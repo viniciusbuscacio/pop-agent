@@ -1,17 +1,27 @@
 import { Hono } from 'hono';
-import { streamSSE } from 'hono/streaming';
-import type { AboutResponse, StreamEvent } from '@popy/shared';
+import type { AboutResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
+import type { ChatService } from '../../application/chat/chat-service.js';
+import type { RunService } from '../../application/chat/run-service.js';
+import type { AgentBridge } from '../../application/ports/agent-bridge.js';
 import type { Clock } from '../../application/ports/clock.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
+import { createChatRoutes } from './chat-routes.js';
+import { EventTickets } from './event-tickets.js';
 import { createSettingsRoutes } from './settings-routes.js';
+import { SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
 
 export interface AppDeps {
   auth: AuthService;
   settings: SettingsService;
+  chats: ChatService;
+  runs: RunService;
+  bridge: AgentBridge;
+  /** The sink the run service emits into; the hub is its adapter. */
+  hub: SseHub;
   clock: Clock;
   /**
    * Read once at boot: versions cannot change while the process runs, so a
@@ -31,34 +41,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use('/v1/*', authMiddleware(deps.auth));
   app.route('/v1', createAuthRoutes(deps));
   app.route('/v1', createSettingsRoutes(deps));
-
-  // Skeleton hello-world: streams a fake run over the real SSE channel so
-  // the transport can be exercised end to end (curl, tests, smoke) before
-  // the pi bridge lands. Replaced by real run events in the next step.
-  app.get('/v1/events', (c) =>
-    streamSSE(c, async (stream) => {
-      const chatId = 'chat-000000000000';
-      const runId = 'run-hello';
-      const words = ['Hello', 'from', 'Popy.', 'Streaming', 'works.'];
-      for (const [i, word] of words.entries()) {
-        const event: StreamEvent = {
-          kind: 'delta',
-          chatId,
-          runId,
-          text: i === 0 ? word : ` ${word}`,
-        };
-        await stream.writeSSE({ data: JSON.stringify(event) });
-        await stream.sleep(150);
-      }
-      const done: StreamEvent = {
-        kind: 'done',
-        chatId,
-        runId,
-        messageId: 'msg-0000000000000000',
-      };
-      await stream.writeSSE({ data: JSON.stringify(done) });
-    }),
-  );
+  app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));
 
   // Last: anything that is not an API route is the frontend or a 404.
   app.use(createStaticSite(deps.webDist));

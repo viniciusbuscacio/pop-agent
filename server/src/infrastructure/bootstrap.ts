@@ -1,9 +1,11 @@
 import { join } from 'node:path';
+import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
+import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteSecretsRepo } from './db/sqlite-secrets-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 
@@ -12,6 +14,7 @@ export interface AppContext {
   dataDir: string;
   settings: SettingsRepo;
   secrets: SecretsRepo;
+  chats: ChatRepo;
 }
 
 /**
@@ -27,5 +30,6 @@ export function bootstrap(): AppContext {
     dataDir,
     settings: new SqliteSettingsRepo(db),
     secrets: new SqliteSecretsRepo(db, key),
+    chats: new SqliteChatRepo(db),
   };
 }

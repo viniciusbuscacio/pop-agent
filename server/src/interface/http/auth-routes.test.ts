@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import { createTestApp, FakeClock, type TestApp } from './test-fixture.js';
+import { createTestApp, FakeClock, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 const NEW_PASSWORD = 'another good password';

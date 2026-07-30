@@ -106,6 +106,70 @@ async function call(
   return { status: response.status, body, contentType };
 }
 
+interface StreamedEvent {
+  kind: string;
+  [field: string]: unknown;
+}
+
+interface StreamWatcher {
+  events: StreamedEvent[];
+  waitFor(predicate: (event: StreamedEvent) => boolean, what: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+/**
+ * Opens the SSE stream the way the browser does: trade the session for a
+ * one-time ticket, then connect with the ticket in the URL.
+ */
+async function openStream(base: string, token: string): Promise<StreamWatcher> {
+  const issued = await call(base, '/v1/events/ticket', { method: 'POST', token });
+  const { ticket } = issued.body as { ticket: string };
+
+  const response = await fetch(`${base}/v1/events?ticket=${ticket}`);
+  if (!response.ok || response.body === null) {
+    throw new Error(`could not open the event stream: ${String(response.status)}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const events: StreamedEvent[] = [];
+  let buffer = '';
+
+  const pump = (async () => {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const match = /^data: (.+)$/.exec(line);
+          if (match?.[1] !== undefined) events.push(JSON.parse(match[1]) as StreamedEvent);
+        }
+      }
+    } catch {
+      // the stream was closed; nothing left to read
+    }
+  })();
+
+  return {
+    events,
+    async waitFor(predicate, what) {
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        if (events.some(predicate)) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`timed out waiting for ${what}`);
+    },
+    async close() {
+      await reader.cancel();
+      await pump;
+    },
+  };
+}
+
 async function run(base: string): Promise<void> {
   // 1
   const health = await call(base, '/healthz');
@@ -216,6 +280,67 @@ async function run(base: string): Promise<void> {
     'the built single-page app was not served',
   );
   pass('the built frontend is served');
+
+  // 10
+  const chatResponse = await call(base, '/v1/chats', { method: 'POST', token: current });
+  expect(chatResponse.status === 201, 'create chat', `expected 201, got ${String(chatResponse.status)}`);
+  const chatId = (chatResponse.body as { id: string }).id;
+  pass('a conversation can be created');
+
+  // 11
+  const watcher = await openStream(base, current);
+  pass('the event stream accepts a one-time ticket');
+
+  // 12
+  await call(base, `/v1/chats/${chatId}/messages`, {
+    method: 'POST',
+    token: current,
+    body: { text: 'tool: list the files' },
+  });
+  await watcher.waitFor((event) => event.kind === 'done', 'the run to finish');
+
+  const kinds = watcher.events.map((event) => event.kind);
+  for (const expected of ['title', 'run-status', 'thinking', 'tool', 'delta', 'done']) {
+    expect(kinds.includes(expected), 'run events', `no ${expected} event arrived (saw ${kinds.join(', ')})`);
+  }
+  const toolStatuses = watcher.events
+    .filter((event) => event.kind === 'tool')
+    .map((event) => String(event['status']));
+  expect(
+    toolStatuses[0] === 'start' && toolStatuses[toolStatuses.length - 1] === 'done',
+    'tool events',
+    `tool statuses out of order: ${toolStatuses.join(', ')}`,
+  );
+  pass('a run streams thinking, a tool call and the answer, then finishes');
+
+  // 13
+  await call(base, `/v1/chats/${chatId}/messages`, {
+    method: 'POST',
+    token: current,
+    body: { text: 'slow: keep going for a while' },
+  });
+  await watcher.waitFor(
+    (event) => event.kind === 'run-status' && event['status'] === 'running',
+    'the slow run to start',
+  );
+  await call(base, `/v1/chats/${chatId}/stop`, { method: 'POST', token: current });
+  await watcher.waitFor(
+    (event) => event.kind === 'error' && event['code'] === 'aborted',
+    'the stopped run to report itself aborted',
+  );
+  pass('Stop aborts a running answer');
+
+  // 14
+  const history = await call(base, `/v1/chats/${chatId}/messages`, { token: current });
+  const stored = (history.body as { messages: { role: string }[] }).messages;
+  expect(
+    stored.length >= 3 && stored[0]?.role === 'user' && stored[1]?.role === 'assistant',
+    'history',
+    `unexpected conversation shape: ${stored.map((message) => message.role).join(', ')}`,
+  );
+  pass('the conversation is on disk, in order');
+
+  await watcher.close();
 }
 
 async function main(): Promise<void> {

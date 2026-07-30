@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTestApp } from './test-fixture.js';
+import { createTestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -62,19 +62,5 @@ describe('app', () => {
     // Either the traversal is rejected outright or it falls through to the
     // shell; what must never happen is a file from outside web/dist.
     expect(res.headers.get('content-type')).not.toContain('application/json');
-  });
-
-  it('/v1/events is an SSE stream whose first event is a delta', async () => {
-    const res = await createTestApp().app.request('/v1/events');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
-
-    const reader = res.body!.getReader();
-    const { value } = await reader.read();
-    await reader.cancel();
-    const text = new TextDecoder().decode(value);
-    const data = /data: (.*)/.exec(text)?.[1];
-    expect(data, 'first SSE frame carries a data line').toBeDefined();
-    expect(JSON.parse(data!)).toMatchObject({ kind: 'delta', runId: 'run-hello' });
   });
 });

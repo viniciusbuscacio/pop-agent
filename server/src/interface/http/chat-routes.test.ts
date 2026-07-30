@@ -1,0 +1,263 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { ChatDTO, MessageDTO, StreamEvent } from '@popy/shared';
+import type { Hono } from 'hono';
+import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+
+const PASSWORD = 'correct horse battery';
+
+let fixture: TestApp;
+let app: Hono;
+let token: string;
+
+async function api(
+  path: string,
+  options: { method?: string; body?: unknown; auth?: boolean } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (options.auth !== false) headers['Authorization'] = `Bearer ${token}`;
+  return app.request(path, {
+    method: options.method ?? 'GET',
+    headers,
+    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+  });
+}
+
+async function newChat(): Promise<ChatDTO> {
+  return (await (await api('/v1/chats', { method: 'POST' })).json()) as ChatDTO;
+}
+
+beforeEach(async () => {
+  fixture = createTestApp();
+  app = fixture.app;
+  const setup = await app.request('/v1/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: PASSWORD }),
+  });
+  token = ((await setup.json()) as { token: string }).token;
+});
+
+describe('chat collection', () => {
+  it('needs a session', async () => {
+    expect((await api('/v1/chats', { auth: false })).status).toBe(401);
+  });
+
+  it('starts empty and grows', async () => {
+    expect(((await (await api('/v1/chats')).json()) as { chats: ChatDTO[] }).chats).toEqual([]);
+
+    const created = await newChat();
+
+    expect(created.title).toBe('New chat');
+    const { chats } = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    expect(chats.map((chat) => chat.id)).toEqual([created.id]);
+  });
+
+  it('separates archived from open chats', async () => {
+    const open = await newChat();
+    const filed = await newChat();
+
+    await api(`/v1/chats/${filed.id}`, { method: 'PATCH', body: { archived: true } });
+
+    const openList = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    const archivedList = (await (await api('/v1/chats?archived=true')).json()) as {
+      chats: ChatDTO[];
+    };
+    expect(openList.chats.map((chat) => chat.id)).toEqual([open.id]);
+    expect(archivedList.chats.map((chat) => chat.id)).toEqual([filed.id]);
+  });
+
+  it('renames and re-models', async () => {
+    const chat = await newChat();
+
+    const renamed = (await (
+      await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { title: 'Groceries' } })
+    ).json()) as ChatDTO;
+    expect(renamed.title).toBe('Groceries');
+
+    const remodelled = (await (
+      await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { model: 'fake/model-2' } })
+    ).json()) as ChatDTO;
+    expect(remodelled.model).toBe('fake/model-2');
+  });
+
+  it('rejects a patch field it does not know', async () => {
+    const chat = await newChat();
+
+    const res = await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { colour: 'red' } });
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('invalid_field');
+  });
+
+  it('deletes', async () => {
+    const chat = await newChat();
+
+    expect((await api(`/v1/chats/${chat.id}`, { method: 'DELETE' })).status).toBe(204);
+    expect((await api(`/v1/chats/${chat.id}/messages`)).status).toBe(404);
+  });
+
+  it('answers 404 for a chat that does not exist', async () => {
+    for (const [path, method] of [
+      ['/v1/chats/chat-000000000000/messages', 'GET'],
+      ['/v1/chats/chat-000000000000', 'DELETE'],
+      ['/v1/chats/chat-000000000000/stop', 'POST'],
+    ] as const) {
+      const res = await api(path, { method });
+      expect(res.status, path).toBe(404);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe('chat_not_found');
+    }
+  });
+});
+
+describe('sending a message', () => {
+  it('accepts with 202 and the ids the client needs', async () => {
+    const chat = await newChat();
+
+    const res = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'hello there' },
+    });
+
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as { runId: string; userMessageId: string };
+    expect(body.runId).toMatch(/^run-/);
+    expect(body.userMessageId).toMatch(/^msg-/);
+    await fixture.runs.whenIdle();
+  });
+
+  it('stores the exchange and returns it in order', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'hello there' } });
+    await fixture.runs.whenIdle();
+
+    const { messages } = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      messages: MessageDTO[];
+    };
+
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(messages[0]?.content).toBe('hello there');
+    expect(messages[1]?.content).toContain('fake bridge');
+  });
+
+  it('refuses a second run in the same chat', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+
+    const res = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'two' },
+    });
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('run_in_progress');
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('rejects an empty message', async () => {
+    const chat = await newChat();
+
+    expect(
+      (await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: '' } })).status,
+    ).toBe(400);
+  });
+
+  it('names the chat after the first message', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'help me plan the grocery shopping' },
+    });
+    await fixture.runs.whenIdle();
+
+    const { chats } = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    expect(chats[0]?.title).toBe('Help Plan Grocery Shopping');
+    expect(chats[0]?.preview.length).toBeGreaterThan(0);
+  });
+});
+
+describe('stopping', () => {
+  it('reports whether there was anything to stop', async () => {
+    const chat = await newChat();
+
+    const idle = await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    expect(await idle.json()).toEqual({ stopped: false });
+
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: going' } });
+    const running = await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    expect(await running.json()).toEqual({ stopped: true });
+    await fixture.runs.whenIdle();
+  });
+});
+
+describe('the event stream', () => {
+  async function ticket(): Promise<string> {
+    const res = await api('/v1/events/ticket', { method: 'POST' });
+    return ((await res.json()) as { ticket: string }).ticket;
+  }
+
+  it('refuses a connection with no ticket', async () => {
+    const res = await app.request('/v1/events');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('refuses a made-up ticket', async () => {
+    expect((await app.request('/v1/events?ticket=not-a-real-ticket')).status).toBe(401);
+  });
+
+  it('needs a session to get a ticket', async () => {
+    expect((await api('/v1/events/ticket', { method: 'POST', auth: false })).status).toBe(401);
+  });
+
+  it('spends the ticket on first use', async () => {
+    const issued = await ticket();
+
+    const first = await app.request(`/v1/events?ticket=${issued}`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get('content-type')).toContain('text/event-stream');
+    await first.body?.cancel();
+
+    expect((await app.request(`/v1/events?ticket=${issued}`)).status).toBe(401);
+  });
+
+  it('streams a run to a connected listener', async () => {
+    const chat = await newChat();
+    const stream = await app.request(`/v1/events?ticket=${await ticket()}`);
+    const reader = stream.body!.getReader();
+
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'tool: run it' } });
+
+    const kinds = new Set<string>();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    // Read until the run reports it is finished.
+    while (!kinds.has('done')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (const line of buffer.split('\n')) {
+        const match = /^data: (.+)$/.exec(line);
+        if (match?.[1] === undefined) continue;
+        kinds.add((JSON.parse(match[1]) as StreamEvent).kind);
+      }
+    }
+    await reader.cancel();
+    await fixture.runs.whenIdle();
+
+    expect(kinds).toContain('title');
+    expect(kinds).toContain('run-status');
+    expect(kinds).toContain('thinking');
+    expect(kinds).toContain('tool');
+    expect(kinds).toContain('delta');
+    expect(kinds).toContain('done');
+  });
+});
+
+describe('models', () => {
+  it('offers what the bridge knows', async () => {
+    const res = await api('/v1/models');
+
+    expect(await res.json()).toEqual({ models: [{ id: 'fake/model-1' }, { id: 'fake/model-2' }] });
+  });
+});

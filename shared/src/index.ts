@@ -94,6 +94,51 @@ export interface AboutResponse {
   piVersion: string;
 }
 
+/** A conversation, as the sidebar and the chat header see it. */
+export interface ChatDTO {
+  id: string;
+  title: string;
+  /** Empty means "whatever the default model is". */
+  model: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** Last message, for the list. Empty for a chat nobody has written in. */
+  preview: string;
+}
+
+export interface ChatListResponse {
+  chats: ChatDTO[];
+}
+
+/** What a tool call left behind, as rendered in a reloaded conversation. */
+export interface ToolCallDTO {
+  name: string;
+  status: 'start' | 'output' | 'done' | 'error';
+  detail: string;
+}
+
+export interface MessageDTO {
+  id: string;
+  chatId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  thinking: string;
+  tools: ToolCallDTO[];
+  createdAt: string;
+}
+
+export interface MessagesResponse {
+  messages: MessageDTO[];
+}
+
+/** `PATCH /v1/chats/:id` — send only what changes. */
+export interface PatchChatRequest {
+  title?: string;
+  archived?: boolean;
+  model?: string;
+}
+
 /** Body of `POST /v1/chats/:id/messages` (docs/agent-flow.md). */
 export interface SendMessageRequest {
   text: string;
@@ -103,6 +148,24 @@ export interface SendMessageRequest {
 export interface SendMessageResponse {
   runId: string;
   userMessageId: string;
+}
+
+/** `POST /v1/chats/:id/stop` — false when there was nothing to stop. */
+export interface StopRunResponse {
+  stopped: boolean;
+}
+
+export interface ModelsResponse {
+  models: { id: string }[];
+}
+
+/**
+ * `POST /v1/events/ticket`. EventSource cannot send an Authorization header,
+ * and a session token in a query string ends up in logs — so an authenticated
+ * request trades it for this: good for one connection, for thirty seconds.
+ */
+export interface EventTicketResponse {
+  ticket: string;
 }
 
 /** Events delivered over the single SSE channel `GET /v1/events`. */
@@ -120,4 +183,6 @@ export type StreamEvent =
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string }
   | { kind: 'title'; chatId: string; title: string }
+  /** Whether a run is waiting for a slot or actually talking to the engine. */
+  | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
   | { kind: 'update'; status: 'available' | 'installing' | 'done' | 'error' };

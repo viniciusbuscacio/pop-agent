@@ -37,7 +37,7 @@ export class SqliteChatRepo implements ChatRepo {
         `SELECT c.*,
                 COALESCE((SELECT m.content FROM messages m
                            WHERE m.chat_id = c.id
-                        ORDER BY m.created_at DESC, m.id DESC
+                        ORDER BY m.created_at DESC, m.rowid DESC
                            LIMIT 1), '') AS preview
            FROM chats c
           WHERE c.archived = ?
@@ -66,23 +66,27 @@ export class SqliteChatRepo implements ChatRepo {
 
   getMessages(chatId: string, options: { before?: string; limit: number }): Message[] {
     // Read backwards from the newest, then flip: a chat opens at its tail, and
-    // scrolling up asks for the page before a message it already has. Ordering
-    // on (created_at, id) keeps the walk stable when two rows share a
-    // timestamp, which they do whenever a run finishes fast.
+    // scrolling up asks for the page before a message it already has.
+    //
+    // Ties on created_at are broken by rowid -- insertion order. Two messages
+    // written in the same millisecond (a question and a fast answer) must come
+    // back in the order they happened, and ids are random, so they cannot be
+    // the tiebreaker.
     const rows =
       options.before === undefined
         ? (this.db
             .prepare(
               `SELECT * FROM messages WHERE chat_id = ?
-            ORDER BY created_at DESC, id DESC LIMIT ?`,
+            ORDER BY created_at DESC, rowid DESC LIMIT ?`,
             )
             .all(chatId, options.limit) as MessageRow[])
         : (this.db
             .prepare(
               `SELECT * FROM messages
                 WHERE chat_id = ?
-                  AND (created_at, id) < (SELECT created_at, id FROM messages WHERE id = ?)
-             ORDER BY created_at DESC, id DESC LIMIT ?`,
+                  AND (created_at, rowid)
+                      < (SELECT created_at, rowid FROM messages WHERE id = ?)
+             ORDER BY created_at DESC, rowid DESC LIMIT ?`,
             )
             .all(chatId, options.before, options.limit) as MessageRow[]);
 

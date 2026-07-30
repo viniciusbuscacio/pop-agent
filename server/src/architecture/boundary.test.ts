@@ -23,6 +23,7 @@ type Layer =
   | 'infrastructure'
   | 'interface'
   | 'architecture'
+  | 'testing'
   | 'shared'
   | 'main';
 
@@ -32,6 +33,10 @@ const allowedImports: Record<Layer, Layer[]> = {
   infrastructure: ['application', 'domain'],
   interface: ['application', 'domain', 'shared'],
   architecture: [],
+  // Test scaffolding: it wires the real stack the way main.ts does, so it may
+  // reach anywhere. Nothing may reach *it* -- no production layer lists
+  // `testing`, so an accidental import from src fails this test.
+  testing: ['domain', 'application', 'infrastructure', 'interface', 'shared'],
   shared: [],
   main: ['domain', 'application', 'infrastructure', 'interface', 'shared'],
 };
