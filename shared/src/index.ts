@@ -12,6 +12,17 @@ export interface ApiError {
   };
 }
 
+/** Body of `POST /v1/chats/:id/messages` (docs/agent-flow.md). */
+export interface SendMessageRequest {
+  text: string;
+}
+
+/** 202 response of `POST /v1/chats/:id/messages`: the run has started. */
+export interface SendMessageResponse {
+  runId: string;
+  userMessageId: string;
+}
+
 /** Events delivered over the single SSE channel `GET /v1/events`. */
 export type StreamEvent =
   | { kind: 'delta'; chatId: string; runId: string; text: string }

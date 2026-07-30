@@ -121,6 +121,9 @@ domain / application / dto / infrastructure / appcore → interface+main):
 
 ## 5. pi integration (`infrastructure/agent/`)
 
+> End-to-end flow detail (frontend ↔ pi through every layer, event
+> mapping, failure modes): `docs/agent-flow.md`.
+
 - Package `@earendil-works/pi-coding-agent`, embedded via SDK
   (`createAgentSession`). Plan B if crash isolation ever demands it: pi as
   an RPC subprocess — the `AgentBridge` interface covers both without
