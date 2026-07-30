@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.5 — 2026-07-30.
+Version 1.6 — 2026-07-30.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -113,7 +113,7 @@ domain / application / dto / infrastructure / appcore → interface+main):
 └── backups/         # tar.gz snapshots (§16)
 ```
 
-- `.env`: `OPENROUTER_API_KEY` optional seed, `POPY_PORT` (default 3999),
+- `.env`: `OPENROUTER_API_KEY` optional seed, `POPY_PORT` (default 8787),
   `POPY_DATA_DIR`, `POPY_WORKSPACE`, `POPY_SESSION_SECRET` (generated at
   setup if absent).
 - `POPY_WORKSPACE` (default `~/popy-workspace/`): the single root directory
@@ -464,6 +464,10 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.6 (2026-07-30): default port is 8787 — one single port on the test
+  server until HTTPS (443 via Caddy) lands; the placeholder hello page
+  hands 8787 over to Popy (§4).
 
 - 1.5 (2026-07-30): development moves onto the test server — the agent
   codes, gates and runs everything on ubuntu-home over SSH; nothing
