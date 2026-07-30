@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.4 — 2026-07-30.
+Version 1.5 — 2026-07-30.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -449,8 +449,14 @@ covers "forgot password AND recovery key" for whoever has shell.
 - Scope evolves in batches of ~20 questions in the maintainer's notes
   (Portuguese, outside the repo). When an answer signals a concept wasn't
   clear, stop and explain before deciding.
-- Dev machine: the maintainer's **Windows ThinkPad** (`~/dev/popy`) — the
-  Mac has npm blocked by corporate policy. Production: any Linux with
+- **Dev happens on the test server, not on the maintainer's machines**:
+  the agent connects over SSH to `ubuntu-home` (Ubuntu Server 26.04, home
+  LAN / tailnet), codes in the clone at `~/dev/popy`, runs the gate, the
+  dev server and the smoke there, and pushes to GitHub from there. The
+  Windows ThinkPad is only the terminal (and holds a read-only mirror
+  clone); the Mac has npm blocked by corporate policy. UI testing: the
+  agent drives a browser (Chrome DevTools) against the server's URL —
+  same interface the maintainer uses. Production target: any Linux with
   systemd + Node 22 (`npm run build` + systemd unit example in repo).
   Docker: maybe later, never required.
 - Verify-at-coding list: pi RPC mode as crash-isolation plan B; SDK
@@ -459,6 +465,9 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.5 (2026-07-30): development moves onto the test server — the agent
+  codes, gates and runs everything on ubuntu-home over SSH; nothing
+  executes on the maintainer's machines (§20).
 - 1.4 (2026-07-30): backend is 100% clean architecture (§3) — aw's layer
   model ported (domain / application / infrastructure / interface, DTOs in
   `shared/`, composition root in main.ts), with the boundary test enforcing
