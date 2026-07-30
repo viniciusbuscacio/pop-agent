@@ -1,0 +1,239 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Clock } from '../ports/clock.js';
+import type { PasswordHasher } from '../ports/password-hasher.js';
+import type { SecretsRepo } from '../ports/secrets-repo.js';
+import type { SettingsRepo } from '../ports/settings-repo.js';
+import { AuthService } from './auth-service.js';
+
+const NOW = 1_700_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
+const PASSWORD = 'correct horse battery';
+const OTHER_PASSWORD = 'another good password';
+
+class MemorySettings implements SettingsRepo {
+  private readonly rows = new Map<string, string>();
+  get<T>(key: string): T | undefined {
+    const raw = this.rows.get(key);
+    return raw === undefined ? undefined : (JSON.parse(raw) as T);
+  }
+  set<T>(key: string, value: T): void {
+    this.rows.set(key, JSON.stringify(value));
+  }
+}
+
+class MemorySecrets implements SecretsRepo {
+  private readonly rows = new Map<string, string>();
+  get(key: string): string | undefined {
+    return this.rows.get(key);
+  }
+  set(key: string, value: string): void {
+    this.rows.set(key, value);
+  }
+  delete(key: string): void {
+    this.rows.delete(key);
+  }
+}
+
+/** Cheap stand-in for argon2: the real one is slow on purpose. */
+const fakeHasher: PasswordHasher = {
+  hash: (plaintext) => Promise.resolve(`hashed:${plaintext}`),
+  verify: (hash, plaintext) => Promise.resolve(hash === `hashed:${plaintext}`),
+};
+
+class FakeClock implements Clock {
+  constructor(private value: number) {}
+  now(): number {
+    return this.value;
+  }
+  advance(ms: number): void {
+    this.value += ms;
+  }
+}
+
+let clock: FakeClock;
+let auth: AuthService;
+
+beforeEach(() => {
+  clock = new FakeClock(NOW);
+  auth = new AuthService({
+    settings: new MemorySettings(),
+    secrets: new MemorySecrets(),
+    hasher: fakeHasher,
+    clock,
+  });
+});
+
+describe('setup', () => {
+  it('creates the account and returns a working session', async () => {
+    expect(auth.isSetupDone()).toBe(false);
+
+    const result = await auth.setup(PASSWORD);
+
+    expect(result.ok).toBe(true);
+    expect(auth.isSetupDone()).toBe(true);
+    if (result.ok) {
+      expect(result.recoveryKey).toMatch(/^[A-Z2-9]{4}(-[A-Z2-9]{4}){5}$/);
+      expect(auth.verifySession(result.token).ok).toBe(true);
+    }
+  });
+
+  it('refuses to run twice', async () => {
+    await auth.setup(PASSWORD);
+    expect(await auth.setup(PASSWORD)).toEqual({ ok: false, reason: 'already_setup' });
+  });
+
+  it('refuses a password under ten characters', async () => {
+    expect(await auth.setup('short')).toEqual({ ok: false, reason: 'weak_password' });
+    expect(auth.isSetupDone()).toBe(false);
+  });
+});
+
+describe('login', () => {
+  beforeEach(async () => {
+    await auth.setup(PASSWORD);
+  });
+
+  it('accepts the password and issues a valid token', async () => {
+    const result = await auth.login(PASSWORD);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(auth.verifySession(result.token).ok).toBe(true);
+  });
+
+  it('rejects the wrong password', async () => {
+    expect(await auth.login('wrong password here')).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
+  });
+});
+
+describe('sessions', () => {
+  it('expires after seven days', async () => {
+    const result = await auth.setup(PASSWORD);
+    if (!result.ok) throw new Error('setup failed');
+
+    clock.advance(7 * DAY - 1);
+    expect(auth.verifySession(result.token).ok).toBe(true);
+
+    clock.advance(1);
+    expect(auth.verifySession(result.token)).toEqual({ ok: false, reason: 'expired' });
+  });
+
+  it('renews only once the token is over a day old', async () => {
+    const result = await auth.setup(PASSWORD);
+    if (!result.ok) throw new Error('setup failed');
+    const verified = auth.verifySession(result.token);
+    if (!verified.ok) throw new Error('token should verify');
+
+    expect(auth.renewIfDue(verified.payload)).toBeUndefined();
+
+    clock.advance(DAY + 1);
+    const renewed = auth.renewIfDue(verified.payload);
+    expect(renewed).toBeDefined();
+    expect(renewed).not.toBe(result.token);
+    expect(auth.verifySession(renewed as string).ok).toBe(true);
+  });
+});
+
+describe('change password', () => {
+  it('drops other sessions but keeps the caller signed in', async () => {
+    const setup = await auth.setup(PASSWORD);
+    if (!setup.ok) throw new Error('setup failed');
+
+    const changed = await auth.changePassword(PASSWORD, OTHER_PASSWORD);
+
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect(auth.verifySession(setup.token)).toEqual({ ok: false, reason: 'stale_epoch' });
+    expect(auth.verifySession(changed.token).ok).toBe(true);
+    expect((await auth.login(OTHER_PASSWORD)).ok).toBe(true);
+  });
+
+  it('refuses the wrong current password', async () => {
+    await auth.setup(PASSWORD);
+
+    expect(await auth.changePassword('not the password', OTHER_PASSWORD)).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
+    expect((await auth.login(PASSWORD)).ok).toBe(true);
+  });
+
+  it('refuses a weak new password and keeps the old one', async () => {
+    await auth.setup(PASSWORD);
+
+    expect(await auth.changePassword(PASSWORD, 'short')).toEqual({
+      ok: false,
+      reason: 'weak_password',
+    });
+    expect((await auth.login(PASSWORD)).ok).toBe(true);
+  });
+});
+
+describe('recovery', () => {
+  it('sets a new password and burns the key it was given', async () => {
+    const setup = await auth.setup(PASSWORD);
+    if (!setup.ok) throw new Error('setup failed');
+
+    const recovered = await auth.recover(setup.recoveryKey, OTHER_PASSWORD);
+
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) return;
+    expect(recovered.recoveryKey).not.toBe(setup.recoveryKey);
+    expect((await auth.login(OTHER_PASSWORD)).ok).toBe(true);
+
+    // The used key must not work a second time; the fresh one must.
+    expect(await auth.recover(setup.recoveryKey, PASSWORD)).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
+    expect((await auth.recover(recovered.recoveryKey, PASSWORD)).ok).toBe(true);
+  });
+
+  it('invalidates existing sessions and signs the caller in', async () => {
+    const setup = await auth.setup(PASSWORD);
+    if (!setup.ok) throw new Error('setup failed');
+
+    const recovered = await auth.recover(setup.recoveryKey, OTHER_PASSWORD);
+
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) return;
+    expect(auth.verifySession(setup.token)).toEqual({ ok: false, reason: 'stale_epoch' });
+    expect(auth.verifySession(recovered.token).ok).toBe(true);
+  });
+
+  it('rejects a key that was never issued', async () => {
+    await auth.setup(PASSWORD);
+
+    expect(await auth.recover('ABCD-EFGH-JKMN-PQRS-TUVW-XYZ2', OTHER_PASSWORD)).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
+  });
+
+  it('keeps the current password when the new one is too weak', async () => {
+    const setup = await auth.setup(PASSWORD);
+    if (!setup.ok) throw new Error('setup failed');
+
+    expect(await auth.recover(setup.recoveryKey, 'short')).toEqual({
+      ok: false,
+      reason: 'weak_password',
+    });
+    expect((await auth.login(PASSWORD)).ok).toBe(true);
+  });
+});
+
+describe('sign out other devices', () => {
+  it('keeps this device and drops the rest', async () => {
+    const first = await auth.setup(PASSWORD);
+    const second = await auth.login(PASSWORD);
+    if (!first.ok || !second.ok) throw new Error('setup failed');
+
+    const { token } = auth.signOutOthers();
+
+    expect(auth.verifySession(second.token)).toEqual({ ok: false, reason: 'stale_epoch' });
+    expect(auth.verifySession(first.token)).toEqual({ ok: false, reason: 'stale_epoch' });
+    expect(auth.verifySession(token).ok).toBe(true);
+  });
+});
