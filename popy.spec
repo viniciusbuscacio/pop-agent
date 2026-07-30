@@ -114,8 +114,10 @@ domain / application / dto / infrastructure / appcore → interface+main):
 ```
 
 - `.env`: `OPENROUTER_API_KEY` optional seed, `POPY_PORT` (default 8787),
-  `POPY_DATA_DIR`, `POPY_WORKSPACE`, `POPY_SESSION_SECRET` (generated at
-  setup if absent).
+  `POPY_BIND` (default `127.0.0.1`), `POPY_DATA_DIR`, `POPY_WORKSPACE`.
+  The session HMAC secret is **not** an environment variable: it is
+  generated at setup and kept in the encrypted `secrets` table (§9), so a
+  leaked backup -- which excludes `secret.key` -- cannot forge a token.
 - `POPY_WORKSPACE` (default `~/popy-workspace/`): the single root directory
   where the agent works; remote-coding repos are cloned as subfolders.
 
@@ -215,16 +217,47 @@ user message — selection is 100% local, no LLM call:
 
 ## 9. Auth and secrets
 
-- **Password only** (no username) — vault-style login. Hash: argon2id.
-- First run: `/setup` wizard — password → provider (skippable) → first
-  message. Shows the recovery key exactly once, with mandatory "I saved
-  it" confirmation.
+- **Password only** (no username) — vault-style login. Hash: argon2id at
+  64 MB / 3 passes / 4 lanes, stated explicitly so a future library
+  default cannot quietly weaken existing installs. Length is the only
+  rule: 10–128 characters, no composition requirements.
+- First run: `/setup` wizard — password → recovery key → provider
+  (skippable) → done. The key is shown exactly once, with a mandatory
+  "I saved it" confirmation, a copy button and a `.txt` download.
+- **Recovery key format**: 24 symbols in six groups of four, drawn from a
+  31-character alphabet that omits the pairs people misread (no `0/O`, no
+  `1/I/L`) — roughly 118 bits. Symbols come from rejection sampling rather
+  than folding random bytes with `%`, which would make the first eight
+  measurably more likely. Input is normalised (upper-cased, separators
+  stripped) so case and hyphens do not matter when typing it on a phone.
+  Only a SHA-256 of the normalised key is stored: the key is
+  CSPRNG-generated, so there is no low-entropy guess space for a slow hash
+  to defend.
+- **Recovery spends the key**: a successful recovery mints a *new* key and
+  invalidates the one used. A key that stayed valid after use would be a
+  permanent master password nobody remembers handing out.
 - **Session token**: stateless, HMAC-SHA256 signed
   (`base64url(payload).base64url(sig)`, payload `{epoch, iat, exp}`,
   constant-time compare, ~60 lines over `node:crypto`). No JWT lib —
-  evaluated and rejected. Exp 7 days, renewed on use. **Epoch** increments
-  on password change / "Sign out all devices" (Settings button, v0.1) —
-  invalidates every session at once.
+  evaluated and rejected. Exp 7 days. **Sliding renewal**: a token
+  over 24h old comes back refreshed in the `x-popy-token` response header
+  and the client swaps what it stored — somebody who opens Popy weekly
+  never meets the login screen, while a token idle for the full week
+  still dies. **Epoch** increments on password change, on recovery and on
+  **"Sign out other devices"** (Settings, v0.1): every other session
+  drops, and the device that acted receives a token on the new epoch,
+  because signing yourself out of the button you just pressed is a
+  confusing way to be told it worked.
+- **Rate limit and lockout**, both in memory (one process, one account):
+  10 requests per minute per origin on the credential routes, plus a
+  progressive lockout on wrong answers — four free misses, then 30s
+  doubling per failure to a fifteen-minute ceiling, reported as exact
+  seconds so the UI counts down honestly. A correct password or a valid
+  recovery key clears it. A restart clears it too: that is a deliberate
+  trade against writing an attacker-driven counter to disk.
+  `GET /v1/auth/state` is exempt from the rate limit — it reveals nothing
+  and the app asks for it on every boot, so throttling it would let a
+  user lock themselves out by refreshing the page.
 - Frontend storage: `sessionStorage` by default; "Keep me signed in"
   checkbox → `localStorage` (essential on mobile PWA).
 - **Biometric unlock via WebAuthn/passkey** (Face ID on iOS 16+ installed
@@ -243,7 +276,8 @@ user message — selection is 100% local, no LLM call:
 - **Provider secrets**: SQLite is not fully encrypted (your own VPS, honest
   threat model). Secrets column is encrypted with the key in
   `~/.popy/secret.key` (0600), which is **excluded from backups** — a
-  leaked backup leaks no keys; restore on a new machine = re-enter keys.
+  leaked backup leaks no keys; restore on a new machine = re-enter keys. The
+  session HMAC secret lives in the same table for the same reason.
   Root-level attackers are out of scope and the README says so.
 
 ## 10. External-content safety (`domain/safety/`)
@@ -287,14 +321,24 @@ Everything under `/v1`. Errors always structured:
 (`invalid_credentials`, `invalid_session`, `locked`, `rate_limited`,
 `chat_not_found`, `run_in_progress`, `missing_field`, `operation_error`…).
 
-Routes: `POST /v1/setup`, `POST /v1/login`, `GET /v1/events` (single SSE
-channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
+Routes: `GET /v1/auth/state`, `POST /v1/setup`, `POST /v1/login`,
+`POST /v1/auth/recover`, `POST /v1/auth/change-password`,
+`POST /v1/auth/sign-out-others`, `GET /v1/about`, `GET /v1/events` (single
+SSE channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
 `GET|POST /v1/chats/:id/messages`, `POST /v1/chats/:id/stop`,
 `GET|PUT /v1/settings`, `GET /v1/models`, `GET|PUT /v1/memory`,
 `GET /v1/usage` (§14), `GET /v1/backups` (§16), `GET /v1/update/status`,
 `POST /v1/update/apply`, `GET /v1/ax` (§18), `GET /healthz` (no auth).
 WebAuthn: `POST /v1/auth/webauthn/register`, `POST /v1/auth/webauthn/login`
 (§9, v0.2).
+
+`GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
+document and the schema is strict, so a field Popy does not know is a 400
+rather than something silently dropped. Public (no session):
+`auth/state`, `setup`, `login`, `auth/recover`, `healthz` — and
+`/v1/events`, until Phase 2 decides how to authenticate a stream that
+EventSource cannot attach a header to. Any response may carry a refreshed
+`x-popy-token` (§9).
 
 SSE events (typed in `shared/`): `delta`, `thinking`, `tool` (with
 start/output/done/error — `output` streams stdout in real time), `done`,
@@ -308,8 +352,10 @@ events from stale runs.
   ESLint restricted-imports; gate fails otherwise). Types come from
   `shared/`, never redefined.
 - Layout: ChatGPT-style without inventing — sidebar (chats, filter, New,
-  archived; collapses to a nav drawer on mobile — the only allowed
-  drawer), central column, composer.
+  archived), central column, composer. **Narrow screens follow the
+  Telegram model rather than a drawer**: the list *is* the screen, and
+  opening something is a route change, so the phone's back gesture means
+  what the user expects.
 - **Never a side drawer/panel for forms** (permanent veto). Settings is a
   full-screen view: General, Appearance, Model, Memory, Notes, Web Access,
   API, Usage, Backup, Updates, About. Every Save has a Cancel.
@@ -341,11 +387,14 @@ events from stale runs.
   retrofit.
 - Icons: Lucide. No emoji as icons. Toasts: own implementation, top-right,
   theme-tinted, async events only; form errors inline.
-- `data-testid` on every interactive control; basic real a11y (visible
-  focus, keyboard nav, `aria-live` on streaming).
+- `data-testid` on every interactive control, kebab-case and named after
+  the thing (`setup-password`, `login-submit`, `settings-theme-dark`);
+  basic real a11y (visible focus, keyboard nav, `aria-live` on streaming).
 - Theme: follows the system (`prefers-color-scheme`) + manual
-  System/Light/Dark override. Two token maps; regression test: every theme
-  defines every token. App icon: friendly mascot, designed later — v0.1
+  System/Light/Dark override. **Never sent to the server** — it belongs to
+  the device, lives in `localStorage`, and is applied by an inline script
+  before the first paint so the wrong colours never flash. Two token maps;
+  regression test: every theme defines every token. App icon: friendly mascot, designed later — v0.1
   ships a simple placeholder.
 - PWA: app-shell precache; API/SSE never cached; SW update prompt. iOS:
   HTTPS required, safe-areas, `dvh`. Android: WebAPK via manifest. Offline
@@ -419,17 +468,33 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## 18. Production exposure
 
-- Bind `127.0.0.1` by default. Public HTTPS via reverse proxy with Let's
-  Encrypt (Caddy recommended, example Caddyfile in repo). Tailscale
-  optional but recommended.
+- Bind `127.0.0.1` by default. HTTPS has **two supported shapes**, and
+  which one applies depends on whether the machine can accept inbound
+  connections at all:
+  - **(a) Public VPS — the product's default.** Reverse proxy with Let's
+    Encrypt (Caddy recommended, example Caddyfile in repo), your own
+    domain, ports 80 and 443 reachable.
+  - **(b) A machine that cannot accept inbound traffic** — behind CGNAT,
+    or on a consumer line that blocks 80 and 443 (the maintainer's home
+    connection blocks both). HTTP-01 cannot complete and the port cannot
+    be served, so (a) is simply unavailable. Use **`tailscale serve`**: a
+    valid certificate on a `*.ts.net` name, reachable only inside the
+    tailnet, with no port opened anywhere — enough for an installable
+    PWA, since it is a secure context. `tailscale funnel` publishes the
+    same thing to the internet when that is wanted. This is how the test
+    server is exposed.
 - Login protection: rate limit (10/min/IP) + progressive lockout + **IP
   access list** (CIDR blocks, managed in Settings and via CLI). If you
   lock yourself out: `popy access-list clean` over SSH.
 - Control plane `GET /v1/ax`: describes the app for agents (route map,
   error contract, action catalog with risk levels), own X-API-Key separate
-  from user sessions, OFF by default. `tools/smoke.ts` boots the server
-  with a temp DB + fake provider and exercises setup → login → message →
-  SSE end-to-end; runs in gate and CI.
+  from user sessions, OFF by default. `tools/smoke.ts` starts the server as its
+  own process with a temp `POPY_DATA_DIR` on an ephemeral port and drives
+  it over HTTP end to end — health, first-run state, setup, the session
+  guard, a settings roundtrip, a password change that drops old tokens,
+  recovery spending its key, sign out others, and the built frontend being
+  served. It runs in the gate and in CI; Phase 2 extends the same file
+  with the chat over a fake provider.
 
 ## 19. Versioning and roadmap
 
@@ -459,11 +524,36 @@ covers "forgot password AND recovery key" for whoever has shell.
   same interface the maintainer uses. Production target: any Linux with
   systemd + Node 22 (`npm run build` + systemd unit example in repo).
   Docker: maybe later, never required.
+- The test server runs the dev build under **systemd**
+  (`deploy/popy-dev.service`: sources through tsx, absolute `ExecStart`
+  because systemd's boot PATH is minimal), so the tailnet URL answers
+  after a reboot with nobody logged in. The production unit points at the
+  compiled `dist/` instead.
+- Gate order is lint → typecheck → **build** → test → smoke: the server
+  serves the built frontend, so both the tests and the smoke need it to
+  exist first.
 - Verify-at-coding list: pi RPC mode as crash-isolation plan B; SDK
   per-session skill scoping (§8); pi's abort behavior on running bash
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.7 (2026-07-30): Phase 1 built — SQLite with a numbered-migration
+  runner, settings and AES-256-GCM-encrypted secrets (§4, §6, §9); auth
+  with HMAC session tokens, epoch, argon2id, recovery key and progressive
+  lockout (§9); settings and about endpoints (§13); the React PWA with the
+  setup wizard, login, recovery and settings screens served by the same
+  process on one port (§14); and an end-to-end smoke in the gate (§18).
+  Decisions recorded here as they were made: password 10–128 with no
+  composition rules; the recovery-key alphabet without confusable
+  characters, case-insensitive input and rejection sampling; recovery
+  spends the key and issues a new one; "Sign out other devices" keeps the
+  acting device signed in; sliding session renewal via `x-popy-token`;
+  settings PUT is a strict full replace; the theme belongs to the device
+  and never reaches the server; narrow layouts follow the Telegram model
+  instead of a drawer; and HTTPS is documented as two scenarios (§18) —
+  public VPS with Let's Encrypt, or `tailscale serve` where the line
+  blocks inbound 80/443.
 
 - 1.6 (2026-07-30): default port is 8787 — one single port on the test
   server until HTTPS (443 via Caddy) lands; the placeholder hello page
