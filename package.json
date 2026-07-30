@@ -14,10 +14,11 @@
   "scripts": {
     "dev": "npm run build -w shared && tsx watch server/src/main.ts",
     "lint": "eslint .",
-    "typecheck": "tsc -b && npm run typecheck -w @popy/web",
+    "typecheck": "tsc -b && npm run typecheck -w @popy/web && tsc --noEmit -p tools",
     "test": "vitest run",
     "build": "tsc -b && npm run build -w @popy/web",
-    "gate": "npm run lint && npm run typecheck && npm run build && npm run test"
+    "gate": "npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke",
+    "smoke": "tsx tools/smoke.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
