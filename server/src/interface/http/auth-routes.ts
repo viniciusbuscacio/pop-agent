@@ -6,6 +6,7 @@ import {
   type AuthService,
 } from '../../application/auth/auth-service.js';
 import type { Clock } from '../../application/ports/clock.js';
+import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import { ProgressiveLockout } from './lockout.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
@@ -119,25 +120,6 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
   routes.post('/auth/sign-out-others', (c) => c.json(deps.auth.signOutOthers()));
 
   return routes;
-}
-
-async function readJson(c: Context): Promise<unknown> {
-  try {
-    return (await c.req.json()) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
-function badBody(c: Context): Response {
-  return apiError(c, 400, 'missing_field', 'This endpoint expects a JSON body.');
-}
-
-function schemaError(c: Context, error: z.ZodError): Response {
-  const unknownField = error.issues.some((issue) => issue.code === 'unrecognized_keys');
-  return unknownField
-    ? apiError(c, 400, 'invalid_field', 'The request carries a field Popy does not accept.')
-    : apiError(c, 400, 'missing_field', 'The request is missing a required field.');
 }
 
 function weakPassword(c: Context): Response {

@@ -1,0 +1,112 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Hono } from 'hono';
+import { createTestApp, type TestApp } from './test-fixture.js';
+
+const PASSWORD = 'correct horse battery';
+
+let fixture: TestApp;
+let app: Hono;
+let token: string;
+
+beforeEach(async () => {
+  fixture = createTestApp();
+  app = fixture.app;
+  const res = await app.request('/v1/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: PASSWORD }),
+  });
+  token = ((await res.json()) as { token: string }).token;
+});
+
+function authed(path: string, init: RequestInit = {}): Promise<Response> {
+  return Promise.resolve(
+    app.request(path, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(init.headers ?? {}),
+      },
+    }),
+  );
+}
+
+describe('GET /v1/settings', () => {
+  it('needs a session', async () => {
+    expect((await app.request('/v1/settings')).status).toBe(401);
+  });
+
+  it('answers with the defaults before anything was saved', async () => {
+    const res = await authed('/v1/settings');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ language: 'en' });
+  });
+});
+
+describe('PUT /v1/settings', () => {
+  it('replaces the document and returns what was stored', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ language: 'en' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ language: 'en' });
+    expect(await (await authed('/v1/settings')).json()).toEqual({ language: 'en' });
+  });
+
+  it('rejects a field it does not know instead of dropping it', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ language: 'en', telemetry: true }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('invalid_field');
+  });
+
+  it('rejects an unsupported language', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ language: 'pt-BR' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a body that is not JSON', async () => {
+    const res = await authed('/v1/settings', { method: 'PUT', body: 'not json' });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('missing_field');
+  });
+
+  it('needs a session', async () => {
+    const res = await app.request('/v1/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ language: 'en' }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /v1/about', () => {
+  it('reports the three versions', async () => {
+    const res = await authed('/v1/about');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      popyVersion: expect.any(String),
+      nodeVersion: expect.any(String),
+      piVersion: expect.any(String),
+    });
+  });
+
+  it('needs a session', async () => {
+    expect((await app.request('/v1/about')).status).toBe(401);
+  });
+});

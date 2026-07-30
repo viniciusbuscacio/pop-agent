@@ -76,6 +76,24 @@ export interface SignOutOthersResponse {
   token: string;
 }
 
+/**
+ * `GET`/`PUT /v1/settings`. PUT takes the whole document -- there is no
+ * partial merge -- and rejects any field it does not know.
+ *
+ * Theme is absent by design: it belongs to the device, not the account
+ * (popy.spec §14).
+ */
+export interface SettingsDTO {
+  language: 'en';
+}
+
+/** `GET /v1/about` — what Settings → About shows. */
+export interface AboutResponse {
+  popyVersion: string;
+  nodeVersion: string;
+  piVersion: string;
+}
+
 /** Body of `POST /v1/chats/:id/messages` (docs/agent-flow.md). */
 export interface SendMessageRequest {
   text: string;

@@ -4,14 +4,14 @@ import type { Clock } from '../../application/ports/clock.js';
 import type { PasswordHasher } from '../../application/ports/password-hasher.js';
 import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../../application/ports/settings-repo.js';
+import { SettingsService } from '../../application/settings/settings-service.js';
 import { createApp } from './app.js';
 
 /**
  * Test-only wiring: the real app over in-memory adapters and a clock the test
  * moves by hand. It lives beside the routes (rather than inside a single test
- * file) because both the app and the auth suites need the same stack, and
- * because building the app for real is the point -- a mocked router would test
- * the mock.
+ * file) because several suites need the same stack, and because building the
+ * app for real is the point -- a mocked router would test the mock.
  */
 
 export const FIXED_NOW = 1_700_000_000_000;
@@ -66,11 +66,18 @@ export interface TestApp {
 }
 
 export function createTestApp(clock: FakeClock = new FakeClock()): TestApp {
+  const settingsRepo = new MemorySettings();
   const auth = new AuthService({
-    settings: new MemorySettings(),
+    settings: settingsRepo,
     secrets: new MemorySecrets(),
     hasher: fastHasher,
     clock,
   });
-  return { app: createApp({ auth, clock }), auth, clock };
+  const app = createApp({
+    auth,
+    settings: new SettingsService(settingsRepo),
+    clock,
+    versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
+  });
+  return { app, auth, clock };
 }
