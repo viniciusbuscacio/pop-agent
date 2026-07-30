@@ -1,0 +1,27 @@
+# Development unit for the test server (ubuntu-home): keeps the dev server up
+# across reboots so the tailnet URL always answers. Runs the TypeScript sources
+# through tsx -- no build step -- which is what makes it a *dev* unit; the
+# production unit will point at the compiled dist/ instead.
+#
+# ExecStart is fully absolute on purpose: systemd starts with a minimal PATH at
+# boot, so `npx` (or a bare `node`) resolves unreliably there. Paths assume the
+# clone lives at /home/vinicius/dev/popy on the test server.
+#
+# Install:  sudo cp deploy/popy-dev.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now popy-dev
+
+[Unit]
+Description=Popy dev server (tsx, sources from ~/dev/popy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinicius
+WorkingDirectory=/home/vinicius/dev/popy
+ExecStart=/usr/bin/node /home/vinicius/dev/popy/node_modules/tsx/dist/cli.mjs server/src/main.ts
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
