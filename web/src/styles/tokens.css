@@ -1,0 +1,49 @@
+/*
+ * Design tokens, taken from go-notepad so the family looks like one product
+ * (Fluent-ish surfaces, Segoe UI stack). Components only ever read these
+ * variables -- a hardcoded colour anywhere is a bug.
+ *
+ * Two complete maps: whatever a component needs in dark, it also gets in
+ * light. The regression test asserts they stay in step.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  --bg: #202020;
+  --screen-fg: #ffffff;
+  --titlebar-fg: #d6d6d6;
+  --accent: #4cc2ff;
+  --accent-hover: #48b2e8;
+  --accent-fg: #003a5c;
+  --border: #333333;
+  --panel-bg: #2b2b2b;
+  --panel-hover: #333333;
+  --input-bg: #1b1b1b;
+  --muted: #9a9a9a;
+  --key-fg-dim: #d0d0d0;
+  --danger: #ff99a4;
+  --success: #3fbf6f;
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --switch-stroke: rgba(255, 255, 255, 0.6);
+  --scroll-thumb: rgba(255, 255, 255, 0.28);
+}
+
+:root[data-theme='light'] {
+  --bg: #f3f3f3;
+  --screen-fg: #1a1a1a;
+  --titlebar-fg: #1a1a1a;
+  --accent: #005fb8;
+  --accent-hover: #0a6cc8;
+  --accent-fg: #ffffff;
+  --border: #e2e2e2;
+  --panel-bg: #ffffff;
+  --panel-hover: #f4f4f4;
+  --input-bg: #ffffff;
+  --muted: #757575;
+  --key-fg-dim: #333333;
+  --danger: #c42b1c;
+  --success: #107c41;
+  --hover-overlay: rgba(0, 0, 0, 0.05);
+  --switch-stroke: rgba(0, 0, 0, 0.45);
+  --scroll-thumb: rgba(0, 0, 0, 0.28);
+}

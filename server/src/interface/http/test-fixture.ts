@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { Hono } from 'hono';
 import { AuthService } from '../../application/auth/auth-service.js';
 import type { Clock } from '../../application/ports/clock.js';
@@ -15,6 +16,9 @@ import { createApp } from './app.js';
  */
 
 export const FIXED_NOW = 1_700_000_000_000;
+
+/** The real build output: the gate builds before it tests, so it is there. */
+export const WEB_DIST = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
 
 export class MemorySettings implements SettingsRepo {
   private readonly rows = new Map<string, string>();
@@ -78,6 +82,7 @@ export function createTestApp(clock: FakeClock = new FakeClock()): TestApp {
     settings: new SettingsService(settingsRepo),
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
+    webDist: WEB_DIST,
   });
   return { app, auth, clock };
 }

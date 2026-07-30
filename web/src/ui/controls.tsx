@@ -1,0 +1,123 @@
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+
+/**
+ * The handful of primitives every screen is built from. Colours come from the
+ * token variables only -- no literal hex anywhere in a component.
+ */
+
+type ButtonVariant = 'primary' | 'ghost' | 'danger';
+
+const BUTTON_BASE =
+  'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-default';
+
+const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+  primary:
+    'bg-[var(--accent)] text-[var(--accent-fg)] hover:enabled:bg-[var(--accent-hover)] border border-transparent',
+  ghost:
+    'bg-transparent text-[var(--screen-fg)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
+  danger:
+    'bg-transparent text-[var(--danger)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
+};
+
+export function Button({
+  variant = 'primary',
+  className = '',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+  return <button className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${className}`} {...props} />;
+}
+
+export function TextField({
+  label,
+  hint,
+  error,
+  id,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; error?: string }) {
+  const describedBy = error !== undefined ? `${id}-error` : hint !== undefined ? `${id}-hint` : undefined;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm text-[var(--key-fg-dim)]">
+        {label}
+      </label>
+      <input
+        id={id}
+        aria-describedby={describedBy}
+        aria-invalid={error !== undefined}
+        className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+        {...props}
+      />
+      {error !== undefined ? (
+        <p id={`${id}-error`} role="alert" className="text-xs text-[var(--danger)]">
+          {error}
+        </p>
+      ) : hint !== undefined ? (
+        <p id={`${id}-hint`} className="text-xs text-[var(--muted)]">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`rounded-xl border border-[var(--border)] bg-[var(--panel-bg)] p-6 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CenteredScreen({ children }: { children: ReactNode }) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <div className="w-full max-w-md">{children}</div>
+    </main>
+  );
+}
+
+export interface SegmentedOption<T extends string> {
+  value: T;
+  label: string;
+  testId: string;
+}
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: SegmentedOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex overflow-hidden rounded-md border border-[var(--border)]"
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          data-testid={option.testId}
+          aria-pressed={option.value === value}
+          onClick={() => onChange(option.value)}
+          className={
+            option.value === value
+              ? 'bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]'
+              : 'px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
+          }
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}

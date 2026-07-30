@@ -1,0 +1,118 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { t } from '../i18n';
+import { ApiError } from '../services/api';
+import { authService } from '../services/auth';
+import { useAuthStore } from '../store/auth';
+import { Button, Card, CenteredScreen, TextField } from '../ui/controls';
+
+/**
+ * Vault-style login: one password field, no user name (popy.spec §9).
+ *
+ * When the server locks the account, the countdown ticks on screen rather than
+ * showing a frozen number -- being told "wait 4 minutes" and having no idea
+ * how much of it is left is the frustrating version of this screen.
+ */
+export function LoginPage() {
+  const navigate = useNavigate();
+  const signIn = useAuthStore((state) => state.signIn);
+
+  const [password, setPassword] = useState('');
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [lockedFor, setLockedFor] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (lockedFor <= 0) return;
+    const timer = setInterval(() => setLockedFor((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [lockedFor]);
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (busy || password.length === 0 || lockedFor > 0) return;
+
+    setBusy(true);
+    setError(undefined);
+    try {
+      const { token } = await authService.login(password);
+      signIn(token, keepSignedIn);
+      navigate('/');
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.code === 'locked') {
+        setLockedFor(cause.retryAfterSeconds ?? 30);
+        setError(undefined);
+      } else if (cause instanceof ApiError && cause.code === 'rate_limited') {
+        setError(t('login.rateLimited'));
+      } else if (cause instanceof ApiError && cause.code === 'invalid_credentials') {
+        setError(t('login.invalid'));
+      } else {
+        setError(t('error.generic'));
+      }
+      setPassword('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <CenteredScreen>
+      <Card>
+        <form className="flex flex-col gap-5" onSubmit={(event) => void submit(event)}>
+          <h1 className="text-xl font-semibold">{t('login.title')}</h1>
+
+          <TextField
+            id="login-password"
+            data-testid="login-password"
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            label={t('login.password')}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            {...(error !== undefined ? { error } : {})}
+          />
+
+          {lockedFor > 0 ? (
+            <p role="alert" data-testid="login-locked" className="text-sm text-[var(--danger)]">
+              {t('login.locked', { seconds: lockedFor })}
+            </p>
+          ) : null}
+
+          <label className="flex items-center gap-2 text-sm text-[var(--key-fg-dim)]">
+            <input
+              type="checkbox"
+              data-testid="login-keep-signed-in"
+              checked={keepSignedIn}
+              onChange={(event) => setKeepSignedIn(event.target.checked)}
+            />
+            {t('login.keepSignedIn')}
+          </label>
+
+          <Button
+            type="submit"
+            data-testid="login-submit"
+            disabled={busy || password.length === 0 || lockedFor > 0}
+          >
+            {t('login.submit')}
+          </Button>
+
+          {/*
+            Biometric unlock (WebAuthn) lands in a later version; the row is
+            kept so adding the button does not reshuffle this screen.
+          */}
+          <div className="min-h-6 text-center">
+            <Link
+              to="/recover"
+              data-testid="login-forgot"
+              className="text-xs text-[var(--muted)] underline underline-offset-2"
+            >
+              {t('login.forgot')}
+            </Link>
+          </div>
+        </form>
+      </Card>
+    </CenteredScreen>
+  );
+}

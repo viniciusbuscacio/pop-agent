@@ -7,7 +7,7 @@ import type { SettingsService } from '../../application/settings/settings-servic
 import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
-import { HOME_PAGE } from './home-page.js';
+import { createStaticSite } from './static-site.js';
 
 export interface AppDeps {
   auth: AuthService;
@@ -18,13 +18,12 @@ export interface AppDeps {
    * port with a live reader would buy nothing.
    */
   versions: AboutResponse;
+  /** Directory holding the built frontend (web/dist). */
+  webDist: string;
 }
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
-
-  // Placeholder landing page until the React web/ frontend lands.
-  app.get('/', (c) => c.html(HOME_PAGE));
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
@@ -61,11 +60,11 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
 
+  // Last: anything that is not an API route is the frontend or a 404.
+  app.use(createStaticSite(deps.webDist));
+
   app.notFound((c) =>
-    c.json(
-      { error: { code: 'not_found', message: 'Route not found', status: 404 } },
-      404,
-    ),
+    c.json({ error: { code: 'not_found', message: 'Route not found', status: 404 } }, 404),
   );
 
   return app;

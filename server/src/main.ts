@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { AuthService } from './application/auth/auth-service.js';
 import { systemClock } from './application/ports/clock.js';
@@ -9,6 +10,10 @@ import { createApp } from './interface/http/app.js';
 
 const port = Number(process.env['POPY_PORT'] ?? 8787);
 const hostname = process.env['POPY_BIND'] ?? '127.0.0.1';
+
+// Resolves the same from src/ (tsx) and dist/ (compiled): both sit two levels
+// below the repo root.
+const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
 
 // Composition root: the one place that knows every layer (popy.spec §3).
 const context = bootstrap();
@@ -24,6 +29,7 @@ const app = createApp({
   settings: new SettingsService(context.settings),
   clock: systemClock,
   versions: readVersions(),
+  webDist,
 });
 
 serve({ fetch: app.fetch, port, hostname }, (info) => {
