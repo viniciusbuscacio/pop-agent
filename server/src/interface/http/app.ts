@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { StreamEvent } from '@popy/shared';
+import { HOME_PAGE } from './home-page.js';
 
 export function createApp(): Hono {
   const app = new Hono();
+
+  // Placeholder landing page until the React `web/` frontend lands.
+  app.get('/', (c) => c.html(HOME_PAGE));
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
