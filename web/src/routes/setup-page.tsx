@@ -164,6 +164,7 @@ export function SetupPage() {
  * rules), so the meter should measure the thing that is actually required.
  */
 function StrengthMeter({ password }: { password: string }) {
+  const empty = password.length === 0;
   const level = password.length >= 20 ? 2 : password.length >= 14 ? 1 : 0;
   const labels = [t('setup.strength.weak'), t('setup.strength.fair'), t('setup.strength.strong')];
   const colours = ['var(--danger)', 'var(--muted)', 'var(--success)'];
@@ -171,14 +172,17 @@ function StrengthMeter({ password }: { password: string }) {
   return (
     <div className="flex items-center gap-3" data-testid="setup-strength">
       <div className="h-1 flex-1 overflow-hidden rounded bg-[var(--border)]">
+        {/* An untouched field is not "weak" -- it is unanswered, so the bar
+            stays empty until there is something to judge. */}
         <div
           className="h-full transition-all"
-          style={{ width: `${String((level + 1) * 33)}%`, background: colours[level] }}
+          style={{
+            width: empty ? '0%' : `${String((level + 1) * 33)}%`,
+            background: colours[level],
+          }}
         />
       </div>
-      <span className="w-14 text-right text-xs text-[var(--muted)]">
-        {password.length === 0 ? '' : labels[level]}
-      </span>
+      <span className="w-14 text-right text-xs text-[var(--muted)]">{empty ? '' : labels[level]}</span>
     </div>
   );
 }
