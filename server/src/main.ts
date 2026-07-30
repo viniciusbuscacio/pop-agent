@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { createApp } from './api/app.js';
+import { createApp } from './interface/http/app.js';
 
 const port = Number(process.env['POPY_PORT'] ?? 3999);
 const hostname = process.env['POPY_BIND'] ?? '127.0.0.1';

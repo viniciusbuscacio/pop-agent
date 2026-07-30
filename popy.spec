@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.3 — 2026-07-30.
+Version 1.4 — 2026-07-30.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -52,31 +52,49 @@ popy/
 ├── AGENTS.md              # pointer here + repo specifics
 ├── CLAUDE.md              # "@AGENTS.md"
 ├── package.json           # workspaces: shared, server, web
-├── shared/src/types.ts    # Chat, Message, StreamEvent, ApiError, Settings…
+├── shared/src/            # THE DTO LAYER — wire contract, pure types
 ├── server/src/
-│   ├── core/              # PURE — no framework/IO imports
-│   │   ├── chat/          #   conversation rules, titles, queueing
-│   │   ├── memory/        #   infinite memory (§7)
-│   │   ├── skills/        #   skill selection mini-RAG (§8)
-│   │   ├── safety/        #   external-content envelope (§10)
-│   │   └── auth/          #   HMAC tokens, epoch (§9)
-│   ├── infra/             # adapters with IO
+│   ├── domain/            # entities, value objects, domain errors, pure
+│   │   │                  #   services (e.g. safety §10) — innermost layer
+│   ├── application/       # use cases + ports/ (interfaces implemented by
+│   │   │                  #   outer layers): chat, memory §7, skills §8,
+│   │   │                  #   auth §9
+│   ├── infrastructure/    # adapters with IO implementing the ports
 │   │   ├── db/            #   SQLite + migrations + FTS5 + vec
 │   │   ├── agent/         #   pi SDK bridge (§5)
 │   │   ├── notes/         #   Popy's own notes vault (§11)
 │   │   ├── web/           #   web_fetch for the agent (§12)
 │   │   ├── backup/        #   snapshots (§16)
 │   │   └── update/        #   pi auto-update (§15)
-│   ├── api/               # HTTP routes, SSE, control plane
-│   ├── cli/               # popy subcommands (§17)
-│   └── main.ts            # composition root
+│   ├── interface/         # delivery: HTTP routes, SSE, control plane, CLI
+│   │   │                  #   §17 — Zod validation, DTO ↔ domain mapping
+│   ├── architecture/      # boundary test (see below)
+│   └── main.ts            # composition root — the only place that wires
+│                          #   layers together
 └── web/                   # React PWA (§13–14)
 ```
 
-- `core/` never imports from `infra/` or `api/`. Enforced by an
-  architecture test (dependency-cruiser or an import-grep test) that fails
+**The backend is 100% clean architecture** (aw's `internal/` layout ported:
+domain / application / dto / infrastructure / appcore → interface+main):
+
+- **Dependency rule**, enforced by `server/src/architecture/boundary.test.ts`
+  (runs in the gate; aw's `boundary_test.go` ported): `domain` imports
+  nothing; `application` imports only `domain`; `infrastructure` imports
+  `application` + `domain`; `interface` imports `application` + `domain` +
+  `shared`; `main.ts` wires everything. Any other cross-layer import fails
   the gate.
-- Persistence is behind repository interfaces defined in `core/`
+- **Inner layers are pure** (aw's second test): `domain`, `application` and
+  `shared` may use Node built-ins but NEVER third-party packages.
+  Exceptions only via an explicit allowlist in the boundary test, each with
+  a TODO — the aw shrinking-allowlist spirit.
+- **DTOs standardize everything that crosses the boundary**: `shared/` is
+  the DTO layer — plain types, zero dependencies (`StreamEvent`,
+  `ApiError`, request/response shapes). Domain objects never leave the
+  application layer; the interface layer validates inbound payloads with
+  Zod and maps use-case results to DTOs explicitly. Being a workspace
+  package, the same DTOs are consumed by `web/` — the frontend needs no
+  architecture of its own, just the wire contract.
+- Persistence is behind ports defined in `application/ports/`
   (`ChatRepo`, `MemoryRepo`, `SkillRepo`…). SQLite is an adapter. A future
   multi-user Postgres port = new adapter, not a rewrite. No ORM as an
   abstraction bet; optionally Drizzle as a typed query builder inside the
@@ -101,7 +119,7 @@ popy/
 - `POPY_WORKSPACE` (default `~/popy-workspace/`): the single root directory
   where the agent works; remote-coding repos are cloned as subfolders.
 
-## 5. pi integration (`infra/agent/`)
+## 5. pi integration (`infrastructure/agent/`)
 
 - Package `@earendil-works/pi-coding-agent`, embedded via SDK
   (`createAgentSession`). Plan B if crash isolation ever demands it: pi as
@@ -156,7 +174,7 @@ skills_index(skill_id, name, description, source, embedding)  -- §8
 - IDs: aw's scheme — `chat-` + 12 hex, `msg-` + 16 hex, etc., from a CSPRNG.
 - Attachments live on disk (`attachments/`), DB stores metadata. 16 MB cap.
 
-## 7. Infinite memory (`core/memory/`)
+## 7. Infinite memory (`application/memory/`)
 
 Hybrid search from day one: FTS5 (lexical) + sqlite-vec (semantic), fused
 with RRF. Three layers, aw's design rewritten:
@@ -225,7 +243,7 @@ user message — selection is 100% local, no LLM call:
   leaked backup leaks no keys; restore on a new machine = re-enter keys.
   Root-level attackers are out of scope and the README says so.
 
-## 10. External-content safety (`core/safety/`)
+## 10. External-content safety (`domain/safety/`)
 
 Mandatory because the agent runs full-power (§5). Deterministic layer (no
 LLM) over everything from outside — web, files, notes, tool output:
@@ -240,7 +258,7 @@ LLM) over everything from outside — web, files, notes, tool output:
   inline UI confirmation (Allow / Deny in the chat). This is the ONLY
   brake on yolo mode.
 
-## 11. Notes (`infra/notes/`)
+## 11. Notes (`infrastructure/notes/`)
 
 Popy owns its notes: a vault of plain markdown files at
 `POPY_DATA_DIR/notes/`, created and maintained by the agent. No external
@@ -252,7 +270,7 @@ sync/open it externally.
 - Path jail, ported line-by-line as a concept from aw: resolve real path
   (symlinks) against the notes root, reject `..` and absolute escapes.
 
-## 12. Web access (`infra/web/`)
+## 12. Web access (`infrastructure/web/`)
 
 - v0.1: `web_fetch(url)` — fetch + Readability extraction + safety envelope
   (§10). pi has NO native web tools (confirmed) — this is a Popy custom
@@ -438,6 +456,11 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.4 (2026-07-30): backend is 100% clean architecture (§3) — aw's layer
+  model ported (domain / application / infrastructure / interface, DTOs in
+  `shared/`, composition root in main.ts), with the boundary test enforcing
+  the dependency rule and inner-layer purity in the gate; section paths
+  updated (§5, §7, §10–12).
 - 1.3 (2026-07-30): repo bootstrapped on the Windows dev machine (Mac has
   npm blocked); §20 dev environment updated; WebAuthn routes added to §13.
 - 1.2 (2026-07-30): biometric unlock via WebAuthn/passkey added to §9

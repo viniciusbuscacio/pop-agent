@@ -7,9 +7,13 @@ Quick facts for agents working in this repo:
 - Popy is a self-hosted, single-user personal agent platform. Node 22 +
   TypeScript strict, pure ESM, monorepo (`shared/`, `server/`, `web/`).
   The engine is the pi agent (`@earendil-works/pi-coding-agent`) via SDK.
-- Architecture law: `server/src/core/` is pure (no framework/IO imports —
-  an architecture test enforces it); `infra/` holds adapters; the React
-  app only paints. Components never call `fetch` — only `web/src/services/*`.
+- Architecture law: the backend is 100% clean architecture —
+  `domain / application / infrastructure / interface` + `main.ts` as the
+  composition root, DTOs in `shared/` (the wire contract, consumed by web
+  too). Domain objects never cross the interface boundary. The dependency
+  rule and inner-layer purity are enforced by
+  `server/src/architecture/boundary.test.ts` in the gate. The React app
+  only paints; components never call `fetch` — only `web/src/services/*`.
 - Gate before every commit: `npm run gate` (lint + typecheck + tests +
   build). Green gate → conventional commit straight to main. English
   everywhere in the repo.
