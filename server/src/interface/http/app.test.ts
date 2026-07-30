@@ -1,22 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from './app.js';
+import { createTestApp } from './test-fixture.js';
 
 describe('app', () => {
   it('healthz responds ok without auth', async () => {
-    const res = await createApp().request('/healthz');
+    const res = await createTestApp().app.request('/healthz');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 
+  it('serves the placeholder landing page at the root', async () => {
+    const res = await createTestApp().app.request('/');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+  });
+
   it('unknown routes return the structured error shape', async () => {
-    const res = await createApp().request('/nope');
+    const res = await createTestApp().app.request('/nope');
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error).toMatchObject({ code: 'not_found', status: 404 });
   });
 
   it('/v1/events is an SSE stream whose first event is a delta', async () => {
-    const res = await createApp().request('/v1/events');
+    const res = await createTestApp().app.request('/v1/events');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/event-stream');
 

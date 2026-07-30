@@ -1,15 +1,28 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { StreamEvent } from '@popy/shared';
+import type { AuthService } from '../../application/auth/auth-service.js';
+import type { Clock } from '../../application/ports/clock.js';
+import { authMiddleware } from './auth-middleware.js';
+import { createAuthRoutes } from './auth-routes.js';
 import { HOME_PAGE } from './home-page.js';
 
-export function createApp(): Hono {
+export interface AppDeps {
+  auth: AuthService;
+  clock: Clock;
+}
+
+export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
-  // Placeholder landing page until the React `web/` frontend lands.
+  // Placeholder landing page until the React web/ frontend lands.
   app.get('/', (c) => c.html(HOME_PAGE));
 
   app.get('/healthz', (c) => c.json({ ok: true }));
+
+  // Guard everything under /v1 except the handful of public auth endpoints.
+  app.use('/v1/*', authMiddleware(deps.auth));
+  app.route('/v1', createAuthRoutes(deps));
 
   // Skeleton hello-world: streams a fake run over the real SSE channel so
   // the transport can be exercised end to end (curl, tests, smoke) before
