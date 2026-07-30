@@ -1,0 +1,248 @@
+import { DEFAULT_CHAT_TITLE, type ToolRecord } from '../../domain/chat/chat.js';
+import { newMessageId, newRunId } from '../../domain/ids.js';
+import { fallbackTitle } from '../../domain/chat/title.js';
+import type { AgentBridge } from '../ports/agent-bridge.js';
+import type { ChatRepo } from '../ports/chat-repo.js';
+import type { Clock } from '../ports/clock.js';
+import type { EventSink } from '../ports/event-sink.js';
+
+/**
+ * Turning a typed message into a run, and a run into a stored answer
+ * (docs/agent-flow.md).
+ *
+ * Two limits shape this. **One run per chat**, because a conversation with two
+ * answers arriving at once is not a conversation. And a **global ceiling** on
+ * how many talk to the engine at the same time -- twenty by default -- with
+ * everything past it queued rather than refused, so opening a burst of chats
+ * degrades into waiting instead of failing.
+ *
+ * Nothing here knows about HTTP or about pi: it drives the AgentBridge port
+ * and announces what happens through the EventSink.
+ */
+
+export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
+
+export type StartRunResult =
+  | { ok: true; runId: string; userMessageId: string }
+  | { ok: false; reason: 'chat_not_found' | 'run_in_progress' };
+
+export interface RunDeps {
+  chats: ChatRepo;
+  bridge: AgentBridge;
+  sink: EventSink;
+  clock: Clock;
+  maxConcurrentRuns?: number;
+}
+
+interface PendingRun {
+  runId: string;
+  chatId: string;
+  prompt: string;
+  model: string;
+  controller: AbortController;
+  started: boolean;
+}
+
+export class RunService {
+  private readonly runs = new Map<string, PendingRun>();
+  private readonly runIdByChat = new Map<string, string>();
+  private readonly queue: string[] = [];
+  private readonly idleWaiters: (() => void)[] = [];
+  private running = 0;
+
+  constructor(private readonly deps: RunDeps) {}
+
+  private get ceiling(): number {
+    return this.deps.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS;
+  }
+
+  /**
+   * Persists the user's message and schedules the run, then returns: the
+   * answer arrives over the event stream, not in this response.
+   */
+  startRun(chatId: string, text: string): StartRunResult {
+    const chat = this.deps.chats.get(chatId);
+    if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
+    if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
+
+    const now = new Date(this.deps.clock.now()).toISOString();
+    const isFirstMessage = this.deps.chats.countMessages(chatId) === 0;
+
+    const userMessage = this.deps.chats.appendMessage({
+      id: newMessageId(),
+      chatId,
+      role: 'user',
+      content: text,
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: now,
+    });
+    this.deps.chats.touch(chatId, now);
+
+    // A sidebar full of "New chat" is a sidebar you cannot read. Phase 3 lets
+    // a model write this; until then the first message names the chat.
+    if (isFirstMessage && chat.title === DEFAULT_CHAT_TITLE) {
+      const title = fallbackTitle(text, this.deps.chats.titles());
+      this.deps.chats.rename(chatId, title);
+      this.deps.sink.emit({ kind: 'title', chatId, title });
+    }
+
+    const run: PendingRun = {
+      runId: newRunId(),
+      chatId,
+      prompt: text,
+      model: chat.model,
+      controller: new AbortController(),
+      started: false,
+    };
+    this.runs.set(run.runId, run);
+    this.runIdByChat.set(chatId, run.runId);
+
+    if (this.running < this.ceiling) {
+      void this.execute(run);
+    } else {
+      this.queue.push(run.runId);
+      this.deps.sink.emit({ kind: 'run-status', chatId, runId: run.runId, status: 'queued' });
+    }
+
+    return { ok: true, runId: run.runId, userMessageId: userMessage.id };
+  }
+
+  /** Stops whatever this chat is doing. False when it was not doing anything. */
+  stopRun(chatId: string): boolean {
+    const runId = this.runIdByChat.get(chatId);
+    if (runId === undefined) return false;
+    const run = this.runs.get(runId);
+    if (run === undefined) return false;
+
+    if (run.started) {
+      run.controller.abort();
+      return true;
+    }
+
+    // Still queued: it never reached the engine, so there is nothing to abort
+    // and no partial answer to keep. It is still reported as aborted, because
+    // a client that asked for a stop needs to stop waiting.
+    const queuedAt = this.queue.indexOf(runId);
+    if (queuedAt >= 0) this.queue.splice(queuedAt, 1);
+    this.runs.delete(runId);
+    this.runIdByChat.delete(chatId);
+    this.deps.sink.emit({ kind: 'error', chatId, runId, code: 'aborted' });
+    this.settle();
+    return true;
+  }
+
+  /** Resolves once nothing is running or waiting. Used by tests and shutdown. */
+  whenIdle(): Promise<void> {
+    if (this.isIdle()) return Promise.resolve();
+    return new Promise((resolve) => this.idleWaiters.push(resolve));
+  }
+
+  private async execute(run: PendingRun): Promise<void> {
+    this.running += 1;
+    run.started = true;
+    const { chats, bridge, sink, clock } = this.deps;
+
+    sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
+
+    let content = '';
+    let thinking = '';
+    const tools: ToolRecord[] = [];
+    let failure: string | undefined;
+
+    try {
+      await bridge.run({
+        chatId: run.chatId,
+        prompt: run.prompt,
+        model: run.model,
+        signal: run.controller.signal,
+        onEvent: (event) => {
+          switch (event.kind) {
+            case 'delta':
+              content += event.text;
+              sink.emit({ kind: 'delta', chatId: run.chatId, runId: run.runId, text: event.text });
+              break;
+            case 'thinking':
+              thinking += event.text;
+              sink.emit({ kind: 'thinking', chatId: run.chatId, runId: run.runId, text: event.text });
+              break;
+            case 'tool':
+              tools.push({ name: event.name, status: event.status, detail: event.detail });
+              sink.emit({
+                kind: 'tool',
+                chatId: run.chatId,
+                runId: run.runId,
+                name: event.name,
+                status: event.status,
+                detail: event.detail,
+              });
+              break;
+            case 'error':
+              // Recorded, not emitted yet: the terminal event goes out after
+              // whatever did arrive has been saved.
+              failure ??= event.code;
+              break;
+          }
+        },
+      });
+    } catch {
+      failure ??= 'operation_error';
+    }
+
+    const finishedAt = new Date(clock.now()).toISOString();
+    const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
+    let messageId = '';
+
+    // On success the message is always stored, so `done` can carry a real id.
+    // On failure it is stored only if the answer had started -- a user who
+    // watched half a reply appear should still find it after a reload.
+    if (failure === undefined || somethingArrived) {
+      messageId = chats.appendMessage({
+        id: newMessageId(),
+        chatId: run.chatId,
+        role: 'assistant',
+        content,
+        thinking,
+        tools,
+        attachments: [],
+        createdAt: finishedAt,
+      }).id;
+      chats.touch(run.chatId, finishedAt);
+    }
+
+    sink.emit(
+      failure === undefined
+        ? { kind: 'done', chatId: run.chatId, runId: run.runId, messageId }
+        : { kind: 'error', chatId: run.chatId, runId: run.runId, code: failure },
+    );
+
+    this.finish(run);
+  }
+
+  private finish(run: PendingRun): void {
+    this.running -= 1;
+    this.runs.delete(run.runId);
+    this.runIdByChat.delete(run.chatId);
+    this.drain();
+    this.settle();
+  }
+
+  private drain(): void {
+    while (this.running < this.ceiling && this.queue.length > 0) {
+      const runId = this.queue.shift();
+      if (runId === undefined) return;
+      const next = this.runs.get(runId);
+      if (next !== undefined) void this.execute(next);
+    }
+  }
+
+  private isIdle(): boolean {
+    return this.running === 0 && this.queue.length === 0 && this.runs.size === 0;
+  }
+
+  private settle(): void {
+    if (!this.isIdle()) return;
+    for (const resolve of this.idleWaiters.splice(0)) resolve();
+  }
+}
