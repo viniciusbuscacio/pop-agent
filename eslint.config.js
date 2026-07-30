@@ -11,6 +11,14 @@ export default tseslint.config(
     },
   },
   {
+    // Plain-JS build scripts run under Node. TypeScript files get this from
+    // the compiler, but no-undef still applies to .mjs.
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: { Buffer: 'readonly', console: 'readonly', process: 'readonly' },
+    },
+  },
+  {
     // The services layer is the only door to the outside (popy.spec §14).
     // A component reaching for fetch/EventSource directly fails the gate.
     files: ['web/src/**/*.{ts,tsx}'],
