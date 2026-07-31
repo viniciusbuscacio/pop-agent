@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { ChatDTO } from '@popy/shared';
 import { t } from '../i18n';
@@ -103,6 +103,9 @@ export function ChatList() {
   );
 }
 
+/** How far a finger must travel before the swipe action fires. */
+const SWIPE_TRIGGER_PX = 72;
+
 function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean }) {
   const rename = useChatStore((state) => state.rename);
   const setArchived = useChatStore((state) => state.setArchived);
@@ -112,6 +115,66 @@ function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(chat.title);
+
+  // Swipe (touch only; the desktop keeps the row menu): right = delete,
+  // left = archive -- Vinicius's mapping, 31/07. touch-action: pan-y leaves
+  // vertical scrolling to the browser, so only a sideways drag reaches here.
+  const [dx, setDx] = useState(0);
+  // The state paints the drag; the refs carry the truth, because a fast
+  // gesture ends before React re-renders the handlers' closures.
+  const dxRef = useRef(0);
+  const swiped = useRef(false);
+  const touch = useRef<{ id: number; startX: number; startY: number; horizontal: boolean } | null>(
+    null,
+  );
+
+  function confirmDelete(): void {
+    if (window.confirm(t('shell.deleteConfirm', { title: chat.title }))) {
+      void remove(chat.id);
+    }
+  }
+
+  function onPointerDown(event: React.PointerEvent): void {
+    if (event.pointerType !== 'touch') return;
+    touch.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      horizontal: false,
+    };
+  }
+
+  function onPointerMove(event: React.PointerEvent): void {
+    const state = touch.current;
+    if (state === null || event.pointerId !== state.id) return;
+    const deltaX = event.clientX - state.startX;
+    const deltaY = event.clientY - state.startY;
+    if (!state.horizontal) {
+      // Decide the gesture once: mostly sideways is a swipe, anything else
+      // stays a scroll/tap and never moves the row.
+      if (Math.abs(deltaX) < 8) return;
+      if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+        touch.current = null;
+        return;
+      }
+      state.horizontal = true;
+    }
+    dxRef.current = deltaX;
+    setDx(deltaX);
+  }
+
+  function onPointerEnd(event: React.PointerEvent): void {
+    const state = touch.current;
+    if (state === null || event.pointerId !== state.id) return;
+    touch.current = null;
+    const deltaX = dxRef.current;
+    dxRef.current = 0;
+    setDx(0);
+    if (!state.horizontal) return;
+    swiped.current = true;
+    if (deltaX >= SWIPE_TRIGGER_PX) confirmDelete();
+    else if (deltaX <= -SWIPE_TRIGGER_PX) void setArchived(chat.id, !archived);
+  }
 
   async function commitRename(): Promise<void> {
     setEditing(false);
@@ -141,7 +204,44 @@ function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean
   }
 
   return (
-    <li className="group relative">
+    <li className="group relative overflow-hidden">
+      {/* The colour that a drag uncovers: delete behind a right swipe, archive behind a left one. */}
+      {dx > 0 ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-start bg-[var(--danger)] pl-4 text-sm font-semibold text-white"
+        >
+          {t('shell.delete')}
+        </div>
+      ) : dx < 0 ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-end bg-[var(--accent)] pr-4 text-sm font-semibold text-[var(--accent-fg)]"
+        >
+          {archived ? t('shell.unarchive') : t('shell.archive')}
+        </div>
+      ) : null}
+
+      <div
+        data-testid="chat-row-surface"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onClickCapture={(event) => {
+          // A finished swipe must not also open the conversation.
+          if (swiped.current) {
+            swiped.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        style={{
+          transform: dx === 0 ? undefined : `translateX(${String(dx)}px)`,
+          touchAction: 'pan-y',
+        }}
+        className="relative bg-[var(--panel-bg)]"
+      >
       <NavLink
         to={`/chat/${chat.id}`}
         data-testid="chat-row"
@@ -201,13 +301,12 @@ function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean
             danger
             onClick={() => {
               setMenuOpen(false);
-              if (window.confirm(t('shell.deleteConfirm', { title: chat.title }))) {
-                void remove(chat.id);
-              }
+              confirmDelete();
             }}
           />
         </div>
       ) : null}
+      </div>
     </li>
   );
 }
