@@ -86,5 +86,13 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         runId: event.runId,
         status: event.status,
       };
+    case 'confirm':
+      return {
+        kind: 'confirm',
+        chatId: event.chatId,
+        runId: event.runId,
+        action: event.action,
+        detail: event.detail,
+      };
   }
 }

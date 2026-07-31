@@ -1,5 +1,13 @@
 import { mkdirSync } from 'node:fs';
-import type { AgentSession, AgentSessionEvent, ModelRuntime } from '@earendil-works/pi-coding-agent';
+import type {
+  AgentSession,
+  AgentSessionEvent,
+  ExtensionAPI,
+  ModelRuntime,
+  ToolCallEvent,
+  ToolCallEventResult,
+  ToolResultEvent,
+} from '@earendil-works/pi-coding-agent';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 
@@ -42,12 +50,30 @@ export class PiEngineError extends Error {
   }
 }
 
+/**
+ * The safety valve the bridge sets around a run (popy.spec §10). pi calls it
+ * before a tool runs and after one produces output; it is what turns "a run
+ * that read something suspicious" into "a destructive command that has to be
+ * confirmed first".
+ */
+export interface ToolGuard {
+  /** A tool produced output; its text feeds the per-turn taint. */
+  onToolResult(text: string): void;
+  /** Before a tool runs. Resolve `block: true` to stop it. */
+  onToolCall(
+    tool: string,
+    input: Record<string, unknown>,
+  ): Promise<{ block: boolean; reason?: string }>;
+}
+
 /** One conversation's live pi session. */
 export interface PiSession {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string): Promise<void>;
   abort(): Promise<void>;
   setModel(modelId: string): Promise<void>;
+  /** Sets (or clears) the guard pi consults around each tool call. */
+  setGuard(guard: ToolGuard | undefined): void;
   dispose(): void;
   /** Path of pi's JSONL file for this session, once it has one. */
   readonly sessionFile: string | undefined;
@@ -125,10 +151,16 @@ export class SdkPiEngine implements PiEngine {
             this.options.workspace,
           );
 
+    // The one thing whose output can block a tool: an inline extension that
+    // asks the session's current guard before every tool runs, and feeds it
+    // every tool result (popy.spec §10). `noExtensions` still keeps pi's own
+    // extensions out; this is ours, not the host's.
+    const guardSlot: { current: ToolGuard | undefined } = { current: undefined };
+
     // A server has no use for pi's CLI trimmings -- skills, prompt templates,
-    // themes, extensions, context files scavenged from the workspace -- and
-    // every one of them is a way for host state to leak into the prompt. What
-    // the model hears is exactly Popy's prompt plus the user's instructions.
+    // themes, context files scavenged from the workspace -- and every one of
+    // them is a way for host state to leak into the prompt. What the model
+    // hears is exactly Popy's prompt plus the user's instructions.
     const resourceLoader = new sdk.DefaultResourceLoader({
       cwd: this.options.workspace,
       agentDir: this.options.agentDir,
@@ -138,6 +170,27 @@ export class SdkPiEngine implements PiEngine {
       noThemes: true,
       noContextFiles: true,
       systemPrompt: SYSTEM_PROMPT,
+      extensionFactories: [
+        (pi: ExtensionAPI) => {
+          const onToolCall = async (event: ToolCallEvent): Promise<ToolCallEventResult> => {
+            const guard = guardSlot.current;
+            if (guard === undefined) return {};
+            const verdict = await guard.onToolCall(event.toolName, event.input);
+            if (!verdict.block) return {};
+            return verdict.reason === undefined
+              ? { block: true }
+              : { block: true, reason: verdict.reason };
+          };
+          const onToolResult = (event: ToolResultEvent): void => {
+            const text = event.content
+              .map((part) => (part.type === 'text' ? part.text : ''))
+              .join('');
+            guardSlot.current?.onToolResult(text);
+          };
+          pi.on('tool_call', onToolCall);
+          pi.on('tool_result', onToolResult);
+        },
+      ],
       ...(options.instructions.length === 0
         ? {}
         : { appendSystemPrompt: [options.instructions] }),
@@ -153,7 +206,7 @@ export class SdkPiEngine implements PiEngine {
       resourceLoader,
     });
 
-    return new SdkPiSession(session, runtime);
+    return new SdkPiSession(session, runtime, guardSlot);
   }
 
   /** Listing does not need a key -- the catalog is built into pi. */
@@ -210,7 +263,12 @@ class SdkPiSession implements PiSession {
   constructor(
     private readonly session: AgentSession,
     private readonly runtime: ModelRuntime,
+    private readonly guardSlot: { current: ToolGuard | undefined },
   ) {}
+
+  setGuard(guard: ToolGuard | undefined): void {
+    this.guardSlot.current = guard;
+  }
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void {
     return this.session.subscribe(listener);

@@ -131,6 +131,11 @@ class ScriptedSession implements PiSession {
     return Promise.resolve();
   }
 
+  guard: import('./pi-engine.js').ToolGuard | undefined;
+  setGuard(guard: import('./pi-engine.js').ToolGuard | undefined): void {
+    this.guard = guard;
+  }
+
   dispose(): void {
     this.disposed = true;
   }

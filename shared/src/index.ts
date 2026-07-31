@@ -192,6 +192,17 @@ export interface StopRunResponse {
   stopped: boolean;
 }
 
+/** `POST /v1/chats/:id/confirm` — answers a paused risky action (popy.spec §10). */
+export interface ConfirmRequest {
+  runId: string;
+  allow: boolean;
+}
+
+export interface ConfirmResponse {
+  /** False when there was no pending confirmation to answer. */
+  answered: boolean;
+}
+
 /** One row of the model catalog. Everything past the id is best-effort. */
 export interface ModelDTO {
   id: string;
@@ -289,6 +300,8 @@ export type StreamEvent =
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string }
   | { kind: 'title'; chatId: string; title: string }
+  /** A risky action is paused mid-run, waiting for Allow or Deny (popy.spec §10). */
+  | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
   | { kind: 'update'; status: 'available' | 'installing' | 'done' | 'error' };

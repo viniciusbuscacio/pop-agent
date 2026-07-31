@@ -483,3 +483,55 @@ describe('the live snapshot', () => {
     expect(sink.of('delta').map((event) => event.seq)).toEqual([1, 2]);
   });
 });
+
+describe('confirmation of a risky action', () => {
+  it('emits a confirm card and unblocks when the user allows', async () => {
+    const chatId = newChat();
+    let decision: boolean | undefined;
+    bridge.script = async (request) => {
+      // The bridge asks mid-run; the run waits on the answer.
+      decision = await request.confirm?.({ action: 'run a destructive command', detail: 'rm -rf x' });
+      request.onEvent({ kind: 'delta', text: 'done' });
+    };
+
+    const started = runs.startRun(chatId, 'do the thing');
+    // Let the run reach the confirm await.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const card = sink.of('confirm')[0];
+    expect(card).toBeDefined();
+    expect(card?.action).toBe('run a destructive command');
+
+    const runId = started.ok ? started.runId : '';
+    expect(runs.resolveConfirm(chatId, runId, true)).toBe(true);
+    await runs.whenIdle();
+
+    expect(decision).toBe(true);
+  });
+
+  it('denies on its own after the timeout', async () => {
+    runs = new RunService({
+      chats: repo,
+      bridge,
+      sink,
+      clock: new FixedClock(),
+      confirmTimeoutMs: 10,
+    });
+    const chatId = newChat();
+    let decision: boolean | undefined;
+    bridge.script = async (request) => {
+      decision = await request.confirm?.({ action: 'run a destructive command', detail: 'rm -rf x' });
+    };
+
+    runs.startRun(chatId, 'do it');
+    await runs.whenIdle();
+
+    expect(decision).toBe(false);
+  });
+
+  it('answers false when there is nothing pending', () => {
+    const chatId = newChat();
+    expect(runs.resolveConfirm(chatId, 'run-nope', true)).toBe(false);
+  });
+});

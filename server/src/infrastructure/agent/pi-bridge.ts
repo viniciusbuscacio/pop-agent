@@ -17,6 +17,7 @@ import {
   type PiEngine,
   type PiSession,
 } from './pi-engine.js';
+import { TaintGuard } from './tool-taint.js';
 
 /**
  * pi behind the AgentBridge port (popy.spec §5, docs/agent-flow.md).
@@ -111,6 +112,21 @@ export class PiAgentBridge implements AgentBridge {
       translator.handle(event);
     });
 
+    // The safety guard for this run: it feeds on tool output and blocks a
+    // destructive command in a turn that read something suspicious, unless the
+    // user confirms (popy.spec §10).
+    entry.session.setGuard(
+      new TaintGuard({
+        ...(request.confirm === undefined ? {} : { confirm: request.confirm }),
+        onTaint: (info) =>
+          this.deps.onFailure?.({
+            chatId,
+            code: 'turn_tainted',
+            message: `risk=${info.risk} ${info.warnings.join(',')}`,
+          }),
+      }),
+    );
+
     // pi kills the process group of a running bash child on abort (it spawns
     // detached and SIGKILLs -pid), so stopping a run really does stop the work,
     // not just the stream.
@@ -125,6 +141,7 @@ export class PiAgentBridge implements AgentBridge {
     } catch (error) {
       translator.fail(signal.aborted ? 'aborted' : errorCode(error), messageOf(error));
     } finally {
+      entry.session.setGuard(undefined);
       unsubscribe();
       signal.removeEventListener('abort', onAbort);
       this.release(entry);

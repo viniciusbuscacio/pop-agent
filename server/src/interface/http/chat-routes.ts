@@ -35,6 +35,8 @@ const patchSchema = z
 const MAX_ATTACHMENT_DATA_URI = 22_400_000;
 const MAX_ATTACHMENTS = 8;
 
+const confirmSchema = z.object({ runId: z.string().min(1).max(80), allow: z.boolean() }).strict();
+
 const sendSchema = z
   .object({
     text: z.string().min(1).max(MAX_MESSAGE_LENGTH),
@@ -144,6 +146,17 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const id = c.req.param('id');
     if (deps.chats.get(id) === undefined) return chatNotFound(c);
     return c.json({ stopped: deps.runs.stopRun(id) });
+  });
+
+  routes.post('/chats/:id/confirm', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = confirmSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const id = c.req.param('id');
+    if (deps.chats.get(id) === undefined) return chatNotFound(c);
+    return c.json({ answered: deps.runs.resolveConfirm(id, parsed.data.runId, parsed.data.allow) });
   });
 
   routes.get('/models', async (c) => {

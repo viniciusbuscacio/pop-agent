@@ -23,6 +23,9 @@ import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 
 export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
 
+/** A paused risky action denies itself after this long (popy.spec §10). */
+export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
+
 export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
   | { ok: false; reason: 'chat_not_found' | 'run_in_progress' };
@@ -33,6 +36,8 @@ export interface RunDeps {
   sink: EventSink;
   clock: Clock;
   maxConcurrentRuns?: number;
+  /** Overridable so tests do not wait five minutes for a denial. */
+  confirmTimeoutMs?: number;
   /** Offered every finished run; decides by itself whether to rewrite. */
   titles?: { maybeRetitle(chatId: string): Promise<void> };
   /** Where what the run cost is written down (popy.spec §14). */
@@ -91,11 +96,18 @@ function recordTool(
   last.detail += event.detail;
 }
 
+interface PendingConfirm {
+  resolve: (allow: boolean) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class RunService {
   private readonly runs = new Map<string, PendingRun>();
   private readonly runIdByChat = new Map<string, string>();
   private readonly queue: string[] = [];
   private readonly idleWaiters: (() => void)[] = [];
+  /** Risky actions paused mid-run, keyed by runId, awaiting Allow/Deny. */
+  private readonly confirms = new Map<string, PendingConfirm>();
   private running = 0;
 
   constructor(private readonly deps: RunDeps) {}
@@ -160,6 +172,50 @@ export class RunService {
     }
 
     return { ok: true, runId: run.runId, userMessageId: userMessage.id };
+  }
+
+  /**
+   * Answers a paused risky action. False when there was nothing waiting --
+   * a stale card, or one another device already answered.
+   */
+  resolveConfirm(chatId: string, runId: string, allow: boolean): boolean {
+    const run = this.runs.get(runId);
+    if (run === undefined || run.chatId !== chatId) return false;
+    const pending = this.confirms.get(runId);
+    if (pending === undefined) return false;
+
+    clearTimeout(pending.timer);
+    this.confirms.delete(runId);
+    pending.resolve(allow);
+    return true;
+  }
+
+  /** Emits the confirm card and waits for an answer, or denies on timeout. */
+  private askConfirm(
+    run: PendingRun,
+    question: { action: string; detail: string },
+  ): Promise<boolean> {
+    // A second question on a run that already has one pending cannot happen --
+    // pi runs tools one at a time -- but if it did, the older one is denied.
+    this.confirms.get(run.runId)?.resolve(false);
+
+    this.deps.sink.emit({
+      kind: 'confirm',
+      chatId: run.chatId,
+      runId: run.runId,
+      action: question.action,
+      detail: question.detail,
+    });
+
+    return new Promise<boolean>((resolve) => {
+      const timeoutMs = this.deps.confirmTimeoutMs ?? CONFIRM_TIMEOUT_MS;
+      const timer = setTimeout(() => {
+        this.confirms.delete(run.runId);
+        resolve(false); // silence is a denial
+      }, timeoutMs);
+      timer.unref?.();
+      this.confirms.set(run.runId, { resolve, timer });
+    });
   }
 
   /** Stops whatever this chat is doing. False when it was not doing anything. */
@@ -229,6 +285,7 @@ export class RunService {
         prompt: run.prompt,
         model: run.model,
         attachments: run.attachments,
+        confirm: (question) => this.askConfirm(run, question),
         signal: run.controller.signal,
         onEvent: (event) => {
           // Fragments accumulate on the run itself, so a client mounting
@@ -341,6 +398,13 @@ export class RunService {
     this.running -= 1;
     this.runs.delete(run.runId);
     this.runIdByChat.delete(run.chatId);
+    // A run that ended with a question still open denies it, so nothing leaks.
+    const pending = this.confirms.get(run.runId);
+    if (pending !== undefined) {
+      clearTimeout(pending.timer);
+      this.confirms.delete(run.runId);
+      pending.resolve(false);
+    }
     this.drain();
     this.settle();
   }

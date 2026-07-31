@@ -98,6 +98,11 @@ export const en = {
   'chat.waitingTurn': 'Waiting for a free slot…',
   'chat.stopped': 'You stopped this answer.',
   'chat.failed': 'That answer could not be finished.',
+  'chat.confirm.title': 'Allow Popy to {action}?',
+  'chat.confirm.why':
+    'This run read untrusted external content, so a risky command is held until you decide.',
+  'chat.confirm.allow': 'Allow',
+  'chat.confirm.deny': 'Deny',
   'chat.jumpToLatest': '↓ New messages',
   'chat.model': 'Model',
   'chat.defaultModel': 'Default model',

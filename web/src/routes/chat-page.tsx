@@ -18,9 +18,11 @@ export function ChatPage() {
   const live = useChatStore((state) => state.live[chatId]);
   const queued = useChatStore((state) => state.queued[chatId]);
   const failure = useChatStore((state) => state.failures[chatId]);
+  const confirm = useChatStore((state) => state.confirms[chatId]);
   const openChat = useChatStore((state) => state.openChat);
   const send = useChatStore((state) => state.send);
   const stop = useChatStore((state) => state.stop);
+  const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
 
   const [models, setModels] = useState<string[]>([]);
@@ -151,6 +153,40 @@ export function ChatPage() {
                 }}
               />
             )
+          ) : null}
+
+          {confirm !== undefined ? (
+            <div
+              data-testid="confirm-card"
+              role="alertdialog"
+              className="rounded-lg border border-[var(--danger)] bg-[var(--panel-bg)] p-3"
+            >
+              <p className="text-sm font-medium text-[var(--screen-fg)]">
+                {t('chat.confirm.title', { action: confirm.action })}
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap">
+                {confirm.detail}
+              </pre>
+              <p className="mt-2 text-xs text-[var(--muted)]">{t('chat.confirm.why')}</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  data-testid="confirm-allow"
+                  onClick={() => void respondConfirm(chatId, confirm.runId, true)}
+                  className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--hover-overlay)]"
+                >
+                  {t('chat.confirm.allow')}
+                </button>
+                <button
+                  type="button"
+                  data-testid="confirm-deny"
+                  onClick={() => void respondConfirm(chatId, confirm.runId, false)}
+                  className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-[var(--accent-fg)]"
+                >
+                  {t('chat.confirm.deny')}
+                </button>
+              </div>
+            </div>
           ) : null}
 
           {failure !== undefined ? (

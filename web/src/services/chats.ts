@@ -2,6 +2,7 @@ import type {
   AttachmentDTO,
   ChatDTO,
   ChatListResponse,
+  ConfirmResponse,
   MessagesResponse,
   ModelsResponse,
   PatchChatRequest,
@@ -41,6 +42,13 @@ export const chatsService = {
 
   stop(id: string): Promise<StopRunResponse> {
     return apiRequest<StopRunResponse>(`/chats/${id}/stop`, { method: 'POST' });
+  },
+
+  confirm(id: string, runId: string, allow: boolean): Promise<ConfirmResponse> {
+    return apiRequest<ConfirmResponse>(`/chats/${id}/confirm`, {
+      method: 'POST',
+      body: { runId, allow },
+    });
   },
 
   models(): Promise<ModelsResponse> {

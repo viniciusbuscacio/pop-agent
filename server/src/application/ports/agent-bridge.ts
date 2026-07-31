@@ -20,6 +20,12 @@ export interface AgentRunRequest {
   /** Files sent with the message; the adapter decides how the model sees them. */
   attachments: Attachment[];
   onEvent: (event: AgentEvent) => void;
+  /**
+   * Asks the user to allow a risky action mid-run (popy.spec §10). Resolves
+   * true to proceed, false to block. Absent means "no one is watching" -- the
+   * adapter must treat that as a denial, never a silent yes.
+   */
+  confirm?: (request: { action: string; detail: string }) => Promise<boolean>;
   /** Aborted when the user presses Stop; the adapter must give up promptly. */
   signal: AbortSignal;
 }

@@ -36,12 +36,16 @@ interface ChatState {
   queued: Record<string, { text: string; attachments: AttachmentDTO[] }>;
   failures: Record<string, string>;
 
+  /** A risky action paused mid-run, waiting for Allow or Deny (popy.spec §10). */
+  confirms: Record<string, { runId: string; action: string; detail: string }>;
+
   loadChats: () => Promise<void>;
   loadArchived: () => Promise<void>;
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string) => Promise<void>;
   send: (chatId: string, text: string, attachments?: AttachmentDTO[]) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
+  respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
   setModel: (chatId: string, model: string) => Promise<void>;
@@ -73,6 +77,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   live: {},
   queued: {},
   failures: {},
+  confirms: {},
 
   async loadChats() {
     const { chats } = await chatsService.list(false);
@@ -153,6 +158,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await chatsService.stop(chatId);
   },
 
+  async respondConfirm(chatId, runId, allow) {
+    // Clear the card at once: a second tap must not fire a second answer.
+    set((state) => ({ confirms: without(state.confirms, chatId) }));
+    await chatsService.confirm(chatId, runId, allow);
+  },
+
   async rename(chatId, title) {
     const updated = await chatsService.patch(chatId, { title });
     set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
@@ -185,6 +196,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         chats: state.chats.map((chat) =>
           chat.id === event.chatId ? { ...chat, title: event.title } : chat,
         ),
+      }));
+      return;
+    }
+    if (event.kind === 'confirm') {
+      set((state) => ({
+        confirms: {
+          ...state.confirms,
+          [event.chatId]: { runId: event.runId, action: event.action, detail: event.detail },
+        },
       }));
       return;
     }
@@ -249,6 +269,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'done':
       case 'error': {
         remember(runId);
+        // A run that ended takes its pending confirm card with it.
+        if (get().confirms[chatId]?.runId === runId) {
+          set((state) => ({ confirms: without(state.confirms, chatId) }));
+        }
         const answered = live.content.length > 0 || live.thinking.length > 0 || live.tools.length > 0;
         const messageId = event.kind === 'done' ? event.messageId : `local-${runId}`;
 
@@ -290,7 +314,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   reset() {
     finished.clear();
-    set({ chats: [], archived: [], messages: {}, live: {}, queued: {}, failures: {} });
+    set({
+      chats: [],
+      archived: [],
+      messages: {},
+      live: {},
+      queued: {},
+      failures: {},
+      confirms: {},
+    });
   },
 }));
 

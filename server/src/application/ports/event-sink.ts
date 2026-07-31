@@ -21,7 +21,9 @@ export type RunEvent =
   | { kind: 'error'; chatId: string; runId: string; code: string }
   | { kind: 'title'; chatId: string; title: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
-  | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' };
+  | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
+  /** A risky action is paused, waiting for the user to allow or deny it. */
+  | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string };
 
 export interface EventSink {
   emit(event: RunEvent): void;
