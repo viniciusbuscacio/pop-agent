@@ -47,20 +47,26 @@ try {
     await new Promise(r => setTimeout(r, 200));
   }
 
+  console.log('server healthy');
   const setup = await (await fetch(`${base}/v1/setup`, { method: 'POST',
     headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: PASSWORD }) })).json();
   const chat = await (await fetch(`${base}/v1/chats`, { method: 'POST',
     headers: { authorization: `Bearer ${setup.token}` } })).json();
 
+  console.log('setup done, chat:', chat.id);
   const browser = await chromium.launch();
   try {
     const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
     await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' });
+    console.log('login page loaded');
     await page.fill('[data-testid="login-password"]', PASSWORD);
     await page.click('[data-testid="login-submit"]');
+    await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10000 });
+    console.log('login redirected to', page.url());
     await page.goto(`${base}/chat/${chat.id}`, { waitUntil: 'domcontentloaded' });
+    console.log('logged in, opening chat');
     await page.waitForSelector('[data-testid="chat-model"]', { timeout: 15000 });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
 
     const snapshot = await page.locator('body').ariaSnapshot();
     writeFileSync(join(process.env.HOME, 'popy-workspace/ax-chat-phone.yaml'), snapshot);
