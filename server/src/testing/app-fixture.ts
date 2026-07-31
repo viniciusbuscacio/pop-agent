@@ -92,6 +92,9 @@ export class RefusingGateway implements ProviderGateway {
   complete(_request: CompletionRequest): Promise<never> {
     return Promise.reject(new Error('the tests must not touch the network'));
   }
+  transcribe(): Promise<never> {
+    return Promise.reject(new Error('the tests must not touch the network'));
+  }
 }
 
 export interface TestApp {

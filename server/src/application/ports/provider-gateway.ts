@@ -22,10 +22,23 @@ export interface CompletionRequest {
   maxTokens: number;
 }
 
+export interface TranscriptionRequest {
+  apiKey: string;
+  /** An audio-capable model: the transcript is just its answer. */
+  model: string;
+  /** Base64 audio payload, without the data-URI prefix. */
+  audioBase64: string;
+  /** The container format, as the provider names it (webm, mp4, wav, mp3…). */
+  format: string;
+}
+
 export interface ProviderGateway {
   /** The provider's live catalog. The key is optional where the catalog is public. */
   listModels(apiKey: string | undefined): Promise<ModelInfo[]>;
 
   /** One prompt, one short answer, outside any session. */
   complete(request: CompletionRequest): Promise<string>;
+
+  /** Audio in, its words out. */
+  transcribe(request: TranscriptionRequest): Promise<string>;
 }

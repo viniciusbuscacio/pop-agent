@@ -17,6 +17,11 @@ import { apiError } from './errors.js';
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
 
+/** ~25 MB of audio, aw's cap, as base64. */
+const transcribeSchema = z
+  .object({ dataUri: z.string().startsWith('data:audio/').max(34_000_000) })
+  .strict();
+
 export interface ProviderRoutesDeps {
   providers: ProviderService;
 }
@@ -63,6 +68,20 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       ...(result.latencyMs === undefined ? {} : { latencyMs: result.latencyMs }),
     };
     return c.json(response);
+  });
+
+  routes.post('/transcribe', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = transcribeSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const result = await deps.providers.transcribe(parsed.data.dataUri);
+    return c.json({
+      ok: result.ok,
+      ...(result.text === undefined ? {} : { text: result.text }),
+      ...(result.message === undefined ? {} : { message: result.message }),
+    });
   });
 
   return routes;

@@ -17,6 +17,9 @@ class OneKeyGateway implements ProviderGateway {
     }
     return Promise.resolve('ok');
   }
+  transcribe(): Promise<string> {
+    return Promise.resolve('what the voice note said');
+  }
 }
 
 let fixture: TestApp;

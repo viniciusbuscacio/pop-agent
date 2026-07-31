@@ -239,6 +239,19 @@ export interface TestProviderRequest {
   apiKey?: string;
 }
 
+/** `POST /v1/transcribe` — recorded audio in, text out (aw's voice flow). */
+export interface TranscribeRequest {
+  /** The recording as a data URI (audio/webm, audio/mp4, audio/wav…). */
+  dataUri: string;
+}
+
+export interface TranscribeResponse {
+  ok: boolean;
+  text?: string;
+  /** Why it did not work, in words the user can act on. */
+  message?: string;
+}
+
 export interface TestProviderResponse {
   ok: boolean;
   /** The provider's own words when it said no. */

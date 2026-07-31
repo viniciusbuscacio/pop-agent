@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { providersService } from '../services/providers';
 
 /**
  * The composer, in aw's shape: an attach button on the left, the textarea in
@@ -33,9 +34,19 @@ export function Composer({
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
+  // Live mirrors, because MediaRecorder.onstop closes over stale state (aw's
+  // fix): what was typed or attached DURING the recording must survive it.
+  const textRef = useRef('');
+  const attachmentsRef = useRef<AttachmentDTO[]>([]);
+  const autoSendRef = useRef(false);
   const storageKey = `popy.draft.${chatId}`;
+
+  textRef.current = text;
+  attachmentsRef.current = attachments;
 
   useEffect(() => {
     try {
@@ -69,30 +80,126 @@ export function Composer({
     if (files === null) return;
     setNotice(undefined);
     for (const file of Array.from(files)) {
+      // An audio file is a voice note that arrived as a file (aw's routing):
+      // it goes to transcription, not to the attachment tray.
+      if (file.type.startsWith('audio/')) {
+        readAsDataUri(file, (dataUri) => void transcribe(dataUri));
+        continue;
+      }
       if (attachments.length >= MAX_ATTACHMENTS) return;
       if (file.size > MAX_ATTACH_BYTES) {
         setNotice(t('chat.attachTooLarge', { name: file.name }));
         continue;
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') return;
+      readAsDataUri(file, (dataUri) => {
         const attachment: AttachmentDTO = {
           name: file.name,
           type: file.type.length > 0 ? file.type : 'application/octet-stream',
-          dataUri: reader.result,
+          dataUri,
         };
         setAttachments((current) =>
           current.length >= MAX_ATTACHMENTS ? current : [...current, attachment],
         );
-      };
-      reader.readAsDataURL(file);
+      });
     }
   }
 
-  const canSend = text.trim().length > 0 || attachments.length > 0;
+  async function transcribe(dataUri: string): Promise<void> {
+    setVoice('transcribing');
+    try {
+      const result = await providersService.transcribe(dataUri);
+      if (!result.ok || result.text === undefined) {
+        setNotice(t('chat.transcribeFailed', { message: result.message ?? '' }));
+        autoSendRef.current = false;
+        return;
+      }
+      const existing = textRef.current.trim();
+      const merged = existing.length > 0 ? `${existing}\n${result.text}` : result.text;
+      if (autoSendRef.current) {
+        // The user pressed Send while still talking: finish the errand.
+        autoSendRef.current = false;
+        onSend(merged, attachmentsRef.current);
+        persist('');
+        setAttachments([]);
+      } else {
+        persist(merged);
+      }
+    } catch {
+      setNotice(t('chat.transcribeFailed', { message: '' }));
+      autoSendRef.current = false;
+    } finally {
+      setVoice('idle');
+    }
+  }
+
+  async function toggleRecording(): Promise<void> {
+    if (voice === 'recording') {
+      recorder.current?.stop();
+      return;
+    }
+    if (typeof MediaRecorder === 'undefined' || navigator.mediaDevices === undefined) {
+      setNotice(t('chat.micUnavailable'));
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((candidate) =>
+        MediaRecorder.isTypeSupported(candidate),
+      );
+      const recording = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recording.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recording.onerror = () => {
+        setNotice(t('chat.micFailed'));
+        setVoice('idle');
+      };
+      recording.onstop = () => {
+        for (const track of stream.getTracks()) track.stop();
+        recorder.current = null;
+        const blob = new Blob(chunks, { type: recording.mimeType || 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') void transcribe(reader.result);
+          else setVoice('idle');
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      recorder.current = recording;
+      setNotice(undefined);
+      setVoice('recording');
+      recording.start();
+    } catch {
+      setNotice(t('chat.micUnavailable'));
+    }
+  }
+
+  // A recording left running when the chat changes must not keep the mic hot.
+  useEffect(() => {
+    return () => {
+      recorder.current?.stop();
+    };
+  }, [chatId]);
+
+  const canSend =
+    text.trim().length > 0 || attachments.length > 0 || voice !== 'idle';
 
   function submit(): void {
+    // Send while talking means "stop, transcribe and send" (aw's errand).
+    if (voice === 'recording') {
+      autoSendRef.current = true;
+      recorder.current?.stop();
+      return;
+    }
+    if (voice === 'transcribing') {
+      autoSendRef.current = true;
+      return;
+    }
     if (!canSend) return;
     onSend(text.trim(), attachments);
     persist('');
@@ -187,17 +294,51 @@ export function Composer({
           <AttachIcon />
         </IconButton>
 
-        <textarea
-          ref={area}
-          data-testid="composer-input"
-          rows={1}
-          value={text}
-          onChange={(event) => persist(event.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={t('chat.placeholder')}
-          aria-label={t('chat.placeholder')}
-          className="max-h-[33dvh] flex-1 resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
-        />
+        {voice === 'idle' ? (
+          <textarea
+            ref={area}
+            data-testid="composer-input"
+            rows={1}
+            value={text}
+            onChange={(event) => persist(event.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={t('chat.placeholder')}
+            aria-label={t('chat.placeholder')}
+            className="max-h-[33dvh] flex-1 resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+          />
+        ) : (
+          <div
+            data-testid={voice === 'recording' ? 'voice-recording' : 'voice-transcribing'}
+            className="flex flex-1 items-center gap-2 rounded-2xl border border-[var(--accent)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-[var(--muted)]"
+          >
+            {voice === 'recording' ? (
+              <>
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--danger)]" aria-hidden="true" />
+                <RecordingTimer />
+              </>
+            ) : (
+              <>
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--muted)]" aria-hidden="true" />
+                {t('chat.transcribing')}
+              </>
+            )}
+          </div>
+        )}
+
+        {voice === 'recording' ? (
+          <IconButton testId="composer-mic-stop" label={t('chat.micStop')} stop onClick={() => void toggleRecording()}>
+            <StopIcon />
+          </IconButton>
+        ) : (
+          <IconButton
+            testId="composer-mic"
+            label={t('chat.mic')}
+            disabled={voice === 'transcribing'}
+            onClick={() => void toggleRecording()}
+          >
+            <MicIcon />
+          </IconButton>
+        )}
 
         {busy && !canSend ? (
           <IconButton testId="composer-stop" label={t('chat.stop')} stop onClick={onStop}>
@@ -288,6 +429,40 @@ function FileIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
+/** Elapsed time of the recording in flight, aw's m:ss. */
+function RecordingTimer() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <span className="tabular-nums">
+      {`${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, '0')}`}
+    </span>
+  );
+}
+
+function readAsDataUri(file: File, onReady: (dataUri: string) => void): void {
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') onReady(reader.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <path d="M12 17v5" />
     </svg>
   );
 }

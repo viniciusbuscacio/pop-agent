@@ -1,4 +1,4 @@
-import type { ProvidersResponse, TestProviderResponse } from '@popy/shared';
+import type { ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
 import { apiRequest } from './api';
 
 export const providersService = {
@@ -16,6 +16,11 @@ export const providersService = {
 
   clearKey(): Promise<ProvidersResponse> {
     return apiRequest<ProvidersResponse>('/providers/openrouter/key', { method: 'DELETE' });
+  },
+
+  /** A recording in, its words out (aw's voice flow, through the provider). */
+  transcribe(dataUri: string): Promise<TranscribeResponse> {
+    return apiRequest<TranscribeResponse>('/transcribe', { method: 'POST', body: { dataUri } });
   },
 
   /** With a key: test the pasted one. Without: test whatever is stored. */
