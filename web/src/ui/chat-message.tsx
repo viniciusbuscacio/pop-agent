@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MessageDTO, ToolCallDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { useThinkingStore } from '../store/thinking';
 import { Markdown } from './markdown';
 
 /**
@@ -15,6 +16,8 @@ export function ChatMessage({
   message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments'>;
   streaming?: boolean;
 }) {
+  const showThinking = useThinkingStore((state) => state.show);
+
   if (message.role === 'user') {
     return (
       <div className="flex flex-col items-end gap-2" data-testid="message-user">
@@ -30,7 +33,7 @@ export function ChatMessage({
 
   return (
     <div className="flex flex-col gap-3" data-testid="message-assistant">
-      {message.thinking.length > 0 ? (
+      {showThinking && message.thinking.length > 0 ? (
         <ThinkingCard text={message.thinking} answered={message.content.length > 0} />
       ) : null}
 

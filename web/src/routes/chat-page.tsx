@@ -5,6 +5,7 @@ import { chatsService } from '../services/chats';
 import { eventStream } from '../services/events';
 import { providersService } from '../services/providers';
 import { useChatStore } from '../store/chat';
+import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
 
@@ -24,6 +25,8 @@ export function ChatPage() {
   const stop = useChatStore((state) => state.stop);
   const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
+  const showThinking = useThinkingStore((state) => state.show);
+  const toggleThinking = useThinkingStore((state) => state.toggle);
 
   const [models, setModels] = useState<string[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
@@ -119,20 +122,6 @@ export function ChatPage() {
           ⧉
         </Link>
 
-        <select
-          data-testid="chat-model"
-          aria-label={t('chat.model')}
-          value={chat?.model ?? ''}
-          onChange={(event) => void setModel(chatId, event.target.value)}
-          className="max-w-40 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
-        >
-          <option value="">{t('chat.defaultModel')}</option>
-          {models.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
       </header>
 
       <div
@@ -237,6 +226,42 @@ export function ChatPage() {
         onSend={(text, attachments) => void send(chatId, text, attachments)}
         onStop={() => void stop(chatId)}
       />
+
+      {/*
+        The strip under the composer (Vinicius, 31/07): per-chat knobs live
+        here, with room to grow -- not in the header, not in a drawer.
+      */}
+      <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-2">
+        <button
+          type="button"
+          data-testid="thinking-visibility"
+          aria-pressed={showThinking}
+          onClick={toggleThinking}
+          title={t('chat.thinkingVisibility')}
+          className={`rounded-md border border-[var(--border)] px-2 py-1 text-xs ${
+            showThinking
+              ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
+              : 'text-[var(--muted)]'
+          }`}
+        >
+          💭 {showThinking ? t('chat.thinkingOn') : t('chat.thinkingOff')}
+        </button>
+
+        <select
+          data-testid="chat-model"
+          aria-label={t('chat.model')}
+          value={chat?.model ?? ''}
+          onChange={(event) => void setModel(chatId, event.target.value)}
+          className="max-w-48 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
+        >
+          <option value="">{t('chat.defaultModel')}</option>
+          {models.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+      </div>
     </>
   );
 }

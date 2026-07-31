@@ -205,6 +205,9 @@ export const en = {
   'settings.appearance.fontLarge': 'Large',
   'settings.appearance.fontXlarge': 'Extra large',
   'settings.appearance.fontNote': 'The font size is remembered on this device only.',
+  'chat.thinkingVisibility': 'Show or hide thinking',
+  'chat.thinkingOn': 'Thinking',
+  'chat.thinkingOff': 'Thinking off',
 
   'settings.notifications.title': 'Notifications',
   'settings.notifications.enable': 'Enable notifications',
