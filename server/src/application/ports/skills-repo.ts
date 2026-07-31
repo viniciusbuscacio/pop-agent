@@ -18,6 +18,8 @@ export interface SkillInput {
   description: string;
   whenToUse: string;
   body: string;
+  /** Pin into the session system prompt instead of routing per turn (§8). */
+  pinned?: boolean;
 }
 
 export interface SkillsRepo {

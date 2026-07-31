@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Skill } from '../../domain/skills/skill.js';
 import type { Embedder } from '../ports/embedder.js';
 import type { SkillsRepo } from '../ports/skills-repo.js';
-import { SkillRouterService } from './skill-router-service.js';
+import { SkillRouterService, type RoutedSkill } from './skill-router-service.js';
 
 function skill(slug: string, name: string, whenToUse: string): Skill {
   return { slug, name, description: name, whenToUse, body: `body-${slug}`, builtin: true };
@@ -49,6 +49,25 @@ describe('SkillRouterService', () => {
 
     const bodies = await service.route('help me make dinner tonight');
     expect(bodies).toContain('body-recipes');
+  });
+
+  it('reports every selection so the caller can log it', async () => {
+    const seen: RoutedSkill[][] = [];
+    const service = new SkillRouterService(repo(SKILLS), undefined, (selection) =>
+      seen.push(selection),
+    );
+    await service.route('what git branches exist?');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.map((entry) => entry.slug)).toEqual(['git']);
+    expect(seen[0]?.[0]?.score).toBeGreaterThan(0);
+  });
+
+  it('keeps a pinned skill away from the per-turn selection', async () => {
+    const pinned = SKILLS.map((entry) =>
+      entry.slug === 'git' ? { ...entry, pinned: true } : entry,
+    );
+    const service = new SkillRouterService(repo(pinned));
+    expect(await service.route('what git branches exist?')).toEqual([]);
   });
 
   it('caches skill vectors across calls', async () => {

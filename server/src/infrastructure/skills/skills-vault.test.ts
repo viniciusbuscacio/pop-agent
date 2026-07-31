@@ -1,10 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SkillsError } from '../../application/ports/skills-repo.js';
 import { DEFAULT_SKILLS } from './default-skills.js';
-import { SkillsVault, parse } from './skills-vault.js';
+import { SkillsVault, parse, seedHash } from './skills-vault.js';
 
 let root: string;
 let vault: SkillsVault;
@@ -56,6 +56,49 @@ describe('SkillsVault', () => {
     expect(() =>
       vault.write({ slug: 'Bad Slug!', name: 'x', description: '', whenToUse: '', body: 'y' }),
     ).toThrow(SkillsError);
+  });
+
+  it('round-trips a pinned user skill', () => {
+    vault.write({
+      slug: 'my-identity',
+      name: 'Mine',
+      description: 'd',
+      whenToUse: 'w',
+      body: 'x',
+      pinned: true,
+    });
+    expect(vault.get('my-identity')?.pinned).toBe(true);
+  });
+
+  it('pins know-thyself even when the seeded file predates the flag', () => {
+    // A v0.2 install: the file exists with neither `pinned` nor `seed`.
+    writeFileSync(
+      join(root, 'know-thyself.md'),
+      '---\nname: About Popy\ndescription: d\nwhenToUse: w\nbuiltin: true\n---\n\nold body\n',
+    );
+    const reopened = new SkillsVault(root);
+    expect(reopened.get('know-thyself')?.pinned).toBe(true);
+  });
+
+  it('upgrades a default the user never touched when the shipped content changes', () => {
+    const old = { name: 'Old', description: 'od', whenToUse: 'ow', body: 'old body' };
+    writeFileSync(
+      join(root, 'summarize.md'),
+      [
+        '---',
+        `name: ${old.name}`,
+        `description: ${old.description}`,
+        `whenToUse: ${old.whenToUse}`,
+        'builtin: true',
+        `seed: ${seedHash(old)}`,
+        '---',
+        '',
+        old.body,
+        '',
+      ].join('\n'),
+    );
+    const reopened = new SkillsVault(root);
+    expect(reopened.get('summarize')?.name).toBe('Summarize');
   });
 
   it('keeps a user edit to a default skill across reboot', () => {

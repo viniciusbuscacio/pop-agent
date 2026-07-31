@@ -133,6 +133,8 @@ export interface SkillDTO {
   body: string;
   /** Built-in skills can be edited but not deleted. */
   builtin: boolean;
+  /** A pinned skill sits in the session system prompt; the router skips it. */
+  pinned?: boolean;
 }
 
 export interface SkillsResponse {
@@ -199,6 +201,7 @@ export interface SaveSkillRequest {
   description: string;
   whenToUse: string;
   body: string;
+  pinned?: boolean;
 }
 
 /** `GET /v1/update/status` — versions and whether newer pi/Popy exist (popy.spec §15). */

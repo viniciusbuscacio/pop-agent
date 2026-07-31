@@ -19,6 +19,7 @@ const saveSchema = z
     description: z.string().max(500),
     whenToUse: z.string().max(500),
     body: z.string().max(20_000),
+    pinned: z.boolean().optional(),
   })
   .strict();
 
@@ -39,8 +40,9 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
     const parsed = saveSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
+    const { pinned, ...fields } = parsed.data;
     try {
-      return c.json(toDto(deps.skills.write(parsed.data)));
+      return c.json(toDto(deps.skills.write({ ...fields, ...(pinned === undefined ? {} : { pinned }) })));
     } catch (error) {
       if (error instanceof SkillsError) {
         return apiError(c, 400, 'invalid_field', error.message);
@@ -76,5 +78,6 @@ function toDto(skill: Skill): SkillDTO {
     whenToUse: skill.whenToUse,
     body: skill.body,
     builtin: skill.builtin,
+    ...(skill.pinned === true ? { pinned: true } : {}),
   };
 }

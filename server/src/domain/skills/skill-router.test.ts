@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectSkills } from './skill-router.js';
+import { pinnedBodies, selectSkills } from './skill-router.js';
 import type { Skill } from './skill.js';
 
 function skill(slug: string, name: string, description: string, whenToUse: string): Skill {
@@ -37,5 +37,21 @@ describe('selectSkills', () => {
     // "the", "a", "to" overlap with everything but must not select anything.
     const selected = selectSkills('please help me with the thing to do', SKILLS);
     expect(selected).toEqual([]);
+  });
+
+  it('never selects a pinned skill; it already sits in the system prompt', () => {
+    const identity: Skill = {
+      ...skill('identity', 'Identity', 'Who you are', 'when the user asks who you are'),
+      pinned: true,
+    };
+    const selected = selectSkills('who are you exactly?', [...SKILLS, identity]);
+    expect(selected.map((entry) => entry.skill.slug)).not.toContain('identity');
+  });
+});
+
+describe('pinnedBodies', () => {
+  it('returns only the pinned bodies, in order', () => {
+    const identity: Skill = { ...skill('identity', 'Identity', 'w', 'w'), pinned: true };
+    expect(pinnedBodies([...SKILLS, identity])).toEqual(['# Identity']);
   });
 });

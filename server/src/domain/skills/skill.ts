@@ -14,6 +14,12 @@ export interface Skill {
   body: string;
   /** True for the skills Popy ships; false for the user's own. */
   builtin: boolean;
+  /**
+   * A pinned skill bypasses the router: its body joins the session's system
+   * prompt once instead of competing for a per-turn slot (popy.spec §8).
+   * Identity is a prerequisite of every answer, not a situational skill.
+   */
+  pinned?: boolean;
 }
 
 /** A skill the router picked, with why. */

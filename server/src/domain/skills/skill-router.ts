@@ -38,6 +38,14 @@ const STOP_WORDS = new Set([
   'com', 'meu', 'minha', 'quero', 'preciso', 'como', 'usar', 'me', 'te',
 ]);
 
+/**
+ * The bodies of the pinned skills, in vault order. They skip routing entirely:
+ * the bridge puts them in the session's system prompt (popy.spec §8).
+ */
+export function pinnedBodies(skills: readonly Skill[]): string[] {
+  return skills.filter((skill) => skill.pinned === true).map((skill) => skill.body);
+}
+
 export function selectSkills(
   message: string,
   skills: readonly Skill[],
@@ -46,16 +54,24 @@ export function selectSkills(
   const query = tokenize(message);
   if (query.size === 0 || skills.length === 0) return [];
 
+  // Pinned skills are already in the system prompt; selecting one would put it
+  // in front of the model twice. Vectors are paired first so the caller's
+  // index alignment survives the filter.
+  const candidates = skills
+    .map((skill, index) => ({ skill, vector: options.skillVectors?.[index] }))
+    .filter((candidate) => candidate.skill.pinned !== true);
+  if (candidates.length === 0) return [];
+
   // Inverse document frequency, so a word common to every skill barely counts.
   const df = new Map<string, number>();
-  const skillTokens = skills.map((skill) => {
+  const skillTokens = candidates.map(({ skill }) => {
     const tokens = skillTokenSet(skill);
     for (const token of tokens) df.set(token, (df.get(token) ?? 0) + 1);
     return tokens;
   });
-  const total = skills.length;
+  const total = candidates.length;
 
-  const scored: SelectedSkill[] = skills.map((skill, index) => {
+  const scored: SelectedSkill[] = candidates.map(({ skill, vector }, index) => {
     let score = 0;
     for (const token of query) {
       if (!(skillTokens[index] as Set<string>).has(token)) continue;
@@ -64,9 +80,8 @@ export function selectSkills(
     }
     // Blend in semantic similarity when vectors are available. Cosine is in
     // [-1, 1]; only a positive, meaningful match adds to the lexical score.
-    const skillVector = options.skillVectors?.[index];
-    if (options.messageVector !== undefined && skillVector !== undefined) {
-      const similarity = cosine(options.messageVector, skillVector);
+    if (options.messageVector !== undefined && vector !== undefined) {
+      const similarity = cosine(options.messageVector, vector);
       if (similarity > 0.75) score += (similarity - 0.75) * 4 * SEMANTIC_WEIGHT;
     }
     return { skill, score };

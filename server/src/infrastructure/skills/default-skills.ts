@@ -1,8 +1,11 @@
+import { SELF_MAP } from './self-map.generated.js';
+
 /**
  * The skills Popy ships with (popy.spec §8). Deliberately short and practical:
  * each one is know-how the model does not reliably have about *this* install,
  * routed in only when the request calls for it. The first, know-thyself, is
- * how Popy explains and diagnoses itself.
+ * how Popy explains and diagnoses itself -- it ships pinned, because identity
+ * is a prerequisite of every answer, not a situational skill.
  */
 
 export interface DefaultSkill {
@@ -11,6 +14,8 @@ export interface DefaultSkill {
   description: string;
   whenToUse: string;
   body: string;
+  /** Pinned into the session system prompt instead of routed (§8). */
+  pinned?: boolean;
 }
 
 export const DEFAULT_SKILLS: DefaultSkill[] = [
@@ -20,6 +25,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
     description: 'What Popy is, how it is built, what tools and data it has, and how to self-diagnose.',
     whenToUse:
       'when the user asks what you are, how you work, what you can do, where your data lives, which model you use, or why something is broken',
+    pinned: true,
     body: [
       '# You are Popy',
       '',
@@ -58,6 +64,32 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '- You can inspect your own server with bash (`ls`, `cat`, `journalctl`)',
       '  when the user asks you to look into a problem.',
       '- Be honest about what you cannot see or do.',
+    ].join('\n'),
+  },
+  {
+    slug: 'self-architecture',
+    name: 'Your own architecture (self-map)',
+    description:
+      "Popy's own codebase: the TypeScript stack, clean-architecture layers, repo layout, and the routes and screens of its PWA.",
+    whenToUse:
+      'when the user asks about your architecture, stack, source code, typescript, python, framework, runtime, auto-programming, extending or improving you, building skills or tools for you, or where a screen, menu or setting lives in your UI',
+    body: [
+      '# Your own architecture',
+      '',
+      'You are a TypeScript system. When you plan extensions of yourself --',
+      'skills, scripts, automations, tools -- the default is **TypeScript on',
+      'your own runtime (Node)**, not Python or another stack: your platform,',
+      'its SDK and its tests are all TypeScript, and an extension in the same',
+      'language is one your gate can check and you can read.',
+      '',
+      '## Reading your own source',
+      '- Your server runs from a clone of the popy repo on this machine. Find',
+      '  it with bash (`readlink /proc/$(pgrep -f popy)/cwd` on Linux) or ask',
+      '  the user where it lives.',
+      '- `popy.spec` at the repo root is the single source of truth for design',
+      '  decisions. Read it before proposing architectural changes.',
+      '',
+      SELF_MAP,
     ].join('\n'),
   },
   {

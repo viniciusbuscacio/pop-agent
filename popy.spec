@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.26 — 2026-07-31.
+Version 1.27 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -259,7 +259,7 @@ user message — selection is 100% local, no LLM call:
   per session/turn; if not, Popy injects the selected skills as its own
   context and disables pi's native listing.
 
-**Self-knowledge hardening** (design recorded in 1.25; not built yet):
+**Self-knowledge hardening** (designed in 1.25–1.26, built in 1.27):
 
 - **Pinned skills.** A skill can be marked `pinned`. Pinned skills bypass
   the router and enter the **session system prompt once** (provider-cache
@@ -731,6 +731,24 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.27 (2026-07-31): **Self-knowledge hardening built (§8).** Skills carry a
+  `pinned` flag (frontmatter, DTO, save schema); the router skips pinned
+  skills and their bodies lead the session system prompt through the
+  bridge's instructions string, which already reopens a session when it
+  changes — so a pin edit reaches the next run. know-thyself ships pinned,
+  and is pinned by code even where a v0.2 file predates the flag. The
+  router service reports every selection and main logs
+  `popy skills: <slug>=<score> …` — slugs and scores only, never message
+  content. New routed **self-architecture** skill: the decision rule
+  ("your extensions are TypeScript on your own runtime"), how to read
+  your own source, and the generated repo/UI map. The map lives in
+  `self-map.generated.ts`, emitted by `tools/generate-self-map.ts`
+  (`npm run selfmap`); `selfmap:check` opens the gate, so drift fails the
+  build. Seeded defaults now carry a `seed` content hash: a default the
+  user never edited upgrades with the ship, an edited one stays theirs.
+  The Portuguese messages from the motivating dialogue are router test
+  cases (default-skills.test.ts).
 
 - 1.26 (2026-07-31): **UI map joins the self-map (§8).** The agent has no
   AX tree of its own PWA — it runs server-side; the interface renders in

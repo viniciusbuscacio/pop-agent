@@ -1,5 +1,5 @@
 import { selectSkills } from '../../domain/skills/skill-router.js';
-import type { Skill } from '../../domain/skills/skill.js';
+import type { SelectedSkill, Skill } from '../../domain/skills/skill.js';
 import type { Embedder } from '../ports/embedder.js';
 import type { SkillsRepo } from '../ports/skills-repo.js';
 
@@ -11,30 +11,46 @@ import type { SkillsRepo } from '../ports/skills-repo.js';
  * the pure lexical router.
  */
 
+/** One routed skill as the log sees it: the slug and the score, never the message. */
+export interface RoutedSkill {
+  slug: string;
+  score: number;
+}
+
 export class SkillRouterService {
   private readonly cache = new Map<string, { signature: string; vector: Float32Array }>();
 
   constructor(
     private readonly skills: SkillsRepo,
     private readonly embedder?: Embedder,
+    /**
+     * Every selection goes here so thresholds are tuned from logged
+     * distributions, not guessed (popy.spec §8).
+     */
+    private readonly onRoute?: (selection: RoutedSkill[]) => void,
   ) {}
 
   /** The bodies of the skills relevant to this message, best first. */
   async route(message: string): Promise<string[]> {
-    const skills = this.skills.all();
+    // Pinned skills already live in the session's system prompt; only the
+    // rest compete for a per-turn slot.
+    const skills = this.skills.all().filter((skill) => skill.pinned !== true);
     if (skills.length === 0) return [];
 
+    let selected: SelectedSkill[];
     if (this.embedder === undefined) {
-      return selectSkills(message, skills).map((selected) => selected.skill.body);
+      selected = selectSkills(message, skills);
+    } else {
+      const skillVectors = await this.skillVectors(skills);
+      const [messageVector] = await this.embedder.embed([message], 'query').catch(() => []);
+      selected = selectSkills(message, skills, {
+        ...(messageVector === undefined ? {} : { messageVector }),
+        skillVectors,
+      });
     }
 
-    const skillVectors = await this.skillVectors(skills);
-    const [messageVector] = await this.embedder.embed([message], 'query').catch(() => []);
-
-    return selectSkills(message, skills, {
-      ...(messageVector === undefined ? {} : { messageVector }),
-      skillVectors,
-    }).map((selected) => selected.skill.body);
+    this.onRoute?.(selected.map((entry) => ({ slug: entry.skill.slug, score: entry.score })));
+    return selected.map((entry) => entry.skill.body);
   }
 
   /** A vector per skill, computed once and reused until the skill's text changes. */

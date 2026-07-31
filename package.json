@@ -17,7 +17,9 @@
     "typecheck": "tsc -b && npm run typecheck -w @popy/web && tsc --noEmit -p tools",
     "test": "vitest run",
     "build": "tsc -b && npm run build -w @popy/web",
-    "gate": "npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke",
+    "gate": "npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke",
+    "selfmap": "tsx tools/generate-self-map.ts",
+    "selfmap:check": "tsx tools/generate-self-map.ts --check",
     "smoke": "tsx tools/smoke.ts"
   },
   "devDependencies": {

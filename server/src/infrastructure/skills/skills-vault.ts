@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   mkdirSync,
   readFileSync,
@@ -19,6 +20,12 @@ import { DEFAULT_SKILLS } from './default-skills.js';
  */
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
+
+/** The defaults that ship pinned (popy.spec §8), pinned even where the seeded
+ * file predates the flag -- no migration, the code is the source. */
+const PINNED_DEFAULTS = new Set(
+  DEFAULT_SKILLS.filter((skill) => skill.pinned === true).map((skill) => skill.slug),
+);
 
 export class SkillsVault implements SkillsRepo {
   constructor(private readonly root: string) {
@@ -67,6 +74,7 @@ export class SkillsVault implements SkillsRepo {
       return undefined;
     }
     const parsed = parse(raw);
+    const pinned = parsed.pinned || PINNED_DEFAULTS.has(slug);
     return {
       slug,
       name: parsed.name.length > 0 ? parsed.name : slug,
@@ -74,20 +82,44 @@ export class SkillsVault implements SkillsRepo {
       whenToUse: parsed.whenToUse,
       body: parsed.body,
       builtin: parsed.builtin,
+      ...(pinned ? { pinned: true } : {}),
     };
   }
 
+  /**
+   * Seeds the defaults, and upgrades the ones the user never touched. Each
+   * seeded file carries a hash of its own content; a file still matching it
+   * follows the shipped default (the generated self-map must not freeze at
+   * whatever a boot once wrote), while an edited file is the user's to keep.
+   */
   private seedDefaults(): void {
     for (const skill of DEFAULT_SKILLS) {
       const path = join(this.root, `${skill.slug}.md`);
+      const fresh = serialize({ ...skill, builtin: true, seed: seedHash(skill) });
+      let existing: Parsed;
       try {
-        readFileSync(path);
-        continue; // already there; a user edit is theirs to keep
+        existing = parse(readFileSync(path, 'utf8'));
       } catch {
-        writeFileSync(path, serialize({ ...skill, builtin: true }));
+        writeFileSync(path, fresh);
+        continue;
       }
+      const pristine = existing.seed !== undefined && existing.seed === seedHash(existing);
+      if (pristine && existing.seed !== seedHash(skill)) writeFileSync(path, fresh);
     }
   }
+}
+
+/** What a default's routed fields hash to; the seed marker of an untouched file. */
+export function seedHash(skill: {
+  name: string;
+  description: string;
+  whenToUse: string;
+  body: string;
+}): string {
+  return createHash('sha256')
+    .update([skill.name, skill.description, skill.whenToUse, skill.body.trim()].join('\n'))
+    .digest('hex')
+    .slice(0, 12);
 }
 
 interface Parsed {
@@ -96,25 +128,31 @@ interface Parsed {
   whenToUse: string;
   body: string;
   builtin: boolean;
+  pinned: boolean;
+  /** The seed marker written by seedDefaults; absent on user files and edits. */
+  seed?: string;
 }
 
 /** Minimal front-matter parse: `--- key: value ---` then the markdown body. */
 export function parse(raw: string): Parsed {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
   if (match === null) {
-    return { name: '', description: '', whenToUse: '', body: raw.trim(), builtin: false };
+    return { name: '', description: '', whenToUse: '', body: raw.trim(), builtin: false, pinned: false };
   }
   const meta = new Map<string, string>();
   for (const line of (match[1] ?? '').split('\n')) {
     const kv = /^(\w+):\s*(.*)$/.exec(line.trim());
     if (kv?.[1] !== undefined) meta.set(kv[1], (kv[2] ?? '').replace(/^["']|["']$/g, ''));
   }
+  const seed = meta.get('seed');
   return {
     name: meta.get('name') ?? '',
     description: meta.get('description') ?? '',
     whenToUse: meta.get('whenToUse') ?? '',
     body: (match[2] ?? '').trim(),
     builtin: meta.get('builtin') === 'true',
+    pinned: meta.get('pinned') === 'true',
+    ...(seed === undefined ? {} : { seed }),
   };
 }
 
@@ -124,6 +162,8 @@ function serialize(input: {
   whenToUse: string;
   body: string;
   builtin?: boolean;
+  pinned?: boolean;
+  seed?: string;
 }): string {
   const escape = (value: string): string => value.replace(/\r?\n/g, ' ').trim();
   return [
@@ -132,6 +172,8 @@ function serialize(input: {
     `description: ${escape(input.description)}`,
     `whenToUse: ${escape(input.whenToUse)}`,
     ...(input.builtin ? ['builtin: true'] : []),
+    ...(input.pinned ? ['pinned: true'] : []),
+    ...(input.seed === undefined ? [] : [`seed: ${input.seed}`]),
     '---',
     '',
     input.body.trim(),

@@ -26,6 +26,7 @@ import { VoiceCleanup } from './application/voice/voice-cleanup.js';
 import { HybridMemory } from './application/memory/hybrid-memory.js';
 import { EmbeddingIndexer } from './application/memory/embedding-indexer.js';
 import { SkillRouterService } from './application/skills/skill-router-service.js';
+import { pinnedBodies } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
@@ -106,7 +107,15 @@ const hybridMemory = new HybridMemory({
   embeddings: context.embeddings,
   ...(embedder === undefined ? {} : { embedder }),
 });
-const skillRouter = new SkillRouterService(skillsVault, embedder);
+// Selections are logged so router thresholds are tuned from data, not guessed
+// (popy.spec §8). Slugs and scores only -- message content stays out of logs.
+const skillRouter = new SkillRouterService(skillsVault, embedder, (selection) => {
+  const picked =
+    selection.length === 0
+      ? 'none'
+      : selection.map((entry) => `${entry.slug}=${entry.score.toFixed(2)}`).join(' ');
+  console.log(`popy skills: ${picked}`);
+});
 const indexer =
   embedder === undefined
     ? undefined
@@ -166,7 +175,13 @@ function piBridge(): PiAgentBridge {
       ...(fileIndex.current === undefined ? {} : { fileSearch: fileIndex.current }),
     }),
     defaultModelId: () => settings.read().defaultModel,
-    instructions: () => settings.read().customInstructions,
+    // Pinned skills lead the session's system prompt (popy.spec §8): identity
+    // is not left to a per-turn router. The bridge reopens a session when this
+    // string changes, so a pin edit reaches the next run.
+    instructions: () =>
+      [...pinnedBodies(skillsVault.all()), settings.read().customInstructions]
+        .filter((block) => block.trim().length > 0)
+        .join('\n\n'),
     // Until Phase 3 step 4 gives them a table, both land in the log -- which is
     // still the difference between "it failed" and knowing why.
     onUsage: (usage) => {
