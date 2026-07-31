@@ -2,6 +2,7 @@ import type {
   AgentBridge,
   AgentEvent,
   AgentRunRequest,
+  AgentRunResult,
   ModelInfo,
 } from '../../application/ports/agent-bridge.js';
 
@@ -34,7 +35,7 @@ export class FakeAgentBridge implements AgentBridge {
   /** Overridable so tests do not spend real seconds on the slow script. */
   constructor(private readonly speed = 1) {}
 
-  async run(request: AgentRunRequest): Promise<void> {
+  async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const { prompt, onEvent, signal } = request;
 
     try {
@@ -48,6 +49,18 @@ export class FakeAgentBridge implements AgentBridge {
       // should surface as a failed run rather than a silent success.
       onEvent({ kind: 'error', code: error instanceof AbortError ? 'aborted' : 'operation_error' });
     }
+
+    // Honest accounting: the smoke asserts that a run books its usage, and a
+    // fake that costs nothing books exactly that.
+    return {
+      usage: {
+        provider: 'fake',
+        model: request.model.length > 0 ? request.model : 'fake/model-1',
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+      },
+    };
   }
 
   listModels(): Promise<ModelInfo[]> {

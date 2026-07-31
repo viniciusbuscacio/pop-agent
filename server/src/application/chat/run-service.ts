@@ -1,10 +1,11 @@
 import { DEFAULT_CHAT_TITLE, type ToolRecord } from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
 import { fallbackTitle } from '../../domain/chat/title.js';
-import type { AgentBridge } from '../ports/agent-bridge.js';
+import type { AgentBridge, AgentRunResult } from '../ports/agent-bridge.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
+import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 
 /**
  * Turning a typed message into a run, and a run into a stored answer
@@ -34,6 +35,8 @@ export interface RunDeps {
   maxConcurrentRuns?: number;
   /** Offered every finished run; decides by itself whether to rewrite. */
   titles?: { maybeRetitle(chatId: string): Promise<void> };
+  /** Where what the run cost is written down (popy.spec §14). */
+  llmRuns?: LlmRunsRepo;
 }
 
 interface PendingRun {
@@ -178,9 +181,10 @@ export class RunService {
     let thinking = '';
     const tools: ToolRecord[] = [];
     let failure: string | undefined;
+    let result: AgentRunResult = {};
 
     try {
-      await bridge.run({
+      result = await bridge.run({
         chatId: run.chatId,
         prompt: run.prompt,
         model: run.model,
@@ -219,6 +223,23 @@ export class RunService {
     }
 
     const finishedAt = new Date(clock.now()).toISOString();
+
+    // Booked before anything else: a failed run that reached the model was
+    // still billed, and the numbers are the provider's own (spec §14).
+    const usage = result.usage;
+    if (usage !== undefined && this.deps.llmRuns !== undefined) {
+      this.deps.llmRuns.record({
+        id: run.runId,
+        chatId: run.chatId,
+        provider: usage.provider,
+        model: usage.model,
+        tokensIn: usage.inputTokens,
+        tokensOut: usage.outputTokens,
+        cost: usage.cost,
+        createdAt: finishedAt,
+      });
+    }
+
     const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
     let messageId = '';
 

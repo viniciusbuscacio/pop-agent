@@ -15,6 +15,7 @@ import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
 
@@ -153,6 +154,7 @@ export function createTestApp(
     bridge,
     sink: hub,
     clock,
+    llmRuns: new SqliteLlmRunsRepo(db),
     titles: new TitleService({
       chats: chatRepo,
       gateway,

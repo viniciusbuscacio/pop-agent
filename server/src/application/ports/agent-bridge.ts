@@ -22,6 +22,21 @@ export interface AgentRunRequest {
   signal: AbortSignal;
 }
 
+/** What one run cost, in the provider's own numbers -- never an estimate. */
+export interface RunUsage {
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** US dollars. */
+  cost: number;
+}
+
+export interface AgentRunResult {
+  /** Absent when the engine never reached a model. */
+  usage?: RunUsage;
+}
+
 /** One model the user can pick. Everything past the id is best-effort. */
 export interface ModelInfo {
   id: string;
@@ -34,6 +49,6 @@ export interface ModelInfo {
 
 export interface AgentBridge {
   /** Resolves when the run is finished, one way or another. */
-  run(request: AgentRunRequest): Promise<void>;
+  run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(): Promise<ModelInfo[]>;
 }

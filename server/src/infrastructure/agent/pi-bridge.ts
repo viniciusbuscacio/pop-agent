@@ -3,10 +3,17 @@ import type {
   AgentBridge,
   AgentEvent,
   AgentRunRequest,
+  AgentRunResult,
   ModelInfo,
 } from '../../application/ports/agent-bridge.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
-import { DEFAULT_MODEL_ID, PiEngineError, type PiEngine, type PiSession } from './pi-engine.js';
+import {
+  DEFAULT_MODEL_ID,
+  PROVIDER_ID,
+  PiEngineError,
+  type PiEngine,
+  type PiSession,
+} from './pi-engine.js';
 
 /**
  * pi behind the AgentBridge port (popy.spec §5, docs/agent-flow.md).
@@ -76,7 +83,7 @@ export class PiAgentBridge implements AgentBridge {
 
   constructor(private readonly deps: PiBridgeDeps) {}
 
-  async run(request: AgentRunRequest): Promise<void> {
+  async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const { chatId, prompt, model, onEvent, signal } = request;
 
     let entry: CachedSession;
@@ -86,7 +93,7 @@ export class PiAgentBridge implements AgentBridge {
       const code = errorCode(error);
       onEvent({ kind: 'error', code });
       this.deps.onFailure?.({ chatId, code, message: messageOf(error) });
-      return;
+      return {};
     }
 
     const translator = new RunTranslator(onEvent);
@@ -121,6 +128,11 @@ export class PiAgentBridge implements AgentBridge {
         this.deps.onFailure({ chatId, ...failure });
       }
     }
+
+    const usage = translator.usage;
+    return usage === undefined
+      ? {}
+      : { usage: { provider: PROVIDER_ID, model: entry.modelId, ...usage } };
   }
 
   listModels(): Promise<ModelInfo[]> {

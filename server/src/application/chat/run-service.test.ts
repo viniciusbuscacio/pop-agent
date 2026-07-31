@@ -2,7 +2,8 @@ import Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../../infrastructure/db/sqlite-chat-repo.js';
-import type { AgentBridge, AgentRunRequest } from '../ports/agent-bridge.js';
+import { SqliteLlmRunsRepo } from '../../infrastructure/db/sqlite-llm-runs-repo.js';
+import type { AgentBridge, AgentRunRequest, AgentRunResult } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink, RunEvent } from '../ports/event-sink.js';
 import { ChatService } from './chat-service.js';
@@ -42,11 +43,13 @@ class ScriptedBridge implements AgentBridge {
     request.onEvent({ kind: 'delta', text: 'hello' });
     await Promise.resolve();
   };
+  usage: AgentRunResult['usage'];
   readonly seen: AgentRunRequest[] = [];
 
-  async run(request: AgentRunRequest): Promise<void> {
+  async run(request: AgentRunRequest): Promise<AgentRunResult> {
     this.seen.push(request);
     await this.script(request);
+    return this.usage === undefined ? {} : { usage: this.usage };
   }
 
   listModels(): Promise<{ id: string }[]> {
@@ -74,7 +77,7 @@ beforeEach(() => {
   chats = new ChatService({ chats: repo, clock });
   sink = new RecordingSink();
   bridge = new ScriptedBridge();
-  runs = new RunService({ chats: repo, bridge, sink, clock });
+  runs = new RunService({ chats: repo, bridge, sink, clock, llmRuns: new SqliteLlmRunsRepo(db) });
 });
 
 describe('starting a run', () => {
@@ -365,5 +368,67 @@ describe('automatic titles', () => {
     await runs.whenIdle();
 
     expect(repo.get(second)?.title).toBe('Deploy Server 2');
+  });
+});
+
+describe('accounting', () => {
+  const USAGE = {
+    provider: 'openrouter',
+    model: 'moonshotai/kimi-k3',
+    inputTokens: 400,
+    outputTokens: 60,
+    cost: 0.0021,
+  };
+
+  it('books what the bridge says the run cost', async () => {
+    const chatId = newChat();
+    bridge.usage = USAGE;
+
+    const started = runs.startRun(chatId, 'how much is this costing?');
+    await runs.whenIdle();
+
+    const rows = db.prepare('SELECT * FROM llm_runs').all() as {
+      id: string;
+      chat_id: string;
+      provider: string;
+      model: string;
+      tokens_in: number;
+      tokens_out: number;
+      cost: number;
+    }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(started.ok ? started.runId : '');
+    expect(rows[0]?.chat_id).toBe(chatId);
+    expect(rows[0]?.provider).toBe('openrouter');
+    expect(rows[0]?.model).toBe('moonshotai/kimi-k3');
+    expect(rows[0]?.tokens_in).toBe(400);
+    expect(rows[0]?.tokens_out).toBe(60);
+    expect(rows[0]?.cost).toBeCloseTo(0.0021, 10);
+  });
+
+  it('books a failed run that still reached the model', async () => {
+    // pi bills every model call, including the ones inside a run that ended
+    // badly -- the record has to say so.
+    const chatId = newChat();
+    bridge.usage = USAGE;
+    bridge.script = async (request) => {
+      request.onEvent({ kind: 'error', code: 'provider_error' });
+      await Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'doomed');
+    await runs.whenIdle();
+
+    expect(db.prepare('SELECT count(*) AS total FROM llm_runs').get()).toEqual({ total: 1 });
+  });
+
+  it('books nothing when the engine was never reached', async () => {
+    const chatId = newChat();
+    bridge.usage = undefined;
+
+    runs.startRun(chatId, 'no provider configured');
+    await runs.whenIdle();
+
+    expect(db.prepare('SELECT count(*) AS total FROM llm_runs').get()).toEqual({ total: 0 });
   });
 });

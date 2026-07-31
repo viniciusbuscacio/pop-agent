@@ -98,6 +98,7 @@ const runs = new RunService({
   bridge,
   sink: hub,
   clock: systemClock,
+  llmRuns: context.llmRuns,
   titles: new TitleService({
     chats: context.chats,
     gateway,

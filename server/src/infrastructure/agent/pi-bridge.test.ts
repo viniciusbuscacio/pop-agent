@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AgentEvent } from '../../application/ports/agent-bridge.js';
+import type { AgentEvent, AgentRunResult } from '../../application/ports/agent-bridge.js';
 import { migrate } from '../db/migrate.js';
 import { SqliteChatRepo } from '../db/sqlite-chat-repo.js';
 import { PiAgentBridge, type PiRunUsage } from './pi-bridge.js';
@@ -163,11 +163,11 @@ function collect(): { events: AgentEvent[]; onEvent: (event: AgentEvent) => void
   return { events, onEvent: (event) => events.push(event) };
 }
 
-async function run(
+function run(
   onEvent: (event: AgentEvent) => void,
   options: { model?: string; signal?: AbortSignal } = {},
-): Promise<void> {
-  await bridge.run({
+): Promise<AgentRunResult> {
+  return bridge.run({
     chatId: CHAT,
     prompt: 'hello',
     model: options.model ?? '',
@@ -356,7 +356,7 @@ describe('accounting', () => {
     ];
     const { onEvent } = collect();
 
-    await run(onEvent);
+    const result = await run(onEvent);
 
     expect(usages).toHaveLength(1);
     expect(usages[0]?.chatId).toBe(CHAT);
@@ -364,6 +364,20 @@ describe('accounting', () => {
     expect(usages[0]?.inputTokens).toBe(400);
     expect(usages[0]?.outputTokens).toBe(60);
     expect(usages[0]?.cost).toBeCloseTo(0.0021, 10);
+
+    // The same numbers come back through the port, for llm_runs to book.
+    expect(result.usage?.provider).toBe('openrouter');
+    expect(result.usage?.model).toBe('moonshotai/kimi-k3');
+    expect(result.usage?.inputTokens).toBe(400);
+    expect(result.usage?.outputTokens).toBe(60);
+    expect(result.usage?.cost).toBeCloseTo(0.0021, 10);
+  });
+
+  it('reports no usage when the engine was never reached', async () => {
+    engine.failure = new PiEngineError('provider_not_configured', 'no key');
+    const { onEvent } = collect();
+
+    expect(await run(onEvent)).toEqual({});
   });
 });
 
