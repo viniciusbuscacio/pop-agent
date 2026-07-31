@@ -38,6 +38,11 @@ export const artifactsService = {
   rename(id: string, name: string): Promise<ArtifactDTO> {
     return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { name } });
   },
+
+  /** Moves a file to a folder; empty folderId = the root. */
+  move(id: string, folderId: string): Promise<ArtifactDTO> {
+    return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { folderId } });
+  },
 };
 
 /** Folders of the Files tab: a flat tree the user manages. */

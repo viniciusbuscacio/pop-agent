@@ -161,10 +161,11 @@ export function ChatList() {
 }
 
 /**
- * The Files tab (decision of 31/07): every file Popy holds, in a flat folder
- * tree the user manages -- upload, download, rename, delete, and folders with
- * the same verbs. Chat uploads land at the root; deleting a folder deletes
- * the files inside it, after a warning.
+ * The Files tab, reworked after the 31/07 review: a real breadcrumb
+ * (Files / folder, each level clickable), a consistent toolbar, per-item
+ * menus on folders and files alike, batch selection with move/delete,
+ * drag-and-drop upload with progress, and a danger-red delete everywhere
+ * a delete lives. Flat tree: the root holds folders and loose files.
  */
 function FilesView({ filter }: { filter: string }) {
   const chats = useChatStore((state) => state.chats);
@@ -173,6 +174,10 @@ function FilesView({ filter }: { filter: string }) {
   const [folders, setFolders] = useState<FolderDTO[]>([]);
   const [openFolder, setOpenFolder] = useState<FolderDTO | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
+  const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -188,16 +193,24 @@ function FilesView({ filter }: { filter: string }) {
       setFiles(all);
       setFolders(tree);
       setOpenFolder((current) => tree.find((f) => f.id === current?.id));
+      setSelected(new Set());
     } catch {
       setFiles([]);
       setFolders([]);
     }
   }
 
-  async function upload(list: FileList | null): Promise<void> {
-    if (list === null || list.length === 0) return;
-    for (const file of Array.from(list)) {
-      await artifactsService.uploadToFiles(file, openFolder?.id ?? '');
+  async function upload(list: FileList | File[] | null): Promise<void> {
+    const entries = list === null ? [] : Array.from(list);
+    if (entries.length === 0) return;
+    setUploading({ done: 0, total: entries.length });
+    try {
+      for (const [index, file] of entries.entries()) {
+        setUploading({ done: index, total: entries.length });
+        await artifactsService.uploadToFiles(file, openFolder?.id ?? '');
+      }
+    } finally {
+      setUploading(undefined);
     }
     await reload();
   }
@@ -244,6 +257,28 @@ function FilesView({ filter }: { filter: string }) {
     await reload();
   }
 
+  function toggleSelected(id: string): void {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function deleteSelected(): Promise<void> {
+    if (!window.confirm(t('files.deleteSelectedConfirm', { count: selected.size }))) return;
+    for (const id of selected) await artifactsService.remove(id);
+    setSelecting(false);
+    await reload();
+  }
+
+  async function moveSelected(folderId: string): Promise<void> {
+    for (const id of selected) await artifactsService.move(id, folderId);
+    setSelecting(false);
+    await reload();
+  }
+
   const titles = new Map([...chats, ...archived].map((chat) => [chat.id, chat.title]));
   const searching = filter.trim().length > 0;
   const visibleFiles = (files ?? []).filter(
@@ -257,7 +292,77 @@ function FilesView({ filter }: { filter: string }) {
       : folders.filter((folder) => folder.name.toLowerCase().includes(filter.toLowerCase()));
 
   return (
-    <div className="flex-1 overflow-y-auto" data-testid="files-view">
+    <div
+      className={`flex-1 overflow-y-auto ${dragging ? 'outline-2 outline-dashed outline-[var(--accent)] -outline-offset-2' : ''}`}
+      data-testid="files-view"
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        void upload(Array.from(event.dataTransfer.files));
+      }}
+    >
+      {/* Breadcrumb: where you are, every level clickable (31/07 review, 1-4). */}
+      <div className="flex items-center gap-1 px-4 pt-1 pb-2" data-testid="files-breadcrumb">
+        <button
+          type="button"
+          data-testid="crumb-root"
+          onClick={() => setOpenFolder(undefined)}
+          className={`text-sm ${openFolder === undefined ? 'font-semibold text-[var(--screen-fg)]' : 'text-[var(--accent)] hover:underline'}`}
+        >
+          {t('files.rootCrumb')}
+        </button>
+        {openFolder !== undefined ? (
+          <>
+            <span className="text-sm text-[var(--muted)]">/</span>
+            <span className="text-sm font-semibold" data-testid="crumb-folder">
+              {openFolder.name}
+            </span>
+            <button
+              type="button"
+              data-testid="folder-menu"
+              aria-label={t('shell.chatMenu')}
+              onClick={() => setMenuFor((v) => (v === openFolder.id ? undefined : openFolder.id))}
+              className="relative rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+            >
+              ⋯
+            </button>
+            {menuFor === openFolder.id ? (
+              <div
+                role="menu"
+                className="absolute top-8 left-24 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+              >
+                <MenuItem
+                  testId="folder-rename"
+                  label={t('files.renameFolder')}
+                  onClick={() => {
+                    setMenuFor(undefined);
+                    void renameFolder(openFolder);
+                  }}
+                />
+                <MenuItem
+                  testId="folder-delete"
+                  label={t('files.deleteFolder')}
+                  danger
+                  onClick={() => {
+                    setMenuFor(undefined);
+                    void deleteFolder(openFolder);
+                  }}
+                />
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        <span className="ml-auto text-xs text-[var(--muted)]" data-testid="files-count">
+          {t('files.count', { count: visibleFiles.length })}
+        </span>
+      </div>
+
+      {/* One toolbar, same on every screen (review, 7). */}
       <div className="flex items-center gap-2 px-3 pb-2">
         <input
           ref={picker}
@@ -277,81 +382,162 @@ function FilesView({ filter }: { filter: string }) {
           <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
-        ) : (
-          <>
-            <Button type="button" variant="ghost" data-testid="folder-rename" onClick={() => void renameFolder(openFolder)}>
-              {t('shell.rename')}
-            </Button>
-            <Button type="button" variant="ghost" data-testid="folder-delete" onClick={() => void deleteFolder(openFolder)}>
-              {t('shell.delete')}
-            </Button>
-          </>
-        )}
+        ) : null}
+        {visibleFiles.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="files-select"
+            onClick={() => {
+              setSelecting((value) => !value);
+              setSelected(new Set());
+            }}
+          >
+            {selecting ? t('common.cancel') : t('files.select')}
+          </Button>
+        ) : null}
       </div>
 
-      {openFolder !== undefined ? (
-        <button
-          type="button"
-          data-testid="folder-back"
-          onClick={() => setOpenFolder(undefined)}
-          className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
-        >
-          ← {openFolder.name}
-        </button>
+      {uploading !== undefined ? (
+        <p className="px-4 pb-2 text-xs text-[var(--accent)]" data-testid="files-uploading" role="status">
+          {t('files.uploading', { done: uploading.done + 1, total: uploading.total })}
+        </p>
+      ) : null}
+
+      {selecting && selected.size > 0 ? (
+        <div className="flex items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
+          <span className="text-xs text-[var(--muted)]">
+            {t('files.selected', { count: selected.size })}
+          </span>
+          <select
+            data-testid="files-move-to"
+            defaultValue=""
+            onChange={(event) => {
+              if (event.target.value === '') return;
+              const target = event.target.value === 'root' ? '' : event.target.value;
+              event.target.value = '';
+              void moveSelected(target);
+            }}
+            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs"
+          >
+            <option value="">{t('files.moveTo')}</option>
+            <option value="root">{t('files.rootCrumb')}</option>
+            {folders
+              .filter((folder) => folder.id !== openFolder?.id)
+              .map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+          </select>
+          <Button type="button" variant="danger" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
+            {t('shell.delete')}
+          </Button>
+        </div>
       ) : null}
 
       {visibleFolders.length > 0 ? (
         <ul data-testid="folder-list">
           {visibleFolders.map((folder) => (
-            <li key={folder.id}>
-              <button
-                type="button"
-                data-testid="folder-row"
-                onClick={() => setOpenFolder(folder)}
-                className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
-              >
-                <span aria-hidden="true">📁</span>
-                <span className="truncate text-sm font-medium">{folder.name}</span>
-                <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-                  {(files ?? []).filter((file) => file.folderId === folder.id).length}
-                </span>
-              </button>
+            <li key={folder.id} className="relative">
+              <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
+                <button
+                  type="button"
+                  data-testid="folder-row"
+                  onClick={() => setOpenFolder(folder)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <FolderIcon />
+                  <span className="truncate text-sm font-medium">{folder.name}</span>
+                  <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
+                    {t('files.count', {
+                      count: (files ?? []).filter((file) => file.folderId === folder.id).length,
+                    })}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="folder-row-menu"
+                  aria-label={t('shell.chatMenu')}
+                  onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
+                  className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+                >
+                  ⋯
+                </button>
+              </div>
+              {menuFor === folder.id ? (
+                <div
+                  role="menu"
+                  className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+                >
+                  <MenuItem
+                    testId="folder-rename"
+                    label={t('files.renameFolder')}
+                    onClick={() => {
+                      setMenuFor(undefined);
+                      void renameFolder(folder);
+                    }}
+                  />
+                  <MenuItem
+                    testId="folder-delete"
+                    label={t('files.deleteFolder')}
+                    danger
+                    onClick={() => {
+                      setMenuFor(undefined);
+                      void deleteFolder(folder);
+                    }}
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : null}
 
       {files === undefined ? null : visibleFiles.length === 0 && visibleFolders.length === 0 ? (
-        <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('files.none')}</p>
+        <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
+          <p className="text-sm text-[var(--muted)]">{t('files.none')}</p>
+          <p className="text-xs text-[var(--muted)]">{t('files.emptyCta')}</p>
+        </div>
       ) : (
         <ul data-testid="all-artifacts">
           {visibleFiles.map((file) => (
             <li key={file.id} className="relative">
               <div
                 data-testid="artifact-row"
-                className="flex w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+                className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
               >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {file.name}
-                    {file.version > 1 ? (
-                      <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
-                    ) : null}
+                {selecting ? (
+                  <input
+                    type="checkbox"
+                    data-testid="file-check"
+                    checked={selected.has(file.id)}
+                    onChange={() => toggleSelected(file.id)}
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {file.name}
+                      {file.version > 1 ? (
+                        <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="file-menu"
+                      aria-label={t('shell.chatMenu')}
+                      onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
+                      className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+                    >
+                      ⋯
+                    </button>
+                  </div>
+                  <span className="block truncate text-xs text-[var(--muted)]">
+                    {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
+                    {formatSize(file.size)} · {relativeTime(file.createdAt)}
                   </span>
-                  <button
-                    type="button"
-                    data-testid="file-menu"
-                    aria-label={t('shell.chatMenu')}
-                    onClick={() => setMenuFor((value) => (value === file.id ? undefined : file.id))}
-                    className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                  >
-                    ⋯
-                  </button>
                 </div>
-                <span className="truncate text-xs text-[var(--muted)]">
-                  {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
-                  {formatSize(file.size)} · {relativeTime(file.createdAt)}
-                </span>
               </div>
               {menuFor === file.id ? (
                 <div
@@ -390,6 +576,20 @@ function FilesView({ filter }: { filter: string }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Line-style folder, matching the app's stroked icons (review, 9). */
+function FolderIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
