@@ -5,6 +5,7 @@ import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { Clock } from '../../application/ports/clock.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
+import type { Transcriber } from '../../application/ports/transcriber.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
@@ -21,6 +22,7 @@ export interface AppDeps {
   chats: ChatService;
   runs: RunService;
   providers: ProviderService;
+  transcriber: Transcriber;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;

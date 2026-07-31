@@ -3,7 +3,6 @@ import {
   ProviderGatewayError,
   type CompletionRequest,
   type ProviderGateway,
-  type TranscriptionRequest,
 } from '../../application/ports/provider-gateway.js';
 
 /**
@@ -84,50 +83,6 @@ export class OpenRouterGateway implements ProviderGateway {
     return content;
   }
 
-  /** Audio as an `input_audio` part; the model's answer is the transcript. */
-  async transcribe(request: TranscriptionRequest): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        ...ATTRIBUTION,
-        'content-type': 'application/json',
-        authorization: `Bearer ${request.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: request.model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text:
-                  'Transcribe this audio exactly as spoken, in its own language. ' +
-                  'Reply with the transcript only -- no commentary, no quotes.',
-              },
-              {
-                type: 'input_audio',
-                input_audio: { data: request.audioBase64, format: request.format },
-              },
-            ],
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!response.ok) {
-      throw new ProviderGatewayError(await errorText(response));
-    }
-
-    const body = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const content = body.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') {
-      throw new ProviderGatewayError('The provider answered without a transcript.');
-    }
-    return content;
-  }
 }
 
 function toModelInfo(row: CatalogRow & { id: string }): ModelInfo {

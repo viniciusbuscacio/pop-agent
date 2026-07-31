@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ModelInfo } from '../ports/agent-bridge.js';
-import type {
-  CompletionRequest,
-  ProviderGateway,
-  TranscriptionRequest,
-} from '../ports/provider-gateway.js';
+import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { FALLBACK_MODELS } from './openrouter.js';
@@ -54,17 +50,6 @@ class ScriptedGateway implements ProviderGateway {
       return Promise.reject(new Error(this.failCompleting));
     }
     return Promise.resolve('ok');
-  }
-
-  transcript = 'the words that were said';
-  failTranscribing: string | undefined;
-  transcriptions: TranscriptionRequest[] = [];
-  transcribe(request: TranscriptionRequest): Promise<string> {
-    this.transcriptions.push(request);
-    if (this.failTranscribing !== undefined) {
-      return Promise.reject(new Error(this.failTranscribing));
-    }
-    return Promise.resolve(this.transcript);
   }
 }
 
@@ -210,49 +195,3 @@ describe('the catalog', () => {
   });
 });
 
-describe('transcription', () => {
-  const AUDIO = `data:audio/webm;codecs=opus;base64,${Buffer.from('fake audio').toString('base64')}`;
-
-  it('hands the audio to an audio-capable model and returns its words', async () => {
-    service.setKey('sk');
-
-    const result = await service.transcribe(AUDIO);
-
-    expect(result).toEqual({ ok: true, text: 'the words that were said' });
-    expect(gateway.transcriptions[0]?.format).toBe('webm');
-    expect(gateway.transcriptions[0]?.audioBase64).toBe(
-      Buffer.from('fake audio').toString('base64'),
-    );
-  });
-
-  it('spells mpeg the way providers do', async () => {
-    service.setKey('sk');
-
-    await service.transcribe(`data:audio/mpeg;base64,${Buffer.from('x').toString('base64')}`);
-
-    expect(gateway.transcriptions[0]?.format).toBe('mp3');
-  });
-
-  it('asks for a provider before asking for a microphone', async () => {
-    const result = await service.transcribe(AUDIO);
-
-    expect(result.ok).toBe(false);
-    expect(gateway.transcriptions).toHaveLength(0);
-  });
-
-  it('refuses a payload that is not audio', async () => {
-    service.setKey('sk');
-
-    const result = await service.transcribe('data:text/plain;base64,aGk=');
-
-    expect(result.ok).toBe(false);
-    expect(gateway.transcriptions).toHaveLength(0);
-  });
-
-  it('carries the provider s refusal back in words', async () => {
-    service.setKey('sk');
-    gateway.failTranscribing = 'audio not supported';
-
-    expect(await service.transcribe(AUDIO)).toEqual({ ok: false, message: 'audio not supported' });
-  });
-});

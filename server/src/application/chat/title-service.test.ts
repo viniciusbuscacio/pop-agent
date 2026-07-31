@@ -25,10 +25,6 @@ class ScriptedGateway {
     if (this.failure !== undefined) return Promise.reject(new Error(this.failure));
     return Promise.resolve(this.answer);
   }
-
-  transcribe(): Promise<string> {
-    return Promise.reject(new Error('titles never transcribe'));
-  }
 }
 
 let db: Database.Database;

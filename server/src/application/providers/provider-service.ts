@@ -3,12 +3,7 @@ import type { Clock } from '../ports/clock.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
-import {
-  DEFAULT_MODEL_ID,
-  FALLBACK_MODELS,
-  OPENROUTER_PROVIDER_ID,
-  TRANSCRIBE_MODEL_ID,
-} from './openrouter.js';
+import { DEFAULT_MODEL_ID, FALLBACK_MODELS, OPENROUTER_PROVIDER_ID } from './openrouter.js';
 
 /**
  * The OpenRouter provider as the rest of the app sees it (popy.spec §15):
@@ -114,41 +109,6 @@ export class ProviderService {
         ok: false,
         message: error instanceof Error ? error.message : 'Request failed.',
         latencyMs: this.deps.clock.now() - startedAt,
-      };
-    }
-  }
-
-  /**
-   * A voice note into words, through an audio-capable model (aw transcribes
-   * locally with whisper.cpp; Popy uses the provider it already pays). The
-   * answer IS the transcript; failures come back as words, not throws.
-   */
-  async transcribe(dataUri: string): Promise<{ ok: boolean; text?: string; message?: string }> {
-    const key = this.apiKey();
-    if (key === undefined) {
-      return { ok: false, message: 'Configure a provider before using the microphone.' };
-    }
-
-    const match = /^data:audio\/([\w+-]+)(?:;[^,]*)?;base64,(.+)$/.exec(dataUri);
-    if (match?.[1] === undefined || match[2] === undefined) {
-      return { ok: false, message: 'The recording did not arrive as audio.' };
-    }
-
-    try {
-      const text = await this.deps.gateway.transcribe({
-        apiKey: key,
-        model: TRANSCRIBE_MODEL_ID,
-        audioBase64: match[2],
-        // "mpeg" is how browsers spell mp3; providers spell it mp3.
-        format: match[1] === 'mpeg' ? 'mp3' : match[1],
-      });
-      const trimmed = text.trim();
-      if (trimmed.length === 0) return { ok: false, message: 'Nothing was heard.' };
-      return { ok: true, text: trimmed };
-    } catch (error) {
-      return {
-        ok: false,
-        message: error instanceof Error ? error.message : 'Transcription failed.',
       };
     }
   }

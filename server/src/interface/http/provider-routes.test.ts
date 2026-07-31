@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import type { CompletionRequest, ProviderGateway } from '../../application/ports/provider-gateway.js';
-import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import { TranscriberError } from '../../application/ports/transcriber.js';
+import { FakeTranscriber, createTestApp, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -16,11 +17,7 @@ class OneKeyGateway implements ProviderGateway {
       return Promise.reject(new Error('Invalid credentials'));
     }
     return Promise.resolve('ok');
-  }
-  transcribe(): Promise<string> {
-    return Promise.resolve('what the voice note said');
-  }
-}
+  }}
 
 let fixture: TestApp;
 let app: Hono;
@@ -176,5 +173,72 @@ describe('GET /v1/models with a configured key', () => {
       models: [{ id: 'live/model' }],
       source: 'live',
     });
+  });
+});
+
+describe('POST /v1/transcribe', () => {
+  const AUDIO = `data:audio/webm;codecs=opus;base64,${Buffer.from('fake audio').toString('base64')}`;
+
+  function withTranscriber() {
+    const transcriber = new FakeTranscriber();
+    return { transcriber, promise: rebuild({ transcriber }) };
+  }
+
+  async function rebuild(options: Parameters<typeof createTestApp>[1]): Promise<void> {
+    fixture = createTestApp(undefined, options);
+    app = fixture.app;
+    const res = await app.request('/v1/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    token = ((await res.json()) as { token: string }).token;
+  }
+
+  it('answers the words whisper heard', async () => {
+    const { transcriber, promise } = withTranscriber();
+    await promise;
+
+    const res = await authed('/v1/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ dataUri: AUDIO }),
+    });
+
+    expect(await res.json()).toEqual({ ok: true, text: 'what the voice note said' });
+    expect(transcriber.jobs[0]?.format).toBe('webm');
+    expect(transcriber.jobs[0]?.audioBase64).toBe(Buffer.from('fake audio').toString('base64'));
+  });
+
+  it('answers the failure in words, never a 500', async () => {
+    const { transcriber, promise } = withTranscriber();
+    await promise;
+    transcriber.failure = new TranscriberError('whisper-cli is not installed');
+
+    const res = await authed('/v1/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ dataUri: AUDIO }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: false, message: 'whisper-cli is not installed' });
+  });
+
+  it('refuses a payload that is not audio', async () => {
+    const res = await authed('/v1/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ dataUri: 'data:text/plain;base64,aGk=' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('needs a session', async () => {
+    const res = await app.request('/v1/transcribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUri: AUDIO }),
+    });
+
+    expect(res.status).toBe(401);
   });
 });

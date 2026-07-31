@@ -17,6 +17,7 @@ import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
+import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
 
@@ -110,12 +111,20 @@ const runs = new RunService({
   }),
 });
 
+// Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
+const transcriber = new WhisperTranscriber({
+  whisperCli: process.env['POPY_WHISPER_CLI'] ?? 'whisper-cli',
+  ffmpeg: process.env['POPY_FFMPEG'] ?? 'ffmpeg',
+  modelPath: process.env['POPY_WHISPER_MODEL'],
+});
+
 const app = createApp({
   auth,
   settings,
   chats,
   runs,
   providers,
+  transcriber,
   hub,
   clock: systemClock,
   versions: readVersions(),

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { ProvidersResponse, TestProviderResponse } from '@popy/shared';
+import type { ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
 import type { ProviderService } from '../../application/providers/provider-service.js';
+import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
@@ -24,6 +25,7 @@ const transcribeSchema = z
 
 export interface ProviderRoutesDeps {
   providers: ProviderService;
+  transcriber: Transcriber;
 }
 
 export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
@@ -76,12 +78,25 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     const parsed = transcribeSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    const result = await deps.providers.transcribe(parsed.data.dataUri);
-    return c.json({
-      ok: result.ok,
-      ...(result.text === undefined ? {} : { text: result.text }),
-      ...(result.message === undefined ? {} : { message: result.message }),
-    });
+    const match = /^data:audio\/([\w+-]+)(?:;[^,]*)?;base64,(.+)$/.exec(parsed.data.dataUri);
+    if (match?.[1] === undefined || match[2] === undefined) {
+      return apiError(c, 400, 'invalid_field', 'The recording did not arrive as audio.');
+    }
+
+    // Local whisper does the work: failures come back as words, never a 500.
+    try {
+      const text = await deps.transcriber.transcribe({
+        audioBase64: match[2],
+        format: match[1],
+      });
+      const response: TranscribeResponse =
+        text.length > 0 ? { ok: true, text } : { ok: false, message: 'Nothing was heard.' };
+      return c.json(response);
+    } catch (error) {
+      const message =
+        error instanceof TranscriberError ? error.message : 'Transcription failed.';
+      return c.json({ ok: false, message } satisfies TranscribeResponse);
+    }
   });
 
   return routes;

@@ -92,8 +92,18 @@ export class RefusingGateway implements ProviderGateway {
   complete(_request: CompletionRequest): Promise<never> {
     return Promise.reject(new Error('the tests must not touch the network'));
   }
-  transcribe(): Promise<never> {
-    return Promise.reject(new Error('the tests must not touch the network'));
+}
+
+/** A transcriber the tests script: fixed words, or a failure with words. */
+export class FakeTranscriber {
+  transcript = 'what the voice note said';
+  failure: Error | undefined;
+  jobs: { audioBase64: string; format: string }[] = [];
+
+  transcribe(job: { audioBase64: string; format: string }): Promise<string> {
+    this.jobs.push(job);
+    if (this.failure !== undefined) return Promise.reject(this.failure);
+    return Promise.resolve(this.transcript);
   }
 }
 
@@ -113,6 +123,8 @@ export interface TestAppOptions {
   gateway?: ProviderGateway;
   /** Stands in for OPENROUTER_API_KEY in the environment. */
   envKey?: string;
+  /** Swap in a scripted transcriber to test the voice route. */
+  transcriber?: FakeTranscriber;
 }
 
 export function createTestApp(
@@ -173,6 +185,7 @@ export function createTestApp(
     chats,
     runs,
     providers,
+    transcriber: options.transcriber ?? new FakeTranscriber(),
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
