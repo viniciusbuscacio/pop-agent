@@ -46,12 +46,49 @@ export function verifyDownload(
   sigRaw: string | undefined,
   now: number,
 ): LinkCheck {
+  return check(secretKey, fileId, expiresRaw, sigRaw, now);
+}
+
+/** A signed link to one specific archived version (RF-018). */
+export function buildVersionLink(
+  secretKey: Buffer,
+  fileId: string,
+  version: number,
+  now: number,
+  ttlMs: number = DEFAULT_LINK_TTL_MS,
+): SignedLink {
+  const expiresAt = now + ttlMs;
+  const sig = sign(secretKey, `${fileId}.v${String(version)}`, expiresAt);
+  return {
+    url: `/artifacts/${fileId}/versions/${String(version)}/download?expires=${expiresAt}&sig=${sig}`,
+    expiresAt,
+  };
+}
+
+export function verifyVersionDownload(
+  secretKey: Buffer,
+  fileId: string,
+  version: number,
+  expiresRaw: string | undefined,
+  sigRaw: string | undefined,
+  now: number,
+): LinkCheck {
+  return check(secretKey, `${fileId}.v${String(version)}`, expiresRaw, sigRaw, now);
+}
+
+function check(
+  secretKey: Buffer,
+  subject: string,
+  expiresRaw: string | undefined,
+  sigRaw: string | undefined,
+  now: number,
+): LinkCheck {
   if (expiresRaw === undefined || sigRaw === undefined) return 'malformed';
 
   const expiresAt = Number(expiresRaw);
   if (!Number.isInteger(expiresAt)) return 'malformed';
 
-  const expected = Buffer.from(sign(secretKey, fileId, expiresAt));
+  const expected = Buffer.from(sign(secretKey, subject, expiresAt));
   const given = Buffer.from(sigRaw);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
     return 'bad-signature';
@@ -62,7 +99,7 @@ export function verifyDownload(
   return 'ok';
 }
 
-function sign(secretKey: Buffer, fileId: string, expiresAt: number): string {
+function sign(secretKey: Buffer, subject: string, expiresAt: number): string {
   const derived = createHmac('sha256', secretKey).update(CONTEXT).digest();
-  return createHmac('sha256', derived).update(`${fileId}.${expiresAt}`).digest('base64url');
+  return createHmac('sha256', derived).update(`${subject}.${expiresAt}`).digest('base64url');
 }

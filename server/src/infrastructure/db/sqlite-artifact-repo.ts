@@ -1,5 +1,5 @@
 import type { Artifact, ArtifactSource } from '../../domain/artifacts/artifact.js';
-import type { ArtifactRepo } from '../../application/ports/artifact-repo.js';
+import type { ArtifactRepo, ArtifactVersion } from '../../application/ports/artifact-repo.js';
 import { entityId } from '../../domain/ids.js';
 import type { Db } from './types.js';
 
@@ -75,6 +75,42 @@ export class SqliteArtifactRepo implements ArtifactRepo {
 
   delete(id: string): boolean {
     return this.db.prepare('DELETE FROM artifacts WHERE id = ?').run(id).changes > 0;
+  }
+
+  addVersion(id: string, version: ArtifactVersion): void {
+    this.db
+      .prepare(
+        `INSERT INTO artifact_versions (artifact_id, version, mime, size, source, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, version.version, version.mime, version.size, version.source, version.createdAt);
+  }
+
+  listVersions(id: string): ArtifactVersion[] {
+    const rows = this.db
+      .prepare(
+        `SELECT version, mime, size, source, created_at
+           FROM artifact_versions
+          WHERE artifact_id = ?
+       ORDER BY version DESC`,
+      )
+      .all(id) as { version: number; mime: string; size: number; source: string; created_at: string }[];
+    return rows.map((row) => ({
+      version: row.version,
+      mime: row.mime,
+      size: row.size,
+      source: row.source as ArtifactSource,
+      createdAt: row.created_at,
+    }));
+  }
+
+  updateLatest(
+    id: string,
+    next: { mime: string; size: number; version: number; updatedAt: string },
+  ): void {
+    this.db
+      .prepare('UPDATE artifacts SET mime = ?, size = ?, version = ?, updated_at = ? WHERE id = ?')
+      .run(next.mime, next.size, next.version, next.updatedAt, id);
   }
 }
 

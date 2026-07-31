@@ -117,4 +117,43 @@ describe('artifact routes', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('versions a re-upload and serves each version by a signed link', async () => {
+    const fixture = await signedIn();
+    const chat = fixture.chats.create();
+    const first = fixture.artifacts.create(
+      { chatId: chat.id, name: 'doc.txt', mime: 'text/plain', source: 'upload' },
+      Buffer.from('one'),
+    );
+    fixture.artifacts.create(
+      { chatId: chat.id, name: 'doc.txt', mime: 'text/plain', source: 'agent' },
+      Buffer.from('two'),
+    );
+
+    const history = await fixture.app.request(`/v1/artifacts/${first.id}/versions`, {
+      headers: auth(fixture.token),
+    });
+    expect(history.status).toBe(200);
+    const body = (await history.json()) as { versions: { version: number }[] };
+    expect(body.versions.map((v) => v.version)).toEqual([2, 1]);
+
+    const linkRes = await fixture.app.request(`/v1/artifacts/${first.id}/versions/1/link`, {
+      method: 'POST',
+      headers: auth(fixture.token),
+    });
+    expect(linkRes.status).toBe(200);
+    const { url } = (await linkRes.json()) as { url: string };
+
+    const download = await fixture.app.request(url);
+    expect(download.status).toBe(200);
+    expect(await download.text()).toBe('one');
+
+    // The latest download serves the newest bytes.
+    const latest = await fixture.app.request(`/v1/artifacts/${first.id}/link`, {
+      method: 'POST',
+      headers: auth(fixture.token),
+    });
+    const latestUrl = ((await latest.json()) as { url: string }).url;
+    expect(await (await fixture.app.request(latestUrl)).text()).toBe('two');
+  });
 });

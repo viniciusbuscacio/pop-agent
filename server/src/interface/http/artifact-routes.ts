@@ -1,5 +1,10 @@
 import { Hono } from 'hono';
-import type { ArtifactDTO, ArtifactsResponse, ArtifactLinkResponse } from '@popy/shared';
+import type {
+  ArtifactDTO,
+  ArtifactsResponse,
+  ArtifactLinkResponse,
+  ArtifactVersionsResponse,
+} from '@popy/shared';
 import type { Artifact } from '../../domain/artifacts/artifact.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
@@ -62,6 +67,23 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
   routes.post('/artifacts/:id/link', (c) => {
     const link = deps.artifacts.mintLink(c.req.param('id'));
     if (link === undefined) return apiError(c, 404, 'not_found', 'No such artifact.');
+    return c.json({ url: link.url, expiresAt: link.expiresAt } satisfies ArtifactLinkResponse);
+  });
+
+  routes.get('/artifacts/:id/versions', (c) => {
+    if (deps.artifacts.get(c.req.param('id')) === undefined) {
+      return apiError(c, 404, 'not_found', 'No such artifact.');
+    }
+    return c.json({
+      versions: deps.artifacts.listVersions(c.req.param('id')),
+    } satisfies ArtifactVersionsResponse);
+  });
+
+  routes.post('/artifacts/:id/versions/:version/link', (c) => {
+    const version = Number(c.req.param('version'));
+    if (!Number.isInteger(version)) return apiError(c, 400, 'bad_request', 'Bad version.');
+    const link = deps.artifacts.mintVersionLink(c.req.param('id'), version);
+    if (link === undefined) return apiError(c, 404, 'not_found', 'No such artifact version.');
     return c.json({ url: link.url, expiresAt: link.expiresAt } satisfies ArtifactLinkResponse);
   });
 

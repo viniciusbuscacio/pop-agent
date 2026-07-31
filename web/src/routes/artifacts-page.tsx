@@ -128,8 +128,9 @@ export function ArtifactsPage() {
                     {(artifact.size / 1024).toFixed(1)} KB ·{' '}
                     {artifact.source === 'agent'
                       ? t('artifacts.sourceAgent')
-                      : t('artifacts.sourceUpload')}{' '}
-                    · <span className="font-mono">{artifact.id}</span>
+                      : t('artifacts.sourceUpload')}
+                    {artifact.version > 1 ? ` · v${String(artifact.version)}` : ''} ·{' '}
+                    <span className="font-mono">{artifact.id}</span>
                   </p>
                 </div>
                 <div className="flex flex-none gap-1">

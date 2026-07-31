@@ -97,4 +97,57 @@ describe('ArtifactService', () => {
     expect(existsSync(path)).toBe(false);
     expect(service.delete(artifact.id)).toBe(false);
   });
+
+  it('versions a re-save under the same name, keeping the old bytes', () => {
+    const v1 = service.create(
+      { chatId: 'chat-1', name: 'doc.txt', mime: 'text/plain', source: 'upload' },
+      Buffer.from('first'),
+    );
+    const v2 = service.create(
+      { chatId: 'chat-1', name: 'doc.txt', mime: 'text/plain', source: 'agent' },
+      Buffer.from('second draft'),
+    );
+
+    // Same artifact id, bumped version, and only one artifact in the chat.
+    expect(v2.id).toBe(v1.id);
+    expect(v2.version).toBe(2);
+    expect(service.list('chat-1')).toHaveLength(1);
+
+    // History has both, newest first.
+    expect(service.listVersions(v1.id).map((h) => h.version)).toEqual([2, 1]);
+
+    // Latest download serves v2; the archived v1 still serves the old bytes.
+    expect(readFileSync(store.pathOf('chat-1', v1.id), 'utf8')).toBe('second draft');
+    expect(readFileSync(store.pathOfVersion('chat-1', v1.id, 1), 'utf8')).toBe('first');
+  });
+
+  it('resolves a versioned link to the right bytes and rejects a forgery', () => {
+    const v1 = service.create(
+      { chatId: 'chat-1', name: 'doc.txt', mime: 'text/plain', source: 'upload' },
+      Buffer.from('first'),
+    );
+    service.create(
+      { chatId: 'chat-1', name: 'doc.txt', mime: 'text/plain', source: 'agent' },
+      Buffer.from('second'),
+    );
+
+    const link = service.mintVersionLink(v1.id, 1);
+    expect(link).toBeDefined();
+    const query = new URL(link!.url, 'http://x').searchParams;
+    const resolution = service.resolveVersionDownload(
+      v1.id,
+      1,
+      query.get('expires') ?? undefined,
+      query.get('sig') ?? undefined,
+    );
+    expect(resolution.status).toBe('ok');
+    if (resolution.status === 'ok') {
+      expect(readFileSync(resolution.path, 'utf8')).toBe('first');
+    }
+
+    expect(service.resolveVersionDownload(v1.id, 1, '9999999999999', 'forged').status).toBe(
+      'bad-signature',
+    );
+    expect(service.mintVersionLink(v1.id, 9)).toBeUndefined();
+  });
 });

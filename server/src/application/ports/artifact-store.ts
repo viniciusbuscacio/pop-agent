@@ -10,6 +10,13 @@ export interface ArtifactStore {
   read(chatId: string, artifactId: string): Buffer | undefined;
   /** The on-disk path, for streaming a download. Never exposed to a client. */
   pathOf(chatId: string, artifactId: string): string;
+  /**
+   * Snapshots the current latest bytes as a numbered version, before they are
+   * overwritten by a new upload/save (popy.spec §14, RF-018). Best-effort.
+   */
+  archive(chatId: string, artifactId: string, version: number): void;
+  /** The on-disk path of a specific archived version. */
+  pathOfVersion(chatId: string, artifactId: string, version: number): string;
   /** Removes one artifact's bytes. Best-effort: already gone is success. */
   remove(chatId: string, artifactId: string): void;
   /** Removes a whole chat's directory when the conversation is deleted. */

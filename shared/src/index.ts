@@ -155,6 +155,19 @@ export interface ArtifactsResponse {
   artifacts: ArtifactDTO[];
 }
 
+/** One entry in an artifact's version history (popy.spec §14, RF-018/019). */
+export interface ArtifactVersionDTO {
+  version: number;
+  mime: string;
+  size: number;
+  source: 'agent' | 'upload';
+  createdAt: string;
+}
+
+export interface ArtifactVersionsResponse {
+  versions: ArtifactVersionDTO[];
+}
+
 /** `POST /v1/artifacts/:id/link` — a fresh HMAC-signed download URL (RF-004). */
 export interface ArtifactLinkResponse {
   url: string;

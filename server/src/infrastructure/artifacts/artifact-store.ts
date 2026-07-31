@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ArtifactStore } from '../../application/ports/artifact-store.js';
 
@@ -28,6 +28,18 @@ export class FsArtifactStore implements ArtifactStore {
 
   pathOf(chatId: string, artifactId: string): string {
     return join(this.root, chatId, artifactId);
+  }
+
+  archive(chatId: string, artifactId: string, version: number): void {
+    try {
+      copyFileSync(this.pathOf(chatId, artifactId), this.pathOfVersion(chatId, artifactId, version));
+    } catch {
+      // Nothing to archive (a fresh artifact, or bytes already gone) is fine.
+    }
+  }
+
+  pathOfVersion(chatId: string, artifactId: string, version: number): string {
+    return join(this.root, chatId, `${artifactId}.v${String(version)}`);
   }
 
   remove(chatId: string, artifactId: string): void {

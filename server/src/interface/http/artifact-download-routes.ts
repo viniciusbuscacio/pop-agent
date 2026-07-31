@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { apiError } from './errors.js';
 
@@ -22,29 +22,47 @@ export function createArtifactDownloadRoutes(deps: ArtifactDownloadRoutesDeps): 
       c.req.query('expires'),
       c.req.query('sig'),
     );
+    return serve(c, resolution);
+  });
 
-    switch (resolution.status) {
-      case 'expired':
-        return apiError(c, 410, 'link_expired', 'This download link has expired.');
-      case 'not-found':
-        return apiError(c, 404, 'not_found', 'No such artifact.');
-      case 'malformed':
-      case 'bad-signature':
-        return apiError(c, 403, 'forbidden', 'Invalid download link.');
-      case 'ok': {
-        const { artifact, path } = resolution;
-        return new Response(nodeStreamToWeb(createReadStream(path)), {
-          headers: {
-            'content-type': artifact.mime,
-            'content-disposition': `attachment; filename="${sanitizeFilename(artifact.name)}"`,
-            'cache-control': 'private, no-store',
-          },
-        });
-      }
-    }
+  routes.get('/artifacts/:id/versions/:version/download', (c) => {
+    const version = Number(c.req.param('version'));
+    if (!Number.isInteger(version)) return apiError(c, 403, 'forbidden', 'Invalid download link.');
+    const resolution = deps.artifacts.resolveVersionDownload(
+      c.req.param('id'),
+      version,
+      c.req.query('expires'),
+      c.req.query('sig'),
+    );
+    return serve(c, resolution);
   });
 
   return routes;
+}
+
+function serve(
+  c: Context,
+  resolution: ReturnType<ArtifactService['resolveDownload']>,
+): Response {
+  switch (resolution.status) {
+    case 'expired':
+      return apiError(c, 410, 'link_expired', 'This download link has expired.');
+    case 'not-found':
+      return apiError(c, 404, 'not_found', 'No such artifact.');
+    case 'malformed':
+    case 'bad-signature':
+      return apiError(c, 403, 'forbidden', 'Invalid download link.');
+    case 'ok': {
+      const { artifact, path } = resolution;
+      return new Response(nodeStreamToWeb(createReadStream(path)), {
+        headers: {
+          'content-type': artifact.mime,
+          'content-disposition': `attachment; filename="${sanitizeFilename(artifact.name)}"`,
+          'cache-control': 'private, no-store',
+        },
+      });
+    }
+  }
 }
 
 /** Keeps the header well-formed: no quotes or control characters. */

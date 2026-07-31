@@ -7,6 +7,12 @@ normative history.
 
 ### Added
 
+- **Artifact versioning and history** (RF-018/019): re-saving a file under the
+  same name in the same chat keeps the previous bytes as a numbered version.
+  `GET /v1/artifacts/:id/versions` lists the history; each version downloads
+  through its own signed link (the version folded into the HMAC). The artifacts
+  screen shows the current version. Validated live: two uploads produced v2+v1,
+  and each version downloaded its own bytes.
 - **Text extraction and OCR for read_artifact** (RF-011/012): non-text
   artifacts are extracted best-effort before the agent gives up — PDF via
   `pdftotext`, DOCX via `unzip` of the document XML, images via `tesseract`
