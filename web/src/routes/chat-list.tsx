@@ -543,9 +543,12 @@ function ChatRow({
         }}
         style={{
           transform: dx === 0 ? undefined : `translateX(${String(dx)}px)`,
+          // Solid only while dragging, to hide the action colour underneath;
+          // at rest it stays transparent so selection/hover paint as always.
+          background: dx === 0 ? undefined : 'var(--bg)',
           touchAction: 'pan-y',
         }}
-        className="relative bg-[var(--panel-bg)]"
+        className="relative"
       >
       <NavLink
         to={`/chat/${chat.id}`}
