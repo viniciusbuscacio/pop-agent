@@ -183,11 +183,13 @@ export interface SaveSkillRequest {
   body: string;
 }
 
-/** `GET /v1/update/status` — versions and whether a newer pi exists (popy.spec §15). */
+/** `GET /v1/update/status` — versions and whether newer pi/Popy exist (popy.spec §15). */
 export interface UpdateStatusResponse {
   pi: { current: string; latest?: string };
-  popy: { current: string };
+  popy: { current: string; latest?: string };
   node: string;
+  /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */
+  environment: { name: string; version: string }[];
   updateCommand: string;
 }
 

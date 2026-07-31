@@ -41,6 +41,7 @@ type Section =
   | 'usage'
   | 'backup'
   | 'appearance'
+  | 'updates'
   | 'security'
   | 'about';
 
@@ -52,13 +53,18 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'usage', labelKey: 'settings.section.usage' },
   { id: 'backup', labelKey: 'settings.section.backup' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
+  { id: 'updates', labelKey: 'settings.section.updates' },
   { id: 'security', labelKey: 'settings.section.security' },
   { id: 'about', labelKey: 'settings.section.about' },
 ];
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [section, setSection] = useState<Section>('general');
+  // A push notification deep-links here with ?section=updates (popy.spec §15).
+  const requested = new URLSearchParams(window.location.search).get('section');
+  const [section, setSection] = useState<Section>(
+    SECTIONS.some((entry) => entry.id === requested) ? (requested as Section) : 'general',
+  );
 
   return (
     <div className="min-h-dvh">
@@ -103,6 +109,7 @@ export function SettingsPage() {
           {section === 'usage' ? <UsageSection /> : null}
           {section === 'backup' ? <BackupSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
+          {section === 'updates' ? <UpdatesSection /> : null}
           {section === 'security' ? <SecuritySection /> : null}
           {section === 'about' ? <AboutSection /> : null}
         </div>
@@ -1075,7 +1082,6 @@ function AppearanceSection() {
 
       <FontSizeCard />
       <NotificationsCard />
-      <AppUpdatesCard />
     </div>
   );
 }
@@ -1374,25 +1380,95 @@ function SecuritySection() {
   );
 }
 
-function AboutSection() {
-  const [about, setAbout] = useState<AboutResponse | undefined>(undefined);
+/**
+ * Settings → Updates (popy.spec §15, design closed 31/07): three cards, one
+ * per channel. The app checks and prompts; the server is notify-only -- a
+ * push says a new tag exists and taps into this screen, applying it stays
+ * the shell command shown here; the environment is visibility only.
+ */
+function UpdatesSection() {
   const [update, setUpdate] = useState<import('@popy/shared').UpdateStatusResponse | undefined>(
     undefined,
   );
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    settingsService
-      .about()
-      .then(setAbout)
-      .catch(() => setAbout(undefined));
     settingsService
       .updateStatus()
       .then(setUpdate)
       .catch(() => setUpdate(undefined));
   }, []);
 
-  const piOutdated =
-    update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
+  const popyOutdated =
+    update?.popy.latest !== undefined && update.popy.latest !== update.popy.current;
+  const piOutdated = update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <AppUpdatesCard />
+
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">{t('settings.updates.serverTitle')}</h2>
+        <Row
+          label={t('settings.updates.installed')}
+          value={update?.popy.current ?? '…'}
+          testId="update-popy-current"
+        />
+        {popyOutdated ? (
+          <p data-testid="update-popy-available" className="text-sm text-[var(--accent)]">
+            {t('settings.updates.popyAvailable', { version: update?.popy.latest ?? '' })}
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
+        )}
+        <p className="text-xs text-[var(--muted)]">{t('settings.updates.notifyNote')}</p>
+        <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
+        <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
+          {update?.updateCommand ?? '…'}
+        </pre>
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="update-copy-command"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(update?.updateCommand ?? '')
+                .then(() => setCopied(true));
+            }}
+          >
+            {copied ? t('settings.updates.copied') : t('settings.updates.copy')}
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">{t('settings.updates.envTitle')}</h2>
+        <Row label="pi" value={update?.pi.current ?? '…'} testId="update-pi-current" />
+        {piOutdated ? (
+          <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
+            {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
+          </p>
+        ) : null}
+        <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
+        {(update?.environment ?? []).map((tool) => (
+          <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />
+        ))}
+        <p className="text-xs text-[var(--muted)]">{t('settings.updates.envNote')}</p>
+      </Card>
+    </div>
+  );
+}
+
+function AboutSection() {
+  const [about, setAbout] = useState<AboutResponse | undefined>(undefined);
+
+  useEffect(() => {
+    settingsService
+      .about()
+      .then(setAbout)
+      .catch(() => setAbout(undefined));
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1411,22 +1487,6 @@ function AboutSection() {
         <p className="text-xs text-[var(--muted)]">{t('settings.about.iconCredit')}</p>
       </Card>
 
-      {update !== undefined ? (
-        <Card className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold">{t('settings.updates.title')}</h2>
-          {piOutdated ? (
-            <p data-testid="update-available" className="text-sm text-[var(--accent)]">
-              {t('settings.updates.piAvailable', { version: update.pi.latest ?? '' })}
-            </p>
-          ) : (
-            <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
-          )}
-          <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
-          <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
-            {update.updateCommand}
-          </pre>
-        </Card>
-      ) : null}
     </div>
   );
 }

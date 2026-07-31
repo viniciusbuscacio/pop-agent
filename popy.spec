@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.21 — 2026-07-31.
+Version 1.22 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -692,6 +692,30 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.22 (2026-07-31): **Rounds 4–5 built** (list redesign, per-device
+  prefs, resilience, the Updates screen). Decisions recorded: the home
+  list gains **Chats | Artefacts segments** with search reaching archived
+  chats (badged) and a deliberate menu -> View archived — the pinned line
+  and the collapsible footer are gone (§14); **swipe on a chat row**:
+  right = delete (confirmed), left = archive (not) — the maintainer's
+  mapping, deliberately the inverse of iOS Mail (§14); a **strip under
+  the composer** holds the per-chat knobs (thinking visibility toggle +
+  model picker, moved out of the header) with room to grow (§14);
+  **font size** and **thinking visibility** are device-scoped localStorage
+  prefs like the theme (§14); **SIGTERM/SIGINT flush**: a server restart
+  parks every in-flight run's partial answer as an interrupted-marked
+  message instead of eating it (§6, §14); **Settings -> Updates** ships
+  its first cut (§15): three cards — the PWA check (moved from
+  Appearance), the Popy server card reading the latest origin tag with
+  the update command shown (the **notify-only** channel: one push per new
+  version, deep-linking to ?section=updates; applying stays a shell act),
+  and an Environment card (pi/node/ffmpeg/poppler/tesseract/whisper
+  versions, visibility only). GET /v1/artifacts (all chats) joins §13.
+  Fixes shipped same day: DELETE responses parse (204), unarchive
+  refreshes both lists, composer scrollbar only at its cap, the update
+  Reload button reloads unconditionally, voice model default small on
+  this hardware (medium measured 5.8x realtime on 4 cores).
 
 - 1.12 (2026-07-31): **v0.2 built, tagged v0.2.0.** Skills + the Skill
   Router (§8): markdown skills under POPY_DATA_DIR/skills, a pure lexical

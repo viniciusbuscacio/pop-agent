@@ -21,6 +21,22 @@ normative history.
 
 ### Added
 
+- **Home list redesign**: Chats | Artefacts segments on top; search reaches
+  archived chats (badged); archived browsing moved to the ... menu. The
+  Artefacts segment lists every artifact across every chat.
+- **Swipe on a chat row** (touch): right = delete (confirmed), left =
+  archive/unarchive.
+- **Composer strip**: thinking visibility toggle (per device) and the model
+  picker, under the composer instead of the header.
+- **Font size** in Settings -> Appearance: Small/Default/Large/Extra large,
+  remembered per device.
+- **Restart resilience**: a server restart stores the partial answer of any
+  in-flight run, marked as interrupted, instead of losing it.
+- **Settings -> Updates**: three cards -- the PWA update check, the Popy
+  server card (latest origin tag + the update command, with a push
+  notification per new version that deep-links here), and the environment
+  versions (pi, Node, ffmpeg, poppler, tesseract, whisper.cpp).
+
 - **Multimodal image input** (RF-014): when the conversation's model accepts
   images, image attachments are sent to the model inline instead of only being
   saved to the workspace. Gated on the model's declared input modalities, so a

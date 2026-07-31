@@ -225,8 +225,9 @@ export function createTestApp(
       status: () =>
         Promise.resolve({
           pi: { current: '0.83.0', latest: '0.83.0' },
-          popy: { current: '0.2.0-test' },
+          popy: { current: '0.2.0-test', latest: undefined },
           node: process.version,
+          environment: [{ name: 'ffmpeg', version: '8.0.0-test' }],
           updateCommand: 'test',
         }),
     },

@@ -7,8 +7,10 @@
 
 export interface UpdateStatus {
   pi: { current: string; latest: string | undefined };
-  popy: { current: string };
+  popy: { current: string; latest: string | undefined };
   node: string;
+  /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */
+  environment: { name: string; version: string }[];
   /** The command that updates Popy, shown in the UI (spec §15). */
   updateCommand: string;
 }

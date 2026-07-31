@@ -217,6 +217,17 @@ export const en = {
   'shell.archivedBadge': 'archived',
   'shell.filterArtifacts': 'Search artifacts',
   'shell.noArtifacts': 'No artifacts yet.',
+  'settings.section.updates': 'Updates',
+  'settings.updates.serverTitle': 'Popy server',
+  'settings.updates.installed': 'Installed',
+  'settings.updates.popyAvailable': 'Popy {version} is available.',
+  'settings.updates.notifyNote':
+    'When a new version is published you get a push notification that opens this screen.',
+  'settings.updates.copy': 'Copy command',
+  'settings.updates.copied': 'Copied',
+  'settings.updates.envTitle': 'Environment',
+  'settings.updates.envNote':
+    'Environment packages are updated by hand on the server, never by Popy itself.',
 
   'settings.notifications.title': 'Notifications',
   'settings.notifications.enable': 'Enable notifications',

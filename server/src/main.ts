@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -32,7 +33,8 @@ import { TarBackupService } from './infrastructure/backup/tar-backup-service.js'
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
 import { WebPushService } from './infrastructure/push/web-push-service.js';
 import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
-import { NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
+import { isNewerVersion, NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
+import { readEnvironmentVersions } from './infrastructure/update/environment-versions.js';
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
@@ -166,6 +168,11 @@ function piBridge(): PiAgentBridge {
 const hub = new SseHub();
 // Web Push: the VAPID keys live in the secrets table, generated once.
 const push = new WebPushService(context.push, context.secrets);
+const updates = new NpmUpdateChecker({
+  versions: readVersions(),
+  now: () => systemClock.now(),
+  environment: readEnvironmentVersions,
+});
 // The pi bridge is the only thing that can dispose a live session; the purger
 // asks it to forget a chat before deleting the chat's files (popy.spec §6).
 const purger = new FsChatPurger({
@@ -244,7 +251,7 @@ const app = createApp({
   usage: context.usage,
   push,
   webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
-  updates: new NpmUpdateChecker({ versions: readVersions(), now: () => systemClock.now() }),
+  updates,
   backups: new TarBackupService({
     dataDir: context.dataDir,
     backupsDir: join(context.dataDir, '..', 'popy-backups'),
@@ -255,6 +262,32 @@ const app = createApp({
   versions: readVersions(),
   webDist,
 });
+
+// The notify-only update channel (popy.spec §15, Vinicius 31/07): when a
+// newer Popy tag appears on the origin, one push per version -- tapping it
+// deep-links into Settings → Updates. Applying the update stays a shell act.
+const updateNoticePath = join(context.dataDir, 'update-noticed');
+async function notifyNewVersion(): Promise<void> {
+  const status = await updates.status();
+  const latest = status.popy.latest;
+  if (latest === undefined || !isNewerVersion(status.popy.current, latest)) return;
+  const noticed = ((): string => {
+    try {
+      return readFileSync(updateNoticePath, 'utf8').trim();
+    } catch {
+      return '';
+    }
+  })();
+  if (noticed === latest) return;
+  await push.send({
+    title: 'Popy',
+    body: `Popy ${latest} is available. Tap to open Updates.`,
+    url: '/settings?section=updates',
+  });
+  writeFileSync(updateNoticePath, latest);
+}
+setTimeout(() => void notifyNewVersion().catch(() => undefined), 60_000);
+setInterval(() => void notifyNewVersion().catch(() => undefined), 6 * 60 * 60 * 1000);
 
 // A restart must not eat a half-written answer: before dying, park every
 // in-flight run's partial on disk (synchronous writes, safe in a handler).

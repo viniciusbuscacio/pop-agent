@@ -22,8 +22,12 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
         current: status.pi.current,
         ...(status.pi.latest === undefined ? {} : { latest: status.pi.latest }),
       },
-      popy: status.popy,
+      popy: {
+        current: status.popy.current,
+        ...(status.popy.latest === undefined ? {} : { latest: status.popy.latest }),
+      },
       node: status.node,
+      environment: status.environment,
       updateCommand: status.updateCommand,
     };
     return c.json(response);
