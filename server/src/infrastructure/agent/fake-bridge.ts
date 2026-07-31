@@ -97,7 +97,7 @@ export class FakeAgentBridge implements AgentBridge {
     onEvent({ kind: 'thinking', text: 'This needs a shell. ' });
 
     await sleep(DEFAULT_STEP_MS / this.speed, signal);
-    onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'echo hello' });
+    onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'echo hello\n' });
 
     for (let line = 1; line <= 6; line += 1) {
       await sleep(TOOL_STEP_MS / this.speed, signal);

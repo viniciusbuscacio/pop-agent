@@ -114,7 +114,9 @@ domain / application / dto / infrastructure / appcore → interface+main):
 ```
 
 - `.env`: `OPENROUTER_API_KEY` optional seed, `POPY_PORT` (default 8787),
-  `POPY_BIND` (default `127.0.0.1`), `POPY_DATA_DIR`, `POPY_WORKSPACE`.
+  `POPY_BIND` (default `127.0.0.1`), `POPY_DATA_DIR`, `POPY_WORKSPACE`,
+  `POPY_AGENT` (`fake` | `pi`; `fake` is the scripted bridge used to build and
+  test the chat without spending tokens).
   The session HMAC secret is **not** an environment variable: it is
   generated at setup and kept in the encrypted `secrets` table (§9), so a
   leaked backup -- which excludes `secret.key` -- cannot forge a token.
@@ -145,7 +147,15 @@ domain / application / dto / infrastructure / appcore → interface+main):
   Popy's own capabilities (memory, notes, web, skills) are registered as pi
   custom tools via `defineTool` (typebox schemas).
 - **Concurrency**: multiple chats run in parallel. Cap configurable,
-  default 20; excess queues with visible status. Idle sessions unload from
+  default 20; excess queues with visible status.
+  **One run per chat** on top of that ceiling — a second message to a busy
+  chat is refused with `run_in_progress`, and the frontend holds it in a
+  one-slot client-side queue that fires when the chat frees. Overflow past
+  the global ceiling is queued rather than refused, so a burst of chats
+  degrades into waiting.
+- **Stopping a queued run** removes it from the queue instead of aborting an
+  engine it never reached, and still reports `aborted`: a client that asked
+  to stop needs to stop waiting. Idle sessions unload from
   RAM after ~3h; reopening is transparent (ms). A warm-standby pool (+1
   pre-created session) was evaluated and rejected for now — session
   creation is an in-process object (ms); revisit only if skill/extension
@@ -176,7 +186,16 @@ llm_runs(id, chat_id, provider, model, tokens_in, tokens_out,
 skills_index(skill_id, name, description, source, embedding)  -- §8
 ```
 
-- IDs: aw's scheme — `chat-` + 12 hex, `msg-` + 16 hex, etc., from a CSPRNG.
+- IDs: aw's scheme — `chat-` + 12 hex, `msg-` + 16 hex, `run-` + 16 hex, from
+  a CSPRNG: nothing about the install leaks through an id.
+- `messages.tools_json` holds **one record per tool call**, not per event: a
+  call that starts, streams six lines and exits is one thing that happened.
+  The frontend folds the live stream the same way, so a conversation reads
+  identically while it streams and after a reload. Details accumulate in
+  order (command, output, closing note).
+- Message order is `(created_at, rowid)`. Ties are broken by insertion order
+  because a question and a fast answer land in the same millisecond, and
+  random ids cannot order them.
 - Attachments live on disk (`attachments/`), DB stores metadata. 16 MB cap.
 
 ## 7. Infinite memory (`application/memory/`)
@@ -197,7 +216,7 @@ with RRF. Three layers, aw's design rewritten:
    build our own (`[popy compacted]` summary + recent tail) if pi's isn't
    enough.
 
-## 8. Skills with local mini-RAG selection ⭐
+## 8. Skills with local mini-RAG selection ⭐ (the **Skill Router**)
 
 Popy ships dozens of built-in skills but injects only the relevant ones per
 user message — selection is 100% local, no LLM call:
@@ -332,6 +351,15 @@ SSE channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
 WebAuthn: `POST /v1/auth/webauthn/register`, `POST /v1/auth/webauthn/login`
 (§9, v0.2).
 
+**The SSE stream is authenticated with a one-time ticket.** `EventSource`
+cannot send an Authorization header, and a session token in a query string
+ends up in access logs, proxy traces and browser history. So
+`POST /v1/events/ticket` (authenticated) returns a CSPRNG ticket good for
+**one connection and 30 seconds**, and `GET /v1/events?ticket=…` spends it.
+A reconnect asks for a new one. The hub broadcasts every event to every
+connection — one user, several tabs — and sends a `:ka` comment every 25s so
+a proxy does not mistake an idle stream for a dead one.
+
 `GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
 document and the schema is strict, so a field Popy does not know is a 400
 rather than something silently dropped. Public (no session):
@@ -342,7 +370,8 @@ EventSource cannot attach a header to. Any response may carry a refreshed
 
 SSE events (typed in `shared/`): `delta`, `thinking`, `tool` (with
 start/output/done/error — `output` streams stdout in real time), `done`,
-`error`, `title`, `update`. Every run has a `runId`; the frontend discards
+`error`, `title`, `run-status` (`queued` | `running`, so the UI can say a
+run is waiting for a slot rather than looking stalled), `update`. Every run has a `runId`; the frontend discards
 events from stale runs.
 
 ## 14. Frontend rules (web/)
@@ -366,10 +395,23 @@ events from stale runs.
   reconciliation mid-run, polite autoscroll + "jump to latest", visible
   message queue during a run, per-chat draft in localStorage, auto-title
   via SSE.
+- **Adoption**: an event for a chat with no live buffer starts one, so a run
+  begun on another device streams into every open window. Runs that already
+  ended are remembered briefly, so their stragglers are ignored rather than
+  adopted as something new.
+- Context menus are **visible buttons, not long-press**: a hidden gesture has
+  no affordance on a touch screen and fights the scroll, and hover-only
+  controls are invisible to keyboards.
 - Thinking: collapsed streaming card. Tool calls: card per call with
   real-time output; consecutive calls group. Sensitive-action confirmation
   renders inline in the chat (§10).
-- Auto-title: aw's scheme — first title at the 3rd user turn, regenerate
+- Auto-title, **fallback first**: the first message of a chat still called
+  "New chat" names it immediately, with no model involved (stop-word scheme,
+  PT/EN, title-cased, de-duplicated). A sidebar of twenty "New chat" entries
+  is unreadable, and the fallback is also what runs when the provider is
+  down, out of credit or not configured. Once a provider exists the LLM title
+  takes over on top of it:
+- Auto-title (LLM): aw's scheme — first title at the 3rd user turn, regenerate
   every 10 turns, chat's own model, TITLE+SUMMARY prompt in the
   conversation's language, LLM-less fallback (4 words, PT/EN stop-words),
   dedup suffix, manual rename disables auto forever.
@@ -537,6 +579,21 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.8 (2026-07-31): Phase 2 built — the whole chat against a scripted
+  `FakeAgentBridge`, no tokens spent. Chats and messages persisted (§6);
+  run orchestration with one run per chat, a global queue and fallback
+  titles (§5, §14); chat routes and an SSE hub authenticated by one-time
+  ticket, replacing the hello-world stream (§13); and the React chat UI
+  with streaming, thinking and tool cards, a queueing composer and a model
+  picker (§14). Decisions recorded as they were made: the SSE ticket;
+  the `run-status` event; stopping a queued run drops it from the queue
+  and still reports `aborted`; tool events are folded into one record per
+  call on both sides of the wire; message order breaks ties on rowid;
+  `POPY_AGENT=fake|pi`; context menus are visible buttons rather than
+  long-press; and the skills selector is named the **Skill Router** (§8).
+  The smoke grew to fourteen steps, now covering the stream, a tool run
+  and Stop.
 
 - 1.7 (2026-07-30): Phase 1 built — SQLite with a numbered-migration
   runner, settings and AES-256-GCM-encrypted secrets (§4, §6, §9); auth
