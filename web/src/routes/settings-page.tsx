@@ -23,11 +23,12 @@ import { Button, Card, Segmented, TextField } from '../ui/controls';
  * screen and become a row of tabs when there is no room for a column.
  */
 
-type Section = 'general' | 'model' | 'appearance' | 'security' | 'about';
+type Section = 'general' | 'model' | 'memory' | 'appearance' | 'security' | 'about';
 
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
+  { id: 'memory', labelKey: 'settings.section.memory' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
   { id: 'security', labelKey: 'settings.section.security' },
   { id: 'about', labelKey: 'settings.section.about' },
@@ -75,6 +76,7 @@ export function SettingsPage() {
         <div className="flex-1">
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}
+          {section === 'memory' ? <MemorySection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
           {section === 'security' ? <SecuritySection /> : null}
           {section === 'about' ? <AboutSection /> : null}
@@ -168,6 +170,89 @@ function GeneralSection() {
         >
           {t('common.cancel')}
         </Button>
+        {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The living document Popy keeps about the user (popy.spec §7). The agent
+ * writes it through its tools; here the user can read, edit, and restore the
+ * one-level backup.
+ */
+function MemorySection() {
+  const [doc, setDoc] = useState('');
+  const [hasBackup, setHasBackup] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    settingsService
+      .readMemory()
+      .then((memory) => {
+        setDoc(memory.doc);
+        setHasBackup(memory.hasBackup);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    try {
+      const memory = await settingsService.writeMemory(doc);
+      setDoc(memory.doc);
+      setHasBackup(memory.hasBackup);
+      setSaved(true);
+    } catch {
+      setSaved(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restore(): Promise<void> {
+    if (!window.confirm(t('settings.memory.restoreConfirm'))) return;
+    try {
+      const memory = await settingsService.restoreMemory();
+      setDoc(memory.doc);
+      setHasBackup(memory.hasBackup);
+    } catch {
+      // Leave what is on screen; the next open tells the truth.
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="settings-memory" className="text-sm text-[var(--key-fg-dim)]">
+          {t('settings.memory.label')}
+        </label>
+        <textarea
+          id="settings-memory"
+          data-testid="settings-memory"
+          rows={10}
+          maxLength={8000}
+          value={doc}
+          placeholder={t('settings.memory.empty')}
+          onChange={(event) => {
+            setDoc(event.target.value);
+            setSaved(false);
+          }}
+          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 font-mono text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+        />
+        <p className="text-xs text-[var(--muted)]">{t('settings.memory.hint')}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" data-testid="settings-memory-save" disabled={busy} onClick={() => void save()}>
+          {t('common.save')}
+        </Button>
+        {hasBackup ? (
+          <Button type="button" variant="ghost" data-testid="settings-memory-restore" onClick={() => void restore()}>
+            {t('settings.memory.restore')}
+          </Button>
+        ) : null}
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
     </Card>

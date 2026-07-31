@@ -110,7 +110,15 @@ export const en = {
   'settings.title': 'Settings',
   'settings.section.general': 'General',
   'settings.section.model': 'Model',
+  'settings.section.memory': 'Memory',
   'settings.section.appearance': 'Appearance',
+
+  'settings.memory.label': 'What Popy knows about you',
+  'settings.memory.hint':
+    'Popy keeps and updates this as you talk. Edit it freely — it is added to every conversation.',
+  'settings.memory.empty': 'Nothing yet. Popy fills this in as it learns about you.',
+  'settings.memory.restore': 'Restore previous version',
+  'settings.memory.restoreConfirm': 'Restore the previous version of your memory?',
   'settings.section.security': 'Security',
   'settings.section.about': 'About',
 

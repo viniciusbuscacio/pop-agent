@@ -12,8 +12,10 @@ import type {
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 import type { MemoryRepo } from '../../application/ports/memory-repo.js';
+import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { envelope } from '../../domain/safety/sanitize.js';
 import { buildMemoryTools } from '../memory/memory-tools.js';
+import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
@@ -119,6 +121,8 @@ export interface SdkPiEngineOptions {
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
   memory?: MemoryRepo;
+  /** The living document the agent keeps about the user; tools + prompt. */
+  userMemory?: UserMemoryRepo;
 }
 
 /**
@@ -207,6 +211,7 @@ export class SdkPiEngine implements PiEngine {
       // data, so the agent knows what memory it can open without being told.
       appendSystemPrompt: [
         ...(options.instructions.length === 0 ? [] : [options.instructions]),
+        ...this.userMemoryBlock(),
         ...(this.recentChatsCatalog() ?? []),
       ],
     });
@@ -221,6 +226,9 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.memory === undefined
         ? []
         : buildMemoryTools(sdk.defineTool, this.options.memory)),
+      ...(this.options.userMemory === undefined
+        ? []
+        : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),
       ...buildWebTools(sdk.defineTool),
     ];
 
@@ -260,6 +268,17 @@ export class SdkPiEngine implements PiEngine {
         'memory:recent-catalog',
       ),
     ];
+  }
+
+  /**
+   * The living document about the user, for the system prompt (popy.spec §7).
+   * This is Popy's own trusted memory, not external content, so it is not
+   * enveloped -- but it is capped, and secrets were scrubbed on write.
+   */
+  private userMemoryBlock(): string[] {
+    const doc = this.options.userMemory?.read().doc ?? '';
+    if (doc.length === 0) return [];
+    return [`## What you know about the user\n${doc.slice(0, 8_000)}`];
   }
 
   /** Listing does not need a key -- the catalog is built into pi. */

@@ -93,6 +93,13 @@ export interface SettingsDTO {
   customInstructions: string;
 }
 
+/** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */
+export interface UserMemoryDTO {
+  doc: string;
+  /** Whether a one-level backup exists to restore. */
+  hasBackup: boolean;
+}
+
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
   popyVersion: string;

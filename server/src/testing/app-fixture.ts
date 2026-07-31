@@ -15,6 +15,7 @@ import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
@@ -186,6 +187,7 @@ export function createTestApp(
     runs,
     providers,
     transcriber: options.transcriber ?? new FakeTranscriber(),
+    userMemory: new SqliteUserMemoryRepo(db),
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
