@@ -244,7 +244,6 @@ function MemorySection() {
   }
 
   async function restore(): Promise<void> {
-    if (!window.confirm(t('settings.memory.restoreConfirm'))) return;
     try {
       const memory = await settingsService.restoreMemory();
       setDoc(memory.doc);
@@ -401,7 +400,6 @@ function BackupSection() {
   }
 
   async function restore(name: string): Promise<void> {
-    if (!window.confirm(t('backup.restoreConfirm'))) return;
     try {
       await backupsService.restore(name);
       setNotice(t('backup.restored'));
@@ -565,7 +563,6 @@ function SkillsSection() {
   }
 
   async function remove(skill: SkillDTO): Promise<void> {
-    if (!window.confirm(t('skills.deleteConfirm', { name: skill.name }))) return;
     try {
       await skillsService.remove(skill.slug);
       await reload();
@@ -811,7 +808,6 @@ function ModelSection() {
   }
 
   async function removeKey(): Promise<void> {
-    if (!window.confirm(t('provider.removeKeyConfirm'))) return;
     try {
       const response = await providersService.clearKey();
       setProvider(response.providers[0]);
@@ -1335,7 +1331,6 @@ function SecuritySection() {
   }
 
   async function signOutOthers(): Promise<void> {
-    if (!window.confirm(t('settings.security.signOutOthersConfirm'))) return;
     try {
       const { token } = await authService.signOutOthers();
       useAuthStore.getState().signIn(token, true);

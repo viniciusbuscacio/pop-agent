@@ -90,7 +90,6 @@ export function FilesPage() {
   }
 
   async function deleteFile(file: ArtifactDTO): Promise<void> {
-    if (!window.confirm(t('files.deleteConfirm', { name: file.name }))) return;
     await artifactsService.remove(file.id);
     await reload();
   }
@@ -109,11 +108,8 @@ export function FilesPage() {
     await reload();
   }
 
+  // YOLO mode (31/07): destructive actions just happen -- no dialogs anywhere.
   async function deleteFolder(folder: FolderDTO): Promise<void> {
-    const inside = (files ?? []).filter((file) => file.folderId === folder.id).length;
-    if (!window.confirm(t('files.deleteFolderConfirm', { name: folder.name, count: inside }))) {
-      return;
-    }
     await foldersService.remove(folder.id);
     await reload();
     navigate('/files');
@@ -129,7 +125,6 @@ export function FilesPage() {
   }
 
   async function deleteSelected(): Promise<void> {
-    if (!window.confirm(t('files.deleteSelectedConfirm', { count: selected.size }))) return;
     for (const id of selected) await artifactsService.remove(id);
     setSelecting(false);
     await reload();

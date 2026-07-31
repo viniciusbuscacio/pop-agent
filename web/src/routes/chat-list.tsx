@@ -270,9 +270,7 @@ function ChatRow({
   );
 
   function confirmDelete(): void {
-    if (window.confirm(t('shell.deleteConfirm', { title: chat.title }))) {
-      void remove(chat.id);
-    }
+    void remove(chat.id);
   }
 
   function onPointerDown(event: React.PointerEvent): void {

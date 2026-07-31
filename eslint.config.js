@@ -17,7 +17,17 @@ export default tseslint.config(
     // the compiler, but no-undef still applies to .mjs.
     files: ['**/*.mjs'],
     languageOptions: {
-      globals: { Buffer: 'readonly', console: 'readonly', process: 'readonly' },
+      globals: {
+        Buffer: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+      },
     },
   },
   {

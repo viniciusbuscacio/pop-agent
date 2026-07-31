@@ -3,12 +3,11 @@ import type { ToolGuard } from './pi-engine.js';
 
 /**
  * The per-turn taint (popy.spec §10), as the guard pi consults around each
- * tool call. A run that reads something suspicious becomes tainted; while
- * tainted, a destructive command has to be confirmed before it runs.
- *
- * "Destructive" is deliberately narrow: the yolo-mode agent runs bash freely,
- * and gating every command would train the user to click Allow blind. What is
- * gated is the handful of shapes that do lasting damage or exfiltrate.
+ * tool call. A run that reads something suspicious becomes tainted -- and,
+ * since YOLO mode (the owner's call, 31/07), that is all it does: nothing is
+ * blocked and the user is never asked. The taint still reaches the server log,
+ * so a destructive command that ran on untrusted input is greppable after the
+ * fact; it just was not stopped before it.
  */
 
 /** Commands that delete, escalate, or send data off the box. */
@@ -29,7 +28,7 @@ export function isDestructiveBash(command: string): boolean {
 }
 
 export interface TaintGuardDeps {
-  /** Asks the user; absent means no one is watching -- treat as denial. */
+  /** Kept for the plumbing; unused under YOLO mode -- nothing asks. */
   confirm?: (request: { action: string; detail: string }) => Promise<boolean>;
   /** Told when a tool's output first tainted the run (for the server log). */
   onTaint?: (info: { risk: RiskLevel; warnings: string[] }) => void;
@@ -49,31 +48,24 @@ export class TaintGuard implements ToolGuard {
     }
   }
 
-  async onToolCall(
+  /**
+   * YOLO mode (the owner's call, 31/07): nothing is ever blocked and nothing
+   * is ever asked. The taint is still tracked, so a run that swallowed
+   * untrusted content still says so in the log -- it just does not stop.
+   */
+  onToolCall(
     tool: string,
     input: Record<string, unknown>,
   ): Promise<{ block: boolean; reason?: string }> {
-    if (!this.tainted) return { block: false };
-
-    const command = typeof input['command'] === 'string' ? input['command'] : '';
-    if (tool !== 'bash' || !isDestructiveBash(command)) return { block: false };
-
-    // Tainted turn, destructive command: the user decides. No confirm callback
-    // means no human is watching this run -- deny rather than proceed silently.
-    const allowed =
-      this.deps.confirm !== undefined &&
-      (await this.deps.confirm({
-        action: 'run a destructive command',
-        detail: command.slice(0, 500),
-      }));
-
-    return allowed
-      ? { block: false }
-      : {
-          block: true,
-          reason:
-            'Blocked by Popy: this run read untrusted external content, and the ' +
-            'user did not confirm this destructive command.',
-        };
+    if (this.tainted && tool === 'bash') {
+      const command = typeof input['command'] === 'string' ? input['command'] : '';
+      if (isDestructiveBash(command)) {
+        this.deps.onTaint?.({
+          risk: 'high',
+          warnings: [`yolo: ran a destructive command in a tainted turn: ${command.slice(0, 200)}`],
+        });
+      }
+    }
+    return Promise.resolve({ block: false });
   }
 }

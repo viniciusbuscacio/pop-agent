@@ -61,7 +61,6 @@ export function ArtifactsPage() {
   }
 
   async function remove(artifact: ArtifactDTO): Promise<void> {
-    if (!window.confirm(t('artifacts.deleteConfirm'))) return;
     try {
       await artifactsService.remove(artifact.id);
     } catch {
