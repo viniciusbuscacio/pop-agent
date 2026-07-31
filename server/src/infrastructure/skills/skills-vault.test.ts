@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -99,6 +99,16 @@ describe('SkillsVault', () => {
     );
     const reopened = new SkillsVault(root);
     expect(reopened.get('summarize')?.name).toBe('Summarize');
+  });
+
+  it('stamps a pre-seed-era file that still matches the shipped default', () => {
+    // v0.2 wrote defaults with no seed marker; strip it to simulate that.
+    const path = join(root, 'summarize.md');
+    writeFileSync(path, readFileSync(path, 'utf8').replace(/^seed: .*\n/m, ''));
+    expect(parse(readFileSync(path, 'utf8')).seed).toBeUndefined();
+
+    new SkillsVault(root);
+    expect(parse(readFileSync(path, 'utf8')).seed).toBeDefined();
   });
 
   it('keeps a user edit to a default skill across reboot', () => {

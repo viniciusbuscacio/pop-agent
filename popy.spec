@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.28 — 2026-07-31.
+Version 1.29 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -240,7 +240,7 @@ with RRF. Three layers, aw's design rewritten:
 3. **Long-chat compaction** — check pi's native auto-compaction first; only
    build our own (`[popy compacted]` summary + recent tail) if pi's isn't
    enough.
-4. **Files awareness** (designed in 1.28; not built yet) — the agent must
+4. **Files awareness** (designed in 1.28, built in 1.29) — the agent must
    know *that* a file exists without being handed it. Two halves, same
    progressive-disclosure move as pinned skills and the recent-chats
    catalog — presence is cheap, content is on demand:
@@ -749,6 +749,21 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.29 (2026-07-31): **Files awareness built (§7.4).** `filesCatalogBlock`
+  (names + folders, 30 newest, untrusted-delimited, with the
+  search-before-shrugging line) joins the bridge's instructions next to the
+  pinned skills, so a new upload reaches the next run via the session
+  reopen; know-thyself teaches the same instinct. Seeding gained an
+  amnesty: a pre-seed-era default file still identical to the shipped
+  content gets stamped with the seed hash and follows upgrades from then
+  on (v0.2 installs heal by themselves; a truly edited file stays the
+  user's). Fixes shipped same day: on a phone the Files screen keeps the
+  app header — a shared ShellHeader rendered above the breadcrumb
+  (`md:hidden`) instead of vanishing with the sidebar; Download works
+  again everywhere — the signed link arrives after an await, so
+  `window.open` was popup-blocked, replaced by an anchor click
+  (`web/src/lib/download.ts`) over the attachment disposition.
 
 - 1.28 (2026-07-31): **Files awareness (§7) — design recorded,
   implementation pending.** A Files catalog (names + folders, recent N,

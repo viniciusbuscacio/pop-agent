@@ -36,6 +36,12 @@ describe('default skills routing', () => {
     expect(DEFAULT_SKILLS.find((skill) => skill.slug === 'know-thyself')?.pinned).toBe(true);
   });
 
+  it('teaches the files-and-memory-first instinct in know-thyself', () => {
+    const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'know-thyself')?.body ?? '';
+    expect(body).toContain('files_search');
+    expect(body).toContain('memory_search');
+  });
+
   it('tells Popy its extensions are TypeScript', () => {
     const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'self-architecture')?.body ?? '';
     expect(body).toContain('TypeScript on');

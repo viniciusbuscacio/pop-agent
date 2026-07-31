@@ -91,6 +91,8 @@ export class SkillsVault implements SkillsRepo {
    * seeded file carries a hash of its own content; a file still matching it
    * follows the shipped default (the generated self-map must not freeze at
    * whatever a boot once wrote), while an edited file is the user's to keep.
+   * A file from before the seed marker existed that is still identical to
+   * the shipped default gets stamped, so it upgrades from here on.
    */
   private seedDefaults(): void {
     for (const skill of DEFAULT_SKILLS) {
@@ -103,8 +105,13 @@ export class SkillsVault implements SkillsRepo {
         writeFileSync(path, fresh);
         continue;
       }
-      const pristine = existing.seed !== undefined && existing.seed === seedHash(existing);
-      if (pristine && existing.seed !== seedHash(skill)) writeFileSync(path, fresh);
+      const matchesShipped = seedHash(existing) === seedHash(skill);
+      if (existing.seed === undefined) {
+        if (matchesShipped) writeFileSync(path, fresh);
+        continue;
+      }
+      const pristine = existing.seed === seedHash(existing);
+      if (pristine && !matchesShipped) writeFileSync(path, fresh);
     }
   }
 }

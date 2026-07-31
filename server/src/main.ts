@@ -15,6 +15,7 @@ import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
 import { FileIndexer } from './application/artifacts/file-indexer.js';
+import { filesCatalogBlock } from './application/artifacts/files-catalog.js';
 import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
@@ -176,10 +177,16 @@ function piBridge(): PiAgentBridge {
     }),
     defaultModelId: () => settings.read().defaultModel,
     // Pinned skills lead the session's system prompt (popy.spec §8): identity
-    // is not left to a per-turn router. The bridge reopens a session when this
-    // string changes, so a pin edit reaches the next run.
+    // is not left to a per-turn router. The Files catalog rides along (§7.4)
+    // so the agent knows what exists without being handed it. The bridge
+    // reopens a session when this string changes, so a pin edit or a new
+    // upload reaches the next run.
     instructions: () =>
-      [...pinnedBodies(skillsVault.all()), settings.read().customInstructions]
+      [
+        ...pinnedBodies(skillsVault.all()),
+        settings.read().customInstructions,
+        filesCatalogBlock(context.artifacts.listAll(), context.folders.list()),
+      ]
         .filter((block) => block.trim().length > 0)
         .join('\n\n'),
     // Until Phase 3 step 4 gives them a table, both land in the log -- which is
