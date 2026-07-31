@@ -26,6 +26,8 @@ export interface ArtifactServiceDeps {
   /** Derived link-signing key, from `secret.key` (never a new secret). */
   secretKey: Buffer;
   clock: Clock;
+  /** Told after bytes+record are stored, so the file index can trail along. */
+  onStored?: (artifactId: string) => void;
 }
 
 export interface NewArtifactInput {
@@ -76,6 +78,7 @@ export class ArtifactService {
         updatedAt: now,
       });
       this.deps.store.write(existing.chatId, existing.id, bytes);
+      this.deps.onStored?.(existing.id);
       return { ...existing, mime: input.mime, size: bytes.length, version, updatedAt: now };
     }
 
@@ -88,6 +91,7 @@ export class ArtifactService {
       createdAt: now,
     });
     this.deps.store.write(stored.chatId, stored.id, bytes);
+    this.deps.onStored?.(stored.id);
     return stored;
   }
 

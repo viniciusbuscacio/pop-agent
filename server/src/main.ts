@@ -14,6 +14,7 @@ import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
+import { FileIndexer } from './application/artifacts/file-indexer.js';
 import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
@@ -68,12 +69,16 @@ const artifactsDir = ensureArtifactsDir(context.dataDir);
 // Artifacts: the agent's outputs and the user's uploads, tracked per chat and
 // downloadable only through an HMAC-signed link keyed off secret.key (§14).
 // Built before the bridge so the pi engine can hand the agent save_artifact.
+// A holder, not a let: the service is built before the embedder exists.
+const fileIndex: { current: FileIndexer | undefined } = { current: undefined };
 const artifacts = new ArtifactService({
   repo: context.artifacts,
   folders: context.folders,
   store: new FsArtifactStore(artifactsDir),
   secretKey: context.secretKey,
   clock: systemClock,
+  // Off the request path: a stored file is indexed for files_search moments later.
+  onStored: (artifactId) => void fileIndex.current?.index(artifactId),
 });
 // Best-effort text extraction for read_artifact: PDF/DOCX/OCR via system
 // binaries (popy.spec §14). Paths overridable for an unusual install.
@@ -109,6 +114,17 @@ const indexer =
         embeddings: context.embeddings,
         embedder,
         onError: (message) => console.warn(`popy embedding: ${message}`),
+      });
+// The semantic index over Files (§14): the agent learns from what the user keeps.
+fileIndex.current =
+  embedder === undefined
+    ? undefined
+    : new FileIndexer({
+        artifacts,
+        chunks: context.artifactChunks,
+        embedder,
+        extractor: artifactExtractor,
+        onError: (message) => console.warn(`popy file index: ${message}`),
       });
 
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
@@ -147,6 +163,7 @@ function piBridge(): PiAgentBridge {
       userMemory: context.userMemory,
       artifacts,
       artifactExtractor,
+      ...(fileIndex.current === undefined ? {} : { fileSearch: fileIndex.current }),
     }),
     defaultModelId: () => settings.read().defaultModel,
     instructions: () => settings.read().customInstructions,
@@ -318,4 +335,6 @@ serve({ fetch: app.fetch, port, hostname }, (info) => {
     if (pending > 0) console.log(`popy embedding backfill: ${String(pending)} messages`);
     void indexer.backfill();
   }
+  // Catch up the file index the same way (files stored while no embedder ran).
+  void fileIndex.current?.backfill();
 });

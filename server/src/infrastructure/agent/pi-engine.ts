@@ -16,7 +16,7 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import { envelope } from '../../domain/safety/sanitize.js';
 import { buildMemoryTools, type MemorySearcher } from '../memory/memory-tools.js';
 import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
-import { buildArtifactTools } from '../artifacts/artifact-tools.js';
+import { buildArtifactTools, type FileSearch } from '../artifacts/artifact-tools.js';
 import type { ArtifactExtractor } from '../artifacts/artifact-extractor.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
@@ -143,6 +143,8 @@ export interface SdkPiEngineOptions {
   artifacts?: ArtifactService;
   /** Extracts text from PDF/DOCX/images for read_artifact (popy.spec §14). */
   artifactExtractor?: ArtifactExtractor;
+  /** Semantic search over Files, when the embedder exists. */
+  fileSearch?: FileSearch;
 }
 
 /**
@@ -261,6 +263,7 @@ export class SdkPiEngine implements PiEngine {
             this.options.workspace,
             options.chatId,
             this.options.artifactExtractor,
+            this.options.fileSearch,
           )),
       ...buildWebTools(sdk.defineTool),
     ];

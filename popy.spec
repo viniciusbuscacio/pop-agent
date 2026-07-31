@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.23 — 2026-07-31.
+Version 1.24 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -692,6 +692,25 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.24 (2026-07-31): **Round 6 — voice raw-first, Files, semantic file
+  index.** Voice (§14): the transcript is used raw the moment whisper
+  finishes (measured 5.9s end-to-end for 11s of audio); the LLM cleanup
+  is an opt-in in Settings with its own model picker (empty = service
+  model). Files (§14): the Artefacts tab is renamed **Files**, the
+  Chats | Files picker sits above New Chat, and Files is a flat folder
+  tree -- upload (root or open folder), download, rename, delete per
+  file; New/Rename/Delete Folder, folder delete warns it removes the
+  files inside. Chat uploads land at the root. A file may exist without
+  a chat: migration 012 rebuilds artifacts with chat_id nullable and
+  adds folders; chatless bytes live under artifacts/_files/. Semantic
+  index (§7/§14): migration 013 adds artifact_chunks (extracted text,
+  chunked, one BLOB embedding per chunk, FK cascade); a FileIndexer
+  trails every stored file off the request path with a boot backfill,
+  and the agent gains **files_search** -- validated live: the real
+  agent found a fact planted in an uploaded file. New surface: POST
+  /v1/artifacts (chatless upload), PATCH /v1/artifacts/:id,
+  GET/POST/PATCH/DELETE /v1/folders (§13).
 
 - 1.23 (2026-07-31): voice default model is **base** (§14) — measured on
   the 4-core test server with an 11s sample: base 5.5s / small 18.8s /

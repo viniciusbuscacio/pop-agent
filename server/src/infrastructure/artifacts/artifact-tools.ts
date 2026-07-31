@@ -90,12 +90,17 @@ export function resolveInWorkspace(workspace: string, relativePath: string): str
   return target;
 }
 
+export interface FileSearch {
+  search(query: string): Promise<{ artifactId: string; name: string; snippet: string; score: number }[]>;
+}
+
 export function buildArtifactTools(
   defineTool: DefineTool,
   artifacts: ArtifactService,
   workspace: string,
   chatId: string,
   extractor?: ArtifactExtractor,
+  fileSearch?: FileSearch,
 ): ToolDefinition[] {
   const save = defineTool({
     name: 'save_artifact',
@@ -197,5 +202,32 @@ export function buildArtifactTools(
     },
   });
 
-  return [save, read];
+  if (fileSearch === undefined) return [save, read];
+
+  const search = defineTool({
+    name: 'files_search',
+    label: 'Search the user files',
+    description:
+      "Semantic search over every file the user keeps in Files (uploads and saved artifacts, " +
+      "all conversations). Returns the most relevant passages with the file they came from. " +
+      "Use it when the user refers to something that may live in their documents.",
+    promptSnippet: 'files_search(query) — search the content of the user\'s files',
+    parameters: Type.Object({
+      query: Type.String({ description: 'What to look for, in natural language' }),
+    }),
+    execute: async (_id, params) => {
+      const { query } = params as { query: string };
+      const hits = await fileSearch.search(query);
+      if (hits.length === 0) return text('No file content matched.');
+      const body = hits
+        .map(
+          (hit) =>
+            `${hit.name} (${hit.artifactId}, score ${hit.score.toFixed(2)}):\n${hit.snippet}`,
+        )
+        .join('\n\n---\n\n');
+      return text(envelope(sanitize(body).clean, 'files_search'));
+    },
+  });
+
+  return [save, read, search];
 }
