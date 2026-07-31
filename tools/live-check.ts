@@ -121,6 +121,8 @@ async function main(): Promise<void> {
     model: DEFAULT_MODEL_ID,
     archived: false,
     piSessionId: '',
+    summary: '',
+    autoTitle: true,
     createdAt: now,
     updatedAt: now,
   });

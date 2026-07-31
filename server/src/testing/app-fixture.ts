@@ -4,6 +4,7 @@ import type { Hono } from 'hono';
 import { AuthService } from '../application/auth/auth-service.js';
 import { ChatService } from '../application/chat/chat-service.js';
 import { RunService } from '../application/chat/run-service.js';
+import { TitleService } from '../application/chat/title-service.js';
 import type { Clock } from '../application/ports/clock.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
 import type { CompletionRequest, ProviderGateway } from '../application/ports/provider-gateway.js';
@@ -133,20 +134,37 @@ export function createTestApp(
   const bridge = new FakeAgentBridge(200);
   const hub = new SseHub();
   const chats = new ChatService({ chats: chatRepo, clock });
-  const runs = new RunService({ chats: chatRepo, bridge, sink: hub, clock });
 
+  const gateway = options.gateway ?? new RefusingGateway();
   const providers = new ProviderService({
     secrets,
     settings: settingsRepo,
-    gateway: options.gateway ?? new RefusingGateway(),
+    gateway,
     clock,
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),
   });
 
+  const settings = new SettingsService(settingsRepo);
+  // Wired exactly the way main.ts wires it: with no key configured the title
+  // job is a silent no-op, which is what the fake-bridge tests need.
+  const runs = new RunService({
+    chats: chatRepo,
+    bridge,
+    sink: hub,
+    clock,
+    titles: new TitleService({
+      chats: chatRepo,
+      gateway,
+      apiKey: () => providers.apiKey(),
+      serviceModel: () => settings.read().serviceModel,
+      sink: hub,
+    }),
+  });
+
   const app = createApp({
     auth,
-    settings: new SettingsService(settingsRepo),
+    settings,
     chats,
     runs,
     providers,

@@ -12,6 +12,10 @@ export interface Chat {
   archived: boolean;
   /** Path to pi's JSONL session. Empty until a real agent run happens. */
   piSessionId: string;
+  /** Written by the service model with the title; Phase 4's memory reads it. */
+  summary: string;
+  /** False after a manual rename: the machine stops renaming this chat. */
+  autoTitle: boolean;
   createdAt: string;
   updatedAt: string;
 }

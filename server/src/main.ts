@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { AuthService } from './application/auth/auth-service.js';
 import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
+import { TitleService } from './application/chat/title-service.js';
 import type { AgentBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { ProviderService } from './application/providers/provider-service.js';
@@ -49,10 +50,11 @@ const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The provider seen by the routes: key precedence (secrets over environment),
 // the key test, and the model catalog with the engine's as offline fallback.
+const gateway = new OpenRouterGateway();
 const providers = new ProviderService({
   secrets: context.secrets,
   settings: context.settings,
-  gateway: new OpenRouterGateway(),
+  gateway,
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: () => bridge.listModels(),
@@ -96,6 +98,14 @@ const runs = new RunService({
   bridge,
   sink: hub,
   clock: systemClock,
+  titles: new TitleService({
+    chats: context.chats,
+    gateway,
+    apiKey: () => providers.apiKey(),
+    serviceModel: () => settings.read().serviceModel,
+    sink: hub,
+    onFailure: (message) => console.warn(`popy ${message}`),
+  }),
 });
 
 const app = createApp({

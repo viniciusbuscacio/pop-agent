@@ -32,6 +32,8 @@ export interface RunDeps {
   sink: EventSink;
   clock: Clock;
   maxConcurrentRuns?: number;
+  /** Offered every finished run; decides by itself whether to rewrite. */
+  titles?: { maybeRetitle(chatId: string): Promise<void> };
 }
 
 interface PendingRun {
@@ -242,6 +244,12 @@ export class RunService {
         ? { kind: 'done', chatId: run.chatId, runId: run.runId, messageId }
         : { kind: 'error', chatId: run.chatId, runId: run.runId, code: failure },
     );
+
+    // After the answer, never in its way: the title job is fire-and-forget,
+    // and a run that failed does not deserve a fresher name.
+    if (failure === undefined && this.deps.titles !== undefined) {
+      this.deps.titles.maybeRetitle(run.chatId).catch(() => undefined);
+    }
 
     this.finish(run);
   }

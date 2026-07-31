@@ -9,8 +9,9 @@ export class SqliteChatRepo implements ChatRepo {
   create(chat: Chat): Chat {
     this.db
       .prepare(
-        `INSERT INTO chats (id, title, model, archived, pi_session_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO chats
+           (id, title, model, archived, pi_session_id, summary, auto_title, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         chat.id,
@@ -18,6 +19,8 @@ export class SqliteChatRepo implements ChatRepo {
         chat.model,
         chat.archived ? 1 : 0,
         chat.piSessionId,
+        chat.summary,
+        chat.autoTitle ? 1 : 0,
         chat.createdAt,
         chat.updatedAt,
       );
@@ -62,6 +65,14 @@ export class SqliteChatRepo implements ChatRepo {
 
   setPiSessionId(id: string, piSessionId: string): void {
     this.db.prepare('UPDATE chats SET pi_session_id = ? WHERE id = ?').run(piSessionId, id);
+  }
+
+  setSummary(id: string, summary: string): void {
+    this.db.prepare('UPDATE chats SET summary = ? WHERE id = ?').run(summary, id);
+  }
+
+  setAutoTitle(id: string, autoTitle: boolean): void {
+    this.db.prepare('UPDATE chats SET auto_title = ? WHERE id = ?').run(autoTitle ? 1 : 0, id);
   }
 
   delete(id: string): void {
@@ -128,6 +139,13 @@ export class SqliteChatRepo implements ChatRepo {
     return row.total;
   }
 
+  countUserMessages(chatId: string): number {
+    const row = this.db
+      .prepare(`SELECT count(*) AS total FROM messages WHERE chat_id = ? AND role = 'user'`)
+      .get(chatId) as { total: number };
+    return row.total;
+  }
+
   titles(): string[] {
     const rows = this.db.prepare('SELECT title FROM chats').all() as { title: string }[];
     return rows.map((row) => row.title);
@@ -140,6 +158,8 @@ interface ChatRow {
   model: string;
   archived: number;
   pi_session_id: string;
+  summary: string;
+  auto_title: number;
   created_at: string;
   updated_at: string;
 }
@@ -162,6 +182,8 @@ function toChat(row: ChatRow): Chat {
     model: row.model,
     archived: row.archived === 1,
     piSessionId: row.pi_session_id,
+    summary: row.summary,
+    autoTitle: row.auto_title === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

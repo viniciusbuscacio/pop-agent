@@ -25,6 +25,8 @@ export class ChatService {
       model: '',
       archived: false,
       piSessionId: '',
+      summary: '',
+      autoTitle: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -44,6 +46,8 @@ export class ChatService {
     const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
     // An empty rename means "undo my title", not "leave it blank".
     this.deps.chats.rename(id, trimmed.length > 0 ? trimmed : DEFAULT_CHAT_TITLE);
+    // A name chosen by hand is not the machine's to improve on.
+    this.deps.chats.setAutoTitle(id, false);
     return this.deps.chats.get(id);
   }
 

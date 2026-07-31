@@ -14,6 +14,10 @@ export interface ChatRepo {
   rename(id: string, title: string): void;
   setArchived(id: string, archived: boolean): void;
   setModel(id: string, model: string): void;
+  setSummary(id: string, summary: string): void;
+
+  /** A manual rename turns auto-titling off; nothing turns it back on today. */
+  setAutoTitle(id: string, autoTitle: boolean): void;
 
   /**
    * Records where pi keeps this conversation's own session file. Popy never
@@ -38,6 +42,9 @@ export interface ChatRepo {
 
   /** True when the title is still the untouched default (drives auto-titling). */
   countMessages(chatId: string): number;
+
+  /** How many turns the user has taken -- the auto-title cadence counts these. */
+  countUserMessages(chatId: string): number;
 
   /** Titles already in use, so a generated one can be de-duplicated. */
   titles(): string[];

@@ -187,6 +187,8 @@ beforeEach(() => {
     model: '',
     archived: false,
     piSessionId: '',
+    summary: '',
+    autoTitle: true,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
   });
