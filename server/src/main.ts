@@ -79,6 +79,7 @@ function piBridge(): PiAgentBridge {
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
       apiKey: () => providers.apiKey(),
       notesVault,
+      memory: context.memory,
     }),
     defaultModelId: () => settings.read().defaultModel,
     instructions: () => settings.read().customInstructions,

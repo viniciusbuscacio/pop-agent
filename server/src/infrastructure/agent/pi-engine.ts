@@ -11,6 +11,9 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
+import type { MemoryRepo } from '../../application/ports/memory-repo.js';
+import { envelope } from '../../domain/safety/sanitize.js';
+import { buildMemoryTools } from '../memory/memory-tools.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
@@ -114,6 +117,8 @@ export interface SdkPiEngineOptions {
   apiKey: () => string | undefined;
   /** The agent's notes vault; its tools are registered on every session. */
   notesVault?: NotesVault;
+  /** Cross-conversation memory; its tools and the recent-chats catalog. */
+  memory?: MemoryRepo;
 }
 
 /**
@@ -197,9 +202,13 @@ export class SdkPiEngine implements PiEngine {
           pi.on('tool_result', onToolResult);
         },
       ],
-      ...(options.instructions.length === 0
-        ? {}
-        : { appendSystemPrompt: [options.instructions] }),
+      // The system prompt gains the user's instructions and a catalog of
+      // recent conversations (popy.spec §7.1) -- names only, as untrusted
+      // data, so the agent knows what memory it can open without being told.
+      appendSystemPrompt: [
+        ...(options.instructions.length === 0 ? [] : [options.instructions]),
+        ...(this.recentChatsCatalog() ?? []),
+      ],
     });
     await resourceLoader.reload();
 
@@ -209,6 +218,9 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.notesVault === undefined
         ? []
         : buildNoteTools(sdk.defineTool, this.options.notesVault)),
+      ...(this.options.memory === undefined
+        ? []
+        : buildMemoryTools(sdk.defineTool, this.options.memory)),
       ...buildWebTools(sdk.defineTool),
     ];
 
@@ -223,6 +235,31 @@ export class SdkPiEngine implements PiEngine {
     });
 
     return new SdkPiSession(session, runtime, guardSlot);
+  }
+
+  /**
+   * The last handful of conversations, as an untrusted-data block for the
+   * system prompt (popy.spec §7.1): titles and summaries only, so the agent
+   * can offer "shall I open our chat about X?" and reach it with memory_open.
+   */
+  private recentChatsCatalog(): string[] | undefined {
+    const memory = this.options.memory;
+    if (memory === undefined) return undefined;
+    const recent = memory.recentChats(15);
+    if (recent.length === 0) return undefined;
+
+    const lines = recent
+      .map((chat) => {
+        const summary = chat.summary.length > 0 ? ` — ${chat.summary}` : '';
+        return `- ${chat.title} (chatId: ${chat.chatId})${summary}`;
+      })
+      .join('\n');
+    return [
+      envelope(
+        `Recent conversations you can open with memory_open:\n${lines}`,
+        'memory:recent-catalog',
+      ),
+    ];
   }
 
   /** Listing does not need a key -- the catalog is built into pi. */

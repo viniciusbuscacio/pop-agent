@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
+import type { MemoryRepo } from '../application/ports/memory-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
@@ -8,6 +9,7 @@ import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
+import { SqliteMemoryRepo } from './db/sqlite-memory-repo.js';
 import { SqliteSecretsRepo } from './db/sqlite-secrets-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 
@@ -18,6 +20,7 @@ export interface AppContext {
   secrets: SecretsRepo;
   chats: ChatRepo;
   llmRuns: LlmRunsRepo;
+  memory: MemoryRepo;
 }
 
 /**
@@ -35,5 +38,6 @@ export function bootstrap(): AppContext {
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
+    memory: new SqliteMemoryRepo(db),
   };
 }
