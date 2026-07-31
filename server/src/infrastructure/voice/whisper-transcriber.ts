@@ -51,8 +51,10 @@ export class WhisperTranscriber implements Transcriber {
 
     const dir = mkdtempSync(join(tmpdir(), 'popy-voice-'));
     try {
-      const input = join(dir, `input.${safeExtension(job.format)}`);
-      const wav = join(dir, 'input.wav');
+      // Distinct basenames: a recording that is already .wav must not collide
+      // with ffmpeg's output (found the hard way).
+      const input = join(dir, `source.${safeExtension(job.format)}`);
+      const wav = join(dir, 'converted.wav');
       const transcriptBase = join(dir, 'transcript');
       writeFileSync(input, audio);
 
