@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.25 — 2026-07-31.
+Version 1.26 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -287,6 +287,16 @@ user message — selection is 100% local, no LLM call:
   extensions are TypeScript on Popy's own runtime**. The repo-map section
   is **generated from the code by a script** (runs with the gate), never
   hand-written — the spec stays the normative source; the map is derived.
+- **UI map (navigation self-knowledge).** The agent runs server-side: it
+  has no browser, no DOM, no accessibility (AX) tree of the PWA it fronts
+  — a live AX tree exists only in the user's browser, out of reach by
+  design. The equivalent knowledge is static and derivable: router paths
+  in `web/src/App.tsx` and every visible label in `web/src/i18n/en.ts`
+  are the source of truth for screens, menus and Settings sections. The
+  self-map generator therefore also emits a **UI map** — routes, Settings
+  sections, what each does — so Popy directs the user through its own
+  interface ("Settings → Model") instead of guessing. Same rule as the
+  repo map: generated, never hand-written.
 
 ## 9. Auth and secrets
 
@@ -721,6 +731,14 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.26 (2026-07-31): **UI map joins the self-map (§8).** The agent has no
+  AX tree of its own PWA — it runs server-side; the interface renders in
+  the user's browser, out of reach. Navigation knowledge ships as data
+  instead: the self-map generator derives a UI map (routes from
+  `web/src/App.tsx`, labels and Settings sections from
+  `web/src/i18n/en.ts`) so Popy can guide the user through its own
+  screens. Design recorded; implementation pending with 1.25.
 
 - 1.25 (2026-07-31): **Self-knowledge hardening (§8) — design recorded,
   implementation pending.** Motivated by a real PT dialogue where the
