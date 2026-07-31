@@ -60,6 +60,10 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET model = ? WHERE id = ?').run(model, id);
   }
 
+  setPiSessionId(id: string, piSessionId: string): void {
+    this.db.prepare('UPDATE chats SET pi_session_id = ? WHERE id = ?').run(piSessionId, id);
+  }
+
   delete(id: string): void {
     this.db.prepare('DELETE FROM chats WHERE id = ?').run(id);
   }

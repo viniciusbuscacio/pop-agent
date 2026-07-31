@@ -14,6 +14,14 @@ export interface ChatRepo {
   rename(id: string, title: string): void;
   setArchived(id: string, archived: boolean): void;
   setModel(id: string, model: string): void;
+
+  /**
+   * Records where pi keeps this conversation's own session file. Popy never
+   * reads that file -- it only needs the path to hand back when the chat wakes
+   * up on the other side of an idle unload or a restart (popy.spec §5).
+   */
+  setPiSessionId(id: string, piSessionId: string): void;
+
   delete(id: string): void;
 
   /**

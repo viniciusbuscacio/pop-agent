@@ -17,3 +17,20 @@ export function ensureDataDir(dataDir: string): string {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   return dataDir;
 }
+
+/**
+ * The single root the agent works in (popy.spec §4). Kept apart from the data
+ * directory on purpose: this one is meant to be looked at, edited and cloned
+ * into, and it holds no keys.
+ */
+export function resolveWorkspace(): string {
+  const fromEnv = process.env['POPY_WORKSPACE'];
+  return fromEnv !== undefined && fromEnv.length > 0
+    ? fromEnv
+    : join(homedir(), 'popy-workspace');
+}
+
+export function ensureWorkspace(workspace: string): string {
+  mkdirSync(workspace, { recursive: true });
+  return workspace;
+}

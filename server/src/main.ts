@@ -1,13 +1,18 @@
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { AuthService } from './application/auth/auth-service.js';
 import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
+import type { AgentBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
+import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
+import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
+import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
@@ -29,12 +34,44 @@ const auth = new AuthService({
   clock: systemClock,
 });
 
-// `POPY_AGENT=pi` is reserved for Phase 3; until the adapter exists, saying so
-// out loud beats booting with a fake the operator did not ask for.
-if (process.env['POPY_AGENT'] === 'pi') {
-  throw new Error('POPY_AGENT=pi is not available yet: the pi bridge arrives in Phase 3');
+// Which engine answers (popy.spec §4). `fake` is scripted and free; `pi` is
+// the real thing and spends money. A typo must not quietly pick either.
+const agent = process.env['POPY_AGENT'] ?? 'pi';
+if (agent !== 'fake' && agent !== 'pi') {
+  throw new Error(`POPY_AGENT must be "fake" or "pi", got "${agent}"`);
 }
-const bridge = new FakeAgentBridge();
+
+const workspace = ensureWorkspace(resolveWorkspace());
+const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
+
+function piBridge(): PiAgentBridge {
+  return new PiAgentBridge({
+    chats: context.chats,
+    engine: new SdkPiEngine({
+      workspace,
+      sessionsDir: join(context.dataDir, 'sessions'),
+      // pi's own config, credentials and catalog cache, all inside Popy's data
+      // directory: a ~/.pi on the host must not reach into this process.
+      agentDir: join(context.dataDir, 'pi-agent'),
+      authPath: join(context.dataDir, 'pi-auth.json'),
+      modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
+      apiKey: () => process.env['OPENROUTER_API_KEY'],
+    }),
+    // Until Phase 3 step 4 gives them a table, both land in the log -- which is
+    // still the difference between "it failed" and knowing why.
+    onUsage: (usage) => {
+      console.log(
+        `popy run usage: chat=${usage.chatId} model=${usage.model} ` +
+          `in=${String(usage.inputTokens)} out=${String(usage.outputTokens)} ` +
+          `usd=${usage.cost.toFixed(6)}`,
+      );
+    },
+    onFailure: (failure) => {
+      const detail = failure.message === undefined ? '' : ` -- ${failure.message}`;
+      console.warn(`popy run failed: chat=${failure.chatId} code=${failure.code}${detail}`);
+    },
+  });
+}
 
 const hub = new SseHub();
 const chats = new ChatService({ chats: context.chats, clock: systemClock });
@@ -60,5 +97,9 @@ const app = createApp({
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`popy server listening on http://${info.address}:${info.port}`);
   console.log(`popy data dir ${context.dataDir}`);
-  console.log('popy agent bridge: fake (scripted; no model is contacted)');
+  console.log(
+    agent === 'pi'
+      ? `popy agent bridge: pi (real models, workspace ${workspace})`
+      : 'popy agent bridge: fake (scripted; no model is contacted)',
+  );
 });

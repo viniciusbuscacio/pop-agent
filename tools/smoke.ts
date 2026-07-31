@@ -355,6 +355,9 @@ async function main(): Promise<void> {
       POPY_PORT: String(port),
       POPY_BIND: '127.0.0.1',
       POPY_DATA_DIR: dataDir,
+      // Explicit, not inherited: the smoke runs in the gate and in CI, and it
+      // must cost nothing no matter what the machine's default engine is.
+      POPY_AGENT: 'fake',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

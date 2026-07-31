@@ -67,11 +67,13 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   transparent. `chats.pi_session_id` stores the JSONL path; first run of a
   chat uses `SessionManager.create(POPY_WORKSPACE, POPY_DATA_DIR/sessions)`
   and records the path.
-- **Concurrency**: semaphore, default 20 (setting). Acquire before
-  `prompt`, release on terminal event; queued runs emit a queued status.
-- **Abort**: `signal` from the use case → abort the pi run AND kill the
-  process group of any running bash child (aw has a reference
-  implementation; verify pi's own abort behavior — spec §20 list).
+- **Concurrency** is not here. The ceiling and the queue live in the
+  application (`RunService`), where they belong: they are a product rule, not
+  an engine detail. The bridge counts only whether a cached session is in use,
+  so an idle sweep never disposes one mid-run.
+- **Abort**: `signal` from the use case → `session.abort()`. Killing the
+  process group of a running bash child is the SDK's own behaviour, verified
+  behaviourally (see §2 below) -- aw's implementation is not needed.
 - **Event mapping** (pi SDK → application `AgentEvent`); exact pi names to
   be confirmed against the SDK types when coding — this table is the
   contract the adapter must satisfy no matter what pi renames:
@@ -117,12 +119,13 @@ GET /v1/events            EventSink port            pi events → AgentEvent
 
 ## v0.1 build order for this flow
 
-1. `AgentBridge` port + fake adapter (scripted events) → wire the full
+1. ✅ `AgentBridge` port + fake adapter (scripted events) → wire the full
    path with zero tokens; smoke test asserts the SSE sequence.
-2. `PiAgentBridge` with `SessionManager.inMemory()` + real OpenRouter key
-   behind `.env` (manual test).
-3. Persistent sessions (`sessionDir`, `pi_session_id`) + SQLite repo.
-4. Frontend chat store + streaming UI against the fake adapter first.
+2. ✅ Frontend chat store + streaming UI against the fake adapter first.
+3. ✅ `PiAgentBridge` with persistent sessions (`sessionDir`,
+   `pi_session_id`) and the real key from the environment. The in-memory
+   session manager was skipped: `tools/live-check.ts` runs against a temporary
+   data directory instead, which exercises the persistence too.
 
 ## SDK verification (pi 0.83.0, checked 31/07/2026)
 
@@ -158,18 +161,41 @@ event type. Tool events do sit at the top level:
 | `tool_execution_update`  | `toolCallId`, `toolName`, `partialResult` | `tool output` |
 | `tool_execution_end`     | `toolCallId`, `toolName`, `result`, `isError` | `tool done`/`error` |
 
-`turn_end` (with the final message and tool results) is the terminal signal for
-one prompt; `agent_end` is filtered out of the session stream and cannot be
-relied on.
+### 1b. What writing the adapter changed in the above
+
+Three corrections, each found by building against the SDK rather than reading it:
+
+- **`message_update` never carries the end of a message.** The stream switches
+  to `message_end` for that, whose `AssistantMessage` holds `stopReason`
+  (`stop` / `toolUse` / `error` / `aborted`) and `usage`. So the `usage` entry
+  listed under `assistantMessageEvent` in §1 and §4 does not exist: an adapter
+  watching only `message_update` sees every token and never learns how it went,
+  or what it cost.
+- **The terminal signal is simpler than `turn_end`.** `session.prompt()`
+  resolves when the whole run is over -- tool loops, auto-retries and
+  continuations included. The bridge awaits it and never inspects `turn_end`.
+  That also settles who decides a run failed: a `message_end` with
+  `stopReason: "error"` may still be followed by a successful retry pi ran on
+  its own, so the verdict waits for `prompt()` to return and reads the last one.
+- **Tool output arrives as cumulative snapshots, not deltas.** The bash tool
+  re-sends everything the command has printed so far, throttled to 100ms. Both
+  the UI and the stored record *append*, so the bridge diffs each snapshot
+  against what it already forwarded and puts only the new tail on the wire.
 
 ### 2. Abort — the SDK owns it
 
 `session.abort()` exists, and so does `session.abortBash()` for a running shell
-command specifically. Whether `abort()` reaches the process group of a bash
-child still has to be checked **behaviourally** (start `sleep 60`, abort, look
-for the process with `ps`) before assuming aw's process-group kill is
-unnecessary. Also present: `abortCompaction()`, `abortBranchSummary()`,
+command specifically. Also present: `abortCompaction()`, `abortBranchSummary()`,
 `abortRetry()`.
+
+**Answered, in the source and then for real: pi already kills the process
+group.** The bash tool spawns with `detached: true`, so the child leads its own
+group, and abort calls `killProcessTree(pid)` -- `process.kill(-pid, "SIGKILL")`,
+falling back to the bare pid. Confirmed behaviourally on the test server with
+`tools/live-check.ts --tools`: the model was asked to run `sleep 47`, `pgrep`
+found the shell and its child, Stop was pressed, and both were gone. aw's own
+process-group kill is therefore **not** needed -- spec §5's "Stop is a kill" is
+satisfied by the SDK.
 
 ### 3. Custom instructions — no direct option
 
@@ -187,7 +213,10 @@ confirmed when implementing.
 `Usage` carries `input`, `output`, `cacheRead`, `cacheWrite`, optional
 `reasoning`, `totalTokens`, and a `cost` breakdown with a `total`. No estimation
 by character count is needed, and `llm_runs` can store real numbers. Usage
-arrives as an `assistantMessageEvent` of type `usage`.
+arrives on the `AssistantMessage` of a `message_end` event (see 1b), and a run
+that used tools produces several -- the bridge adds them up, because every call
+in a tool loop is billed. Measured on the first live run: 530 in + 29 out =
+US$ 0.002265.
 
 ### 5. Model changes mid-session — supported
 
@@ -222,11 +251,10 @@ const runtime = await ModelRuntime.create({
   allowModelNetwork: false,                  // no catalog fetch during boot
 });
 
-runtime.registerProvider('openrouter', { models: [KIMI_K3] });
 await runtime.setRuntimeApiKey('openrouter', apiKey);
 
 const model = runtime.getModel('openrouter', 'moonshotai/kimi-k3');
-// → passed to createAgentSession({ model, sessionManager, ... })
+// → passed to createAgentSession({ model, agentDir, sessionManager, ... })
 ```
 
 Why each piece:
@@ -239,22 +267,38 @@ Why each piece:
 - **`allowModelNetwork: false`.** Boot must not depend on OpenRouter being
   reachable. The live catalog is a Settings-screen action (`runtime.refresh()`),
   not a startup cost.
-- **`registerProvider` augments the built-in.** The built-in `openrouter`
-  provider ships with no model entries, so base URL and API shape are inherited
-  and Popy supplies only the model row — including pinned pricing, which is what
-  makes `llm_runs` costs reproducible rather than dependent on a catalog that
-  moved.
+- **`agentDir` inside `POPY_DATA_DIR`.** Not in the original recipe, and it
+  belongs for the same reason as the other three: `agentDir` is where pi reads
+  settings, extensions and skills from, and a `~/.pi/agent` on the host must not
+  get a vote on how Popy behaves.
+
+**`registerProvider` turned out to be unnecessary, and the reason is worth
+recording**: this section first said the built-in `openrouter` provider "ships
+with no model entries", so Popy had to declare its own row with pinned pricing.
+That is wrong. `pi-ai/dist/providers/data/openrouter.json` ships **303 models**,
+`moonshotai/kimi-k3` among them, priced exactly as OpenRouter's live catalog
+prices it: US$3/M input, US$15/M output, US$0.30/M cache read, 1,048,576
+context, checked against `GET https://openrouter.ai/api/v1/models` on the same
+day. With `allowModelNetwork: false`, `modelsPath: null` and an empty auth file,
+`getModel('openrouter', 'moonshotai/kimi-k3')` simply resolves.
+
+So the bridge declares nothing, and there is no second copy of the price to
+drift out of date. What guards it instead is `sdk-contract.test.ts`, which
+resolves that model offline in the gate: a pi release that drops the row breaks
+the build rather than the first conversation of the day.
+
+One footnote to "isolated": `ModelRuntime.create` *does* create the file at
+`authPath`, empty. That is fine -- it is Popy's own, inside `POPY_DATA_DIR`. The
+point was isolation from `~/.pi`, not abstinence.
 
 Verified to exist with these signatures: `ModelRuntime.create(options)`,
-`registerProvider(providerId, config)`, `setRuntimeApiKey(providerId, apiKey)`
-(async), `getModel(providerId, modelId)`, `refresh(options)`.
-
-**To confirm while implementing**: the exact field names of a model entry inside
-`ProviderConfigInput` (declared in `core/provider-composer.ts`) — in particular
-how pricing is spelled, since that is what the cost accounting in §4 reads back.
+`setRuntimeApiKey(providerId, apiKey)` (async), `getModel(providerId, modelId)`,
+`getModels(providerId)`, `registerProvider(providerId, config)`,
+`refresh(options)`.
 
 ### Still open
 
-- Whether `abort()` kills a bash child's process group (2).
-- The exact route for custom instructions through the resource loader (3).
-- The exact model-entry fields inside `ProviderConfigInput` (see 8).
+- The exact route for custom instructions through the resource loader (3). The
+  bridge shipped without them; they are a Phase 3 step 1 setting, and if the
+  resource-loader route proves expensive the honest answer is to say so rather
+  than hold the phase for it.
