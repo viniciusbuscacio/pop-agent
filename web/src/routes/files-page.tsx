@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ArtifactDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
+import { ShellHeader } from './shell-header';
 import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
@@ -77,7 +79,7 @@ export function FilesPage() {
 
   async function download(id: string): Promise<void> {
     const { url } = await artifactsService.link(id);
-    window.open(url, '_blank', 'noopener');
+    saveFromLink(url);
   }
 
   async function renameFile(file: ArtifactDTO): Promise<void> {
@@ -166,6 +168,9 @@ export function FilesPage() {
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
+      {/* On a phone this screen replaces the sidebar, and the app's top bar
+          must not vanish with it (Vinicius, 31/07): same header, own copy. */}
+      <ShellHeader className="md:hidden" settingsTestId="files-shell-settings" />
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
         <button
           type="button"
