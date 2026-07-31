@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.29 — 2026-07-31.
+Version 1.31 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -267,6 +267,10 @@ user message — selection is 100% local, no LLM call:
 - Skill format: markdown with `name` + `description` frontmatter,
   compatible with pi's SKILL.md. Built-ins live in the repo; user skills in
   `POPY_DATA_DIR/skills/`.
+- **Skill language**: skills the agent writes for itself are English —
+  name, slug, frontmatter, body — same rule as the repo. Skills the end
+  user uploads may be in any language; the router's semantic leg is
+  multilingual and the lexical leg leans on translation-stable tokens.
 - pi's native behavior (progressive disclosure: ALL descriptions in the
   system prompt) does not scale to dozens of skills and models often skip
   reading them. Popy's selector replaces it.
@@ -749,6 +753,26 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.31 (2026-07-31): **Agent-written skills are English (§8).** The agent
+  authors its own skills in English, like the rest of the repo; end-user
+  skills stay free-language. Decided live: the agent's first two
+  self-authored skills (`self-change`, `field-lessons`) date from today —
+  it created the self-change flow unprompted after being taught
+  edit→gate→commit, and the router picked both up within minutes.
+
+- 1.30 (2026-07-31): **A real browser, and a crawler that hunts dead
+  buttons.** Playwright + headless Chromium land as a dev dependency. Two
+  uses: (1) the agent can browse the internet — a routed **web-browsing**
+  skill teaches it to drive Chromium from bash for javascript pages,
+  clicks and screenshots, with the rules spelled out (untrusted content,
+  web_fetch's address policy, close the browser, prefer web_fetch for
+  static pages); know-thyself mentions the capability. (2)
+  `npm run ui:crawl` (tools/ui-crawl.ts) boots a throwaway popy (temp
+  data dir, fake agent), logs in through the real form at a desktop and a
+  phone viewport, clicks every visible button on every screen, and
+  reports NO-OP buttons and console errors with screenshots — the class
+  of bug Download just was, hunted by machine. Not part of the gate.
 
 - 1.29 (2026-07-31): **Files awareness built (§7.4).** `filesCatalogBlock`
   (names + folders, 30 newest, untrusted-delimited, with the
