@@ -65,18 +65,26 @@ export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
 }
 
 export async function applyUpdate(): Promise<void> {
-  // The plugin runtime only reloads when its `controlling` event carries
-  // isUpdate -- which a worker that was already waiting when this page loaded
-  // (another tab, a previous session) does not. The button says Reload, so
-  // reload: on the real controller change if it comes, on a timer if not.
+  // Reload exactly once, and only when the new worker actually owns the
+  // page. The old 1.5s blind timer raced activation: on a phone the page
+  // often reloaded still under the previous worker, the banner came back,
+  // and Reload read as a button that must be pressed several times.
   let reloaded = false;
   const reload = (): void => {
     if (reloaded) return;
     reloaded = true;
     window.location.reload();
   };
+  // Fires thanks to clientsClaim in the generated worker (vite.config.ts).
   navigator.serviceWorker?.addEventListener('controllerchange', reload, { once: true });
-  setTimeout(reload, 1500);
+  // Belt for a worker that was already waiting before this page existed:
+  // its own activation is just as good a signal as the controller change.
+  const waiting = registration?.waiting;
+  waiting?.addEventListener('statechange', () => {
+    if (waiting.state === 'activated') reload();
+  });
+  // Last resort only -- long enough that it can no longer win the race.
+  setTimeout(reload, 8000);
   await updateSW?.(true);
 }
 

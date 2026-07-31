@@ -39,6 +39,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // The freshly activated worker must claim the open page, or the
+        // `controllerchange` the Reload button waits on never fires and the
+        // reload races activation (the press-Reload-twice bug). Safe under
+        // 'prompt': activation itself still waits for the user's consent.
+        clientsClaim: true,
         // Adds the Web Push handlers (popy.spec §14) to the generated worker.
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
