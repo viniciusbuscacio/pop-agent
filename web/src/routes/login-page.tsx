@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { passkeyService } from '../services/passkey';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, TextField } from '../ui/controls';
 
@@ -56,6 +57,18 @@ export function LoginPage() {
     }
   }
 
+  async function unlockWithPasskey(): Promise<void> {
+    setError(undefined);
+    try {
+      const token = await passkeyService.login();
+      signIn(token, true);
+      navigate('/');
+    } catch (cause) {
+      // A cancel is not an error; a real failure is.
+      if (cause instanceof ApiError) setError(t('login.invalid'));
+    }
+  }
+
   return (
     <CenteredScreen>
       <Card>
@@ -98,10 +111,17 @@ export function LoginPage() {
             {t('login.submit')}
           </Button>
 
-          {/*
-            Biometric unlock (WebAuthn) lands in a later version; the row is
-            kept so adding the button does not reshuffle this screen.
-          */}
+          {passkeyService.supported() ? (
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="login-passkey"
+              onClick={() => void unlockWithPasskey()}
+            >
+              {t('login.passkey')}
+            </Button>
+          ) : null}
+
           <div className="min-h-6 text-center">
             <Link
               to="/recover"

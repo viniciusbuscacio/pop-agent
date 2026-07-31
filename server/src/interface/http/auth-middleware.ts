@@ -16,6 +16,9 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   '/v1/login',
   '/v1/auth/recover',
   '/v1/events',
+  // Unlocking with a passkey happens before there is a session (popy.spec §9).
+  '/v1/auth/webauthn/login/options',
+  '/v1/auth/webauthn/login/verify',
 ]);
 
 /**

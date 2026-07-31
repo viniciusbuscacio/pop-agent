@@ -23,6 +23,7 @@ import { readVersions } from './infrastructure/config/versions.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
 import { WebPushService } from './infrastructure/push/web-push-service.js';
+import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
@@ -169,6 +170,7 @@ const app = createApp({
   skills: skillsVault,
   usage: context.usage,
   push,
+  webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
   backups: new TarBackupService({
     dataDir: context.dataDir,
     backupsDir: join(context.dataDir, '..', 'popy-backups'),

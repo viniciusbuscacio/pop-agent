@@ -15,6 +15,7 @@ import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
 import { providersService } from '../services/providers';
+import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
@@ -276,6 +277,76 @@ function MemorySection() {
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
     </Card>
+  );
+}
+
+/** Passkey / Face ID setup and management (popy.spec §9). */
+function PasskeyControls() {
+  const [supported] = useState(() => passkeyService.supported());
+  const [credentials, setCredentials] = useState<{ id: string; label: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (supported) void reload();
+  }, [supported]);
+
+  async function reload(): Promise<void> {
+    try {
+      setCredentials((await passkeyService.list()).credentials);
+    } catch {
+      // Leave the list.
+    }
+  }
+
+  async function register(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await passkeyService.register('This device');
+      await reload();
+    } catch {
+      setError(t('settings.security.passkeyFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string): Promise<void> {
+    try {
+      await passkeyService.remove(id);
+      await reload();
+    } catch {
+      // Ignore.
+    }
+  }
+
+  if (!supported) {
+    return <p className="text-xs text-[var(--muted)]">{t('settings.security.passkeyUnsupported')}</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium">{t('settings.security.passkeys')}</h3>
+      {credentials.map((credential) => (
+        <div key={credential.id} className="flex items-center justify-between gap-2 text-sm">
+          <span className="truncate text-[var(--muted)]">{credential.label || credential.id.slice(0, 12)}</span>
+          <Button type="button" variant="ghost" onClick={() => void remove(credential.id)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      ))}
+      <div>
+        <Button type="button" variant="ghost" data-testid="passkey-register" disabled={busy} onClick={() => void register()}>
+          {t('settings.security.passkeyAdd')}
+        </Button>
+      </div>
+      {error !== undefined ? (
+        <p role="alert" className="text-xs text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1111,8 +1182,7 @@ function SecuritySection() {
             {t('settings.security.signOutOthers')}
           </Button>
         </div>
-        {/* Biometric unlock (WebAuthn) is a later version; noted, not promised. */}
-        <p className="text-xs text-[var(--muted)]">{t('settings.security.passkeySoon')}</p>
+        <PasskeyControls />
       </Card>
 
       <Card className="flex flex-col gap-3">

@@ -22,6 +22,8 @@ import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
 import { TarBackupService } from '../infrastructure/backup/tar-backup-service.js';
+import { WebAuthnService } from '../infrastructure/auth/webauthn-service.js';
+import { SqliteWebAuthnRepo } from '../infrastructure/db/sqlite-webauthn-repo.js';
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
@@ -202,6 +204,7 @@ export function createTestApp(
       unsubscribe: () => undefined,
       send: () => Promise.resolve(),
     },
+    webauthn: new WebAuthnService({ repo: new SqliteWebAuthnRepo(db), now: () => clock.now() }),
     backups: new TarBackupService({
       dataDir: mkdtempSync(join(tmpdir(), 'popy-test-data-')),
       backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),

@@ -212,7 +212,11 @@ export const en = {
     'Ends every other session. This device stays signed in.',
   'settings.security.signOutOthersConfirm': 'Sign out everywhere else?',
   'settings.security.signedOutOthers': 'Other devices were signed out.',
-  'settings.security.passkeySoon': 'Face ID / fingerprint unlock arrives in a later version.',
+  'settings.security.passkeys': 'Passkeys (Face ID / fingerprint)',
+  'settings.security.passkeyAdd': 'Add this device',
+  'settings.security.passkeyFailed': 'The passkey could not be set up.',
+  'settings.security.passkeyUnsupported': 'This browser does not support passkeys.',
+  'login.passkey': 'Unlock with a passkey',
   'settings.security.signOut': 'Sign out',
 
   'settings.about.popy': 'Popy',

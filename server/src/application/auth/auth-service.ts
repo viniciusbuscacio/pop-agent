@@ -98,6 +98,15 @@ export class AuthService {
   }
 
   /**
+   * A session token on the current epoch, for a caller that has authenticated
+   * some other way -- a passkey (popy.spec §9). Undefined before setup.
+   */
+  issueSessionToken(): string | undefined {
+    const record = this.record();
+    return record === undefined ? undefined : this.issueToken(record.epoch);
+  }
+
+  /**
    * Recovery burns the key it was given: a used key would otherwise stay valid
    * forever, which is a permanent master password nobody remembers handing
    * out. The caller must show the new one.

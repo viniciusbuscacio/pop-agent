@@ -5,6 +5,7 @@ import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
 import type { PushService } from '../../application/ports/push-repo.js';
+import type { WebAuthnGateway } from '../../application/ports/webauthn-repo.js';
 import type { Clock } from '../../application/ports/clock.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
@@ -16,6 +17,7 @@ import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
 import { createPushRoutes } from './push-routes.js';
+import { createWebAuthnRoutes } from './webauthn-routes.js';
 import { createChatRoutes } from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
 import { createMemoryRoutes } from './memory-routes.js';
@@ -38,6 +40,7 @@ export interface AppDeps {
   usage: UsageRepo;
   backups: BackupService;
   push: PushService;
+  webauthn: WebAuthnGateway;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;
@@ -58,6 +61,7 @@ export function createApp(deps: AppDeps): Hono {
   // Guard everything under /v1 except the handful of public auth endpoints.
   app.use('/v1/*', authMiddleware(deps.auth));
   app.route('/v1', createAuthRoutes(deps));
+  app.route('/v1', createWebAuthnRoutes(deps));
   app.route('/v1', createSettingsRoutes(deps));
   app.route('/v1', createProviderRoutes(deps));
   app.route('/v1', createMemoryRoutes(deps));
