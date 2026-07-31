@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.9 — 2026-07-31.
+Version 1.10 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -197,7 +197,14 @@ skills_index(skill_id, name, description, source, embedding)  -- §8
 - Message order is `(created_at, rowid)`. Ties are broken by insertion order
   because a question and a fast answer land in the same millisecond, and
   random ids cannot order them.
-- Attachments live on disk (`attachments/`), DB stores metadata. 16 MB cap.
+- Attachments travel and rest as data URIs on the message row (`attachments_json`),
+  16 MB cap, and the pi bridge also writes each into
+  `POPY_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
+- **Deleting a chat deletes everything it left behind.** `DELETE /v1/chats/:id`
+  removes the SQLite rows (cascade), pi's JSONL session file and its sidecar
+  folder, and the chat's `attachments/<chatId>/` directory — no orphans. The
+  live pi session, if cached, is disposed first so nothing rewrites the file
+  after it is gone. FTS5/embedding rows go by the same cascade once they exist.
 
 ## 7. Infinite memory (`application/memory/`)
 
@@ -314,6 +321,16 @@ LLM) over everything from outside — web, files, notes, tool output:
   subsequent sensitive actions (dangerous shell, note writes) require
   inline UI confirmation (Allow / Deny in the chat). This is the ONLY
   brake on yolo mode.
+- **Implemented via pi's own `tool_call` / `tool_result` extension hooks**
+  (an inline extension Popy registers; `noExtensions` still keeps the
+  host's out). A run whose tool output sanitizes as suspicious/high
+  becomes tainted; a **destructive** bash command in a tainted turn
+  (rm -rf, sudo, dd, mkfs, chmod/chown -R, pipe-to-shell, scp/rsync out,
+  fork bomb, redirect outside the workspace) is paused with a `confirm`
+  SSE card and answered by `POST /v1/chats/:id/confirm {runId, allow}`.
+  Silence denies after 5 minutes; a run with no one watching denies at
+  once. Only destructive shapes are gated — gating every command would
+  train the user to click Allow blind.
 
 ## 11. Notes (`infrastructure/notes/`)
 
@@ -556,6 +573,15 @@ covers "forgot password AND recovery key" for whoever has shell.
   The maintainer tests visually; the agent tests through `/v1/ax` + smoke.
   A dedicated home Linux box will serve as a real test server the agent
   logs into (details when it's set up).
+- **Continuous execution (decided 31/07/2026)**: the remaining phases run
+  in sequence with **no manual acceptance between them**. The agent tests
+  each block itself — full gate plus a live check against the dev server
+  in the browser — and calls the maintainer once, at the end, with a
+  numeric summary and an iPhone checklist. Anything that can only be
+  validated on the device (passkey, push with the PWA closed, real-mic
+  recording, PWA reinstall) goes on that checklist, never blocks the flow.
+  Small product/technical decisions are the agent's to make: decide,
+  record here with a version bump, move on.
 - Scope evolves in batches of ~20 questions in the maintainer's notes
   (Portuguese, outside the repo). When an answer signals a concept wasn't
   clear, stop and explain before deciding.
@@ -582,6 +608,17 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.10 (2026-07-31): Phase 4 begins and the mode changes. The external
+  content safety layer landed (§10): pure sanitize (invisible-strip by
+  codepoint, NFC, base64 flag, ~40 EN+PT injection patterns over
+  accent-folded text) and the per-turn taint riding pi's tool_call /
+  tool_result hooks, with a `confirm` SSE card + `POST /chats/:id/confirm`
+  gating destructive bash in a tainted turn. Deleting a chat now deletes
+  its JSONL, sidecar and attachments too, not just the rows (§6). Voice
+  moved from a cloud model to local whisper.cpp (ffmpeg + whisper-cli on
+  the server, no tokens). And the process itself: continuous execution,
+  no manual acceptance between phases (§20).
 
 - 1.9 (2026-07-31): Phase 3 finished — the pi bridge (steps 0–2, spec 1.8
   session) grew the provider, the titles and the accounting (steps 1, 3,

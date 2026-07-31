@@ -1,5 +1,6 @@
 import { DEFAULT_CHAT_TITLE, type Chat, type ChatSummary, type Message } from '../../domain/chat/chat.js';
 import { newChatId } from '../../domain/ids.js';
+import type { ChatPurger } from '../ports/chat-purger.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 
@@ -12,6 +13,8 @@ const MAX_TITLE_LENGTH = 120;
 export interface ChatDeps {
   chats: ChatRepo;
   clock: Clock;
+  /** Removes a deleted chat's on-disk remains (JSONL, attachments). */
+  purger?: ChatPurger;
 }
 
 export class ChatService {
@@ -64,8 +67,12 @@ export class ChatService {
   }
 
   delete(id: string): boolean {
-    if (this.deps.chats.get(id) === undefined) return false;
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return false;
+    // Read the chat before the rows go, so the purger still knows where pi
+    // kept the session (popy.spec §6): SQLite by cascade, the rest by hand.
     this.deps.chats.delete(id);
+    this.deps.purger?.purge(chat);
     return true;
   }
 

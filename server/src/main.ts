@@ -10,6 +10,7 @@ import { systemClock } from './application/ports/clock.js';
 import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
+import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
@@ -94,7 +95,15 @@ function piBridge(): PiAgentBridge {
 }
 
 const hub = new SseHub();
-const chats = new ChatService({ chats: context.chats, clock: systemClock });
+// The pi bridge is the only thing that can dispose a live session; the purger
+// asks it to forget a chat before deleting the chat's files (popy.spec §6).
+const purger = new FsChatPurger({
+  workspace,
+  forgetSession: (chatId) => {
+    if (bridge instanceof PiAgentBridge) bridge.forget(chatId);
+  },
+});
+const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
 const runs = new RunService({
   chats: context.chats,
   bridge,

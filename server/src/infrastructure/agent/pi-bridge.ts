@@ -166,6 +166,17 @@ export class PiAgentBridge implements AgentBridge {
     return this.deps.engine.models();
   }
 
+  /**
+   * Drops a chat's cached session, disposing it. Called before a chat is
+   * deleted so nothing rewrites its JSONL after the file is removed.
+   */
+  forget(chatId: string): void {
+    const entry = this.sessions.get(chatId);
+    if (entry === undefined) return;
+    entry.session.dispose();
+    this.sessions.delete(chatId);
+  }
+
   /** Disposes every live session. For shutdown and for tests. */
   close(): void {
     if (this.sweeper !== undefined) clearInterval(this.sweeper);
