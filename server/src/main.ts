@@ -256,6 +256,15 @@ const app = createApp({
   webDist,
 });
 
+// A restart must not eat a half-written answer: before dying, park every
+// in-flight run's partial on disk (synchronous writes, safe in a handler).
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    runs.flushInterrupted();
+    process.exit(0);
+  });
+}
+
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`popy server listening on http://${info.address}:${info.port}`);
   console.log(`popy data dir ${context.dataDir}`);

@@ -535,3 +535,47 @@ describe('confirmation of a risky action', () => {
     expect(runs.resolveConfirm(chatId, 'run-nope', true)).toBe(false);
   });
 });
+
+describe('a process shutdown mid-run', () => {
+  it('parks the partial answer on disk, marked as interrupted', () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'half an answer' });
+      return new Promise(() => undefined); // the process dies before this resolves
+    };
+    runs.startRun(chatId, 'a question');
+
+    runs.flushInterrupted();
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    const assistant = stored.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toContain('half an answer');
+    expect(assistant?.content).toContain('interrupted by a server restart');
+  });
+
+  it('stores nothing for a run that had not streamed a word', () => {
+    const chatId = newChat();
+    bridge.script = () => new Promise(() => undefined);
+    runs.startRun(chatId, 'a question');
+
+    runs.flushInterrupted();
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    expect(stored.some((message) => message.role === 'assistant')).toBe(false);
+  });
+
+  it('never stores the same words twice if the run still finishes', () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'half an answer' });
+      return new Promise(() => undefined);
+    };
+    runs.startRun(chatId, 'a question');
+
+    runs.flushInterrupted();
+    runs.flushInterrupted(); // a second signal must be a no-op
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    expect(stored.filter((message) => message.role === 'assistant')).toHaveLength(1);
+  });
+});

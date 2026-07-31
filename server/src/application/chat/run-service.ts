@@ -273,6 +273,36 @@ export class RunService {
     };
   }
 
+  /**
+   * Persists every in-flight run's partial answer, for the moment the process
+   * is told to die: a watched half-reply must be on disk after the restart,
+   * not gone (Vinicius, 31/07). Synchronous on purpose -- better-sqlite3
+   * writes complete inside a signal handler. Buffers are cleared so a run
+   * that somehow still finishes cannot store the same words twice.
+   */
+  flushInterrupted(): void {
+    for (const run of this.runs.values()) {
+      const somethingArrived =
+        run.content.length > 0 || run.thinking.length > 0 || run.tools.length > 0;
+      if (!run.started || !somethingArrived) continue;
+      const at = new Date(this.deps.clock.now()).toISOString();
+      this.deps.chats.appendMessage({
+        id: newMessageId(),
+        chatId: run.chatId,
+        role: 'assistant',
+        content: `${run.content}\n\n*— interrupted by a server restart —*`,
+        thinking: run.thinking,
+        tools: run.tools,
+        attachments: [],
+        createdAt: at,
+      });
+      this.deps.chats.touch(run.chatId, at);
+      run.content = '';
+      run.thinking = '';
+      run.tools = [];
+    }
+  }
+
   private async execute(run: PendingRun): Promise<void> {
     this.running += 1;
     run.started = true;
