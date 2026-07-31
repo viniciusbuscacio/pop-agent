@@ -3,7 +3,6 @@ import { NavLink, useMatch, useNavigate, useParams } from 'react-router-dom';
 import type { ChatDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
-import { relativeTime } from '../lib/time';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellHeader } from './shell-header';
@@ -395,7 +394,9 @@ function ChatRow({
           `flex flex-col gap-0.5 px-4 py-3 ${isActive ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'}`
         }
       >
-        <div className="flex items-baseline justify-between gap-2">
+        {/* The top-right corner belongs to the row menu (Vinicius, 31/07):
+            the timestamp used to sit there too, hiding the ⋯ under it. */}
+        <div className="flex items-baseline justify-between gap-2 pr-6">
           <span className="flex min-w-0 items-baseline gap-1.5">
             <span className="truncate text-sm font-medium">{chat.title}</span>
             {badge ? (
@@ -407,7 +408,6 @@ function ChatRow({
               </span>
             ) : null}
           </span>
-          <span className="shrink-0 text-xs text-[var(--muted)]">{relativeTime(chat.updatedAt)}</span>
         </div>
         <span className="truncate text-xs text-[var(--muted)]">
           {live !== undefined ? t('chat.answering') : chat.preview}
