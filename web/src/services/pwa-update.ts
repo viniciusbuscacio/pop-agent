@@ -65,6 +65,18 @@ export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
 }
 
 export async function applyUpdate(): Promise<void> {
+  // The plugin runtime only reloads when its `controlling` event carries
+  // isUpdate -- which a worker that was already waiting when this page loaded
+  // (another tab, a previous session) does not. The button says Reload, so
+  // reload: on the real controller change if it comes, on a timer if not.
+  let reloaded = false;
+  const reload = (): void => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  };
+  navigator.serviceWorker?.addEventListener('controllerchange', reload, { once: true });
+  setTimeout(reload, 1500);
   await updateSW?.(true);
 }
 
