@@ -12,7 +12,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -254,7 +254,41 @@ async function crawlScreen(
   }
 }
 
+/**
+ * A run killed outright (timeout's SIGKILL, a lost ssh) never reaches its
+ * finally, so its throwaway server outlives it and leaks RAM. Every run
+ * starts by burying the dead: any process wearing our data-dir marker dies.
+ */
+function sweepOrphans(): void {
+  try {
+    for (const entry of readdirSync('/proc')) {
+      if (!/^\d+$/.test(entry)) continue;
+      try {
+        const environ = readFileSync(`/proc/${entry}/environ`, 'utf8');
+        if (environ.includes('POPY_DATA_DIR=/tmp/popy-crawl-')) {
+          process.kill(Number(entry), 'SIGKILL');
+          console.log(`  buried orphan server ${entry}`);
+        }
+      } catch {
+        // not ours, gone already, or not readable
+      }
+    }
+  } catch {
+    // no /proc (not linux): nothing to sweep
+  }
+  try {
+    for (const entry of readdirSync(tmpdir())) {
+      if (entry.startsWith('popy-crawl-')) {
+        rmSync(join(tmpdir(), entry), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // a vanished entry mid-sweep is fine
+  }
+}
+
 async function main(): Promise<void> {
+  sweepOrphans();
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   const dataDir = mkdtempSync(join(tmpdir(), 'popy-crawl-'));
