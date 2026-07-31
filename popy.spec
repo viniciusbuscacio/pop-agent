@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.6 — 2026-07-30.
+Version 1.9 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -172,7 +172,8 @@ domain / application / dto / infrastructure / appcore → interface+main):
 Single file `popy.db`. Migrations numbered, run at boot.
 
 ```sql
-chats(id, title, model, archived, pi_session_id, created_at, updated_at)
+chats(id, title, model, archived, pi_session_id, summary, auto_title,
+      created_at, updated_at)
 messages(id, chat_id, role, content, thinking, tools_json,
          attachments_json, created_at)
 messages_fts      -- FTS5 external-content table over messages.content
@@ -345,7 +346,9 @@ Routes: `GET /v1/auth/state`, `POST /v1/setup`, `POST /v1/login`,
 `POST /v1/auth/sign-out-others`, `GET /v1/about`, `GET /v1/events` (single
 SSE channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
 `GET|POST /v1/chats/:id/messages`, `POST /v1/chats/:id/stop`,
-`GET|PUT /v1/settings`, `GET /v1/models`, `GET|PUT /v1/memory`,
+`GET|PUT /v1/settings`, `GET /v1/models`, `GET /v1/providers`,
+`PUT|DELETE /v1/providers/:id/key`, `POST /v1/providers/:id/test` (the
+key is write-only: no response anywhere carries it), `GET|PUT /v1/memory`,
 `GET /v1/usage` (§14), `GET /v1/backups` (§16), `GET /v1/update/status`,
 `POST /v1/update/apply`, `GET /v1/ax` (§18), `GET /healthz` (no auth).
 WebAuthn: `POST /v1/auth/webauthn/register`, `POST /v1/auth/webauthn/login`
@@ -579,6 +582,27 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.9 (2026-07-31): Phase 3 finished — the pi bridge (steps 0–2, spec 1.8
+  session) grew the provider, the titles and the accounting (steps 1, 3,
+  4). OpenRouter configuration: the key lives in the encrypted secrets
+  table, beats `OPENROUTER_API_KEY`, is write-only on the wire, and can be
+  tested with one five-token completion (§9, §15); `GET /v1/models`
+  prefers the live catalog (key present, cached 24h) and falls back to
+  pi's offline built-in one, so CI never touches the network. Settings
+  grew `defaultModel`, `serviceModel` and `customInstructions`; the
+  instructions reach pi through a `DefaultResourceLoader` that replaces
+  the coding persona with Popy's neutral prompt and disables pi's CLI
+  resource discovery (§5). Auto-titles: at the user's 3rd turn and every
+  10th after, the service model writes TITLE + SUMMARY in the
+  conversation's language; failures are silent, a manual rename turns the
+  feature off per chat (`chats.auto_title`), and `chats.summary` waits
+  for Phase 4's memory (§14). Accounting: one `llm_runs` row per run with
+  pi's real numbers; `run()` resolves with the usage rather than emitting
+  a synthetic event, and the fake bridge books an honest zero (§6, §14).
+  New routes: `GET /v1/providers`, `PUT|DELETE /v1/providers/:id/key`,
+  `POST /v1/providers/:id/test` (§13). Wizard screen 3 is real; a chat
+  with no provider links to Settings (§14).
 
 - 1.8 (2026-07-31): Phase 2 built — the whole chat against a scripted
   `FakeAgentBridge`, no tokens spent. Chats and messages persisted (§6);

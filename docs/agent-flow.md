@@ -197,16 +197,19 @@ found the shell and its child, Stop was pressed, and both were gone. aw's own
 process-group kill is therefore **not** needed -- spec §5's "Stop is a kill" is
 satisfied by the SDK.
 
-### 3. Custom instructions — no direct option
+### 3. Custom instructions — through the resource loader, answered
 
-`CreateAgentSessionOptions` has no system-prompt field. What it has is `cwd`,
-`agentDir`, `modelRuntime`, `model`, `thinkingLevel`, `scopedModels`, `tools`,
-`excludeTools`, `noTools`, `customTools`, `resourceLoader`, `sessionManager`,
-`settingsManager`, `sessionStartEvent`. The system prompt is assembled
-internally (`_baseSystemPromptOptions` is private) and extended through the
-resource loader and extensions. So custom instructions go in through
-`resourceLoader` / project context files, not through an option — to be
-confirmed when implementing.
+`CreateAgentSessionOptions` has no system-prompt field, but
+`DefaultResourceLoader` takes two: `systemPrompt` replaces pi's base prompt
+and `appendSystemPrompt: string[]` extends it. Popy builds its own loader per
+session -- `systemPrompt` set to a short neutral Popy prompt (the coding-agent
+persona is not what a personal assistant should sound like) and the user's
+custom instructions appended when present. The same loader construction turns
+off everything a server has no use for: `noExtensions`, `noSkills`,
+`noPromptTemplates`, `noThemes`, `noContextFiles` -- so no `AGENTS.md`
+scavenged from the workspace can quietly join the prompt. Instructions are
+fixed at session open; the bridge reopens a cached session from its JSONL when
+the setting changes, the same move that survives a restart.
 
 ### 4. Usage and cost — pi reports both
 
@@ -216,7 +219,9 @@ by character count is needed, and `llm_runs` can store real numbers. Usage
 arrives on the `AssistantMessage` of a `message_end` event (see 1b), and a run
 that used tools produces several -- the bridge adds them up, because every call
 in a tool loop is billed. Measured on the first live run: 530 in + 29 out =
-US$ 0.002265.
+US$ 0.002265. The totals leave through the port: `run()` resolves with an
+`AgentRunResult` whose usage the application books into `llm_runs`, one row
+per run id -- the event stream stays exactly what the UI renders.
 
 ### 5. Model changes mid-session — supported
 
@@ -298,7 +303,6 @@ Verified to exist with these signatures: `ModelRuntime.create(options)`,
 
 ### Still open
 
-- The exact route for custom instructions through the resource loader (3). The
-  bridge shipped without them; they are a Phase 3 step 1 setting, and if the
-  resource-loader route proves expensive the honest answer is to say so rather
-  than hold the phase for it.
+Nothing. Every question this section tracked has an answer above: events (1),
+abort (2), custom instructions (3), usage (4), model switching (5), tools (6),
+skills (7), the key and the catalog (8).
