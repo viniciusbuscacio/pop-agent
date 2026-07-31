@@ -22,6 +22,7 @@ import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
+import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, Segmented, TextField } from '../ui/controls';
@@ -1072,9 +1073,34 @@ function AppearanceSection() {
         <p className="text-xs text-[var(--muted)]">{t('settings.appearance.note')}</p>
       </Card>
 
+      <FontSizeCard />
       <NotificationsCard />
       <AppUpdatesCard />
     </div>
+  );
+}
+
+/** Device-scoped like the theme: the root font-size, remembered per device. */
+function FontSizeCard() {
+  const choice = useFontStore((state) => state.choice);
+  const setChoice = useFontStore((state) => state.setChoice);
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.appearance.fontSize')}</span>
+      <Segmented<FontSizeChoice>
+        ariaLabel={t('settings.appearance.fontSize')}
+        value={choice}
+        onChange={setChoice}
+        options={[
+          { value: 'small', label: t('settings.appearance.fontSmall'), testId: 'settings-font-small' },
+          { value: 'default', label: t('settings.appearance.fontDefault'), testId: 'settings-font-default' },
+          { value: 'large', label: t('settings.appearance.fontLarge'), testId: 'settings-font-large' },
+          { value: 'xlarge', label: t('settings.appearance.fontXlarge'), testId: 'settings-font-xlarge' },
+        ]}
+      />
+      <p className="text-xs text-[var(--muted)]">{t('settings.appearance.fontNote')}</p>
+    </Card>
   );
 }
 

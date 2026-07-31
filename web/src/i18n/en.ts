@@ -199,6 +199,12 @@ export const en = {
   'settings.appearance.light': 'Light',
   'settings.appearance.dark': 'Dark',
   'settings.appearance.note': 'The theme is remembered on this device only.',
+  'settings.appearance.fontSize': 'Font size',
+  'settings.appearance.fontSmall': 'Small',
+  'settings.appearance.fontDefault': 'Default',
+  'settings.appearance.fontLarge': 'Large',
+  'settings.appearance.fontXlarge': 'Extra large',
+  'settings.appearance.fontNote': 'The font size is remembered on this device only.',
 
   'settings.notifications.title': 'Notifications',
   'settings.notifications.enable': 'Enable notifications',
