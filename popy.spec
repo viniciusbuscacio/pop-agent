@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.18 — 2026-07-31.
+Version 1.19 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -490,7 +490,12 @@ events from stale runs.
   **`read_artifact(ref)`** — by id or by exact name, scoped to the current
   conversation so one chat can never read another's — which returns text content
   through the safety envelope (an artifact is external content) and reports
-  binary files without inlining them. The bytes live under
+  binary files without inlining them. Text is extracted best-effort from
+  non-text formats first (RF-011/012): **PDF** via `pdftotext`, **DOCX** via
+  `unzip` of `word/document.xml`, and **images** via `tesseract` OCR (por+eng) —
+  system binaries, not heavy JS deps; a failure just falls back to the binary
+  note. A deploy that wants extraction installs `poppler-utils`, `tesseract-ocr`
+  (+ language packs) and `unzip`. The bytes live under
   `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the `file-<11 base62>` id is the
   only handle a client ever sees — no filesystem path or storage key is
   exposed. Deleting a chat deletes its artifacts (rows by cascade, bytes by

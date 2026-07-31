@@ -137,7 +137,7 @@ describe('read_artifact tool', () => {
     );
     const message = await runRead(readTool('chat-1'), created.id);
 
-    expect(message).toContain('not text');
+    expect(message).toContain('no extractable text');
     expect(message).toContain(created.id);
   });
 

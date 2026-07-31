@@ -7,6 +7,11 @@ normative history.
 
 ### Added
 
+- **Text extraction and OCR for read_artifact** (RF-011/012): non-text
+  artifacts are extracted best-effort before the agent gives up — PDF via
+  `pdftotext`, DOCX via `unzip` of the document XML, images via `tesseract`
+  OCR (por+eng). System binaries, not heavy JS deps. Validated live: the agent
+  read a PDF's text and OCR'd a PNG.
 - **`read_artifact` agent tool** (RF-011/016/017): the agent reads a
   conversation's artifact by id or exact name (scoped to that chat), getting
   text content through the safety envelope; binary files are reported, not

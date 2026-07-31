@@ -13,6 +13,7 @@ import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
+import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
@@ -70,6 +71,14 @@ const artifacts = new ArtifactService({
   store: new FsArtifactStore(artifactsDir),
   secretKey: context.secretKey,
   clock: systemClock,
+});
+// Best-effort text extraction for read_artifact: PDF/DOCX/OCR via system
+// binaries (popy.spec §14). Paths overridable for an unusual install.
+const artifactExtractor = new BinaryArtifactExtractor({
+  ...(process.env['POPY_PDFTOTEXT'] === undefined ? {} : { pdftotext: process.env['POPY_PDFTOTEXT'] }),
+  ...(process.env['POPY_UNZIP'] === undefined ? {} : { unzip: process.env['POPY_UNZIP'] }),
+  ...(process.env['POPY_TESSERACT'] === undefined ? {} : { tesseract: process.env['POPY_TESSERACT'] }),
+  ...(process.env['POPY_OCR_LANGS'] === undefined ? {} : { ocrLanguages: process.env['POPY_OCR_LANGS'] }),
 });
 const settings = new SettingsService(context.settings);
 // The agent's own notes vault (popy.spec §11), inside the data directory.
@@ -134,6 +143,7 @@ function piBridge(): PiAgentBridge {
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
       artifacts,
+      artifactExtractor,
     }),
     defaultModelId: () => settings.read().defaultModel,
     instructions: () => settings.read().customInstructions,

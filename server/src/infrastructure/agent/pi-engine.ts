@@ -17,6 +17,7 @@ import { envelope } from '../../domain/safety/sanitize.js';
 import { buildMemoryTools, type MemorySearcher } from '../memory/memory-tools.js';
 import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
 import { buildArtifactTools } from '../artifacts/artifact-tools.js';
+import type { ArtifactExtractor } from '../artifacts/artifact-extractor.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
@@ -131,6 +132,8 @@ export interface SdkPiEngineOptions {
   userMemory?: UserMemoryRepo;
   /** Artifacts: powers the save_artifact tool (popy.spec §14). */
   artifacts?: ArtifactService;
+  /** Extracts text from PDF/DOCX/images for read_artifact (popy.spec §14). */
+  artifactExtractor?: ArtifactExtractor;
 }
 
 /**
@@ -248,6 +251,7 @@ export class SdkPiEngine implements PiEngine {
             this.options.artifacts,
             this.options.workspace,
             options.chatId,
+            this.options.artifactExtractor,
           )),
       ...buildWebTools(sdk.defineTool),
     ];

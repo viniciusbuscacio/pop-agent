@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { envelope, sanitize } from '../../domain/safety/sanitize.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import type { ArtifactExtractor } from './artifact-extractor.js';
 
 /**
  * The agent's artifact tool (popy.spec §14, RF-001). The agent writes a file in
@@ -94,6 +95,7 @@ export function buildArtifactTools(
   artifacts: ArtifactService,
   workspace: string,
   chatId: string,
+  extractor?: ArtifactExtractor,
 ): ToolDefinition[] {
   const save = defineTool({
     name: 'save_artifact',
@@ -171,18 +173,27 @@ export function buildArtifactTools(
       if (opened === undefined) {
         return Promise.resolve(text(`Artifact ${target.id} has no stored content.`));
       }
-      if (!isTextual(target.mime)) {
-        return Promise.resolve(
-          text(
-            `${target.name} (${target.id}) is a ${target.mime} file of ${String(target.size)} bytes. ` +
-              `It is not text, so it cannot be shown inline; offer the user a download instead.`,
-          ),
-        );
+
+      const found = target;
+      const guard = (body: string): string => envelope(sanitize(body).clean, `artifact:${found.id}`);
+
+      if (isTextual(found.mime)) {
+        return Promise.resolve(text(guard(opened.bytes.toString('utf8').slice(0, MAX_INLINE_CHARS))));
       }
 
-      const decoded = opened.bytes.toString('utf8').slice(0, MAX_INLINE_CHARS);
-      const guarded = envelope(sanitize(decoded).clean, `artifact:${target.id}`);
-      return Promise.resolve(text(guarded));
+      // Not plain text: try to extract (PDF/DOCX/OCR) before giving up.
+      return (async () => {
+        const extracted = extractor === undefined
+          ? undefined
+          : await extractor.extract(opened.bytes, found.mime, found.name);
+        if (extracted !== undefined && extracted.trim().length > 0) {
+          return text(guard(extracted.slice(0, MAX_INLINE_CHARS)));
+        }
+        return text(
+          `${found.name} (${found.id}) is a ${found.mime} file of ${String(found.size)} bytes ` +
+            `with no extractable text; offer the user a download instead.`,
+        );
+      })();
     },
   });
 
