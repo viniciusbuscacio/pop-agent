@@ -38,3 +38,22 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Shiki writes both palettes into CSS variables (defaultColor: false); this
+   picks the one matching the app theme, so code follows light/dark instantly. */
+.code-shiki .shiki,
+.code-shiki .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+:root[data-theme='dark'] .code-shiki .shiki,
+:root[data-theme='dark'] .code-shiki .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+.code-shiki pre {
+  padding: 0.75rem;
+  margin: 0;
+}

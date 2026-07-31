@@ -5,7 +5,8 @@ import { setSessionLostHandler } from './services/api';
 import { authService } from './services/auth';
 import { session } from './services/session';
 import { useAuthStore } from './store/auth';
-import { AppShell } from './routes/app-shell';
+import { ChatLayout, NoChatSelected } from './routes/chat-layout';
+import { ChatPage } from './routes/chat-page';
 import { LoginPage } from './routes/login-page';
 import { RecoverPage } from './routes/recover-page';
 import { SettingsPage } from './routes/settings-page';
@@ -64,10 +65,30 @@ function Boot() {
   return (
     <Routes>
       <Route path="/setup" element={<SetupPage />} />
-      <Route path="/login" element={status === 'signed-in' ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route
+        path="/login"
+        element={status === 'signed-in' ? <Navigate to="/" replace /> : <LoginPage />}
+      />
       <Route path="/recover" element={<RecoverPage />} />
-      <Route path="/settings/*" element={<Protected status={status}><SettingsPage /></Protected>} />
-      <Route path="/" element={<Protected status={status}><AppShell /></Protected>} />
+      <Route
+        path="/settings/*"
+        element={
+          <Protected status={status}>
+            <SettingsPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/"
+        element={
+          <Protected status={status}>
+            <ChatLayout />
+          </Protected>
+        }
+      >
+        <Route index element={<NoChatSelected />} />
+        <Route path="chat/:chatId" element={<ChatPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

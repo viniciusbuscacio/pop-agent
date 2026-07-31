@@ -1,0 +1,291 @@
+import { create } from 'zustand';
+import type { ChatDTO, MessageDTO, StreamEvent, ToolCallDTO } from '@popy/shared';
+import { chatsService } from '../services/chats';
+
+/**
+ * Everything the chat UI reads. The interesting part is what happens between a
+ * message being sent and its answer being stored.
+ *
+ * A **live buffer** per chat accumulates the fragments of the run in flight.
+ * `done` promotes it to a message and clears it. Events are matched by runId,
+ * so a reply from a run the user already stopped -- or from the previous
+ * question in the same chat -- cannot bleed into the current one.
+ *
+ * A run started elsewhere (another tab, the phone) is **adopted**: with no
+ * buffer of its own for that chat, the store starts one. That is what makes
+ * two windows show the same answer arriving. Runs that already ended are
+ * remembered briefly so their late events are ignored rather than adopted.
+ */
+
+export interface LiveRun {
+  runId: string;
+  status: 'queued' | 'running';
+  content: string;
+  thinking: string;
+  tools: ToolCallDTO[];
+}
+
+interface ChatState {
+  chats: ChatDTO[];
+  archived: ChatDTO[];
+  messages: Record<string, MessageDTO[]>;
+  live: Record<string, LiveRun>;
+  /** One message per chat may wait for the current run to finish. */
+  queued: Record<string, string>;
+  failures: Record<string, string>;
+
+  loadChats: () => Promise<void>;
+  loadArchived: () => Promise<void>;
+  createChat: () => Promise<ChatDTO>;
+  openChat: (chatId: string) => Promise<void>;
+  send: (chatId: string, text: string) => Promise<void>;
+  stop: (chatId: string) => Promise<void>;
+  rename: (chatId: string, title: string) => Promise<void>;
+  setArchived: (chatId: string, archived: boolean) => Promise<void>;
+  setModel: (chatId: string, model: string) => Promise<void>;
+  remove: (chatId: string) => Promise<void>;
+  apply: (event: StreamEvent) => void;
+  reset: () => void;
+}
+
+/** Runs that have ended, so their stragglers are not mistaken for a new run. */
+const finished = new Set<string>();
+const FINISHED_MEMORY = 50;
+
+function remember(runId: string): void {
+  finished.add(runId);
+  if (finished.size > FINISHED_MEMORY) {
+    const oldest = finished.values().next().value;
+    if (oldest !== undefined) finished.delete(oldest);
+  }
+}
+
+function emptyRun(runId: string, status: LiveRun['status']): LiveRun {
+  return { runId, status, content: '', thinking: '', tools: [] };
+}
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  chats: [],
+  archived: [],
+  messages: {},
+  live: {},
+  queued: {},
+  failures: {},
+
+  async loadChats() {
+    const { chats } = await chatsService.list(false);
+    set({ chats });
+  },
+
+  async loadArchived() {
+    const { chats } = await chatsService.list(true);
+    set({ archived: chats });
+  },
+
+  async createChat() {
+    const chat = await chatsService.create();
+    set((state) => ({ chats: [chat, ...state.chats] }));
+    return chat;
+  },
+
+  /**
+   * Reconciliation: the stored history replaces whatever this client had, so a
+   * reload in the middle of a run cannot end up with the same answer twice --
+   * once from the buffer and once from the database.
+   */
+  async openChat(chatId) {
+    const { messages } = await chatsService.messages(chatId);
+    set((state) => ({ messages: { ...state.messages, [chatId]: messages } }));
+  },
+
+  async send(chatId, text) {
+    const state = get();
+    if (state.live[chatId] !== undefined) {
+      // A run is already going: hold this one and send it when the chat frees.
+      set((current) => ({ queued: { ...current.queued, [chatId]: text } }));
+      return;
+    }
+
+    const { runId, userMessageId } = await chatsService.send(chatId, text);
+    set((current) => {
+      const existing = current.live[chatId];
+      return {
+        messages: {
+          ...current.messages,
+          [chatId]: [
+            ...(current.messages[chatId] ?? []),
+            {
+              id: userMessageId,
+              chatId,
+              role: 'user',
+              content: text,
+              thinking: '',
+              tools: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        // The stream can beat this response; if it already opened a buffer for
+        // this very run, keep what it collected.
+        live: {
+          ...current.live,
+          [chatId]: existing?.runId === runId ? existing : emptyRun(runId, 'running'),
+        },
+        failures: without(current.failures, chatId),
+      };
+    });
+  },
+
+  async stop(chatId) {
+    await chatsService.stop(chatId);
+  },
+
+  async rename(chatId, title) {
+    const updated = await chatsService.patch(chatId, { title });
+    set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
+  },
+
+  async setArchived(chatId, archived) {
+    await chatsService.patch(chatId, { archived });
+    set((state) => ({ chats: state.chats.filter((chat) => chat.id !== chatId) }));
+    await get().loadArchived();
+  },
+
+  async setModel(chatId, model) {
+    const updated = await chatsService.patch(chatId, { model });
+    set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
+  },
+
+  async remove(chatId) {
+    await chatsService.remove(chatId);
+    set((state) => ({
+      chats: state.chats.filter((chat) => chat.id !== chatId),
+      archived: state.archived.filter((chat) => chat.id !== chatId),
+      messages: without(state.messages, chatId),
+      live: without(state.live, chatId),
+    }));
+  },
+
+  apply(event) {
+    if (event.kind === 'title') {
+      set((state) => ({
+        chats: state.chats.map((chat) =>
+          chat.id === event.chatId ? { ...chat, title: event.title } : chat,
+        ),
+      }));
+      return;
+    }
+    if (event.kind === 'update') return;
+
+    const { chatId, runId } = event;
+    const current = get().live[chatId];
+
+    // Anything from a run this client is not following is dropped, unless
+    // there is no run to follow and this one is still alive.
+    if (current === undefined) {
+      if (finished.has(runId) || event.kind === 'done' || event.kind === 'error') return;
+      set((state) => ({ live: { ...state.live, [chatId]: emptyRun(runId, 'running') } }));
+    } else if (current.runId !== runId) {
+      return;
+    }
+
+    const live = get().live[chatId];
+    if (live === undefined) return;
+
+    switch (event.kind) {
+      case 'run-status':
+        set((state) => ({ live: { ...state.live, [chatId]: { ...live, status: event.status } } }));
+        return;
+
+      case 'delta':
+        set((state) => ({
+          live: { ...state.live, [chatId]: { ...live, content: live.content + event.text } },
+        }));
+        return;
+
+      case 'thinking':
+        set((state) => ({
+          live: { ...state.live, [chatId]: { ...live, thinking: live.thinking + event.text } },
+        }));
+        return;
+
+      case 'tool':
+        set((state) => ({
+          live: { ...state.live, [chatId]: { ...live, tools: mergeTool(live.tools, event) } },
+        }));
+        return;
+
+      case 'done':
+      case 'error': {
+        remember(runId);
+        const answered = live.content.length > 0 || live.thinking.length > 0 || live.tools.length > 0;
+        const messageId = event.kind === 'done' ? event.messageId : `local-${runId}`;
+
+        set((state) => ({
+          messages: answered
+            ? {
+                ...state.messages,
+                [chatId]: [
+                  ...(state.messages[chatId] ?? []),
+                  {
+                    id: messageId,
+                    chatId,
+                    role: 'assistant',
+                    content: live.content,
+                    thinking: live.thinking,
+                    tools: live.tools,
+                    createdAt: new Date().toISOString(),
+                  },
+                ],
+              }
+            : state.messages,
+          live: without(state.live, chatId),
+          failures:
+            event.kind === 'error'
+              ? { ...state.failures, [chatId]: event.code }
+              : without(state.failures, chatId),
+        }));
+
+        const waiting = get().queued[chatId];
+        if (waiting !== undefined) {
+          set((state) => ({ queued: without(state.queued, chatId) }));
+          void get().send(chatId, waiting);
+        }
+        return;
+      }
+    }
+  },
+
+  reset() {
+    finished.clear();
+    set({ chats: [], archived: [], messages: {}, live: {}, queued: {}, failures: {} });
+  },
+}));
+
+/** Tool events arrive in pieces; output lines append to the call in progress. */
+function mergeTool(
+  tools: ToolCallDTO[],
+  event: { name: string; status: ToolCallDTO['status']; detail?: string },
+): ToolCallDTO[] {
+  const detail = event.detail ?? '';
+  const last = tools[tools.length - 1];
+
+  if (event.status === 'start' || last === undefined || last.name !== event.name) {
+    return [...tools, { name: event.name, status: event.status, detail }];
+  }
+
+  const merged: ToolCallDTO =
+    event.status === 'output'
+      ? { ...last, status: 'output', detail: last.detail + detail }
+      : { ...last, status: event.status, detail: detail.length > 0 ? detail : last.detail };
+
+  return [...tools.slice(0, -1), merged];
+}
+
+function without<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const rest: Record<string, T> = {};
+  for (const [name, value] of Object.entries(record)) {
+    if (name !== key) rest[name] = value;
+  }
+  return rest;
+}
