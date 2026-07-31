@@ -7,6 +7,10 @@ normative history.
 
 ### Added
 
+- **`save_artifact` agent tool** (RF-001): the agent writes a file in its
+  workspace and calls `save_artifact(path)` to promote it into a tracked,
+  downloadable artifact for the conversation (path jailed to the workspace).
+  Validated live against the real pi bridge.
 - **Artifacts screen + upload** (RF-002/009): a full-screen artifacts view per
   conversation (reached from the chat header) that uploads a file, lists what a
   chat holds, downloads through a freshly minted signed link, and deletes.

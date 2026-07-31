@@ -62,6 +62,15 @@ if (agent !== 'fake' && agent !== 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const artifactsDir = ensureArtifactsDir(context.dataDir);
+// Artifacts: the agent's outputs and the user's uploads, tracked per chat and
+// downloadable only through an HMAC-signed link keyed off secret.key (§14).
+// Built before the bridge so the pi engine can hand the agent save_artifact.
+const artifacts = new ArtifactService({
+  repo: context.artifacts,
+  store: new FsArtifactStore(artifactsDir),
+  secretKey: context.secretKey,
+  clock: systemClock,
+});
 const settings = new SettingsService(context.settings);
 // The agent's own notes vault (popy.spec §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
@@ -124,6 +133,7 @@ function piBridge(): PiAgentBridge {
       memory: context.memory,
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
+      artifacts,
     }),
     defaultModelId: () => settings.read().defaultModel,
     instructions: () => settings.read().customInstructions,
@@ -156,14 +166,6 @@ const purger = new FsChatPurger({
   },
 });
 const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
-// Artifacts: the agent's outputs and the user's uploads, tracked per chat and
-// downloadable only through an HMAC-signed link keyed off secret.key (§14).
-const artifacts = new ArtifactService({
-  repo: context.artifacts,
-  store: new FsArtifactStore(artifactsDir),
-  secretKey: context.secretKey,
-  clock: systemClock,
-});
 const runs = new RunService({
   chats: context.chats,
   bridge,

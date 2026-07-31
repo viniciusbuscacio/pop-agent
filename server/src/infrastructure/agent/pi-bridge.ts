@@ -254,6 +254,7 @@ export class PiAgentBridge implements AgentBridge {
       modelId,
       sessionFile: chat?.piSessionId,
       instructions,
+      chatId,
     });
 
     const entry: CachedSession = {

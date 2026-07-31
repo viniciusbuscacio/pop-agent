@@ -16,6 +16,8 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import { envelope } from '../../domain/safety/sanitize.js';
 import { buildMemoryTools, type MemorySearcher } from '../memory/memory-tools.js';
 import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
+import { buildArtifactTools } from '../artifacts/artifact-tools.js';
+import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
@@ -93,6 +95,8 @@ export interface PiOpenOptions {
   sessionFile: string | undefined;
   /** The user's custom instructions, appended to the system prompt. */
   instructions: string;
+  /** The conversation this session serves, so save_artifact can attribute. */
+  chatId: string;
 }
 
 export interface PiEngine {
@@ -125,6 +129,8 @@ export interface SdkPiEngineOptions {
   memorySearch?: MemorySearcher;
   /** The living document the agent keeps about the user; tools + prompt. */
   userMemory?: UserMemoryRepo;
+  /** Artifacts: powers the save_artifact tool (popy.spec §14). */
+  artifacts?: ArtifactService;
 }
 
 /**
@@ -235,6 +241,14 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.userMemory === undefined
         ? []
         : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),
+      ...(this.options.artifacts === undefined
+        ? []
+        : buildArtifactTools(
+            sdk.defineTool,
+            this.options.artifacts,
+            this.options.workspace,
+            options.chatId,
+          )),
       ...buildWebTools(sdk.defineTool),
     ];
 

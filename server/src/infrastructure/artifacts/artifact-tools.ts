@@ -1,0 +1,130 @@
+import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, extname, isAbsolute, join, normalize, sep } from 'node:path';
+import { Type } from 'typebox';
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+
+/**
+ * The agent's artifact tool (popy.spec §14, RF-001). The agent writes a file in
+ * its workspace with the built-in `write`/`bash` tools; `save_artifact` then
+ * promotes that file into a tracked, downloadable artifact for the current
+ * conversation. The path is jailed to the workspace, so it can never reach out
+ * to `secret.key` or anything else on disk.
+ *
+ * `defineTool` is passed in rather than imported so the SDK stays a single
+ * dynamic import in the engine -- the fake bridge never loads pi at all.
+ */
+
+type DefineTool = (tool: ToolDefinition) => ToolDefinition;
+
+/** Matches the upload cap (popy.spec §14): one artifact cannot fill the disk. */
+const MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
+
+const MIME_BY_EXT: Record<string, string> = {
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+  '.xml': 'application/xml',
+  '.yaml': 'application/yaml',
+  '.yml': 'application/yaml',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.html': 'text/html',
+  '.zip': 'application/zip',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+
+function mimeOf(path: string): string {
+  return MIME_BY_EXT[extname(path).toLowerCase()] ?? 'application/octet-stream';
+}
+
+function text(body: string): { content: [{ type: 'text'; text: string }]; details: undefined } {
+  return { content: [{ type: 'text', text: body }], details: undefined };
+}
+
+/**
+ * Resolves a workspace-relative path, refusing anything that escapes it --
+ * lexically first (catches `..` and absolutes), then by real path so a symlink
+ * pointing out of the workspace is followed and then refused.
+ */
+export function resolveInWorkspace(workspace: string, relativePath: string): string {
+  const cleaned = relativePath.trim().replace(/\\/g, '/');
+  if (cleaned.length === 0) throw new Error('A file path is required.');
+  if (isAbsolute(cleaned) || cleaned.startsWith('/')) {
+    throw new Error('The path must be relative to the workspace.');
+  }
+  if (cleaned.includes('\0')) throw new Error('The path cannot contain a null byte.');
+
+  const root = realpathSync(workspace);
+  const withSep = root.endsWith(sep) ? root : root + sep;
+  const target = normalize(join(root, cleaned));
+  if (target !== root && !target.startsWith(withSep)) {
+    throw new Error('The path must stay inside the workspace.');
+  }
+  return target;
+}
+
+export function buildArtifactTools(
+  defineTool: DefineTool,
+  artifacts: ArtifactService,
+  workspace: string,
+  chatId: string,
+): ToolDefinition[] {
+  const save = defineTool({
+    name: 'save_artifact',
+    label: 'Save an artifact',
+    description:
+      'Saves a file you created in the workspace as a downloadable artifact for this ' +
+      'conversation. Pass the workspace-relative path; returns the artifact id the user ' +
+      'can download from the conversation.',
+    promptSnippet: 'save_artifact(path, name?) — save a workspace file as a downloadable artifact',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Workspace-relative path to the file you created' }),
+      name: Type.Optional(
+        Type.String({ description: 'Display name for the download (defaults to the file name)' }),
+      ),
+    }),
+    execute: (_id, params) => {
+      const { path, name } = params as { path: string; name?: string };
+      try {
+        const resolved = resolveInWorkspace(workspace, path);
+        const stat = statSync(resolved);
+        if (!stat.isFile()) return Promise.resolve(text('That path is not a file.'));
+        if (stat.size > MAX_ARTIFACT_BYTES) {
+          return Promise.resolve(text('That file is too large to save as an artifact (25 MB max).'));
+        }
+
+        const bytes = readFileSync(resolved);
+        const displayName = (name ?? basename(path)).trim();
+        const artifact = artifacts.create(
+          {
+            chatId,
+            name: displayName.length > 0 ? displayName : 'artifact',
+            mime: mimeOf(path),
+            source: 'agent',
+          },
+          bytes,
+        );
+        return Promise.resolve(
+          text(
+            `Saved "${artifact.name}" as artifact ${artifact.id} (${String(artifact.size)} bytes). ` +
+              `The user can download it from this conversation's artifacts.`,
+          ),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown error';
+        return Promise.resolve(text(`Could not save the artifact: ${message}`));
+      }
+    },
+  });
+
+  return [save];
+}
