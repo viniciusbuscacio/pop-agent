@@ -509,7 +509,8 @@ function ChatRow({
   }
 
   return (
-    <li className="group relative overflow-hidden">
+    <li className="group relative">
+      <div className="relative overflow-hidden">
       {/* The colour that a drag uncovers: delete behind a right swipe, archive behind a left one. */}
       {dx > 0 ? (
         <div
@@ -591,6 +592,9 @@ function ChatRow({
         ⋯
       </button>
 
+      </div>
+      </div>
+
       {menuOpen ? (
         <div
           role="menu"
@@ -624,7 +628,6 @@ function ChatRow({
           />
         </div>
       ) : null}
-      </div>
     </li>
   );
 }
