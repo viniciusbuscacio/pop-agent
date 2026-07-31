@@ -145,6 +145,44 @@ describe('finishing a run', () => {
     expect(answer?.tools).toEqual([{ name: 'bash', status: 'done', detail: 'echo hi' }]);
   });
 
+  it('stores one record per tool call, not one per event', async () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'echo hi\n' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'output', detail: 'line 1\n' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'output', detail: 'line 2\n' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'done', detail: 'exit 0' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    const answer = messages[messages.length - 1];
+    // One call happened, so one card should render -- before and after reload.
+    expect(answer?.tools).toEqual([
+      { name: 'bash', status: 'done', detail: 'echo hi\nline 1\nline 2\nexit 0' },
+    ]);
+  });
+
+  it('keeps two separate calls separate', async () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'one' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'done', detail: '' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'two' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'done', detail: '' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.tools).toHaveLength(2);
+  });
+
   it('broadcasts every fragment as it arrives', async () => {
     bridge.script = (request) => {
       request.onEvent({ kind: 'delta', text: 'a' });

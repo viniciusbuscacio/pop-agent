@@ -269,17 +269,15 @@ function mergeTool(
 ): ToolCallDTO[] {
   const detail = event.detail ?? '';
   const last = tools[tools.length - 1];
+  const finished = last?.status === 'done' || last?.status === 'error';
 
-  if (event.status === 'start' || last === undefined || last.name !== event.name) {
+  if (event.status === 'start' || last === undefined || last.name !== event.name || finished) {
     return [...tools, { name: event.name, status: event.status, detail }];
   }
 
-  const merged: ToolCallDTO =
-    event.status === 'output'
-      ? { ...last, status: 'output', detail: last.detail + detail }
-      : { ...last, status: event.status, detail: detail.length > 0 ? detail : last.detail };
-
-  return [...tools.slice(0, -1), merged];
+  // Same fold the server applies before storing: one record per call, details
+  // in the order they arrived.
+  return [...tools.slice(0, -1), { ...last, status: event.status, detail: last.detail + detail }];
 }
 
 function without<T>(record: Record<string, T>, key: string): Record<string, T> {

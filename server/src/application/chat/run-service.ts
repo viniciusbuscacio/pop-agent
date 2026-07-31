@@ -43,6 +43,32 @@ interface PendingRun {
   started: boolean;
 }
 
+/**
+ * Folds the events of one tool call into a single record: a call that starts,
+ * streams six lines and exits is one thing that happened, not eight. The
+ * client folds the live stream the same way, so a conversation reads
+ * identically while it streams and after a reload.
+ *
+ * Details accumulate in order -- the command, then its output, then whatever
+ * the closing event said -- because replacing them would throw away the output
+ * the moment the call finished.
+ */
+function recordTool(
+  tools: ToolRecord[],
+  event: { name: string; status: ToolRecord['status']; detail: string },
+): void {
+  const last = tools[tools.length - 1];
+  const finished = last?.status === 'done' || last?.status === 'error';
+
+  if (event.status === 'start' || last === undefined || last.name !== event.name || finished) {
+    tools.push({ name: event.name, status: event.status, detail: event.detail });
+    return;
+  }
+
+  last.status = event.status;
+  last.detail += event.detail;
+}
+
 export class RunService {
   private readonly runs = new Map<string, PendingRun>();
   private readonly runIdByChat = new Map<string, string>();
@@ -168,7 +194,7 @@ export class RunService {
               sink.emit({ kind: 'thinking', chatId: run.chatId, runId: run.runId, text: event.text });
               break;
             case 'tool':
-              tools.push({ name: event.name, status: event.status, detail: event.detail });
+              recordTool(tools, event);
               sink.emit({
                 kind: 'tool',
                 chatId: run.chatId,

@@ -60,6 +60,26 @@ describe('streaming into the live buffer', () => {
     expect(live()?.tools).toEqual([{ name: 'bash', status: 'output', detail: 'ls' + 'a\nb\n' }]);
   });
 
+  it('folds a tool call the way the server stores it', () => {
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'echo hi\n' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'output', detail: 'line 1\n' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'done', detail: 'exit 0' });
+
+    // Must match what run-service persists, or the same message would render
+    // as one card while streaming and as three after a reload.
+    expect(live()?.tools).toEqual([
+      { name: 'bash', status: 'done', detail: 'echo hi\nline 1\nexit 0' },
+    ]);
+  });
+
+  it('starts a new card when a second call begins', () => {
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'one' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'done', detail: '' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'two' });
+
+    expect(live()?.tools).toHaveLength(2);
+  });
+
   it('ignores fragments belonging to another run', () => {
     apply({ kind: 'delta', chatId: CHAT, runId: 'run-somebody-elses', text: 'not mine' });
 
