@@ -1206,29 +1206,58 @@ function SecuritySection() {
 
 function AboutSection() {
   const [about, setAbout] = useState<AboutResponse | undefined>(undefined);
+  const [update, setUpdate] = useState<import('@popy/shared').UpdateStatusResponse | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     settingsService
       .about()
       .then(setAbout)
       .catch(() => setAbout(undefined));
+    settingsService
+      .updateStatus()
+      .then(setUpdate)
+      .catch(() => setUpdate(undefined));
   }, []);
 
+  const piOutdated =
+    update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
+
   return (
-    <Card className="flex flex-col gap-3">
-      <Row label={t('settings.about.popy')} value={about?.popyVersion ?? '…'} testId="about-popy" />
-      <Row label={t('settings.about.node')} value={about?.nodeVersion ?? '…'} testId="about-node" />
-      <Row label={t('settings.about.pi')} value={about?.piVersion ?? '…'} testId="about-pi" />
-      <a
-        href="https://github.com/viniciusbuscacio/popy"
-        target="_blank"
-        rel="noreferrer noopener"
-        className="text-sm text-[var(--accent)] underline underline-offset-2"
-      >
-        {t('settings.about.repo')}
-      </a>
-      <p className="text-xs text-[var(--muted)]">{t('settings.about.iconCredit')}</p>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <Row label={t('settings.about.popy')} value={about?.popyVersion ?? '…'} testId="about-popy" />
+        <Row label={t('settings.about.node')} value={about?.nodeVersion ?? '…'} testId="about-node" />
+        <Row label={t('settings.about.pi')} value={about?.piVersion ?? '…'} testId="about-pi" />
+        <a
+          href="https://github.com/viniciusbuscacio/popy"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-sm text-[var(--accent)] underline underline-offset-2"
+        >
+          {t('settings.about.repo')}
+        </a>
+        <p className="text-xs text-[var(--muted)]">{t('settings.about.iconCredit')}</p>
+      </Card>
+
+      {update !== undefined ? (
+        <Card className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold">{t('settings.updates.title')}</h2>
+          {piOutdated ? (
+            <p data-testid="update-available" className="text-sm text-[var(--accent)]">
+              {t('settings.updates.piAvailable', { version: update.pi.latest ?? '' })}
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
+          )}
+          <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
+          <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
+            {update.updateCommand}
+          </pre>
+        </Card>
+      ) : null}
+    </div>
   );
 }
 

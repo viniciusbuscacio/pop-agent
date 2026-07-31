@@ -142,6 +142,14 @@ export interface SaveSkillRequest {
   body: string;
 }
 
+/** `GET /v1/update/status` — versions and whether a newer pi exists (popy.spec §15). */
+export interface UpdateStatusResponse {
+  pi: { current: string; latest?: string };
+  popy: { current: string };
+  node: string;
+  updateCommand: string;
+}
+
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
   popyVersion: string;

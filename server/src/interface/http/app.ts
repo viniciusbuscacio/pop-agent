@@ -10,6 +10,7 @@ import type { Clock } from '../../application/ports/clock.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { Transcriber } from '../../application/ports/transcriber.js';
+import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { UsageRepo } from '../../application/ports/usage-repo.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
@@ -17,6 +18,7 @@ import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
 import { createPushRoutes } from './push-routes.js';
+import { createUpdateRoutes } from './update-routes.js';
 import { createWebAuthnRoutes } from './webauthn-routes.js';
 import { createChatRoutes } from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
@@ -41,6 +43,7 @@ export interface AppDeps {
   backups: BackupService;
   push: PushService;
   webauthn: WebAuthnGateway;
+  updates: UpdateChecker;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;
@@ -67,6 +70,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/v1', createMemoryRoutes(deps));
   app.route('/v1', createSkillsRoutes(deps));
   app.route('/v1', createUsageRoutes(deps));
+  app.route('/v1', createUpdateRoutes(deps));
   app.route('/v1', createBackupRoutes(deps));
   app.route('/v1', createPushRoutes(deps));
   app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));

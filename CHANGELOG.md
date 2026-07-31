@@ -3,6 +3,34 @@
 All notable changes to Popy. Dates are ISO. See `popy.spec` for the full
 normative history.
 
+## v0.2.0 — 2026-07-31
+
+Everything on the v0.2 roadmap.
+
+### Added
+
+- **Skills and the Skill Router** — markdown skills the agent pulls in when a
+  request calls for them, chosen by a pure lexical router; fifteen defaults led
+  by *know-thyself*; a full-screen editor in Settings.
+- **Backup and restore** — the data directory as a tar.gz (the encryption key
+  excluded), created, downloaded, restored and deleted from Settings.
+- **Web Push** — the server tells your phone an answer is ready even with the
+  app closed; opt in per device.
+- **Passkeys (Face ID / fingerprint)** — register a device and unlock with it
+  instead of the password.
+- **Local voice** — record a note, transcribed on the server with whisper.cpp,
+  no tokens.
+- **Cost dashboard** — total spend, tokens and runs, by model and by day.
+- **Update status** — the installed versions and whether a newer pi exists,
+  with the one-line update command.
+
+### Notes
+
+- Attachments reach the agent through its workspace; it extracts what it needs
+  with its own tools rather than a bundled PDF/OCR pipeline.
+- Popy does not update itself from the running process; the update is a gated
+  shell command.
+
 ## v0.1.0 — 2026-07-31
 
 The first usable cut: a personal agent you talk to from your phone, that runs

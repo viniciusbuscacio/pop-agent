@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.11 — 2026-07-31.
+Version 1.12 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -608,6 +608,25 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.12 (2026-07-31): **v0.2 built, tagged v0.2.0.** Skills + the Skill
+  Router (§8): markdown skills under POPY_DATA_DIR/skills, a pure lexical
+  router that prepends the relevant few per turn, 15 defaults led by
+  know-thyself, a full-screen CRUD in Settings. Backup/restore as tar.gz
+  with the key excluded (§16). Web Push when a run finishes, VAPID keys in
+  the secrets table (§14). Passkeys via WebAuthn for Face ID unlock (§9).
+  Local voice already shipped in 1.10. Cost dashboard over llm_runs (§14).
+  Two decisions recorded here: **attachments extraction** — Popy does not
+  bundle a PDF/DOCX/OCR pipeline like aw; attachments are written into the
+  agent's workspace and the agent extracts what it needs with its own
+  tools (pdftotext, unzip, its reader), which fits Popy's "agent with real
+  fs" design where aw's server-side extraction fit its tool-less desktop
+  app. **Update channel** (§15): Popy does not self-update from the running
+  process; `GET /v1/update/status` reports the installed versions and the
+  latest pi on npm, and Settings shows the one-line shell update command,
+  which runs the same `npm run gate` before restarting. Automatic
+  pi-update gate with rollback/probation stays documented for a later
+  version — the manual path is gated and safe.
 
 - 1.11 (2026-07-31): **Phase 4 complete, tagged v0.1.0.** The agent got
   its own notes vault (§11) behind aw's path jail, exposed as

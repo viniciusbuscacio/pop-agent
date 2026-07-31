@@ -205,6 +205,15 @@ export function createTestApp(
       send: () => Promise.resolve(),
     },
     webauthn: new WebAuthnService({ repo: new SqliteWebAuthnRepo(db), now: () => clock.now() }),
+    updates: {
+      status: () =>
+        Promise.resolve({
+          pi: { current: '0.83.0', latest: '0.83.0' },
+          popy: { current: '0.2.0-test' },
+          node: process.version,
+          updateCommand: 'test',
+        }),
+    },
     backups: new TarBackupService({
       dataDir: mkdtempSync(join(tmpdir(), 'popy-test-data-')),
       backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),

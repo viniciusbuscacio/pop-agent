@@ -225,6 +225,11 @@ export const en = {
   'settings.about.repo': 'Source code',
   'settings.about.iconCredit': 'App icon based on Tabler Icons (MIT).',
 
+  'settings.updates.title': 'Updates',
+  'settings.updates.upToDate': 'Popy is up to date.',
+  'settings.updates.piAvailable': 'A newer pi is available: {version}.',
+  'settings.updates.how': 'Update from the server shell (the gate runs before restart):',
+
   'update.available': 'A new version is ready.',
   'update.reload': 'Reload',
   'update.later': 'Not now',
