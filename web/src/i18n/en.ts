@@ -125,6 +125,10 @@ export const en = {
   'settings.about.pi': 'pi agent',
   'settings.about.repo': 'Source code',
 
+  'update.available': 'A new version is ready.',
+  'update.reload': 'Reload',
+  'update.later': 'Not now',
+
   'error.generic': 'Something went wrong. Try again.',
   'error.offline': 'Popy is offline.',
 } as const;

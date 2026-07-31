@@ -11,6 +11,7 @@ import { LoginPage } from './routes/login-page';
 import { RecoverPage } from './routes/recover-page';
 import { SettingsPage } from './routes/settings-page';
 import { SetupPage } from './routes/setup-page';
+import { UpdatePrompt } from './ui/update-prompt';
 
 /**
  * Boot decides the screen (popy.spec §9): a server with no account goes to the
@@ -19,6 +20,7 @@ import { SetupPage } from './routes/setup-page';
 export function App() {
   return (
     <BrowserRouter>
+      <UpdatePrompt />
       <Boot />
     </BrowserRouter>
   );

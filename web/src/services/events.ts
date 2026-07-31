@@ -8,9 +8,16 @@ import { apiRequest } from './api';
  * Connecting takes two steps because EventSource cannot send a header — ask
  * for a one-time ticket with the session, then open the stream with it. A
  * reconnect needs a fresh ticket, since each one is spent on use.
+ *
+ * Coming back from the background is its own case. iOS suspends a backgrounded
+ * PWA: the connection dies and the retry timer freezes with it, so waiting for
+ * the backoff would leave the app looking frozen for as long as it slept. The
+ * page becoming visible reconnects immediately and tells the app to refetch,
+ * because whatever happened while it slept was never delivered.
  */
 
 type Listener = (event: StreamEvent) => void;
+type ResumeListener = () => void;
 
 const FIRST_RETRY_MS = 500;
 const MAX_RETRY_MS = 15_000;
@@ -19,12 +26,15 @@ let source: EventSource | undefined;
 let retryMs = FIRST_RETRY_MS;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let stopped = true;
+let watchingVisibility = false;
 const listeners = new Set<Listener>();
+const resumeListeners = new Set<ResumeListener>();
 
 export const eventStream = {
   /** Idempotent: calling it twice keeps the one connection. */
   start(): void {
     stopped = false;
+    watchVisibility();
     if (source !== undefined) return;
     void connect();
   },
@@ -44,7 +54,45 @@ export const eventStream = {
       listeners.delete(listener);
     };
   },
+
+  /** Fires when the app comes back to the foreground and has to catch up. */
+  onResume(listener: ResumeListener): () => void {
+    resumeListeners.add(listener);
+    return () => {
+      resumeListeners.delete(listener);
+    };
+  },
 };
+
+function watchVisibility(): void {
+  if (watchingVisibility || typeof document === 'undefined') return;
+  watchingVisibility = true;
+
+  const wake = (): void => {
+    if (stopped || document.visibilityState !== 'visible') return;
+
+    retryMs = FIRST_RETRY_MS;
+    if (retryTimer !== undefined) {
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
+    }
+
+    // A connection that survived is kept; one the system tore down is
+    // replaced right away instead of after a backoff that never ticked.
+    if (source === undefined || source.readyState === EventSource.CLOSED) {
+      source?.close();
+      source = undefined;
+      void connect();
+    }
+
+    for (const listener of resumeListeners) listener();
+  };
+
+  document.addEventListener('visibilitychange', wake);
+  // Safari restoring from the back/forward cache does not always fire
+  // visibilitychange, but it does fire pageshow.
+  window.addEventListener('pageshow', wake);
+}
 
 async function connect(): Promise<void> {
   if (stopped) return;

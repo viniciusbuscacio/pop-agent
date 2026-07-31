@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { chatsService } from '../services/chats';
+import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
@@ -32,6 +33,14 @@ export function ChatPage() {
     void openChat(chatId);
     setMissed(0);
     atBottom.current = true;
+  }, [chatId, openChat]);
+
+  useEffect(() => {
+    // Whatever arrived while the phone had the app suspended was never
+    // delivered; the stored history is the only way to catch up.
+    return eventStream.onResume(() => {
+      void openChat(chatId);
+    });
   }, [chatId, openChat]);
 
   useEffect(() => {

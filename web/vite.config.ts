@@ -14,7 +14,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': a silently updated PWA keeps serving the
+      // previous build until it is next opened cold, which on a phone can be
+      // days and reads as an app that stopped being fixed.
+      registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
         name: 'Popy',
