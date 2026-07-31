@@ -123,3 +123,95 @@ GET /v1/events            EventSink port            pi events → AgentEvent
    behind `.env` (manual test).
 3. Persistent sessions (`sessionDir`, `pi_session_id`) + SQLite repo.
 4. Frontend chat store + streaming UI against the fake adapter first.
+
+## SDK verification (pi 0.83.0, checked 31/07/2026)
+
+Phase 3 §V, answered against the installed types rather than the docs. The
+mapping table above was designed before this check; where reality differs, this
+section wins.
+
+### 1. Event names — confirmed, with one correction
+
+`AgentSession.subscribe(listener)` delivers `AgentSessionEvent`, which is
+`AgentEvent` minus `agent_end`. The union is:
+
+```
+agent_start | turn_start | turn_end | message_start | message_update |
+message_end | tool_execution_start | tool_execution_update | tool_execution_end
+```
+
+Text and thinking are **not** separate top-level events. They arrive inside
+`message_update`, whose `assistantMessageEvent` carries the streaming detail:
+
+```
+text_start | text_delta { delta } | text_end { content } |
+thinking_start | thinking_delta { delta } | thinking_end |
+tool_call | usage
+```
+
+So the adapter matches on `event.assistantMessageEvent.type`, not on the outer
+event type. Tool events do sit at the top level:
+
+| pi event                 | payload                                | AgentEvent      |
+|--------------------------|----------------------------------------|-----------------|
+| `tool_execution_start`   | `toolCallId`, `toolName`, `args`       | `tool start`    |
+| `tool_execution_update`  | `toolCallId`, `toolName`, `partialResult` | `tool output` |
+| `tool_execution_end`     | `toolCallId`, `toolName`, `result`, `isError` | `tool done`/`error` |
+
+`turn_end` (with the final message and tool results) is the terminal signal for
+one prompt; `agent_end` is filtered out of the session stream and cannot be
+relied on.
+
+### 2. Abort — the SDK owns it
+
+`session.abort()` exists, and so does `session.abortBash()` for a running shell
+command specifically. Whether `abort()` reaches the process group of a bash
+child still has to be checked **behaviourally** (start `sleep 60`, abort, look
+for the process with `ps`) before assuming aw's process-group kill is
+unnecessary. Also present: `abortCompaction()`, `abortBranchSummary()`,
+`abortRetry()`.
+
+### 3. Custom instructions — no direct option
+
+`CreateAgentSessionOptions` has no system-prompt field. What it has is `cwd`,
+`agentDir`, `modelRuntime`, `model`, `thinkingLevel`, `scopedModels`, `tools`,
+`excludeTools`, `noTools`, `customTools`, `resourceLoader`, `sessionManager`,
+`settingsManager`, `sessionStartEvent`. The system prompt is assembled
+internally (`_baseSystemPromptOptions` is private) and extended through the
+resource loader and extensions. So custom instructions go in through
+`resourceLoader` / project context files, not through an option — to be
+confirmed when implementing.
+
+### 4. Usage and cost — pi reports both
+
+`Usage` carries `input`, `output`, `cacheRead`, `cacheWrite`, optional
+`reasoning`, `totalTokens`, and a `cost` breakdown with a `total`. No estimation
+by character count is needed, and `llm_runs` can store real numbers. Usage
+arrives as an `assistantMessageEvent` of type `usage`.
+
+### 5. Model changes mid-session — supported
+
+`session.setModel(model)` is public and async. Models come from `ModelRegistry`
+/ `resolveCliModel`; the runtime that owns auth is `ModelRuntime`, which
+defaults to `agentDir/auth.json` and `models.json` and can be passed in.
+
+### 6. Tools
+
+Built-ins are `read`, `bash`, `edit`, `write`, enabled by default. `tools` is an
+allowlist, `excludeTools` a denylist applied after it, and `noTools: "all" |
+"builtin"` sets the default. `customTools` registers our own (memory, notes,
+web) later without touching the built-ins.
+
+### 7. Skills — controlled by the resource loader
+
+`loadSkills` / `loadSkillsFromDir` / `formatSkillsForPrompt` are exported, and
+discovery runs through `DefaultResourceLoader`. Turning pi's own progressive
+disclosure off is therefore a resource-loader decision, not a flag — which is
+what the Skill Router (§8) will need in v0.2.
+
+### Still open
+
+- Whether `abort()` kills a bash child's process group (2).
+- The exact route for custom instructions through the resource loader (3).
+- How to construct a `Model` bound to an OpenRouter key without going through
+  pi's own auth storage — the piece the bridge needs first.

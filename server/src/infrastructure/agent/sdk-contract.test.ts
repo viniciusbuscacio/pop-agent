@@ -18,6 +18,13 @@ describe('pi sdk contract', () => {
       expect(typeof sdk.SessionManager?.create).toBe('function');
       expect(typeof sdk.SessionManager?.open).toBe('function');
       expect(typeof sdk.SessionManager?.inMemory).toBe('function');
+
+      // The bridge drives these three; a rename here is a silent breakage
+      // everywhere else, so it fails the gate instead.
+      const session = Object.getOwnPropertyNames(sdk.AgentSession.prototype);
+      for (const method of ['subscribe', 'prompt', 'abort', 'setModel', 'dispose']) {
+        expect(session, `AgentSession.${method}`).toContain(method);
+      }
     },
   );
 });
