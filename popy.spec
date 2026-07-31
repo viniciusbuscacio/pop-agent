@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.13 — 2026-07-31.
+Version 1.14 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -185,6 +185,8 @@ secrets(key, value_encrypted)                   -- §9, secret.key encrypted
 llm_runs(id, chat_id, provider, model, tokens_in, tokens_out,
          cost, created_at)                      -- cost accounting (§14)
 skills_index(skill_id, name, description, source, embedding)  -- §8
+artifacts(id, chat_id, name, mime, size, version, source,
+          created_at, updated_at)              -- §14, RF-001
 ```
 
 - **IDs and internal file names** — two shapes, one CSPRNG generator (11 base62
@@ -214,6 +216,12 @@ skills_index(skill_id, name, description, source, embedding)  -- §8
   folder, and the chat's `attachments/<chatId>/` directory — no orphans. The
   live pi session, if cached, is disposed first so nothing rewrites the file
   after it is gone. FTS5/embedding rows go by the same cascade once they exist.
+- **Artifacts** are files the agent produced or the user uploaded, tracked per
+  chat and downloadable through a signed link (§14). The bytes live on disk
+  under `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the row is the record. The
+  `file-<11 base62>` id is the only identifier that leaves the server — no
+  filesystem path or storage key is ever exposed. Deleting a chat deletes its
+  artifacts (rows by cascade, bytes by removing `artifacts/<chatId>/`).
 
 ## 7. Infinite memory (`application/memory/`)
 

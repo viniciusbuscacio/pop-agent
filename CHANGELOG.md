@@ -5,6 +5,17 @@ normative history.
 
 ## Unreleased
 
+### Added
+
+- **Artifacts foundation** (RF-001/003–008, backend groundwork toward v0.3): an
+  `artifacts` table keyed by an unguessable `file-<base62>` id, a SQLite repo
+  with the same collision-retry discipline as chats/messages, and HMAC-signed
+  download links derived from `secret.key` — the signature covers the id and the
+  expiry together, so a tampered expiry fails as a bad signature; links default
+  to a 30-day life and expiring a link never touches the artifact. HTTP surface,
+  the on-disk store, the artifacts screen, upload, OCR and versioning follow in
+  later blocks (see `docs/artifacts-attachments-downloads.md`).
+
 ### Fixed
 
 - **PWA update prompt now actually appears.** An installed PWA (and an
