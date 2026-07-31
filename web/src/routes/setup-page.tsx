@@ -169,7 +169,9 @@ function ProviderStep({ onDone }: { onDone: () => void }) {
       setTestOk(result.ok);
       setTestResult(
         result.ok
-          ? t('provider.testOk')
+          ? result.latencyMs === undefined
+            ? t('provider.testOk')
+            : t('provider.testOkLatency', { ms: result.latencyMs })
           : t('provider.testFailed', { message: result.message ?? '' }),
       );
     } catch {

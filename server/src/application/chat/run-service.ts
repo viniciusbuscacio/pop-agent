@@ -46,6 +46,22 @@ interface PendingRun {
   model: string;
   controller: AbortController;
   started: boolean;
+  /** Fragments emitted so far -- the sequence number of the last one. */
+  seq: number;
+  /** What has streamed so far, so a client mounting mid-run can catch up. */
+  content: string;
+  thinking: string;
+  tools: ToolRecord[];
+}
+
+/** The run in flight for a chat, as the routes hand it to a mounting client. */
+export interface LiveRunSnapshot {
+  runId: string;
+  status: 'queued' | 'running';
+  seq: number;
+  content: string;
+  thinking: string;
+  tools: ToolRecord[];
 }
 
 /**
@@ -126,6 +142,10 @@ export class RunService {
       model: chat.model,
       controller: new AbortController(),
       started: false,
+      seq: 0,
+      content: '',
+      thinking: '',
+      tools: [],
     };
     this.runs.set(run.runId, run);
     this.runIdByChat.set(chatId, run.runId);
@@ -170,6 +190,27 @@ export class RunService {
     return new Promise((resolve) => this.idleWaiters.push(resolve));
   }
 
+  /**
+   * What this chat's run has streamed so far, for a client that just mounted
+   * (aw's partial-reply buffer). Undefined when nothing is in flight.
+   */
+  liveRun(chatId: string): LiveRunSnapshot | undefined {
+    const runId = this.runIdByChat.get(chatId);
+    if (runId === undefined) return undefined;
+    const run = this.runs.get(runId);
+    if (run === undefined) return undefined;
+
+    return {
+      runId: run.runId,
+      status: run.started ? 'running' : 'queued',
+      seq: run.seq,
+      content: run.content,
+      thinking: run.thinking,
+      // Copied: the caller gets a snapshot, not a window into a moving run.
+      tools: run.tools.map((tool) => ({ ...tool })),
+    };
+  }
+
   private async execute(run: PendingRun): Promise<void> {
     this.running += 1;
     run.started = true;
@@ -177,9 +218,6 @@ export class RunService {
 
     sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
 
-    let content = '';
-    let thinking = '';
-    const tools: ToolRecord[] = [];
     let failure: string | undefined;
     let result: AgentRunResult = {};
 
@@ -190,21 +228,40 @@ export class RunService {
         model: run.model,
         signal: run.controller.signal,
         onEvent: (event) => {
+          // Fragments accumulate on the run itself, so a client mounting
+          // mid-run can be handed everything that already streamed
+          // ({@link liveRun}); seq marks each one so nothing is counted twice.
           switch (event.kind) {
             case 'delta':
-              content += event.text;
-              sink.emit({ kind: 'delta', chatId: run.chatId, runId: run.runId, text: event.text });
+              run.content += event.text;
+              run.seq += 1;
+              sink.emit({
+                kind: 'delta',
+                chatId: run.chatId,
+                runId: run.runId,
+                seq: run.seq,
+                text: event.text,
+              });
               break;
             case 'thinking':
-              thinking += event.text;
-              sink.emit({ kind: 'thinking', chatId: run.chatId, runId: run.runId, text: event.text });
+              run.thinking += event.text;
+              run.seq += 1;
+              sink.emit({
+                kind: 'thinking',
+                chatId: run.chatId,
+                runId: run.runId,
+                seq: run.seq,
+                text: event.text,
+              });
               break;
             case 'tool':
-              recordTool(tools, event);
+              recordTool(run.tools, event);
+              run.seq += 1;
               sink.emit({
                 kind: 'tool',
                 chatId: run.chatId,
                 runId: run.runId,
+                seq: run.seq,
                 name: event.name,
                 status: event.status,
                 detail: event.detail,
@@ -221,6 +278,8 @@ export class RunService {
     } catch {
       failure ??= 'operation_error';
     }
+
+    const { content, thinking, tools } = run;
 
     const finishedAt = new Date(clock.now()).toISOString();
 

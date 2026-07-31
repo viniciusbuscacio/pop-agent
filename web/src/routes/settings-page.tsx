@@ -1,6 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AboutResponse, ModelDTO, ProviderStatusDTO, SettingsDTO } from '@popy/shared';
+import type {
+  AboutResponse,
+  ModelCatalogSource,
+  ModelDTO,
+  ProviderStatusDTO,
+  SettingsDTO,
+} from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
@@ -168,6 +174,14 @@ function GeneralSection() {
   );
 }
 
+/** How fresh the catalog is, said plainly (aw's source label). */
+const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> = {
+  live: 'provider.source.live',
+  cache: 'provider.source.cache',
+  engine: 'provider.source.engine',
+  static: 'provider.source.static',
+};
+
 /**
  * The provider and the models (popy.spec §15). The key field is write-only:
  * what was stored is reported as "configured", never echoed back.
@@ -176,6 +190,7 @@ function ModelSection() {
   const [provider, setProvider] = useState<ProviderStatusDTO | undefined>(undefined);
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
   const [models, setModels] = useState<ModelDTO[]>([]);
+  const [catalogSource, setCatalogSource] = useState<ModelCatalogSource | undefined>(undefined);
 
   const [keyDraft, setKeyDraft] = useState('');
   const [testResult, setTestResult] = useState<string | undefined>(undefined);
@@ -198,6 +213,7 @@ function ModelSection() {
       setProvider(providersResponse.providers[0]);
       setSettings(settingsDoc);
       setModels(modelsResponse.models);
+      setCatalogSource(modelsResponse.source);
     } catch {
       // The section renders what it has; a failed load leaves it empty.
     }
@@ -211,7 +227,9 @@ function ModelSection() {
       setTestOk(result.ok);
       setTestResult(
         result.ok
-          ? t('provider.testOk')
+          ? result.latencyMs === undefined
+            ? t('provider.testOk')
+            : t('provider.testOkLatency', { ms: result.latencyMs })
           : t('provider.testFailed', { message: result.message ?? '' }),
       );
     } catch {
@@ -232,7 +250,9 @@ function ModelSection() {
       setTestResult(undefined);
       setSaved(true);
       // A fresh key can unlock the live catalog.
-      setModels((await chatsService.models()).models);
+      const catalog = await chatsService.models();
+      setModels(catalog.models);
+      setCatalogSource(catalog.source);
     } catch {
       setSaved(false);
     } finally {
@@ -367,6 +387,14 @@ function ModelSection() {
           value={settings?.serviceModel ?? ''}
           onChange={(model) => void saveModels({ serviceModel: model })}
         />
+        {catalogSource !== undefined ? (
+          <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
+            {t('provider.modelsInfo', {
+              count: models.length,
+              source: t(CATALOG_SOURCE_KEYS[catalogSource]),
+            })}
+          </p>
+        ) : null}
       </Card>
     </div>
   );

@@ -124,7 +124,7 @@ describe('POST /v1/providers/openrouter/test', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await res.json()).toEqual({ ok: true, latencyMs: 0 });
   });
 
   it('carries the provider s refusal back to the user', async () => {
@@ -133,7 +133,7 @@ describe('POST /v1/providers/openrouter/test', () => {
       body: JSON.stringify({ apiKey: 'sk-bad' }),
     });
 
-    expect(await res.json()).toEqual({ ok: false, message: 'Invalid credentials' });
+    expect(await res.json()).toEqual({ ok: false, message: 'Invalid credentials', latencyMs: 0 });
   });
 
   it('tests the stored key when the body names none', async () => {
@@ -147,7 +147,7 @@ describe('POST /v1/providers/openrouter/test', () => {
       body: JSON.stringify({}),
     });
 
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await res.json()).toEqual({ ok: true, latencyMs: 0 });
   });
 
   it('fails politely when there is no key anywhere', async () => {
@@ -171,6 +171,7 @@ describe('GET /v1/models with a configured key', () => {
 
     expect(await (await authed('/v1/models')).json()).toEqual({
       models: [{ id: 'live/model' }],
+      source: 'live',
     });
   });
 });

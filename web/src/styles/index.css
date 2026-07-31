@@ -57,3 +57,30 @@ body {
   padding: 0.75rem;
   margin: 0;
 }
+
+/* The streaming cursor: a pulsing dot inside the LAST block of the answer,
+   so it sits on the line being written instead of below it (aw's trailing
+   dot, ported as CSS). Lists and quotes get it on their last item. */
+.streaming-tail .markdown > :last-child:not(ul):not(ol):not(blockquote)::after,
+.streaming-tail .markdown > :is(ul, ol):last-child li:last-child::after,
+.streaming-tail .markdown > blockquote:last-child > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.3em;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: streaming-dot 1s ease-in-out infinite;
+  vertical-align: baseline;
+}
+
+@keyframes streaming-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}

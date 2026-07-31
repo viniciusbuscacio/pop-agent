@@ -29,6 +29,9 @@ export interface ProviderStatus {
   source: 'settings' | 'env' | null;
 }
 
+/** Where a catalog answer came from, freshest first. */
+export type ModelCatalogSource = 'live' | 'cache' | 'engine' | 'static';
+
 interface CatalogCache {
   fetchedAt: number;
   models: ModelInfo[];
@@ -82,9 +85,10 @@ export class ProviderService {
   /**
    * A real, paid-for round trip with the candidate key -- the only proof a
    * key works that does not involve waiting for a chat to fail. Costs a few
-   * tokens by design (aw's Test button, ported).
+   * tokens by design (aw's Test button, ported), and reports how long the
+   * provider took to answer.
    */
-  async test(apiKey?: string): Promise<{ ok: boolean; message?: string }> {
+  async test(apiKey?: string): Promise<{ ok: boolean; message?: string; latencyMs?: number }> {
     const key = apiKey ?? this.apiKey();
     if (key === undefined || key.length === 0) {
       return { ok: false, message: 'No API key to test.' };
@@ -96,25 +100,32 @@ export class ProviderService {
       prompt: TEST_PROMPT,
       maxTokens: TEST_MAX_TOKENS,
     };
+    const startedAt = this.deps.clock.now();
     try {
       await this.deps.gateway.complete(request);
-      return { ok: true };
+      return { ok: true, latencyMs: this.deps.clock.now() - startedAt };
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : 'Request failed.' };
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : 'Request failed.',
+        latencyMs: this.deps.clock.now() - startedAt,
+      };
     }
   }
 
   /**
    * The catalog, freshest source first: a live fetch when a key exists
    * (cached for a day), else the engine's offline catalog, else the pinned
-   * row. CI and the smoke run keyless, so they never touch the network here.
+   * row. Every answer says where it came from (aw's honest-source label), so
+   * the picker is never empty and never pretends to be fresher than it is.
+   * CI and the smoke run keyless, so they never touch the network here.
    */
-  async models(): Promise<ModelInfo[]> {
+  async models(): Promise<{ models: ModelInfo[]; source: ModelCatalogSource }> {
     const key = this.apiKey();
     if (key !== undefined) {
       const cached = this.deps.settings.get<CatalogCache>(CATALOG_CACHE_KEY);
       if (cached !== undefined && this.deps.clock.now() - cached.fetchedAt < CATALOG_TTL_MS) {
-        return cached.models;
+        return { models: cached.models, source: 'cache' };
       }
       try {
         const models = await this.deps.gateway.listModels(key);
@@ -123,20 +134,20 @@ export class ProviderService {
             fetchedAt: this.deps.clock.now(),
             models,
           });
-          return models;
+          return { models, source: 'live' };
         }
       } catch {
         // A stale cache is better than no catalog at all.
-        if (cached !== undefined) return cached.models;
+        if (cached !== undefined) return { models: cached.models, source: 'cache' };
       }
     }
 
     try {
       const models = await this.deps.engineModels();
-      if (models.length > 0) return models;
+      if (models.length > 0) return { models, source: 'engine' };
     } catch {
       // The engine failing to list models must not take the catalog down.
     }
-    return FALLBACK_MODELS;
+    return { models: FALLBACK_MODELS, source: 'static' };
   }
 }

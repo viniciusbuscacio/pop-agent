@@ -258,6 +258,9 @@ describe('models', () => {
   it('offers what the bridge knows', async () => {
     const res = await api('/v1/models');
 
-    expect(await res.json()).toEqual({ models: [{ id: 'fake/model-1' }, { id: 'fake/model-2' }] });
+    expect(await res.json()).toEqual({
+      models: [{ id: 'fake/model-1' }, { id: 'fake/model-2' }],
+      source: 'engine',
+    });
   });
 });

@@ -6,9 +6,17 @@ import type { ToolStatus } from '../../domain/chat/chat.js';
  * wire DTOs, so the application never learns that HTTP exists.
  */
 export type RunEvent =
-  | { kind: 'delta'; chatId: string; runId: string; text: string }
-  | { kind: 'thinking'; chatId: string; runId: string; text: string }
-  | { kind: 'tool'; chatId: string; runId: string; name: string; status: ToolStatus; detail: string }
+  | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
+  | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
+  | {
+      kind: 'tool';
+      chatId: string;
+      runId: string;
+      seq: number;
+      name: string;
+      status: ToolStatus;
+      detail: string;
+    }
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string }
   | { kind: 'title'; chatId: string; title: string }

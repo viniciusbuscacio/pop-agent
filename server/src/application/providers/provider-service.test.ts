@@ -121,7 +121,7 @@ describe('testing the key', () => {
   it('makes one real, tiny completion with the candidate key', async () => {
     const result = await service.test('sk-pasted');
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, latencyMs: 0 });
     expect(gateway.completions).toHaveLength(1);
     expect(gateway.completions[0]?.apiKey).toBe('sk-pasted');
     expect(gateway.completions[0]?.maxTokens).toBeLessThanOrEqual(5);
@@ -138,7 +138,11 @@ describe('testing the key', () => {
   it('hands back the provider s own words when the key is refused', async () => {
     gateway.failCompleting = 'Invalid credentials';
 
-    expect(await service.test('sk-bad')).toEqual({ ok: false, message: 'Invalid credentials' });
+    expect(await service.test('sk-bad')).toEqual({
+      ok: false,
+      message: 'Invalid credentials',
+      latencyMs: 0,
+    });
   });
 
   it('does not bother the provider when there is no key at all', async () => {
@@ -151,19 +155,19 @@ describe('testing the key', () => {
 
 describe('the catalog', () => {
   it('is the engine catalog while there is no key to fetch a live one', async () => {
-    expect(await service.models()).toEqual([{ id: 'engine/model' }]);
+    expect(await service.models()).toEqual({ models: [{ id: 'engine/model' }], source: 'engine' });
     expect(gateway.listed).toBe(0);
   });
 
   it('is fetched live once a key exists, then served from cache for a day', async () => {
     service.setKey('sk');
 
-    expect(await service.models()).toEqual([{ id: 'live/model' }]);
-    expect(await service.models()).toEqual([{ id: 'live/model' }]);
+    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'live' });
+    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'cache' });
     expect(gateway.listed).toBe(1);
 
     clock.value += 24 * 60 * 60 * 1000 + 1;
-    await service.models();
+    expect((await service.models()).source).toBe('live');
     expect(gateway.listed).toBe(2);
   });
 
@@ -174,19 +178,19 @@ describe('the catalog', () => {
     clock.value += 25 * 60 * 60 * 1000;
     gateway.failListing = true;
 
-    expect(await service.models()).toEqual([{ id: 'live/model' }]);
+    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'cache' });
   });
 
   it('falls back to the engine catalog when the fetch fails with nothing cached', async () => {
     service.setKey('sk');
     gateway.failListing = true;
 
-    expect(await service.models()).toEqual([{ id: 'engine/model' }]);
+    expect(await service.models()).toEqual({ models: [{ id: 'engine/model' }], source: 'engine' });
   });
 
   it('answers the pinned row when every other source is empty', async () => {
     engineCatalog = [];
 
-    expect(await service.models()).toEqual(FALLBACK_MODELS);
+    expect(await service.models()).toEqual({ models: FALLBACK_MODELS, source: 'static' });
   });
 });

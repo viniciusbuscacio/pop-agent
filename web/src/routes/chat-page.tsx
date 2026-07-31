@@ -79,7 +79,9 @@ export function ChatPage() {
     const element = scroller.current;
     if (element === null) return;
     const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
-    atBottom.current = distance < 60;
+    // 96px, aw's threshold: generous enough that a bounce or an address-bar
+    // resize does not break follow mode, small enough that scrolling up does.
+    atBottom.current = distance < 96;
     if (atBottom.current) setMissed(0);
   }
 

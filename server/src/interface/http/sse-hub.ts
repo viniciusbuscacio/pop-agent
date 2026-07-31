@@ -48,14 +48,27 @@ export class SseHub implements EventSink {
 export function toStreamEvent(event: RunEvent): StreamEvent {
   switch (event.kind) {
     case 'delta':
-      return { kind: 'delta', chatId: event.chatId, runId: event.runId, text: event.text };
+      return {
+        kind: 'delta',
+        chatId: event.chatId,
+        runId: event.runId,
+        seq: event.seq,
+        text: event.text,
+      };
     case 'thinking':
-      return { kind: 'thinking', chatId: event.chatId, runId: event.runId, text: event.text };
+      return {
+        kind: 'thinking',
+        chatId: event.chatId,
+        runId: event.runId,
+        seq: event.seq,
+        text: event.text,
+      };
     case 'tool':
       return {
         kind: 'tool',
         chatId: event.chatId,
         runId: event.runId,
+        seq: event.seq,
         name: event.name,
         status: event.status,
         detail: event.detail,

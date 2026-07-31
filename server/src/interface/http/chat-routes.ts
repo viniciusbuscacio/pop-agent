@@ -83,13 +83,20 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       return apiError(c, 400, 'invalid_field', 'limit must be a number.');
     }
 
-    const messages = deps.chats.getMessages(c.req.param('id'), {
+    const chatId = c.req.param('id');
+    const messages = deps.chats.getMessages(chatId, {
       ...(before === undefined ? {} : { before }),
       ...(limit === undefined ? {} : { limit }),
     });
     if (messages === undefined) return chatNotFound(c);
 
-    return c.json({ messages: messages.map(toMessageDto) });
+    // A client mounting mid-run gets what already streamed, not a blank
+    // bubble; only the first page carries it -- history pages have no "now".
+    const live = before === undefined ? deps.runs.liveRun(chatId) : undefined;
+    return c.json({
+      messages: messages.map(toMessageDto),
+      ...(live === undefined ? {} : { live }),
+    });
   });
 
   routes.post('/chats/:id/messages', async (c) => {
@@ -115,9 +122,10 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json({ stopped: deps.runs.stopRun(id) });
   });
 
-  routes.get('/models', async (c) =>
-    c.json({ models: (await deps.providers.models()).map(toModelDto) }),
-  );
+  routes.get('/models', async (c) => {
+    const catalog = await deps.providers.models();
+    return c.json({ models: catalog.models.map(toModelDto), source: catalog.source });
+  });
 
   /** Trades a session for a short-lived ticket the EventSource URL can carry. */
   routes.post('/events/ticket', (c) => c.json({ ticket: deps.tickets.issue() }));

@@ -34,9 +34,11 @@ export function ChatMessage({
       {message.tools.length > 0 ? <ToolCards tools={message.tools} /> : null}
 
       {message.content.length > 0 ? (
-        <div className="text-[var(--screen-fg)]">
+        <div
+          className={streaming ? 'streaming-tail text-[var(--screen-fg)]' : 'text-[var(--screen-fg)]'}
+          {...(streaming ? { 'data-testid': 'stream-cursor' } : {})}
+        >
           <Markdown text={message.content} />
-          {streaming ? <Cursor /> : null}
         </div>
       ) : streaming && message.thinking.length === 0 && message.tools.length === 0 ? (
         <Cursor />

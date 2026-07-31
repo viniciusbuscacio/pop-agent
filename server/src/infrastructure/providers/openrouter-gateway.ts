@@ -14,6 +14,15 @@ import {
 const BASE_URL = 'https://openrouter.ai/api/v1';
 const TIMEOUT_MS = 20_000;
 
+/**
+ * OpenRouter's attribution headers (aw sends its own pair): they name the app
+ * in the provider's dashboard and rankings, and cost nothing.
+ */
+const ATTRIBUTION = {
+  'HTTP-Referer': 'https://github.com/viniciusbuscacio/popy',
+  'X-Title': 'Popy',
+};
+
 /** What OpenRouter's `GET /models` answers, for the fields Popy keeps. */
 interface CatalogRow {
   id?: string;
@@ -27,7 +36,7 @@ export class OpenRouterGateway implements ProviderGateway {
   constructor(private readonly baseUrl: string = BASE_URL) {}
 
   async listModels(apiKey: string | undefined): Promise<ModelInfo[]> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...ATTRIBUTION };
     if (apiKey !== undefined) headers['authorization'] = `Bearer ${apiKey}`;
 
     const response = await fetch(`${this.baseUrl}/models`, {
@@ -49,6 +58,7 @@ export class OpenRouterGateway implements ProviderGateway {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
+        ...ATTRIBUTION,
         'content-type': 'application/json',
         authorization: `Bearer ${request.apiKey}`,
       },

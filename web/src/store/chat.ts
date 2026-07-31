@@ -20,6 +20,8 @@ import { chatsService } from '../services/chats';
 export interface LiveRun {
   runId: string;
   status: 'queued' | 'running';
+  /** Sequence of the last fragment folded in; older fragments are dropped. */
+  seq: number;
   content: string;
   thinking: string;
   tools: ToolCallDTO[];
@@ -61,7 +63,7 @@ function remember(runId: string): void {
 }
 
 function emptyRun(runId: string, status: LiveRun['status']): LiveRun {
-  return { runId, status, content: '', thinking: '', tools: [] };
+  return { runId, status, seq: 0, content: '', thinking: '', tools: [] };
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -92,10 +94,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * Reconciliation: the stored history replaces whatever this client had, so a
    * reload in the middle of a run cannot end up with the same answer twice --
    * once from the buffer and once from the database.
+   *
+   * If the server says a run is in flight, its snapshot replaces the local
+   * buffer: a client that mounted mid-run starts from everything already
+   * streamed instead of a blank bubble (aw's partial-reply buffer). Fragments
+   * older than the snapshot's `seq` are dropped in {@link apply}.
    */
   async openChat(chatId) {
-    const { messages } = await chatsService.messages(chatId);
-    set((state) => ({ messages: { ...state.messages, [chatId]: messages } }));
+    const { messages, live } = await chatsService.messages(chatId);
+    set((state) => ({
+      messages: { ...state.messages, [chatId]: messages },
+      ...(live !== undefined && !finished.has(live.runId)
+        ? { live: { ...state.live, [chatId]: live } }
+        : {}),
+    }));
   },
 
   async send(chatId, text) {
@@ -192,6 +204,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const live = get().live[chatId];
     if (live === undefined) return;
 
+    // A fragment the live snapshot already contains (the client seeded from
+    // the server mid-run) must not be folded in a second time.
+    if (
+      (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'tool') &&
+      event.seq <= live.seq
+    ) {
+      return;
+    }
+
     switch (event.kind) {
       case 'run-status':
         set((state) => ({ live: { ...state.live, [chatId]: { ...live, status: event.status } } }));
@@ -199,19 +220,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       case 'delta':
         set((state) => ({
-          live: { ...state.live, [chatId]: { ...live, content: live.content + event.text } },
+          live: {
+            ...state.live,
+            [chatId]: { ...live, seq: event.seq, content: live.content + event.text },
+          },
         }));
         return;
 
       case 'thinking':
         set((state) => ({
-          live: { ...state.live, [chatId]: { ...live, thinking: live.thinking + event.text } },
+          live: {
+            ...state.live,
+            [chatId]: { ...live, seq: event.seq, thinking: live.thinking + event.text },
+          },
         }));
         return;
 
       case 'tool':
         set((state) => ({
-          live: { ...state.live, [chatId]: { ...live, tools: mergeTool(live.tools, event) } },
+          live: {
+            ...state.live,
+            [chatId]: { ...live, seq: event.seq, tools: mergeTool(live.tools, event) },
+          },
         }));
         return;
 

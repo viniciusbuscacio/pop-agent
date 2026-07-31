@@ -5,13 +5,14 @@ import { useChatStore } from './chat';
 
 const send = vi.fn();
 const stop = vi.fn();
+const messagesBody: { value: unknown } = { value: { messages: [] } };
 
 vi.mock('../services/chats', () => ({
   chatsService: {
     send: (chatId: string, text: string) => send(chatId, text) as Promise<unknown>,
     stop: (chatId: string) => stop(chatId) as Promise<unknown>,
     list: () => Promise.resolve({ chats: [] }),
-    messages: () => Promise.resolve({ messages: [] }),
+    messages: () => Promise.resolve(messagesBody.value),
   },
 }));
 
@@ -35,6 +36,7 @@ beforeEach(() => {
   send.mockReset();
   stop.mockReset();
   send.mockResolvedValue({ runId: RUN, userMessageId: 'msg-0000000000000001' });
+  messagesBody.value = { messages: [] };
 });
 
 describe('streaming into the live buffer', () => {
@@ -48,12 +50,12 @@ describe('streaming into the live buffer', () => {
   });
 
   it('accumulates deltas, thinking and tool output', () => {
-    apply({ kind: 'thinking', chatId: CHAT, runId: RUN, text: 'hmm ' });
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, text: 'the ' });
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, text: 'answer' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'ls' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'output', detail: 'a\n' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'output', detail: 'b\n' });
+    apply({ kind: 'thinking', chatId: CHAT, runId: RUN, seq: 1, text: 'hmm ' });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 2, text: 'the ' });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 3, text: 'answer' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 4, name: 'bash', status: 'start', detail: 'ls' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 5, name: 'bash', status: 'output', detail: 'a\n' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 6, name: 'bash', status: 'output', detail: 'b\n' });
 
     expect(live()?.content).toBe('the answer');
     expect(live()?.thinking).toBe('hmm ');
@@ -61,9 +63,9 @@ describe('streaming into the live buffer', () => {
   });
 
   it('folds a tool call the way the server stores it', () => {
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'echo hi\n' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'output', detail: 'line 1\n' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'done', detail: 'exit 0' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 1, name: 'bash', status: 'start', detail: 'echo hi\n' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 2, name: 'bash', status: 'output', detail: 'line 1\n' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 3, name: 'bash', status: 'done', detail: 'exit 0' });
 
     // Must match what run-service persists, or the same message would render
     // as one card while streaming and as three after a reload.
@@ -73,21 +75,21 @@ describe('streaming into the live buffer', () => {
   });
 
   it('starts a new card when a second call begins', () => {
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'one' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'done', detail: '' });
-    apply({ kind: 'tool', chatId: CHAT, runId: RUN, name: 'bash', status: 'start', detail: 'two' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 1, name: 'bash', status: 'start', detail: 'one' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 2, name: 'bash', status: 'done', detail: '' });
+    apply({ kind: 'tool', chatId: CHAT, runId: RUN, seq: 3, name: 'bash', status: 'start', detail: 'two' });
 
     expect(live()?.tools).toHaveLength(2);
   });
 
   it('ignores fragments belonging to another run', () => {
-    apply({ kind: 'delta', chatId: CHAT, runId: 'run-somebody-elses', text: 'not mine' });
+    apply({ kind: 'delta', chatId: CHAT, runId: 'run-somebody-elses', seq: 1, text: 'not mine' });
 
     expect(live()?.content).toBe('');
   });
 
   it('promotes the buffer to a stored message when the run finishes', () => {
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, text: 'done thinking' });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'done thinking' });
     apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-0000000000000002' });
 
     expect(live()).toBeUndefined();
@@ -96,7 +98,7 @@ describe('streaming into the live buffer', () => {
   });
 
   it('keeps a half-written answer when the run fails, and says so', () => {
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, text: 'I was saying' });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'I was saying' });
     apply({ kind: 'error', chatId: CHAT, runId: RUN, code: 'provider_error' });
 
     expect(messages()[1]?.content).toBe('I was saying');
@@ -105,16 +107,57 @@ describe('streaming into the live buffer', () => {
 
   it('drops late fragments from a run that already ended', () => {
     apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-0000000000000002' });
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, text: 'too late' });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'too late' });
 
     expect(live()).toBeUndefined();
     expect(messages()).toHaveLength(1); // nothing was answered, so nothing stored
   });
 });
 
+describe('mounting mid-run', () => {
+  it('seeds the live view from the server snapshot and drops what it already contains', async () => {
+    // aw's partial-reply buffer: a reload mid-run starts from everything that
+    // already streamed, and seq keeps the overlap from being counted twice.
+    messagesBody.value = {
+      messages: [],
+      live: {
+        runId: RUN,
+        status: 'running',
+        seq: 3,
+        content: 'already streamed ',
+        thinking: '',
+        tools: [],
+      },
+    };
+    await useChatStore.getState().openChat(CHAT);
+
+    expect(live()?.content).toBe('already streamed ');
+
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 3, text: 'duplicate' });
+    expect(live()?.content).toBe('already streamed ');
+
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 4, text: 'and new' });
+    expect(live()?.content).toBe('already streamed and new');
+  });
+
+  it('does not resurrect a run it already saw finish', async () => {
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'hello' });
+    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-a' });
+
+    // A stale snapshot raced the terminal event; the finished run must stay finished.
+    messagesBody.value = {
+      messages: [],
+      live: { runId: RUN, status: 'running', seq: 1, content: 'hello', thinking: '', tools: [] },
+    };
+    await useChatStore.getState().openChat(CHAT);
+
+    expect(live()).toBeUndefined();
+  });
+});
+
 describe('a run started somewhere else', () => {
   it('is adopted so a second window shows the same answer', () => {
-    apply({ kind: 'delta', chatId: CHAT, runId: 'run-from-the-phone', text: 'hello' });
+    apply({ kind: 'delta', chatId: CHAT, runId: 'run-from-the-phone', seq: 1, text: 'hello' });
 
     expect(live()?.runId).toBe('run-from-the-phone');
     expect(live()?.content).toBe('hello');

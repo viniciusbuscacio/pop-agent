@@ -60,6 +60,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     const response: TestProviderResponse = {
       ok: result.ok,
       ...(result.message === undefined ? {} : { message: result.message }),
+      ...(result.latencyMs === undefined ? {} : { latencyMs: result.latencyMs }),
     };
     return c.json(response);
   });

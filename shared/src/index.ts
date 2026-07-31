@@ -134,8 +134,26 @@ export interface MessageDTO {
   createdAt: string;
 }
 
+/**
+ * The run in flight for a chat, as of this response (aw's partial-reply
+ * buffer, ported). A client that mounts mid-run seeds its live view from this
+ * instead of waiting for the next fragment; `seq` says how much of the stream
+ * the snapshot already contains, so fragments are never counted twice.
+ */
+export interface LiveRunDTO {
+  runId: string;
+  status: 'queued' | 'running';
+  /** Sequence number of the last fragment folded into this snapshot. */
+  seq: number;
+  content: string;
+  thinking: string;
+  tools: ToolCallDTO[];
+}
+
 export interface MessagesResponse {
   messages: MessageDTO[];
+  /** Present while this chat has a run in flight. */
+  live?: LiveRunDTO;
 }
 
 /** `PATCH /v1/chats/:id` — send only what changes. */
@@ -171,8 +189,12 @@ export interface ModelDTO {
   pricing?: { input: number; output: number };
 }
 
+/** Where the catalog came from, freshest first (aw's honest-source label). */
+export type ModelCatalogSource = 'live' | 'cache' | 'engine' | 'static';
+
 export interface ModelsResponse {
   models: ModelDTO[];
+  source: ModelCatalogSource;
 }
 
 /**
@@ -208,6 +230,8 @@ export interface TestProviderResponse {
   ok: boolean;
   /** The provider's own words when it said no. */
   message?: string;
+  /** Round-trip time of the probe, when it ran. */
+  latencyMs?: number;
 }
 
 /**
@@ -219,14 +243,19 @@ export interface EventTicketResponse {
   ticket: string;
 }
 
-/** Events delivered over the single SSE channel `GET /v1/events`. */
+/**
+ * Events delivered over the single SSE channel `GET /v1/events`. Fragments
+ * (`delta`, `thinking`, `tool`) carry a per-run `seq` so a client holding a
+ * live snapshot can drop what the snapshot already contains.
+ */
 export type StreamEvent =
-  | { kind: 'delta'; chatId: string; runId: string; text: string }
-  | { kind: 'thinking'; chatId: string; runId: string; text: string }
+  | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
+  | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {
       kind: 'tool';
       chatId: string;
       runId: string;
+      seq: number;
       name: string;
       status: 'start' | 'output' | 'done' | 'error';
       detail?: string;

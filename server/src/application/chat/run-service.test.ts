@@ -432,3 +432,54 @@ describe('accounting', () => {
     expect(db.prepare('SELECT count(*) AS total FROM llm_runs').get()).toEqual({ total: 0 });
   });
 });
+
+describe('the live snapshot', () => {
+  it('hands a mounting client everything that already streamed', () => {
+    // aw's partial-reply buffer: a reload mid-run must not open on a blank
+    // bubble when half the answer has already gone out over the stream.
+    const chatId = newChat();
+    let finish: (() => void) | undefined;
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'thinking', text: 'hmm ' });
+      request.onEvent({ kind: 'delta', text: 'so far' });
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'ls\n' });
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    };
+
+    runs.startRun(chatId, 'question');
+
+    const snapshot = runs.liveRun(chatId);
+    expect(snapshot?.status).toBe('running');
+    expect(snapshot?.seq).toBe(3);
+    expect(snapshot?.thinking).toBe('hmm ');
+    expect(snapshot?.content).toBe('so far');
+    expect(snapshot?.tools).toEqual([{ name: 'bash', status: 'start', detail: 'ls\n' }]);
+
+    finish?.();
+  });
+
+  it('is gone once the run is over', async () => {
+    const chatId = newChat();
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(runs.liveRun(chatId)).toBeUndefined();
+  });
+
+  it('numbers the emitted fragments so the snapshot and the stream agree', async () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'a' });
+      request.onEvent({ kind: 'delta', text: 'b' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(sink.of('delta').map((event) => event.seq)).toEqual([1, 2]);
+  });
+});
