@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { providersService } from '../services/providers';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, TextField } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
@@ -129,18 +130,7 @@ export function SetupPage() {
           </div>
         ) : null}
 
-        {step === 'provider' ? (
-          <div className="flex flex-col gap-5">
-            <header className="flex flex-col gap-2">
-              <h1 className="text-xl font-semibold">{t('setup.provider.title')}</h1>
-              <p className="text-sm text-[var(--key-fg-dim)]">{t('setup.provider.body')}</p>
-            </header>
-
-            <Button type="button" data-testid="setup-skip-provider" onClick={() => setStep('done')}>
-              {t('setup.provider.skip')}
-            </Button>
-          </div>
-        ) : null}
+        {step === 'provider' ? <ProviderStep onDone={() => setStep('done')} /> : null}
 
         {step === 'done' ? (
           <div className="flex flex-col gap-5">
@@ -156,6 +146,118 @@ export function SetupPage() {
         ) : null}
       </Card>
     </CenteredScreen>
+  );
+}
+
+/**
+ * Wizard screen three: the OpenRouter key (popy.spec §15). Test before
+ * saving is encouraged, skipping is fine -- Settings has the same card.
+ */
+function ProviderStep({ onDone }: { onDone: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [testResult, setTestResult] = useState<string | undefined>(undefined);
+  const [testOk, setTestOk] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+
+  async function test(): Promise<void> {
+    setTesting(true);
+    setTestResult(undefined);
+    try {
+      const result = await providersService.test(apiKey);
+      setTestOk(result.ok);
+      setTestResult(
+        result.ok
+          ? t('provider.testOk')
+          : t('provider.testFailed', { message: result.message ?? '' }),
+      );
+    } catch {
+      setTestOk(false);
+      setTestResult(t('error.generic'));
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function saveAndContinue(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await providersService.setKey(apiKey);
+      onDone();
+    } catch {
+      setError(t('error.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold">{t('setup.provider.title')}</h1>
+        <p className="text-sm text-[var(--key-fg-dim)]">{t('setup.provider.body')}</p>
+      </header>
+
+      <TextField
+        id="setup-provider-key"
+        data-testid="setup-provider-key"
+        type="password"
+        autoComplete="off"
+        label={t('provider.keyLabel')}
+        hint={t('provider.keyHint')}
+        value={apiKey}
+        onChange={(event) => {
+          setApiKey(event.target.value);
+          setTestResult(undefined);
+        }}
+      />
+
+      {testResult !== undefined ? (
+        <p
+          role="status"
+          className={testOk ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--danger)]'}
+        >
+          {testResult}
+        </p>
+      ) : null}
+      {error !== undefined ? (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            data-testid="setup-provider-continue"
+            disabled={busy || apiKey.length === 0}
+            onClick={() => void saveAndContinue()}
+          >
+            {t('common.continue')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="setup-provider-test"
+            disabled={testing || apiKey.length === 0}
+            onClick={() => void test()}
+          >
+            {testing ? t('provider.testing') : t('provider.test')}
+          </Button>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="setup-skip-provider"
+          onClick={onDone}
+        >
+          {t('setup.provider.skip')}
+        </Button>
+      </div>
+    </div>
   );
 }
 

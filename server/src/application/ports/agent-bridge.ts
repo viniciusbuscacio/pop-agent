@@ -22,8 +22,14 @@ export interface AgentRunRequest {
   signal: AbortSignal;
 }
 
+/** One model the user can pick. Everything past the id is best-effort. */
 export interface ModelInfo {
   id: string;
+  name?: string;
+  /** Context window, in tokens. */
+  context?: number;
+  /** US dollars per million tokens. */
+  pricing?: { input: number; output: number };
 }
 
 export interface AgentBridge {

@@ -13,7 +13,17 @@ import { badBody, readJson, schemaError } from './body.js';
  * having it quietly dropped and believing it was saved.
  */
 
-const settingsSchema = z.object({ language: z.literal('en') }).strict();
+/** Room for instructions, not for essays: the cap from the Phase 3 plan. */
+const MAX_INSTRUCTIONS = 4_000;
+
+const settingsSchema = z
+  .object({
+    language: z.literal('en'),
+    defaultModel: z.string().min(1).max(200),
+    serviceModel: z.string().min(1).max(200),
+    customInstructions: z.string().max(MAX_INSTRUCTIONS),
+  })
+  .strict();
 
 export interface SettingsRoutesDeps {
   settings: SettingsService;
@@ -32,7 +42,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
     const parsed = settingsSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    return c.json(toDto(deps.settings.write({ language: parsed.data.language })));
+    return c.json(toDto(deps.settings.write(parsed.data)));
   });
 
   routes.get('/about', (c) => c.json(deps.versions));
@@ -42,5 +52,10 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
 
 /** Explicit mapping: the application type and the wire type evolve separately. */
 function toDto(settings: AppSettings): SettingsDTO {
-  return { language: settings.language };
+  return {
+    language: settings.language,
+    defaultModel: settings.defaultModel,
+    serviceModel: settings.serviceModel,
+    customInstructions: settings.customInstructions,
+  };
 }

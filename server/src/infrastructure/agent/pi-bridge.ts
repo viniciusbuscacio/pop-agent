@@ -44,8 +44,10 @@ export interface PiRunUsage {
 export interface PiBridgeDeps {
   chats: ChatRepo;
   engine: PiEngine;
-  /** Used when a chat has no model of its own. */
-  defaultModelId?: string;
+  /** Used when a chat has no model of its own. Read per run: it is a setting. */
+  defaultModelId?: () => string;
+  /** The user's custom instructions. Read per run, same reason. */
+  instructions?: () => string;
   /** Overridable so tests do not wait three hours. */
   idleMs?: number;
   onUsage?: (usage: PiRunUsage) => void;
@@ -61,6 +63,8 @@ interface CachedSession {
   chatId: string;
   session: PiSession;
   modelId: string;
+  /** What the session was opened with; a change means reopening. */
+  instructions: string;
   /** Runs currently using it; a session in use is never swept. */
   busy: number;
   lastUsedAt: number;
@@ -132,11 +136,22 @@ export class PiAgentBridge implements AgentBridge {
   }
 
   private get defaultModelId(): string {
-    return this.deps.defaultModelId ?? DEFAULT_MODEL_ID;
+    return this.deps.defaultModelId?.() ?? DEFAULT_MODEL_ID;
   }
 
   private async acquire(chatId: string, modelId: string): Promise<CachedSession> {
-    const cached = this.sessions.get(chatId);
+    const instructions = this.deps.instructions?.() ?? '';
+
+    let cached = this.sessions.get(chatId);
+    // Instructions live in the system prompt, which pi fixes when the session
+    // opens. Reopening from the JSONL is the same move that survives a restart,
+    // so a changed setting costs one transparent reload, not the conversation.
+    if (cached !== undefined && cached.instructions !== instructions && cached.busy === 0) {
+      cached.session.dispose();
+      this.sessions.delete(chatId);
+      cached = undefined;
+    }
+
     if (cached !== undefined) {
       if (cached.modelId !== modelId) {
         await cached.session.setModel(modelId);
@@ -151,9 +166,17 @@ export class PiAgentBridge implements AgentBridge {
     const session = await this.deps.engine.open({
       modelId,
       sessionFile: chat?.piSessionId,
+      instructions,
     });
 
-    const entry: CachedSession = { chatId, session, modelId, busy: 1, lastUsedAt: Date.now() };
+    const entry: CachedSession = {
+      chatId,
+      session,
+      modelId,
+      instructions,
+      busy: 1,
+      lastUsedAt: Date.now(),
+    };
     this.sessions.set(chatId, entry);
     this.rememberSessionFile(entry);
     this.startSweeping();

@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { chatsService } from '../services/chats';
 import { eventStream } from '../services/events';
+import { providersService } from '../services/providers';
 import { useChatStore } from '../store/chat';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
@@ -23,6 +24,7 @@ export function ChatPage() {
   const setModel = useChatStore((state) => state.setModel);
 
   const [models, setModels] = useState<string[]>([]);
+  const [unconfigured, setUnconfigured] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [missed, setMissed] = useState(0);
@@ -48,6 +50,12 @@ export function ChatPage() {
       .models()
       .then(({ models: available }) => setModels(available.map((model) => model.id)))
       .catch(() => setModels([]));
+    // The banner only appears on a definite "no": a failed lookup must not
+    // nag someone whose provider is fine.
+    void providersService
+      .list()
+      .then(({ providers }) => setUnconfigured(providers.every((entry) => !entry.configured)))
+      .catch(() => setUnconfigured(false));
   }, []);
 
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
@@ -159,6 +167,18 @@ export function ChatPage() {
         >
           {t('chat.jumpToLatest')}
         </button>
+      ) : null}
+
+      {unconfigured ? (
+        <p
+          data-testid="no-provider"
+          className="mx-auto mb-1 max-w-3xl px-4 text-center text-xs text-[var(--muted)]"
+        >
+          {t('chat.noProvider')}{' '}
+          <Link to="/settings" className="text-[var(--accent)] underline underline-offset-2">
+            {t('chat.noProviderLink')}
+          </Link>
+        </p>
       ) : null}
 
       <Composer

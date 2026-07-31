@@ -3,13 +3,14 @@ import type { AboutResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
-import type { AgentBridge } from '../../application/ports/agent-bridge.js';
 import type { Clock } from '../../application/ports/clock.js';
+import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createChatRoutes } from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
+import { createProviderRoutes } from './provider-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
@@ -19,7 +20,7 @@ export interface AppDeps {
   settings: SettingsService;
   chats: ChatService;
   runs: RunService;
-  bridge: AgentBridge;
+  providers: ProviderService;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;
@@ -41,6 +42,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use('/v1/*', authMiddleware(deps.auth));
   app.route('/v1', createAuthRoutes(deps));
   app.route('/v1', createSettingsRoutes(deps));
+  app.route('/v1', createProviderRoutes(deps));
   app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));
 
   // Last: anything that is not an API route is the frontend or a 404.

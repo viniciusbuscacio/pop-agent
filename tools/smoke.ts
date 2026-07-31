@@ -204,15 +204,21 @@ async function run(base: string): Promise<void> {
   pass('settings are refused without a session and served with one');
 
   // 5
+  const settingsDoc = {
+    language: 'en',
+    defaultModel: 'moonshotai/kimi-k3',
+    serviceModel: 'moonshotai/kimi-k3',
+    customInstructions: 'Keep answers short.',
+  };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',
     token: created.token,
-    body: { language: 'en' },
+    body: settingsDoc,
   });
   expect(written.status === 200, 'settings PUT', `expected 200, got ${String(written.status)}`);
   const readBack = await call(base, '/v1/settings', { token: created.token });
   expect(
-    JSON.stringify(readBack.body) === JSON.stringify({ language: 'en' }),
+    JSON.stringify(readBack.body) === JSON.stringify(settingsDoc),
     'settings roundtrip',
     `read back ${JSON.stringify(readBack.body)}`,
   );

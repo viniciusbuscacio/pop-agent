@@ -20,8 +20,23 @@ describe('settings service', () => {
 
   it('reads back what it wrote', () => {
     const service = new SettingsService(new MemorySettings());
+    const next = {
+      language: 'en' as const,
+      defaultModel: 'openai/gpt-5',
+      serviceModel: 'moonshotai/kimi-k3',
+      customInstructions: 'Answer in Portuguese.',
+    };
 
-    expect(service.write({ language: 'en' })).toEqual({ language: 'en' });
-    expect(service.read()).toEqual({ language: 'en' });
+    expect(service.write(next)).toEqual(next);
+    expect(service.read()).toEqual(next);
+  });
+
+  it('fills fields a document saved before they existed', () => {
+    // The store may hold a document from an older Popy; reading it must not
+    // lose the fields that were invented since.
+    const repo = new MemorySettings();
+    repo.set('app', { language: 'en' });
+
+    expect(new SettingsService(repo).read()).toEqual(DEFAULT_SETTINGS);
   });
 });

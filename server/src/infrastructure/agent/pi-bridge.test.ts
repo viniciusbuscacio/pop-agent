@@ -5,7 +5,7 @@ import type { AgentEvent } from '../../application/ports/agent-bridge.js';
 import { migrate } from '../db/migrate.js';
 import { SqliteChatRepo } from '../db/sqlite-chat-repo.js';
 import { PiAgentBridge, type PiRunUsage } from './pi-bridge.js';
-import { PiEngineError, type PiEngine, type PiSession } from './pi-engine.js';
+import { PiEngineError, type PiEngine, type PiOpenOptions, type PiSession } from './pi-engine.js';
 
 /**
  * The bridge, against a pi that is scripted rather than paid for.
@@ -136,11 +136,11 @@ class ScriptedSession implements PiSession {
 
 class ScriptedEngine implements PiEngine {
   readonly sessions: ScriptedSession[] = [];
-  readonly opened: { modelId: string; sessionFile: string | undefined }[] = [];
+  readonly opened: PiOpenOptions[] = [];
   failure: Error | undefined;
   next = new ScriptedSession();
 
-  open(options: { modelId: string; sessionFile: string | undefined }): Promise<PiSession> {
+  open(options: PiOpenOptions): Promise<PiSession> {
     if (this.failure !== undefined) return Promise.reject(this.failure);
     this.opened.push(options);
     this.sessions.push(this.next);
@@ -409,5 +409,39 @@ describe('sessions', () => {
     bridge.close();
 
     expect(engine.sessions[0]?.disposed).toBe(true);
+  });
+
+  it('reopens the session when the custom instructions change', async () => {
+    // Instructions live in the system prompt, fixed when a session opens.
+    // Reopening from the JSONL is the restart move: the conversation's context
+    // survives, only the prompt changes.
+    let instructions = 'Answer briefly.';
+    bridge = new PiAgentBridge({ chats, engine, instructions: () => instructions });
+    const { onEvent } = collect();
+
+    await run(onEvent);
+    const first = engine.next;
+    engine.next = new ScriptedSession();
+    instructions = 'Answer at length.';
+    await run(onEvent);
+
+    expect(first.disposed).toBe(true);
+    expect(engine.opened).toHaveLength(2);
+    expect(engine.opened.map((entry) => entry.instructions)).toEqual([
+      'Answer briefly.',
+      'Answer at length.',
+    ]);
+    // The second open resumes the same conversation, not a blank one.
+    expect(engine.opened[1]?.sessionFile).toBe('/data/sessions/chat.jsonl');
+  });
+
+  it('keeps the session while the instructions do not change', async () => {
+    bridge = new PiAgentBridge({ chats, engine, instructions: () => 'Same words.' });
+    const { onEvent } = collect();
+
+    await run(onEvent);
+    await run(onEvent);
+
+    expect(engine.opened).toHaveLength(1);
   });
 });

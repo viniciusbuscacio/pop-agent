@@ -87,7 +87,7 @@ describe('setup wizard', () => {
     expect(disabled('setup-recovery-continue')).toBe(false);
   });
 
-  it('reaches the provider step, which can only be skipped in this version', async () => {
+  it('reaches the provider step, which can still be skipped', async () => {
     const user = userEvent.setup();
     renderWizard();
 

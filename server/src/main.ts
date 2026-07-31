@@ -6,6 +6,7 @@ import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
 import type { AgentBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
+import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
@@ -14,6 +15,7 @@ import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
+import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
 
@@ -42,7 +44,19 @@ if (agent !== 'fake' && agent !== 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
+const settings = new SettingsService(context.settings);
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
+
+// The provider seen by the routes: key precedence (secrets over environment),
+// the key test, and the model catalog with the engine's as offline fallback.
+const providers = new ProviderService({
+  secrets: context.secrets,
+  settings: context.settings,
+  gateway: new OpenRouterGateway(),
+  clock: systemClock,
+  envKey: () => process.env['OPENROUTER_API_KEY'],
+  engineModels: () => bridge.listModels(),
+});
 
 function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
@@ -55,8 +69,10 @@ function piBridge(): PiAgentBridge {
       agentDir: join(context.dataDir, 'pi-agent'),
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
-      apiKey: () => process.env['OPENROUTER_API_KEY'],
+      apiKey: () => providers.apiKey(),
     }),
+    defaultModelId: () => settings.read().defaultModel,
+    instructions: () => settings.read().customInstructions,
     // Until Phase 3 step 4 gives them a table, both land in the log -- which is
     // still the difference between "it failed" and knowing why.
     onUsage: (usage) => {
@@ -84,10 +100,10 @@ const runs = new RunService({
 
 const app = createApp({
   auth,
-  settings: new SettingsService(context.settings),
+  settings,
   chats,
   runs,
-  bridge,
+  providers,
   hub,
   clock: systemClock,
   versions: readVersions(),

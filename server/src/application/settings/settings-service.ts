@@ -1,4 +1,5 @@
 import type { SettingsRepo } from '../ports/settings-repo.js';
+import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
 
 /**
  * Application-owned settings (popy.spec §13). Deliberately not the wire DTO:
@@ -10,9 +11,20 @@ import type { SettingsRepo } from '../ports/settings-repo.js';
  */
 export interface AppSettings {
   language: 'en';
+  /** Model used when a chat does not choose its own. */
+  defaultModel: string;
+  /** Model for background jobs: titles, summaries (popy.spec §15). */
+  serviceModel: string;
+  /** Appended to the agent's system prompt. Empty means none. */
+  customInstructions: string;
 }
 
-export const DEFAULT_SETTINGS: AppSettings = { language: 'en' };
+export const DEFAULT_SETTINGS: AppSettings = {
+  language: 'en',
+  defaultModel: DEFAULT_MODEL_ID,
+  serviceModel: DEFAULT_MODEL_ID,
+  customInstructions: '',
+};
 
 const SETTINGS_KEY = 'app';
 
@@ -20,7 +32,9 @@ export class SettingsService {
   constructor(private readonly repo: SettingsRepo) {}
 
   read(): AppSettings {
-    return this.repo.get<AppSettings>(SETTINGS_KEY) ?? DEFAULT_SETTINGS;
+    // Spread over the defaults: a document saved before a field existed still
+    // answers with every field.
+    return { ...DEFAULT_SETTINGS, ...this.repo.get<Partial<AppSettings>>(SETTINGS_KEY) };
   }
 
   /** Full replace: callers send the whole object, so there is no merge to reason about. */

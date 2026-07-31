@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AboutResponse } from '@popy/shared';
+import type { AboutResponse, ModelDTO, ProviderStatusDTO, SettingsDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { chatsService } from '../services/chats';
+import { providersService } from '../services/providers';
 import { settingsService } from '../services/settings';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
@@ -15,10 +17,11 @@ import { Button, Card, Segmented, TextField } from '../ui/controls';
  * screen and become a row of tabs when there is no room for a column.
  */
 
-type Section = 'general' | 'appearance' | 'security' | 'about';
+type Section = 'general' | 'model' | 'appearance' | 'security' | 'about';
 
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
+  { id: 'model', labelKey: 'settings.section.model' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
   { id: 'security', labelKey: 'settings.section.security' },
   { id: 'about', labelKey: 'settings.section.about' },
@@ -65,6 +68,7 @@ export function SettingsPage() {
 
         <div className="flex-1">
           {section === 'general' ? <GeneralSection /> : null}
+          {section === 'model' ? <ModelSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
           {section === 'security' ? <SecuritySection /> : null}
           {section === 'about' ? <AboutSection /> : null}
@@ -75,13 +79,27 @@ export function SettingsPage() {
 }
 
 function GeneralSection() {
+  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
+  const [instructions, setInstructions] = useState('');
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    settingsService
+      .read()
+      .then((doc) => {
+        setSettings(doc);
+        setInstructions(doc.customInstructions);
+      })
+      .catch(() => setSettings(undefined));
+  }, []);
+
   async function save(): Promise<void> {
+    if (settings === undefined) return;
     setBusy(true);
     try {
-      await settingsService.write({ language: 'en' });
+      const next = await settingsService.write({ ...settings, customInstructions: instructions });
+      setSettings(next);
       setSaved(true);
     } catch {
       setSaved(false);
@@ -106,16 +124,294 @@ function GeneralSection() {
         </select>
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="settings-instructions" className="text-sm text-[var(--key-fg-dim)]">
+          {t('settings.general.instructions')}
+        </label>
+        <textarea
+          id="settings-instructions"
+          data-testid="settings-instructions"
+          rows={5}
+          maxLength={4000}
+          value={instructions}
+          onChange={(event) => {
+            setInstructions(event.target.value);
+            setSaved(false);
+          }}
+          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+        />
+        <p className="text-xs text-[var(--muted)]">{t('settings.general.instructionsHint')}</p>
+      </div>
+
       <div className="flex items-center gap-2">
-        <Button type="button" data-testid="settings-language-save" disabled={busy} onClick={() => void save()}>
+        <Button
+          type="button"
+          data-testid="settings-general-save"
+          disabled={busy || settings === undefined}
+          onClick={() => void save()}
+        >
           {t('common.save')}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setSaved(false)}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setInstructions(settings?.customInstructions ?? '');
+            setSaved(false);
+          }}
+        >
           {t('common.cancel')}
         </Button>
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
     </Card>
+  );
+}
+
+/**
+ * The provider and the models (popy.spec §15). The key field is write-only:
+ * what was stored is reported as "configured", never echoed back.
+ */
+function ModelSection() {
+  const [provider, setProvider] = useState<ProviderStatusDTO | undefined>(undefined);
+  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
+  const [models, setModels] = useState<ModelDTO[]>([]);
+
+  const [keyDraft, setKeyDraft] = useState('');
+  const [testResult, setTestResult] = useState<string | undefined>(undefined);
+  const [testOk, setTestOk] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function reload(): Promise<void> {
+    try {
+      const [providersResponse, settingsDoc, modelsResponse] = await Promise.all([
+        providersService.list(),
+        settingsService.read(),
+        chatsService.models(),
+      ]);
+      setProvider(providersResponse.providers[0]);
+      setSettings(settingsDoc);
+      setModels(modelsResponse.models);
+    } catch {
+      // The section renders what it has; a failed load leaves it empty.
+    }
+  }
+
+  async function test(): Promise<void> {
+    setTesting(true);
+    setTestResult(undefined);
+    try {
+      const result = await providersService.test(keyDraft.length > 0 ? keyDraft : undefined);
+      setTestOk(result.ok);
+      setTestResult(
+        result.ok
+          ? t('provider.testOk')
+          : t('provider.testFailed', { message: result.message ?? '' }),
+      );
+    } catch {
+      setTestOk(false);
+      setTestResult(t('error.generic'));
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function saveKey(): Promise<void> {
+    if (keyDraft.length === 0) return;
+    setBusy(true);
+    try {
+      const response = await providersService.setKey(keyDraft);
+      setProvider(response.providers[0]);
+      setKeyDraft('');
+      setTestResult(undefined);
+      setSaved(true);
+      // A fresh key can unlock the live catalog.
+      setModels((await chatsService.models()).models);
+    } catch {
+      setSaved(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeKey(): Promise<void> {
+    if (!window.confirm(t('provider.removeKeyConfirm'))) return;
+    try {
+      const response = await providersService.clearKey();
+      setProvider(response.providers[0]);
+    } catch {
+      // Leave the section as it is; the next reload tells the truth.
+    }
+  }
+
+  async function saveModels(next: Partial<SettingsDTO>): Promise<void> {
+    if (settings === undefined) return;
+    try {
+      setSettings(await settingsService.write({ ...settings, ...next }));
+    } catch {
+      // The select snaps back on the next load; nothing was stored.
+    }
+  }
+
+  const statusLabel =
+    provider === undefined || !provider.configured
+      ? t('provider.notConfigured')
+      : provider.source === 'env'
+        ? t('provider.configuredEnv')
+        : t('provider.configured');
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-base font-semibold">{t('provider.title')}</h2>
+          <span
+            data-testid="provider-status"
+            className={
+              provider?.configured === true
+                ? 'text-sm text-[var(--success)]'
+                : 'text-sm text-[var(--muted)]'
+            }
+          >
+            {statusLabel}
+          </span>
+        </div>
+
+        <TextField
+          id="provider-key"
+          data-testid="provider-key"
+          type="password"
+          autoComplete="off"
+          label={t('provider.keyLabel')}
+          hint={t('provider.keyHint')}
+          value={keyDraft}
+          onChange={(event) => {
+            setKeyDraft(event.target.value);
+            setSaved(false);
+            setTestResult(undefined);
+          }}
+        />
+
+        {testResult !== undefined ? (
+          <p
+            data-testid="provider-test-result"
+            role="status"
+            className={testOk ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--danger)]'}
+          >
+            {testResult}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            data-testid="provider-save"
+            disabled={busy || keyDraft.length === 0}
+            onClick={() => void saveKey()}
+          >
+            {t('common.save')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="provider-test"
+            disabled={testing || (keyDraft.length === 0 && provider?.configured !== true)}
+            onClick={() => void test()}
+          >
+            {testing ? t('provider.testing') : t('provider.test')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setKeyDraft('');
+              setTestResult(undefined);
+              setSaved(false);
+            }}
+          >
+            {t('common.cancel')}
+          </Button>
+          {provider?.source === 'settings' ? (
+            <Button
+              type="button"
+              variant="danger"
+              data-testid="provider-remove"
+              onClick={() => void removeKey()}
+            >
+              {t('provider.removeKey')}
+            </Button>
+          ) : null}
+          {saved ? <span className="text-sm text-[var(--success)]">{t('provider.saved')}</span> : null}
+        </div>
+      </Card>
+
+      <Card className="flex flex-col gap-4">
+        <ModelPicker
+          id="settings-default-model"
+          label={t('provider.defaultModel')}
+          models={models}
+          value={settings?.defaultModel ?? ''}
+          onChange={(model) => void saveModels({ defaultModel: model })}
+        />
+        <ModelPicker
+          id="settings-service-model"
+          label={t('provider.serviceModel')}
+          hint={t('provider.serviceModelHint')}
+          models={models}
+          value={settings?.serviceModel ?? ''}
+          onChange={(model) => void saveModels({ serviceModel: model })}
+        />
+      </Card>
+    </div>
+  );
+}
+
+function ModelPicker({
+  id,
+  label,
+  hint,
+  models,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  models: ModelDTO[];
+  value: string;
+  onChange: (model: string) => void;
+}) {
+  // The stored model may not be in the loaded catalog (stale cache, another
+  // provider): it still has to be selectable rather than silently replaced.
+  const known = models.some((model) => model.id === value);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm text-[var(--key-fg-dim)]">
+        {label}
+      </label>
+      <select
+        id={id}
+        data-testid={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
+      >
+        {known || value.length === 0 ? null : <option value={value}>{value}</option>}
+        {models.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.name === undefined ? model.id : `${model.name} — ${model.id}`}
+          </option>
+        ))}
+      </select>
+      {hint !== undefined ? <p className="text-xs text-[var(--muted)]">{hint}</p> : null}
+    </div>
   );
 }
 

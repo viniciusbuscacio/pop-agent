@@ -85,6 +85,12 @@ export interface SignOutOthersResponse {
  */
 export interface SettingsDTO {
   language: 'en';
+  /** Model used when a chat does not choose its own. */
+  defaultModel: string;
+  /** Model for background jobs: titles, summaries (popy.spec §15). */
+  serviceModel: string;
+  /** Appended to the agent's system prompt. Empty means none. */
+  customInstructions: string;
 }
 
 /** `GET /v1/about` — what Settings → About shows. */
@@ -155,8 +161,53 @@ export interface StopRunResponse {
   stopped: boolean;
 }
 
+/** One row of the model catalog. Everything past the id is best-effort. */
+export interface ModelDTO {
+  id: string;
+  name?: string;
+  /** Context window, in tokens. */
+  context?: number;
+  /** US dollars per million tokens. */
+  pricing?: { input: number; output: number };
+}
+
 export interface ModelsResponse {
-  models: { id: string }[];
+  models: ModelDTO[];
+}
+
+/**
+ * `GET /v1/providers` — whether each provider can be used, never the key
+ * itself. `source` says where the key came from, because a key set by the
+ * environment cannot be cleared from the UI.
+ */
+export interface ProviderStatusDTO {
+  id: string;
+  configured: boolean;
+  source: 'settings' | 'env' | null;
+}
+
+export interface ProvidersResponse {
+  providers: ProviderStatusDTO[];
+}
+
+/** `PUT /v1/providers/:id/key` — write-only: no route ever returns the key. */
+export interface SetProviderKeyRequest {
+  apiKey: string;
+}
+
+/**
+ * `POST /v1/providers/:id/test` — a real one-prompt call against the
+ * provider. Without a body it tests the stored key; with one, the key the
+ * user just pasted and has not saved yet.
+ */
+export interface TestProviderRequest {
+  apiKey?: string;
+}
+
+export interface TestProviderResponse {
+  ok: boolean;
+  /** The provider's own words when it said no. */
+  message?: string;
 }
 
 /**

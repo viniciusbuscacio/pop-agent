@@ -32,6 +32,13 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
   );
 }
 
+const DEFAULT_DOC = {
+  language: 'en',
+  defaultModel: 'moonshotai/kimi-k3',
+  serviceModel: 'moonshotai/kimi-k3',
+  customInstructions: '',
+};
+
 describe('GET /v1/settings', () => {
   it('needs a session', async () => {
     expect((await app.request('/v1/settings')).status).toBe(401);
@@ -41,26 +48,31 @@ describe('GET /v1/settings', () => {
     const res = await authed('/v1/settings');
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ language: 'en' });
+    expect(await res.json()).toEqual(DEFAULT_DOC);
   });
 });
 
 describe('PUT /v1/settings', () => {
   it('replaces the document and returns what was stored', async () => {
+    const next = {
+      ...DEFAULT_DOC,
+      defaultModel: 'openai/gpt-5',
+      customInstructions: 'Answer briefly.',
+    };
     const res = await authed('/v1/settings', {
       method: 'PUT',
-      body: JSON.stringify({ language: 'en' }),
+      body: JSON.stringify(next),
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ language: 'en' });
-    expect(await (await authed('/v1/settings')).json()).toEqual({ language: 'en' });
+    expect(await res.json()).toEqual(next);
+    expect(await (await authed('/v1/settings')).json()).toEqual(next);
   });
 
   it('rejects a field it does not know instead of dropping it', async () => {
     const res = await authed('/v1/settings', {
       method: 'PUT',
-      body: JSON.stringify({ language: 'en', telemetry: true }),
+      body: JSON.stringify({ ...DEFAULT_DOC, telemetry: true }),
     });
 
     expect(res.status).toBe(400);
@@ -70,7 +82,16 @@ describe('PUT /v1/settings', () => {
   it('rejects an unsupported language', async () => {
     const res = await authed('/v1/settings', {
       method: 'PUT',
-      body: JSON.stringify({ language: 'pt-BR' }),
+      body: JSON.stringify({ ...DEFAULT_DOC, language: 'pt-BR' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects instructions past the cap instead of truncating them', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, customInstructions: 'x'.repeat(4_001) }),
     });
 
     expect(res.status).toBe(400);

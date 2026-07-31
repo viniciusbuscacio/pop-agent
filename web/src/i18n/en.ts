@@ -36,7 +36,7 @@ export const en = {
 
   'setup.provider.title': 'Connect a model',
   'setup.provider.body':
-    'Popy talks to a language model through a provider. There is nothing to connect yet — this arrives with the chat.',
+    'Popy talks to a language model through OpenRouter. Paste an API key to connect — or skip and add one later in Settings.',
   'setup.provider.skip': 'Skip for now',
 
   'setup.done.title': "You're all set",
@@ -94,12 +94,36 @@ export const en = {
 
   'settings.title': 'Settings',
   'settings.section.general': 'General',
+  'settings.section.model': 'Model',
   'settings.section.appearance': 'Appearance',
   'settings.section.security': 'Security',
   'settings.section.about': 'About',
 
   'settings.general.language': 'Language',
   'settings.general.saved': 'Saved',
+  'settings.general.instructions': 'Custom instructions',
+  'settings.general.instructionsHint':
+    'Added to every conversation. How you want Popy to answer, in your own words.',
+
+  'provider.title': 'OpenRouter',
+  'provider.keyLabel': 'API key',
+  'provider.keyHint': 'Stored encrypted on your server, and never shown again.',
+  'provider.configured': 'Configured ✓',
+  'provider.configuredEnv': 'Configured by the server environment ✓',
+  'provider.notConfigured': 'Not configured',
+  'provider.test': 'Test',
+  'provider.testing': 'Testing…',
+  'provider.testOk': 'The key works.',
+  'provider.testFailed': 'The key did not work: {message}',
+  'provider.removeKey': 'Remove key',
+  'provider.removeKeyConfirm': 'Remove the stored API key?',
+  'provider.defaultModel': 'Default model',
+  'provider.serviceModel': 'Service model',
+  'provider.serviceModelHint': 'The model Popy uses for background work like titles.',
+  'provider.saved': 'Saved',
+
+  'chat.noProvider': 'Popy has no model to talk to yet. Configure a provider in Settings.',
+  'chat.noProviderLink': 'Open Settings',
 
   'settings.appearance.theme': 'Theme',
   'settings.appearance.system': 'System',

@@ -6,8 +6,10 @@ import { ChatService } from '../application/chat/chat-service.js';
 import { RunService } from '../application/chat/run-service.js';
 import type { Clock } from '../application/ports/clock.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
+import type { CompletionRequest, ProviderGateway } from '../application/ports/provider-gateway.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
+import { ProviderService } from '../application/providers/provider-service.js';
 import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { migrate } from '../infrastructure/db/migrate.js';
@@ -80,17 +82,40 @@ export const fastHasher: PasswordHasher = {
   verify: (hash, plaintext) => Promise.resolve(hash === `hashed:${plaintext}`),
 };
 
+/** A gateway that must never be reached: the tests run offline. */
+export class RefusingGateway implements ProviderGateway {
+  listModels(): Promise<never> {
+    return Promise.reject(new Error('the tests must not touch the network'));
+  }
+  complete(_request: CompletionRequest): Promise<never> {
+    return Promise.reject(new Error('the tests must not touch the network'));
+  }
+}
+
 export interface TestApp {
   app: Hono;
   auth: AuthService;
   chats: ChatService;
   runs: RunService;
+  providers: ProviderService;
+  secrets: MemorySecrets;
   hub: SseHub;
   clock: FakeClock;
 }
 
-export function createTestApp(clock: FakeClock = new FakeClock()): TestApp {
+export interface TestAppOptions {
+  /** Swap in a scripted gateway to test the provider routes. */
+  gateway?: ProviderGateway;
+  /** Stands in for OPENROUTER_API_KEY in the environment. */
+  envKey?: string;
+}
+
+export function createTestApp(
+  clock: FakeClock = new FakeClock(),
+  options: TestAppOptions = {},
+): TestApp {
   const settingsRepo = new MemorySettings();
+  const secrets = new MemorySecrets();
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   migrate(db);
@@ -98,7 +123,7 @@ export function createTestApp(clock: FakeClock = new FakeClock()): TestApp {
 
   const auth = new AuthService({
     settings: settingsRepo,
-    secrets: new MemorySecrets(),
+    secrets,
     hasher: fastHasher,
     clock,
   });
@@ -110,17 +135,26 @@ export function createTestApp(clock: FakeClock = new FakeClock()): TestApp {
   const chats = new ChatService({ chats: chatRepo, clock });
   const runs = new RunService({ chats: chatRepo, bridge, sink: hub, clock });
 
+  const providers = new ProviderService({
+    secrets,
+    settings: settingsRepo,
+    gateway: options.gateway ?? new RefusingGateway(),
+    clock,
+    envKey: () => options.envKey,
+    engineModels: () => bridge.listModels(),
+  });
+
   const app = createApp({
     auth,
     settings: new SettingsService(settingsRepo),
     chats,
     runs,
-    bridge,
+    providers,
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
     webDist: WEB_DIST,
   });
 
-  return { app, auth, chats, runs, hub, clock };
+  return { app, auth, chats, runs, providers, secrets, hub, clock };
 }

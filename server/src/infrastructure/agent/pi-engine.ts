@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import type { AgentSession, AgentSessionEvent, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
+import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 
 /**
  * pi as the rest of the server is allowed to see it: open a session, prompt it,
@@ -12,15 +13,21 @@ import type { ModelInfo } from '../../application/ports/agent-bridge.js';
  * bridge -- the CI, the smoke, every test -- never pays to load pi.
  */
 
-/** The one provider v0.1 ships with (popy.spec §15). */
-export const PROVIDER_ID = 'openrouter';
+/** Re-exported so the pi-facing modules read as one vocabulary. */
+export const PROVIDER_ID = OPENROUTER_PROVIDER_ID;
+export { DEFAULT_MODEL_ID };
 
 /**
- * Default model (popy.spec §15). Its price and context window are not repeated
- * here: pi's built-in catalog already carries the row for it (US$3/M in,
- * US$15/M out, 1M context), so pinning a copy would only invite drift.
+ * Popy's own voice, replacing pi's coding-agent persona. Short and neutral on
+ * purpose (Phase 3 plan): what Popy is comes from here, how the user wants it
+ * to behave comes from the custom instructions appended after it.
  */
-export const DEFAULT_MODEL_ID = 'moonshotai/kimi-k3';
+const SYSTEM_PROMPT = [
+  'You are Popy, a personal assistant running on a server the user owns.',
+  'Answer plainly and helpfully, in the language the user writes in.',
+  'You have tools to read and write files and to run commands in your',
+  'workspace; use them when they genuinely help with the request.',
+].join(' ');
 
 export type PiEngineErrorCode = 'provider_not_configured' | 'model_not_available';
 
@@ -46,8 +53,15 @@ export interface PiSession {
   readonly sessionFile: string | undefined;
 }
 
+export interface PiOpenOptions {
+  modelId: string;
+  sessionFile: string | undefined;
+  /** The user's custom instructions, appended to the system prompt. */
+  instructions: string;
+}
+
 export interface PiEngine {
-  open(options: { modelId: string; sessionFile: string | undefined }): Promise<PiSession>;
+  open(options: PiOpenOptions): Promise<PiSession>;
   models(): Promise<ModelInfo[]>;
 }
 
@@ -84,7 +98,7 @@ export class SdkPiEngine implements PiEngine {
 
   constructor(private readonly options: SdkPiEngineOptions) {}
 
-  async open(options: { modelId: string; sessionFile: string | undefined }): Promise<PiSession> {
+  async open(options: PiOpenOptions): Promise<PiSession> {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const runtime = await this.authenticatedRuntime();
 
@@ -111,12 +125,32 @@ export class SdkPiEngine implements PiEngine {
             this.options.workspace,
           );
 
+    // A server has no use for pi's CLI trimmings -- skills, prompt templates,
+    // themes, extensions, context files scavenged from the workspace -- and
+    // every one of them is a way for host state to leak into the prompt. What
+    // the model hears is exactly Popy's prompt plus the user's instructions.
+    const resourceLoader = new sdk.DefaultResourceLoader({
+      cwd: this.options.workspace,
+      agentDir: this.options.agentDir,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      systemPrompt: SYSTEM_PROMPT,
+      ...(options.instructions.length === 0
+        ? {}
+        : { appendSystemPrompt: [options.instructions] }),
+    });
+    await resourceLoader.reload();
+
     const { session } = await sdk.createAgentSession({
       cwd: this.options.workspace,
       agentDir: this.options.agentDir,
       modelRuntime: runtime,
       model,
       sessionManager,
+      resourceLoader,
     });
 
     return new SdkPiSession(session, runtime);
@@ -127,7 +161,12 @@ export class SdkPiEngine implements PiEngine {
     const runtime = await this.modelRuntime();
     return runtime
       .getModels(PROVIDER_ID)
-      .map((model) => ({ id: model.id }))
+      .map((model) => ({
+        id: model.id,
+        name: model.name,
+        context: model.contextWindow,
+        pricing: { input: model.cost.input, output: model.cost.output },
+      }))
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 

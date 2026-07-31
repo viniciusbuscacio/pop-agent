@@ -1,11 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { ChatDTO, MessageDTO } from '@popy/shared';
+import type { ChatDTO, MessageDTO, ModelDTO } from '@popy/shared';
 import type { Chat, ChatSummary, Message } from '../../domain/chat/chat.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
-import type { AgentBridge } from '../../application/ports/agent-bridge.js';
+import type { ModelInfo } from '../../application/ports/agent-bridge.js';
+import type { ProviderService } from '../../application/providers/provider-service.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import type { EventTickets } from './event-tickets.js';
@@ -35,7 +36,7 @@ const sendSchema = z.object({ text: z.string().min(1).max(MAX_MESSAGE_LENGTH) })
 export interface ChatRoutesDeps {
   chats: ChatService;
   runs: RunService;
-  bridge: AgentBridge;
+  providers: ProviderService;
   hub: SseHub;
   tickets: EventTickets;
 }
@@ -114,7 +115,9 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json({ stopped: deps.runs.stopRun(id) });
   });
 
-  routes.get('/models', async (c) => c.json({ models: await deps.bridge.listModels() }));
+  routes.get('/models', async (c) =>
+    c.json({ models: (await deps.providers.models()).map(toModelDto) }),
+  );
 
   /** Trades a session for a short-lived ticket the EventSource URL can carry. */
   routes.post('/events/ticket', (c) => c.json({ ticket: deps.tickets.issue() }));
@@ -183,6 +186,15 @@ function toChatDto(chat: Chat | ChatSummary): ChatDTO {
     createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     preview: 'preview' in chat ? chat.preview : '',
+  };
+}
+
+function toModelDto(model: ModelInfo): ModelDTO {
+  return {
+    id: model.id,
+    ...(model.name === undefined ? {} : { name: model.name }),
+    ...(model.context === undefined ? {} : { context: model.context }),
+    ...(model.pricing === undefined ? {} : { pricing: model.pricing }),
   };
 }
 
