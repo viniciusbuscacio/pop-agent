@@ -7,6 +7,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { FakeClock } from '../../testing/app-fixture.js';
 import { migrate } from '../db/migrate.js';
 import { SqliteArtifactRepo } from '../db/sqlite-artifact-repo.js';
+import { SqliteFolderRepo } from '../db/sqlite-folder-repo.js';
 import { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { FsArtifactStore } from './artifact-store.js';
 import { buildArtifactTools, resolveInWorkspace } from './artifact-tools.js';
@@ -68,6 +69,7 @@ beforeEach(() => {
   seedChat('chat-1');
   artifacts = new ArtifactService({
     repo: new SqliteArtifactRepo(db),
+    folders: new SqliteFolderRepo(db),
     store: new FsArtifactStore(store),
     secretKey: Buffer.from('k'.repeat(32)),
     clock: new FakeClock(),

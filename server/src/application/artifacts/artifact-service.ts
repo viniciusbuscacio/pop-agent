@@ -1,6 +1,8 @@
 import { createArtifact, type Artifact, type ArtifactSource } from '../../domain/artifacts/artifact.js';
+import { createFolder, type Folder } from '../../domain/artifacts/folder.js';
 import type { Clock } from '../ports/clock.js';
 import type { ArtifactRepo, ArtifactVersion } from '../ports/artifact-repo.js';
+import type { FolderRepo } from '../ports/folder-repo.js';
 import type { ArtifactStore } from '../ports/artifact-store.js';
 import {
   buildSignedLink,
@@ -19,6 +21,7 @@ import {
  */
 export interface ArtifactServiceDeps {
   repo: ArtifactRepo;
+  folders: FolderRepo;
   store: ArtifactStore;
   /** Derived link-signing key, from `secret.key` (never a new secret). */
   secretKey: Buffer;
@@ -26,7 +29,10 @@ export interface ArtifactServiceDeps {
 }
 
 export interface NewArtifactInput {
+  /** Empty = uploaded straight into Files, no chat. */
   chatId: string;
+  /** Empty = the root of Files. */
+  folderId?: string;
   name: string;
   mime: string;
   source: ArtifactSource;
@@ -45,7 +51,13 @@ export class ArtifactService {
   create(input: NewArtifactInput, bytes: Buffer): Artifact {
     const now = new Date(this.deps.clock.now()).toISOString();
 
-    const existing = this.findByName(input.chatId, input.name);
+    const existing =
+      input.chatId === ''
+        ? this.deps.repo
+            .listByFolder(input.folderId ?? '')
+            .filter((a) => a.chatId === '' && a.name === input.name)
+            .at(-1)
+        : this.findByName(input.chatId, input.name);
     if (existing !== undefined) {
       // Snapshot the current latest bytes, then overwrite with the new version.
       this.deps.store.archive(existing.chatId, existing.id, existing.version);
@@ -110,6 +122,44 @@ export class ArtifactService {
     const bytes = this.deps.store.read(artifact.chatId, id);
     if (bytes === undefined) return undefined;
     return { artifact, bytes };
+  }
+
+  /** Renames a file's display name. */
+  rename(id: string, name: string): boolean {
+    return this.deps.repo.rename(id, name, new Date(this.deps.clock.now()).toISOString());
+  }
+
+  /** Moves a file to a folder ('' = the root). The folder must exist. */
+  move(id: string, folderId: string): boolean {
+    if (folderId !== '' && this.deps.folders.get(folderId) === undefined) return false;
+    return this.deps.repo.setFolder(id, folderId, new Date(this.deps.clock.now()).toISOString());
+  }
+
+  listFolders(): Folder[] {
+    return this.deps.folders.list();
+  }
+
+  createFolder(name: string): Folder {
+    return this.deps.folders.insert(
+      createFolder(name, new Date(this.deps.clock.now()).toISOString()),
+    );
+  }
+
+  renameFolder(id: string, name: string): boolean {
+    return this.deps.folders.rename(id, name);
+  }
+
+  /**
+   * Deletes a folder AND every file inside it -- records and bytes both; the
+   * UI warns before calling (decision of 31/07).
+   */
+  deleteFolder(id: string): boolean {
+    if (this.deps.folders.get(id) === undefined) return false;
+    for (const artifact of this.deps.repo.listByFolder(id)) {
+      this.deps.repo.delete(artifact.id);
+      this.deps.store.remove(artifact.chatId, artifact.id);
+    }
+    return this.deps.folders.delete(id);
   }
 
   /** Removes the record and the bytes. Returns false if there was no such id. */

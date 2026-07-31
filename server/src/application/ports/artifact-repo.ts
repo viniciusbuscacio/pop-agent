@@ -23,8 +23,14 @@ export interface ArtifactRepo {
   insert(artifact: Artifact): Artifact;
   get(id: string): Artifact | undefined;
   listByChat(chatId: string): Artifact[];
-  /** Every artifact, newest first -- the cross-chat Artifacts view. */
+  /** Every artifact, newest first -- the cross-chat Files view. */
   listAll(): Artifact[];
+  /** The files sitting in one folder ('' = the root). */
+  listByFolder(folderId: string): Artifact[];
+  /** Renames the display name. */
+  rename(id: string, name: string, at: string): boolean;
+  /** Moves the file to a folder ('' = the root). */
+  setFolder(id: string, folderId: string, at: string): boolean;
   delete(id: string): boolean;
   /** Appends a version-history row. */
   addVersion(id: string, version: ArtifactVersion): void;

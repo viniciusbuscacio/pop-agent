@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { ArtifactRepo } from '../application/ports/artifact-repo.js';
+import type { FolderRepo } from '../application/ports/folder-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
@@ -13,6 +14,7 @@ import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
+import { SqliteFolderRepo } from './db/sqlite-folder-repo.js';
 import { SqliteArtifactRepo } from './db/sqlite-artifact-repo.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
@@ -34,6 +36,7 @@ export interface AppContext {
   secrets: SecretsRepo;
   chats: ChatRepo;
   artifacts: ArtifactRepo;
+  folders: FolderRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
@@ -59,6 +62,7 @@ export function bootstrap(): AppContext {
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),
     artifacts: new SqliteArtifactRepo(db),
+    folders: new SqliteFolderRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),

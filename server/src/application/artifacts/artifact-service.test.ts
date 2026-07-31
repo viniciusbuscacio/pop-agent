@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeClock } from '../../testing/app-fixture.js';
 import { migrate } from '../../infrastructure/db/migrate.js';
 import { SqliteArtifactRepo } from '../../infrastructure/db/sqlite-artifact-repo.js';
+import { SqliteFolderRepo } from '../../infrastructure/db/sqlite-folder-repo.js';
 import { FsArtifactStore } from '../../infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './artifact-service.js';
 
@@ -32,6 +33,7 @@ beforeEach(() => {
   store = new FsArtifactStore(root);
   service = new ArtifactService({
     repo: new SqliteArtifactRepo(db),
+    folders: new SqliteFolderRepo(db),
     store,
     secretKey: KEY,
     clock: new FakeClock(),

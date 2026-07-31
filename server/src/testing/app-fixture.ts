@@ -21,6 +21,7 @@ import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteArtifactRepo } from '../infrastructure/db/sqlite-artifact-repo.js';
+import { SqliteFolderRepo } from '../infrastructure/db/sqlite-folder-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
@@ -177,6 +178,7 @@ export function createTestApp(
   const settings = new SettingsService(settingsRepo);
   const artifacts = new ArtifactService({
     repo: new SqliteArtifactRepo(db),
+    folders: new SqliteFolderRepo(db),
     store: new FsArtifactStore(mkdtempSync(join(tmpdir(), 'popy-test-artifacts-'))),
     secretKey: Buffer.from('test-artifact-signing-key-000000'),
     clock,

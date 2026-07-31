@@ -12,8 +12,13 @@ import type { ArtifactStore } from '../../application/ports/artifact-store.js';
 export class FsArtifactStore implements ArtifactStore {
   constructor(private readonly root: string) {}
 
+  /** Files without a chat live under `_files/` -- a chat id never starts with `_`. */
+  private dirOf(chatId: string): string {
+    return chatId === '' ? '_files' : chatId;
+  }
+
   write(chatId: string, artifactId: string, bytes: Buffer): void {
-    const dir = join(this.root, chatId);
+    const dir = join(this.root, this.dirOf(chatId));
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeFileSync(this.pathOf(chatId, artifactId), bytes, { mode: 0o600 });
   }
@@ -27,7 +32,7 @@ export class FsArtifactStore implements ArtifactStore {
   }
 
   pathOf(chatId: string, artifactId: string): string {
-    return join(this.root, chatId, artifactId);
+    return join(this.root, this.dirOf(chatId), artifactId);
   }
 
   archive(chatId: string, artifactId: string, version: number): void {
@@ -39,7 +44,7 @@ export class FsArtifactStore implements ArtifactStore {
   }
 
   pathOfVersion(chatId: string, artifactId: string, version: number): string {
-    return join(this.root, chatId, `${artifactId}.v${String(version)}`);
+    return join(this.root, this.dirOf(chatId), `${artifactId}.v${String(version)}`);
   }
 
   remove(chatId: string, artifactId: string): void {
@@ -47,7 +52,7 @@ export class FsArtifactStore implements ArtifactStore {
   }
 
   removeChat(chatId: string): void {
-    safeRemove(join(this.root, chatId));
+    safeRemove(join(this.root, this.dirOf(chatId)));
   }
 }
 

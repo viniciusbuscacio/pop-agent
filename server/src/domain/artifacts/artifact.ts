@@ -11,7 +11,10 @@ export type ArtifactSource = 'agent' | 'upload';
 
 export interface Artifact {
   id: string;
+  /** Empty when the file was uploaded straight into Files, not a chat. */
   chatId: string;
+  /** Empty means the root of Files. */
+  folderId: string;
   /** The original or display name, kept as the user's own (not a base62 name). */
   name: string;
   mime: string;
@@ -24,6 +27,7 @@ export interface Artifact {
 
 export interface NewArtifact {
   chatId: string;
+  folderId?: string;
   name: string;
   mime: string;
   size: number;
@@ -34,6 +38,7 @@ export function createArtifact(input: NewArtifact, now: string): Artifact {
   return {
     id: entityId('file'),
     chatId: input.chatId,
+    folderId: input.folderId ?? '',
     name: input.name,
     mime: input.mime,
     size: input.size,

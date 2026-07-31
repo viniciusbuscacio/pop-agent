@@ -70,6 +70,7 @@ const artifactsDir = ensureArtifactsDir(context.dataDir);
 // Built before the bridge so the pi engine can hand the agent save_artifact.
 const artifacts = new ArtifactService({
   repo: context.artifacts,
+  folders: context.folders,
   store: new FsArtifactStore(artifactsDir),
   secretKey: context.secretKey,
   clock: systemClock,

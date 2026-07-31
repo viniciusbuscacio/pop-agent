@@ -146,13 +146,27 @@ export interface SkillsResponse {
  */
 export interface ArtifactDTO {
   id: string;
+  /** Empty when the file was uploaded straight into Files. */
   chatId: string;
+  /** Empty means the root of Files. */
+  folderId: string;
   name: string;
   mime: string;
   size: number;
   version: number;
   source: 'agent' | 'upload';
   createdAt: string;
+}
+
+/** A folder in Files (flat tree). */
+export interface FolderDTO {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface FoldersResponse {
+  folders: FolderDTO[];
 }
 
 export interface ArtifactsResponse {

@@ -17,7 +17,8 @@ function isPrimaryKeyCollision(error: unknown): boolean {
 
 interface ArtifactRow {
   id: string;
-  chat_id: string;
+  chat_id: string | null;
+  folder_id: string | null;
   name: string;
   mime: string;
   size: number;
@@ -34,15 +35,16 @@ export class SqliteArtifactRepo implements ArtifactRepo {
   insert(artifact: Artifact): Artifact {
     const insert = this.db.prepare(
       `INSERT INTO artifacts
-         (id, chat_id, name, mime, size, version, source, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, chat_id, folder_id, name, mime, size, version, source, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = artifact;
     for (let attempt = 0; ; attempt += 1) {
       try {
         insert.run(
           current.id,
-          current.chatId,
+          current.chatId === '' ? null : current.chatId,
+          current.folderId === '' ? null : current.folderId,
           current.name,
           current.mime,
           current.size,
@@ -78,6 +80,35 @@ export class SqliteArtifactRepo implements ArtifactRepo {
       .prepare('SELECT * FROM artifacts ORDER BY created_at DESC, rowid DESC')
       .all() as ArtifactRow[];
     return rows.map(toArtifact);
+  }
+
+  listByFolder(folderId: string): Artifact[] {
+    const rows = (
+      folderId === ''
+        ? this.db
+            .prepare('SELECT * FROM artifacts WHERE folder_id IS NULL ORDER BY created_at DESC, rowid DESC')
+            .all()
+        : this.db
+            .prepare('SELECT * FROM artifacts WHERE folder_id = ? ORDER BY created_at DESC, rowid DESC')
+            .all(folderId)
+    ) as ArtifactRow[];
+    return rows.map(toArtifact);
+  }
+
+  rename(id: string, name: string, at: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE artifacts SET name = ?, updated_at = ? WHERE id = ?')
+        .run(name, at, id).changes > 0
+    );
+  }
+
+  setFolder(id: string, folderId: string, at: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE artifacts SET folder_id = ?, updated_at = ? WHERE id = ?')
+        .run(folderId === '' ? null : folderId, at, id).changes > 0
+    );
   }
 
   delete(id: string): boolean {
@@ -124,7 +155,8 @@ export class SqliteArtifactRepo implements ArtifactRepo {
 function toArtifact(row: ArtifactRow): Artifact {
   return {
     id: row.id,
-    chatId: row.chat_id,
+    chatId: row.chat_id ?? '',
+    folderId: row.folder_id ?? '',
     name: row.name,
     mime: row.mime,
     size: row.size,
