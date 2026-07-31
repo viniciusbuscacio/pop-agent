@@ -96,6 +96,8 @@ class ScriptedSession implements PiSession {
   /** Emitted instead of the script when the run is aborted mid-flight. */
   onPrompt: (() => Promise<void>) | undefined;
   readonly prompts: string[] = [];
+  readonly promptImages: (import('./pi-engine.js').PiImage[] | undefined)[] = [];
+  supportsImages = false;
   readonly models: string[] = [];
   disposed = false;
   sessionFile: string | undefined = '/data/sessions/chat.jsonl';
@@ -112,8 +114,9 @@ class ScriptedSession implements PiSession {
     this.listener?.(event);
   }
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, images?: import('./pi-engine.js').PiImage[]): Promise<void> {
     this.prompts.push(text);
+    this.promptImages.push(images);
     if (this.onPrompt !== undefined) {
       await this.onPrompt();
       return;
@@ -514,5 +517,51 @@ describe('attachments', () => {
     await run(onEvent);
 
     expect(engine.sessions[0]?.prompts[0]).toBe('hello');
+  });
+
+  it('sends image attachments to a multimodal model', async () => {
+    engine.next.supportsImages = true;
+    const { onEvent } = collect();
+
+    await bridge.run({
+      chatId: CHAT,
+      prompt: 'what is in this image',
+      model: '',
+      attachments: [
+        {
+          name: 'pic.png',
+          type: 'image/png',
+          dataUri: `data:image/png;base64,${Buffer.from([1, 2, 3]).toString('base64')}`,
+        },
+      ],
+      onEvent,
+      signal: new AbortController().signal,
+    });
+
+    const images = engine.sessions[0]?.promptImages[0];
+    expect(images).toHaveLength(1);
+    expect(images?.[0]).toMatchObject({ mimeType: 'image/png' });
+  });
+
+  it('withholds images from a text-only model', async () => {
+    engine.next.supportsImages = false;
+    const { onEvent } = collect();
+
+    await bridge.run({
+      chatId: CHAT,
+      prompt: 'x',
+      model: '',
+      attachments: [
+        {
+          name: 'pic.png',
+          type: 'image/png',
+          dataUri: `data:image/png;base64,${Buffer.from([1]).toString('base64')}`,
+        },
+      ],
+      onEvent,
+      signal: new AbortController().signal,
+    });
+
+    expect(engine.sessions[0]?.promptImages[0]).toBeUndefined();
   });
 });

@@ -7,6 +7,11 @@ normative history.
 
 ### Added
 
+- **Multimodal image input** (RF-014): when the conversation's model accepts
+  images, image attachments are sent to the model inline instead of only being
+  saved to the workspace. Gated on the model's declared input modalities, so a
+  text-only model (the default) is untouched and still reads files with its
+  tools.
 - **Artifact versioning and history** (RF-018/019): re-saving a file under the
   same name in the same chat keeps the previous bytes as a numbered version.
   `GET /v1/artifacts/:id/versions` lists the history; each version downloads

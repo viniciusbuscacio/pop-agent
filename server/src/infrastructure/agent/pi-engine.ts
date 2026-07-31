@@ -78,10 +78,19 @@ export interface ToolGuard {
   ): Promise<{ block: boolean; reason?: string }>;
 }
 
+/** An image handed to a multimodal model as input (popy.spec §14, RF-014). */
+export interface PiImage {
+  /** Base64 (no data-URI prefix). */
+  data: string;
+  mimeType: string;
+}
+
 /** One conversation's live pi session. */
 export interface PiSession {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
-  prompt(text: string): Promise<void>;
+  prompt(text: string, images?: PiImage[]): Promise<void>;
+  /** Whether the current model accepts image input (popy.spec §14, RF-014). */
+  readonly supportsImages: boolean;
   abort(): Promise<void>;
   setModel(modelId: string): Promise<void>;
   /** Sets (or clears) the guard pi consults around each tool call. */
@@ -266,7 +275,7 @@ export class SdkPiEngine implements PiEngine {
       ...(customTools.length === 0 ? {} : { customTools }),
     });
 
-    return new SdkPiSession(session, runtime, guardSlot);
+    return new SdkPiSession(session, runtime, guardSlot, model.input.includes('image'));
   }
 
   /**
@@ -360,6 +369,7 @@ class SdkPiSession implements PiSession {
     private readonly session: AgentSession,
     private readonly runtime: ModelRuntime,
     private readonly guardSlot: { current: ToolGuard | undefined },
+    public supportsImages: boolean = false,
   ) {}
 
   setGuard(guard: ToolGuard | undefined): void {
@@ -370,8 +380,17 @@ class SdkPiSession implements PiSession {
     return this.session.subscribe(listener);
   }
 
-  prompt(text: string): Promise<void> {
-    return this.session.prompt(text);
+  prompt(text: string, images?: PiImage[]): Promise<void> {
+    if (images === undefined || images.length === 0) return this.session.prompt(text);
+    // Only reached when the model accepts image input (the bridge checks
+    // supportsImages first): send the images inline as multimodal content.
+    return this.session.prompt(text, {
+      images: images.map((image) => ({
+        type: 'image' as const,
+        data: image.data,
+        mimeType: image.mimeType,
+      })),
+    });
   }
 
   abort(): Promise<void> {
@@ -383,6 +402,7 @@ class SdkPiSession implements PiSession {
     if (model === undefined) {
       throw new PiEngineError('model_not_available', `${PROVIDER_ID} has no model "${modelId}"`);
     }
+    this.supportsImages = model.input.includes('image');
     await this.session.setModel(model);
   }
 

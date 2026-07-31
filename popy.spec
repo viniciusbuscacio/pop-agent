@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.20 — 2026-07-31.
+Version 1.21 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -518,6 +518,11 @@ events from stale runs.
   single-user install where the user is implied. `GET /v1/artifacts/:id/versions`
   lists the history; a specific version downloads through its own signed link
   (`/artifacts/:id/versions/:n/download`, the version folded into the signature).
+- **Multimodal input** (RF-014): when the conversation's model accepts image
+  input (`model.input` includes `image`), image attachments go straight to the
+  model as inline content, not just saved to the workspace. Text-only models
+  never receive images — they keep the file + tools path (RF-015 fallback), so
+  the default model is unaffected.
 - The authenticated half (`/v1`) lists a chat's artifacts, uploads a file into
   a chat (`POST /v1/chats/:chatId/artifacts`, multipart, 25 MB cap), mints a
   link and deletes one. The **artifacts screen** is a full-screen route

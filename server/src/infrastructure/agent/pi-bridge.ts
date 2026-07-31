@@ -15,6 +15,7 @@ import {
   PROVIDER_ID,
   PiEngineError,
   type PiEngine,
+  type PiImage,
   type PiSession,
 } from './pi-engine.js';
 import { TaintGuard } from './tool-taint.js';
@@ -99,6 +100,10 @@ export class PiAgentBridge implements AgentBridge {
     // extracts text server-side instead; an agent with a read tool need not.
     // Then the Skill Router prepends the few skills relevant to this message.
     const prompt = await this.withSkills(this.withAttachments(request), request.prompt);
+    // Image attachments also go straight to the model when it is multimodal
+    // (popy.spec §14, RF-014); otherwise they stay files the agent reads with
+    // its tools (RF-015 fallback).
+    const images = imagesFor(request);
 
     let entry: CachedSession;
     try {
@@ -139,7 +144,7 @@ export class PiAgentBridge implements AgentBridge {
     signal.addEventListener('abort', onAbort, { once: true });
 
     try {
-      await entry.session.prompt(prompt);
+      await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
       translator.finish(signal.aborted);
     } catch (error) {
       translator.fail(signal.aborted ? 'aborted' : errorCode(error), messageOf(error));
@@ -474,6 +479,23 @@ class RunTranslator {
       cost: (this.total?.cost ?? 0) + usage.cost,
     };
   }
+}
+
+/**
+ * The image attachments as multimodal content: base64 without the data-URI
+ * prefix, plus the mime type (popy.spec §14, RF-014). Non-images, and payloads
+ * that are not well-formed data URIs, are skipped -- they still land on disk
+ * via saveAttachment for the agent's tools.
+ */
+function imagesFor(request: AgentRunRequest): PiImage[] {
+  const images: PiImage[] = [];
+  for (const attachment of request.attachments) {
+    if (!attachment.type.startsWith('image/')) continue;
+    const match = /^data:[^;,]*;base64,(.+)$/.exec(attachment.dataUri);
+    if (match?.[1] === undefined) continue;
+    images.push({ data: match[1], mimeType: attachment.type });
+  }
+  return images;
 }
 
 /**
