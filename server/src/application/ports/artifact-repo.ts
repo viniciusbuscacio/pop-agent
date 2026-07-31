@@ -23,6 +23,8 @@ export interface ArtifactRepo {
   insert(artifact: Artifact): Artifact;
   get(id: string): Artifact | undefined;
   listByChat(chatId: string): Artifact[];
+  /** Every artifact, newest first -- the cross-chat Artifacts view. */
+  listAll(): Artifact[];
   delete(id: string): boolean;
   /** Appends a version-history row. */
   addVersion(id: string, version: ArtifactVersion): void;

@@ -34,6 +34,11 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
     } satisfies ArtifactsResponse),
   );
 
+  // Every artifact across every chat -- the Artefacts segment of the home list.
+  routes.get('/artifacts', (c) =>
+    c.json({ artifacts: deps.artifacts.listAll().map(toDto) } satisfies ArtifactsResponse),
+  );
+
   // Upload a file straight into a conversation (RF-009). Multipart, so the
   // bytes are not base64-inflated across the wire.
   routes.post('/chats/:chatId/artifacts', async (c) => {

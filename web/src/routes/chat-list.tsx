@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import type { ChatDTO } from '@popy/shared';
+import type { ArtifactDTO, ChatDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { relativeTime } from '../lib/time';
+import { artifactsService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
-import { Button } from '../ui/controls';
+import { Button, Segmented } from '../ui/controls';
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
@@ -15,8 +16,10 @@ export function ChatList() {
   const loadArchived = useChatStore((state) => state.loadArchived);
   const createChat = useChatStore((state) => state.createChat);
 
+  const [segment, setSegment] = useState<'chats' | 'artifacts'>('chats');
   const [filter, setFilter] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const [viewArchived, setViewArchived] = useState(false);
+  const [listMenu, setListMenu] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -24,9 +27,21 @@ export function ChatList() {
     void loadArchived();
   }, [loadChats, loadArchived]);
 
-  const visible = chats.filter((chat) =>
-    `${chat.title} ${chat.preview}`.toLowerCase().includes(filter.toLowerCase()),
-  );
+  const searching = filter.trim().length > 0;
+  const match = (chat: ChatDTO): boolean =>
+    `${chat.title} ${chat.preview}`.toLowerCase().includes(filter.toLowerCase());
+
+  // Browsing shows one list at a time; searching looks across both, with a
+  // badge telling the archived rows apart (Vinicius, 31/07 -- no pinned line,
+  // no collapsible footer).
+  const rows: { chat: ChatDTO; archived: boolean }[] = searching
+    ? [
+        ...chats.filter(match).map((chat) => ({ chat, archived: false })),
+        ...archived.filter(match).map((chat) => ({ chat, archived: true })),
+      ]
+    : viewArchived
+      ? archived.map((chat) => ({ chat, archived: true }))
+      : chats.map((chat) => ({ chat, archived: false }));
 
   async function startChat(): Promise<void> {
     setCreating(true);
@@ -57,56 +72,169 @@ export function ChatList() {
         <Button type="button" data-testid="shell-new-chat" disabled={creating} onClick={() => void startChat()}>
           {t('shell.newChat')}
         </Button>
+
+        <div className="relative flex items-center gap-2">
+          <div className="flex-1">
+            <Segmented<'chats' | 'artifacts'>
+              ariaLabel={t('shell.segments')}
+              value={segment}
+              onChange={(value) => {
+                setSegment(value);
+                setListMenu(false);
+              }}
+              options={[
+                { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
+                { value: 'artifacts', label: t('shell.segArtifacts'), testId: 'segment-artifacts' },
+              ]}
+            />
+          </div>
+          {segment === 'chats' ? (
+            <button
+              type="button"
+              data-testid="list-menu"
+              aria-label={t('shell.listMenu')}
+              onClick={() => setListMenu((value) => !value)}
+              className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+            >
+              ⋯
+            </button>
+          ) : null}
+          {listMenu ? (
+            <div
+              role="menu"
+              className="absolute top-10 right-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+            >
+              <MenuItem
+                testId="list-view-archived"
+                label={viewArchived ? t('shell.viewActive') : t('shell.viewArchived', { count: archived.length })}
+                onClick={() => {
+                  setListMenu(false);
+                  setViewArchived((value) => !value);
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+
         <input
           data-testid="chat-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder={t('shell.filter')}
+          placeholder={segment === 'chats' ? t('shell.filter') : t('shell.filterArtifacts')}
           aria-label={t('shell.filter')}
           className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {visible.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('shell.noChats')}</p>
-        ) : (
-          <ul data-testid="chat-list">
-            {visible.map((chat) => (
-              <ChatRow key={chat.id} chat={chat} />
-            ))}
-          </ul>
-        )}
-
-        {archived.length > 0 ? (
-          <div className="border-t border-[var(--border)]">
-            <button
-              type="button"
-              data-testid="archived-toggle"
-              aria-expanded={showArchived}
-              onClick={() => setShowArchived((value) => !value)}
-              className="w-full px-4 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+      {segment === 'artifacts' ? (
+        <AllArtifacts filter={filter} />
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {viewArchived && !searching ? (
+            <p
+              data-testid="archived-heading"
+              className="px-4 pt-2 pb-1 text-xs text-[var(--muted)]"
             >
-              {showArchived ? '▾' : '▸'} {t('shell.archived', { count: archived.length })}
-            </button>
-            {showArchived ? (
-              <ul data-testid="archived-list">
-                {archived.map((chat) => (
-                  <ChatRow key={chat.id} chat={chat} archived />
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+              {t('shell.archived', { count: archived.length })}
+            </p>
+          ) : null}
+          {rows.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('shell.noChats')}</p>
+          ) : (
+            <ul data-testid="chat-list">
+              {rows.map(({ chat, archived: isArchived }) => (
+                <ChatRow
+                  key={chat.id}
+                  chat={chat}
+                  archived={isArchived}
+                  badge={searching && isArchived}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </>
   );
+}
+
+/** The Artefacts segment: every artifact, every chat, newest first. */
+function AllArtifacts({ filter }: { filter: string }) {
+  const navigate = useNavigate();
+  const chats = useChatStore((state) => state.chats);
+  const archived = useChatStore((state) => state.archived);
+  const [artifacts, setArtifacts] = useState<ArtifactDTO[] | undefined>(undefined);
+
+  useEffect(() => {
+    void artifactsService
+      .listAll()
+      .then(({ artifacts: all }) => setArtifacts(all))
+      .catch(() => setArtifacts([]));
+  }, []);
+
+  const titles = new Map([...chats, ...archived].map((chat) => [chat.id, chat.title]));
+  const visible = (artifacts ?? []).filter((artifact) =>
+    artifact.name.toLowerCase().includes(filter.toLowerCase()),
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {artifacts === undefined ? null : visible.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+          {t('shell.noArtifacts')}
+        </p>
+      ) : (
+        <ul data-testid="all-artifacts">
+          {visible.map((artifact) => (
+            <li key={artifact.id}>
+              <button
+                type="button"
+                data-testid="artifact-row"
+                onClick={() => navigate(`/chat/${artifact.chatId}/artifacts`)}
+                className="flex w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium">
+                    {artifact.name}
+                    {artifact.version > 1 ? (
+                      <span className="ml-1 text-xs text-[var(--muted)]">v{artifact.version}</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--muted)]">
+                    {relativeTime(artifact.createdAt)}
+                  </span>
+                </div>
+                <span className="truncate text-xs text-[var(--muted)]">
+                  {titles.get(artifact.chatId) ?? artifact.chatId} · {formatSize(artifact.size)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${String(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** How far a finger must travel before the swipe action fires. */
 const SWIPE_TRIGGER_PX = 72;
 
-function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean }) {
+function ChatRow({
+  chat,
+  archived = false,
+  badge = false,
+}: {
+  chat: ChatDTO;
+  archived?: boolean;
+  /** Marks an archived row inside mixed search results. */
+  badge?: boolean;
+}) {
   const rename = useChatStore((state) => state.rename);
   const setArchived = useChatStore((state) => state.setArchived);
   const remove = useChatStore((state) => state.remove);
@@ -250,7 +378,17 @@ function ChatRow({ chat, archived = false }: { chat: ChatDTO; archived?: boolean
         }
       >
         <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm font-medium">{chat.title}</span>
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="truncate text-sm font-medium">{chat.title}</span>
+            {badge ? (
+              <span
+                data-testid="archived-badge"
+                className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]"
+              >
+                {t('shell.archivedBadge')}
+              </span>
+            ) : null}
+          </span>
           <span className="shrink-0 text-xs text-[var(--muted)]">{relativeTime(chat.updatedAt)}</span>
         </div>
         <span className="truncate text-xs text-[var(--muted)]">

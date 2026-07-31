@@ -88,6 +88,11 @@ export class ArtifactService {
     return this.deps.repo.listByChat(chatId);
   }
 
+  /** Every artifact across every chat, newest first. */
+  listAll(): Artifact[] {
+    return this.deps.repo.listAll();
+  }
+
   get(id: string): Artifact | undefined {
     return this.deps.repo.get(id);
   }

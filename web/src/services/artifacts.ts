@@ -7,6 +7,11 @@ export const artifactsService = {
     return apiRequest<ArtifactsResponse>(`/chats/${chatId}/artifacts`);
   },
 
+  /** Every artifact across every chat, newest first. */
+  listAll(): Promise<ArtifactsResponse> {
+    return apiRequest<ArtifactsResponse>('/artifacts');
+  },
+
   upload(chatId: string, file: File): Promise<ArtifactDTO> {
     const form = new FormData();
     form.append('file', file);

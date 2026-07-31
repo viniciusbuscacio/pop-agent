@@ -73,6 +73,13 @@ export class SqliteArtifactRepo implements ArtifactRepo {
     return rows.map(toArtifact);
   }
 
+  listAll(): Artifact[] {
+    const rows = this.db
+      .prepare('SELECT * FROM artifacts ORDER BY created_at DESC, rowid DESC')
+      .all() as ArtifactRow[];
+    return rows.map(toArtifact);
+  }
+
   delete(id: string): boolean {
     return this.db.prepare('DELETE FROM artifacts WHERE id = ?').run(id).changes > 0;
   }
