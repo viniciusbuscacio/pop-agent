@@ -14,6 +14,7 @@ import { useUpdatesStore } from '../store/updates';
  */
 export function UpdatePrompt() {
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
 
   useEffect(() => {
@@ -32,24 +33,48 @@ export function UpdatePrompt() {
       data-testid="update-prompt"
       className="fixed top-3 right-3 z-50 flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-sm shadow-lg"
     >
-      <span>{t('update.available')}</span>
-      <button
-        type="button"
-        data-testid="update-reload"
-        onClick={() => void applyUpdate()}
-        className="rounded bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-fg)]"
-      >
-        {t('update.reload')}
-      </button>
-      <button
-        type="button"
-        data-testid="update-dismiss"
-        aria-label={t('update.later')}
-        onClick={() => setNeedsRefresh(false)}
-        className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
-      >
-        ✕
-      </button>
+      {reloading ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent"
+          />
+          <span data-testid="update-reloading" role="status">
+            {t('update.reloading')}
+          </span>
+        </>
+      ) : (
+        <>
+          <span>{t('update.available')}</span>
+          <button
+            type="button"
+            data-testid="update-reload"
+            onClick={() => {
+              // The click answers at once: spinner in, buttons out, and any
+              // extra taps land on nothing while the new version takes over.
+              setReloading(true);
+              void applyUpdate();
+            }}
+            className="rounded bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-fg)]"
+          >
+            {t('update.reload')}
+          </button>
+          <button
+            type="button"
+            data-testid="update-dismiss"
+            aria-label={t('update.later')}
+            onClick={() => setNeedsRefresh(false)}
+            className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
+          >
+            ✕
+          </button>
+        </>
+      )}
+      {reloading ? (
+        <span className="absolute right-0 -bottom-px left-0 h-0.5 overflow-hidden rounded-b-lg">
+          <span className="block h-full w-1/3 animate-[updatebar_1s_ease-in-out_infinite] bg-[var(--accent)]" />
+        </span>
+      ) : null}
     </div>
   );
 }

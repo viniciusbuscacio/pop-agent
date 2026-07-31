@@ -84,3 +84,13 @@ body {
     opacity: 0.25;
   }
 }
+
+/* The update banner's indeterminate progress while the new version loads. */
+@keyframes updatebar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

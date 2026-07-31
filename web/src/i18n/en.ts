@@ -216,6 +216,7 @@ export const en = {
   'shell.viewActive': 'View active chats',
   'shell.archivedBadge': 'archived',
   'shell.filterFiles': 'Search files',
+  'update.reloading': 'Updating…',
   'files.none': 'No files yet.',
   'files.emptyFolder': 'This folder is empty.',
   'files.rootCrumb': 'Files',
