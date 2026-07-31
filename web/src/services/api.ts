@@ -49,6 +49,8 @@ export async function apiRequest<T>(
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
   if (renewed !== null && renewed.length > 0) session.refresh(renewed);
 
+  // A 204 (every DELETE) has no body to parse.
+  if (response.status === 204) return undefined as T;
   if (response.ok) return (await response.json()) as T;
 
   const error = await toApiError(response);

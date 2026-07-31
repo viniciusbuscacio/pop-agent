@@ -5,13 +5,18 @@ import { useChatStore } from './chat';
 
 const send = vi.fn();
 const stop = vi.fn();
+const patch = vi.fn();
 const messagesBody: { value: unknown } = { value: { messages: [] } };
+// What the server would answer after any patch: the two lists, post-change.
+const listBody: { active: unknown[]; archived: unknown[] } = { active: [], archived: [] };
 
 vi.mock('../services/chats', () => ({
   chatsService: {
     send: (chatId: string, text: string) => send(chatId, text) as Promise<unknown>,
     stop: (chatId: string) => stop(chatId) as Promise<unknown>,
-    list: () => Promise.resolve({ chats: [] }),
+    patch: (chatId: string, body: unknown) => patch(chatId, body) as Promise<unknown>,
+    list: (archived = false) =>
+      Promise.resolve({ chats: archived ? listBody.archived : listBody.active }),
     messages: () => Promise.resolve(messagesBody.value),
   },
 }));
@@ -35,8 +40,12 @@ beforeEach(() => {
   useChatStore.getState().reset();
   send.mockReset();
   stop.mockReset();
+  patch.mockReset();
+  patch.mockResolvedValue({});
   send.mockResolvedValue({ runId: RUN, userMessageId: 'msg-0000000000000001' });
   messagesBody.value = { messages: [] };
+  listBody.active = [];
+  listBody.archived = [];
 });
 
 describe('streaming into the live buffer', () => {
@@ -223,5 +232,40 @@ describe('titles', () => {
     apply({ kind: 'title', chatId: CHAT, title: 'Deploy Server' });
 
     expect(useChatStore.getState().chats[0]?.title).toBe('Deploy Server');
+  });
+});
+
+describe('archiving', () => {
+  const chat = {
+    id: CHAT,
+    title: 'A chat',
+    model: '',
+    archived: false,
+    createdAt: '',
+    updatedAt: '',
+    preview: '',
+  };
+
+  it('archive moves the chat from the main list to the archived one', async () => {
+    useChatStore.setState({ chats: [chat] });
+    listBody.active = [];
+    listBody.archived = [{ ...chat, archived: true }];
+
+    await useChatStore.getState().setArchived(CHAT, true);
+
+    expect(patch).toHaveBeenCalledWith(CHAT, { archived: true });
+    expect(useChatStore.getState().chats).toEqual([]);
+    expect(useChatStore.getState().archived.map((entry) => entry.id)).toEqual([CHAT]);
+  });
+
+  it('unarchive puts the chat back in the main list without a reload', async () => {
+    useChatStore.setState({ archived: [{ ...chat, archived: true }] });
+    listBody.active = [chat];
+    listBody.archived = [];
+
+    await useChatStore.getState().setArchived(CHAT, false);
+
+    expect(useChatStore.getState().chats.map((entry) => entry.id)).toEqual([CHAT]);
+    expect(useChatStore.getState().archived).toEqual([]);
   });
 });

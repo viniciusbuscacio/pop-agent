@@ -171,8 +171,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async setArchived(chatId, archived) {
     await chatsService.patch(chatId, { archived });
-    set((state) => ({ chats: state.chats.filter((chat) => chat.id !== chatId) }));
-    await get().loadArchived();
+    // The chat leaves one list and joins the other, so refresh both.
+    await Promise.all([get().loadChats(), get().loadArchived()]);
   },
 
   async setModel(chatId, model) {

@@ -5,6 +5,20 @@ normative history.
 
 ## Unreleased
 
+### Fixed
+
+- **Every delete from the UI looked dead**: the API layer parsed JSON out of
+  every ok response, but a DELETE answers 204 with no body, so the parse threw
+  after the server had already deleted — the row never left the screen. Chats,
+  artifacts, skills, backups and passkeys were all affected.
+- **Unarchiving a chat made it vanish from both lists** until a reload: the
+  store only removed it from the active list and refreshed the archived one.
+  Both lists refresh now.
+- **The composer showed a scrollbar on a single line**: the auto-grow height
+  missed the 2px of border (border-box) and left the box permanently 2px short
+  of its content. The scrollbar now appears only once the composer hits its
+  one-third-of-the-screen cap, like aw's.
+
 ### Added
 
 - **Multimodal image input** (RF-014): when the conversation's model accepts

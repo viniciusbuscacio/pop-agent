@@ -61,9 +61,16 @@ export function Composer({
   useEffect(() => {
     const element = area.current;
     if (element === null) return;
-    // Grow with the content, but never past a third of the screen.
+    // Grow with the content, but never past a third of the screen. scrollHeight
+    // excludes the border, which height (border-box) includes — without adding
+    // it back the box sits 2px short and a scrollbar shows on a single line.
     element.style.height = 'auto';
-    element.style.height = `${String(Math.min(element.scrollHeight, window.innerHeight / 3))}px`;
+    const border = element.offsetHeight - element.clientHeight;
+    const wanted = element.scrollHeight + border;
+    const max = window.innerHeight / 3;
+    element.style.height = `${String(Math.min(wanted, max))}px`;
+    // The scrollbar belongs only to the capped state, like aw's composer.
+    element.style.overflowY = wanted > max ? 'auto' : 'hidden';
   }, [text]);
 
   function persist(value: string): void {
