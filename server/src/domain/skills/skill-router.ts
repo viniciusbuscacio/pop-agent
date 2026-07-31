@@ -14,10 +14,21 @@ export interface RouteOptions {
   topK?: number;
   /** A skill below this score is not relevant enough to include. */
   minScore?: number;
+  /**
+   * Optional embeddings (popy.spec §8): the message's vector and each skill's,
+   * in the same order as `skills`. When present, a skill's semantic similarity
+   * is blended with its lexical score, so a request phrased differently from
+   * the skill's description still routes -- "help me cook dinner" reaching a
+   * "recipes" skill it shares no words with.
+   */
+  messageVector?: Float32Array;
+  skillVectors?: (Float32Array | undefined)[];
 }
 
 const DEFAULT_TOP_K = 3;
 const DEFAULT_MIN_SCORE = 1;
+/** A perfect semantic match is worth this much lexical score in the blend. */
+const SEMANTIC_WEIGHT = 3;
 
 const STOP_WORDS = new Set([
   'a', 'an', 'and', 'the', 'to', 'of', 'in', 'on', 'for', 'is', 'are', 'be', 'do', 'does',
@@ -51,6 +62,13 @@ export function selectSkills(
       const seen = df.get(token) ?? total;
       score += Math.log(1 + total / seen);
     }
+    // Blend in semantic similarity when vectors are available. Cosine is in
+    // [-1, 1]; only a positive, meaningful match adds to the lexical score.
+    const skillVector = options.skillVectors?.[index];
+    if (options.messageVector !== undefined && skillVector !== undefined) {
+      const similarity = cosine(options.messageVector, skillVector);
+      if (similarity > 0.75) score += (similarity - 0.75) * 4 * SEMANTIC_WEIGHT;
+    }
     return { skill, score };
   });
 
@@ -65,6 +83,14 @@ function skillTokenSet(skill: Skill): Set<string> {
   // The routing signal is the metadata, not the whole body: a skill about
   // invoices should not match every message that says "the".
   return tokenize(`${skill.name} ${skill.name} ${skill.description} ${skill.whenToUse}`);
+}
+
+/** Cosine of two L2-normalized vectors -- a dot product. */
+function cosine(a: Float32Array, b: Float32Array): number {
+  let sum = 0;
+  const length = Math.min(a.length, b.length);
+  for (let i = 0; i < length; i += 1) sum += (a[i] ?? 0) * (b[i] ?? 0);
+  return sum;
 }
 
 function tokenize(text: string): Set<string> {

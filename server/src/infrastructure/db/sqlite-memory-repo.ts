@@ -1,5 +1,6 @@
 import type {
   MemoryChatHit,
+  MemoryMessageRow,
   MemoryRepo,
   MemorySnippet,
   MemoryTranscriptLine,
@@ -64,6 +65,41 @@ export class SqliteMemoryRepo implements MemoryRepo {
     return [...byChat.values()];
   }
 
+  searchRows(query: string, limit: number): MemoryMessageRow[] {
+    const match = toMatchQuery(query);
+    if (match === undefined) return [];
+    const rows = this.db
+      .prepare(
+        `SELECT m.rowid AS rowid, m.chat_id AS chatId, c.title AS title,
+                m.role AS role, m.created_at AS createdAt,
+                snippet(messages_fts, 0, '[', ']', '…', 12) AS snippet
+           FROM messages_fts
+           JOIN messages m ON m.rowid = messages_fts.rowid
+           JOIN chats c ON c.id = m.chat_id
+          WHERE messages_fts MATCH ?
+       ORDER BY bm25(messages_fts)
+          LIMIT ?`,
+      )
+      .all(match, limit) as RowResult[];
+    return rows.map(toMessageRow);
+  }
+
+  rowsByRowid(rowids: number[]): MemoryMessageRow[] {
+    if (rowids.length === 0) return [];
+    const placeholders = rowids.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT m.rowid AS rowid, m.chat_id AS chatId, c.title AS title,
+                m.role AS role, m.created_at AS createdAt,
+                substr(m.content, 1, 160) AS snippet
+           FROM messages m
+           JOIN chats c ON c.id = m.chat_id
+          WHERE m.rowid IN (${placeholders})`,
+      )
+      .all(...rowids) as RowResult[];
+    return rows.map(toMessageRow);
+  }
+
   recentChats(limit: number): RecentChat[] {
     const rows = this.db
       .prepare(
@@ -98,6 +134,26 @@ export class SqliteMemoryRepo implements MemoryRepo {
       createdAt: row.created_at,
     }));
   }
+}
+
+interface RowResult {
+  rowid: number;
+  chatId: string;
+  title: string;
+  role: string;
+  createdAt: string;
+  snippet: string;
+}
+
+function toMessageRow(row: RowResult): MemoryMessageRow {
+  return {
+    rowid: row.rowid,
+    chatId: row.chatId,
+    title: row.title,
+    role: row.role === 'assistant' ? 'assistant' : 'user',
+    createdAt: row.createdAt,
+    snippet: row.snippet,
+  };
 }
 
 function toSnippet(row: HitRow): MemorySnippet {

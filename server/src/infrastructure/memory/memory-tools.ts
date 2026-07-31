@@ -1,7 +1,12 @@
 import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { MemoryRepo } from '../../application/ports/memory-repo.js';
+import type { MemoryChatHit, MemoryRepo } from '../../application/ports/memory-repo.js';
 import { envelope, sanitize } from '../../domain/safety/sanitize.js';
+
+/** The hybrid searcher (FTS5 + embeddings); a plain MemoryRepo also fits. */
+export interface MemorySearcher {
+  search(query: string): Promise<MemoryChatHit[]>;
+}
 
 /**
  * Memory tools (popy.spec §7): the agent reaching back across every past
@@ -22,22 +27,26 @@ function data(body: string, source: string): {
   return { content: [{ type: 'text', text: envelope(sanitize(body).clean, source) }], details: undefined };
 }
 
-export function buildMemoryTools(defineTool: DefineTool, memory: MemoryRepo): ToolDefinition[] {
+export function buildMemoryTools(
+  defineTool: DefineTool,
+  memory: MemoryRepo,
+  searcher: MemorySearcher,
+): ToolDefinition[] {
   const search = defineTool({
     name: 'memory_search',
     label: 'Search past conversations',
     description:
-      'Searches every past conversation for a phrase and returns the chats that mentioned it, with excerpts and their chat ids.',
+      'Searches every past conversation by keyword and by meaning, and returns the chats that match, with excerpts and their chat ids.',
     promptSnippet: 'memory_search(query) — search all past chats',
     parameters: Type.Object({ query: Type.String({ description: 'What to look for' }) }),
-    execute: (_id, params) => {
+    execute: async (_id, params) => {
       const { query } = params as { query: string };
-      const hits = memory.search(query);
+      const hits = await searcher.search(query);
       if (hits.length === 0) {
-        return Promise.resolve({
+        return {
           content: [{ type: 'text' as const, text: '(nothing found in past conversations)' }],
           details: undefined,
-        });
+        };
       }
       const body = hits
         .map((hit) => {
@@ -45,7 +54,7 @@ export function buildMemoryTools(defineTool: DefineTool, memory: MemoryRepo): To
           return `# ${hit.title} (chatId: ${hit.chatId})\n${lines}`;
         })
         .join('\n\n');
-      return Promise.resolve(data(body, 'memory:search'));
+      return data(body, 'memory:search');
     },
   });
 

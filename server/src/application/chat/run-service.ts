@@ -44,6 +44,8 @@ export interface RunDeps {
   llmRuns?: LlmRunsRepo;
   /** Told when a run finished, to push a notification (popy.spec §14). */
   notifyDone?: (info: { chatId: string; failed: boolean }) => void;
+  /** Told after a run's messages are stored, to embed them (popy.spec §7). */
+  indexMessages?: () => void;
 }
 
 interface PendingRun {
@@ -394,6 +396,8 @@ export class RunService {
     }
     // A push so the phone hears about it with the PWA closed (popy.spec §14).
     this.deps.notifyDone?.({ chatId: run.chatId, failed: failure !== undefined });
+    // Embed the new messages for semantic memory, off the reply path (§7).
+    this.deps.indexMessages?.();
 
     this.finish(run);
   }

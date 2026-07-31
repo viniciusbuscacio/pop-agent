@@ -15,7 +15,10 @@ import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
 import { SkillsVault } from './infrastructure/skills/skills-vault.js';
-import { selectSkills } from './domain/skills/skill-router.js';
+import { TransformersEmbedder } from './infrastructure/embeddings/transformers-embedder.js';
+import { HybridMemory } from './application/memory/hybrid-memory.js';
+import { EmbeddingIndexer } from './application/memory/embedding-indexer.js';
+import { SkillRouterService } from './application/skills/skill-router-service.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
@@ -59,6 +62,29 @@ const settings = new SettingsService(context.settings);
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
 // The skills vault (popy.spec §8): seeds the defaults on first boot.
 const skillsVault = new SkillsVault(join(context.dataDir, 'skills'));
+
+// Local embeddings power semantic memory and skill routing (popy.spec §7, §8).
+// Built only for the real agent -- the fake bridge never embeds anything -- and
+// the model downloads on first use into the data directory.
+const embedder =
+  agent === 'pi'
+    ? new TransformersEmbedder({ cacheDir: join(context.dataDir, 'models') })
+    : undefined;
+const hybridMemory = new HybridMemory({
+  memory: context.memory,
+  embeddings: context.embeddings,
+  ...(embedder === undefined ? {} : { embedder }),
+});
+const skillRouter = new SkillRouterService(skillsVault, embedder);
+const indexer =
+  embedder === undefined
+    ? undefined
+    : new EmbeddingIndexer({
+        embeddings: context.embeddings,
+        embedder,
+        onError: (message) => console.warn(`popy embedding: ${message}`),
+      });
+
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The provider seen by the routes: key precedence (secrets over environment),
@@ -77,10 +103,9 @@ function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
     chats: context.chats,
     workspace,
-    // The Skill Router picks the few relevant skills for each message and
-    // returns their bodies for the bridge to prepend (popy.spec §8).
-    skillsFor: (message) =>
-      selectSkills(message, skillsVault.all()).map((selected) => selected.skill.body),
+    // The Skill Router picks the few relevant skills for each message (lexical
+    // + semantic) and returns their bodies for the bridge to prepend (§8).
+    skillsFor: (message) => skillRouter.route(message),
     engine: new SdkPiEngine({
       workspace,
       sessionsDir: join(context.dataDir, 'sessions'),
@@ -92,6 +117,7 @@ function piBridge(): PiAgentBridge {
       apiKey: () => providers.apiKey(),
       notesVault,
       memory: context.memory,
+      memorySearch: hybridMemory,
       userMemory: context.userMemory,
     }),
     defaultModelId: () => settings.read().defaultModel,
@@ -143,6 +169,10 @@ const runs = new RunService({
       })
       .catch(() => undefined);
   },
+  // Embed the run's new messages for semantic memory, off the reply path (§7).
+  indexMessages: () => {
+    void indexer?.backfill();
+  },
   titles: new TitleService({
     chats: context.chats,
     gateway,
@@ -192,4 +222,11 @@ serve({ fetch: app.fetch, port, hostname }, (info) => {
       ? `popy agent bridge: pi (real models, workspace ${workspace})`
       : 'popy agent bridge: fake (scripted; no model is contacted)',
   );
+  // Catch up the embedding index for anything written before this boot, in the
+  // background so nothing waits on the model download (popy.spec §7).
+  if (indexer !== undefined) {
+    const pending = context.embeddings.pendingCount();
+    if (pending > 0) console.log(`popy embedding backfill: ${String(pending)} messages`);
+    void indexer.backfill();
+  }
 });

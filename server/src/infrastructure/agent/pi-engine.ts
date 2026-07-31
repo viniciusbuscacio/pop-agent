@@ -14,7 +14,7 @@ import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/prov
 import type { MemoryRepo } from '../../application/ports/memory-repo.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { envelope } from '../../domain/safety/sanitize.js';
-import { buildMemoryTools } from '../memory/memory-tools.js';
+import { buildMemoryTools, type MemorySearcher } from '../memory/memory-tools.js';
 import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
@@ -121,6 +121,8 @@ export interface SdkPiEngineOptions {
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
   memory?: MemoryRepo;
+  /** Hybrid (FTS5 + embeddings) search behind memory_search. */
+  memorySearch?: MemorySearcher;
   /** The living document the agent keeps about the user; tools + prompt. */
   userMemory?: UserMemoryRepo;
 }
@@ -225,7 +227,11 @@ export class SdkPiEngine implements PiEngine {
         : buildNoteTools(sdk.defineTool, this.options.notesVault)),
       ...(this.options.memory === undefined
         ? []
-        : buildMemoryTools(sdk.defineTool, this.options.memory)),
+        : buildMemoryTools(
+            sdk.defineTool,
+            this.options.memory,
+            this.options.memorySearch ?? { search: (query) => Promise.resolve(this.options.memory!.search(query)) },
+          )),
       ...(this.options.userMemory === undefined
         ? []
         : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),

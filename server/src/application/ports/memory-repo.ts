@@ -32,9 +32,26 @@ export interface MemoryTranscriptLine {
   createdAt: string;
 }
 
+/** One message as the hybrid searcher sees it: enough to rank and to render. */
+export interface MemoryMessageRow {
+  rowid: number;
+  chatId: string;
+  title: string;
+  role: 'user' | 'assistant';
+  createdAt: string;
+  /** A short excerpt, with the lexical hit marked when it came from FTS. */
+  snippet: string;
+}
+
 export interface MemoryRepo {
   /** Full-text search across all messages, grouped by chat. */
   search(query: string, options?: { limit?: number }): MemoryChatHit[];
+
+  /** Lexical (FTS5) message rows, ranked best first, for hybrid fusion. */
+  searchRows(query: string, limit: number): MemoryMessageRow[];
+
+  /** The same rows for a set of message rowids (from the vector search). */
+  rowsByRowid(rowids: number[]): MemoryMessageRow[];
 
   /** The most recently active chats, for the system-prompt catalog. */
   recentChats(limit: number): RecentChat[];

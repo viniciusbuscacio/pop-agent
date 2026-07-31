@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
+import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
 import type { PushRepo } from '../application/ports/push-repo.js';
@@ -12,6 +13,7 @@ import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
+import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
 import { SqliteMemoryRepo } from './db/sqlite-memory-repo.js';
 import { SqlitePushRepo } from './db/sqlite-push-repo.js';
@@ -29,6 +31,7 @@ export interface AppContext {
   chats: ChatRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
+  embeddings: EmbeddingsRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
   push: PushRepo;
@@ -51,6 +54,7 @@ export function bootstrap(): AppContext {
     chats: new SqliteChatRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
+    embeddings: new SqliteEmbeddingsRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
     push: new SqlitePushRepo(db),
