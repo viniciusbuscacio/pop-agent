@@ -250,7 +250,7 @@ export function ChatPage() {
               : 'text-[var(--muted)]'
           }`}
         >
-          💭 {showThinking ? t('chat.thinkingHide') : t('chat.thinkingShow')}
+          💭 {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
         </button>
 
         <select
