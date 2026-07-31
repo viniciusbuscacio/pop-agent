@@ -135,7 +135,10 @@ export function ChatPage() {
               : 'text-[var(--muted)]'
           }`}
         >
-          💭 {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
+          💭{' '}
+          <span className="hidden sm:inline">
+            {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
+          </span>
         </button>
 
         <select
@@ -143,7 +146,7 @@ export function ChatPage() {
           aria-label={t('chat.model')}
           value={chat?.model ?? ''}
           onChange={(event) => void setModel(chatId, event.target.value)}
-          className="max-w-32 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)] sm:max-w-48"
+          className="max-w-28 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)] sm:max-w-48"
         >
           <option value="">{t('chat.defaultModel')}</option>
           {models.map((model) => (
