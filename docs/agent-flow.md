@@ -209,9 +209,52 @@ discovery runs through `DefaultResourceLoader`. Turning pi's own progressive
 disclosure off is therefore a resource-loader decision, not a flag — which is
 what the Skill Router (§8) will need in v0.2.
 
+### 8. Binding a model to our OpenRouter key, without touching `~/.pi`
+
+This was the open question that blocked the bridge. Verified against the
+installed `ModelRuntime` types (pi 0.83.0):
+
+```ts
+const runtime = await ModelRuntime.create({
+  authPath: join(dataDir, 'pi-auth.json'),   // isolated: never ~/.pi/agent/auth.json
+  modelsPath: null,                          // do not read pi's models.json
+  modelsStorePath: join(dataDir, 'pi-models-store.json'),
+  allowModelNetwork: false,                  // no catalog fetch during boot
+});
+
+runtime.registerProvider('openrouter', { models: [KIMI_K3] });
+await runtime.setRuntimeApiKey('openrouter', apiKey);
+
+const model = runtime.getModel('openrouter', 'moonshotai/kimi-k3');
+// → passed to createAgentSession({ model, sessionManager, ... })
+```
+
+Why each piece:
+
+- **`authPath` isolated.** A stored credential outranks the environment
+  variable, so pointing at pi's own auth file would let a credential Popy never
+  set decide which account gets billed. Popy keeps its own.
+- **`modelsPath: null`.** Popy pins the models it offers; inheriting pi's local
+  catalog would make behaviour depend on whatever the operator ran the CLI with.
+- **`allowModelNetwork: false`.** Boot must not depend on OpenRouter being
+  reachable. The live catalog is a Settings-screen action (`runtime.refresh()`),
+  not a startup cost.
+- **`registerProvider` augments the built-in.** The built-in `openrouter`
+  provider ships with no model entries, so base URL and API shape are inherited
+  and Popy supplies only the model row — including pinned pricing, which is what
+  makes `llm_runs` costs reproducible rather than dependent on a catalog that
+  moved.
+
+Verified to exist with these signatures: `ModelRuntime.create(options)`,
+`registerProvider(providerId, config)`, `setRuntimeApiKey(providerId, apiKey)`
+(async), `getModel(providerId, modelId)`, `refresh(options)`.
+
+**To confirm while implementing**: the exact field names of a model entry inside
+`ProviderConfigInput` (declared in `core/provider-composer.ts`) — in particular
+how pricing is spelled, since that is what the cost accounting in §4 reads back.
+
 ### Still open
 
 - Whether `abort()` kills a bash child's process group (2).
 - The exact route for custom instructions through the resource loader (3).
-- How to construct a `Model` bound to an OpenRouter key without going through
-  pi's own auth storage — the piece the bridge needs first.
+- The exact model-entry fields inside `ProviderConfigInput` (see 8).
