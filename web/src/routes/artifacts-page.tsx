@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ArtifactDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { saveFromLink } from '../lib/download';
 import { ApiError } from '../services/api';
 import { artifactsService } from '../services/artifacts';
 import { Button, Card } from '../ui/controls';
@@ -53,7 +54,7 @@ export function ArtifactsPage() {
   async function download(artifact: ArtifactDTO): Promise<void> {
     try {
       const { url } = await artifactsService.link(artifact.id);
-      window.open(url, '_blank', 'noopener');
+      saveFromLink(url);
     } catch {
       setError(t('error.generic'));
     }
