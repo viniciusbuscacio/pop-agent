@@ -297,6 +297,8 @@ export interface AttachmentDTO {
 export interface SendMessageRequest {
   text: string;
   attachments?: AttachmentDTO[];
+  /** Files already in Files, referenced by @ in the composer. */
+  artifactIds?: string[];
 }
 
 /** 202 response of `POST /v1/chats/:id/messages`: the run has started. */

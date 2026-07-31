@@ -33,10 +33,19 @@ export const chatsService = {
     return apiRequest<MessagesResponse>(`/chats/${id}/messages${query}`);
   },
 
-  send(id: string, text: string, attachments: AttachmentDTO[] = []): Promise<SendMessageResponse> {
+  send(
+    id: string,
+    text: string,
+    attachments: AttachmentDTO[] = [],
+    artifactIds: string[] = [],
+  ): Promise<SendMessageResponse> {
     return apiRequest<SendMessageResponse>(`/chats/${id}/messages`, {
       method: 'POST',
-      body: attachments.length > 0 ? { text, attachments } : { text },
+      body: {
+        text,
+        ...(attachments.length > 0 ? { attachments } : {}),
+        ...(artifactIds.length > 0 ? { artifactIds } : {}),
+      },
     });
   },
 

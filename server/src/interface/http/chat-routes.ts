@@ -7,6 +7,7 @@ import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
+import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import type { EventTickets } from './event-tickets.js';
@@ -52,11 +53,14 @@ const sendSchema = z
       )
       .max(MAX_ATTACHMENTS)
       .optional(),
+    /** Files already in Files, referenced by @ in the composer -- no re-upload. */
+    artifactIds: z.array(z.string().min(1).max(60)).max(MAX_ATTACHMENTS).optional(),
   })
   .strict();
 
 export interface ChatRoutesDeps {
   chats: ChatService;
+  artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
   hub: SseHub;
@@ -127,10 +131,25 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const parsed = sendSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
+    // An @-mentioned file joins the run as a normal attachment, resolved
+    // server-side so the bytes never round-trip through the client.
+    const referenced: { name: string; type: string; dataUri: string }[] = [];
+    for (const artifactId of parsed.data.artifactIds ?? []) {
+      const opened = deps.artifacts.read(artifactId);
+      if (opened === undefined) {
+        return apiError(c, 404, 'not_found', `No such file: ${artifactId}`);
+      }
+      referenced.push({
+        name: opened.artifact.name,
+        type: opened.artifact.mime,
+        dataUri: `data:${opened.artifact.mime};base64,${opened.bytes.toString('base64')}`,
+      });
+    }
+
     const result = deps.runs.startRun(
       c.req.param('id'),
       parsed.data.text,
-      parsed.data.attachments ?? [],
+      [...(parsed.data.attachments ?? []), ...referenced],
     );
     if (!result.ok) {
       return result.reason === 'chat_not_found'

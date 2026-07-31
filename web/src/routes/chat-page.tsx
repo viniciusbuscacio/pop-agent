@@ -223,7 +223,7 @@ export function ChatPage() {
         chatId={chatId}
         busy={live !== undefined}
         {...(queued === undefined ? {} : { queuedText: queued.text })}
-        onSend={(text, attachments) => void send(chatId, text, attachments)}
+        onSend={(text, attachments, artifactIds) => void send(chatId, text, attachments, artifactIds)}
         onStop={() => void stop(chatId)}
       />
 

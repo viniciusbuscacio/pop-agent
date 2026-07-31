@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
 
 /**
@@ -28,13 +29,18 @@ export function Composer({
   chatId: string;
   busy: boolean;
   queuedText?: string;
-  onSend: (text: string, attachments: AttachmentDTO[]) => void;
+  onSend: (text: string, attachments: AttachmentDTO[], artifactIds?: string[]) => void;
   onStop: () => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  // @-mentions: files already in Files, attached by reference (no re-upload).
+  const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
+  const [allFiles, setAllFiles] = useState<{ id: string; name: string }[] | undefined>(undefined);
+  const mentionCaret = useRef(0);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -42,11 +48,13 @@ export function Composer({
   // fix): what was typed or attached DURING the recording must survive it.
   const textRef = useRef('');
   const attachmentsRef = useRef<AttachmentDTO[]>([]);
+  const mentionsRef = useRef<{ id: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
   const storageKey = `popy.draft.${chatId}`;
 
   textRef.current = text;
   attachmentsRef.current = attachments;
+  mentionsRef.current = mentions;
 
   useEffect(() => {
     try {
@@ -55,6 +63,8 @@ export function Composer({
       setText('');
     }
     setAttachments([]);
+    setMentions([]);
+    setMentionQuery(undefined);
     setNotice(undefined);
   }, [storageKey]);
 
@@ -82,6 +92,42 @@ export function Composer({
       // storage denied; the draft simply will not survive a reload
     }
   }
+
+  function updateMention(value: string, caret: number): void {
+    const before = value.slice(0, caret);
+    const match = /(?:^|\s)@([^\s@]*)$/.exec(before);
+    if (match?.[1] === undefined) {
+      setMentionQuery(undefined);
+      return;
+    }
+    mentionCaret.current = caret;
+    setMentionQuery(match[1]);
+    if (allFiles === undefined) {
+      void artifactsService
+        .listAll()
+        .then(({ artifacts }) => setAllFiles(artifacts.map((a) => ({ id: a.id, name: a.name }))))
+        .catch(() => setAllFiles([]));
+    }
+  }
+
+  function pickMention(file: { id: string; name: string }): void {
+    const caret = mentionCaret.current;
+    const query = mentionQuery ?? '';
+    const next = `${text.slice(0, caret - query.length)}${file.name} ${text.slice(caret)}`;
+    persist(next);
+    setMentions((current) =>
+      current.some((entry) => entry.id === file.id) ? current : [...current, file],
+    );
+    setMentionQuery(undefined);
+    area.current?.focus();
+  }
+
+  const mentionMatches =
+    mentionQuery === undefined
+      ? []
+      : (allFiles ?? [])
+          .filter((file) => file.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+          .slice(0, 6);
 
   function addFiles(files: FileList | null): void {
     if (files === null) return;
@@ -125,7 +171,8 @@ export function Composer({
       // A voice note is meant to be sent: the transcript (with any typed draft
       // in front of it) goes to the chat automatically (popy.spec §14).
       autoSendRef.current = false;
-      onSend(merged, attachmentsRef.current);
+      onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.id));
+      setMentions([]);
       persist('');
       setAttachments([]);
     } catch {
@@ -205,12 +252,26 @@ export function Composer({
       return;
     }
     if (!canSend) return;
-    onSend(text.trim(), attachments);
+    onSend(text.trim(), attachments, mentions.map((m) => m.id));
     persist('');
     setAttachments([]);
+    setMentions([]);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (mentionQuery !== undefined && mentionMatches.length > 0) {
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        const first = mentionMatches[0];
+        if (first !== undefined) pickMention(first);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMentionQuery(undefined);
+        return;
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       submit();
@@ -246,8 +307,27 @@ export function Composer({
         </p>
       ) : null}
 
-      {attachments.length > 0 ? (
+      {attachments.length > 0 || mentions.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="attachment-tray">
+          {mentions.map((mention) => (
+            <span
+              key={mention.id}
+              data-testid="mention-chip"
+              className="inline-flex max-w-60 items-center gap-1.5 rounded-lg border border-[var(--accent)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
+            >
+              <span className="truncate">@{mention.name}</span>
+              <button
+                type="button"
+                aria-label={t('chat.attachRemove', { name: mention.name })}
+                onClick={() =>
+                  setMentions((current) => current.filter((entry) => entry.id !== mention.id))
+                }
+                className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
           {attachments.map((attachment, index) => (
             <span
               key={`${attachment.name}-${String(index)}`}
@@ -299,17 +379,40 @@ export function Composer({
         </IconButton>
 
         {voice === 'idle' ? (
+          <div className="relative flex-1">
+          {mentionQuery !== undefined && mentionMatches.length > 0 ? (
+            <div
+              data-testid="mention-menu"
+              className="absolute bottom-full left-0 z-20 mb-1 flex max-h-56 w-72 flex-col overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+            >
+              {mentionMatches.map((file) => (
+                <button
+                  key={file.id}
+                  type="button"
+                  data-testid="mention-option"
+                  onClick={() => pickMention(file)}
+                  className="truncate px-3 py-1.5 text-left hover:bg-[var(--hover-overlay)]"
+                >
+                  @{file.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <textarea
             ref={area}
             data-testid="composer-input"
             rows={1}
             value={text}
-            onChange={(event) => persist(event.target.value)}
+            onChange={(event) => {
+              persist(event.target.value);
+              updateMention(event.target.value, event.target.selectionStart ?? event.target.value.length);
+            }}
             onKeyDown={onKeyDown}
             placeholder={t('chat.placeholder')}
             aria-label={t('chat.placeholder')}
-            className="max-h-[33dvh] flex-1 resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+            className="max-h-[33dvh] w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
           />
+          </div>
         ) : (
           <div
             data-testid={voice === 'recording' ? 'voice-recording' : 'voice-transcribing'}
