@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.27 — 2026-07-31.
+Version 1.28 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -240,6 +240,24 @@ with RRF. Three layers, aw's design rewritten:
 3. **Long-chat compaction** — check pi's native auto-compaction first; only
    build our own (`[popy compacted]` summary + recent tail) if pi's isn't
    enough.
+4. **Files awareness** (designed in 1.28; not built yet) — the agent must
+   know *that* a file exists without being handed it. Two halves, same
+   progressive-disclosure move as pinned skills and the recent-chats
+   catalog — presence is cheap, content is on demand:
+   - **Catalog**: a compact list of Files (names + folders, most recent N,
+     inside untrusted-data delimiters — filenames are user data) joins the
+     session instructions; the bridge already reopens a session when that
+     string changes. Names only for now; per-file descriptions wait for a
+     real case that needs them.
+   - **Instinct**: know-thyself gains the rule — an unrecognized name,
+     project or term means `files_search` + `memory_search` *before* the
+     web and before answering "I don't know".
+   Content still enters context only by attachment, @-mention, or the
+   agent's own tools. Explicitly **no per-turn RAG injection** of file
+   chunks: an agent with a real filesystem fetches; it is not fed.
+   Motivated by the OffSchool dialogue (2026-07-31): the answer sat in a
+   filename the agent had no way to see (`popy skills: none` in the log),
+   and it went to the web instead of its own files_search.
 
 ## 8. Skills with local mini-RAG selection ⭐ (the **Skill Router**)
 
@@ -731,6 +749,17 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.28 (2026-07-31): **Files awareness (§7) — design recorded,
+  implementation pending.** A Files catalog (names + folders, recent N,
+  untrusted-delimited) joins the session instructions, and know-thyself
+  gains the search-before-shrugging instinct: unknown term →
+  `files_search` + `memory_search` before the web. No per-turn RAG chunk
+  injection — the agent fetches with its own tools. Motivated by the
+  OffSchool dialogue, where the answer sat in a filename the agent could
+  not see. Also validated live today: the self-architecture skill routed
+  at 6.54 for the auto-programming question and Popy answered TypeScript
+  with the platform's own reasons.
 
 - 1.27 (2026-07-31): **Self-knowledge hardening built (§8).** Skills carry a
   `pinned` flag (frontmatter, DTO, save schema); the router skips pinned
