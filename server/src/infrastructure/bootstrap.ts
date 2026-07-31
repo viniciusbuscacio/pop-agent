@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
+import type { PushRepo } from '../application/ports/push-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
@@ -12,6 +13,7 @@ import { openDatabase } from './db/database.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
 import { SqliteMemoryRepo } from './db/sqlite-memory-repo.js';
+import { SqlitePushRepo } from './db/sqlite-push-repo.js';
 import { SqliteSecretsRepo } from './db/sqlite-secrets-repo.js';
 import { SqliteUsageRepo } from './db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
@@ -27,6 +29,7 @@ export interface AppContext {
   memory: MemoryRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
+  push: PushRepo;
 }
 
 /**
@@ -47,5 +50,6 @@ export function bootstrap(): AppContext {
     memory: new SqliteMemoryRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
+    push: new SqlitePushRepo(db),
   };
 }

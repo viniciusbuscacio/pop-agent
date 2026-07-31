@@ -22,6 +22,7 @@ import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-
 import { readVersions } from './infrastructure/config/versions.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
+import { WebPushService } from './infrastructure/push/web-push-service.js';
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { SseHub } from './interface/http/sse-hub.js';
@@ -110,6 +111,8 @@ function piBridge(): PiAgentBridge {
 }
 
 const hub = new SseHub();
+// Web Push: the VAPID keys live in the secrets table, generated once.
+const push = new WebPushService(context.push, context.secrets);
 // The pi bridge is the only thing that can dispose a live session; the purger
 // asks it to forget a chat before deleting the chat's files (popy.spec §6).
 const purger = new FsChatPurger({
@@ -125,6 +128,19 @@ const runs = new RunService({
   sink: hub,
   clock: systemClock,
   llmRuns: context.llmRuns,
+  // When a run ends, tell the phone -- even with the PWA closed (popy.spec §14).
+  notifyDone: (info) => {
+    const chat = context.chats.get(info.chatId);
+    void push
+      .send({
+        title: 'Popy',
+        body: info.failed
+          ? `${chat?.title ?? 'Your chat'}: the answer could not be finished.`
+          : `${chat?.title ?? 'Your chat'}: the answer is ready.`,
+        url: `/chat/${info.chatId}`,
+      })
+      .catch(() => undefined);
+  },
   titles: new TitleService({
     chats: context.chats,
     gateway,
@@ -152,6 +168,7 @@ const app = createApp({
   userMemory: context.userMemory,
   skills: skillsVault,
   usage: context.usage,
+  push,
   backups: new TarBackupService({
     dataDir: context.dataDir,
     backupsDir: join(context.dataDir, '..', 'popy-backups'),

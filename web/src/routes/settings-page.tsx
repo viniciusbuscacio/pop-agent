@@ -15,6 +15,7 @@ import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
 import { providersService } from '../services/providers';
+import { pushService } from '../services/push';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { useAuthStore } from '../store/auth';
@@ -915,19 +916,68 @@ function AppearanceSection() {
   const setChoice = useThemeStore((state) => state.setChoice);
 
   return (
-    <Card className="flex flex-col gap-4">
-      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.appearance.theme')}</span>
-      <Segmented<ThemeChoice>
-        ariaLabel={t('settings.appearance.theme')}
-        value={choice}
-        onChange={setChoice}
-        options={[
-          { value: 'system', label: t('settings.appearance.system'), testId: 'settings-theme-system' },
-          { value: 'light', label: t('settings.appearance.light'), testId: 'settings-theme-light' },
-          { value: 'dark', label: t('settings.appearance.dark'), testId: 'settings-theme-dark' },
-        ]}
-      />
-      <p className="text-xs text-[var(--muted)]">{t('settings.appearance.note')}</p>
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-4">
+        <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.appearance.theme')}</span>
+        <Segmented<ThemeChoice>
+          ariaLabel={t('settings.appearance.theme')}
+          value={choice}
+          onChange={setChoice}
+          options={[
+            { value: 'system', label: t('settings.appearance.system'), testId: 'settings-theme-system' },
+            { value: 'light', label: t('settings.appearance.light'), testId: 'settings-theme-light' },
+            { value: 'dark', label: t('settings.appearance.dark'), testId: 'settings-theme-dark' },
+          ]}
+        />
+        <p className="text-xs text-[var(--muted)]">{t('settings.appearance.note')}</p>
+      </Card>
+
+      <NotificationsCard />
+    </div>
+  );
+}
+
+/** Web Push opt-in (popy.spec §14). Device-scoped, like the theme. */
+function NotificationsCard() {
+  const [supported] = useState(() => pushService.supported());
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void pushService.isSubscribed().then(setSubscribed);
+  }, []);
+
+  async function toggle(): Promise<void> {
+    setBusy(true);
+    try {
+      if (subscribed) {
+        await pushService.disable();
+        setSubscribed(false);
+      } else {
+        setSubscribed(await pushService.enable());
+      }
+    } catch {
+      // Leave the state; the next open reflects the truth.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.notifications.title')}</span>
+      {supported ? (
+        <>
+          <div>
+            <Button type="button" data-testid="notifications-toggle" disabled={busy} onClick={() => void toggle()}>
+              {subscribed ? t('settings.notifications.disable') : t('settings.notifications.enable')}
+            </Button>
+          </div>
+          <p className="text-xs text-[var(--muted)]">{t('settings.notifications.note')}</p>
+        </>
+      ) : (
+        <p className="text-xs text-[var(--muted)]">{t('settings.notifications.unsupported')}</p>
+      )}
     </Card>
   );
 }

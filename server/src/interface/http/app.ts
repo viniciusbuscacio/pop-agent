@@ -4,6 +4,7 @@ import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
+import type { PushService } from '../../application/ports/push-repo.js';
 import type { Clock } from '../../application/ports/clock.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
@@ -14,6 +15,7 @@ import type { SettingsService } from '../../application/settings/settings-servic
 import { authMiddleware } from './auth-middleware.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
+import { createPushRoutes } from './push-routes.js';
 import { createChatRoutes } from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
 import { createMemoryRoutes } from './memory-routes.js';
@@ -35,6 +37,7 @@ export interface AppDeps {
   skills: SkillsRepo;
   usage: UsageRepo;
   backups: BackupService;
+  push: PushService;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;
@@ -61,6 +64,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/v1', createSkillsRoutes(deps));
   app.route('/v1', createUsageRoutes(deps));
   app.route('/v1', createBackupRoutes(deps));
+  app.route('/v1', createPushRoutes(deps));
   app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));
 
   // Last: anything that is not an API route is the frontend or a 404.

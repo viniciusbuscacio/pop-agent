@@ -2,7 +2,9 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/dev-dist/**'] },
+  // web/public holds static assets served as-is, including the service-worker
+  // push script, which uses the worker global `self` and is not app source.
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/dev-dist/**', 'web/public/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {

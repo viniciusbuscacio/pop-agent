@@ -39,6 +39,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // Adds the Web Push handlers (popy.spec §14) to the generated worker.
+        importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
         // The API and the SSE stream are never served from the cache, and a
         // navigation must never be answered with the shell in their place.

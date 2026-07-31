@@ -196,6 +196,12 @@ export function createTestApp(
     userMemory: new SqliteUserMemoryRepo(db),
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
     usage: new SqliteUsageRepo(db),
+    push: {
+      vapidPublicKey: () => 'test-vapid-key',
+      subscribe: () => undefined,
+      unsubscribe: () => undefined,
+      send: () => Promise.resolve(),
+    },
     backups: new TarBackupService({
       dataDir: mkdtempSync(join(tmpdir(), 'popy-test-data-')),
       backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),

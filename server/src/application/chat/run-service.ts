@@ -42,6 +42,8 @@ export interface RunDeps {
   titles?: { maybeRetitle(chatId: string): Promise<void> };
   /** Where what the run cost is written down (popy.spec §14). */
   llmRuns?: LlmRunsRepo;
+  /** Told when a run finished, to push a notification (popy.spec §14). */
+  notifyDone?: (info: { chatId: string; failed: boolean }) => void;
 }
 
 interface PendingRun {
@@ -390,6 +392,8 @@ export class RunService {
     if (failure === undefined && this.deps.titles !== undefined) {
       this.deps.titles.maybeRetitle(run.chatId).catch(() => undefined);
     }
+    // A push so the phone hears about it with the PWA closed (popy.spec §14).
+    this.deps.notifyDone?.({ chatId: run.chatId, failed: failure !== undefined });
 
     this.finish(run);
   }

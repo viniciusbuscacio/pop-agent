@@ -195,6 +195,13 @@ export const en = {
   'settings.appearance.dark': 'Dark',
   'settings.appearance.note': 'The theme is remembered on this device only.',
 
+  'settings.notifications.title': 'Notifications',
+  'settings.notifications.enable': 'Enable notifications',
+  'settings.notifications.disable': 'Turn off notifications',
+  'settings.notifications.note': 'Popy tells this device when an answer is ready, even when closed.',
+  'settings.notifications.unsupported':
+    'Notifications need an installed app. On iPhone, add Popy to your home screen first.',
+
   'settings.security.changePassword': 'Change password',
   'settings.security.currentPassword': 'Current password',
   'settings.security.newPassword': 'New password',
