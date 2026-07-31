@@ -2,6 +2,7 @@ import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, join, normalize, sep } from 'node:path';
 import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { envelope, sanitize } from '../../domain/safety/sanitize.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 
 /**
@@ -45,6 +46,22 @@ const MIME_BY_EXT: Record<string, string> = {
 function mimeOf(path: string): string {
   return MIME_BY_EXT[extname(path).toLowerCase()] ?? 'application/octet-stream';
 }
+
+/** Text the agent can read inline; anything else is opened as bytes only. */
+function isTextual(mime: string): boolean {
+  return (
+    mime.startsWith('text/') ||
+    mime === 'application/json' ||
+    mime === 'application/xml' ||
+    mime === 'application/yaml' ||
+    mime === 'image/svg+xml' ||
+    mime === 'application/javascript' ||
+    mime === 'application/x-yaml'
+  );
+}
+
+/** A read artifact is external content, so it reaches the model as data. */
+const MAX_INLINE_CHARS = 100_000;
 
 function text(body: string): { content: [{ type: 'text'; text: string }]; details: undefined } {
   return { content: [{ type: 'text', text: body }], details: undefined };
@@ -126,5 +143,48 @@ export function buildArtifactTools(
     },
   });
 
-  return [save];
+  const read = defineTool({
+    name: 'read_artifact',
+    label: 'Read an artifact',
+    description:
+      'Reads an artifact from this conversation by its id (file-...) or by its exact name, ' +
+      'and returns its text content. Binary files (images, archives, office docs) are reported ' +
+      'but not inlined.',
+    promptSnippet: 'read_artifact(ref) — read a conversation artifact by id or name',
+    parameters: Type.Object({
+      ref: Type.String({ description: 'The artifact id (file-...) or its exact name' }),
+    }),
+    execute: (_id, params) => {
+      const { ref } = params as { ref: string };
+      const query = ref.trim();
+
+      // An id is scoped to this chat; a name resolves within this chat only, so
+      // one conversation can never read another's artifacts.
+      let target = query.startsWith('file-') ? artifacts.get(query) : undefined;
+      if (target !== undefined && target.chatId !== chatId) target = undefined;
+      target ??= artifacts.findByName(chatId, query);
+      if (target === undefined) {
+        return Promise.resolve(text(`No artifact "${query}" in this conversation.`));
+      }
+
+      const opened = artifacts.read(target.id);
+      if (opened === undefined) {
+        return Promise.resolve(text(`Artifact ${target.id} has no stored content.`));
+      }
+      if (!isTextual(target.mime)) {
+        return Promise.resolve(
+          text(
+            `${target.name} (${target.id}) is a ${target.mime} file of ${String(target.size)} bytes. ` +
+              `It is not text, so it cannot be shown inline; offer the user a download instead.`,
+          ),
+        );
+      }
+
+      const decoded = opened.bytes.toString('utf8').slice(0, MAX_INLINE_CHARS);
+      const guarded = envelope(sanitize(decoded).clean, `artifact:${target.id}`);
+      return Promise.resolve(text(guarded));
+    },
+  });
+
+  return [save, read];
 }

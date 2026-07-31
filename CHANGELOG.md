@@ -7,6 +7,11 @@ normative history.
 
 ### Added
 
+- **`read_artifact` agent tool** (RF-011/016/017): the agent reads a
+  conversation's artifact by id or exact name (scoped to that chat), getting
+  text content through the safety envelope; binary files are reported, not
+  inlined. Closes the loop with uploads — validated live (uploaded a note, the
+  agent read it back).
 - **`save_artifact` agent tool** (RF-001): the agent writes a file in its
   workspace and calls `save_artifact(path)` to promote it into a tracked,
   downloadable artifact for the conversation (path jailed to the workspace).

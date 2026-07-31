@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ArtifactStore } from '../../application/ports/artifact-store.js';
 
@@ -16,6 +16,14 @@ export class FsArtifactStore implements ArtifactStore {
     const dir = join(this.root, chatId);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeFileSync(this.pathOf(chatId, artifactId), bytes, { mode: 0o600 });
+  }
+
+  read(chatId: string, artifactId: string): Buffer | undefined {
+    try {
+      return readFileSync(this.pathOf(chatId, artifactId));
+    } catch {
+      return undefined;
+    }
   }
 
   pathOf(chatId: string, artifactId: string): string {

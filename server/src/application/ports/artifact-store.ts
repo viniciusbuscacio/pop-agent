@@ -6,6 +6,8 @@
 export interface ArtifactStore {
   /** Writes the bytes for an artifact, creating the chat's directory. */
   write(chatId: string, artifactId: string, bytes: Buffer): void;
+  /** Reads an artifact's bytes back, or undefined if they are gone. */
+  read(chatId: string, artifactId: string): Buffer | undefined;
   /** The on-disk path, for streaming a download. Never exposed to a client. */
   pathOf(chatId: string, artifactId: string): string;
   /** Removes one artifact's bytes. Best-effort: already gone is success. */

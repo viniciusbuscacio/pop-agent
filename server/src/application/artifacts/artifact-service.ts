@@ -56,6 +56,21 @@ export class ArtifactService {
     return this.deps.repo.get(id);
   }
 
+  /** The latest artifact in a chat with a given display name (RF-017). */
+  findByName(chatId: string, name: string): Artifact | undefined {
+    const matches = this.deps.repo.listByChat(chatId).filter((a) => a.name === name);
+    return matches.length === 0 ? undefined : matches[matches.length - 1];
+  }
+
+  /** Reads an artifact's metadata and bytes together, for the agent to open. */
+  read(id: string): { artifact: Artifact; bytes: Buffer } | undefined {
+    const artifact = this.deps.repo.get(id);
+    if (artifact === undefined) return undefined;
+    const bytes = this.deps.store.read(artifact.chatId, id);
+    if (bytes === undefined) return undefined;
+    return { artifact, bytes };
+  }
+
   /** Removes the record and the bytes. Returns false if there was no such id. */
   delete(id: string): boolean {
     const artifact = this.deps.repo.get(id);

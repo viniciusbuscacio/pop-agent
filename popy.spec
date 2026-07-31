@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.17 — 2026-07-31.
+Version 1.18 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -486,7 +486,11 @@ events from stale runs.
   chat (§6 `artifacts` table). The agent produces one with the **`save_artifact`
   tool**: it writes a file in its workspace with the built-in tools, then calls
   `save_artifact(path)` to promote it into a tracked, downloadable artifact for
-  the conversation (the path is jailed to the workspace). The bytes live under
+  the conversation (the path is jailed to the workspace). It reads one back with
+  **`read_artifact(ref)`** — by id or by exact name, scoped to the current
+  conversation so one chat can never read another's — which returns text content
+  through the safety envelope (an artifact is external content) and reports
+  binary files without inlining them. The bytes live under
   `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the `file-<11 base62>` id is the
   only handle a client ever sees — no filesystem path or storage key is
   exposed. Deleting a chat deletes its artifacts (rows by cascade, bytes by
