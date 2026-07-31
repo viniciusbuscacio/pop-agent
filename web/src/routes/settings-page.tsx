@@ -17,6 +17,7 @@ import { chatsService } from '../services/chats';
 import { providersService } from '../services/providers';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
+import { voiceService, type VoiceModelStatus } from '../services/voice';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { useAuthStore } from '../store/auth';
@@ -935,7 +936,73 @@ function ModelSection() {
           </p>
         ) : null}
       </Card>
+
+      <VoiceModelCard />
     </div>
+  );
+}
+
+/** The whisper model for voice transcription (popy.spec §14). */
+function VoiceModelCard() {
+  const [status, setStatus] = useState<VoiceModelStatus[]>([]);
+  const [selected, setSelected] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function reload(): Promise<void> {
+    try {
+      const result = await voiceService.models();
+      setStatus(result.models);
+      setSelected(result.selected);
+    } catch {
+      // Leave what is shown.
+    }
+  }
+
+  async function choose(name: string): Promise<void> {
+    setBusy(true);
+    setNote(t('voice.installing'));
+    try {
+      await voiceService.select(name);
+      setSelected(name);
+      setNote(undefined);
+      await reload();
+    } catch {
+      setNote(t('voice.installFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="voice-model" className="text-sm text-[var(--key-fg-dim)]">
+          {t('voice.model')}
+        </label>
+        <select
+          id="voice-model"
+          data-testid="voice-model"
+          value={selected}
+          disabled={busy}
+          onChange={(event) => void choose(event.target.value)}
+          className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
+        >
+          {status.map((model) => (
+            <option key={model.name} value={model.name}>
+              {model.name} · {model.approxMb} MB
+              {model.installed ? '' : ` · ${t('voice.notInstalled')}`}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-[var(--muted)]">{t('voice.hint')}</p>
+        {note !== undefined ? <p className="text-xs text-[var(--muted)]">{note}</p> : null}
+      </div>
+    </Card>
   );
 }
 

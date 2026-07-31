@@ -195,6 +195,11 @@ export function createTestApp(
     runs,
     providers,
     transcriber: options.transcriber ?? new FakeTranscriber(),
+    voiceCleanup: { clean: (text: string) => Promise.resolve(text) } as never,
+    voiceModels: {
+      status: () => Promise.resolve([{ name: 'medium', approxMb: 1530, installed: true }]),
+      ensure: () => Promise.resolve('/models/ggml-medium.bin'),
+    },
     userMemory: new SqliteUserMemoryRepo(db),
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
     usage: new SqliteUsageRepo(db),

@@ -16,6 +16,8 @@ import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
 import { SkillsVault } from './infrastructure/skills/skills-vault.js';
 import { TransformersEmbedder } from './infrastructure/embeddings/transformers-embedder.js';
+import { WhisperModelStore } from './infrastructure/voice/whisper-models.js';
+import { VoiceCleanup } from './application/voice/voice-cleanup.js';
 import { HybridMemory } from './application/memory/hybrid-memory.js';
 import { EmbeddingIndexer } from './application/memory/embedding-indexer.js';
 import { SkillRouterService } from './application/skills/skill-router-service.js';
@@ -184,10 +186,23 @@ const runs = new RunService({
 });
 
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
+// The model is selected in Settings and downloaded on demand; POPY_WHISPER_MODEL
+// still pins an explicit path for an operator who wants one.
+const voiceModels = new WhisperModelStore(join(context.dataDir, 'voice-models'));
 const transcriber = new WhisperTranscriber({
   whisperCli: process.env['POPY_WHISPER_CLI'] ?? 'whisper-cli',
   ffmpeg: process.env['POPY_FFMPEG'] ?? 'ffmpeg',
-  modelPath: process.env['POPY_WHISPER_MODEL'],
+  resolveModel: () => {
+    const override = process.env['POPY_WHISPER_MODEL'];
+    if (override !== undefined && override.length > 0) return Promise.resolve(override);
+    return voiceModels.ensure(settings.read().voiceModel);
+  },
+});
+// The best-effort LLM pass that cleans a raw transcript (§14).
+const voiceCleanup = new VoiceCleanup({
+  gateway,
+  apiKey: () => providers.apiKey(),
+  serviceModel: () => settings.read().serviceModel,
 });
 
 const app = createApp({
@@ -197,6 +212,8 @@ const app = createApp({
   runs,
   providers,
   transcriber,
+  voiceCleanup,
+  voiceModels,
   userMemory: context.userMemory,
   skills: skillsVault,
   usage: context.usage,

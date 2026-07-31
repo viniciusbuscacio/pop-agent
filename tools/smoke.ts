@@ -209,6 +209,7 @@ async function run(base: string): Promise<void> {
     defaultModel: 'moonshotai/kimi-k3',
     serviceModel: 'moonshotai/kimi-k3',
     customInstructions: 'Keep answers short.',
+    voiceModel: 'medium',
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

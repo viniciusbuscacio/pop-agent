@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
+import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
@@ -26,6 +27,7 @@ const transcribeSchema = z
 export interface ProviderRoutesDeps {
   providers: ProviderService;
   transcriber: Transcriber;
+  voiceCleanup: VoiceCleanup;
 }
 
 export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
@@ -84,14 +86,17 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     }
 
     // Local whisper does the work: failures come back as words, never a 500.
+    // A cheap LLM pass then cleans the raw transcript, best-effort (§14).
     try {
-      const text = await deps.transcriber.transcribe({
+      const raw = await deps.transcriber.transcribe({
         audioBase64: match[2],
         format: match[1],
       });
-      const response: TranscribeResponse =
-        text.length > 0 ? { ok: true, text } : { ok: false, message: 'Nothing was heard.' };
-      return c.json(response);
+      if (raw.length === 0) {
+        return c.json({ ok: false, message: 'Nothing was heard.' } satisfies TranscribeResponse);
+      }
+      const text = await deps.voiceCleanup.clean(raw);
+      return c.json({ ok: true, text } satisfies TranscribeResponse);
     } catch (error) {
       const message =
         error instanceof TranscriberError ? error.message : 'Transcription failed.';

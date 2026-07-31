@@ -91,6 +91,8 @@ export interface SettingsDTO {
   serviceModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
+  /** whisper.cpp model for voice transcription (popy.spec §14). */
+  voiceModel: string;
 }
 
 /** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */

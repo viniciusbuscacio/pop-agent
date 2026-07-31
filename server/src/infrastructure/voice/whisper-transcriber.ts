@@ -7,6 +7,7 @@ import {
   type TranscriptionJob,
   type Transcriber,
 } from '../../application/ports/transcriber.js';
+import { randomBase62, randomFileName } from '../../domain/ids.js';
 
 /**
  * aw's local voice pipeline, ported: ffmpeg turns whatever the browser
@@ -28,34 +29,36 @@ export interface WhisperOptions {
   whisperCli: string;
   /** Path (or PATH-resolved name) of ffmpeg. */
   ffmpeg: string;
-  /** Path of the GGML model file. */
-  modelPath: string | undefined;
+  /**
+   * Resolves the GGML model to use, downloading it if needed. Async because a
+   * model may not be on disk yet (popy.spec §14).
+   */
+  resolveModel: () => Promise<string>;
 }
 
 export class WhisperTranscriber implements Transcriber {
   constructor(private readonly options: WhisperOptions) {}
 
   async transcribe(job: TranscriptionJob): Promise<string> {
-    const model = this.options.modelPath;
-    if (model === undefined || model.length === 0) {
-      throw new TranscriberError(
-        'No whisper model is configured: set POPY_WHISPER_MODEL to a ggml-*.bin file.',
-      );
-    }
-
     const audio = Buffer.from(job.audioBase64, 'base64');
     if (audio.byteLength === 0) throw new TranscriberError('The recording was empty.');
     if (audio.byteLength > MAX_AUDIO_BYTES) {
       throw new TranscriberError('The recording is too large to transcribe (max 25 MB).');
     }
 
+    const model = await this.options.resolveModel();
+    if (model.length === 0) {
+      throw new TranscriberError('No whisper model is available.');
+    }
+
     const dir = mkdtempSync(join(tmpdir(), 'popy-voice-'));
     try {
-      // Distinct basenames: a recording that is already .wav must not collide
-      // with ffmpeg's output (found the hard way).
-      const input = join(dir, `source.${safeExtension(job.format)}`);
-      const wav = join(dir, 'converted.wav');
-      const transcriptBase = join(dir, 'transcript');
+      // Internal files get the id convention (popy.spec §6): audio_<11>.wav.
+      // Distinct basenames, so a recording that is already .wav does not
+      // collide with ffmpeg's output.
+      const input = join(dir, randomFileName('audio', safeExtension(job.format)));
+      const wav = join(dir, randomFileName('audio', 'wav'));
+      const transcriptBase = join(dir, `text_${randomBase62(11)}`);
       writeFileSync(input, audio);
 
       // 16 kHz mono PCM is the one shape whisper.cpp accepts (aw's flags).

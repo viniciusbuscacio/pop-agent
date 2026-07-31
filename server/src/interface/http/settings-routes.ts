@@ -22,6 +22,7 @@ const settingsSchema = z
     defaultModel: z.string().min(1).max(200),
     serviceModel: z.string().min(1).max(200),
     customInstructions: z.string().max(MAX_INSTRUCTIONS),
+    voiceModel: z.string().min(1).max(60),
   })
   .strict();
 
@@ -57,5 +58,6 @@ function toDto(settings: AppSettings): SettingsDTO {
     defaultModel: settings.defaultModel,
     serviceModel: settings.serviceModel,
     customInstructions: settings.customInstructions,
+    voiceModel: settings.voiceModel,
   };
 }

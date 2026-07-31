@@ -15,18 +15,12 @@ function transcriber(overrides: Partial<ConstructorParameters<typeof WhisperTran
   return new WhisperTranscriber({
     whisperCli: 'popy-test-missing-whisper-cli',
     ffmpeg: 'popy-test-missing-ffmpeg',
-    modelPath: '/nowhere/ggml-small.bin',
+    resolveModel: () => Promise.resolve('/nowhere/ggml-medium.bin'),
     ...overrides,
   });
 }
 
 describe('whisper transcriber', () => {
-  it('says how to fix a missing model', async () => {
-    await expect(transcriber({ modelPath: undefined }).transcribe(JOB)).rejects.toThrow(
-      /POPY_WHISPER_MODEL/,
-    );
-  });
-
   it('refuses an empty recording', async () => {
     await expect(transcriber().transcribe({ ...JOB, audioBase64: '' })).rejects.toThrow(/empty/);
   });
@@ -36,6 +30,12 @@ describe('whisper transcriber', () => {
     await expect(transcriber().transcribe({ ...JOB, audioBase64: huge })).rejects.toThrow(
       /too large/,
     );
+  });
+
+  it('surfaces a model that would not resolve', async () => {
+    await expect(
+      transcriber({ resolveModel: () => Promise.resolve('') }).transcribe(JOB),
+    ).rejects.toThrow(TranscriberError);
   });
 
   it('says how to fix a missing ffmpeg, in words', async () => {

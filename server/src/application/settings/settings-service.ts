@@ -17,6 +17,8 @@ export interface AppSettings {
   serviceModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
+  /** whisper.cpp model for voice transcription (popy.spec §14). */
+  voiceModel: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: DEFAULT_MODEL_ID,
   serviceModel: DEFAULT_MODEL_ID,
   customInstructions: '',
+  voiceModel: 'medium',
 };
 
 const SETTINGS_KEY = 'app';

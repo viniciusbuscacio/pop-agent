@@ -25,6 +25,7 @@ describe('settings service', () => {
       defaultModel: 'openai/gpt-5',
       serviceModel: 'moonshotai/kimi-k3',
       customInstructions: 'Answer in Portuguese.',
+      voiceModel: 'small',
     };
 
     expect(service.write(next)).toEqual(next);

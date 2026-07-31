@@ -115,15 +115,12 @@ export function Composer({
       }
       const existing = textRef.current.trim();
       const merged = existing.length > 0 ? `${existing}\n${result.text}` : result.text;
-      if (autoSendRef.current) {
-        // The user pressed Send while still talking: finish the errand.
-        autoSendRef.current = false;
-        onSend(merged, attachmentsRef.current);
-        persist('');
-        setAttachments([]);
-      } else {
-        persist(merged);
-      }
+      // A voice note is meant to be sent: the transcript (with any typed draft
+      // in front of it) goes to the chat automatically (popy.spec §14).
+      autoSendRef.current = false;
+      onSend(merged, attachmentsRef.current);
+      persist('');
+      setAttachments([]);
     } catch {
       setNotice(t('chat.transcribeFailed', { message: '' }));
       autoSendRef.current = false;
