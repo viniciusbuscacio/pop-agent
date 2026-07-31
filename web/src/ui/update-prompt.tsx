@@ -1,28 +1,28 @@
 import { useEffect, useState } from 'react';
-import { registerSW } from 'virtual:pwa-register';
 import { t } from '../i18n';
+import { applyUpdate, setUpdateIntervalMs, startUpdateChecks } from '../services/pwa-update';
+import { useUpdatesStore } from '../store/updates';
 
 /**
- * Offers the new version instead of waiting for one (popy.spec §14).
+ * Offers the new version instead of waiting for one (popy.spec §14, §15).
  *
  * With silent auto-update an installed PWA keeps serving the previous build
  * until it is closed and reopened cold -- which on a phone can be days, and
- * looks exactly like an app that stopped being fixed. This asks.
+ * looks exactly like an app that stopped being fixed. The actual checking is
+ * driven by services/pwa-update (timer + resume + manual); this component only
+ * shows the banner and applies the update.
  */
 export function UpdatePrompt() {
   const [needsRefresh, setNeedsRefresh] = useState(false);
-  const [update, setUpdate] = useState<(() => Promise<void>) | undefined>(undefined);
+  const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
 
   useEffect(() => {
-    const updateSW = registerSW({
-      onNeedRefresh() {
-        setUpdate(() => async () => {
-          await updateSW(true);
-        });
-        setNeedsRefresh(true);
-      },
-    });
+    startUpdateChecks(() => setNeedsRefresh(true));
   }, []);
+
+  useEffect(() => {
+    setUpdateIntervalMs(intervalMinutes * 60 * 1000);
+  }, [intervalMinutes]);
 
   if (!needsRefresh) return null;
 
@@ -36,7 +36,7 @@ export function UpdatePrompt() {
       <button
         type="button"
         data-testid="update-reload"
-        onClick={() => void update?.()}
+        onClick={() => void applyUpdate()}
         className="rounded bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-fg)]"
       >
         {t('update.reload')}

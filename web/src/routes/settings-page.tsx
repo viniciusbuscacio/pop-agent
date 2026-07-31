@@ -20,8 +20,10 @@ import { pushService } from '../services/push';
 import { voiceService, type VoiceModelStatus } from '../services/voice';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
+import { checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
+import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, Segmented, TextField } from '../ui/controls';
 
 /**
@@ -1071,8 +1073,83 @@ function AppearanceSection() {
       </Card>
 
       <NotificationsCard />
+      <AppUpdatesCard />
     </div>
   );
+}
+
+/**
+ * How the installed PWA notices a new build (popy.spec §15). Device-scoped
+ * like the theme and notifications: the interval lives in localStorage and
+ * never reaches the server. "Check now" asks the service worker immediately.
+ */
+function AppUpdatesCard() {
+  const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
+  const setIntervalMinutes = useUpdatesStore((state) => state.setIntervalMinutes);
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<string | undefined>(undefined);
+
+  async function checkNow(): Promise<void> {
+    setChecking(true);
+    setResult(undefined);
+    const outcome = await checkForUpdateNow();
+    setResult(
+      outcome === 'update-found'
+        ? t('settings.updates.found')
+        : outcome === 'up-to-date'
+          ? t('settings.updates.current')
+          : t('settings.updates.checkUnavailable'),
+    );
+    setChecking(false);
+  }
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.updates.checkTitle')}</span>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="update-interval" className="text-sm text-[var(--key-fg-dim)]">
+          {t('settings.updates.every')}
+        </label>
+        <select
+          id="update-interval"
+          data-testid="update-interval"
+          value={intervalMinutes}
+          onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+          className="w-full max-w-xs rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
+        >
+          {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {intervalLabel(minutes)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="update-check-now"
+          disabled={checking}
+          onClick={() => void checkNow()}
+        >
+          {checking ? t('settings.updates.checking') : t('settings.updates.checkNow')}
+        </Button>
+      </div>
+      {result !== undefined ? (
+        <p role="status" data-testid="update-check-result" className="text-xs text-[var(--muted)]">
+          {result}
+        </p>
+      ) : null}
+      <p className="text-xs text-[var(--muted)]">{t('settings.updates.checkNote')}</p>
+    </Card>
+  );
+}
+
+function intervalLabel(minutes: number): string {
+  if (minutes === 60) return t('settings.updates.everyHour');
+  if (minutes < 60) return t('settings.updates.everyMinutes', { count: minutes });
+  if (minutes < 1440) return t('settings.updates.everyHours', { count: minutes / 60 });
+  return t('settings.updates.everyDay');
 }
 
 /** Web Push opt-in (popy.spec §14). Device-scoped, like the theme. */

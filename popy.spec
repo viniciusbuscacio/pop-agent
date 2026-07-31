@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.12 — 2026-07-31.
+Version 1.13 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -520,6 +520,22 @@ version is accepted.
   `--to` on an older tag = rollback.
 - Plain `git pull && npm ci && npm run build && restart` remains
   documented for hands-on users.
+
+**PWA client freshness** (the installed frontend, distinct from the two
+channels above):
+
+- An installed PWA only re-checks its service worker on navigation, so the
+  client drives the check itself: on a **device-chosen interval**
+  (Settings → Appearance → App updates, default **10 minutes**; the shipped
+  factory default drops to **once a day**), on `visibilitychange → visible`
+  when the app is resumed, and on a manual **"Check now"**. The interval is
+  device-scoped in `localStorage`, never sent to the server.
+- The registration lives in one module (`web/src/services/pwa-update.ts`);
+  `registerSW` runs exactly once. A found update raises the reload banner
+  (`registerType: 'prompt'` — never a silent swap).
+- The server serves `sw.js` and the HTML shell with `Cache-Control:
+  no-cache` (always revalidate) and only the hashed `/assets/*` with
+  `immutable`, so a heuristic cache can never pin a stale worker or shell.
 
 ## 16. Backup and restore
 

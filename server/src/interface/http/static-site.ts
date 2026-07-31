@@ -32,14 +32,35 @@ export function createStaticSite(distDir: string): MiddlewareHandler {
 
     const asset = await readAsset(distDir, path);
     if (asset !== undefined) {
-      return c.body(new Uint8Array(asset.body), 200, { 'content-type': asset.contentType });
+      return c.body(new Uint8Array(asset.body), 200, {
+        'content-type': asset.contentType,
+        'cache-control': cacheControl(path),
+      });
     }
 
     // Not a file: hand back the shell so client-side routing can resolve it.
     const shell = await readAsset(distDir, '/index.html');
     if (shell === undefined) return next();
-    return c.body(new Uint8Array(shell.body), 200, { 'content-type': shell.contentType });
+    return c.body(new Uint8Array(shell.body), 200, {
+      'content-type': shell.contentType,
+      // A navigation must always fetch a fresh shell, or a new build's hashed
+      // asset names are never picked up.
+      'cache-control': 'no-cache',
+    });
   };
+}
+
+/**
+ * Cache policy that lets updates actually land (popy.spec §15). Hashed build
+ * assets are content-addressed and safe to cache forever; everything else --
+ * crucially sw.js and the HTML shell -- must be revalidated every time, or a
+ * heuristic cache can keep serving a stale worker and the PWA never sees a new
+ * version. `no-cache` still caches, it just always revalidates first.
+ */
+function cacheControl(urlPath: string): string {
+  const name = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  if (name.startsWith('assets/')) return 'public, max-age=31536000, immutable';
+  return 'no-cache';
 }
 
 interface Asset {

@@ -56,6 +56,25 @@ describe('app', () => {
     expect(body.error).toMatchObject({ code: 'not_found', status: 404 });
   });
 
+  it('makes the shell always-revalidate so a new build is noticed', async () => {
+    // sw.js and the HTML shell must not be cached hard, or the PWA keeps
+    // serving a stale worker and never sees a new version (popy.spec §15).
+    const root = await createTestApp().app.request('/');
+    expect(root.headers.get('cache-control')).toContain('no-cache');
+
+    const deepLink = await createTestApp().app.request('/settings');
+    expect(deepLink.headers.get('cache-control')).toContain('no-cache');
+  });
+
+  it('lets the hashed build assets cache hard', async () => {
+    const shell = await (await createTestApp().app.request('/')).text();
+    const asset = /src="(\/assets\/[^"]+\.js)"/.exec(shell)?.[1];
+    expect(asset, 'index.html should reference a built bundle').toBeDefined();
+
+    const res = await createTestApp().app.request(asset as string);
+    expect(res.headers.get('cache-control')).toContain('immutable');
+  });
+
   it('refuses to serve files from outside the build directory', async () => {
     const res = await createTestApp().app.request('/../../server/package.json');
 

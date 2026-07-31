@@ -235,6 +235,20 @@ export const en = {
   'settings.updates.piAvailable': 'A newer pi is available: {version}.',
   'settings.updates.how': 'Update from the server shell (the gate runs before restart):',
 
+  'settings.updates.checkTitle': 'App updates',
+  'settings.updates.every': 'Check for a new version',
+  'settings.updates.everyMinutes': 'Every {count} minutes',
+  'settings.updates.everyHour': 'Every hour',
+  'settings.updates.everyHours': 'Every {count} hours',
+  'settings.updates.everyDay': 'Once a day',
+  'settings.updates.checkNow': 'Check now',
+  'settings.updates.checking': 'Checking…',
+  'settings.updates.found': 'An update is on the way — the reload banner will appear.',
+  'settings.updates.current': 'You are on the latest version.',
+  'settings.updates.checkUnavailable': 'The service worker is not ready yet. Try again in a moment.',
+  'settings.updates.checkNote':
+    'Popy also checks on this schedule and whenever you reopen it. Remembered on this device only.',
+
   'update.available': 'A new version is ready.',
   'update.reload': 'Reload',
   'update.later': 'Not now',

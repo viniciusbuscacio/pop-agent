@@ -3,6 +3,19 @@
 All notable changes to Popy. Dates are ISO. See `popy.spec` for the full
 normative history.
 
+## Unreleased
+
+### Fixed
+
+- **PWA update prompt now actually appears.** An installed PWA (and an
+  already-open desktop tab) only re-checked its service worker on
+  navigation, so a shipped fix could sit unseen for days. The client now
+  checks on a device-chosen interval (Settings → Appearance → App updates,
+  default 10 minutes), whenever the app is resumed, and on a manual
+  "Check now" button. The server marks `sw.js` and the HTML shell
+  `no-cache` while keeping hashed assets `immutable`, so a stale worker can
+  no longer be pinned by a heuristic cache.
+
 ## v0.2.0 — 2026-07-31
 
 Everything on the v0.2 roadmap.
