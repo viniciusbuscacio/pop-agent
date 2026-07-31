@@ -153,16 +153,6 @@ export function ChatPage() {
           ))}
         </select>
 
-        <Link
-          to={`/chat/${chatId}/artifacts`}
-          data-testid="chat-artifacts"
-          aria-label={t('artifacts.title')}
-          title={t('artifacts.title')}
-          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
-        >
-          ⧉
-        </Link>
-
       </header>
 
       <div
