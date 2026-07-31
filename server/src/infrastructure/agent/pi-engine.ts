@@ -6,10 +6,13 @@ import type {
   ModelRuntime,
   ToolCallEvent,
   ToolCallEventResult,
+  ToolDefinition,
   ToolResultEvent,
 } from '@earendil-works/pi-coding-agent';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
+import { buildNoteTools } from '../notes/note-tools.js';
+import type { NotesVault } from '../notes/notes-vault.js';
 
 /**
  * pi as the rest of the server is allowed to see it: open a session, prompt it,
@@ -108,6 +111,8 @@ export interface SdkPiEngineOptions {
   modelsStorePath: string;
   /** Read late, not captured: the key can arrive after boot, from Settings. */
   apiKey: () => string | undefined;
+  /** The agent's notes vault; its tools are registered on every session. */
+  notesVault?: NotesVault;
 }
 
 /**
@@ -197,6 +202,13 @@ export class SdkPiEngine implements PiEngine {
     });
     await resourceLoader.reload();
 
+    // The notes tools, built with this session's SDK so pi stays one dynamic
+    // import. The built-in read/bash/edit/write stay on; these are added.
+    const customTools: ToolDefinition[] =
+      this.options.notesVault === undefined
+        ? []
+        : buildNoteTools(sdk.defineTool, this.options.notesVault);
+
     const { session } = await sdk.createAgentSession({
       cwd: this.options.workspace,
       agentDir: this.options.agentDir,
@@ -204,6 +216,7 @@ export class SdkPiEngine implements PiEngine {
       model,
       sessionManager,
       resourceLoader,
+      ...(customTools.length === 0 ? {} : { customTools }),
     });
 
     return new SdkPiSession(session, runtime, guardSlot);

@@ -13,6 +13,7 @@ import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
+import { NotesVault } from './infrastructure/notes/notes-vault.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
@@ -48,6 +49,8 @@ if (agent !== 'fake' && agent !== 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const settings = new SettingsService(context.settings);
+// The agent's own notes vault (popy.spec §11), inside the data directory.
+const notesVault = new NotesVault(join(context.dataDir, 'notes'));
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The provider seen by the routes: key precedence (secrets over environment),
@@ -75,6 +78,7 @@ function piBridge(): PiAgentBridge {
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
       apiKey: () => providers.apiKey(),
+      notesVault,
     }),
     defaultModelId: () => settings.read().defaultModel,
     instructions: () => settings.read().customInstructions,
