@@ -79,7 +79,17 @@ export function ChatList() {
               value={segment}
               onChange={(value) => {
                 setListMenu(false);
-                navigate(value === 'files' ? '/files' : '/');
+                if (value === 'files') {
+                  const folder = read('popy.lastFolder');
+                  navigate(folder !== undefined && folder.length > 0 ? `/files/${folder}` : '/files');
+                  return;
+                }
+                // Back to the conversation that was open, if it still exists.
+                const last = read('popy.lastChat');
+                const alive =
+                  last !== undefined &&
+                  [...chats, ...archived].some((chat) => chat.id === last);
+                navigate(alive ? `/chat/${last}` : '/');
               }}
               options={[
                 { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
@@ -220,6 +230,15 @@ function FolderTree() {
       ))}
     </div>
   );
+}
+
+/** localStorage, but never throwing on a device that refuses it. */
+function read(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** How far a finger must travel before the swipe action fires. */

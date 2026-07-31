@@ -35,6 +35,12 @@ export function ChatPage() {
   const [missed, setMissed] = useState(0);
 
   useEffect(() => {
+    // Remembered per device, so the Chats segment reopens where you were.
+    try {
+      localStorage.setItem('popy.lastChat', chatId);
+    } catch {
+      // storage denied; the segment just falls back to the list
+    }
     // On mount and on every chat change, the stored history replaces whatever
     // was on screen: a reload mid-run must not show the answer twice.
     void openChat(chatId);

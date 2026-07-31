@@ -40,6 +40,12 @@ export function FilesPage() {
     setSelecting(false);
     setFilter('');
     setMenuFor(undefined);
+    // Remembered per device, so the Files segment reopens where you were.
+    try {
+      localStorage.setItem('popy.lastFolder', folderId ?? '');
+    } catch {
+      // storage denied; the segment just falls back to the root
+    }
   }, [folderId]);
 
   const openFolder: FolderDTO | undefined = folders.find((entry) => entry.id === folderId);
