@@ -13,6 +13,7 @@ import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
+import { buildWebTools } from '../web/web-tools.js';
 
 /**
  * pi as the rest of the server is allowed to see it: open a session, prompt it,
@@ -202,12 +203,14 @@ export class SdkPiEngine implements PiEngine {
     });
     await resourceLoader.reload();
 
-    // The notes tools, built with this session's SDK so pi stays one dynamic
+    // Popy's own tools, built with this session's SDK so pi stays one dynamic
     // import. The built-in read/bash/edit/write stay on; these are added.
-    const customTools: ToolDefinition[] =
-      this.options.notesVault === undefined
+    const customTools: ToolDefinition[] = [
+      ...(this.options.notesVault === undefined
         ? []
-        : buildNoteTools(sdk.defineTool, this.options.notesVault);
+        : buildNoteTools(sdk.defineTool, this.options.notesVault)),
+      ...buildWebTools(sdk.defineTool),
+    ];
 
     const { session } = await sdk.createAgentSession({
       cwd: this.options.workspace,
