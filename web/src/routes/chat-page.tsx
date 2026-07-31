@@ -127,6 +127,7 @@ export function ChatPage() {
           type="button"
           data-testid="thinking-visibility"
           aria-pressed={showThinking}
+          aria-label={showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
           onClick={toggleThinking}
           title={t('chat.thinkingVisibility')}
           className={`rounded-md border border-[var(--border)] px-2 py-1 text-xs ${
