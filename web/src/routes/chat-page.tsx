@@ -118,6 +118,41 @@ export function ChatPage() {
         </button>
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
 
+        {/*
+          Per-chat knobs live in the header (Vinicius, 31/07, reversing the
+          strip-under-the-composer decision from earlier the same day):
+          always visible while reading, no fighting the composer for space.
+        */}
+        <button
+          type="button"
+          data-testid="thinking-visibility"
+          aria-pressed={showThinking}
+          onClick={toggleThinking}
+          title={t('chat.thinkingVisibility')}
+          className={`rounded-md border border-[var(--border)] px-2 py-1 text-xs ${
+            showThinking
+              ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
+              : 'text-[var(--muted)]'
+          }`}
+        >
+          💭 {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
+        </button>
+
+        <select
+          data-testid="chat-model"
+          aria-label={t('chat.model')}
+          value={chat?.model ?? ''}
+          onChange={(event) => void setModel(chatId, event.target.value)}
+          className="max-w-32 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)] sm:max-w-48"
+        >
+          <option value="">{t('chat.defaultModel')}</option>
+          {models.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+
         <Link
           to={`/chat/${chatId}/artifacts`}
           data-testid="chat-artifacts"
@@ -233,41 +268,6 @@ export function ChatPage() {
         onStop={() => void stop(chatId)}
       />
 
-      {/*
-        The strip under the composer (Vinicius, 31/07): per-chat knobs live
-        here, with room to grow -- not in the header, not in a drawer.
-      */}
-      <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-2">
-        <button
-          type="button"
-          data-testid="thinking-visibility"
-          aria-pressed={showThinking}
-          onClick={toggleThinking}
-          title={t('chat.thinkingVisibility')}
-          className={`rounded-md border border-[var(--border)] px-2 py-1 text-xs ${
-            showThinking
-              ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
-              : 'text-[var(--muted)]'
-          }`}
-        >
-          💭 {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
-        </button>
-
-        <select
-          data-testid="chat-model"
-          aria-label={t('chat.model')}
-          value={chat?.model ?? ''}
-          onChange={(event) => void setModel(chatId, event.target.value)}
-          className="max-w-48 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
-        >
-          <option value="">{t('chat.defaultModel')}</option>
-          {models.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
-      </div>
     </>
   );
 }

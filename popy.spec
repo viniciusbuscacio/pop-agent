@@ -871,9 +871,10 @@ covers "forgot password AND recovery key" for whoever has shell.
   chats (badged) and a deliberate menu -> View archived — the pinned line
   and the collapsible footer are gone (§14); **swipe on a chat row**:
   right = delete (confirmed), left = archive (not) — the maintainer's
-  mapping, deliberately the inverse of iOS Mail (§14); a **strip under
-  the composer** holds the per-chat knobs (thinking visibility toggle +
-  model picker, moved out of the header) with room to grow (§14);
+  mapping, deliberately the inverse of iOS Mail (§14); the per-chat knobs
+  (thinking visibility toggle + model picker) live **in the chat header**,
+  always visible while reading -- reversed the same day from a strip under
+  the composer (§14);
   **font size** and **thinking visibility** are device-scoped localStorage
   prefs like the theme (§14); **SIGTERM/SIGINT flush**: a server restart
   parks every in-flight run's partial answer as an interrupted-marked
