@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.22 — 2026-07-31.
+Version 1.23 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -458,7 +458,7 @@ events from stale runs.
   file + a workspace file browser.
 - Slash commands: `/model`, `/new`, `/memory`; extensible menu on `/`.
 - Voice (v0.2): aw's pipeline copied as-is — MediaRecorder → upload →
-  ffmpeg (WAV 16k mono) → whisper.cpp (`whisper-cli`, `tiny` default,
+  ffmpeg (WAV 16k mono) → whisper.cpp (`whisper-cli`, `base` default,
   HF download with SHA1 pin, `-l auto`) → best-effort LLM cleanup. Check
   in aw whether the transcript lands in the composer and replicate.
 - UI in English; strings structured in a light i18n layer from day one
@@ -692,6 +692,12 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.23 (2026-07-31): voice default model is **base** (§14) — measured on
+  the 4-core test server with an 11s sample: base 5.5s / small 18.8s /
+  medium 63.4s, near-identical transcripts; the maintainer revised his
+  earlier medium-default decision. Settings → Voice still offers the
+  full manifest.
 
 - 1.22 (2026-07-31): **Rounds 4–5 built** (list redesign, per-device
   prefs, resilience, the Updates screen). Decisions recorded: the home

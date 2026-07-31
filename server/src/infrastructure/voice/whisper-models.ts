@@ -10,8 +10,10 @@ import type { VoiceModelStatus, VoiceModelStore } from '../../application/ports/
  * The whisper.cpp GGML models Popy offers (popy.spec §14). Each is fetched on
  * demand into POPY_DATA_DIR/voice-models with its SHA1 verified against this
  * pinned manifest -- a corrupted or tampered download is rejected, not run. The
- * default is `medium`: noticeably more accurate than the small models, and a
- * home server has the disk for it.
+ * default is `base`: on this 4-core home server it runs ~0.5x realtime where
+ * `small` takes ~1.7x and `medium` ~5.8x, and the measured transcription
+ * quality was near-identical (decision of 31/07, revising the earlier
+ * medium default).
  *
  * The manifest mirrors the whisper.cpp release checksums (the same ones aw
  * pins).
@@ -34,7 +36,7 @@ export const WHISPER_MODELS: WhisperModelSpec[] = [
   { name: 'medium', file: 'ggml-medium.bin', sha1: 'fd9727b6e1217c2f614f9b698455c4ffd82463b4', approxMb: 1530 },
 ];
 
-export const DEFAULT_WHISPER_MODEL = 'medium';
+export const DEFAULT_WHISPER_MODEL = 'base';
 
 export class WhisperModelError extends Error {
   constructor(message: string) {
