@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.15 — 2026-07-31.
+Version 1.16 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -499,9 +499,13 @@ events from stale runs.
   not the artifact: the default life is 30 days, an expired link is refused
   even though the file still exists, a fresh link can be minted any time, and
   there is no cleanup cron.
-- The authenticated half (`/v1`) lists a chat's artifacts, mints a link and
-  deletes one. The artifacts screen, upload, OCR, multimodal and versioning
-  land in later blocks (`docs/artifacts-attachments-downloads.md`).
+- The authenticated half (`/v1`) lists a chat's artifacts, uploads a file into
+  a chat (`POST /v1/chats/:chatId/artifacts`, multipart, 25 MB cap), mints a
+  link and deletes one. The **artifacts screen** is a full-screen route
+  (`/chat/:chatId/artifacts`, reached from the chat header) that lists, uploads,
+  downloads (through a freshly minted link) and deletes — never a drawer.
+  OCR, multimodal and versioning land in later blocks
+  (`docs/artifacts-attachments-downloads.md`).
 
 ## 15. Providers, models, updates
 

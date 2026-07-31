@@ -85,4 +85,36 @@ describe('artifact routes', () => {
     const res = await fixture.app.request('/artifacts/file-whatever/download');
     expect(res.status).toBe(403);
   });
+
+  it('uploads a file into a chat and then lists and downloads it', async () => {
+    const fixture = await signedIn();
+    const chat = fixture.chats.create();
+
+    const form = new FormData();
+    form.append('file', new File([Buffer.from('uploaded bytes')], 'notes.txt', { type: 'text/plain' }));
+    const upload = await fixture.app.request(`/v1/chats/${chat.id}/artifacts`, {
+      method: 'POST',
+      headers: auth(fixture.token),
+      body: form,
+    });
+    expect(upload.status).toBe(201);
+    const created = (await upload.json()) as { id: string; name: string; size: number; source: string };
+    expect(created).toMatchObject({ name: 'notes.txt', size: 14, source: 'upload' });
+
+    const list = await fixture.app.request(`/v1/chats/${chat.id}/artifacts`, { headers: auth(fixture.token) });
+    const body = (await list.json()) as { artifacts: { id: string }[] };
+    expect(body.artifacts.map((a) => a.id)).toContain(created.id);
+  });
+
+  it('refuses an upload to a chat that does not exist', async () => {
+    const fixture = await signedIn();
+    const form = new FormData();
+    form.append('file', new File([Buffer.from('x')], 'x.txt', { type: 'text/plain' }));
+    const res = await fixture.app.request('/v1/chats/chat-nope/artifacts', {
+      method: 'POST',
+      headers: auth(fixture.token),
+      body: form,
+    });
+    expect(res.status).toBe(404);
+  });
 });

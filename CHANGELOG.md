@@ -7,6 +7,10 @@ normative history.
 
 ### Added
 
+- **Artifacts screen + upload** (RF-002/009): a full-screen artifacts view per
+  conversation (reached from the chat header) that uploads a file, lists what a
+  chat holds, downloads through a freshly minted signed link, and deletes.
+  Upload is `POST /v1/chats/:chatId/artifacts` (multipart, 25 MB cap).
 - **Artifacts — HTTP surface, disk store and signed downloads** (RF-001/002-list/
   004–008): an on-disk blob store grouped per chat under the data directory, a
   service that creates/lists/deletes artifacts and mints links, authenticated

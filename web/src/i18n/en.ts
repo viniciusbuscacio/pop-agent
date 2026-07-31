@@ -253,6 +253,19 @@ export const en = {
   'update.reload': 'Reload',
   'update.later': 'Not now',
 
+  'artifacts.title': 'Artifacts',
+  'artifacts.intro': 'Files from this conversation — what the agent made and what you uploaded.',
+  'artifacts.empty': 'No artifacts in this conversation yet.',
+  'artifacts.upload': 'Upload a file',
+  'artifacts.uploading': 'Uploading…',
+  'artifacts.download': 'Download',
+  'artifacts.delete': 'Delete',
+  'artifacts.deleteConfirm': 'Delete this artifact? The download links stop working.',
+  'artifacts.tooLarge': 'That file is too large (25 MB max).',
+  'artifacts.uploadFailed': 'The upload failed. Try again.',
+  'artifacts.sourceAgent': 'made by Popy',
+  'artifacts.sourceUpload': 'uploaded',
+
   'error.generic': 'Something went wrong. Try again.',
   'error.offline': 'Popy is offline.',
 } as const;

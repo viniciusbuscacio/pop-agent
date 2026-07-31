@@ -109,6 +109,16 @@ export function ChatPage() {
         </button>
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
 
+        <Link
+          to={`/chat/${chatId}/artifacts`}
+          data-testid="chat-artifacts"
+          aria-label={t('artifacts.title')}
+          title={t('artifacts.title')}
+          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+        >
+          ⧉
+        </Link>
+
         <select
           data-testid="chat-model"
           aria-label={t('chat.model')}

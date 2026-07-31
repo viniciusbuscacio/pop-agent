@@ -7,6 +7,7 @@ import { session } from './services/session';
 import { useAuthStore } from './store/auth';
 import { ChatLayout, NoChatSelected } from './routes/chat-layout';
 import { ChatPage } from './routes/chat-page';
+import { ArtifactsPage } from './routes/artifacts-page';
 import { LoginPage } from './routes/login-page';
 import { RecoverPage } from './routes/recover-page';
 import { SettingsPage } from './routes/settings-page';
@@ -72,6 +73,14 @@ function Boot() {
         element={status === 'signed-in' ? <Navigate to="/" replace /> : <LoginPage />}
       />
       <Route path="/recover" element={<RecoverPage />} />
+      <Route
+        path="/chat/:chatId/artifacts"
+        element={
+          <Protected status={status}>
+            <ArtifactsPage />
+          </Protected>
+        }
+      />
       <Route
         path="/settings/*"
         element={

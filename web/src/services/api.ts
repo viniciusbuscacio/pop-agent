@@ -72,6 +72,21 @@ export async function apiDownload(path: string): Promise<Blob> {
   return response.blob();
 }
 
+/** A multipart upload (e.g. an artifact), returning the parsed JSON reply. */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const token = session.token();
+  const headers: Record<string, string> = {};
+  // No content-type header: the browser sets the multipart boundary itself.
+  if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+  const renewed = response.headers.get(SESSION_TOKEN_HEADER);
+  if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+
+  if (response.ok) return (await response.json()) as T;
+  throw await toApiError(response);
+}
+
 async function toApiError(response: Response): Promise<ApiError> {
   try {
     const body = (await response.json()) as {
