@@ -11,6 +11,7 @@ async function collect(prompt: string, signal?: AbortSignal): Promise<AgentEvent
     chatId: 'chat-000000000000',
     prompt,
     model: '',
+    attachments: [],
     onEvent: (event) => events.push(event),
     signal: signal ?? new AbortController().signal,
   });

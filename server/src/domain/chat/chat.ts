@@ -36,6 +36,17 @@ export interface ToolRecord {
   detail: string;
 }
 
+/**
+ * A file sent with a message (popy.spec §6, aw's shape). The data URI is the
+ * payload itself -- stored with the message, rendered from there, and written
+ * into the agent's workspace so its tools can open the file.
+ */
+export interface Attachment {
+  name: string;
+  type: string;
+  dataUri: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -44,7 +55,7 @@ export interface Message {
   /** Reasoning that preceded the answer; empty for user messages. */
   thinking: string;
   tools: ToolRecord[];
-  attachments: string[];
+  attachments: Attachment[];
   createdAt: string;
 }
 

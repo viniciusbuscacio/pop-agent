@@ -160,6 +160,7 @@ async function main(): Promise<void> {
       chatId: CHAT_ID,
       prompt: 'Reply with exactly: ok',
       model: DEFAULT_MODEL_ID,
+    attachments: [],
       onEvent: (event) => events.push(event),
       signal: new AbortController().signal,
     });
@@ -183,6 +184,7 @@ async function main(): Promise<void> {
         chatId: CHAT_ID,
         prompt: 'Run this bash command and report the result: sleep 47',
         model: DEFAULT_MODEL_ID,
+    attachments: [],
         onEvent: (event) => toolEvents.push(event),
         signal: controller.signal,
       });

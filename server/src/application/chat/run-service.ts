@@ -1,4 +1,4 @@
-import { DEFAULT_CHAT_TITLE, type ToolRecord } from '../../domain/chat/chat.js';
+import { DEFAULT_CHAT_TITLE, type Attachment, type ToolRecord } from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
 import { fallbackTitle } from '../../domain/chat/title.js';
 import type { AgentBridge, AgentRunResult } from '../ports/agent-bridge.js';
@@ -44,6 +44,7 @@ interface PendingRun {
   chatId: string;
   prompt: string;
   model: string;
+  attachments: Attachment[];
   controller: AbortController;
   started: boolean;
   /** Fragments emitted so far -- the sequence number of the last one. */
@@ -107,7 +108,7 @@ export class RunService {
    * Persists the user's message and schedules the run, then returns: the
    * answer arrives over the event stream, not in this response.
    */
-  startRun(chatId: string, text: string): StartRunResult {
+  startRun(chatId: string, text: string, attachments: Attachment[] = []): StartRunResult {
     const chat = this.deps.chats.get(chatId);
     if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
     if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
@@ -122,7 +123,7 @@ export class RunService {
       content: text,
       thinking: '',
       tools: [],
-      attachments: [],
+      attachments,
       createdAt: now,
     });
     this.deps.chats.touch(chatId, now);
@@ -140,6 +141,7 @@ export class RunService {
       chatId,
       prompt: text,
       model: chat.model,
+      attachments,
       controller: new AbortController(),
       started: false,
       seq: 0,
@@ -226,6 +228,7 @@ export class RunService {
         chatId: run.chatId,
         prompt: run.prompt,
         model: run.model,
+        attachments: run.attachments,
         signal: run.controller.signal,
         onEvent: (event) => {
           // Fragments accumulate on the run itself, so a client mounting

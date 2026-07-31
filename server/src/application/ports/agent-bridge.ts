@@ -1,4 +1,4 @@
-import type { ToolStatus } from '../../domain/chat/chat.js';
+import type { Attachment, ToolStatus } from '../../domain/chat/chat.js';
 
 /**
  * The only door to the agent engine (docs/agent-flow.md). pi lives behind this
@@ -17,6 +17,8 @@ export interface AgentRunRequest {
   chatId: string;
   prompt: string;
   model: string;
+  /** Files sent with the message; the adapter decides how the model sees them. */
+  attachments: Attachment[];
   onEvent: (event: AgentEvent) => void;
   /** Aborted when the user presses Stop; the adapter must give up promptly. */
   signal: AbortSignal;

@@ -95,6 +95,7 @@ class ScriptedSession implements PiSession {
   script: AgentSessionEvent[] = [];
   /** Emitted instead of the script when the run is aborted mid-flight. */
   onPrompt: (() => Promise<void>) | undefined;
+  readonly prompts: string[] = [];
   readonly models: string[] = [];
   disposed = false;
   sessionFile: string | undefined = '/data/sessions/chat.jsonl';
@@ -111,7 +112,8 @@ class ScriptedSession implements PiSession {
     this.listener?.(event);
   }
 
-  async prompt(): Promise<void> {
+  async prompt(text: string): Promise<void> {
+    this.prompts.push(text);
     if (this.onPrompt !== undefined) {
       await this.onPrompt();
       return;
@@ -171,6 +173,7 @@ function run(
     chatId: CHAT,
     prompt: 'hello',
     model: options.model ?? '',
+    attachments: [],
     onEvent,
     signal: options.signal ?? new AbortController().signal,
   });
@@ -459,5 +462,52 @@ describe('sessions', () => {
     await run(onEvent);
 
     expect(engine.opened).toHaveLength(1);
+  });
+});
+
+describe('attachments', () => {
+  it('writes the files into the workspace and tells the model where', async () => {
+    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const workspace = mkdtempSync(join(tmpdir(), 'popy-bridge-test-'));
+
+    try {
+      bridge = new PiAgentBridge({ chats, engine, workspace });
+      const { onEvent } = collect();
+
+      await bridge.run({
+        chatId: CHAT,
+        prompt: 'read my notes',
+        model: '',
+        attachments: [
+          {
+            name: '../sneaky notes.txt',
+            type: 'text/plain',
+            dataUri: `data:text/plain;base64,${Buffer.from('remember the milk').toString('base64')}`,
+          },
+        ],
+        onEvent,
+        signal: new AbortController().signal,
+      });
+
+      // The traversal is gone from the name, the content survived the trip.
+      const saved = join(workspace, 'attachments', CHAT, 'sneaky notes.txt');
+      expect(readFileSync(saved, 'utf8')).toBe('remember the milk');
+
+      const prompt = engine.sessions[0]?.prompts[0] ?? '';
+      expect(prompt).toContain('read my notes');
+      expect(prompt).toContain(`attachments/${CHAT}/sneaky notes.txt`);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves the prompt alone when there is nothing attached', async () => {
+    const { onEvent } = collect();
+
+    await run(onEvent);
+
+    expect(engine.sessions[0]?.prompts[0]).toBe('hello');
   });
 });

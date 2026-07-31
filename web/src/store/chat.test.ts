@@ -179,7 +179,7 @@ describe('the client-side queue', () => {
     await useChatStore.getState().send(CHAT, 'second');
 
     expect(send, 'the second one waits').toHaveBeenCalledTimes(1);
-    expect(useChatStore.getState().queued[CHAT]).toBe('second');
+    expect(useChatStore.getState().queued[CHAT]).toEqual({ text: 'second', attachments: [] });
 
     send.mockResolvedValue({ runId: 'run-second', userMessageId: 'msg-second' });
     apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-answer' });

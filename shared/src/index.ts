@@ -131,6 +131,7 @@ export interface MessageDTO {
   content: string;
   thinking: string;
   tools: ToolCallDTO[];
+  attachments: AttachmentDTO[];
   createdAt: string;
 }
 
@@ -163,9 +164,21 @@ export interface PatchChatRequest {
   model?: string;
 }
 
+/**
+ * A file sent with a message (popy.spec §6, aw's shape). The data URI is the
+ * whole payload: stored on the message row, rendered from there, and written
+ * into the agent's workspace so its tools can read the file.
+ */
+export interface AttachmentDTO {
+  name: string;
+  type: string;
+  dataUri: string;
+}
+
 /** Body of `POST /v1/chats/:id/messages` (docs/agent-flow.md). */
 export interface SendMessageRequest {
   text: string;
+  attachments?: AttachmentDTO[];
 }
 
 /** 202 response of `POST /v1/chats/:id/messages`: the run has started. */

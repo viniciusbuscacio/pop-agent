@@ -31,7 +31,27 @@ const patchSchema = z
   })
   .strict();
 
-const sendSchema = z.object({ text: z.string().min(1).max(MAX_MESSAGE_LENGTH) }).strict();
+/** 16 MB of file is ~21.4 MB of base64; the schema allows a little slack. */
+const MAX_ATTACHMENT_DATA_URI = 22_400_000;
+const MAX_ATTACHMENTS = 8;
+
+const sendSchema = z
+  .object({
+    text: z.string().min(1).max(MAX_MESSAGE_LENGTH),
+    attachments: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1).max(200),
+            type: z.string().max(100),
+            dataUri: z.string().startsWith('data:').max(MAX_ATTACHMENT_DATA_URI),
+          })
+          .strict(),
+      )
+      .max(MAX_ATTACHMENTS)
+      .optional(),
+  })
+  .strict();
 
 export interface ChatRoutesDeps {
   chats: ChatService;
@@ -105,7 +125,11 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const parsed = sendSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    const result = deps.runs.startRun(c.req.param('id'), parsed.data.text);
+    const result = deps.runs.startRun(
+      c.req.param('id'),
+      parsed.data.text,
+      parsed.data.attachments ?? [],
+    );
     if (!result.ok) {
       return result.reason === 'chat_not_found'
         ? chatNotFound(c)
@@ -217,6 +241,11 @@ function toMessageDto(message: Message): MessageDTO {
       name: tool.name,
       status: tool.status,
       detail: tool.detail,
+    })),
+    attachments: message.attachments.map((attachment) => ({
+      name: attachment.name,
+      type: attachment.type,
+      dataUri: attachment.dataUri,
     })),
     createdAt: message.createdAt,
   };

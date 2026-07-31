@@ -1,4 +1,7 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import type { Attachment } from '../../domain/chat/chat.js';
 import type {
   AgentBridge,
   AgentEvent,
@@ -51,6 +54,8 @@ export interface PiRunUsage {
 export interface PiBridgeDeps {
   chats: ChatRepo;
   engine: PiEngine;
+  /** Where attached files are written so the agent's tools can open them. */
+  workspace?: string;
   /** Used when a chat has no model of its own. Read per run: it is a setting. */
   defaultModelId?: () => string;
   /** The user's custom instructions. Read per run, same reason. */
@@ -84,7 +89,12 @@ export class PiAgentBridge implements AgentBridge {
   constructor(private readonly deps: PiBridgeDeps) {}
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
-    const { chatId, prompt, model, onEvent, signal } = request;
+    const { chatId, model, onEvent, signal } = request;
+
+    // Attachments become files in the workspace, and the prompt says where:
+    // the agent reads them with the same tools it reads anything else. aw
+    // extracts text server-side instead; an agent with a read tool need not.
+    const prompt = this.withAttachments(request);
 
     let entry: CachedSession;
     try {
@@ -149,6 +159,26 @@ export class PiAgentBridge implements AgentBridge {
 
   private get defaultModelId(): string {
     return this.deps.defaultModelId?.() ?? DEFAULT_MODEL_ID;
+  }
+
+  /** Writes the attached files and appends their whereabouts to the prompt. */
+  private withAttachments(request: AgentRunRequest): string {
+    const { workspace } = this.deps;
+    if (workspace === undefined || request.attachments.length === 0) return request.prompt;
+
+    const saved: string[] = [];
+    for (const attachment of request.attachments) {
+      const relative = saveAttachment(workspace, request.chatId, attachment);
+      if (relative !== undefined) saved.push(`- ${relative} (${attachment.type})`);
+    }
+    if (saved.length === 0) return request.prompt;
+
+    return (
+      `${request.prompt}\n\n` +
+      `[The user attached ${String(saved.length)} file(s), saved in your workspace:\n` +
+      `${saved.join('\n')}\n` +
+      `Open them with your tools when they matter to the request.]`
+    );
   }
 
   private async acquire(chatId: string, modelId: string): Promise<CachedSession> {
@@ -398,6 +428,31 @@ class RunTranslator {
       cost: (this.total?.cost ?? 0) + usage.cost,
     };
   }
+}
+
+/**
+ * One attachment onto disk, under `attachments/<chatId>/` in the workspace.
+ * Returns the workspace-relative path, or undefined for a payload that is not
+ * a well-formed data URI -- a bad file must not sink the whole run.
+ */
+function saveAttachment(
+  workspace: string,
+  chatId: string,
+  attachment: Attachment,
+): string | undefined {
+  const match = /^data:[^;,]*;base64,(.+)$/.exec(attachment.dataUri);
+  if (match?.[1] === undefined) return undefined;
+
+  // The name is the user's; the path it lands on is ours.
+  const name = basename(attachment.name).replace(/[^\w.() -]/g, '_') || 'file';
+  const dir = join(workspace, 'attachments', chatId);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, name), Buffer.from(match[1], 'base64'));
+  } catch {
+    return undefined;
+  }
+  return `attachments/${chatId}/${name}`;
 }
 
 /** The header line of a tool card: the command, the file, or the raw call. */

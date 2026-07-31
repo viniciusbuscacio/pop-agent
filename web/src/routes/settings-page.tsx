@@ -640,6 +640,7 @@ function AboutSection() {
       >
         {t('settings.about.repo')}
       </a>
+      <p className="text-xs text-[var(--muted)]">{t('settings.about.iconCredit')}</p>
     </Card>
   );
 }

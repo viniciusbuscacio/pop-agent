@@ -1,4 +1,5 @@
 import type {
+  AttachmentDTO,
   ChatDTO,
   ChatListResponse,
   MessagesResponse,
@@ -31,10 +32,10 @@ export const chatsService = {
     return apiRequest<MessagesResponse>(`/chats/${id}/messages${query}`);
   },
 
-  send(id: string, text: string): Promise<SendMessageResponse> {
+  send(id: string, text: string, attachments: AttachmentDTO[] = []): Promise<SendMessageResponse> {
     return apiRequest<SendMessageResponse>(`/chats/${id}/messages`, {
       method: 'POST',
-      body: { text },
+      body: attachments.length > 0 ? { text, attachments } : { text },
     });
   },
 

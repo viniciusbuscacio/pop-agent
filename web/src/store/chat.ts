@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatDTO, MessageDTO, StreamEvent, ToolCallDTO } from '@popy/shared';
+import type { AttachmentDTO, ChatDTO, MessageDTO, StreamEvent, ToolCallDTO } from '@popy/shared';
 import { chatsService } from '../services/chats';
 
 /**
@@ -33,14 +33,14 @@ interface ChatState {
   messages: Record<string, MessageDTO[]>;
   live: Record<string, LiveRun>;
   /** One message per chat may wait for the current run to finish. */
-  queued: Record<string, string>;
+  queued: Record<string, { text: string; attachments: AttachmentDTO[] }>;
   failures: Record<string, string>;
 
   loadChats: () => Promise<void>;
   loadArchived: () => Promise<void>;
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string) => Promise<void>;
-  send: (chatId: string, text: string) => Promise<void>;
+  send: (chatId: string, text: string, attachments?: AttachmentDTO[]) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
@@ -110,15 +110,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
-  async send(chatId, text) {
+  async send(chatId, text, attachments = []) {
     const state = get();
     if (state.live[chatId] !== undefined) {
       // A run is already going: hold this one and send it when the chat frees.
-      set((current) => ({ queued: { ...current.queued, [chatId]: text } }));
+      set((current) => ({ queued: { ...current.queued, [chatId]: { text, attachments } } }));
       return;
     }
 
-    const { runId, userMessageId } = await chatsService.send(chatId, text);
+    const { runId, userMessageId } = await chatsService.send(chatId, text, attachments);
     set((current) => {
       const existing = current.live[chatId];
       return {
@@ -133,6 +133,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               content: text,
               thinking: '',
               tools: [],
+              attachments,
               createdAt: new Date().toISOString(),
             },
           ],
@@ -264,6 +265,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     content: live.content,
                     thinking: live.thinking,
                     tools: live.tools,
+                    attachments: [],
                     createdAt: new Date().toISOString(),
                   },
                 ],
@@ -279,7 +281,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const waiting = get().queued[chatId];
         if (waiting !== undefined) {
           set((state) => ({ queued: without(state.queued, chatId) }));
-          void get().send(chatId, waiting);
+          void get().send(chatId, waiting.text, waiting.attachments);
         }
         return;
       }

@@ -12,15 +12,18 @@ export function ChatMessage({
   message,
   streaming = false,
 }: {
-  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools'>;
+  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments'>;
   streaming?: boolean;
 }) {
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end" data-testid="message-user">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap">
-          {message.content}
-        </div>
+      <div className="flex flex-col items-end gap-2" data-testid="message-user">
+        {message.content.length > 0 ? (
+          <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap">
+            {message.content}
+          </div>
+        ) : null}
+        {message.attachments.length > 0 ? <Attachments attachments={message.attachments} /> : null}
       </div>
     );
   }
@@ -42,6 +45,41 @@ export function ChatMessage({
         </div>
       ) : streaming && message.thinking.length === 0 && message.tools.length === 0 ? (
         <Cursor />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What was sent along with the words (aw's split): images render as
+ * thumbnails, everything else as a named chip. Tapping an image opens it in a
+ * new tab -- the data URI is the file.
+ */
+function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }) {
+  const images = attachments.filter((entry) => entry.type.startsWith('image/'));
+  const files = attachments.filter((entry) => !entry.type.startsWith('image/'));
+
+  return (
+    <div className="flex max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">
+      {images.map((image, index) => (
+        <img
+          key={`${image.name}-${String(index)}`}
+          src={image.dataUri}
+          alt={image.name}
+          className="max-h-72 max-w-full rounded-xl object-contain"
+        />
+      ))}
+      {files.length > 0 ? (
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {files.map((file, index) => (
+            <span
+              key={`${file.name}-${String(index)}`}
+              className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--muted)]"
+            >
+              <span className="truncate">{file.name}</span>
+            </span>
+          ))}
+        </div>
       ) : null}
     </div>
   );

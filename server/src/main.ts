@@ -63,6 +63,7 @@ const providers = new ProviderService({
 function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
     chats: context.chats,
+    workspace,
     engine: new SdkPiEngine({
       workspace,
       sessionsDir: join(context.dataDir, 'sessions'),

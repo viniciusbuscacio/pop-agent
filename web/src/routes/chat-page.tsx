@@ -147,6 +147,7 @@ export function ChatPage() {
                   content: live.content,
                   thinking: live.thinking,
                   tools: live.tools,
+                  attachments: [],
                 }}
               />
             )
@@ -186,8 +187,8 @@ export function ChatPage() {
       <Composer
         chatId={chatId}
         busy={live !== undefined}
-        {...(queued === undefined ? {} : { queuedText: queued })}
-        onSend={(text) => void send(chatId, text)}
+        {...(queued === undefined ? {} : { queuedText: queued.text })}
+        onSend={(text, attachments) => void send(chatId, text, attachments)}
         onStop={() => void stop(chatId)}
       />
     </>

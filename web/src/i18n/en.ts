@@ -79,7 +79,11 @@ export const en = {
 
   'chat.placeholder': 'Message Popy…',
   'chat.send': 'Send',
+  'chat.queue': 'Queue message',
   'chat.stop': 'Stop',
+  'chat.attach': 'Attach a file',
+  'chat.attachRemove': 'Remove {name}',
+  'chat.attachTooLarge': '{name} is too large to attach (limit 16 MB).',
   'chat.thinking': 'Thinking',
   'chat.ranTools': 'Ran {count} tools',
   'chat.toolFailed': 'failed',
@@ -154,6 +158,7 @@ export const en = {
   'settings.about.node': 'Node',
   'settings.about.pi': 'pi agent',
   'settings.about.repo': 'Source code',
+  'settings.about.iconCredit': 'App icon based on Tabler Icons (MIT).',
 
   'update.available': 'A new version is ready.',
   'update.reload': 'Reload',

@@ -1,4 +1,4 @@
-import type { Chat, ChatSummary, Message, ToolRecord } from '../../domain/chat/chat.js';
+import type { Attachment, Chat, ChatSummary, Message, ToolRecord } from '../../domain/chat/chat.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
 import type { Db } from './types.js';
 
@@ -197,7 +197,7 @@ function toMessage(row: MessageRow): Message {
     content: row.content,
     thinking: row.thinking,
     tools: parseJson<ToolRecord[]>(row.tools_json, []),
-    attachments: parseJson<string[]>(row.attachments_json, []),
+    attachments: parseJson<Attachment[]>(row.attachments_json, []),
     createdAt: row.created_at,
   };
 }
