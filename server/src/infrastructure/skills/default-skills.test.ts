@@ -32,6 +32,11 @@ describe('default skills routing', () => {
     expect(selected[0]?.skill.slug).toBe('self-architecture');
   });
 
+  it('routes a Portuguese screenshot request to the browser skill', () => {
+    const selected = selectSkills('Tira um screenshot do site pra mim, navega na internet', SKILLS);
+    expect(selected[0]?.skill.slug).toBe('web-browsing');
+  });
+
   it('ships know-thyself pinned: identity is not left to the router', () => {
     expect(DEFAULT_SKILLS.find((skill) => skill.slug === 'know-thyself')?.pinned).toBe(true);
   });
