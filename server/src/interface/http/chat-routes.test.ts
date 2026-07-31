@@ -121,7 +121,7 @@ describe('sending a message', () => {
     expect(res.status).toBe(202);
     const body = (await res.json()) as { runId: string; userMessageId: string };
     expect(body.runId).toMatch(/^run-/);
-    expect(body.userMessageId).toMatch(/^msg-/);
+    expect(body.userMessageId).toMatch(/^message-/);
     await fixture.runs.whenIdle();
   });
 

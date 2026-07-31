@@ -187,8 +187,17 @@ llm_runs(id, chat_id, provider, model, tokens_in, tokens_out,
 skills_index(skill_id, name, description, source, embedding)  -- §8
 ```
 
-- IDs: aw's scheme — `chat-` + 12 hex, `msg-` + 16 hex, `run-` + 16 hex, from
-  a CSPRNG: nothing about the install leaks through an id.
+- **IDs and internal file names** — two shapes, one CSPRNG generator (11 base62
+  chars ≈ 65 bits, drawn by rejection sampling so there is no modulo bias):
+  - **Entity id** = `prefix-<11 base62>` with a full-word prefix and a hyphen:
+    `chat-Hq8Lm2XcN5R`, `message-…`, `run-…`, `file-…`. Nothing about the
+    install leaks through an id. On a primary-key collision (astronomically
+    unlikely, but defined) the repo re-draws the id and retries once — it never
+    fails the request or overwrites.
+  - **Internal file** = `prefix_<11 base62>.ext` with an underscore, for files
+    Popy makes itself (`audio_2f9FmGo58Jm.wav`, `text_…`). Created with an
+    exclusive flag; on `EEXIST` it re-draws. The user's own files (attachments,
+    notes) keep their names — the convention is for Popy's internal artifacts.
 - `messages.tools_json` holds **one record per tool call**, not per event: a
   call that starts, streams six lines and exits is one thing that happened.
   The frontend folds the live stream the same way, so a conversation reads

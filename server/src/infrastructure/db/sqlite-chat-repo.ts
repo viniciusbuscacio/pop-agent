@@ -1,30 +1,50 @@
 import type { Attachment, Chat, ChatSummary, Message, ToolRecord } from '../../domain/chat/chat.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
+import { entityId } from '../../domain/ids.js';
 import type { Db } from './types.js';
+
+/**
+ * A primary-key collision is astronomically unlikely with 65-bit ids, but the
+ * behaviour is defined (popy.spec §6): re-draw the id and try once more rather
+ * than fail the request or overwrite. One retry is plenty.
+ */
+function isPrimaryKeyCollision(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as { code?: string }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
+  );
+}
 
 /** SQLite adapter for {@link ChatRepo}. */
 export class SqliteChatRepo implements ChatRepo {
   constructor(private readonly db: Db) {}
 
   create(chat: Chat): Chat {
-    this.db
-      .prepare(
-        `INSERT INTO chats
-           (id, title, model, archived, pi_session_id, summary, auto_title, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        chat.id,
-        chat.title,
-        chat.model,
-        chat.archived ? 1 : 0,
-        chat.piSessionId,
-        chat.summary,
-        chat.autoTitle ? 1 : 0,
-        chat.createdAt,
-        chat.updatedAt,
-      );
-    return chat;
+    const insert = this.db.prepare(
+      `INSERT INTO chats
+         (id, title, model, archived, pi_session_id, summary, auto_title, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let current = chat;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        insert.run(
+          current.id,
+          current.title,
+          current.model,
+          current.archived ? 1 : 0,
+          current.piSessionId,
+          current.summary,
+          current.autoTitle ? 1 : 0,
+          current.createdAt,
+          current.updatedAt,
+        );
+        return current;
+      } catch (error) {
+        if (attempt >= 1 || !isPrimaryKeyCollision(error)) throw error;
+        current = { ...current, id: entityId('chat') };
+      }
+    }
   }
 
   get(id: string): Chat | undefined {
@@ -109,23 +129,30 @@ export class SqliteChatRepo implements ChatRepo {
   }
 
   appendMessage(message: Message): Message {
-    this.db
-      .prepare(
-        `INSERT INTO messages
-           (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        message.id,
-        message.chatId,
-        message.role,
-        message.content,
-        message.thinking,
-        JSON.stringify(message.tools),
-        JSON.stringify(message.attachments),
-        message.createdAt,
-      );
-    return message;
+    const insert = this.db.prepare(
+      `INSERT INTO messages
+         (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let current = message;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        insert.run(
+          current.id,
+          current.chatId,
+          current.role,
+          current.content,
+          current.thinking,
+          JSON.stringify(current.tools),
+          JSON.stringify(current.attachments),
+          current.createdAt,
+        );
+        return current;
+      } catch (error) {
+        if (attempt >= 1 || !isPrimaryKeyCollision(error)) throw error;
+        current = { ...current, id: entityId('message') };
+      }
+    }
   }
 
   touch(chatId: string, at: string): void {

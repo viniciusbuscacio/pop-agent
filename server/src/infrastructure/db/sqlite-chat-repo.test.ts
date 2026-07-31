@@ -207,4 +207,20 @@ describe('messages', () => {
   it('refuses a message pointing at no chat', () => {
     expect(() => repo.appendMessage(message('chat-000000000000'))).toThrow();
   });
+
+  it('re-draws the id and retries on a primary-key collision (popy.spec §6)', () => {
+    // Force a collision: create a chat, then try to create another with the
+    // same id. The repo must not throw or overwrite -- it re-draws and inserts.
+    const taken = chat({ id: 'chat-CollisionAAA', title: 'first' });
+    repo.create(taken);
+
+    const clash = chat({ id: 'chat-CollisionAAA', title: 'second' });
+    const stored = repo.create(clash);
+
+    expect(stored.id).not.toBe('chat-CollisionAAA');
+    expect(stored.title).toBe('second');
+    // Both rows survive: nothing was overwritten.
+    expect(repo.get('chat-CollisionAAA')?.title).toBe('first');
+    expect(repo.get(stored.id)?.title).toBe('second');
+  });
 });
