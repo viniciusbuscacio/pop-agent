@@ -6,6 +6,7 @@ import type {
   ModelDTO,
   ProviderStatusDTO,
   SettingsDTO,
+  SkillDTO,
 } from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
@@ -13,6 +14,7 @@ import { authService } from '../services/auth';
 import { chatsService } from '../services/chats';
 import { providersService } from '../services/providers';
 import { settingsService } from '../services/settings';
+import { skillsService } from '../services/skills';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { Button, Card, Segmented, TextField } from '../ui/controls';
@@ -23,12 +25,13 @@ import { Button, Card, Segmented, TextField } from '../ui/controls';
  * screen and become a row of tabs when there is no room for a column.
  */
 
-type Section = 'general' | 'model' | 'memory' | 'appearance' | 'security' | 'about';
+type Section = 'general' | 'model' | 'memory' | 'skills' | 'appearance' | 'security' | 'about';
 
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'memory', labelKey: 'settings.section.memory' },
+  { id: 'skills', labelKey: 'settings.section.skills' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
   { id: 'security', labelKey: 'settings.section.security' },
   { id: 'about', labelKey: 'settings.section.about' },
@@ -77,6 +80,7 @@ export function SettingsPage() {
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
+          {section === 'skills' ? <SkillsSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
           {section === 'security' ? <SecuritySection /> : null}
           {section === 'about' ? <AboutSection /> : null}
@@ -254,6 +258,187 @@ function MemorySection() {
           </Button>
         ) : null}
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Skills management (popy.spec §8). A list, and a full-screen editor when you
+ * create or edit one -- never a side drawer (permanent house veto). Built-in
+ * skills can be edited but not deleted.
+ */
+function SkillsSection() {
+  const [skills, setSkills] = useState<SkillDTO[]>([]);
+  const [editing, setEditing] = useState<SkillDTO | 'new' | undefined>(undefined);
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function reload(): Promise<void> {
+    try {
+      setSkills((await skillsService.list()).skills);
+    } catch {
+      // Leave what is on screen.
+    }
+  }
+
+  async function remove(skill: SkillDTO): Promise<void> {
+    if (!window.confirm(t('skills.deleteConfirm', { name: skill.name }))) return;
+    try {
+      await skillsService.remove(skill.slug);
+      await reload();
+    } catch {
+      // Ignore; the list is authoritative on the next load.
+    }
+  }
+
+  if (editing !== undefined) {
+    return (
+      <SkillEditor
+        skill={editing === 'new' ? undefined : editing}
+        onDone={() => {
+          setEditing(undefined);
+          void reload();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--muted)]">{t('skills.intro')}</p>
+        <div>
+          <Button type="button" data-testid="skill-new" onClick={() => setEditing('new')}>
+            {t('skills.new')}
+          </Button>
+        </div>
+      </Card>
+
+      <div className="flex flex-col gap-2">
+        {skills.map((skill) => (
+          <Card key={skill.slug} className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{skill.name}</span>
+                {skill.builtin ? (
+                  <span className="rounded bg-[var(--panel-bg)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
+                    {t('skills.builtin')}
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
+            </div>
+            <div className="flex flex-none gap-1">
+              <Button type="button" variant="ghost" onClick={() => setEditing(skill)}>
+                {t('skills.edit')}
+              </Button>
+              {skill.builtin ? null : (
+                <Button type="button" variant="danger" onClick={() => void remove(skill)}>
+                  {t('skills.delete')}
+                </Button>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
+  const [slug, setSlug] = useState(skill?.slug ?? '');
+  const [name, setName] = useState(skill?.name ?? '');
+  const [description, setDescription] = useState(skill?.description ?? '');
+  const [whenToUse, setWhenToUse] = useState(skill?.whenToUse ?? '');
+  const [body, setBody] = useState(skill?.body ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+
+  const isNew = skill === undefined;
+  const canSave = slug.trim().length > 0 && name.trim().length > 0 && !busy;
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await skillsService.save({ slug, name, description, whenToUse, body });
+      onDone();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : t('error.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <button
+        type="button"
+        data-testid="skill-back"
+        onClick={onDone}
+        className="self-start text-sm text-[var(--accent)]"
+      >
+        ← {t('skills.back')}
+      </button>
+
+      <TextField
+        id="skill-slug"
+        data-testid="skill-slug"
+        label={t('skills.field.slug')}
+        value={slug}
+        disabled={!isNew}
+        onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+      />
+      <TextField
+        id="skill-name"
+        data-testid="skill-name"
+        label={t('skills.field.name')}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
+      <TextField
+        id="skill-description"
+        label={t('skills.field.description')}
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+      />
+      <TextField
+        id="skill-when"
+        label={t('skills.field.whenToUse')}
+        hint={t('skills.field.whenToUseHint')}
+        value={whenToUse}
+        onChange={(event) => setWhenToUse(event.target.value)}
+      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="skill-body" className="text-sm text-[var(--key-fg-dim)]">
+          {t('skills.field.body')}
+        </label>
+        <textarea
+          id="skill-body"
+          data-testid="skill-body"
+          rows={10}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 font-mono text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+        />
+      </div>
+
+      {error !== undefined ? (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex gap-2">
+        <Button type="button" data-testid="skill-save" disabled={!canSave} onClick={() => void save()}>
+          {t('common.save')}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          {t('common.cancel')}
+        </Button>
       </div>
     </Card>
   );

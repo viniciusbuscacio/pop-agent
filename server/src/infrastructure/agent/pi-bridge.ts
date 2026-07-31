@@ -57,6 +57,8 @@ export interface PiBridgeDeps {
   engine: PiEngine;
   /** Where attached files are written so the agent's tools can open them. */
   workspace?: string;
+  /** The Skill Router: the relevant skills for a message, as prompt blocks. */
+  skillsFor?: (message: string) => string[];
   /** Used when a chat has no model of its own. Read per run: it is a setting. */
   defaultModelId?: () => string;
   /** The user's custom instructions. Read per run, same reason. */
@@ -95,7 +97,8 @@ export class PiAgentBridge implements AgentBridge {
     // Attachments become files in the workspace, and the prompt says where:
     // the agent reads them with the same tools it reads anything else. aw
     // extracts text server-side instead; an agent with a read tool need not.
-    const prompt = this.withAttachments(request);
+    // Then the Skill Router prepends the few skills relevant to this message.
+    const prompt = this.withSkills(this.withAttachments(request), request.prompt);
 
     let entry: CachedSession;
     try {
@@ -187,6 +190,20 @@ export class PiAgentBridge implements AgentBridge {
 
   private get defaultModelId(): string {
     return this.deps.defaultModelId?.() ?? DEFAULT_MODEL_ID;
+  }
+
+  /**
+   * Prepends the skills the router picked for this message (popy.spec §8).
+   * These are Popy's own trusted instructions, so they lead the prompt rather
+   * than being wrapped as untrusted data.
+   */
+  private withSkills(prompt: string, message: string): string {
+    const blocks = this.deps.skillsFor?.(message) ?? [];
+    if (blocks.length === 0) return prompt;
+    return (
+      `[Relevant skills for this request — follow them:\n\n${blocks.join('\n\n---\n\n')}\n]\n\n` +
+      prompt
+    );
   }
 
   /** Writes the attached files and appends their whereabouts to the prompt. */

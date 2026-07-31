@@ -100,6 +100,30 @@ export interface UserMemoryDTO {
   hasBackup: boolean;
 }
 
+/** A skill as Settings → Skills shows and edits it (popy.spec §8). */
+export interface SkillDTO {
+  slug: string;
+  name: string;
+  description: string;
+  whenToUse: string;
+  body: string;
+  /** Built-in skills can be edited but not deleted. */
+  builtin: boolean;
+}
+
+export interface SkillsResponse {
+  skills: SkillDTO[];
+}
+
+/** `POST`/`PUT /v1/skills` — create or replace a skill. */
+export interface SaveSkillRequest {
+  slug: string;
+  name: string;
+  description: string;
+  whenToUse: string;
+  body: string;
+}
+
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
   popyVersion: string;

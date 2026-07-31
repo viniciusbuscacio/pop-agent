@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import type { Hono } from 'hono';
@@ -16,6 +19,7 @@ import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
+import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
@@ -188,6 +192,7 @@ export function createTestApp(
     providers,
     transcriber: options.transcriber ?? new FakeTranscriber(),
     userMemory: new SqliteUserMemoryRepo(db),
+    skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },

@@ -14,6 +14,8 @@ import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
+import { SkillsVault } from './infrastructure/skills/skills-vault.js';
+import { selectSkills } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
@@ -51,6 +53,8 @@ const workspace = ensureWorkspace(resolveWorkspace());
 const settings = new SettingsService(context.settings);
 // The agent's own notes vault (popy.spec §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
+// The skills vault (popy.spec §8): seeds the defaults on first boot.
+const skillsVault = new SkillsVault(join(context.dataDir, 'skills'));
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The provider seen by the routes: key precedence (secrets over environment),
@@ -69,6 +73,10 @@ function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
     chats: context.chats,
     workspace,
+    // The Skill Router picks the few relevant skills for each message and
+    // returns their bodies for the bridge to prepend (popy.spec §8).
+    skillsFor: (message) =>
+      selectSkills(message, skillsVault.all()).map((selected) => selected.skill.body),
     engine: new SdkPiEngine({
       workspace,
       sessionsDir: join(context.dataDir, 'sessions'),
@@ -141,6 +149,7 @@ const app = createApp({
   providers,
   transcriber,
   userMemory: context.userMemory,
+  skills: skillsVault,
   hub,
   clock: systemClock,
   versions: readVersions(),

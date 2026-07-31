@@ -111,7 +111,22 @@ export const en = {
   'settings.section.general': 'General',
   'settings.section.model': 'Model',
   'settings.section.memory': 'Memory',
+  'settings.section.skills': 'Skills',
   'settings.section.appearance': 'Appearance',
+
+  'skills.intro': 'Skills are know-how Popy pulls in when a request calls for it.',
+  'skills.builtin': 'Built-in',
+  'skills.new': 'New skill',
+  'skills.edit': 'Edit',
+  'skills.delete': 'Delete',
+  'skills.deleteConfirm': 'Delete the skill "{name}"?',
+  'skills.field.slug': 'Id (lowercase, dashes)',
+  'skills.field.name': 'Name',
+  'skills.field.description': 'Description',
+  'skills.field.whenToUse': 'When to use',
+  'skills.field.whenToUseHint': 'The phrase that routes it in — "when the user asks about…".',
+  'skills.field.body': 'Instructions',
+  'skills.back': 'Back to skills',
 
   'settings.memory.label': 'What Popy knows about you',
   'settings.memory.hint':
