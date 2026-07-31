@@ -217,6 +217,7 @@ export const en = {
   'shell.archivedBadge': 'archived',
   'shell.filterFiles': 'Search files',
   'files.none': 'No files yet.',
+  'files.emptyFolder': 'This folder is empty.',
   'files.rootCrumb': 'Files',
   'files.count': '{count} file(s)',
   'files.select': 'Select',

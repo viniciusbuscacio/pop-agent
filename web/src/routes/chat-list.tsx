@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import type { ArtifactDTO, ChatDTO, FolderDTO } from '@popy/shared';
+import { NavLink, useMatch, useNavigate, useParams } from 'react-router-dom';
+import type { ChatDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { relativeTime } from '../lib/time';
-import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
+import { FolderIcon } from './files-page';
+import { useFilesStore } from '../store/files';
 import { Button, Segmented } from '../ui/controls';
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
@@ -16,7 +17,9 @@ export function ChatList() {
   const loadArchived = useChatStore((state) => state.loadArchived);
   const createChat = useChatStore((state) => state.createChat);
 
-  const [segment, setSegment] = useState<'chats' | 'files'>('chats');
+  const filesRoot = useMatch('/files');
+  const filesFolder = useMatch('/files/:folderId');
+  const segment: 'chats' | 'files' = filesRoot !== null || filesFolder !== null ? 'files' : 'chats';
   const [filter, setFilter] = useState('');
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
@@ -75,8 +78,8 @@ export function ChatList() {
               ariaLabel={t('shell.segments')}
               value={segment}
               onChange={(value) => {
-                setSegment(value);
                 setListMenu(false);
+                navigate(value === 'files' ? '/files' : '/');
               }}
               options={[
                 { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
@@ -118,6 +121,7 @@ export function ChatList() {
           </Button>
         ) : null}
 
+        {segment === 'files' ? null : (
         <input
           data-testid="chat-filter"
           value={filter}
@@ -126,10 +130,11 @@ export function ChatList() {
           aria-label={t('shell.filter')}
           className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
         />
+        )}
       </div>
 
       {segment === 'files' ? (
-        <FilesView filter={filter} />
+        <FolderTree />
       ) : (
         <div className="flex-1 overflow-y-auto">
           {viewArchived && !searching ? (
@@ -161,442 +166,60 @@ export function ChatList() {
 }
 
 /**
- * The Files tab, reworked after the 31/07 review: a real breadcrumb
- * (Files / folder, each level clickable), a consistent toolbar, per-item
- * menus on folders and files alike, batch selection with move/delete,
- * drag-and-drop upload with progress, and a danger-red delete everywhere
- * a delete lives. Flat tree: the root holds folders and loose files.
+ * The sidebar when Files is active (31/07 explorer layout): the folder tree.
+ * The content pane on the right shows the selected folder; here is only
+ * where-you-can-go, with counts, kept in sync through the shared store.
  */
-function FilesView({ filter }: { filter: string }) {
-  const chats = useChatStore((state) => state.chats);
-  const archived = useChatStore((state) => state.archived);
-  const [files, setFiles] = useState<ArtifactDTO[] | undefined>(undefined);
-  const [folders, setFolders] = useState<FolderDTO[]>([]);
-  const [openFolder, setOpenFolder] = useState<FolderDTO | undefined>(undefined);
-  const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
-  const [dragging, setDragging] = useState(false);
-  const picker = useRef<HTMLInputElement>(null);
+function FolderTree() {
+  const navigate = useNavigate();
+  const { folderId } = useParams();
+  const files = useFilesStore((state) => state.files);
+  const folders = useFilesStore((state) => state.folders);
+  const reload = useFilesStore((state) => state.reload);
 
   useEffect(() => {
     void reload();
-  }, []);
+  }, [reload]);
 
-  async function reload(): Promise<void> {
-    try {
-      const [{ artifacts: all }, { folders: tree }] = await Promise.all([
-        artifactsService.listAll(),
-        foldersService.list(),
-      ]);
-      setFiles(all);
-      setFolders(tree);
-      setOpenFolder((current) => tree.find((f) => f.id === current?.id));
-      setSelected(new Set());
-    } catch {
-      setFiles([]);
-      setFolders([]);
-    }
-  }
-
-  async function upload(list: FileList | File[] | null): Promise<void> {
-    const entries = list === null ? [] : Array.from(list);
-    if (entries.length === 0) return;
-    setUploading({ done: 0, total: entries.length });
-    try {
-      for (const [index, file] of entries.entries()) {
-        setUploading({ done: index, total: entries.length });
-        await artifactsService.uploadToFiles(file, openFolder?.id ?? '');
-      }
-    } finally {
-      setUploading(undefined);
-    }
-    await reload();
-  }
-
-  async function download(id: string): Promise<void> {
-    const { url } = await artifactsService.link(id);
-    window.open(url, '_blank', 'noopener');
-  }
-
-  async function renameFile(file: ArtifactDTO): Promise<void> {
-    const name = window.prompt(t('files.renamePrompt'), file.name);
-    if (name === null || name.trim().length === 0 || name === file.name) return;
-    await artifactsService.rename(file.id, name.trim());
-    await reload();
-  }
-
-  async function deleteFile(file: ArtifactDTO): Promise<void> {
-    if (!window.confirm(t('files.deleteConfirm', { name: file.name }))) return;
-    await artifactsService.remove(file.id);
-    await reload();
-  }
-
-  async function newFolder(): Promise<void> {
-    const name = window.prompt(t('files.newFolderPrompt'));
-    if (name === null || name.trim().length === 0) return;
-    await foldersService.create(name.trim());
-    await reload();
-  }
-
-  async function renameFolder(folder: FolderDTO): Promise<void> {
-    const name = window.prompt(t('files.renamePrompt'), folder.name);
-    if (name === null || name.trim().length === 0 || name === folder.name) return;
-    await foldersService.rename(folder.id, name.trim());
-    await reload();
-  }
-
-  async function deleteFolder(folder: FolderDTO): Promise<void> {
-    const inside = (files ?? []).filter((file) => file.folderId === folder.id).length;
-    if (!window.confirm(t('files.deleteFolderConfirm', { name: folder.name, count: inside }))) {
-      return;
-    }
-    await foldersService.remove(folder.id);
-    setOpenFolder(undefined);
-    await reload();
-  }
-
-  function toggleSelected(id: string): void {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function deleteSelected(): Promise<void> {
-    if (!window.confirm(t('files.deleteSelectedConfirm', { count: selected.size }))) return;
-    for (const id of selected) await artifactsService.remove(id);
-    setSelecting(false);
-    await reload();
-  }
-
-  async function moveSelected(folderId: string): Promise<void> {
-    for (const id of selected) await artifactsService.move(id, folderId);
-    setSelecting(false);
-    await reload();
-  }
-
-  const titles = new Map([...chats, ...archived].map((chat) => [chat.id, chat.title]));
-  const searching = filter.trim().length > 0;
-  const visibleFiles = (files ?? []).filter(
-    (file) =>
-      file.name.toLowerCase().includes(filter.toLowerCase()) &&
-      (searching || file.folderId === (openFolder?.id ?? '')),
-  );
-  const visibleFolders =
-    searching || openFolder !== undefined
-      ? []
-      : folders.filter((folder) => folder.name.toLowerCase().includes(filter.toLowerCase()));
+  const rootCount = (files ?? []).filter((file) => file.folderId === '').length;
 
   return (
-    <div
-      className={`flex-1 overflow-y-auto ${dragging ? 'outline-2 outline-dashed outline-[var(--accent)] -outline-offset-2' : ''}`}
-      data-testid="files-view"
-      onDragOver={(event) => {
-        event.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(event) => {
-        event.preventDefault();
-        setDragging(false);
-        void upload(Array.from(event.dataTransfer.files));
-      }}
-    >
-      {/* Breadcrumb: where you are, every level clickable (31/07 review, 1-4). */}
-      <div className="flex items-center gap-1 px-4 pt-1 pb-2" data-testid="files-breadcrumb">
-        <button
-          type="button"
-          data-testid="crumb-root"
-          onClick={() => setOpenFolder(undefined)}
-          className={`text-sm ${openFolder === undefined ? 'font-semibold text-[var(--screen-fg)]' : 'text-[var(--accent)] hover:underline'}`}
-        >
-          {t('files.rootCrumb')}
-        </button>
-        {openFolder !== undefined ? (
-          <>
-            <span className="text-sm text-[var(--muted)]">/</span>
-            <span className="text-sm font-semibold" data-testid="crumb-folder">
-              {openFolder.name}
-            </span>
-            <button
-              type="button"
-              data-testid="folder-menu"
-              aria-label={t('shell.chatMenu')}
-              onClick={() => setMenuFor((v) => (v === openFolder.id ? undefined : openFolder.id))}
-              className="relative rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-            >
-              ⋯
-            </button>
-            {menuFor === openFolder.id ? (
-              <div
-                role="menu"
-                className="absolute top-8 left-24 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-              >
-                <MenuItem
-                  testId="folder-rename"
-                  label={t('files.renameFolder')}
-                  onClick={() => {
-                    setMenuFor(undefined);
-                    void renameFolder(openFolder);
-                  }}
-                />
-                <MenuItem
-                  testId="folder-delete"
-                  label={t('files.deleteFolder')}
-                  danger
-                  onClick={() => {
-                    setMenuFor(undefined);
-                    void deleteFolder(openFolder);
-                  }}
-                />
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <span className="ml-auto text-xs text-[var(--muted)]" data-testid="files-count">
-          {t('files.count', { count: visibleFiles.length })}
+    <div className="flex-1 overflow-y-auto" data-testid="folder-tree">
+      <button
+        type="button"
+        data-testid="tree-root"
+        onClick={() => navigate('/files')}
+        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left ${
+          folderId === undefined ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
+        }`}
+      >
+        <FolderIcon />
+        <span className="truncate text-sm">{t('files.rootCrumb')}</span>
+        <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
+          {t('files.count', { count: rootCount })}
         </span>
-      </div>
-
-      {/* One toolbar, same on every screen (review, 7). */}
-      <div className="flex items-center gap-2 px-3 pb-2">
-        <input
-          ref={picker}
-          type="file"
-          multiple
-          hidden
-          data-testid="files-upload-input"
-          onChange={(event) => {
-            void upload(event.target.files);
-            event.target.value = '';
-          }}
-        />
-        <Button type="button" data-testid="files-upload" onClick={() => picker.current?.click()}>
-          {t('files.upload')}
-        </Button>
-        {openFolder === undefined ? (
-          <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
-            {t('files.newFolder')}
-          </Button>
-        ) : null}
-        {visibleFiles.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            data-testid="files-select"
-            onClick={() => {
-              setSelecting((value) => !value);
-              setSelected(new Set());
-            }}
-          >
-            {selecting ? t('common.cancel') : t('files.select')}
-          </Button>
-        ) : null}
-      </div>
-
-      {uploading !== undefined ? (
-        <p className="px-4 pb-2 text-xs text-[var(--accent)]" data-testid="files-uploading" role="status">
-          {t('files.uploading', { done: uploading.done + 1, total: uploading.total })}
-        </p>
-      ) : null}
-
-      {selecting && selected.size > 0 ? (
-        <div className="flex items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
-          <span className="text-xs text-[var(--muted)]">
-            {t('files.selected', { count: selected.size })}
+      </button>
+      {folders.map((folder) => (
+        <button
+          key={folder.id}
+          type="button"
+          data-testid="tree-folder"
+          onClick={() => navigate(`/files/${folder.id}`)}
+          className={`flex w-full items-center gap-2 py-2.5 pr-4 pl-8 text-left ${
+            folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
+          }`}
+        >
+          <FolderIcon />
+          <span className="truncate text-sm">{folder.name}</span>
+          <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
+            {t('files.count', {
+              count: (files ?? []).filter((file) => file.folderId === folder.id).length,
+            })}
           </span>
-          <select
-            data-testid="files-move-to"
-            defaultValue=""
-            onChange={(event) => {
-              if (event.target.value === '') return;
-              const target = event.target.value === 'root' ? '' : event.target.value;
-              event.target.value = '';
-              void moveSelected(target);
-            }}
-            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs"
-          >
-            <option value="">{t('files.moveTo')}</option>
-            <option value="root">{t('files.rootCrumb')}</option>
-            {folders
-              .filter((folder) => folder.id !== openFolder?.id)
-              .map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-          </select>
-          <Button type="button" variant="danger" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
-            {t('shell.delete')}
-          </Button>
-        </div>
-      ) : null}
-
-      {visibleFolders.length > 0 ? (
-        <ul data-testid="folder-list">
-          {visibleFolders.map((folder) => (
-            <li key={folder.id} className="relative">
-              <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
-                <button
-                  type="button"
-                  data-testid="folder-row"
-                  onClick={() => setOpenFolder(folder)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <FolderIcon />
-                  <span className="truncate text-sm font-medium">{folder.name}</span>
-                  <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-                    {t('files.count', {
-                      count: (files ?? []).filter((file) => file.folderId === folder.id).length,
-                    })}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  data-testid="folder-row-menu"
-                  aria-label={t('shell.chatMenu')}
-                  onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
-                  className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                >
-                  ⋯
-                </button>
-              </div>
-              {menuFor === folder.id ? (
-                <div
-                  role="menu"
-                  className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                >
-                  <MenuItem
-                    testId="folder-rename"
-                    label={t('files.renameFolder')}
-                    onClick={() => {
-                      setMenuFor(undefined);
-                      void renameFolder(folder);
-                    }}
-                  />
-                  <MenuItem
-                    testId="folder-delete"
-                    label={t('files.deleteFolder')}
-                    danger
-                    onClick={() => {
-                      setMenuFor(undefined);
-                      void deleteFolder(folder);
-                    }}
-                  />
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {files === undefined ? null : visibleFiles.length === 0 && visibleFolders.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-          <p className="text-sm text-[var(--muted)]">{t('files.none')}</p>
-          <p className="text-xs text-[var(--muted)]">{t('files.emptyCta')}</p>
-        </div>
-      ) : (
-        <ul data-testid="all-artifacts">
-          {visibleFiles.map((file) => (
-            <li key={file.id} className="relative">
-              <div
-                data-testid="artifact-row"
-                className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
-              >
-                {selecting ? (
-                  <input
-                    type="checkbox"
-                    data-testid="file-check"
-                    checked={selected.has(file.id)}
-                    onChange={() => toggleSelected(file.id)}
-                  />
-                ) : null}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {file.name}
-                      {file.version > 1 ? (
-                        <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
-                      ) : null}
-                    </span>
-                    <button
-                      type="button"
-                      data-testid="file-menu"
-                      aria-label={t('shell.chatMenu')}
-                      onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
-                      className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                    >
-                      ⋯
-                    </button>
-                  </div>
-                  <span className="block truncate text-xs text-[var(--muted)]">
-                    {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
-                    {formatSize(file.size)} · {relativeTime(file.createdAt)}
-                  </span>
-                </div>
-              </div>
-              {menuFor === file.id ? (
-                <div
-                  role="menu"
-                  className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                >
-                  <MenuItem
-                    testId="file-download"
-                    label={t('files.download')}
-                    onClick={() => {
-                      setMenuFor(undefined);
-                      void download(file.id);
-                    }}
-                  />
-                  <MenuItem
-                    testId="file-rename"
-                    label={t('shell.rename')}
-                    onClick={() => {
-                      setMenuFor(undefined);
-                      void renameFile(file);
-                    }}
-                  />
-                  <MenuItem
-                    testId="file-delete"
-                    label={t('shell.delete')}
-                    danger
-                    onClick={() => {
-                      setMenuFor(undefined);
-                      void deleteFile(file);
-                    }}
-                  />
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
+        </button>
+      ))}
     </div>
   );
-}
-
-/** Line-style folder, matching the app's stroked icons (review, 9). */
-function FolderIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${String(bytes)} B`;
-  if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** How far a finger must travel before the swipe action fires. */

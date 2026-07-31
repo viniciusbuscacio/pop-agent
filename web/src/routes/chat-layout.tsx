@@ -16,6 +16,11 @@ import { ChatList } from './chat-list';
 export function ChatLayout() {
   const apply = useChatStore((state) => state.apply);
   const openChat = useMatch('/chat/:chatId');
+  const filesRoot = useMatch('/files');
+  const filesFolder = useMatch('/files/:folderId');
+  // On a phone, Files is its own screen (back returns to the list), exactly
+  // like a conversation; on a wide screen the sidebar stays as the tree.
+  const contentOpen = openChat !== null || filesRoot !== null || filesFolder !== null;
 
   useEffect(() => {
     // One stream for the whole session; the store fans events out from here.
@@ -30,12 +35,12 @@ export function ChatLayout() {
   return (
     <div className="flex h-dvh overflow-hidden">
       <aside
-        className={`${openChat === null ? 'flex' : 'hidden md:flex'} w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
+        className={`${contentOpen ? 'hidden md:flex' : 'flex'} w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
       >
         <ChatList />
       </aside>
 
-      <main className={`${openChat === null ? 'hidden md:flex' : 'flex'} min-w-0 flex-1 flex-col`}>
+      <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
         <Outlet />
       </main>
     </div>
