@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.10 — 2026-07-31.
+Version 1.11 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -608,6 +608,17 @@ covers "forgot password AND recovery key" for whoever has shell.
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
 ## Changelog
+
+- 1.11 (2026-07-31): **Phase 4 complete, tagged v0.1.0.** The agent got
+  its own notes vault (§11) behind aw's path jail, exposed as
+  notes_list/read/search/write pi tools; web_fetch with SSRF protection
+  and the safety envelope (§12); lexical memory over an FTS5 index of
+  every message with memory_search/open/recent and a recent-chats
+  catalog in the system prompt (§7); and a living user-memory document
+  with a one-level backup, its own tools and GET/PUT /v1/memory (§7).
+  Custom tools are built with typebox (added as a direct dependency).
+  Conversation compaction is pi's own: it auto-compacts on context
+  pressure (SessionCompactEvent), so Popy builds nothing and inherits it.
 
 - 1.10 (2026-07-31): Phase 4 begins and the mode changes. The external
   content safety layer landed (§10): pure sanitize (invisible-strip by
