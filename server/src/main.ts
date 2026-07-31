@@ -20,6 +20,7 @@ import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
+import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
@@ -150,6 +151,12 @@ const app = createApp({
   transcriber,
   userMemory: context.userMemory,
   skills: skillsVault,
+  usage: context.usage,
+  backups: new TarBackupService({
+    dataDir: context.dataDir,
+    backupsDir: join(context.dataDir, '..', 'popy-backups'),
+    now: () => new Date(systemClock.now()).toISOString(),
+  }),
   hub,
   clock: systemClock,
   versions: readVersions(),

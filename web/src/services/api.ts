@@ -61,6 +61,17 @@ export async function apiRequest<T>(
   throw error;
 }
 
+/** A binary GET (e.g. a backup archive), returned as a Blob with the bearer token. */
+export async function apiDownload(path: string): Promise<Blob> {
+  const token = session.token();
+  const headers: Record<string, string> = {};
+  if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(`${BASE}${path}`, { headers });
+  if (!response.ok) throw await toApiError(response);
+  return response.blob();
+}
+
 async function toApiError(response: Response): Promise<ApiError> {
   try {
     const body = (await response.json()) as {

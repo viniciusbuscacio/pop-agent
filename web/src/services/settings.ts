@@ -1,4 +1,4 @@
-import type { AboutResponse, SettingsDTO, UserMemoryDTO } from '@popy/shared';
+import type { AboutResponse, SettingsDTO, UsageResponse, UserMemoryDTO } from '@popy/shared';
 import { apiRequest } from './api';
 
 export const settingsService = {
@@ -25,5 +25,9 @@ export const settingsService = {
 
   restoreMemory(): Promise<UserMemoryDTO> {
     return apiRequest<UserMemoryDTO>('/memory/restore', { method: 'POST' });
+  },
+
+  usage(): Promise<UsageResponse> {
+    return apiRequest<UsageResponse>('/usage');
   },
 };

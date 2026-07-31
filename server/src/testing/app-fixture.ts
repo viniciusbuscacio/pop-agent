@@ -18,8 +18,10 @@ import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
+import { TarBackupService } from '../infrastructure/backup/tar-backup-service.js';
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
@@ -193,6 +195,12 @@ export function createTestApp(
     transcriber: options.transcriber ?? new FakeTranscriber(),
     userMemory: new SqliteUserMemoryRepo(db),
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
+    usage: new SqliteUsageRepo(db),
+    backups: new TarBackupService({
+      dataDir: mkdtempSync(join(tmpdir(), 'popy-test-data-')),
+      backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),
+      now: () => new Date(clock.now()).toISOString(),
+    }),
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },

@@ -7,10 +7,12 @@ import type {
   ProviderStatusDTO,
   SettingsDTO,
   SkillDTO,
+  UsageResponse,
 } from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
 import { providersService } from '../services/providers';
 import { settingsService } from '../services/settings';
@@ -25,13 +27,24 @@ import { Button, Card, Segmented, TextField } from '../ui/controls';
  * screen and become a row of tabs when there is no room for a column.
  */
 
-type Section = 'general' | 'model' | 'memory' | 'skills' | 'appearance' | 'security' | 'about';
+type Section =
+  | 'general'
+  | 'model'
+  | 'memory'
+  | 'skills'
+  | 'usage'
+  | 'backup'
+  | 'appearance'
+  | 'security'
+  | 'about';
 
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'memory', labelKey: 'settings.section.memory' },
   { id: 'skills', labelKey: 'settings.section.skills' },
+  { id: 'usage', labelKey: 'settings.section.usage' },
+  { id: 'backup', labelKey: 'settings.section.backup' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
   { id: 'security', labelKey: 'settings.section.security' },
   { id: 'about', labelKey: 'settings.section.about' },
@@ -81,6 +94,8 @@ export function SettingsPage() {
           {section === 'model' ? <ModelSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
           {section === 'skills' ? <SkillsSection /> : null}
+          {section === 'usage' ? <UsageSection /> : null}
+          {section === 'backup' ? <BackupSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
           {section === 'security' ? <SecuritySection /> : null}
           {section === 'about' ? <AboutSection /> : null}
@@ -260,6 +275,188 @@ function MemorySection() {
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
     </Card>
+  );
+}
+
+/** Backup and restore (popy.spec §16). */
+function BackupSection() {
+  const [backups, setBackups] = useState<import('@popy/shared').BackupDTO[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function reload(): Promise<void> {
+    try {
+      setBackups((await backupsService.list()).backups);
+    } catch {
+      // Leave the list.
+    }
+  }
+
+  async function create(): Promise<void> {
+    setBusy(true);
+    setNotice(undefined);
+    try {
+      await backupsService.create();
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function download(name: string): Promise<void> {
+    const blob = await backupsService.download(name);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function restore(name: string): Promise<void> {
+    if (!window.confirm(t('backup.restoreConfirm'))) return;
+    try {
+      await backupsService.restore(name);
+      setNotice(t('backup.restored'));
+    } catch {
+      setNotice(t('error.generic'));
+    }
+  }
+
+  async function remove(name: string): Promise<void> {
+    try {
+      await backupsService.remove(name);
+      await reload();
+    } catch {
+      // Ignore.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--muted)]">{t('backup.intro')}</p>
+        <div>
+          <Button type="button" data-testid="backup-create" disabled={busy} onClick={() => void create()}>
+            {busy ? t('backup.creating') : t('backup.create')}
+          </Button>
+        </div>
+        {notice !== undefined ? (
+          <p role="status" className="text-sm text-[var(--success)]">
+            {notice}
+          </p>
+        ) : null}
+      </Card>
+
+      {backups.length === 0 ? (
+        <Card>
+          <p className="text-sm text-[var(--muted)]">{t('backup.empty')}</p>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {backups.map((backup) => (
+            <Card key={backup.name} className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs text-[var(--key-fg-dim)]">{backup.name}</p>
+                <p className="text-xs text-[var(--muted)]">
+                  {(backup.size / 1024).toFixed(0)} KB · {backup.createdAt.slice(0, 16).replace('T', ' ')}
+                </p>
+              </div>
+              <div className="flex flex-none gap-1">
+                <Button type="button" variant="ghost" onClick={() => void download(backup.name)}>
+                  {t('backup.download')}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => void restore(backup.name)}>
+                  {t('backup.restore')}
+                </Button>
+                <Button type="button" variant="danger" onClick={() => void remove(backup.name)}>
+                  {t('backup.delete')}
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The cost dashboard (popy.spec §14), read off llm_runs. */
+function UsageSection() {
+  const [usage, setUsage] = useState<UsageResponse | undefined>(undefined);
+
+  useEffect(() => {
+    settingsService
+      .usage()
+      .then(setUsage)
+      .catch(() => setUsage(undefined));
+  }, []);
+
+  if (usage === undefined) {
+    return <Card>{t('app.loading')}</Card>;
+  }
+
+  const dollars = (value: number): string => `$${value.toFixed(4)}`;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--muted)]">{t('usage.intro')}</p>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <Stat label={t('usage.totalCost')} value={dollars(usage.total.cost)} testId="usage-total" />
+          <Stat label={t('usage.runs')} value={String(usage.total.runs)} />
+          <Stat
+            label={t('usage.tokens')}
+            value={`${usage.total.tokensIn} / ${usage.total.tokensOut}`}
+          />
+        </div>
+      </Card>
+
+      {usage.byModel.length === 0 ? (
+        <Card>
+          <p className="text-sm text-[var(--muted)]">{t('usage.empty')}</p>
+        </Card>
+      ) : (
+        <>
+          <Card className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold">{t('usage.byModel')}</h2>
+            {usage.byModel.map((row) => (
+              <div key={row.model} className="flex justify-between gap-4 text-sm">
+                <span className="truncate font-mono text-[var(--key-fg-dim)]">{row.model}</span>
+                <span className="text-[var(--muted)]">
+                  {row.runs} · {dollars(row.cost)}
+                </span>
+              </div>
+            ))}
+          </Card>
+
+          <Card className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold">{t('usage.byDay')}</h2>
+            {usage.byDay.map((row) => (
+              <div key={row.day} className="flex justify-between gap-4 text-sm">
+                <span className="font-mono text-[var(--key-fg-dim)]">{row.day}</span>
+                <span className="text-[var(--muted)]">{dollars(row.cost)}</span>
+              </div>
+            ))}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, testId }: { label: string; value: string; testId?: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span data-testid={testId} className="text-lg font-semibold text-[var(--screen-fg)]">
+        {value}
+      </span>
+      <span className="text-xs text-[var(--muted)]">{label}</span>
+    </div>
   );
 }
 

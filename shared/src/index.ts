@@ -100,6 +100,24 @@ export interface UserMemoryDTO {
   hasBackup: boolean;
 }
 
+/** A data-directory snapshot (popy.spec §16). */
+export interface BackupDTO {
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface BackupsResponse {
+  backups: BackupDTO[];
+}
+
+/** `GET /v1/usage` — the cost dashboard (popy.spec §14). */
+export interface UsageResponse {
+  total: { runs: number; tokensIn: number; tokensOut: number; cost: number };
+  byModel: { model: string; runs: number; cost: number }[];
+  byDay: { day: string; cost: number }[];
+}
+
 /** A skill as Settings → Skills shows and edits it (popy.spec §8). */
 export interface SkillDTO {
   slug: string;
