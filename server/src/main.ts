@@ -233,7 +233,11 @@ const transcriber = new WhisperTranscriber({
 const voiceCleanup = new VoiceCleanup({
   gateway,
   apiKey: () => providers.apiKey(),
-  serviceModel: () => settings.read().serviceModel,
+  enabled: () => settings.read().voiceCleanup,
+  model: () => {
+    const current = settings.read();
+    return current.voiceCleanupModel.length > 0 ? current.voiceCleanupModel : current.serviceModel;
+  },
 });
 
 const app = createApp({

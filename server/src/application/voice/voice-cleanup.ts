@@ -23,7 +23,9 @@ const PROMPT = [
 export interface VoiceCleanupDeps {
   gateway: ProviderGateway;
   apiKey: () => string | undefined;
-  serviceModel: () => string;
+  /** Off = the raw transcript goes straight through, no tokens, no waiting. */
+  enabled: () => boolean;
+  model: () => string;
 }
 
 export class VoiceCleanup {
@@ -32,6 +34,7 @@ export class VoiceCleanup {
   async clean(transcript: string): Promise<string> {
     const trimmed = transcript.trim();
     if (trimmed.length === 0) return trimmed;
+    if (!this.deps.enabled()) return trimmed;
 
     const key = this.deps.apiKey();
     if (key === undefined) return trimmed;
@@ -39,7 +42,7 @@ export class VoiceCleanup {
     try {
       const improved = await this.deps.gateway.complete({
         apiKey: key,
-        model: this.deps.serviceModel(),
+        model: this.deps.model(),
         prompt: `${PROMPT}\n${trimmed}`,
         maxTokens: MAX_TOKENS,
       });

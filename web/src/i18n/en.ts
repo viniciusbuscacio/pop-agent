@@ -218,6 +218,11 @@ export const en = {
   'shell.filterArtifacts': 'Search artifacts',
   'shell.noArtifacts': 'No artifacts yet.',
   'settings.section.updates': 'Updates',
+  'voice.cleanup': 'Improve transcripts with AI',
+  'voice.cleanupNote':
+    'Off: the raw transcript is used as soon as whisper finishes. On: one model pass fixes punctuation and obvious mishears, at the cost of extra seconds per note.',
+  'voice.cleanupModel': 'Model for the cleanup',
+  'voice.cleanupModelDefault': 'Same as the service model',
   'settings.updates.serverTitle': 'Popy server',
   'settings.updates.installed': 'Installed',
   'settings.updates.popyAvailable': 'Popy {version} is available.',

@@ -93,6 +93,10 @@ export interface SettingsDTO {
   customInstructions: string;
   /** whisper.cpp model for voice transcription (popy.spec §14). */
   voiceModel: string;
+  /** Whether an LLM pass improves the raw transcript before it is used. */
+  voiceCleanup: boolean;
+  /** Model for that pass; empty means the service model. */
+  voiceCleanupModel: string;
 }
 
 /** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */

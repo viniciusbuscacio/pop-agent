@@ -19,6 +19,10 @@ export interface AppSettings {
   customInstructions: string;
   /** whisper.cpp model for voice transcription (popy.spec §14). */
   voiceModel: string;
+  /** Whether an LLM pass improves the raw transcript. Off = raw text, fast. */
+  voiceCleanup: boolean;
+  /** Model for that pass; empty means the service model. */
+  voiceCleanupModel: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -26,7 +30,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: DEFAULT_MODEL_ID,
   serviceModel: DEFAULT_MODEL_ID,
   customInstructions: '',
-  voiceModel: 'medium',
+  voiceModel: 'base',
+  voiceCleanup: false,
+  voiceCleanupModel: '',
 };
 
 const SETTINGS_KEY = 'app';

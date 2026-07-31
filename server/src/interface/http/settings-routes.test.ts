@@ -37,7 +37,9 @@ const DEFAULT_DOC = {
   defaultModel: 'moonshotai/kimi-k3',
   serviceModel: 'moonshotai/kimi-k3',
   customInstructions: '',
-  voiceModel: 'medium',
+  voiceModel: 'base',
+  voiceCleanup: false,
+  voiceCleanupModel: '',
 };
 
 describe('GET /v1/settings', () => {

@@ -948,7 +948,73 @@ function ModelSection() {
       </Card>
 
       <VoiceModelCard />
+      <VoiceCleanupCard />
     </div>
+  );
+}
+
+/**
+ * The optional LLM pass over a raw transcript (popy.spec §14). Off by default
+ * (decision of 31/07): the raw text lands in the composer in whisper time;
+ * turning this on trades ~10s+ per note for punctuation fixes.
+ */
+function VoiceCleanupCard() {
+  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
+  const [models, setModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    void settingsService
+      .read()
+      .then(setSettings)
+      .catch(() => setSettings(undefined));
+    void chatsService
+      .models()
+      .then(({ models: available }) => setModels(available.map((model) => model.id)))
+      .catch(() => setModels([]));
+  }, []);
+
+  async function save(next: Partial<SettingsDTO>): Promise<void> {
+    if (settings === undefined) return;
+    const written = await settingsService.write({ ...settings, ...next });
+    setSettings(written);
+  }
+
+  if (settings === undefined) return null;
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          data-testid="voice-cleanup-toggle"
+          checked={settings.voiceCleanup}
+          onChange={(event) => void save({ voiceCleanup: event.target.checked })}
+        />
+        {t('voice.cleanup')}
+      </label>
+      <p className="text-xs text-[var(--muted)]">{t('voice.cleanupNote')}</p>
+      {settings.voiceCleanup ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="voice-cleanup-model" className="text-sm text-[var(--key-fg-dim)]">
+            {t('voice.cleanupModel')}
+          </label>
+          <select
+            id="voice-cleanup-model"
+            data-testid="voice-cleanup-model"
+            value={settings.voiceCleanupModel}
+            onChange={(event) => void save({ voiceCleanupModel: event.target.value })}
+            className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
+          >
+            <option value="">{t('voice.cleanupModelDefault')}</option>
+            {models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

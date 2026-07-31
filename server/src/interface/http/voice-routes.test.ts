@@ -37,7 +37,7 @@ describe('/v1/voice/models', () => {
       models: { name: string }[];
       selected: string;
     };
-    expect(body.selected).toBe('medium');
+    expect(body.selected).toBe('base');
     expect(body.models.some((m) => m.name === 'medium')).toBe(true);
   });
 

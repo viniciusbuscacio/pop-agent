@@ -11,7 +11,8 @@ describe('VoiceCleanup', () => {
     const cleanup = new VoiceCleanup({
       gateway: gateway(() => Promise.resolve('Buy coffee tomorrow.')),
       apiKey: () => 'sk',
-      serviceModel: () => 'kimi',
+      enabled: () => true,
+      model: () => 'kimi',
     });
     expect(await cleanup.clean('buy coffee tomorow')).toBe('Buy coffee tomorrow.');
   });
@@ -21,7 +22,8 @@ describe('VoiceCleanup', () => {
     const cleanup = new VoiceCleanup({
       gateway: gateway(complete),
       apiKey: () => undefined,
-      serviceModel: () => 'kimi',
+      enabled: () => true,
+      model: () => 'kimi',
     });
     expect(await cleanup.clean('raw text')).toBe('raw text');
     expect(complete).not.toHaveBeenCalled();
@@ -31,14 +33,27 @@ describe('VoiceCleanup', () => {
     const cleanup = new VoiceCleanup({
       gateway: gateway(() => Promise.reject(new Error('down'))),
       apiKey: () => 'sk',
-      serviceModel: () => 'kimi',
+      enabled: () => true,
+      model: () => 'kimi',
     });
     expect(await cleanup.clean('raw text')).toBe('raw text');
   });
 
+  it('returns the raw text untouched when the cleanup is disabled', async () => {
+    const complete = vi.fn();
+    const cleanup = new VoiceCleanup({
+      gateway: gateway(complete),
+      apiKey: () => 'sk',
+      enabled: () => false,
+      model: () => 'kimi',
+    });
+    expect(await cleanup.clean('raw text')).toBe('raw text');
+    expect(complete).not.toHaveBeenCalled();
+  });
+
   it('does not call the model for an empty transcript', async () => {
     const complete = vi.fn();
-    const cleanup = new VoiceCleanup({ gateway: gateway(complete), apiKey: () => 'sk', serviceModel: () => 'k' });
+    const cleanup = new VoiceCleanup({ gateway: gateway(complete), apiKey: () => 'sk', enabled: () => true, model: () => 'k' });
     expect(await cleanup.clean('   ')).toBe('');
     expect(complete).not.toHaveBeenCalled();
   });
