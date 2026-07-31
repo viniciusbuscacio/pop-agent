@@ -5,8 +5,8 @@ import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
 
 /**
- * The composer, in aw's shape: an attach button on the left, the textarea in
- * the middle, and an icon-only send/stop on the right. Enter sends,
+ * The composer, in aw's shape: the textarea on the left, then attach, mic
+ * and an icon-only send/stop on the right. Enter sends,
  * Shift+Enter breaks a line, Escape stops a run. Files arrive through the
  * picker or by dropping them anywhere on the composer; images show a
  * thumbnail chip, everything else a file chip. aw's 16 MB cap applies here
@@ -370,14 +370,6 @@ export function Composer({
             event.target.value = '';
           }}
         />
-        <IconButton
-          testId="composer-attach"
-          label={t('chat.attach')}
-          onClick={() => picker.current?.click()}
-        >
-          <AttachIcon />
-        </IconButton>
-
         {voice === 'idle' ? (
           <div className="relative flex-1">
           {mentionQuery !== undefined && mentionMatches.length > 0 ? (
@@ -431,6 +423,14 @@ export function Composer({
             )}
           </div>
         )}
+
+        <IconButton
+          testId="composer-attach"
+          label={t('chat.attach')}
+          onClick={() => picker.current?.click()}
+        >
+          <AttachIcon />
+        </IconButton>
 
         {voice === 'recording' ? (
           <IconButton testId="composer-mic-stop" label={t('chat.micStop')} stop onClick={() => void toggleRecording()}>
