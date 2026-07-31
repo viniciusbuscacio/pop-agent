@@ -1,0 +1,15 @@
+/**
+ * Where an artifact's bytes live (popy.spec §6, §14). The record is the repo's
+ * job; this is the blob store beside it. Paths are grouped by chat so deleting
+ * a conversation is one directory removal.
+ */
+export interface ArtifactStore {
+  /** Writes the bytes for an artifact, creating the chat's directory. */
+  write(chatId: string, artifactId: string, bytes: Buffer): void;
+  /** The on-disk path, for streaming a download. Never exposed to a client. */
+  pathOf(chatId: string, artifactId: string): string;
+  /** Removes one artifact's bytes. Best-effort: already gone is success. */
+  remove(chatId: string, artifactId: string): void;
+  /** Removes a whole chat's directory when the conversation is deleted. */
+  removeChat(chatId: string): void;
+}

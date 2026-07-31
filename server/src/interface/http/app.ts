@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AboutResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
+import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
@@ -17,6 +18,8 @@ import type { UsageRepo } from '../../application/ports/usage-repo.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
+import { createArtifactRoutes } from './artifact-routes.js';
+import { createArtifactDownloadRoutes } from './artifact-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
 import { createPushRoutes } from './push-routes.js';
@@ -37,6 +40,7 @@ export interface AppDeps {
   auth: AuthService;
   settings: SettingsService;
   chats: ChatService;
+  artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
   transcriber: Transcriber;
@@ -66,6 +70,11 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
+  // The signed artifact download carries no session -- the HMAC in the URL is
+  // the whole authorisation (popy.spec §14) -- so it sits before the /v1 guard
+  // and before the static site could mistake it for a missing file.
+  app.route('/', createArtifactDownloadRoutes(deps));
+
   // Guard everything under /v1 except the handful of public auth endpoints.
   app.use('/v1/*', authMiddleware(deps.auth));
   app.route('/v1', createAuthRoutes(deps));
@@ -79,6 +88,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/v1', createVoiceRoutes(deps));
   app.route('/v1', createBackupRoutes(deps));
   app.route('/v1', createPushRoutes(deps));
+  app.route('/v1', createArtifactRoutes(deps));
   app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));
 
   // Last: anything that is not an API route is the frontend or a 404.

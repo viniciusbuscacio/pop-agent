@@ -135,6 +135,32 @@ export interface SkillsResponse {
   skills: SkillDTO[];
 }
 
+/**
+ * An artifact as the artifacts screen lists it (popy.spec §14, RF-002). The
+ * `id` is the only handle a client ever sees — no filesystem path or storage
+ * key (RF-008).
+ */
+export interface ArtifactDTO {
+  id: string;
+  chatId: string;
+  name: string;
+  mime: string;
+  size: number;
+  version: number;
+  source: 'agent' | 'upload';
+  createdAt: string;
+}
+
+export interface ArtifactsResponse {
+  artifacts: ArtifactDTO[];
+}
+
+/** `POST /v1/artifacts/:id/link` — a fresh HMAC-signed download URL (RF-004). */
+export interface ArtifactLinkResponse {
+  url: string;
+  expiresAt: number;
+}
+
 /** `POST`/`PUT /v1/skills` — create or replace a skill. */
 export interface SaveSkillRequest {
   slug: string;

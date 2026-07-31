@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.14 — 2026-07-31.
+Version 1.15 — 2026-07-31.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -479,6 +479,29 @@ events from stale runs.
   HTTPS required, safe-areas, `dvh`. Android: WebAPK via manifest. Offline
   is honest: shell + "Popy is offline". Web Push in v0.2 — exactly two
   triggers: "run finished" and "agent needs confirmation".
+
+### Artifacts and signed downloads (RF-001–019)
+
+- **Artifacts** are the agent's outputs and the user's uploads, tracked per
+  chat (§6 `artifacts` table). The bytes live under
+  `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the `file-<11 base62>` id is the
+  only handle a client ever sees — no filesystem path or storage key is
+  exposed. Deleting a chat deletes its artifacts (rows by cascade, bytes by
+  removing the folder).
+- **Downloads are HMAC-signed and public.** `GET /artifacts/:id/download?
+  expires=<ms>&sig=<b64url>` carries no session — the signature is the whole
+  authorisation. The signing key is derived from `secret.key` (never a fresh
+  secret), so rotating the key invalidates every outstanding link. The
+  signature covers the id and the expiry together, and verification checks the
+  signature **before** the expiry, so tampering with `expires` fails as a bad
+  signature rather than extending the link. A bad/forged signature → 403, an
+  expired link → 410, an unknown id → 404. Expiry is a property of the LINK,
+  not the artifact: the default life is 30 days, an expired link is refused
+  even though the file still exists, a fresh link can be minted any time, and
+  there is no cleanup cron.
+- The authenticated half (`/v1`) lists a chat's artifacts, mints a link and
+  deletes one. The artifacts screen, upload, OCR, multimodal and versioning
+  land in later blocks (`docs/artifacts-attachments-downloads.md`).
 
 ## 15. Providers, models, updates
 

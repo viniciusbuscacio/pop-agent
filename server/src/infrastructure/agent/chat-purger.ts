@@ -4,13 +4,16 @@ import type { Chat } from '../../domain/chat/chat.js';
 import type { ChatPurger } from '../../application/ports/chat-purger.js';
 
 /**
- * Deletes a chat's on-disk remains (popy.spec §6): pi's JSONL session file and
- * the chat's attachment folder in the workspace. Best-effort by design -- a
- * file already gone is the goal, not an error -- and it disposes any live pi
- * session first so nothing rewrites the file after it is removed.
+ * Deletes a chat's on-disk remains (popy.spec §6): pi's JSONL session file, the
+ * chat's attachment folder in the workspace, and its artifacts directory in the
+ * data directory. Best-effort by design -- a file already gone is the goal, not
+ * an error -- and it disposes any live pi session first so nothing rewrites the
+ * file after it is removed.
  */
 export interface FsChatPurgerDeps {
   workspace: string;
+  /** Where artifact bytes live, grouped per chat (popy.spec §14). */
+  artifactsDir?: string;
   /** Drops (and disposes) any cached pi session for the chat. */
   forgetSession: (chatId: string) => void;
 }
@@ -28,6 +31,9 @@ export class FsChatPurger implements ChatPurger {
     }
 
     remove(join(this.deps.workspace, 'attachments', chat.id));
+    if (this.deps.artifactsDir !== undefined) {
+      remove(join(this.deps.artifactsDir, chat.id));
+    }
   }
 }
 

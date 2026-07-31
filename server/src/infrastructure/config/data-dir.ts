@@ -34,3 +34,17 @@ export function ensureWorkspace(workspace: string): string {
   mkdirSync(workspace, { recursive: true });
   return workspace;
 }
+
+/**
+ * Where artifact bytes live (popy.spec §6, §14): inside the data directory so
+ * they ride the backup (they are the user's own content), grouped per chat.
+ */
+export function resolveArtifactsDir(dataDir: string): string {
+  return join(dataDir, 'artifacts');
+}
+
+export function ensureArtifactsDir(dataDir: string): string {
+  const dir = resolveArtifactsDir(dataDir);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}

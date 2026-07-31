@@ -16,8 +16,11 @@ import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import { ProviderService } from '../application/providers/provider-service.js';
 import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
+import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
+import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteArtifactRepo } from '../infrastructure/db/sqlite-artifact-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
@@ -120,6 +123,7 @@ export interface TestApp {
   app: Hono;
   auth: AuthService;
   chats: ChatService;
+  artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
   secrets: MemorySecrets;
@@ -171,6 +175,12 @@ export function createTestApp(
   });
 
   const settings = new SettingsService(settingsRepo);
+  const artifacts = new ArtifactService({
+    repo: new SqliteArtifactRepo(db),
+    store: new FsArtifactStore(mkdtempSync(join(tmpdir(), 'popy-test-artifacts-'))),
+    secretKey: Buffer.from('test-artifact-signing-key-000000'),
+    clock,
+  });
   // Wired exactly the way main.ts wires it: with no key configured the title
   // job is a silent no-op, which is what the fake-bridge tests need.
   const runs = new RunService({
@@ -192,6 +202,7 @@ export function createTestApp(
     auth,
     settings,
     chats,
+    artifacts,
     runs,
     providers,
     transcriber: options.transcriber ?? new FakeTranscriber(),
@@ -230,5 +241,5 @@ export function createTestApp(
     webDist: WEB_DIST,
   });
 
-  return { app, auth, chats, runs, providers, secrets, hub, clock };
+  return { app, auth, chats, artifacts, runs, providers, secrets, hub, clock };
 }

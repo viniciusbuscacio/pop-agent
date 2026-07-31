@@ -11,6 +11,8 @@ import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
+import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
+import { ArtifactService } from './application/artifacts/artifact-service.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
@@ -23,7 +25,7 @@ import { EmbeddingIndexer } from './application/memory/embedding-indexer.js';
 import { SkillRouterService } from './application/skills/skill-router-service.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
-import { ensureWorkspace, resolveWorkspace } from './infrastructure/config/data-dir.js';
+import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
@@ -59,6 +61,7 @@ if (agent !== 'fake' && agent !== 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
+const artifactsDir = ensureArtifactsDir(context.dataDir);
 const settings = new SettingsService(context.settings);
 // The agent's own notes vault (popy.spec §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
@@ -147,11 +150,20 @@ const push = new WebPushService(context.push, context.secrets);
 // asks it to forget a chat before deleting the chat's files (popy.spec §6).
 const purger = new FsChatPurger({
   workspace,
+  artifactsDir,
   forgetSession: (chatId) => {
     if (bridge instanceof PiAgentBridge) bridge.forget(chatId);
   },
 });
 const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
+// Artifacts: the agent's outputs and the user's uploads, tracked per chat and
+// downloadable only through an HMAC-signed link keyed off secret.key (§14).
+const artifacts = new ArtifactService({
+  repo: context.artifacts,
+  store: new FsArtifactStore(artifactsDir),
+  secretKey: context.secretKey,
+  clock: systemClock,
+});
 const runs = new RunService({
   chats: context.chats,
   bridge,
@@ -209,6 +221,7 @@ const app = createApp({
   auth,
   settings,
   chats,
+  artifacts,
   runs,
   providers,
   transcriber,

@@ -7,6 +7,13 @@ normative history.
 
 ### Added
 
+- **Artifacts — HTTP surface, disk store and signed downloads** (RF-001/002-list/
+  004–008): an on-disk blob store grouped per chat under the data directory, a
+  service that creates/lists/deletes artifacts and mints links, authenticated
+  routes to list a chat's artifacts / mint a signed link / delete one, and a
+  public `GET /artifacts/:id/download` that carries no session — the HMAC in the
+  URL is the whole authorisation (bad signature → 403, expired → 410, unknown
+  → 404). Deleting a chat now also deletes its artifact bytes.
 - **Artifacts foundation** (RF-001/003–008, backend groundwork toward v0.3): an
   `artifacts` table keyed by an unguessable `file-<base62>` id, a SQLite repo
   with the same collision-retry discipline as chats/messages, and HMAC-signed

@@ -1,0 +1,82 @@
+import { createArtifact, type Artifact, type ArtifactSource } from '../../domain/artifacts/artifact.js';
+import type { Clock } from '../ports/clock.js';
+import type { ArtifactRepo } from '../ports/artifact-repo.js';
+import type { ArtifactStore } from '../ports/artifact-store.js';
+import {
+  buildSignedLink,
+  verifyDownload,
+  type LinkCheck,
+  type SignedLink,
+} from './artifact-download.js';
+
+/**
+ * Artifacts as a feature (popy.spec §14, RF-001–008): the agent's outputs and
+ * the user's uploads, tracked per chat, listed, deleted, and downloaded only
+ * through an HMAC-signed link. The record and the bytes are kept together here
+ * so a delete removes both and a download resolves both.
+ */
+export interface ArtifactServiceDeps {
+  repo: ArtifactRepo;
+  store: ArtifactStore;
+  /** Derived link-signing key, from `secret.key` (never a new secret). */
+  secretKey: Buffer;
+  clock: Clock;
+}
+
+export interface NewArtifactInput {
+  chatId: string;
+  name: string;
+  mime: string;
+  source: ArtifactSource;
+}
+
+export type DownloadResolution =
+  | { status: 'ok'; artifact: Artifact; path: string }
+  | { status: 'not-found' }
+  | { status: Exclude<LinkCheck, 'ok'> };
+
+export class ArtifactService {
+  constructor(private readonly deps: ArtifactServiceDeps) {}
+
+  /** Stores bytes and their record, and returns the record. */
+  create(input: NewArtifactInput, bytes: Buffer): Artifact {
+    const now = new Date(this.deps.clock.now()).toISOString();
+    const stored = this.deps.repo.insert(
+      createArtifact({ ...input, size: bytes.length }, now),
+    );
+    this.deps.store.write(stored.chatId, stored.id, bytes);
+    return stored;
+  }
+
+  list(chatId: string): Artifact[] {
+    return this.deps.repo.listByChat(chatId);
+  }
+
+  get(id: string): Artifact | undefined {
+    return this.deps.repo.get(id);
+  }
+
+  /** Removes the record and the bytes. Returns false if there was no such id. */
+  delete(id: string): boolean {
+    const artifact = this.deps.repo.get(id);
+    if (artifact === undefined) return false;
+    this.deps.repo.delete(id);
+    this.deps.store.remove(artifact.chatId, id);
+    return true;
+  }
+
+  /** Mints a fresh signed link, or undefined when the artifact is gone. */
+  mintLink(id: string, ttlMs?: number): SignedLink | undefined {
+    if (this.deps.repo.get(id) === undefined) return undefined;
+    return buildSignedLink(this.deps.secretKey, id, this.deps.clock.now(), ttlMs);
+  }
+
+  /** Validates a download request end to end for the public route. */
+  resolveDownload(id: string, expires: string | undefined, sig: string | undefined): DownloadResolution {
+    const check = verifyDownload(this.deps.secretKey, id, expires, sig, this.deps.clock.now());
+    if (check !== 'ok') return { status: check };
+    const artifact = this.deps.repo.get(id);
+    if (artifact === undefined) return { status: 'not-found' };
+    return { status: 'ok', artifact, path: this.deps.store.pathOf(artifact.chatId, id) };
+  }
+}

@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
+import type { ArtifactRepo } from '../application/ports/artifact-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
@@ -12,6 +13,7 @@ import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
+import { SqliteArtifactRepo } from './db/sqlite-artifact-repo.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
@@ -26,9 +28,12 @@ import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
   dataDir: string;
+  /** The raw key that unlocks secrets and signs artifact links (§9, §14). */
+  secretKey: Buffer;
   settings: SettingsRepo;
   secrets: SecretsRepo;
   chats: ChatRepo;
+  artifacts: ArtifactRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
@@ -49,9 +54,11 @@ export function bootstrap(): AppContext {
 
   return {
     dataDir,
+    secretKey: key,
     settings: new SqliteSettingsRepo(db),
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),
+    artifacts: new SqliteArtifactRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),
