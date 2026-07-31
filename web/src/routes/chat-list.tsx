@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate, useParams } from 'react-router-dom';
 import type { ChatDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { useDismiss } from '../lib/dismiss';
 import { relativeTime } from '../lib/time';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
@@ -23,6 +24,7 @@ export function ChatList() {
   const [filter, setFilter] = useState('');
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
+  useDismiss(listMenu, () => setListMenu(false));
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -102,6 +104,7 @@ export function ChatList() {
               type="button"
               data-testid="list-menu"
               aria-label={t('shell.listMenu')}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={() => setListMenu((value) => !value)}
               className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
             >
@@ -110,6 +113,7 @@ export function ChatList() {
           ) : null}
           {listMenu ? (
             <div
+              onPointerDown={(event) => event.stopPropagation()}
               role="menu"
               className="absolute top-10 right-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
             >
@@ -260,6 +264,7 @@ function ChatRow({
   const live = useChatStore((state) => state.live[chat.id]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  useDismiss(menuOpen, () => setMenuOpen(false));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(chat.title);
 
@@ -428,6 +433,7 @@ function ChatRow({
         type="button"
         data-testid="chat-menu"
         aria-label={t('shell.chatMenu')}
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setMenuOpen((value) => !value)}
         className="absolute top-2 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
@@ -439,6 +445,7 @@ function ChatRow({
 
       {menuOpen ? (
         <div
+          onPointerDown={(event) => event.stopPropagation()}
           role="menu"
           className="absolute top-8 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
         >

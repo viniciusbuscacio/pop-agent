@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ArtifactDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
+import { useDismiss } from '../lib/dismiss';
 import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
@@ -30,6 +31,8 @@ export function FilesPage() {
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+
+  useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   useEffect(() => {
     void reload();
@@ -193,6 +196,7 @@ export function FilesPage() {
                   type="button"
                   data-testid="folder-menu"
                   aria-label={t('shell.chatMenu')}
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setMenuFor((v) => (v === openFolder.id ? undefined : openFolder.id))}
                   className="rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                 >
@@ -200,6 +204,7 @@ export function FilesPage() {
                 </button>
                 {menuFor === openFolder.id ? (
                   <div
+                    onPointerDown={(event) => event.stopPropagation()}
                     role="menu"
                     className="absolute top-7 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
                   >
@@ -336,6 +341,7 @@ export function FilesPage() {
                     type="button"
                     data-testid="folder-row-menu"
                     aria-label={t('shell.chatMenu')}
+                    onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
                     className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                   >
@@ -344,6 +350,7 @@ export function FilesPage() {
                 </div>
                 {menuFor === folder.id ? (
                   <div
+                    onPointerDown={(event) => event.stopPropagation()}
                     role="menu"
                     className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
                   >
@@ -406,6 +413,7 @@ export function FilesPage() {
                         type="button"
                         data-testid="file-menu"
                         aria-label={t('shell.chatMenu')}
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
                         className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                       >
@@ -420,6 +428,7 @@ export function FilesPage() {
                 </div>
                 {menuFor === file.id ? (
                   <div
+                    onPointerDown={(event) => event.stopPropagation()}
                     role="menu"
                     className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
                   >
