@@ -247,6 +247,8 @@ export const en = {
   'provider.oauth.disconnect': 'Disconnect',
   'provider.oauth.openLink': 'Open the sign-in page',
   'provider.oauth.deviceCode': 'Enter this code on the page:',
+  'provider.oauth.loopbackHint':
+    'The provider sends your browser to a blank localhost page. That is expected: the callback address belongs to the server, not to the device you are browsing from. Copy the whole URL from the address bar and paste it here.',
   'provider.oauth.answerPlaceholder': 'Answer',
   'provider.oauth.submit': 'Submit',
   'provider.oauth.waiting': 'Waiting for the provider…',

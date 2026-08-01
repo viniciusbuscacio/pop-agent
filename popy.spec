@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.40 — 2026-08-01.
+Version 1.41 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -791,6 +791,15 @@ reimplemented.
   instead of the paid HTTP probe; the model catalog answers from pi's
   built-in list (no gateway, keyless). Session open for an oauth
   provider must not demand an API key.
+- **The card outlives the page.** Signing in means leaving for the
+  provider and coming back, and the way back is usually a fresh mount:
+  a new tab, a reload, the PWA resumed from the background. The card
+  therefore asks for the flow state on mount and adopts a running flow,
+  instead of only knowing about flows it started itself. It also says,
+  in the card, that the browser will land on a blank `localhost` page:
+  that callback address belongs to the server, not to the device doing
+  the browsing, so the whole URL from the address bar is what the
+  pending prompt wants pasted back.
 
 ### Multi-provider (fase 2 — automatic fallback)
 
@@ -1058,6 +1067,16 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.41 (2026-08-01): **A sign-in survives the round trip (§15).** The
+  OAuth card only rendered flows started in that same mount, so coming
+  back from the provider -- a reload, a new tab, the PWA resumed --
+  showed "Sign in" again while the server sat waiting for the code, with
+  no way to hand it over. The card now adopts a running flow on mount,
+  and spells out that the blank `localhost` callback page is expected
+  and is itself what must be pasted back. The section moved into
+  `oauth-section.tsx` so it can be tested at all: the settings page
+  pulls in the PWA registration virtual module, which no test
+  environment can resolve.
 - 1.40 (2026-08-01): **iOS push actually arrives (§14).** The whole chain
   existed — service worker with `push`/`notificationclick`, the Settings
   opt-in, `/v1/push/*`, the send on run finish — and delivered nothing on
