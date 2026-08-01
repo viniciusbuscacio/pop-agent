@@ -29,6 +29,7 @@ const patchSchema = z
     title: z.string().optional(),
     archived: z.boolean().optional(),
     model: z.string().optional(),
+    provider: z.string().optional(),
   })
   .strict();
 
@@ -91,7 +92,12 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     if (parsed.data.archived !== undefined) {
       chat = deps.chats.setArchived(id, parsed.data.archived) ?? chat;
     }
-    if (parsed.data.model !== undefined) chat = deps.chats.setModel(id, parsed.data.model) ?? chat;
+    if (parsed.data.model !== undefined) {
+      // The pair is the identity: a model without a provider keeps the chat's
+      // current provider; both empty means "back to the global default".
+      const provider = parsed.data.provider ?? chat.provider;
+      chat = deps.chats.setModel(id, parsed.data.model, provider) ?? chat;
+    }
 
     return c.json(toChatDto(chat));
   });
@@ -246,6 +252,7 @@ function toChatDto(chat: Chat | ChatSummary): ChatDTO {
     id: chat.id,
     title: chat.title,
     model: chat.model,
+    provider: chat.provider,
     archived: chat.archived,
     createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,

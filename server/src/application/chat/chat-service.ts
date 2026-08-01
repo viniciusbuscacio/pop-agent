@@ -26,6 +26,7 @@ export class ChatService {
       id: newChatId(),
       title: DEFAULT_CHAT_TITLE,
       model: '',
+      provider: '',
       archived: false,
       piSessionId: '',
       summary: '',
@@ -60,9 +61,9 @@ export class ChatService {
     return this.deps.chats.get(id);
   }
 
-  setModel(id: string, model: string): Chat | undefined {
+  setModel(id: string, model: string, provider: string): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
-    this.deps.chats.setModel(id, model);
+    this.deps.chats.setModel(id, model, provider);
     return this.deps.chats.get(id);
   }
 

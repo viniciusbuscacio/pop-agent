@@ -29,7 +29,7 @@ let embeddings: SqliteEmbeddingsRepo;
 
 function chat(title: string): string {
   const id = newChatId();
-  chats.create({ id, title, model: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
+  chats.create({ id, title, model: '', provider: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
   return id;
 }
 function say(chatId: string, content: string): number {

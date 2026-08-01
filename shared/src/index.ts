@@ -238,6 +238,8 @@ export interface ChatDTO {
   title: string;
   /** Empty means "whatever the default model is". */
   model: string;
+  /** Empty means "whatever the default provider is" (popy.spec §15). */
+  provider: string;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -294,6 +296,8 @@ export interface PatchChatRequest {
   title?: string;
   archived?: boolean;
   model?: string;
+  /** Must travel with `model`: the identity is the pair (popy.spec §15). */
+  provider?: string;
 }
 
 /**

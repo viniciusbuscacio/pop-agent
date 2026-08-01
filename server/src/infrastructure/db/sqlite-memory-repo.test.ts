@@ -15,6 +15,7 @@ function chatWith(title: string, summary = ''): string {
     id,
     title,
     model: '',
+    provider: '',
     archived: false,
     piSessionId: '',
     summary,

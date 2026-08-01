@@ -60,6 +60,7 @@ beforeEach(() => {
     id: CHAT,
     title: 'Question 1',
     model: '',
+    provider: '',
     archived: false,
     piSessionId: '',
     summary: '',

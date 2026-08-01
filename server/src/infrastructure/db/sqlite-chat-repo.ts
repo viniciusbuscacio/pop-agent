@@ -22,8 +22,8 @@ export class SqliteChatRepo implements ChatRepo {
   create(chat: Chat): Chat {
     const insert = this.db.prepare(
       `INSERT INTO chats
-         (id, title, model, archived, pi_session_id, summary, auto_title, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, title, model, provider, archived, pi_session_id, summary, auto_title, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = chat;
     for (let attempt = 0; ; attempt += 1) {
@@ -32,6 +32,7 @@ export class SqliteChatRepo implements ChatRepo {
           current.id,
           current.title,
           current.model,
+          current.provider,
           current.archived ? 1 : 0,
           current.piSessionId,
           current.summary,
@@ -79,8 +80,8 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET archived = ? WHERE id = ?').run(archived ? 1 : 0, id);
   }
 
-  setModel(id: string, model: string): void {
-    this.db.prepare('UPDATE chats SET model = ? WHERE id = ?').run(model, id);
+  setModel(id: string, model: string, provider: string): void {
+    this.db.prepare('UPDATE chats SET model = ?, provider = ? WHERE id = ?').run(model, provider, id);
   }
 
   setPiSessionId(id: string, piSessionId: string): void {
@@ -183,6 +184,7 @@ interface ChatRow {
   id: string;
   title: string;
   model: string;
+  provider: string;
   archived: number;
   pi_session_id: string;
   summary: string;
@@ -207,6 +209,7 @@ function toChat(row: ChatRow): Chat {
     id: row.id,
     title: row.title,
     model: row.model,
+    provider: row.provider ?? '',
     archived: row.archived === 1,
     piSessionId: row.pi_session_id,
     summary: row.summary,

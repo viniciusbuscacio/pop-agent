@@ -9,6 +9,11 @@ export interface Chat {
   title: string;
   /** Model id chosen for this conversation; empty means "the default". */
   model: string;
+  /**
+   * Provider half of the model identity pair (popy.spec §15); empty means
+   * "the default provider". Meaningful whenever `model` is.
+   */
+  provider: string;
   archived: boolean;
   /** Path to pi's JSONL session. Empty until a real agent run happens. */
   piSessionId: string;

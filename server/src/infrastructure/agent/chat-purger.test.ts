@@ -12,6 +12,7 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     id: CHAT,
     title: 'x',
     model: '',
+    provider: '',
     archived: false,
     piSessionId: '',
     summary: '',

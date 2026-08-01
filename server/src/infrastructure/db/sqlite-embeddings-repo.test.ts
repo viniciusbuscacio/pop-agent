@@ -18,7 +18,7 @@ beforeEach(() => {
   chats = new SqliteChatRepo(db);
   embeddings = new SqliteEmbeddingsRepo(db);
   chatId = newChatId();
-  chats.create({ id: chatId, title: 'x', model: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
+  chats.create({ id: chatId, title: 'x', model: '', provider: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
   chats.appendMessage({ id: newMessageId(), chatId, role: 'user', content: 'hi', thinking: '', tools: [], attachments: [], createdAt: 'T' });
   rowid = (db.prepare('SELECT rowid FROM messages LIMIT 1').get() as { rowid: number }).rowid;
 });

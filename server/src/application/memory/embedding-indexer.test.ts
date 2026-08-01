@@ -27,7 +27,7 @@ beforeEach(() => {
   chats = new SqliteChatRepo(db);
   embeddings = new SqliteEmbeddingsRepo(db);
   const c = newChatId();
-  chats.create({ id: c, title: 'x', model: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
+  chats.create({ id: c, title: 'x', model: '', provider: '', archived: false, piSessionId: '', summary: '', autoTitle: true, createdAt: 'T', updatedAt: 'T' });
   for (let i = 0; i < 3; i += 1) {
     chats.appendMessage({ id: newMessageId(), chatId: c, role: 'user', content: `message ${i}`, thinking: '', tools: [], attachments: [], createdAt: 'T' });
   }

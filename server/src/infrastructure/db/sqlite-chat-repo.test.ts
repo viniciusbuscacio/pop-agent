@@ -15,6 +15,7 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     id: newChatId(),
     title: DEFAULT_CHAT_TITLE,
     model: '',
+    provider: '',
     archived: false,
     piSessionId: '',
     summary: '',
@@ -93,7 +94,7 @@ describe('chats', () => {
     const created = repo.create(chat());
 
     repo.rename(created.id, 'Renamed');
-    repo.setModel(created.id, 'fake/model-2');
+    repo.setModel(created.id, 'fake/model-2', 'openrouter');
     repo.touch(created.id, '2026-07-31T00:00:00.000Z');
 
     const stored = repo.get(created.id);
