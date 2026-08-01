@@ -34,6 +34,25 @@ export const providersService = {
     return apiRequest<ProvidersResponse>('/providers');
   },
 
+  /**
+   * The priority list, whole (popy.spec §15, fase 2). Sent complete rather
+   * than as a move, so the server never has to merge two half-edits.
+   */
+  setOrder(ids: string[]): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>('/providers/order', {
+      method: 'PUT',
+      body: { ids },
+    });
+  },
+
+  /** The per-provider on/off switch. Off means out of the chain entirely. */
+  setEnabled(providerId: string, enabled: boolean): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/${providerId}/enabled`, {
+      method: 'PUT',
+      body: { enabled },
+    });
+  },
+
   /** Write-only: the key goes in and no route ever hands it back. */
   setKey(providerId: string, apiKey: string): Promise<ProvidersResponse> {
     return apiRequest<ProvidersResponse>(`/providers/${providerId}/key`, {

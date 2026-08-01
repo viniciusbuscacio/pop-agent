@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.42 — 2026-08-01.
+Version 1.43 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -814,12 +814,29 @@ reimplemented.
 
 ### Multi-provider (fase 2 — automatic fallback)
 
+- **The priority list is the only lever** (settings key
+  `provider.order`, ids in order, #1 first). The list the user edits IS
+  the failover order, and its head IS the global default: after every
+  edit `electDefault` writes the first *usable* entry back as
+  `defaultProvider`, so the numbered list can never say one thing while
+  new chats do another. There is no separate "default provider"
+  control. Providers absent from a saved list keep a position at the
+  tail — a provider added later is never orphaned outside the chain —
+  and unknown ids are dropped rather than stored. Routes:
+  `PUT /v1/providers/order` (whole list, never a move).
+- **A per-provider on/off switch** (settings key `provider.disabled`,
+  `PUT /v1/providers/:id/enabled`). Off means out of the chain
+  entirely, even for a chat that names the provider: the run falls
+  through to the next candidate instead of failing. Switching off the
+  head hands the default to the next usable entry; with nothing usable
+  the current default is left alone, because an empty slot breaks more
+  than a stale one.
 - **The chain**: a run's failover chain = chat override (when usable) →
-  global default pair → every other usable provider (key stored or
-  subscription signed in) in definition order, one entry per provider,
-  each with its own default model (`ProviderService.resolveChain`).
-  With nothing usable it degrades to `[resolve()]`, so the run still
-  fails with the error that points at Settings.
+  global default pair → the priority list, one entry per provider, each
+  with its own default model (`ProviderService.resolveChain`). Only
+  usable providers (key stored or subscription signed in, and switched
+  on) take a place. With nothing usable it degrades to `[resolve()]`,
+  so the run still fails with the error that points at Settings.
 - **Error classification is TYPED** (`shouldFailOver`, application
   layer): by code and HTTP status, never substring-only. Fail-forward:
   401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,
@@ -1078,6 +1095,14 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.43 (2026-08-01): **The provider priority is the user's to edit
+  (§15).** The failover order was hardcoded — definition order, after a
+  global default that lived in its own Settings control — so there was
+  no way to say "try this one first" or "never this one", and the
+  default could name a provider the chain did not start with. Settings
+  now shows one numbered list: #1 is the default, the order below it is
+  the failover order, and each row has an on/off switch. Ported from
+  aw, including its lesson that activation and #1 must be one lever.
 - 1.42 (2026-08-01): **The subscription sign-in stops reading as broken
   (§15).** pi offers two login methods and advertises the browser
   redirect as the default; on a self-hosted install that is the one

@@ -40,6 +40,8 @@ const PROVIDER: ProviderStatusDTO = {
   authType: 'oauth',
   defaultModel: 'gpt-5.5',
   allowCustomModel: false,
+  order: 1,
+  enabled: true,
 };
 
 /** What the server reports while it waits for the pasted redirect URL. */

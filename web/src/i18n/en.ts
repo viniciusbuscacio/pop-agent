@@ -226,6 +226,14 @@ export const en = {
   'provider.saved': 'Saved',
   'provider.globalDefault': 'Global default',
   'provider.defaultProvider': 'Default provider',
+  'provider.priority.title': 'Provider priority',
+  'provider.priority.hint':
+    'Answers use #1. If it fails or runs out, the next one that is on and configured takes the turn.',
+  'provider.priority.default': 'default',
+  'provider.priority.on': 'On',
+  'provider.priority.off': 'Off',
+  'provider.priority.up': 'Move {name} up',
+  'provider.priority.down': 'Move {name} down',
   'provider.globalDefaultHint':
     'Used by every chat that does not pick its own model. If its key is removed, the next configured provider takes over.',
   'provider.keyConfiguredPlaceholder': '•••••••• (configured — enter a new key to replace)',

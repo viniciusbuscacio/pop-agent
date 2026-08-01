@@ -72,6 +72,8 @@ function status(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
     source: null,
     defaultModel: 'moonshotai/kimi-k3',
     allowCustomModel: true,
+    order: 1,
+    enabled: true,
     ...overrides,
   };
 }
@@ -127,6 +129,9 @@ beforeEach(() => {
     },
     cooldown,
     defaults: () => defaults,
+    setDefaultProvider: (provider, model) => {
+      defaults = { provider, model };
+    },
   });
 });
 
@@ -313,6 +318,8 @@ describe('subscription (oauth) providers', () => {
       source: null,
       defaultModel: 'gpt-5.5',
       allowCustomModel: false,
+      order: 4,
+      enabled: true,
     });
 
     oauthAuthed.add(CODEX);
@@ -365,6 +372,95 @@ describe('subscription (oauth) providers', () => {
     await service.disconnect(CODEX);
 
     expect(service.status(CODEX)?.configured).toBe(false);
+  });
+});
+
+/**
+ * The priority list (popy.spec §15, fase 2). The list the user edits IS the
+ * failover order and its head IS the global default -- aw's lesson, ported:
+ * two levers for one decision let the numbered list say one thing while new
+ * chats did another.
+ */
+describe('the priority list', () => {
+  it('gives every provider a position, in definition order, before anyone edits it', () => {
+    const ids = service.statuses().map((entry) => entry.id);
+    expect(service.order()).toEqual(ids);
+    expect(service.statuses().map((entry) => entry.order)).toEqual(
+      ids.map((_id, index) => index + 1),
+    );
+  });
+
+  it('drives the chain and elects its head as the global default', () => {
+    secrets.set('provider.openai.apiKey', 'sk-openai');
+    secrets.set('provider.openrouter.apiKey', 'sk-openrouter');
+
+    service.setOrder(['openai', OPENROUTER]);
+
+    expect(service.order().slice(0, 2)).toEqual(['openai', OPENROUTER]);
+    expect(defaults.provider).toBe('openai');
+    expect(service.resolveChain().map((pair) => pair.providerId)).toEqual([
+      'openai',
+      OPENROUTER,
+    ]);
+  });
+
+  it('elects the first head that can actually answer, not merely the first', () => {
+    // Only the second one has a key: an unusable head would point the whole
+    // workspace at a provider that cannot serve a single run.
+    secrets.set('provider.anthropic.apiKey', 'sk-anthropic');
+
+    service.setOrder(['openai', 'anthropic', OPENROUTER]);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+
+  it('keeps a provider left out of a saved list, at the tail', () => {
+    service.setOrder(['anthropic']);
+
+    const order = service.order();
+    expect(order[0]).toBe('anthropic');
+    expect(order).toContain(OPENROUTER);
+    expect(order.length).toBe(service.statuses().length);
+  });
+
+  it('refuses ids nothing answers to instead of storing them', () => {
+    service.setOrder(['ghost', 'anthropic']);
+
+    expect(service.order()).not.toContain('ghost');
+    expect(service.order()[0]).toBe('anthropic');
+  });
+
+  it('takes a switched-off provider out of the chain, even when a chat names it', () => {
+    secrets.set('provider.openai.apiKey', 'sk-openai');
+    secrets.set('provider.openrouter.apiKey', 'sk-openrouter');
+
+    service.setEnabled('openai', false);
+
+    expect(service.status('openai')?.enabled).toBe(false);
+    const chain = service.resolveChain({ provider: 'openai' }).map((pair) => pair.providerId);
+    expect(chain).not.toContain('openai');
+    expect(chain[0]).toBe(OPENROUTER);
+  });
+
+  it('hands the default over when the head is switched off', () => {
+    secrets.set('provider.openrouter.apiKey', 'sk-openrouter');
+    secrets.set('provider.anthropic.apiKey', 'sk-anthropic');
+    service.setOrder([OPENROUTER, 'anthropic']);
+    expect(defaults.provider).toBe(OPENROUTER);
+
+    service.setEnabled(OPENROUTER, false);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+
+  it('forgets a deleted custom instance instead of holding its position', () => {
+    const instance = service.createCustom({ name: 'Ollama', baseURL: 'http://x/v1', defaultModel: 'llama4' });
+    service.setOrder([instance.id, OPENROUTER]);
+    expect(service.order()[0]).toBe(instance.id);
+
+    service.deleteCustom(instance.id);
+
+    expect(service.order()).not.toContain(instance.id);
   });
 });
 
@@ -477,6 +573,8 @@ describe('custom provider instances (popy.spec §15)', () => {
       source: null,
       defaultModel: 'llama4',
       allowCustomModel: true,
+      order: all.length,
+      enabled: true,
       baseURL: 'http://localhost:11434/v1',
       custom: true,
     });

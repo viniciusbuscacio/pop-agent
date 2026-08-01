@@ -458,6 +458,10 @@ export interface ProviderStatusDTO {
   baseURL?: string;
   /** True for a user-created custom instance: editable, deletable. */
   custom?: boolean;
+  /** Position in the priority list, 1-based. #1 is the global default. */
+  order: number;
+  /** The user's on/off switch: a disabled provider never serves a run. */
+  enabled: boolean;
 }
 
 export interface ProvidersResponse {

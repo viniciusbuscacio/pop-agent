@@ -60,6 +60,8 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         source: openrouter.source,
         defaultModel: 'moonshotai/kimi-k3',
         allowCustomModel: true,
+        order: 1,
+        enabled: true,
       },
       {
         id: 'openai',
@@ -69,6 +71,8 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         source: null,
         defaultModel: 'gpt-4o-mini',
         allowCustomModel: true,
+        order: 2,
+        enabled: true,
       },
       {
         id: 'anthropic',
@@ -78,6 +82,8 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         source: null,
         defaultModel: 'claude-sonnet-4-5',
         allowCustomModel: true,
+        order: 3,
+        enabled: true,
       },
       {
         id: 'openai-codex',
@@ -87,6 +93,8 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         source: null,
         defaultModel: 'gpt-5.5',
         allowCustomModel: false,
+        order: 4,
+        enabled: true,
       },
       {
         id: 'github-copilot',
@@ -96,6 +104,8 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         source: null,
         defaultModel: 'gpt-5.4',
         allowCustomModel: false,
+        order: 5,
+        enabled: true,
       },
     ],
   };
@@ -110,6 +120,54 @@ describe('GET /v1/providers', () => {
     expect(await (await authed('/v1/providers')).json()).toEqual(
       expectedProviders({ configured: false, source: null }),
     );
+  });
+});
+
+describe('PUT /v1/providers/order', () => {
+  it('reorders the list and reports the new positions', async () => {
+    const res = await authed('/v1/providers/order', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: ['anthropic', 'openrouter'] }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { providers: { id: string; order: number }[] };
+    const positions = new Map(body.providers.map((entry) => [entry.id, entry.order]));
+    expect(positions.get('anthropic')).toBe(1);
+    expect(positions.get('openrouter')).toBe(2);
+    // Everything left out keeps a position, after the ones that were named.
+    expect(positions.get('openai')).toBe(3);
+  });
+
+  it('refuses a body that is not a list of ids', async () => {
+    const res = await authed('/v1/providers/order', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: 'anthropic' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('PUT /v1/providers/:id/enabled', () => {
+  it('switches a provider off and reports it', async () => {
+    const res = await authed('/v1/providers/openrouter/enabled', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: false }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { providers: { id: string; enabled: boolean }[] };
+    expect(body.providers.find((entry) => entry.id === 'openrouter')?.enabled).toBe(false);
+  });
+
+  it('404s for a provider nothing answers to', async () => {
+    const res = await authed('/v1/providers/ghost/enabled', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: false }),
+    });
+
+    expect(res.status).toBe(404);
   });
 });
 

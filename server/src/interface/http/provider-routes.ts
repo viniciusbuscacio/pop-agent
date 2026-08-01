@@ -29,6 +29,9 @@ import { apiError } from './errors.js';
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
 const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
+/** The whole priority list at once: partial edits would need a merge rule. */
+const orderSchema = z.object({ ids: z.array(z.string().min(1).max(60)).max(50) }).strict();
+const enabledSchema = z.object({ enabled: z.boolean() }).strict();
 const createCustomSchema = z.object({ name: z.string().min(1).max(100).optional() }).strict();
 const patchCustomSchema = z
   .object({
@@ -119,6 +122,28 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       ...(result.latencyMs === undefined ? {} : { latencyMs: result.latencyMs }),
     };
     return c.json(response);
+  });
+
+  // The priority list (popy.spec §15, fase 2): #1 is the global default and
+  // the rest is the failover order. Sent whole, like every other list here.
+  routes.put('/providers/order', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = orderSchema.safeParse(body);
+    if (!parsed.success) return badBody(c);
+    deps.providers.setOrder(parsed.data.ids);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
+  });
+
+  routes.put('/providers/:id/enabled', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = enabledSchema.safeParse(body);
+    if (!parsed.success) return badBody(c);
+    deps.providers.setEnabled(id, parsed.data.enabled);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
   // The provider's default model: the pair's provider half already has a
@@ -281,6 +306,8 @@ function toStatusDto(status: import('../../application/providers/provider-servic
     source: status.source,
     defaultModel: status.defaultModel,
     allowCustomModel: status.allowCustomModel,
+    order: status.order,
+    enabled: status.enabled,
     ...(status.baseURL === undefined ? {} : { baseURL: status.baseURL }),
     ...(status.custom === undefined ? {} : { custom: status.custom }),
   };

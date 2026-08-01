@@ -14,6 +14,7 @@ import type {
 } from '@popy/shared';
 import { t } from '../i18n';
 import { OAuthSection } from './oauth-section';
+import { PriorityList } from './priority-list';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
@@ -788,36 +789,19 @@ function ModelSection() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4">
-        <h2 className="text-base font-semibold">{t('provider.globalDefault')}</h2>
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="settings-default-provider"
-            className="text-sm text-[var(--key-fg-dim)]"
-          >
-            {t('provider.defaultProvider')}
-          </label>
-          <select
-            id="settings-default-provider"
-            data-testid="settings-default-provider"
-            value={settings?.defaultProvider ?? ''}
-            onChange={(event) => {
-              const providerId = event.target.value;
-              const status = providers.find((entry) => entry.id === providerId);
-              void saveSettings({
-                defaultProvider: providerId,
-                defaultModel: status?.defaultModel ?? '',
-              });
-            }}
-            className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-          >
-            {providers.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.configured ? entry.name : `${entry.name} — ${t('provider.notConfigured')}`}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-[var(--muted)]">{t('provider.globalDefaultHint')}</p>
-        </div>
+        <h2 className="text-base font-semibold">{t('provider.priority.title')}</h2>
+        {/* One lever, not two: the head of this list is the global default,
+            so there is no separate "default provider" control to contradict
+            it (popy.spec §15, fase 2). */}
+        <PriorityList
+          providers={providers}
+          onChanged={(next) => {
+            setProviders(next.providers);
+            // The head may have just become the default; re-read it so the
+            // model picker below is the new head's catalog, not the old.
+            void reload();
+          }}
+        />
         <ModelPicker
           id="settings-default-model"
           label={t('provider.defaultModel')}

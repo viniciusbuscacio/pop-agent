@@ -37,6 +37,15 @@ const LEGACY_CUSTOM_ID = 'custom';
 /** Where a chat override saying `custom` now points (set by the migration). */
 const CUSTOM_ALIAS_KEY = 'provider.custom.alias';
 
+/**
+ * The priority list, #1 first (popy.spec §15, fase 2). The list IS the
+ * failover chain and its head IS the global default: one lever, so the
+ * numbered list can never disagree with what a new chat actually uses.
+ */
+const ORDER_KEY = 'provider.order';
+/** The ids the user switched off. Off means out of the chain entirely. */
+const DISABLED_KEY = 'provider.disabled';
+
 /** What the key test sends. Short on purpose: it spends real money. */
 const TEST_PROMPT = 'Reply with exactly: ok';
 const TEST_MAX_TOKENS = 5;
@@ -54,6 +63,10 @@ export interface ProviderStatus {
   baseURL?: string;
   /** True for a user-created custom instance: editable, deletable. */
   custom?: boolean;
+  /** Position in the priority list, 1-based. #1 is the global default. */
+  order: number;
+  /** The user's on/off switch: a disabled provider never serves a run. */
+  enabled: boolean;
 }
 
 /** Where a catalog answer came from, freshest first. */
@@ -116,6 +129,12 @@ export interface ProviderServiceDeps {
   cooldown?: ProviderCooldown;
   /** The global default pair from Settings. Read late; it is a setting. */
   defaults: () => { provider: string; model: string };
+  /**
+   * Writes the elected head of the list back as the global default. Without
+   * it the numbered list and the default drift apart, which is the bug aw
+   * fixed by making activation and #1 the same lever.
+   */
+  setDefaultProvider?: (providerId: string, model: string) => void;
 }
 
 export class ProviderService {
@@ -147,6 +166,8 @@ export class ProviderService {
         source: connected ? 'oauth' : null,
         defaultModel: this.storedDefaultModel(definition.id) ?? definition.defaultModel,
         allowCustomModel: definition.allowCustomModel,
+        order: this.positionOf(definition.id),
+        enabled: this.isEnabled(definition.id),
       };
     }
     const key = this.deps.secrets.get(keySecretName(definition.id));
@@ -165,6 +186,8 @@ export class ProviderService {
         ? definition.defaultModel
         : this.storedDefaultModel(definition.id) ?? definition.defaultModel,
       allowCustomModel: definition.allowCustomModel,
+      order: this.positionOf(definition.id),
+      enabled: this.isEnabled(definition.id),
       ...(definition.customBaseURL ? { baseURL: definition.baseURL, custom: true } : {}),
     };
   }
@@ -191,6 +214,87 @@ export class ProviderService {
   async disconnect(providerId: string): Promise<void> {
     if (providerDefinition(providerId)?.authType !== 'oauth') return;
     await this.deps.engineLogout(providerId);
+  }
+
+  /**
+   * The priority list, #1 first: the stored ids that still exist, then every
+   * remaining provider appended. The tail matters -- a provider added (or a
+   * custom instance created) after the list was saved must still be reachable
+   * instead of silently sitting outside the chain.
+   */
+  order(): string[] {
+    const known = this.definitions().map((definition) => definition.id);
+    const ordered: string[] = [];
+    for (const id of this.deps.settings.get<string[]>(ORDER_KEY) ?? []) {
+      const canonical = this.canonicalId(id);
+      if (known.includes(canonical) && !ordered.includes(canonical)) ordered.push(canonical);
+    }
+    for (const id of known) {
+      if (!ordered.includes(id)) ordered.push(id);
+    }
+    return ordered;
+  }
+
+  /**
+   * Rewrites the priority list. Unknown ids are dropped rather than stored,
+   * so a stale browser tab cannot resurrect a deleted custom instance, and
+   * the head is elected as the new global default.
+   */
+  setOrder(ids: string[]): string[] {
+    const known = new Set(this.definitions().map((definition) => definition.id));
+    const cleaned: string[] = [];
+    for (const id of ids) {
+      const canonical = this.canonicalId(id);
+      if (known.has(canonical) && !cleaned.includes(canonical)) cleaned.push(canonical);
+    }
+    this.deps.settings.set(ORDER_KEY, cleaned);
+    this.electDefault();
+    return this.order();
+  }
+
+  /** Whether the provider is switched on. Unknown ids read as on. */
+  isEnabled(providerId: string): boolean {
+    return !this.disabledIds().includes(this.canonicalId(providerId));
+  }
+
+  /**
+   * Flips the on/off switch. Switching off the provider currently serving as
+   * the default hands the default to the next usable one, so the slot is
+   * never left pointing at something that cannot answer.
+   */
+  setEnabled(providerId: string, enabled: boolean): void {
+    const canonical = this.canonicalId(providerId);
+    const disabled = this.disabledIds().filter((id) => id !== canonical);
+    if (!enabled) disabled.push(canonical);
+    this.deps.settings.set(DISABLED_KEY, disabled);
+    this.electDefault();
+  }
+
+  private disabledIds(): string[] {
+    return this.deps.settings.get<string[]>(DISABLED_KEY) ?? [];
+  }
+
+  /** 1-based position in the list; every known provider has one. */
+  private positionOf(providerId: string): number {
+    return this.order().indexOf(this.canonicalId(providerId)) + 1;
+  }
+
+  /**
+   * The first usable provider of the list becomes the global default. Called
+   * after every edit to the list or the switches: it is what keeps "#1" and
+   * "what a new chat uses" the same statement. With nothing usable the
+   * current default is left alone -- an empty slot breaks more than a stale
+   * one, and the run error already points at Settings.
+   */
+  private electDefault(): void {
+    const write = this.deps.setDefaultProvider;
+    if (write === undefined) return;
+    for (const id of this.order()) {
+      if (!this.usable(id)) continue;
+      if (this.deps.defaults().provider === id) return;
+      write(id, this.ref(id, '').modelId);
+      return;
+    }
   }
 
   /** Whether the provider the next run would use has a key (health probe). */
@@ -262,6 +366,16 @@ export class ProviderService {
       registry.filter((instance) => instance.id !== id),
     );
     this.deps.secrets.delete(keySecretName(id));
+    // Out of the list and the switches too, or a deleted instance keeps a
+    // position (and a disabled flag) that its id could inherit later.
+    this.deps.settings.set(
+      ORDER_KEY,
+      (this.deps.settings.get<string[]>(ORDER_KEY) ?? []).filter((entry) => entry !== id),
+    );
+    this.deps.settings.set(
+      DISABLED_KEY,
+      this.disabledIds().filter((entry) => entry !== id),
+    );
     // The settings repo has no delete; emptied values mean the same thing.
     this.deps.settings.set(`provider.${id}.defaultModel`, '');
     this.deps.settings.set(`models.${id}`, { fetchedAt: 0, models: [] });
@@ -349,9 +463,10 @@ export class ProviderService {
   }
 
   /**
-   * Resolution order: chat override, the global default, then every
-   * definition -- builtins first, custom instances after them in registry
-   * order (they join the failover chain there too).
+   * Resolution order: chat override, the global default, then the priority
+   * list the user edits. The default is kept equal to the list's head by
+   * `electDefault`, so the second entry is normally the same provider as the
+   * first of the list -- the dedup in `resolveChain` collapses it.
    */
   private candidates(override?: { provider?: string; model?: string }): ModelRef[] {
     const candidates: ModelRef[] = [];
@@ -360,14 +475,17 @@ export class ProviderService {
     }
     const defaults = this.deps.defaults();
     candidates.push(this.ref(this.canonicalId(defaults.provider), defaults.model));
-    for (const definition of this.definitions()) {
-      candidates.push(this.ref(definition.id, ''));
+    for (const id of this.order()) {
+      candidates.push(this.ref(id, ''));
     }
     return candidates;
   }
 
   /** Whether a provider could serve a run right now: key or subscription. */
   private usable(providerId: string): boolean {
+    // Switched off is switched off, even for a chat that names it: the run
+    // falls through to the next candidate instead of failing.
+    if (!this.isEnabled(providerId)) return false;
     if (this.definition(providerId)?.authType === 'oauth') {
       return this.deps.engineHasAuth(providerId);
     }

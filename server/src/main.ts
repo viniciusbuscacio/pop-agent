@@ -181,6 +181,12 @@ const providers: ProviderService = new ProviderService({
   engineCheckAuth: (providerId) => bridge.checkProviderAuth(providerId),
   engineLogout: (providerId) => bridge.providerLogout(providerId),
   cooldown,
+  setDefaultProvider: (providerId, model) => {
+    // The list's head IS the default (popy.spec §15): written back here so
+    // Settings, /model and every new chat report the same provider.
+    const current = settings.read();
+    settings.write({ ...current, defaultProvider: providerId, defaultModel: model });
+  },
   defaults: () => ({
     provider: settings.read().defaultProvider,
     model: settings.read().defaultModel,
