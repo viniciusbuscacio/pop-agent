@@ -23,7 +23,10 @@ const DESTRUCTIVE = [
   /\bchmod\s+-R|\bchown\s+-R/i,
   /\bcurl\b[^|]*\|\s*(ba)?sh|\bwget\b[^|]*\|\s*(ba)?sh/i, // pipe-to-shell
   /:\s*\(\s*\)\s*\{/, // fork bomb
-  />\s*\/(?!home\/\w+\/popy-workspace|tmp)/, // redirect outside workspace/tmp
+  // Clobbering a system path. Anchored so it only fires on a real output
+  // redirect ("> /etc/x", "1> /usr/x") into a known system dir -- not on the
+  // harmless `2>/dev/null`, `2>&1`, or a JS arrow-plus-regex like `n=>/re/`.
+  /(^|\s)\d?>>?\s*\/(etc|usr|s?bin|boot|lib(64)?|sys|proc|var|root|opt)\b/i,
 ];
 
 /**

@@ -18,7 +18,18 @@ describe('isDestructiveBash', () => {
     ': () { :|:& }; :',
     'echo pwned > /etc/passwd',
   ];
-  const safe = ['ls -la', 'cat notes.txt', 'echo hello > output.txt', 'grep TODO src/*.ts', 'node build.js'];
+  const safe = [
+    'ls -la',
+    'cat notes.txt',
+    'echo hello > output.txt',
+    'grep TODO src/*.ts',
+    'node build.js',
+    // Real commands that a broad redirect rule wrongly flagged (fixed):
+    'ls /home/vinicius/.popy 2>/dev/null',
+    'find . -name "*.ts" 2>/dev/null | head',
+    'node -e "const f = xs.filter(n=>/runtime|model/i.test(n))"',
+    'journalctl -u popy-dev 2>&1 | tail -5',
+  ];
 
   it('catches the destructive shapes', () => {
     for (const command of destructive) expect(isDestructiveBash(command), command).toBe(true);
