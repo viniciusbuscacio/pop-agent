@@ -237,9 +237,34 @@ with RRF. Three layers, aw's design rewritten:
    (max 1×/day, one-level backup, secret-scrub before persisting).
    Editable in Settings → Memory. Ships EMPTY — no personal seed; Popy is
    a product for anyone to deploy.
-3. **Long-chat compaction** — check pi's native auto-compaction first; only
-   build our own (`[popy compacted]` summary + recent tail) if pi's isn't
-   enough.
+3. **Long-chat compaction & restore** (aw's layered design, adapted 01/08 —
+   pi ALREADY does the heavy lifting, Popy wraps the policy):
+   - **Compaction = pi's native auto-compaction**, explicitly configured via
+     `SettingsManager` (before 01/08 it ran on implicit defaults):
+     `contextTokens > contextWindow - reserveTokens` (reserve 16384,
+     keepRecent 20k) → pi summarizes the old span with iterative context
+     (previous summary composes in), cuts at turn boundaries (never inside a
+     tool pair), and persists a `CompactionEntry` in the session JSONL.
+     Popy builds no summarizer of her own.
+   - **Proactive trigger**: pi's own threshold check before each turn.
+   - **Reactive trigger = Popy's layer**: pi does NOT retry on a
+     context-overflow error (its `retry.*` covers transient failures only).
+     The bridge catches an overflow error, calls `session.compact()` and
+     retries the SAME turn once — token accounting always errs a little,
+     this is the safety net.
+   - **Summary authority**: model-generated text never returns with system
+     authority. Pi renders its summary as conversation context (verified
+     01/08); anything Popy adds herself follows the house pattern — inside
+     the untrusted-data envelope, never bare system.
+   - **Restore after restart/idle-unload = pi's session resume** (replays
+     the JSONL honouring compaction entries), plus Popy's **continuity
+     note** (untrusted envelope): real numbers ("the N newest of M stored
+     messages"), how to page back (memory_open/memory_search), and the rule
+     that kills a class of hallucination — "tool results from before the
+     restart may not have survived: re-run the tool instead of answering
+     from memory".
+   - **Memory humility**: the prompt states "never claim you have no memory
+     before searching" — matching the existing memory/files tools.
 4. **Files awareness** (designed in 1.28, built in 1.29) — the agent must
    know *that* a file exists without being handed it. Two halves, same
    progressive-disclosure move as pinned skills and the recent-chats
