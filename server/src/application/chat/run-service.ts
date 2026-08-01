@@ -28,7 +28,7 @@ export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
 
 export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
-  | { ok: false; reason: 'chat_not_found' | 'run_in_progress' };
+  | { ok: false; reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' };
 
 export interface RunDeps {
   chats: ChatRepo;
@@ -114,6 +114,12 @@ export class RunService {
   /** Risky actions paused mid-run, keyed by runId, awaiting Allow/Deny. */
   private readonly confirms = new Map<string, PendingConfirm>();
   private running = 0;
+  /**
+   * The operator's "Stop LLM" switch (Settings → Server, LOTE 6): while set,
+   * new runs are refused with a persisted error and nothing reaches the
+   * engine. The web/API keep working; only the brain is off.
+   */
+  private llmHalted = false;
 
   constructor(private readonly deps: RunDeps) {}
 
@@ -132,6 +138,33 @@ export class RunService {
 
     const now = new Date(this.deps.clock.now()).toISOString();
     const isFirstMessage = this.deps.chats.countMessages(chatId) === 0;
+
+    // Refused, but not silently: the user's words and the reason nothing
+    // answered are both history now (the flag is deliberate, not a crash).
+    if (this.llmHalted) {
+      this.deps.chats.appendMessage({
+        id: newMessageId(),
+        chatId,
+        role: 'user',
+        content: text,
+        thinking: '',
+        tools: [],
+        attachments,
+        createdAt: now,
+      });
+      this.deps.chats.appendMessage({
+        id: newMessageId(),
+        chatId,
+        role: 'system',
+        content: 'LLM stopped by operator. Start it again in Settings → Server.',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: now,
+      });
+      this.deps.chats.touch(chatId, now);
+      return { ok: false, reason: 'llm_stopped' };
+    }
 
     const userMessage = this.deps.chats.appendMessage({
       id: newMessageId(),
@@ -229,6 +262,29 @@ export class RunService {
       timer.unref?.();
       this.confirms.set(run.runId, { resolve, timer });
     });
+  }
+
+  /** Whether the operator has the LLM switched off. */
+  isLlmStopped(): boolean {
+    return this.llmHalted;
+  }
+
+  /**
+   * "Stop LLM" (LOTE 6): aborts every run in flight, drops the queue, and
+   * refuses anything new until {@link startLlm}. Returns how many chats were
+   * interrupted. Each aborted run still persists its partial answer through
+   * the normal failure path.
+   */
+  stopLlm(): number {
+    this.llmHalted = true;
+    const chatIds = [...this.runIdByChat.keys()];
+    for (const chatId of chatIds) this.stopRun(chatId);
+    return chatIds.length;
+  }
+
+  /** Clears the operator switch; sessions are recreated lazily by the bridge. */
+  startLlm(): void {
+    this.llmHalted = false;
   }
 
   /** Stops whatever this chat is doing. False when it was not doing anything. */

@@ -158,8 +158,9 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       [...(parsed.data.attachments ?? []), ...referenced],
     );
     if (!result.ok) {
-      return result.reason === 'chat_not_found'
-        ? chatNotFound(c)
+      if (result.reason === 'chat_not_found') return chatNotFound(c);
+      return result.reason === 'llm_stopped'
+        ? apiError(c, 503, 'llm_stopped', 'The LLM is stopped by the operator (Settings → Server).')
         : apiError(c, 409, 'run_in_progress', 'This chat is already waiting on an answer.');
     }
 

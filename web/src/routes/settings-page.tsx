@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   AboutResponse,
+  ProviderCreditsResponse,
   ModelCatalogSource,
   ModelDTO,
   ProvidersResponse,
@@ -907,6 +908,18 @@ function ProviderCard({
 
   const isCustom = provider.id === 'custom';
 
+  // The balance row (LOTE 6): undefined = still loading or hidden. ANY error
+  // hides it silently -- a balance you cannot see is never a broken card.
+  const [credits, setCredits] = useState<ProviderCreditsResponse | undefined>(undefined);
+
+  useEffect(() => {
+    if (!provider.configured) return;
+    providersService
+      .credits(provider.id)
+      .then(setCredits)
+      .catch(() => setCredits(undefined));
+  }, [provider.id, provider.configured]);
+
   useEffect(() => {
     void loadCatalog();
   }, [provider.id, provider.configured]);
@@ -1009,6 +1022,15 @@ function ProviderCard({
           {statusLabel}
         </span>
       </div>
+
+      {credits !== undefined ? (
+        <p data-testid={`provider-credits-${provider.id}`} className="text-sm text-[var(--muted)]">
+          {t('provider.credits', {
+            remaining: credits.remaining.toFixed(2),
+            used: credits.used.toFixed(2),
+          })}
+        </p>
+      ) : null}
 
       {isCustom ? (
         <div className="flex flex-col gap-3">
@@ -1748,7 +1770,77 @@ function ServerSection() {
         <Row label={t('settings.server.dataDir')} value={info?.dataDir ?? '…'} testId="server-datadir" />
         <Row label={t('settings.server.workspace')} value={info?.workspace ?? '…'} testId="server-workspace-path" />
       </Card>
+
+      <DangerZoneSection />
     </div>
+  );
+}
+
+function DangerZoneSection() {
+  const [busy, setBusy] = useState<string | undefined>(undefined);
+
+  async function act(action: string, fn: () => Promise<unknown>): Promise<void> {
+    setBusy(action);
+    try {
+      await fn();
+    } catch {
+      // The service dying mid-answer is the expected path for restart/stop.
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-3 border-[var(--danger)]">
+      <h3 className="text-sm font-semibold text-[var(--danger)]">{t('settings.server.dangerZone')}</h3>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="danger"
+          disabled={busy !== undefined}
+          data-testid="server-restart"
+          onClick={() => {
+            if (!window.confirm(t('settings.server.restartConfirm'))) return;
+            void act('restart', () => serverService.restart());
+          }}
+        >
+          {t('settings.server.restart')}
+        </Button>
+        <Button
+          variant="danger"
+          disabled={busy !== undefined}
+          data-testid="server-stop"
+          onClick={() => {
+            if (!window.confirm(t('settings.server.stopConfirm1'))) return;
+            if (!window.confirm(t('settings.server.stopConfirm2'))) return;
+            void act('stop', () => serverService.stop());
+          }}
+        >
+          {t('settings.server.stop')}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="ghost"
+          disabled={busy !== undefined}
+          data-testid="server-llm-stop"
+          onClick={() => {
+            if (!window.confirm(t('settings.server.llmStopConfirm'))) return;
+            void act('llm-stop', () => serverService.llmStop());
+          }}
+        >
+          {t('settings.server.llmStop')}
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={busy !== undefined}
+          data-testid="server-llm-start"
+          onClick={() => void act('llm-start', () => serverService.llmStart())}
+        >
+          {t('settings.server.llmStart')}
+        </Button>
+      </div>
+      <p className="text-xs text-[var(--muted)]">{t('settings.server.dangerHint')}</p>
+    </Card>
   );
 }
 

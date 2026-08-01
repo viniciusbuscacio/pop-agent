@@ -404,6 +404,15 @@ export interface ProvidersResponse {
   providers: ProviderStatusDTO[];
 }
 
+/**
+ * `GET /v1/providers/:id/credits` — the provider's balance, when it publishes
+ * one (OpenRouter does). Any failure is a non-200: the client hides the row.
+ */
+export interface ProviderCreditsResponse {
+  remaining: number;
+  used: number;
+}
+
 /** `PUT /v1/providers/:id/key` — write-only: no route ever returns the key. */
 export interface SetProviderKeyRequest {
   apiKey: string;

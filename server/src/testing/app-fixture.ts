@@ -123,6 +123,8 @@ export class FakeTranscriber {
 
 export interface TestApp {
   app: Hono;
+  /** Danger-zone calls the test inspects (LOTE 6). */
+  controlLog: string[];
   auth: AuthService;
   chats: ChatService;
   artifacts: ArtifactService;
@@ -134,6 +136,9 @@ export interface TestApp {
 }
 
 export interface TestAppOptions {
+  /** Scripted provider balance for the credits route (LOTE 6). */
+  credits?: { remaining: number; used: number };
+
   /** Swap in a scripted gateway to test the provider routes. */
   gateway?: ProviderGateway;
   /** Stands in for OPENROUTER_API_KEY in the environment. */
@@ -205,6 +210,7 @@ export function createTestApp(
     }),
   });
 
+  const controlLog: string[] = [];
   const app = createApp({
     auth,
     settings,
@@ -252,6 +258,19 @@ export function createTestApp(
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
+    ...(options.credits === undefined
+      ? {}
+      : { credits: () => Promise.resolve(options.credits) }),
+    serverControl: {
+      restart: () => {
+        controlLog.push('restart');
+      },
+      stop: () => {
+        controlLog.push('stop');
+      },
+      llmStop: () => runs.stopLlm(),
+      llmStart: () => runs.startLlm(),
+    },
     serverInfo: () =>
       ({
         cpu: { model: 'Test CPU', cores: 2, load: [0, 0, 0] },
@@ -272,5 +291,5 @@ export function createTestApp(
     webDist: WEB_DIST,
   });
 
-  return { app, auth, chats, artifacts, runs, providers, secrets, hub, clock };
+  return { controlLog, app, auth, chats, artifacts, runs, providers, secrets, hub, clock };
 }

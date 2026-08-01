@@ -368,6 +368,10 @@ async function main(): Promise<void> {
       // Explicit, not inherited: the smoke runs in the gate and in CI, and it
       // must cost nothing no matter what the machine's default engine is.
       POPY_AGENT: 'fake',
+      // A disposable instance never holds the real systemd switch: the fake
+      // only logs the call (field lesson: a validation run once restarted
+      // the live service). Defense in depth even though smoke clicks nothing.
+      POPY_SERVICE_CONTROL: 'fake',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -66,6 +66,15 @@ export interface AppDeps {
   versions: AboutResponse;
   /** Settings -> Server snapshot: measured on each read, so a function. */
   serverInfo: () => ServerInfoResponse;
+  /** Settings -> Server danger zone (LOTE 6). See server-routes.ts. */
+  serverControl: {
+    restart(): void;
+    stop(): void;
+    llmStop(): number;
+    llmStart(): void;
+  };
+  /** Provider balance lookup (LOTE 6); absent means "no balance to show". */
+  credits?: (providerId: string) => Promise<{ remaining: number; used: number } | undefined>;
   /** Directory holding the built frontend (web/dist). */
   webDist: string;
 }

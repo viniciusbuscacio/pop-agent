@@ -236,6 +236,16 @@ export class PiAgentBridge implements AgentBridge {
   }
 
   /**
+   * "Restart LLM" (LOTE 6): drops every live session so the next run builds
+   * a fresh runtime, without killing the sweeper like {@link close} does --
+   * the process lives on.
+   */
+  resetSessions(): void {
+    for (const entry of this.sessions.values()) entry.session.dispose();
+    this.sessions.clear();
+  }
+
+  /**
    * Prepends the skills the router picked for this message (popy.spec §8).
    * These are Popy's own trusted instructions, so they lead the prompt rather
    * than being wrapped as untrusted data.

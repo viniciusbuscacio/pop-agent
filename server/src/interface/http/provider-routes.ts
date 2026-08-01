@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type {
+  ProviderCreditsResponse,
   ProviderStatusDTO,
   ProvidersResponse,
   TestProviderResponse,
@@ -37,6 +38,12 @@ export interface ProviderRoutesDeps {
   providers: ProviderService;
   transcriber: Transcriber;
   voiceCleanup: VoiceCleanup;
+  /**
+   * Balance lookup for providers that publish one (LOTE 6). Undefined in the
+   * deps or undefined from the call both mean "no balance to show" -- the
+   * endpoint answers 404 and the client hides the row.
+   */
+  credits?: (providerId: string) => Promise<{ remaining: number; used: number } | undefined>;
 }
 
 export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
@@ -47,6 +54,16 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       providers: deps.providers.statuses().map(toStatusDto),
     };
     return c.json(response);
+  });
+
+  routes.get('/providers/:id/credits', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const credits = (await deps.credits?.(id)) ?? undefined;
+    if (credits === undefined) {
+      return apiError(c, 404, 'not_found', 'This provider does not publish a balance right now.');
+    }
+    return c.json(credits satisfies ProviderCreditsResponse);
   });
 
   routes.put('/providers/:id/key', async (c) => {

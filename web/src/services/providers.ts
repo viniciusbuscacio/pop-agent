@@ -1,4 +1,4 @@
-import type { ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
+import type { ProviderCreditsResponse, ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
 import { apiRequest } from './api';
 
 /**
@@ -29,6 +29,14 @@ export const providersService = {
       method: 'POST',
       body: apiKey === undefined ? {} : { apiKey },
     });
+  },
+
+  /**
+   * The provider's balance, when it publishes one (LOTE 6). Rejects on ANY
+   * failure -- the card catches and hides the row, never the other way round.
+   */
+  credits(providerId: string): Promise<ProviderCreditsResponse> {
+    return apiRequest<ProviderCreditsResponse>(`/providers/${providerId}/credits`);
   },
 
   /** The provider's default model; '' resets to the built-in one. */

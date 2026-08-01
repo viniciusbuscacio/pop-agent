@@ -34,6 +34,8 @@ import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { readServerInfo } from './infrastructure/config/server-info.js';
+import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
+import { fetchOpenRouterCredits } from './infrastructure/providers/openrouter-credits.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { AnthropicGateway } from './infrastructure/providers/anthropic-gateway.js';
 import {
@@ -331,10 +333,44 @@ const app = createApp({
     backupsDir: join(context.dataDir, '..', 'popy-backups'),
     now: () => new Date(systemClock.now()).toISOString(),
   }),
+  // OpenRouter balance for the provider card (LOTE 6): cached 60s so a
+  // settings-page refresh storm costs at most one upstream call a minute.
+  credits: (() => {
+    let cached: { at: number; value: { remaining: number; used: number } | undefined } | undefined;
+    return async (providerId: string) => {
+      if (providerId !== 'openrouter') return undefined;
+      if (cached !== undefined && Date.now() - cached.at < 60_000) return cached.value;
+      const key = providers.apiKey('openrouter');
+      const value = key === undefined ? undefined : await fetchOpenRouterCredits(key);
+      cached = { at: Date.now(), value };
+      return value;
+    };
+  })(),
   hub,
   clock: systemClock,
   versions: readVersions(),
   serverInfo: () => readServerInfo({ dataDir: context.dataDir, workspace, versions: readVersions() }),
+  serverControl: (() => {
+    // The systemd unit this process runs as (LOTE 6); the name is
+    // overridable for an install that names it differently. A disposable
+    // boot (POPY_SERVICE_CONTROL=fake) gets a logging no-op instead, so a
+    // validation click can never reach the real service.
+    const service =
+      process.env['POPY_SERVICE_CONTROL'] === 'fake'
+        ? createFakeServiceControl()
+        : createSystemdControl(process.env['POPY_SERVICE_NAME'] ?? 'popy-dev');
+    return {
+      restart: () => service.restart(),
+      stop: () => service.stop(),
+      llmStop: () => runs.stopLlm(),
+      llmStart: () => {
+        runs.startLlm();
+        // Fresh brain: live pi sessions are dropped so the next run rebuilds
+        // the runtime; the fake bridge holds nothing to reset.
+        if (bridge instanceof PiAgentBridge) bridge.resetSessions();
+      },
+    };
+  })(),
   webDist,
 });
 
