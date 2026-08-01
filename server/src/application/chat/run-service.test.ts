@@ -63,6 +63,7 @@ let chats: ChatService;
 let runs: RunService;
 let sink: RecordingSink;
 let bridge: ScriptedBridge;
+let clock: FixedClock;
 
 function newChat(): string {
   return chats.create().id;
@@ -73,7 +74,7 @@ beforeEach(() => {
   db.pragma('foreign_keys = ON');
   migrate(db);
   repo = new SqliteChatRepo(db);
-  const clock = new FixedClock();
+  clock = new FixedClock();
   chats = new ChatService({ chats: repo, clock });
   sink = new RecordingSink();
   bridge = new ScriptedBridge();
@@ -328,8 +329,9 @@ describe('the queue', () => {
 
     expect(bridge.seen).toHaveLength(2);
     release[0]?.();
-    await Promise.resolve();
-    await Promise.resolve();
+    // A macrotask flush: the released run's post-processing spans a few
+    // awaits (attempt, accounting) before the queue drains.
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(bridge.seen).toHaveLength(3);
     const third = sink.of('run-status').filter((event) => event.status === 'running');
@@ -603,5 +605,164 @@ describe('a process shutdown mid-run', () => {
 
     const stored = repo.getMessages(chatId, { limit: 10 });
     expect(stored.filter((message) => message.role === 'assistant')).toHaveLength(1);
+  });
+});
+
+describe('failing over between providers (popy.spec §15, fase 2)', () => {
+  let penalized: string[];
+  let fallbacks: { chatId: string; from: string; to: string; code: string }[];
+
+  /** The service under a fixed two-provider chain, everything recorded. */
+  function withChain(chain: { providerId: string; modelId: string }[]): void {
+    penalized = [];
+    fallbacks = [];
+    runs = new RunService({
+      chats: repo,
+      bridge,
+      sink,
+      clock,
+      llmRuns: new SqliteLlmRunsRepo(db),
+      resolveChain: () => chain,
+      cooldown: { penalize: (providerId) => penalized.push(providerId) },
+      onFallback: (info) => fallbacks.push(info),
+    });
+  }
+
+  const TWO = [
+    { providerId: 'p1', modelId: 'p1/model' },
+    { providerId: 'p2', modelId: 'p2/model' },
+  ];
+
+  it('retries the next provider when the first refuses with a 402', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      if (request.provider === 'p1') {
+        request.onEvent({ kind: 'error', code: 'provider_error', status: 402 });
+      } else {
+        request.onEvent({ kind: 'delta', text: 'saved by the second' });
+      }
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    // The answer arrived, from the second provider.
+    expect(sink.of('done')).toHaveLength(1);
+    expect(sink.of('error')).toHaveLength(0);
+    expect(bridge.seen.map((request) => request.provider)).toEqual(['p1', 'p2']);
+    expect(bridge.seen.map((request) => request.model)).toEqual(['p1/model', 'p2/model']);
+
+    // Loud: the retry is history, placed before the answer it explains.
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    const mark = messages.find((message) => message.role === 'system');
+    expect(mark?.content).toBe('Answer retried via p2 after p1 failed (provider_error).');
+    expect(messages[messages.length - 1]?.content).toBe('saved by the second');
+
+    // Penalized and journaled.
+    expect(penalized).toEqual(['p1']);
+    expect(fallbacks).toEqual([
+      { chatId, from: 'p1', to: 'p2', code: 'provider_error' },
+    ]);
+  });
+
+  it('books every billed attempt in llm_runs, under distinct ids', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.usage = { provider: 'fake', model: 'm', inputTokens: 1, outputTokens: 2, cost: 0.1 };
+    bridge.script = (request) => {
+      if (request.provider === 'p1') {
+        request.onEvent({ kind: 'error', code: 'provider_error', status: 429 });
+      } else {
+        request.onEvent({ kind: 'delta', text: 'ok' });
+      }
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    const rows = db.prepare('SELECT id FROM llm_runs ORDER BY id').all() as { id: string }[];
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.id).toBe(`${rows[0]?.id ?? ''}-f1`);
+  });
+
+  it('does not retry under the reader: a streamed word pins the run', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'half an ans' });
+      request.onEvent({ kind: 'error', code: 'provider_error', status: 402 });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    // One attempt, failed in place -- but the provider is still penalized.
+    expect(bridge.seen).toHaveLength(1);
+    expect(sink.of('error')[0]?.code).toBe('provider_error');
+    expect(penalized).toEqual(['p1']);
+    expect(fallbacks).toEqual([]);
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.content).toContain('could not be finished');
+  });
+
+  it('never fails over on a 400: wrong is wrong everywhere', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'error', code: 'provider_error', status: 400 });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen).toHaveLength(1);
+    expect(penalized).toEqual([]);
+    expect(sink.of('error')[0]?.code).toBe('provider_error');
+  });
+
+  it('never fails over past the user s own Stop', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'error', code: 'aborted' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen).toHaveLength(1);
+    expect(penalized).toEqual([]);
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.content).toBe('You stopped this answer.');
+  });
+
+  it('walks the whole chain and fails with the last verdict when everyone refuses', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'error', code: 'provider_error', status: 503 });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen).toHaveLength(2);
+    expect(penalized).toEqual(['p1', 'p2']);
+    expect(sink.of('error')[0]?.code).toBe('provider_error');
+    // One retry mark (p1 -> p2), then the final failure mark.
+    const marks = repo
+      .getMessages(chatId, { limit: 10 })
+      .filter((message) => message.role === 'system');
+    expect(marks.map((message) => message.content)).toEqual([
+      'Answer retried via p2 after p1 failed (provider_error).',
+      'That answer could not be finished. (provider_error)',
+    ]);
   });
 });

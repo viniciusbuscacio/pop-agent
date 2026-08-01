@@ -191,7 +191,11 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
 
       translator.finish(signal.aborted);
     } catch (error) {
-      translator.fail(signal.aborted ? 'aborted' : errorCode(error), messageOf(error));
+      translator.fail(
+        signal.aborted ? 'aborted' : errorCode(error),
+        messageOf(error),
+        statusOf(error),
+      );
     } finally {
       entry.session.setGuard(undefined);
       unsubscribe();
@@ -535,14 +539,21 @@ class RunTranslator {
   /** The run is over: say whether it worked. */
   finish(aborted: boolean): void {
     if (aborted || this.lastStopReason === 'aborted') this.fail('aborted', undefined);
-    else if (this.lastStopReason === 'error') this.fail('provider_error', this.lastErrorMessage);
+    else if (this.lastStopReason === 'error') {
+      // Typed for failover (popy.spec §15, fase 2): a transport failure gets
+      // its own code, and an HTTP refusal carries its status when the
+      // provider's message names one.
+      const message = this.lastErrorMessage;
+      if (isNetworkFailure(message)) this.fail('network_error', message);
+      else this.fail('provider_error', message, extractHttpStatus(message));
+    }
   }
 
   /** Reports a failed run once; later ones are the same failure echoing. */
-  fail(code: string, message: string | undefined): void {
+  fail(code: string, message: string | undefined, status?: number): void {
     if (this.reported !== undefined) return;
     this.reported = { code, message };
-    this.onEvent({ kind: 'error', code });
+    this.onEvent({ kind: 'error', code, ...(status === undefined ? {} : { status }) });
   }
 
   /** The part of this snapshot that has not been sent yet. */
@@ -647,9 +658,86 @@ function isContextOverflow(message: string | undefined): boolean {
 
 function errorCode(error: unknown): string {
   if (error instanceof PiEngineError) return error.code;
+  if (isNetworkFailure(messageOf(error)) || networkCodeOf(error) !== undefined) {
+    return 'network_error';
+  }
   return 'operation_error';
 }
 
 function messageOf(error: unknown): string | undefined {
   return error instanceof Error ? error.message : undefined;
+}
+
+/**
+ * The HTTP status a thrown error carries, when the SDK put one on it
+ * (`status`/`statusCode` on the error or its cause). Typed input for the
+ * failover classifier (popy.spec §15, fase 2).
+ */
+function statusOf(error: unknown): number | undefined {
+  for (const candidate of [error, (error as { cause?: unknown } | null)?.cause]) {
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    const record = candidate as Record<string, unknown>;
+    for (const key of ['status', 'statusCode']) {
+      const value = record[key];
+      if (typeof value === 'number' && value >= 400 && value <= 599) return value;
+    }
+  }
+  return undefined;
+}
+
+/** The `code` of a Node system error (`ECONNREFUSED`…), wherever it hides. */
+function networkCodeOf(error: unknown): string | undefined {
+  for (const candidate of [error, (error as { cause?: unknown } | null)?.cause]) {
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    const code = (candidate as Record<string, unknown>)['code'];
+    if (typeof code === 'string' && NETWORK_CODES.has(code)) return code;
+  }
+  return undefined;
+}
+
+const NETWORK_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+/**
+ * A provider error that is really the wire failing: the Node error codes
+ * above, TLS trouble, an interrupted stream. Matched against the code-like
+ * tokens providers embed in their messages, not against free prose.
+ */
+const NETWORK_FAILURE_PATTERN =
+  /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|EHOSTUNREACH|ENETUNREACH|UND_ERR_\w+)\b|fetch failed|socket hang up|TLS handshake|certificate|unexpected (end of file|EOF)/i;
+
+export function isNetworkFailure(message: string | undefined): boolean {
+  return message !== undefined && NETWORK_FAILURE_PATTERN.test(message);
+}
+
+/**
+ * The status of an HTTP refusal, read from the code-shaped places providers
+ * put it: the front of the message ("402 …"), an explicit "status code 402",
+ * or the status word next to the number ("402 Payment Required"). Never a
+ * bare number from the middle of prose -- a model name or a token count must
+ * not become a status.
+ */
+const STATUS_PATTERNS = [
+  /^\s*\(?([45]\d{2})\)?[\s:-]/,
+  /\bstatus(?:\s+code)?[:\s]+\(?([45]\d{2})\b/i,
+  /\b([45]\d{2})\s+(?:Bad Request|Unauthorized|Payment Required|Forbidden|Not Found|Method Not Allowed|Request Timeout|Conflict|Payload Too Large|Too Many Requests|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|Overloaded)\b/i,
+];
+
+export function extractHttpStatus(message: string | undefined): number | undefined {
+  if (message === undefined) return undefined;
+  for (const pattern of STATUS_PATTERNS) {
+    const match = pattern.exec(message);
+    if (match?.[1] !== undefined) return Number(match[1]);
+  }
+  return undefined;
 }

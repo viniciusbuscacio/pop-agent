@@ -4,7 +4,11 @@
  */
 
 export interface LlmRun {
-  /** The run id -- one row per run, so a retry cannot double-count. */
+  /**
+   * The run id -- one row per billed attempt. A failover attempt (popy.spec
+   * §15, fase 2) books its own row under `<runId>-f<n>`, because a failed
+   * attempt that reached the model was still paid for.
+   */
   id: string;
   chatId: string;
   provider: string;

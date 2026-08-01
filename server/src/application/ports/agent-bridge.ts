@@ -11,7 +11,12 @@ export type AgentEvent =
   | { kind: 'delta'; text: string }
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; name: string; status: ToolStatus; detail: string }
-  | { kind: 'error'; code: string };
+  /**
+   * `status` is the HTTP status of the provider's refusal, when the adapter
+   * could tell -- it is what lets failover classify by type instead of prose
+   * (popy.spec §15, fase 2).
+   */
+  | { kind: 'error'; code: string; status?: number };
 
 export interface AgentRunRequest {
   chatId: string;

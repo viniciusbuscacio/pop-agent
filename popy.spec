@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.34 — 2026-08-01.
+Version 1.35 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -731,16 +731,40 @@ reimplemented.
   built-in list (no gateway, keyless). Session open for an oauth
   provider must not demand an API key.
 
-### Multi-provider (fase 2 — FUTURE, do not implement now)
+### Multi-provider (fase 2 — automatic fallback)
 
-- **Ordered fallback**: persisted priority order where #1 IS the
-  default; error classification TYPED by status — fail-forward:
-  401/402/403/404/408/429/5xx/network; never: 400, cancellation.
-- Mid-stream failure does NOT fail over (tokens already rendered) but
-  penalizes the provider; in-memory advisory cooldown (if all are
-  penalized, ignore it and try anyway).
-- Failover is LOUD: log + system bubble in the chat naming
-  from-whom-to-whom.
+- **The chain**: a run's failover chain = chat override (when usable) →
+  global default pair → every other usable provider (key stored or
+  subscription signed in) in definition order, one entry per provider,
+  each with its own default model (`ProviderService.resolveChain`).
+  With nothing usable it degrades to `[resolve()]`, so the run still
+  fails with the error that points at Settings.
+- **Error classification is TYPED** (`shouldFailOver`, application
+  layer): by code and HTTP status, never substring-only. Fail-forward:
+  401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,
+  TLS, fetch failed…), `provider_not_configured`. Never: 400, the
+  user's Stop (`aborted`), `turn_tainted`. Anything unclassifiable
+  stays put. The bridge supplies the typing: it parses the status out
+  of the code-shaped places providers put it and tags transport
+  failures. Context overflow keeps its own path (§7: compact + retry
+  same provider once, inside the bridge); only a failover-class error
+  on the retry moves on.
+- **Mid-stream failure does NOT fail over** (tokens already rendered)
+  but still penalizes the provider; the run fails in place with the
+  persisted system mark.
+- **Advisory cooldown** (`ProviderCooldown`, in-memory, 5 min): a
+  penalized provider is skipped by the next chains — unless every
+  candidate is penalized, in which case the full chain is used anyway.
+  Saving a key or completing a sign-in forgives the provider; a
+  restart forgives everyone.
+- **Failover is LOUD**: a persisted system message in the chat
+  ("Answer retried via X after Y failed (code).") plus one journal
+  line (`popy fallback: chat=… from=… to=… code=…`). Every billed
+  attempt books its own `llm_runs` row (failover attempts under
+  `<runId>-f<n>`), so the accounting shows what each provider really
+  charged.
+- Still future: a user-editable priority order (today the order is the
+  definition list with the default first).
 
 ### Updates — two channels, one discipline
 
@@ -893,6 +917,21 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.35 (2026-08-01): **Automatic provider fallback (§15, fase 2).**
+  The run loop iterates a failover chain (override → default → every
+  usable provider, deduped, each with its default model) instead of
+  calling the bridge once. Failures are classified TYPED
+  (`shouldFailOver`): fail-forward on 401/402/403/404/408/429/5xx,
+  transport errors and `provider_not_configured`; never on 400, Stop
+  or a tainted turn; unknown stays put — the bridge now parses the
+  HTTP status out of provider refusals and tags network failures.
+  Mid-stream failures never fail over (tokens already rendered) but
+  penalize. New in-memory advisory `ProviderCooldown` (5 min): the
+  chain skips penalized providers unless all are; key save / sign-in
+  forgives; restart resets. Failover is loud: persisted system message
+  in the chat + `popy fallback:` journal line; every billed attempt
+  books its own `llm_runs` row (`<runId>-f<n>` for retries). Context
+  overflow keeps its §7 compact-and-retry path, same provider.
 - 1.34 (2026-08-01): **Subscription providers via OAuth (§15, fase
   1.5).** `openai-codex` (ChatGPT subscription) and `github-copilot`
   (Copilot subscription) join the declarative list with

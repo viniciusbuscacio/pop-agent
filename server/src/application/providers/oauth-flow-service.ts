@@ -41,6 +41,8 @@ export interface OAuthFlowState {
 export interface OAuthFlowServiceDeps {
   /** The engine's login flow, behind the port. Persists the credential itself. */
   login: (providerId: string, interaction: ProviderAuthInteraction) => Promise<void>;
+  /** Told when a sign-in lands, e.g. to forgive the provider's cooldown. */
+  onSuccess?: (providerId: string) => void;
   /** Overridable so the timeout test does not wait ten minutes. */
   timeoutMs?: number;
 }
@@ -91,7 +93,12 @@ export class OAuthFlowService {
     };
 
     this.deps.login(providerId, interaction).then(
-      () => this.finish(flow, undefined),
+      () => {
+        this.finish(flow, undefined);
+        // Only a flow that really landed counts -- a cancel that raced the
+        // login's own resolution keeps ok=false and stays penalized.
+        if (flow.state.ok === true) this.deps.onSuccess?.(providerId);
+      },
       (error: unknown) =>
         this.finish(flow, flow.state.error ?? messageOf(error) ?? 'The sign-in failed.'),
     );

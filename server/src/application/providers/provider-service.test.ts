@@ -4,6 +4,7 @@ import type { CompletionRequest, ProviderGateway } from '../ports/provider-gatew
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { FALLBACK_MODELS } from './openrouter.js';
+import { ProviderCooldown } from './provider-cooldown.js';
 import { ProviderService, type ProviderStatus } from './provider-service.js';
 
 class MemorySettings implements SettingsRepo {
@@ -83,6 +84,7 @@ let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
 let oauthAuthed: Set<string>;
 let checkAuthCalls: string[];
+let cooldown: ProviderCooldown;
 let defaults: { provider: string; model: string };
 let service: ProviderService;
 
@@ -95,6 +97,7 @@ beforeEach(() => {
   engineCatalog = [{ id: 'engine/model' }];
   oauthAuthed = new Set();
   checkAuthCalls = [];
+  cooldown = new ProviderCooldown({ clock });
   defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
   service = new ProviderService({
     secrets,
@@ -114,6 +117,7 @@ beforeEach(() => {
       oauthAuthed.delete(providerId);
       return Promise.resolve();
     },
+    cooldown,
     defaults: () => defaults,
   });
 });
@@ -353,5 +357,77 @@ describe('subscription (oauth) providers', () => {
     await service.disconnect(CODEX);
 
     expect(service.status(CODEX)?.configured).toBe(false);
+  });
+});
+
+describe('the failover chain (popy.spec §15, fase 2)', () => {
+  it('lists every usable provider once, default first', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    oauthAuthed.add('openai-codex');
+
+    expect(service.resolveChain()).toEqual([
+      { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
+      { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' },
+      { providerId: 'openai-codex', modelId: 'gpt-5.5' },
+    ]);
+  });
+
+  it('puts a usable chat override at the head, without duplicating its provider', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+
+    const chain = service.resolveChain({ provider: 'anthropic', model: 'claude-haiku-4-5' });
+
+    expect(chain).toEqual([
+      { providerId: 'anthropic', modelId: 'claude-haiku-4-5' },
+      { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
+    ]);
+  });
+
+  it('drops an unusable override instead of trying it', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+
+    expect(service.resolveChain({ provider: 'anthropic', model: 'x' })).toEqual([
+      { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
+    ]);
+  });
+
+  it('skips a penalized provider while another can answer', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    cooldown.penalize(OPENROUTER);
+
+    expect(service.resolveChain()).toEqual([
+      { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' },
+    ]);
+  });
+
+  it('is advisory: with every provider penalized the full chain returns', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    cooldown.penalize(OPENROUTER);
+    cooldown.penalize('anthropic');
+
+    expect(service.resolveChain().map((ref) => ref.providerId)).toEqual([
+      OPENROUTER,
+      'anthropic',
+    ]);
+  });
+
+  it('saving a key forgives the provider s penalty', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    cooldown.penalize(OPENROUTER);
+
+    service.setKey(OPENROUTER, 'sk-or-fresh');
+
+    expect(service.resolveChain()[0]?.providerId).toBe(OPENROUTER);
+  });
+
+  it('degrades to the default pair when nothing is usable, so the error points at Settings', () => {
+    expect(service.resolveChain()).toEqual([
+      { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
+    ]);
   });
 });

@@ -6,6 +6,7 @@ import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
+import { shouldFailOver, type RunFailure } from './failover.js';
 
 /**
  * Turning a typed message into a run, and a run into a stored answer
@@ -46,6 +47,20 @@ export interface RunDeps {
   notifyDone?: (info: { chatId: string; failed: boolean; code?: string }) => void;
   /** Told after a run's messages are stored, to embed them (popy.spec §7). */
   indexMessages?: () => void;
+  /**
+   * The ordered failover chain for a run (popy.spec §15, fase 2): every
+   * usable (provider, model) pair, the chat's override first. Absent -- the
+   * fixture-less tests -- means one attempt with the chat's own pair, which
+   * is exactly the phase-1 behaviour.
+   */
+  resolveChain?: (override: {
+    provider: string;
+    model: string;
+  }) => { providerId: string; modelId: string }[];
+  /** The advisory cooldown a failing provider is penalized into. */
+  cooldown?: { penalize(providerId: string): void };
+  /** The journal line when a run fails over; main.ts logs it. */
+  onFallback?: (info: { chatId: string; from: string; to: string; code: string }) => void;
 }
 
 interface PendingRun {
@@ -368,22 +383,27 @@ export class RunService {
     }
   }
 
-  private async execute(run: PendingRun): Promise<void> {
-    this.running += 1;
-    run.started = true;
-    const { chats, bridge, sink, clock } = this.deps;
-
-    sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
-
-    let failure: string | undefined;
+  /**
+   * One attempt against one provider. The failure comes back typed (code +
+   * status where the adapter could tell) so the failover loop can classify
+   * it; the attempt's usage is booked here, because a failed attempt that
+   * reached the model was still billed (spec §14).
+   */
+  private async attempt(
+    run: PendingRun,
+    pair: { providerId: string; modelId: string },
+    attemptIndex: number,
+  ): Promise<RunFailure | undefined> {
+    const { bridge, sink, clock } = this.deps;
+    let failure: RunFailure | undefined;
     let result: AgentRunResult = {};
 
     try {
       result = await bridge.run({
         chatId: run.chatId,
         prompt: run.prompt,
-        model: run.model,
-        provider: run.provider,
+        model: pair.modelId,
+        provider: pair.providerId,
         attachments: run.attachments,
         confirm: (question) => this.askConfirm(run, question),
         signal: run.controller.signal,
@@ -430,34 +450,94 @@ export class RunService {
             case 'error':
               // Recorded, not emitted yet: the terminal event goes out after
               // whatever did arrive has been saved.
-              failure ??= event.code;
+              failure ??= {
+                code: event.code,
+                ...(event.status === undefined ? {} : { status: event.status }),
+              };
               break;
           }
         },
       });
     } catch {
-      failure ??= 'operation_error';
+      failure ??= { code: 'operation_error' };
     }
 
-    const { content, thinking, tools } = run;
-
-    const finishedAt = new Date(clock.now()).toISOString();
-
-    // Booked before anything else: a failed run that reached the model was
-    // still billed, and the numbers are the provider's own (spec §14).
     const usage = result.usage;
     if (usage !== undefined && this.deps.llmRuns !== undefined) {
       this.deps.llmRuns.record({
-        id: run.runId,
+        // The first attempt keeps the run id; a failover attempt gets its own
+        // suffixed row -- both were billed, and llm_runs ids are unique.
+        id: attemptIndex === 0 ? run.runId : `${run.runId}-f${String(attemptIndex)}`,
         chatId: run.chatId,
         provider: usage.provider,
         model: usage.model,
         tokensIn: usage.inputTokens,
         tokensOut: usage.outputTokens,
         cost: usage.cost,
-        createdAt: finishedAt,
+        createdAt: new Date(clock.now()).toISOString(),
       });
     }
+
+    return failure;
+  }
+
+  private async execute(run: PendingRun): Promise<void> {
+    this.running += 1;
+    run.started = true;
+    const { chats, sink, clock } = this.deps;
+
+    sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
+
+    // The failover chain (popy.spec §15, fase 2): every usable pair in
+    // resolution order, or -- without the resolver -- one attempt with the
+    // chat's own pair, exactly the old behaviour.
+    const chain = this.deps.resolveChain?.({ provider: run.provider, model: run.model }) ?? [
+      { providerId: run.provider, modelId: run.model },
+    ];
+
+    let failure: RunFailure | undefined;
+
+    for (let index = 0; index < chain.length; index += 1) {
+      const pair = chain[index];
+      if (pair === undefined) break;
+
+      failure = await this.attempt(run, pair, index);
+      if (failure === undefined) break; // answered
+      if (failure.code === 'aborted' || run.controller.signal.aborted) break;
+
+      // A failover-class refusal penalizes the provider whether or not the
+      // run can move on -- the next chains skip it for a few minutes.
+      const failover = shouldFailOver(failure);
+      if (failover) this.deps.cooldown?.penalize(pair.providerId);
+
+      const next = chain[index + 1];
+      // Tokens already rendered must not be retried under the reader: a run
+      // that streamed any visible answer fails in place, like before.
+      if (!failover || next === undefined || run.content.length > 0) break;
+
+      // Loud, and in the history: the reader of this chat deserves to know
+      // the answer came from somewhere else, today and after every reload.
+      chats.appendMessage({
+        id: newMessageId(),
+        chatId: run.chatId,
+        role: 'system',
+        content: `Answer retried via ${next.providerId} after ${pair.providerId} failed (${failure.code}).`,
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: new Date(clock.now()).toISOString(),
+      });
+      this.deps.onFallback?.({
+        chatId: run.chatId,
+        from: pair.providerId,
+        to: next.providerId,
+        code: failure.code,
+      });
+    }
+
+    const { content, thinking, tools } = run;
+
+    const finishedAt = new Date(clock.now()).toISOString();
 
     const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
     let messageId = '';
@@ -486,9 +566,9 @@ export class RunService {
         chatId: run.chatId,
         role: 'system',
         content:
-          failure === 'aborted'
+          failure.code === 'aborted'
             ? 'You stopped this answer.'
-            : `That answer could not be finished. (${failure})`,
+            : `That answer could not be finished. (${failure.code})`,
         thinking: '',
         tools: [],
         attachments: [],
@@ -501,7 +581,7 @@ export class RunService {
     sink.emit(
       failure === undefined
         ? { kind: 'done', chatId: run.chatId, runId: run.runId, messageId }
-        : { kind: 'error', chatId: run.chatId, runId: run.runId, code: failure },
+        : { kind: 'error', chatId: run.chatId, runId: run.runId, code: failure.code },
     );
 
     // After the answer, never in its way: the title job is fire-and-forget,
@@ -513,7 +593,7 @@ export class RunService {
     this.deps.notifyDone?.({
       chatId: run.chatId,
       failed: failure !== undefined,
-      ...(failure === undefined ? {} : { code: failure }),
+      ...(failure === undefined ? {} : { code: failure.code }),
     });
     // Embed the new messages for semantic memory, off the reply path (§7).
     this.deps.indexMessages?.();

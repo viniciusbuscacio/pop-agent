@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AgentEvent, AgentRunResult } from '../../application/ports/agent-bridge.js';
 import { migrate } from '../db/migrate.js';
 import { SqliteChatRepo } from '../db/sqlite-chat-repo.js';
-import { PiAgentBridge, type PiRunUsage } from './pi-bridge.js';
+import { PiAgentBridge, extractHttpStatus, isNetworkFailure, type PiRunUsage } from './pi-bridge.js';
 import { PiEngineError, type PiEngine, type PiOpenOptions, type PiSession } from './pi-engine.js';
 
 /**
@@ -652,5 +652,29 @@ describe('attachments', () => {
     });
 
     expect(engine.sessions[0]?.promptImages[0]).toBeUndefined();
+  });
+});
+
+describe('typing provider failures for failover (popy.spec §15, fase 2)', () => {
+  it('reads the status from the code-shaped places providers put it', () => {
+    expect(extractHttpStatus('402 {"error":{"message":"Insufficient credits"}}')).toBe(402);
+    expect(extractHttpStatus('Provider returned error, status code: 429')).toBe(429);
+    expect(extractHttpStatus('OpenAI answered 503 Service Unavailable')).toBe(503);
+    expect(extractHttpStatus('(529) Overloaded')).toBe(529);
+  });
+
+  it('refuses to mistake prose numbers for a status', () => {
+    expect(extractHttpStatus('the model gpt-404 answered with 500 tokens')).toBeUndefined();
+    expect(extractHttpStatus('reduce the length: 401234 tokens sent')).toBeUndefined();
+    expect(extractHttpStatus(undefined)).toBeUndefined();
+  });
+
+  it('recognizes the wire failing, by code-like tokens', () => {
+    expect(isNetworkFailure('connect ECONNREFUSED 127.0.0.1:443')).toBe(true);
+    expect(isNetworkFailure('fetch failed')).toBe(true);
+    expect(isNetworkFailure('socket hang up')).toBe(true);
+    expect(isNetworkFailure('TLS handshake timeout')).toBe(true);
+    expect(isNetworkFailure('Payment Required')).toBe(false);
+    expect(isNetworkFailure(undefined)).toBe(false);
   });
 });

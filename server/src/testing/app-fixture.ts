@@ -16,6 +16,7 @@ import type { CompletionRequest, ProviderGateway } from '../application/ports/pr
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import { OAuthFlowService } from '../application/providers/oauth-flow-service.js';
+import { ProviderCooldown } from '../application/providers/provider-cooldown.js';
 import { ProviderService } from '../application/providers/provider-service.js';
 import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
@@ -199,6 +200,7 @@ export function createTestApp(
 
   const gateway = options.gateway ?? new RefusingGateway();
   const providerAuth = options.providerAuth ?? new FakeProviderAuth();
+  const cooldown = new ProviderCooldown({ clock });
   const providers = new ProviderService({
     secrets,
     settings: settingsRepo,
@@ -217,6 +219,7 @@ export function createTestApp(
       providerAuth.authed.delete(providerId);
       return Promise.resolve();
     },
+    cooldown,
     defaults: () => {
       const current = settings.read();
       return { provider: current.defaultProvider, model: current.defaultModel };
@@ -224,6 +227,7 @@ export function createTestApp(
   });
   const oauthFlows = new OAuthFlowService({
     login: (providerId, interaction) => providerAuth.login(providerId, interaction),
+    onSuccess: (providerId) => cooldown.clear(providerId),
   });
 
   const settings = new SettingsService(settingsRepo);
@@ -242,6 +246,8 @@ export function createTestApp(
     sink: hub,
     clock,
     llmRuns: new SqliteLlmRunsRepo(db),
+    resolveChain: (override) => providers.resolveChain(override),
+    cooldown,
     titles: new TitleService({
       chats: chatRepo,
       gateway,

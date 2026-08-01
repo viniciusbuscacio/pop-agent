@@ -10,6 +10,7 @@ import {
   providerDefinition,
   type ProviderDefinition,
 } from './provider-definitions.js';
+import type { ProviderCooldown } from './provider-cooldown.js';
 
 /**
  * The providers as the rest of the app sees them (popy.spec §15): where the
@@ -85,6 +86,11 @@ export interface ProviderServiceDeps {
   engineCheckAuth: (providerId: string) => Promise<{ ok: boolean; message?: string }>;
   /** Drops the engine's stored OAuth credential (disconnect). */
   engineLogout: (providerId: string) => Promise<void>;
+  /**
+   * The advisory failover cooldown (popy.spec §15, fase 2): the chain skips
+   * penalized providers, and saving a key forgives its provider.
+   */
+  cooldown?: ProviderCooldown;
   /** The global default pair from Settings. Read late; it is a setting. */
   defaults: () => { provider: string; model: string };
 }
@@ -147,6 +153,8 @@ export class ProviderService {
 
   setKey(providerId: string, apiKey: string): void {
     this.deps.secrets.set(keySecretName(providerId), apiKey);
+    // New evidence: a freshly saved key deserves a first try immediately.
+    this.deps.cooldown?.clear(providerId);
   }
 
   clearKey(providerId: string): void {
@@ -201,6 +209,35 @@ export class ProviderService {
    * the engine's error points the user to Settings.
    */
   resolve(override?: { provider?: string; model?: string }): ModelRef {
+    const candidates = this.candidates(override);
+    for (const candidate of candidates) {
+      if (this.usable(candidate.providerId)) return candidate;
+    }
+    return candidates[candidates.length > 1 ? 1 : 0] ?? this.ref(DEFAULT_PROVIDER_ID, '');
+  }
+
+  /**
+   * The failover chain for a run (popy.spec §15, fase 2): every usable pair
+   * in resolution order -- override first, then the global default, then the
+   * remaining definitions -- one entry per provider. Penalized providers are
+   * filtered out, unless that would empty the chain (the cooldown is
+   * advisory). With nothing usable at all it degrades to `[resolve()]`, so
+   * the run still fails with the error that points at Settings.
+   */
+  resolveChain(override?: { provider?: string; model?: string }): ModelRef[] {
+    const chain: ModelRef[] = [];
+    const seen = new Set<string>();
+    for (const candidate of this.candidates(override)) {
+      if (seen.has(candidate.providerId)) continue;
+      seen.add(candidate.providerId);
+      if (this.usable(candidate.providerId)) chain.push(candidate);
+    }
+    if (chain.length === 0) return [this.resolve(override)];
+    return this.deps.cooldown?.admissible(chain) ?? chain;
+  }
+
+  /** Resolution order: chat override, the global default, then every definition. */
+  private candidates(override?: { provider?: string; model?: string }): ModelRef[] {
     const candidates: ModelRef[] = [];
     if (override !== undefined && override.provider !== undefined && override.provider.length > 0) {
       candidates.push(this.ref(override.provider, override.model));
@@ -210,11 +247,7 @@ export class ProviderService {
     for (const definition of PROVIDER_DEFINITIONS) {
       candidates.push(this.ref(definition.id, ''));
     }
-
-    for (const candidate of candidates) {
-      if (this.usable(candidate.providerId)) return candidate;
-    }
-    return candidates[candidates.length > 1 ? 1 : 0] ?? this.ref(DEFAULT_PROVIDER_ID, '');
+    return candidates;
   }
 
   /** Whether a provider could serve a run right now: key or subscription. */

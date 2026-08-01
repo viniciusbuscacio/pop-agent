@@ -10,6 +10,7 @@ import { HealthService } from './application/health/health-service.js';
 import type { AgentBridge, ProviderAuthBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { OAuthFlowService } from './application/providers/oauth-flow-service.js';
+import { ProviderCooldown } from './application/providers/provider-cooldown.js';
 import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
@@ -153,6 +154,10 @@ const bridge: AgentBridge & ProviderAuthBridge = agent === 'pi' ? piBridge() : n
 // engine's as offline fallback (popy.spec §15). Provider is data: each id in
 // the declarative list maps to a plain-HTTP gateway here.
 const gateway = createOpenRouterGateway();
+// The advisory failover cooldown (popy.spec §15, fase 2): shared by the
+// chain (which skips penalized providers), the run loop (which penalizes)
+// and the credential writes (which forgive).
+const cooldown = new ProviderCooldown({ clock: systemClock });
 // Read late, not captured: the custom endpoint can change in Settings at any
 // time, and the lambda below is how the gateway sees it without a cycle.
 let customBaseURL = (): string => '';
@@ -173,6 +178,7 @@ const providers: ProviderService = new ProviderService({
   engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),
   engineCheckAuth: (providerId) => bridge.checkProviderAuth(providerId),
   engineLogout: (providerId) => bridge.providerLogout(providerId),
+  cooldown,
   defaults: () => ({
     provider: settings.read().defaultProvider,
     model: settings.read().defaultModel,
@@ -182,6 +188,8 @@ customBaseURL = () => providers.customConfig()?.baseURL ?? '';
 // The one interactive sign-in at a time, driven through the bridge.
 const oauthFlows = new OAuthFlowService({
   login: (providerId, interaction) => bridge.providerLogin(providerId, interaction),
+  // A fresh sign-in is new evidence: the provider's penalty is forgiven.
+  onSuccess: (providerId) => cooldown.clear(providerId),
 });
 
 function piBridge(): PiAgentBridge {
@@ -269,6 +277,15 @@ const runs = new RunService({
   sink: hub,
   clock: systemClock,
   llmRuns: context.llmRuns,
+  // Failover (popy.spec §15, fase 2): the chain of usable pairs, the
+  // cooldown a refusing provider is penalized into, and the journal line.
+  resolveChain: (override) => providers.resolveChain(override),
+  cooldown,
+  onFallback: (info) => {
+    console.log(
+      `popy fallback: chat=${info.chatId} from=${info.from} to=${info.to} code=${info.code}`,
+    );
+  },
   // When a run ends, tell the phone -- even with the PWA closed (popy.spec §14).
   notifyDone: (info) => {
     health.noteRun(info.failed, info.code);
