@@ -107,7 +107,10 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     // the agent reads them with the same tools it reads anything else. aw
     // extracts text server-side instead; an agent with a read tool need not.
     // Then the Skill Router prepends the few skills relevant to this message.
-    const prompt = await this.withSkills(this.withAttachments(request), request.prompt);
+    const prompt = withRuntimeIdentity(
+      request,
+      await this.withSkills(this.withAttachments(request), request.prompt),
+    );
     // Image attachments also go straight to the model when it is multimodal
     // (popy.spec §14, RF-014); otherwise they stay files the agent reads with
     // its tools (RF-015 fallback).
@@ -576,6 +579,22 @@ class RunTranslator {
       cost: (this.total?.cost ?? 0) + usage.cost,
     };
   }
+}
+
+/**
+ * States which provider and model are answering, on the turn itself.
+ *
+ * The pair can change between two turns of the same conversation -- a chat
+ * override, a new global default, a failover -- so a fact recorded anywhere
+ * more durable than the turn goes stale and the agent then describes itself
+ * wrongly, confidently. Cheap to restate, so it is restated every time.
+ */
+function withRuntimeIdentity(request: AgentRunRequest, prompt: string): string {
+  const model = request.model.length > 0 ? request.model : 'the configured default';
+  const provider = request.provider !== undefined && request.provider.length > 0
+    ? request.provider
+    : 'the configured default';
+  return `[This turn runs on provider "${provider}", model "${model}". This is the truth about what is answering right now; prefer it over anything a skill or an older message says.]\n\n${prompt}`;
 }
 
 /**

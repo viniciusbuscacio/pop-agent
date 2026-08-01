@@ -198,12 +198,13 @@ function collect(): { events: AgentEvent[]; onEvent: (event: AgentEvent) => void
 
 function run(
   onEvent: (event: AgentEvent) => void,
-  options: { model?: string; signal?: AbortSignal } = {},
+  options: { model?: string; provider?: string; signal?: AbortSignal } = {},
 ): Promise<AgentRunResult> {
   return bridge.run({
     chatId: CHAT,
     prompt: 'hello',
     model: options.model ?? '',
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
     attachments: [],
     onEvent,
     signal: options.signal ?? new AbortController().signal,
@@ -605,7 +606,9 @@ describe('attachments', () => {
 
     await run(onEvent);
 
-    expect(engine.sessions[0]?.prompts[0]).toBe('hello');
+    const sent = engine.sessions[0]?.prompts[0] ?? '';
+    expect(sent).toContain('hello');
+    expect(sent).not.toContain('attach');
   });
 
   it('sends image attachments to a multimodal model', async () => {
@@ -676,5 +679,23 @@ describe('typing provider failures for failover (popy.spec §15, fase 2)', () =>
     expect(isNetworkFailure('TLS handshake timeout')).toBe(true);
     expect(isNetworkFailure('Payment Required')).toBe(false);
     expect(isNetworkFailure(undefined)).toBe(false);
+  });
+});
+
+describe('runtime identity', () => {
+  it('states the pair answering this turn, ahead of the prompt', async () => {
+    await run(collect().onEvent, { model: 'gpt-5.5', provider: 'openai-codex' });
+
+    const sent = engine.sessions[0]?.prompts[0] ?? '';
+    expect(sent).toContain('provider "openai-codex"');
+    expect(sent).toContain('model "gpt-5.5"');
+    // Ahead of it, so a stale claim later in the prompt loses the argument.
+    expect(sent.indexOf('openai-codex')).toBeLessThan(sent.indexOf('hello'));
+  });
+
+  it('says "the configured default" rather than inventing a pair', async () => {
+    await run(collect().onEvent);
+
+    expect(engine.sessions[0]?.prompts[0] ?? '').toContain('the configured default');
   });
 });
