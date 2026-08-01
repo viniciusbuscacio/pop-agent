@@ -43,7 +43,7 @@ export interface RunDeps {
   /** Where what the run cost is written down (popy.spec §14). */
   llmRuns?: LlmRunsRepo;
   /** Told when a run finished, to push a notification (popy.spec §14). */
-  notifyDone?: (info: { chatId: string; failed: boolean }) => void;
+  notifyDone?: (info: { chatId: string; failed: boolean; code?: string }) => void;
   /** Told after a run's messages are stored, to embed them (popy.spec §7). */
   indexMessages?: () => void;
 }
@@ -425,7 +425,11 @@ export class RunService {
       this.deps.titles.maybeRetitle(run.chatId).catch(() => undefined);
     }
     // A push so the phone hears about it with the PWA closed (popy.spec §14).
-    this.deps.notifyDone?.({ chatId: run.chatId, failed: failure !== undefined });
+    this.deps.notifyDone?.({
+      chatId: run.chatId,
+      failed: failure !== undefined,
+      ...(failure === undefined ? {} : { code: failure }),
+    });
     // Embed the new messages for semantic memory, off the reply path (§7).
     this.deps.indexMessages?.();
 

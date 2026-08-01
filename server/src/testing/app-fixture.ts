@@ -8,6 +8,7 @@ import { AuthService } from '../application/auth/auth-service.js';
 import { ChatService } from '../application/chat/chat-service.js';
 import { RunService } from '../application/chat/run-service.js';
 import { TitleService } from '../application/chat/title-service.js';
+import { HealthService } from '../application/health/health-service.js';
 import type { Clock } from '../application/ports/clock.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
 import type { CompletionRequest, ProviderGateway } from '../application/ports/provider-gateway.js';
@@ -207,6 +208,12 @@ export function createTestApp(
     artifacts,
     runs,
     providers,
+    health: new HealthService({
+      providers,
+      pingDb: () => {
+        db.prepare('SELECT 1').get();
+      },
+    }),
     transcriber: options.transcriber ?? new FakeTranscriber(),
     voiceCleanup: { clean: (text: string) => Promise.resolve(text) } as never,
     voiceModels: {

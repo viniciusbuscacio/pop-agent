@@ -6,6 +6,7 @@ import { AuthService } from './application/auth/auth-service.js';
 import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
 import { TitleService } from './application/chat/title-service.js';
+import { HealthService } from './application/health/health-service.js';
 import type { AgentBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { ProviderService } from './application/providers/provider-service.js';
@@ -223,6 +224,7 @@ const purger = new FsChatPurger({
   },
 });
 const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
+const health = new HealthService({ providers, pingDb: context.pingDb });
 const runs = new RunService({
   chats: context.chats,
   bridge,
@@ -231,6 +233,7 @@ const runs = new RunService({
   llmRuns: context.llmRuns,
   // When a run ends, tell the phone -- even with the PWA closed (popy.spec §14).
   notifyDone: (info) => {
+    health.noteRun(info.failed, info.code);
     const chat = context.chats.get(info.chatId);
     void push
       .send({
@@ -287,6 +290,7 @@ const app = createApp({
   artifacts,
   runs,
   providers,
+  health,
   transcriber,
   voiceCleanup,
   voiceModels,

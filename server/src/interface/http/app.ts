@@ -15,6 +15,7 @@ import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import type { VoiceModelStore } from '../../application/ports/voice-models.js';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { UsageRepo } from '../../application/ports/usage-repo.js';
+import type { HealthService } from '../../application/health/health-service.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
@@ -43,6 +44,7 @@ export interface AppDeps {
   artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
+  health: HealthService;
   transcriber: Transcriber;
   voiceCleanup: VoiceCleanup;
   voiceModels: VoiceModelStore;
@@ -69,6 +71,11 @@ export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
+
+  // The sidebar's health probe (popy.spec §13): public like /healthz -- it
+  // leaks nothing but ok/error flags, and a session check here would make
+  // "signed out" indistinguishable from "server down".
+  app.get('/v1/health', (c) => c.json(deps.health.report()));
 
   // The signed artifact download carries no session -- the HMAC in the URL is
   // the whole authorisation (popy.spec §14) -- so it sits before the /v1 guard

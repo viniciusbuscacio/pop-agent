@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.32 — 2026-08-01.
+Version 1.33 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -449,7 +449,11 @@ SSE channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
 `PUT|DELETE /v1/providers/:id/key`, `POST /v1/providers/:id/test` (the
 key is write-only: no response anywhere carries it), `GET|PUT /v1/memory`,
 `GET /v1/usage` (§14), `GET /v1/backups` (§16), `GET /v1/update/status`,
-`POST /v1/update/apply`, `GET /v1/ax` (§18), `GET /healthz` (no auth).
+`POST /v1/update/apply`, `GET /v1/ax` (§18), `GET /healthz` (no auth),
+`GET /v1/health` (no auth) — the sidebar's probe: `{server, provider, db}`
+with `ok|error` flags, cheap and cached only (provider = key configured +
+last run's outcome, never a paid call per poll; db = a `SELECT 1`; a
+user-aborted run is not a failure). No answer at all means "Server offline".
 WebAuthn: `POST /v1/auth/webauthn/register`, `POST /v1/auth/webauthn/login`
 (§9, v0.2).
 
@@ -465,7 +469,7 @@ a proxy does not mistake an idle stream for a dead one.
 `GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
 document and the schema is strict, so a field Popy does not know is a 400
 rather than something silently dropped. Public (no session):
-`auth/state`, `setup`, `login`, `auth/recover`, `healthz` — and
+`auth/state`, `setup`, `login`, `auth/recover`, `healthz`, `health` — and
 `/v1/events`, until Phase 2 decides how to authenticate a stream that
 EventSource cannot attach a header to. Any response may carry a refreshed
 `x-popy-token` (§9).
@@ -483,7 +487,16 @@ events from stale runs.
   ESLint restricted-imports; gate fails otherwise). Types come from
   `shared/`, never redefined.
 - Layout: ChatGPT-style without inventing — sidebar (chats, filter, New,
-  archived), central column, composer. **Narrow screens follow the
+  archived), central column, composer. **The app bar (wordmark + Settings)
+  lives at the BOTTOM of the sidebar**, floating above the endlessly
+  scrolling list (the list keeps a padding-bottom so the last row is never
+  hidden), and carries the **health indicator**: silence means healthy —
+  nothing renders while `/v1/health` is all `ok`; a problem shows a small
+  gently pulsing red button (opacity animation, never stroboscopic) whose
+  tooltip/click names the diagnosis ("Server offline", "LLM provider
+  disconnected", "Database disconnected"). The frontend polls `/v1/health`
+  lightly (~10s, backing off while the tab is hidden). Diagnosis only;
+  maintenance actions come later. **Narrow screens follow the
   Telegram model rather than a drawer**: the list *is* the screen, and
   opening something is a route change, so the phone's back gesture means
   what the user expects.
@@ -758,6 +771,13 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.33 (2026-08-01): **Health where the user can see it (§13, §14).** New
+  public `GET /v1/health` reporting `{server, provider, db}` from cheap
+  cached signals (key configured + last run outcome, `SELECT 1` on the
+  database), and the sidebar's app bar moves to the bottom as a floating
+  strip the chat list scrolls behind, gaining a gently pulsing red health
+  button that only appears when something is wrong. Backend first; the
+  frontend strip lands in the same change.
 - 1.31 (2026-07-31): **Agent-written skills are English (§8).** The agent
   authors its own skills in English, like the rest of the repo; end-user
   skills stay free-language. Decided live: the agent's first two

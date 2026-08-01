@@ -47,6 +47,8 @@ export interface AppContext {
   usage: UsageRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
+  /** The health endpoint's cheap liveness query (popy.spec §13). */
+  pingDb: () => void;
 }
 
 /**
@@ -74,5 +76,8 @@ export function bootstrap(): AppContext {
     usage: new SqliteUsageRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),
+    pingDb: () => {
+      db.prepare('SELECT 1').get();
+    },
   };
 }

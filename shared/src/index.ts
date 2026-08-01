@@ -221,6 +221,17 @@ export interface AboutResponse {
   piVersion: string;
 }
 
+/**
+ * `GET /v1/health` — the sidebar's silence-means-healthy probe (popy.spec
+ * §13). Public, cheap, cached signals only: a missing answer means
+ * "Server offline", an `error` field means connected-but-degraded.
+ */
+export interface HealthResponse {
+  server: 'ok';
+  provider: 'ok' | 'error';
+  db: 'ok' | 'error';
+}
+
 /** A conversation, as the sidebar and the chat header see it. */
 export interface ChatDTO {
   id: string;
