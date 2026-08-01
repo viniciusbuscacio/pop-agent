@@ -1,3 +1,5 @@
+import type { ModelInfo } from '../ports/agent-bridge.js';
+
 /**
  * The declarative provider list (popy.spec §15: "provider is data, not a
  * class"). Behaviour varies only by auth type -- phase 1 ships api-key
@@ -20,6 +22,8 @@ export interface ProviderDefinition {
   allowCustomModel: boolean;
   /** True when pi needs `registerProvider` instead of a builtin. */
   customBaseURL: boolean;
+  /** The catalog of last resort, when live fetch, cache and engine all fail. */
+  staticModels: ModelInfo[];
 }
 
 export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
@@ -31,6 +35,14 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     defaultModel: 'moonshotai/kimi-k3',
     allowCustomModel: true,
     customBaseURL: false,
+    staticModels: [
+      {
+        id: 'moonshotai/kimi-k3',
+        name: 'MoonshotAI: Kimi K3',
+        context: 1_048_576,
+        pricing: { input: 3, output: 15 },
+      },
+    ],
   },
   {
     id: 'openai',
@@ -40,6 +52,10 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     defaultModel: 'gpt-4o-mini',
     allowCustomModel: true,
     customBaseURL: false,
+    staticModels: [
+      { id: 'gpt-4o-mini', name: 'GPT-4o mini', context: 128_000 },
+      { id: 'gpt-4o', name: 'GPT-4o', context: 128_000 },
+    ],
   },
   {
     id: 'anthropic',
@@ -49,6 +65,10 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     defaultModel: 'claude-sonnet-4-5',
     allowCustomModel: true,
     customBaseURL: false,
+    staticModels: [
+      { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', context: 200_000 },
+      { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', context: 200_000 },
+    ],
   },
   {
     id: 'custom',
@@ -58,6 +78,8 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     defaultModel: '',
     allowCustomModel: true,
     customBaseURL: true,
+    // A custom endpoint's catalog cannot be guessed; the configured model is it.
+    staticModels: [],
   },
 ];
 

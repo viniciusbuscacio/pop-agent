@@ -17,6 +17,8 @@ export interface AgentRunRequest {
   chatId: string;
   prompt: string;
   model: string;
+  /** Provider half of the pair (popy.spec §15); empty means the default. */
+  provider?: string;
   /** Files sent with the message; the adapter decides how the model sees them. */
   attachments: Attachment[];
   onEvent: (event: AgentEvent) => void;
@@ -58,5 +60,5 @@ export interface ModelInfo {
 export interface AgentBridge {
   /** Resolves when the run is finished, one way or another. */
   run(request: AgentRunRequest): Promise<AgentRunResult>;
-  listModels(): Promise<ModelInfo[]>;
+  listModels(providerId?: string): Promise<ModelInfo[]>;
 }

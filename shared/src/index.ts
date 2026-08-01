@@ -85,6 +85,8 @@ export interface SignOutOthersResponse {
  */
 export interface SettingsDTO {
   language: 'en';
+  /** Provider used when a chat does not choose its own (popy.spec §15). */
+  defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Model for background jobs: titles, summaries (popy.spec §15). */
@@ -366,8 +368,13 @@ export interface ModelsResponse {
  */
 export interface ProviderStatusDTO {
   id: string;
+  name: string;
   configured: boolean;
   source: 'settings' | 'env' | null;
+  defaultModel: string;
+  allowCustomModel: boolean;
+  /** The custom provider's endpoint; never a secret (popy.spec §15). */
+  baseURL?: string;
 }
 
 export interface ProvidersResponse {

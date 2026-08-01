@@ -129,7 +129,7 @@ class ScriptedSession implements PiSession {
     return Promise.resolve();
   }
 
-  setModel(modelId: string): Promise<void> {
+  setModel(_providerId: string, modelId: string): Promise<void> {
     this.models.push(modelId);
     return Promise.resolve();
   }

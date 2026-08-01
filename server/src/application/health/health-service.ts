@@ -50,7 +50,7 @@ export class HealthService {
     }
 
     let provider: HealthReport['provider'] = 'ok';
-    if (!this.deps.providers.status().configured) {
+    if (!this.deps.providers.activeConfigured()) {
       // No key anywhere: every run would fail, so the light is honestly red.
       provider = 'error';
     } else if (this.lastRunFailed === true) {

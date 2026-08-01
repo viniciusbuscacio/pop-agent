@@ -170,10 +170,14 @@ export function createTestApp(
   const providers = new ProviderService({
     secrets,
     settings: settingsRepo,
-    gateway,
+    gateways: { openrouter: gateway },
     clock,
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),
+    defaults: () => {
+      const current = settings.read();
+      return { provider: current.defaultProvider, model: current.defaultModel };
+    },
   });
 
   const settings = new SettingsService(settingsRepo);
@@ -195,7 +199,7 @@ export function createTestApp(
     titles: new TitleService({
       chats: chatRepo,
       gateway,
-      apiKey: () => providers.apiKey(),
+      apiKey: () => providers.apiKey('openrouter'),
       serviceModel: () => settings.read().serviceModel,
       sink: hub,
     }),

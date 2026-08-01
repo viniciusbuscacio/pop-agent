@@ -53,6 +53,7 @@ interface PendingRun {
   chatId: string;
   prompt: string;
   model: string;
+  provider: string;
   attachments: Attachment[];
   controller: AbortController;
   started: boolean;
@@ -157,6 +158,7 @@ export class RunService {
       chatId,
       prompt: text,
       model: chat.model,
+      provider: chat.provider,
       attachments,
       controller: new AbortController(),
       started: false,
@@ -318,6 +320,7 @@ export class RunService {
         chatId: run.chatId,
         prompt: run.prompt,
         model: run.model,
+        provider: run.provider,
         attachments: run.attachments,
         confirm: (question) => this.askConfirm(run, question),
         signal: run.controller.signal,

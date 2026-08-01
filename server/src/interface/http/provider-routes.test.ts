@@ -47,15 +47,56 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
   );
 }
 
+
+/** The full list, with OpenRouter scripted and the rest at their defaults. */
+function expectedProviders(openrouter: { configured: boolean; source: string | null }): unknown {
+  return {
+    providers: [
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        configured: openrouter.configured,
+        source: openrouter.source,
+        defaultModel: 'moonshotai/kimi-k3',
+        allowCustomModel: true,
+      },
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        configured: false,
+        source: null,
+        defaultModel: 'gpt-4o-mini',
+        allowCustomModel: true,
+      },
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        configured: false,
+        source: null,
+        defaultModel: 'claude-sonnet-4-5',
+        allowCustomModel: true,
+      },
+      {
+        id: 'custom',
+        name: 'Custom (OpenAI-compatible)',
+        configured: false,
+        source: null,
+        defaultModel: '',
+        allowCustomModel: true,
+      },
+    ],
+  };
+}
+
 describe('GET /v1/providers', () => {
   it('needs a session', async () => {
     expect((await app.request('/v1/providers')).status).toBe(401);
   });
 
   it('starts unconfigured', async () => {
-    expect(await (await authed('/v1/providers')).json()).toEqual({
-      providers: [{ id: 'openrouter', configured: false, source: null }],
-    });
+    expect(await (await authed('/v1/providers')).json()).toEqual(
+      expectedProviders({ configured: false, source: null }),
+    );
   });
 });
 
@@ -67,9 +108,9 @@ describe('PUT /v1/providers/openrouter/key', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      providers: [{ id: 'openrouter', configured: true, source: 'settings' }],
-    });
+    expect(await res.json()).toEqual(
+      expectedProviders({ configured: true, source: 'settings' }),
+    );
   });
 
   it('never hands the key back, on any route', async () => {
@@ -104,9 +145,9 @@ describe('DELETE /v1/providers/openrouter/key', () => {
     const res = await authed('/v1/providers/openrouter/key', { method: 'DELETE' });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      providers: [{ id: 'openrouter', configured: false, source: null }],
-    });
+    expect(await res.json()).toEqual(
+      expectedProviders({ configured: false, source: null }),
+    );
   });
 
   it('has nothing to remove when no key was stored', async () => {

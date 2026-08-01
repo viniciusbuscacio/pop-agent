@@ -19,6 +19,7 @@ const MAX_INSTRUCTIONS = 4_000;
 const settingsSchema = z
   .object({
     language: z.literal('en'),
+    defaultProvider: z.string().min(1).max(60),
     defaultModel: z.string().min(1).max(200),
     serviceModel: z.string().min(1).max(200),
     customInstructions: z.string().max(MAX_INSTRUCTIONS),
@@ -57,6 +58,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
 function toDto(settings: AppSettings): SettingsDTO {
   return {
     language: settings.language,
+    defaultProvider: settings.defaultProvider,
     defaultModel: settings.defaultModel,
     serviceModel: settings.serviceModel,
     customInstructions: settings.customInstructions,

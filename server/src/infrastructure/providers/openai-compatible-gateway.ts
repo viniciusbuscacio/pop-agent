@@ -6,40 +6,47 @@ import {
 } from '../../application/ports/provider-gateway.js';
 
 /**
- * OpenRouter over plain HTTP (popy.spec §15). Two endpoints and nothing else:
- * the catalog, and the one-shot completions that do not belong to a
- * conversation. Chat traffic goes through pi, never through here.
+ * Any OpenAI-compatible HTTP API (popy.spec §15): the model catalog and the
+ * one-shot completions that do not belong to a conversation -- the key test,
+ * titles and summaries. OpenRouter, OpenAI and user-run endpoints all speak
+ * this shape; chat traffic goes through pi, never through here.
  */
 
-const BASE_URL = 'https://openrouter.ai/api/v1';
 const TIMEOUT_MS = 20_000;
 
 /**
  * OpenRouter's attribution headers (aw sends its own pair): they name the app
  * in the provider's dashboard and rankings, and cost nothing.
  */
-const ATTRIBUTION = {
+const OPENROUTER_ATTRIBUTION = {
   'HTTP-Referer': 'https://github.com/viniciusbuscacio/popy',
   'X-Title': 'Popy',
 };
 
-/** What OpenRouter's `GET /models` answers, for the fields Popy keeps. */
+/** What an OpenAI-shaped `GET /models` answers, for the fields Popy keeps. */
 interface CatalogRow {
   id?: string;
   name?: string;
   context_length?: number;
-  /** US dollars per single token, as decimal strings. */
+  /** US dollars per single token, as decimal strings (OpenRouter only). */
   pricing?: { prompt?: string; completion?: string };
 }
 
-export class OpenRouterGateway implements ProviderGateway {
-  constructor(private readonly baseUrl: string = BASE_URL) {}
+export class OpenAiCompatibleGateway implements ProviderGateway {
+  /**
+   * @param baseUrl static, or read late so the custom provider's URL can
+   *   change in Settings without a restart.
+   */
+  constructor(
+    private readonly baseUrl: string | (() => string),
+    private readonly extraHeaders: Record<string, string> = {},
+  ) {}
 
   async listModels(apiKey: string | undefined): Promise<ModelInfo[]> {
-    const headers: Record<string, string> = { ...ATTRIBUTION };
+    const headers: Record<string, string> = { ...this.extraHeaders };
     if (apiKey !== undefined) headers['authorization'] = `Bearer ${apiKey}`;
 
-    const response = await fetch(`${this.baseUrl}/models`, {
+    const response = await fetch(`${this.url()}/models`, {
       headers,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -55,10 +62,10 @@ export class OpenRouterGateway implements ProviderGateway {
   }
 
   async complete(request: CompletionRequest): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(`${this.url()}/chat/completions`, {
       method: 'POST',
       headers: {
-        ...ATTRIBUTION,
+        ...this.extraHeaders,
         'content-type': 'application/json',
         authorization: `Bearer ${request.apiKey}`,
       },
@@ -83,6 +90,21 @@ export class OpenRouterGateway implements ProviderGateway {
     return content;
   }
 
+  private url(): string {
+    const url = typeof this.baseUrl === 'function' ? this.baseUrl() : this.baseUrl;
+    if (url.length === 0) {
+      throw new ProviderGatewayError('This provider has no URL configured yet (Settings).');
+    }
+    return url.replace(/\/$/, '');
+  }
+}
+
+/** The default provider, with its attribution headers (popy.spec §15). */
+export function createOpenRouterGateway(): OpenAiCompatibleGateway {
+  return new OpenAiCompatibleGateway(
+    'https://openrouter.ai/api/v1',
+    OPENROUTER_ATTRIBUTION,
+  );
 }
 
 function toModelInfo(row: CatalogRow & { id: string }): ModelInfo {

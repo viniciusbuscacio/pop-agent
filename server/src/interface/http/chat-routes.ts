@@ -185,7 +185,10 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
   });
 
   routes.get('/models', async (c) => {
-    const catalog = await deps.providers.models();
+    // The catalog is per provider (popy.spec §15); absent param means the
+    // provider the next run would actually use.
+    const provider = c.req.query('provider') ?? deps.providers.resolve().providerId;
+    const catalog = await deps.providers.models(provider);
     return c.json({ models: catalog.models.map(toModelDto), source: catalog.source });
   });
 

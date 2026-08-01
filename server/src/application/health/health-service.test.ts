@@ -4,7 +4,7 @@ import { HealthService } from './health-service.js';
 
 function providers(configured: boolean): ProviderService {
   return {
-    status: () => ({ id: 'openrouter', configured, source: configured ? 'env' : null }),
+    activeConfigured: () => configured,
   } as unknown as ProviderService;
 }
 

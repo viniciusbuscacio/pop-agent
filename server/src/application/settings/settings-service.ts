@@ -1,5 +1,6 @@
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
+import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
 
 /**
  * Application-owned settings (popy.spec §13). Deliberately not the wire DTO:
@@ -11,6 +12,8 @@ import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
  */
 export interface AppSettings {
   language: 'en';
+  /** Provider used when a chat does not choose its own (popy.spec §15). */
+  defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Model for background jobs: titles, summaries (popy.spec §15). */
@@ -27,6 +30,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'en',
+  defaultProvider: DEFAULT_PROVIDER_ID,
   defaultModel: DEFAULT_MODEL_ID,
   serviceModel: DEFAULT_MODEL_ID,
   customInstructions: '',

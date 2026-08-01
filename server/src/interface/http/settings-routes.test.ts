@@ -34,6 +34,7 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
 
 const DEFAULT_DOC = {
   language: 'en',
+  defaultProvider: 'openrouter',
   defaultModel: 'moonshotai/kimi-k3',
   serviceModel: 'moonshotai/kimi-k3',
   customInstructions: '',
@@ -59,6 +60,7 @@ describe('PUT /v1/settings', () => {
   it('replaces the document and returns what was stored', async () => {
     const next = {
       ...DEFAULT_DOC,
+      defaultProvider: 'openrouter',
       defaultModel: 'openai/gpt-5',
       customInstructions: 'Answer briefly.',
     };

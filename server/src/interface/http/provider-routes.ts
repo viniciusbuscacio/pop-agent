@@ -1,6 +1,11 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
+import type {
+  ProviderStatusDTO,
+  ProvidersResponse,
+  TestProviderResponse,
+  TranscribeResponse,
+} from '@popy/shared';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
@@ -8,9 +13,9 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Provider configuration (popy.spec §15). One provider today, but the wire
- * speaks plural from the start so the multi-provider phase adds rows, not
- * routes.
+ * Provider configuration (popy.spec §15). The routes speak plural and are
+ * driven by the declarative provider list: adding a provider adds a row of
+ * data, never a route.
  *
  * The key is write-only end to end: it goes in through PUT, it can be tested
  * and deleted, and no response anywhere carries it back out.
@@ -18,6 +23,9 @@ import { apiError } from './errors.js';
 
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
+const customConfigSchema = z
+  .object({ baseURL: z.string().url().max(500), defaultModel: z.string().min(1).max(200) })
+  .strict();
 
 /** ~25 MB of audio, aw's cap, as base64. */
 const transcribeSchema = z
@@ -34,44 +42,63 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
   const routes = new Hono();
 
   routes.get('/providers', (c) => {
-    const status = deps.providers.status();
-    const response: ProvidersResponse = { providers: [status] };
+    const response: ProvidersResponse = {
+      providers: deps.providers.statuses().map(toStatusDto),
+    };
     return c.json(response);
   });
 
-  routes.put('/providers/openrouter/key', async (c) => {
+  routes.put('/providers/:id/key', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
     const parsed = keySchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    deps.providers.setKey(parsed.data.apiKey);
-    return c.json({ providers: [deps.providers.status()] } satisfies ProvidersResponse);
+    deps.providers.setKey(id, parsed.data.apiKey);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
-  routes.delete('/providers/openrouter/key', (c) => {
+  routes.delete('/providers/:id/key', (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
     // Only the stored key can be cleared; one set by the environment is the
     // server operator's decision, not the UI's.
-    if (deps.providers.status().source !== 'settings') {
+    if (status.source !== 'settings') {
       return apiError(c, 404, 'not_found', 'There is no stored key to remove.');
     }
-    deps.providers.clearKey();
-    return c.json({ providers: [deps.providers.status()] } satisfies ProvidersResponse);
+    deps.providers.clearKey(id);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
-  routes.post('/providers/openrouter/test', async (c) => {
+  routes.post('/providers/:id/test', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
     // No body means "test the stored key"; a pasted one tests the candidate.
     const raw = (await readJson(c)) ?? {};
     const parsed = testSchema.safeParse(raw);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    const result = await deps.providers.test(parsed.data.apiKey);
+    const result = await deps.providers.test(id, parsed.data.apiKey);
     const response: TestProviderResponse = {
       ok: result.ok,
       ...(result.message === undefined ? {} : { message: result.message }),
       ...(result.latencyMs === undefined ? {} : { latencyMs: result.latencyMs }),
     };
     return c.json(response);
+  });
+
+  // The custom provider is pure data: an endpoint and a model, never a secret.
+  routes.put('/providers/custom/config', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = customConfigSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    deps.providers.setCustomConfig(parsed.data);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
   routes.post('/transcribe', async (c) => {
@@ -105,4 +132,20 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
   });
 
   return routes;
+}
+
+function providerNotFound(c: Context, id: string): Response {
+  return apiError(c, 404, 'not_found', `Unknown provider "${id}".`);
+}
+
+function toStatusDto(status: import('../../application/providers/provider-service.js').ProviderStatus): ProviderStatusDTO {
+  return {
+    id: status.id,
+    name: status.name,
+    configured: status.configured,
+    source: status.source,
+    defaultModel: status.defaultModel,
+    allowCustomModel: status.allowCustomModel,
+    ...(status.baseURL === undefined ? {} : { baseURL: status.baseURL }),
+  };
 }

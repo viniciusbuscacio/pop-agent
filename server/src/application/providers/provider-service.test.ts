@@ -4,7 +4,7 @@ import type { CompletionRequest, ProviderGateway } from '../ports/provider-gatew
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { FALLBACK_MODELS } from './openrouter.js';
-import { ProviderService } from './provider-service.js';
+import { ProviderService, type ProviderStatus } from './provider-service.js';
 
 class MemorySettings implements SettingsRepo {
   private readonly rows = new Map<string, string>();
@@ -60,12 +60,27 @@ class TickingClock {
   }
 }
 
+const OPENROUTER = 'openrouter';
+
+function status(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
+  return {
+    id: OPENROUTER,
+    name: 'OpenRouter',
+    configured: false,
+    source: null,
+    defaultModel: 'moonshotai/kimi-k3',
+    allowCustomModel: true,
+    ...overrides,
+  };
+}
+
 let secrets: MemorySecrets;
 let settings: MemorySettings;
 let gateway: ScriptedGateway;
 let clock: TickingClock;
 let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
+let defaults: { provider: string; model: string };
 let service: ProviderService;
 
 beforeEach(() => {
@@ -75,51 +90,59 @@ beforeEach(() => {
   clock = new TickingClock();
   envKey = undefined;
   engineCatalog = [{ id: 'engine/model' }];
+  defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
   service = new ProviderService({
     secrets,
     settings,
-    gateway,
+    gateways: { [OPENROUTER]: gateway },
     clock,
     envKey: () => envKey,
     engineModels: () => Promise.resolve(engineCatalog),
+    defaults: () => defaults,
   });
 });
 
 describe('the key', () => {
   it('is not configured until something provides one', () => {
-    expect(service.apiKey()).toBeUndefined();
-    expect(service.status()).toEqual({ id: 'openrouter', configured: false, source: null });
+    expect(service.apiKey(OPENROUTER)).toBeUndefined();
+    expect(service.status(OPENROUTER)).toEqual(status());
   });
 
   it('comes from the environment when nothing is stored', () => {
     envKey = 'sk-env';
 
-    expect(service.apiKey()).toBe('sk-env');
-    expect(service.status()).toEqual({ id: 'openrouter', configured: true, source: 'env' });
+    expect(service.apiKey(OPENROUTER)).toBe('sk-env');
+    expect(service.status(OPENROUTER)).toEqual(status({ configured: true, source: 'env' }));
   });
 
   it('prefers the stored key over the environment', () => {
     // The stored key is the one the user can see and change from Settings.
     envKey = 'sk-env';
-    service.setKey('sk-stored');
+    service.setKey(OPENROUTER, 'sk-stored');
 
-    expect(service.apiKey()).toBe('sk-stored');
-    expect(service.status()).toEqual({ id: 'openrouter', configured: true, source: 'settings' });
+    expect(service.apiKey(OPENROUTER)).toBe('sk-stored');
+    expect(service.status(OPENROUTER)).toEqual(status({ configured: true, source: 'settings' }));
   });
 
   it('falls back to the environment once the stored key is cleared', () => {
     envKey = 'sk-env';
-    service.setKey('sk-stored');
+    service.setKey(OPENROUTER, 'sk-stored');
 
-    service.clearKey();
+    service.clearKey(OPENROUTER);
 
-    expect(service.apiKey()).toBe('sk-env');
+    expect(service.apiKey(OPENROUTER)).toBe('sk-env');
+  });
+
+  it('only seeds OpenRouter from the environment', () => {
+    envKey = 'sk-env';
+
+    expect(service.apiKey('anthropic')).toBeUndefined();
   });
 });
 
 describe('testing the key', () => {
   it('makes one real, tiny completion with the candidate key', async () => {
-    const result = await service.test('sk-pasted');
+    const result = await service.test(OPENROUTER, 'sk-pasted');
 
     expect(result).toEqual({ ok: true, latencyMs: 0 });
     expect(gateway.completions).toHaveLength(1);
@@ -128,9 +151,9 @@ describe('testing the key', () => {
   });
 
   it('tests the stored key when none is passed', async () => {
-    service.setKey('sk-stored');
+    service.setKey(OPENROUTER, 'sk-stored');
 
-    await service.test();
+    await service.test(OPENROUTER);
 
     expect(gateway.completions[0]?.apiKey).toBe('sk-stored');
   });
@@ -138,7 +161,7 @@ describe('testing the key', () => {
   it('hands back the provider s own words when the key is refused', async () => {
     gateway.failCompleting = 'Invalid credentials';
 
-    expect(await service.test('sk-bad')).toEqual({
+    expect(await service.test(OPENROUTER, 'sk-bad')).toEqual({
       ok: false,
       message: 'Invalid credentials',
       latencyMs: 0,
@@ -146,7 +169,7 @@ describe('testing the key', () => {
   });
 
   it('does not bother the provider when there is no key at all', async () => {
-    const result = await service.test();
+    const result = await service.test(OPENROUTER);
 
     expect(result.ok).toBe(false);
     expect(gateway.completions).toHaveLength(0);
@@ -155,43 +178,87 @@ describe('testing the key', () => {
 
 describe('the catalog', () => {
   it('is the engine catalog while there is no key to fetch a live one', async () => {
-    expect(await service.models()).toEqual({ models: [{ id: 'engine/model' }], source: 'engine' });
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'engine/model' }],
+      source: 'engine',
+    });
     expect(gateway.listed).toBe(0);
   });
 
   it('is fetched live once a key exists, then served from cache for a day', async () => {
-    service.setKey('sk');
+    service.setKey(OPENROUTER, 'sk');
 
-    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'live' });
-    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'cache' });
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'live/model' }],
+      source: 'live',
+    });
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'live/model' }],
+      source: 'cache',
+    });
     expect(gateway.listed).toBe(1);
 
     clock.value += 24 * 60 * 60 * 1000 + 1;
-    expect((await service.models()).source).toBe('live');
+    expect((await service.models(OPENROUTER)).source).toBe('live');
     expect(gateway.listed).toBe(2);
   });
 
   it('serves the stale cache when the live fetch fails', async () => {
-    service.setKey('sk');
-    await service.models();
+    service.setKey(OPENROUTER, 'sk');
+    await service.models(OPENROUTER);
 
     clock.value += 25 * 60 * 60 * 1000;
     gateway.failListing = true;
 
-    expect(await service.models()).toEqual({ models: [{ id: 'live/model' }], source: 'cache' });
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'live/model' }],
+      source: 'cache',
+    });
   });
 
   it('falls back to the engine catalog when the fetch fails with nothing cached', async () => {
-    service.setKey('sk');
+    service.setKey(OPENROUTER, 'sk');
     gateway.failListing = true;
 
-    expect(await service.models()).toEqual({ models: [{ id: 'engine/model' }], source: 'engine' });
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'engine/model' }],
+      source: 'engine',
+    });
   });
 
   it('answers the pinned row when every other source is empty', async () => {
     engineCatalog = [];
 
-    expect(await service.models()).toEqual({ models: FALLBACK_MODELS, source: 'static' });
+    expect(await service.models(OPENROUTER)).toEqual({ models: FALLBACK_MODELS, source: 'static' });
   });
 });
 
+describe('resolving the pair', () => {
+  it('honours a usable chat override', () => {
+    service.setKey('anthropic', 'sk-ant');
+
+    expect(service.resolve({ provider: 'anthropic', model: 'claude-sonnet-4-5' })).toEqual({
+      providerId: 'anthropic',
+      modelId: 'claude-sonnet-4-5',
+    });
+  });
+
+  it('degrades a broken override to the configured default, never an error', () => {
+    service.setKey(OPENROUTER, 'sk');
+
+    expect(service.resolve({ provider: 'anthropic', model: 'claude-sonnet-4-5' })).toEqual({
+      providerId: OPENROUTER,
+      modelId: 'moonshotai/kimi-k3',
+    });
+  });
+
+  it('elects the next configured provider when the default loses its key', () => {
+    service.setKey('anthropic', 'sk-ant');
+
+    expect(service.resolve()).toEqual({ providerId: 'anthropic', modelId: 'claude-sonnet-4-5' });
+  });
+
+  it('answers the default pair even with nothing configured, so the error points at Settings', () => {
+    expect(service.resolve()).toEqual({ providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' });
+  });
+});

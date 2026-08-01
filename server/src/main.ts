@@ -34,7 +34,11 @@ import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
-import { OpenRouterGateway } from './infrastructure/providers/openrouter-gateway.js';
+import { AnthropicGateway } from './infrastructure/providers/anthropic-gateway.js';
+import {
+  OpenAiCompatibleGateway,
+  createOpenRouterGateway,
+} from './infrastructure/providers/openai-compatible-gateway.js';
 import { WebPushService } from './infrastructure/push/web-push-service.js';
 import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
 import { isNewerVersion, NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
@@ -140,17 +144,32 @@ fileIndex.current =
 
 const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
-// The provider seen by the routes: key precedence (secrets over environment),
-// the key test, and the model catalog with the engine's as offline fallback.
-const gateway = new OpenRouterGateway();
-const providers = new ProviderService({
+// The providers seen by the routes: key precedence (secrets over
+// environment), the key test, and the per-provider model catalog with the
+// engine's as offline fallback (popy.spec §15). Provider is data: each id in
+// the declarative list maps to a plain-HTTP gateway here.
+const gateway = createOpenRouterGateway();
+// Read late, not captured: the custom endpoint can change in Settings at any
+// time, and the lambda below is how the gateway sees it without a cycle.
+let customBaseURL = (): string => '';
+const providers: ProviderService = new ProviderService({
   secrets: context.secrets,
   settings: context.settings,
-  gateway,
+  gateways: {
+    openrouter: gateway,
+    openai: new OpenAiCompatibleGateway('https://api.openai.com/v1'),
+    anthropic: new AnthropicGateway(),
+    custom: new OpenAiCompatibleGateway(() => customBaseURL()),
+  },
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
-  engineModels: () => bridge.listModels(),
+  engineModels: (providerId) => bridge.listModels(providerId),
+  defaults: () => ({
+    provider: settings.read().defaultProvider,
+    model: settings.read().defaultModel,
+  }),
 });
+customBaseURL = () => providers.customConfig()?.baseURL ?? '';
 
 function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
@@ -171,7 +190,8 @@ function piBridge(): PiAgentBridge {
       // operator cap a model's maxTokens when the provider key is near its
       // credit limit, instead of every turn failing with a 402.
       modelsPath: join(context.dataDir, 'models.json'),
-      apiKey: () => providers.apiKey(),
+      apiKey: (providerId) => providers.apiKey(providerId),
+      customProvider: () => providers.customConfig(),
       notesVault,
       memory: context.memory,
       memorySearch: hybridMemory,
@@ -180,7 +200,7 @@ function piBridge(): PiAgentBridge {
       artifactExtractor,
       ...(fileIndex.current === undefined ? {} : { fileSearch: fileIndex.current }),
     }),
-    defaultModelId: () => settings.read().defaultModel,
+    resolvePair: (provider, model) => providers.resolve({ provider, model }),
     // Pinned skills lead the session's system prompt (popy.spec §8): identity
     // is not left to a per-turn router. The Files catalog rides along (§7.4)
     // so the agent knows what exists without being handed it. The bridge
@@ -256,7 +276,7 @@ const runs = new RunService({
   titles: new TitleService({
     chats: context.chats,
     gateway,
-    apiKey: () => providers.apiKey(),
+    apiKey: () => providers.apiKey('openrouter'),
     serviceModel: () => settings.read().serviceModel,
     sink: hub,
     onFailure: (message) => console.warn(`popy ${message}`),
@@ -279,7 +299,7 @@ const transcriber = new WhisperTranscriber({
 // The best-effort LLM pass that cleans a raw transcript (§14).
 const voiceCleanup = new VoiceCleanup({
   gateway,
-  apiKey: () => providers.apiKey(),
+  apiKey: () => providers.apiKey('openrouter'),
   enabled: () => settings.read().voiceCleanup,
   model: () => {
     const current = settings.read();

@@ -46,6 +46,7 @@ const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 /** What one run cost, in the provider's own numbers. Phase 3 step 4 stores it. */
 export interface PiRunUsage {
   chatId: string;
+  provider: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -60,8 +61,12 @@ export interface PiBridgeDeps {
   workspace?: string;
   /** The Skill Router: the relevant skills for a message, as prompt blocks. */
   skillsFor?: (message: string) => Promise<string[]>;
-  /** Used when a chat has no model of its own. Read per run: it is a setting. */
-  defaultModelId?: () => string;
+  /**
+   * Resolves the pair that should actually run (popy.spec §15): the chat's
+   * override when usable, the global default otherwise, with silent
+   * degradation and the never-empty election inside. Read per run.
+   */
+  resolvePair?: (provider: string, model: string) => { providerId: string; modelId: string };
   /** The user's custom instructions. Read per run, same reason. */
   instructions?: () => string;
   /** Overridable so tests do not wait three hours. */
@@ -78,6 +83,7 @@ export interface PiBridgeDeps {
 interface CachedSession {
   chatId: string;
   session: PiSession;
+  providerId: string;
   modelId: string;
   /** What the session was opened with; a change means reopening. */
   instructions: string;
@@ -105,9 +111,19 @@ export class PiAgentBridge implements AgentBridge {
     // its tools (RF-015 fallback).
     const images = imagesFor(request);
 
+    // The pair is the identity (popy.spec §15): the chat's override when it
+    // works, the global default when it does not -- never an error.
+    const pair = this.deps.resolvePair?.(request.provider ?? '', model) ?? {
+      providerId:
+        request.provider !== undefined && request.provider.length > 0
+          ? request.provider
+          : PROVIDER_ID,
+      modelId: model.length > 0 ? model : DEFAULT_MODEL_ID,
+    };
+
     let entry: CachedSession;
     try {
-      entry = await this.acquire(chatId, model.length > 0 ? model : this.defaultModelId);
+      entry = await this.acquire(chatId, pair.providerId, pair.modelId);
     } catch (error) {
       const code = errorCode(error);
       onEvent({ kind: 'error', code });
@@ -157,7 +173,7 @@ export class PiAgentBridge implements AgentBridge {
 
       const usage = translator.usage;
       if (usage !== undefined && this.deps.onUsage !== undefined) {
-        this.deps.onUsage({ chatId, model: entry.modelId, ...usage });
+        this.deps.onUsage({ chatId, provider: entry.providerId, model: entry.modelId, ...usage });
       }
       const failure = translator.failure;
       if (failure !== undefined && this.deps.onFailure !== undefined) {
@@ -168,11 +184,11 @@ export class PiAgentBridge implements AgentBridge {
     const usage = translator.usage;
     return usage === undefined
       ? {}
-      : { usage: { provider: PROVIDER_ID, model: entry.modelId, ...usage } };
+      : { usage: { provider: entry.providerId, model: entry.modelId, ...usage } };
   }
 
-  listModels(): Promise<ModelInfo[]> {
-    return this.deps.engine.models();
+  listModels(providerId?: string): Promise<ModelInfo[]> {
+    return this.deps.engine.models(providerId ?? '');
   }
 
   /**
@@ -192,10 +208,6 @@ export class PiAgentBridge implements AgentBridge {
     this.sweeper = undefined;
     for (const entry of this.sessions.values()) entry.session.dispose();
     this.sessions.clear();
-  }
-
-  private get defaultModelId(): string {
-    return this.deps.defaultModelId?.() ?? DEFAULT_MODEL_ID;
   }
 
   /**
@@ -232,7 +244,11 @@ export class PiAgentBridge implements AgentBridge {
     );
   }
 
-  private async acquire(chatId: string, modelId: string): Promise<CachedSession> {
+  private async acquire(
+    chatId: string,
+    providerId: string,
+    modelId: string,
+  ): Promise<CachedSession> {
     const instructions = this.deps.instructions?.() ?? '';
 
     let cached = this.sessions.get(chatId);
@@ -246,8 +262,11 @@ export class PiAgentBridge implements AgentBridge {
     }
 
     if (cached !== undefined) {
-      if (cached.modelId !== modelId) {
-        await cached.session.setModel(modelId);
+      // A mid-chat switch keeps the conversation: only the model inside the
+      // session is swapped, the JSONL history is untouched (popy.spec §15).
+      if (cached.providerId !== providerId || cached.modelId !== modelId) {
+        await cached.session.setModel(providerId, modelId);
+        cached.providerId = providerId;
         cached.modelId = modelId;
       }
       cached.busy += 1;
@@ -257,6 +276,7 @@ export class PiAgentBridge implements AgentBridge {
 
     const chat = this.deps.chats.get(chatId);
     const session = await this.deps.engine.open({
+      providerId,
       modelId,
       sessionFile: chat?.piSessionId,
       instructions,
@@ -266,6 +286,7 @@ export class PiAgentBridge implements AgentBridge {
     const entry: CachedSession = {
       chatId,
       session,
+      providerId,
       modelId,
       instructions,
       busy: 1,

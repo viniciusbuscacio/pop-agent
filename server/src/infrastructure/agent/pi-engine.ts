@@ -92,7 +92,7 @@ export interface PiSession {
   /** Whether the current model accepts image input (popy.spec §14, RF-014). */
   readonly supportsImages: boolean;
   abort(): Promise<void>;
-  setModel(modelId: string): Promise<void>;
+  setModel(providerId: string, modelId: string): Promise<void>;
   /** Sets (or clears) the guard pi consults around each tool call. */
   setGuard(guard: ToolGuard | undefined): void;
   dispose(): void;
@@ -101,6 +101,8 @@ export interface PiSession {
 }
 
 export interface PiOpenOptions {
+  /** The pair is the model identity (popy.spec §15). */
+  providerId: string;
   modelId: string;
   sessionFile: string | undefined;
   /** The user's custom instructions, appended to the system prompt. */
@@ -111,7 +113,7 @@ export interface PiOpenOptions {
 
 export interface PiEngine {
   open(options: PiOpenOptions): Promise<PiSession>;
-  models(): Promise<ModelInfo[]>;
+  models(providerId: string): Promise<ModelInfo[]>;
 }
 
 export interface SdkPiEngineOptions {
@@ -137,8 +139,14 @@ export interface SdkPiEngineOptions {
    * remaining balance can afford, which otherwise bricks every turn.
    */
   modelsPath?: string;
-  /** Read late, not captured: the key can arrive after boot, from Settings. */
-  apiKey: () => string | undefined;
+  /** Read late, not captured: keys can arrive after boot, from Settings. */
+  apiKey: (providerId: string) => string | undefined;
+  /**
+   * The custom provider's endpoint and model, when configured (popy.spec
+   * §15). pi has no builtin for it, so the engine registers it as an
+   * OpenAI-compatible provider on first use.
+   */
+  customProvider?: () => { baseURL: string; defaultModel: string } | undefined;
   /** The agent's notes vault; its tools are registered on every session. */
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
@@ -166,19 +174,21 @@ export interface SdkPiEngineOptions {
  */
 export class SdkPiEngine implements PiEngine {
   private runtime: Promise<ModelRuntime> | undefined;
-  private appliedKey = '';
+  private readonly appliedKeys = new Map<string, string>();
+  /** The custom provider registration last applied, to re-register on change. */
+  private customRegistered = '';
 
   constructor(private readonly options: SdkPiEngineOptions) {}
 
   async open(options: PiOpenOptions): Promise<PiSession> {
     const sdk = await import('@earendil-works/pi-coding-agent');
-    const runtime = await this.authenticatedRuntime();
+    const runtime = await this.authenticatedRuntime(options.providerId);
 
-    const model = runtime.getModel(PROVIDER_ID, options.modelId);
+    const model = runtime.getModel(options.providerId, options.modelId);
     if (model === undefined) {
       throw new PiEngineError(
         'model_not_available',
-        `${PROVIDER_ID} has no model "${options.modelId}"`,
+        `${options.providerId} has no model "${options.modelId}"`,
       );
     }
 
@@ -327,10 +337,10 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /** Listing does not need a key -- the catalog is built into pi. */
-  async models(): Promise<ModelInfo[]> {
+  async models(providerId: string): Promise<ModelInfo[]> {
     const runtime = await this.modelRuntime();
     return runtime
-      .getModels(PROVIDER_ID)
+      .getModels(providerId)
       .map((model) => ({
         id: model.id,
         name: model.name,
@@ -340,23 +350,59 @@ export class SdkPiEngine implements PiEngine {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
-  private async authenticatedRuntime(): Promise<ModelRuntime> {
-    const key = this.options.apiKey();
+  private async authenticatedRuntime(providerId: string): Promise<ModelRuntime> {
+    const key = this.options.apiKey(providerId);
     if (key === undefined || key.length === 0) {
+      // Points at Settings, never at internals: the user fixes this there.
       throw new PiEngineError(
         'provider_not_configured',
-        `no API key for ${PROVIDER_ID}: set one in Settings or OPENROUTER_API_KEY`,
+        `no API key for ${providerId}: set one in Settings`,
       );
     }
 
     const runtime = await this.modelRuntime();
+    if (providerId === 'custom') this.registerCustom(runtime);
     // The runtime credential is an in-memory overlay; a key changed in Settings
     // takes effect on the next run without a restart.
-    if (key !== this.appliedKey) {
-      await runtime.setRuntimeApiKey(PROVIDER_ID, key);
-      this.appliedKey = key;
+    if (key !== this.appliedKeys.get(providerId)) {
+      await runtime.setRuntimeApiKey(providerId, key);
+      this.appliedKeys.set(providerId, key);
     }
     return runtime;
+  }
+
+  /**
+   * The custom provider exists only as data the user typed (popy.spec §15):
+   * register it with pi as an OpenAI-compatible endpoint carrying its one
+   * configured model. Re-registered when the URL or model changes.
+   */
+  private registerCustom(runtime: ModelRuntime): void {
+    const config = this.options.customProvider?.();
+    if (config === undefined || config.baseURL.length === 0 || config.defaultModel.length === 0) {
+      throw new PiEngineError(
+        'provider_not_configured',
+        'the custom provider needs a URL and a model: set them in Settings',
+      );
+    }
+    const stamp = `${config.baseURL} ${config.defaultModel}`;
+    if (stamp === this.customRegistered) return;
+    runtime.registerProvider('custom', {
+      name: 'Custom (OpenAI-compatible)',
+      baseUrl: config.baseURL,
+      api: 'openai-completions',
+      models: [
+        {
+          id: config.defaultModel,
+          name: config.defaultModel,
+          reasoning: false,
+          input: ['text'],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128_000,
+          maxTokens: 16_384,
+        },
+      ],
+    });
+    this.customRegistered = stamp;
   }
 
   private modelRuntime(): Promise<ModelRuntime> {
@@ -409,10 +455,10 @@ class SdkPiSession implements PiSession {
     return this.session.abort();
   }
 
-  async setModel(modelId: string): Promise<void> {
-    const model = this.runtime.getModel(PROVIDER_ID, modelId);
+  async setModel(providerId: string, modelId: string): Promise<void> {
+    const model = this.runtime.getModel(providerId, modelId);
     if (model === undefined) {
-      throw new PiEngineError('model_not_available', `${PROVIDER_ID} has no model "${modelId}"`);
+      throw new PiEngineError('model_not_available', `${providerId} has no model "${modelId}"`);
     }
     this.supportsImages = model.input.includes('image');
     await this.session.setModel(model);
