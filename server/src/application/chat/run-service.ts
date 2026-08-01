@@ -336,6 +336,36 @@ export class RunService {
     }
   }
 
+  /**
+   * Everything this chat has in flight, gone (popy.spec §6). A started run is
+   * aborted -- which reaches all the way down to pi killing the engine's
+   * process group -- and anything of this chat still waiting for a slot is
+   * dropped without ever reaching the engine.
+   *
+   * This is what a delete calls before the rows go: a run that kept streaming
+   * into a conversation that no longer exists would be work nobody can read,
+   * paid for out of the user's own credit.
+   */
+  discardChat(chatId: string): boolean {
+    let discarded = this.stopRun(chatId);
+
+    // Defensive sweep: one chat has one run today, but a queued straggler
+    // must not survive the conversation it belongs to.
+    for (const run of [...this.runs.values()]) {
+      if (run.chatId !== chatId || run.started) continue;
+      const queuedAt = this.queue.indexOf(run.runId);
+      if (queuedAt >= 0) this.queue.splice(queuedAt, 1);
+      this.runs.delete(run.runId);
+      this.runIdByChat.delete(chatId);
+      this.deps.sink.emit({ kind: 'error', chatId, runId: run.runId, code: 'aborted' });
+      this.endRun(run.runId, { ok: false, code: 'aborted' });
+      discarded = true;
+    }
+
+    if (discarded) this.settle();
+    return discarded;
+  }
+
   /** Whether the operator has the LLM switched off. */
   isLlmStopped(): boolean {
     return this.llmHalted;
@@ -599,6 +629,17 @@ export class RunService {
 
     const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
     let messageId = '';
+
+    // The conversation may have been deleted while this ran (popy.spec §6):
+    // the delete aborts the run first, but the abort unwinds asynchronously
+    // and lands here. There is nowhere to store an answer, and writing one
+    // would fail the foreign key -- so the run just ends.
+    if (chats.get(run.chatId) === undefined) {
+      sink.emit({ kind: 'error', chatId: run.chatId, runId: run.runId, code: 'aborted' });
+      this.endRun(run.runId, { ok: false, code: 'aborted' });
+      this.finish(run);
+      return;
+    }
 
     // On success the message is always stored, so `done` can carry a real id.
     // On failure a partial answer is still stored -- a user who watched half

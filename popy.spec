@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.38 — 2026-08-01.
+Version 1.39 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -211,11 +211,19 @@ artifacts(id, chat_id, name, mime, size, version, source,
 - Attachments travel and rest as data URIs on the message row (`attachments_json`),
   16 MB cap, and the pi bridge also writes each into
   `POPY_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
-- **Deleting a chat deletes everything it left behind.** `DELETE /v1/chats/:id`
-  removes the SQLite rows (cascade), pi's JSONL session file and its sidecar
-  folder, and the chat's `attachments/<chatId>/` directory — no orphans. The
-  live pi session, if cached, is disposed first so nothing rewrites the file
-  after it is gone. FTS5/embedding rows go by the same cascade once they exist.
+- **Deleting a chat kills its work, then deletes everything it left behind.**
+  `DELETE /v1/chats/:id` first stops what the chat has in flight
+  (`RunService.discardChat`): the running attempt is aborted — which reaches
+  down to pi killing the engine's process group — and anything of that chat
+  still waiting for a slot is dropped without ever reaching the engine. Only
+  then do the SQLite rows go (cascade), pi's JSONL session file and its
+  sidecar folder, and the chat's `attachments/<chatId>/` directory — no
+  orphans. **The order is the point**: a run still streaming into rows that
+  are about to disappear would keep a process group alive, keep spending the
+  user's own credit, and end by failing a foreign key. The aborted run unwinds
+  afterwards, finds its chat gone, and stores nothing. The live pi session, if
+  cached, is disposed first so nothing rewrites the file after it is gone.
+  FTS5/embedding rows go by the same cascade once they exist.
 - **Artifacts** are files the agent produced or the user uploaded, tracked per
   chat and downloadable through a signed link (§14). The bytes live on disk
   under `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the row is the record. The
@@ -1006,8 +1014,47 @@ covers "forgot password AND recovery key" for whoever has shell.
   tick rather than owning timers of its own. A maintenance job is not a
   task: no row, no chat, no agent tool, invisible in the UI.
 
+
+### The orphan sweep
+
+- A **maintenance job**, not a task: no row, no chat, no agent tool, invisible
+  in the UI. It rides the scheduler's tick on a daily cadence, and runs on the
+  first tick after boot so a machine that reboots every night still sweeps.
+- Two targets, both deliberately narrow:
+  - `POPY_WORKSPACE/attachments/<chatId>/` whose chat is no longer in the
+    database. A chat deleted through the API already takes its folder with it
+    (§6); this catches what a crash, a restore or a hand-edited database left.
+  - Scratch files sitting **directly** in the workspace root, older than thirty
+    days, and only with an extension the agent is known to leave behind:
+    `.png`, `.yaml`, `.mjs`.
+- The list of what it must never do is longer than what it does: never the
+  attachments of a living chat, never the database, never a directory in the
+  workspace root (that is someone's project), never anything outside
+  `POPY_WORKSPACE`, never a symlink. **Session history is forever** — a sweep
+  only ever removes files *derived* from it, never a message, a chat or a
+  title. Deletion failures are swallowed: a file already gone is the goal.
+- One journal line per sweep, with the counts, even when both are zero — a
+  silent job is a job nobody can tell is alive.
+
 ## Changelog
 
+- 1.39 (2026-08-01): **A deleted chat takes its work with it (§6), and a
+  daily orphan sweep (§21).** `DELETE /v1/chats/:id` now stops the chat's
+  run *before* the first row goes: new `RunService.discardChat` aborts the
+  started attempt (pi kills the process group) and drops anything of that
+  chat still queued. The order is asserted in a test — abort, delete,
+  purge — because a run streaming into rows about to disappear keeps a
+  process group alive, keeps spending credit, and ends on a foreign-key
+  failure; the unwinding run now finds its chat gone and stores nothing.
+  The workspace attachment purge is wired into the test fixture too, so
+  "the folder is gone" is a claim with a test behind it. New internal
+  maintenance job `WorkspaceSweeper`, daily on the scheduler's tick:
+  removes `attachments/<chatId>/` for chats that no longer exist plus
+  root-level scratch older than 30 days (`.png`, `.yaml`, `.mjs` only),
+  never a live chat's attachments, never a directory, never a symlink,
+  never anything outside POPY_WORKSPACE, never the database. One journal
+  line per sweep with the counts. Session history is forever: sweeps touch
+  only derived workspace files.
 - 1.38 (2026-08-01): **Background tasks (§21).** New third sidebar tab —
   a prompt with a schedule (`once` or every N minutes), table `tasks`
   (migration 017), repo port + SQLite adapter. The scheduler lives in

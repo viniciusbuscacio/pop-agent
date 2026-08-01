@@ -18,6 +18,7 @@ import { TaskService } from './application/tasks/task-service.js';
 import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
+import { WorkspaceSweeper } from './infrastructure/agent/workspace-sweeper.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
 import { FileIndexer } from './application/artifacts/file-indexer.js';
@@ -316,10 +317,19 @@ const runs = new RunService({
   }),
 });
 
-// Built after the run service, because the task scheduler below needs both.
-const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
+// Built after the run service on purpose: deleting a conversation stops its
+// work first (popy.spec §6), and that is the run service's job.
+const chats = new ChatService({
+  chats: context.chats,
+  clock: systemClock,
+  purger,
+  runs,
+});
 
-// Background tasks (popy.spec §21): the rows and the queue that runs them.
+// Background tasks (popy.spec §21): the rows, the queue that runs them, and
+// the daily housekeeping that rides the same tick. The sweep is internal --
+// it has no row, no chat and no agent tool; it only ever removes derived
+// files in the workspace that nothing points at any more.
 const tasks = new TaskService({ tasks: context.tasks, clock: systemClock });
 const taskScheduler = new TaskScheduler({
   tasks: context.tasks,
@@ -327,6 +337,18 @@ const taskScheduler = new TaskScheduler({
   runs,
   clock: systemClock,
   timer: intervalTimer,
+  jobs: [
+    new WorkspaceSweeper({
+      workspace,
+      liveChatIds: () =>
+        new Set([
+          ...context.chats.list({ archived: false }).map((chat) => chat.id),
+          ...context.chats.list({ archived: true }).map((chat) => chat.id),
+        ]),
+      now: () => systemClock.now(),
+      onJournal: (line) => console.log(line),
+    }),
+  ],
   onJournal: (line) => console.log(line),
 });
 

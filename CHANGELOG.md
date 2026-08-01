@@ -21,6 +21,15 @@ normative history.
 
 ### Added
 
+- **Deleting a chat now stops what it was doing first**: the running answer is
+  aborted (which kills the agent's process group) and anything of that chat
+  still queued is dropped, before a single row is deleted. The chat's
+  attachment folder in the workspace goes with it, as before.
+- **Daily orphan sweep**: attachment folders whose chat no longer exists, and
+  scratch files (*.png, *.yaml, *.mjs) sitting in the workspace root untouched
+  for thirty days, are removed once a day. It never touches a live chat's
+  files, a project directory, or anything outside the workspace — conversation
+  history is never swept, only files derived from it.
 - **Background tasks**: a third sidebar tab next to Chats and Files. A task is
   a prompt with a schedule — once, or every N minutes/hours. Each run opens its
   own conversation named after the task and goes through the normal chat

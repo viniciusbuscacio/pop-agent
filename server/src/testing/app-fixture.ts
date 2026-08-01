@@ -23,6 +23,7 @@ import { TaskScheduler } from '../application/tasks/task-scheduler.js';
 import { TaskService } from '../application/tasks/task-service.js';
 import type { Timer } from '../application/ports/timer.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
+import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
@@ -161,6 +162,8 @@ export interface TestApp {
   runs: RunService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
+  /** The throwaway POPY_WORKSPACE this app's purger and sweeps act on. */
+  workspace: string;
   providers: ProviderService;
   /** The scripted subscription auth behind the oauth routes. */
   providerAuth: FakeProviderAuth;
@@ -269,8 +272,16 @@ export function createTestApp(
     }),
   });
 
-  // Built after the run service, because the task scheduler below needs both.
-  const chats = new ChatService({ chats: chatRepo, clock });
+  // Wired exactly the way main.ts wires it (popy.spec §6): a delete stops the
+  // chat's work first, then purges what it left in the workspace. The
+  // workspace is a throwaway directory, so a test can look at it.
+  const workspace = mkdtempSync(join(tmpdir(), 'popy-test-workspace-'));
+  const chats = new ChatService({
+    chats: chatRepo,
+    clock,
+    runs,
+    purger: new FsChatPurger({ workspace, forgetSession: () => undefined }),
+  });
 
   // Background tasks (popy.spec §21). The timer is inert: nothing ticks by
   // itself in a test, and `run-now` drives the queue directly.
@@ -377,6 +388,7 @@ export function createTestApp(
     runs,
     tasks,
     taskScheduler,
+    workspace,
     providers,
     providerAuth,
     secrets,

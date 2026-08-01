@@ -16,6 +16,12 @@ export interface ChatDeps {
   clock: Clock;
   /** Removes a deleted chat's on-disk remains (JSONL, attachments). */
   purger?: ChatPurger;
+  /**
+   * Stops whatever the chat has in flight before it is deleted. Structural on
+   * purpose: the run service is a sibling use case, not something this one
+   * should depend on by name.
+   */
+  runs?: { discardChat(chatId: string): boolean };
 }
 
 export class ChatService {
@@ -79,9 +85,18 @@ export class ChatService {
     return this.deps.chats.get(id);
   }
 
+  /**
+   * Deleting a conversation kills its work first (popy.spec §6). The order
+   * matters and is the whole point: abort, then delete, then purge. A run
+   * still streaming into rows that are about to disappear would keep a pi
+   * process group alive, keep spending the user's credit, and end by failing
+   * a foreign key -- so the run is stopped and its queued siblings dropped
+   * before a single row goes.
+   */
   delete(id: string): boolean {
     const chat = this.deps.chats.get(id);
     if (chat === undefined) return false;
+    this.deps.runs?.discardChat(id);
     // Read the chat before the rows go, so the purger still knows where pi
     // kept the session (popy.spec §6): SQLite by cascade, the rest by hand.
     this.deps.chats.delete(id);

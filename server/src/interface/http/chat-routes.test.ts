@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatDTO, MessageDTO, StreamEvent } from '@popy/shared';
 import type { Hono } from 'hono';
@@ -94,6 +96,32 @@ describe('chat collection', () => {
 
     expect((await api(`/v1/chats/${chat.id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await api(`/v1/chats/${chat.id}/messages`)).status).toBe(404);
+  });
+
+  it('takes the chat\'s workspace attachments with it (popy.spec §6)', async () => {
+    const chat = await newChat();
+    const attachments = join(fixture.workspace, 'attachments', chat.id);
+    mkdirSync(attachments, { recursive: true });
+    writeFileSync(join(attachments, 'photo.png'), 'bytes');
+
+    await api(`/v1/chats/${chat.id}`, { method: 'DELETE' });
+
+    expect(existsSync(attachments)).toBe(false);
+  });
+
+  it('stops the run it had in flight before deleting anything', async () => {
+    const chat = await newChat();
+    // The slow script streams for thirty seconds; the delete must not wait.
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: keep going' } });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(fixture.runs.liveRun(chat.id)).toBeDefined();
+
+    expect((await api(`/v1/chats/${chat.id}`, { method: 'DELETE' })).status).toBe(204);
+
+    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
+    // And the run unwinds without writing into rows that no longer exist.
+    await fixture.runs.whenIdle();
+    expect(fixture.chats.get(chat.id)).toBeUndefined();
   });
 
   it('answers 404 for a chat that does not exist', async () => {
