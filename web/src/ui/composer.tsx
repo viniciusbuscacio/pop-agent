@@ -474,7 +474,7 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-3 sm:gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <input
           ref={picker}
           type="file"
@@ -487,7 +487,7 @@ export function Composer({
           }}
         />
         {voice === 'idle' ? (
-          <div className="relative flex-1">
+          <div className="relative w-full min-w-0 sm:flex-1">
           {slashMode === 'models' ? (
             <ModelMenu
               models={models}
@@ -539,7 +539,7 @@ export function Composer({
         ) : (
           <div
             data-testid={voice === 'recording' ? 'voice-recording' : 'voice-transcribing'}
-            className="flex flex-1 items-center gap-2 rounded-2xl border border-[var(--accent)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-[var(--muted)]"
+            className="flex w-full items-center gap-2 rounded-2xl border border-[var(--accent)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-[var(--muted)] sm:flex-1"
           >
             {voice === 'recording' ? (
               <>
@@ -555,6 +555,7 @@ export function Composer({
           </div>
         )}
 
+        <div className="flex items-center justify-end gap-2">
         <IconButton
           testId="composer-attach"
           label={t('chat.attach')}
@@ -593,6 +594,7 @@ export function Composer({
             <SendIcon />
           </IconButton>
         )}
+        </div>
       </div>
     </div>
   );
@@ -630,7 +632,7 @@ function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-11 w-11 flex-none place-items-center rounded-full border sm:h-10 sm:w-10 ${skin}`}
+      className={`grid h-10 w-10 flex-none place-items-center rounded-full border ${skin}`}
     >
       {children}
     </button>
