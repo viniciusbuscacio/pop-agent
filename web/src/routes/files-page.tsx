@@ -175,13 +175,8 @@ export function FilesPage() {
               return;
             }
             if (value === 'chats') {
-              let lastChat = '';
-              try {
-                lastChat = localStorage.getItem('popy.lastChat') ?? '';
-              } catch {
-                // Fall back to the chat list when storage is unavailable.
-              }
-              navigate(lastChat.length > 0 ? `/chat/${lastChat}` : '/');
+              // Files opens Chats as the list, never the last conversation.
+              navigate('/');
             }
           }}
           options={[
