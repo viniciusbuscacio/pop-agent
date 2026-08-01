@@ -257,8 +257,9 @@ function piBridge(): PiAgentBridge {
 }
 
 const hub = new SseHub();
-// Web Push: the VAPID keys live in the secrets table, generated once.
-const push = new WebPushService(context.push, context.secrets);
+// Web Push: the VAPID keys live in the secrets table, generated once. The
+// subject is the JWT's contact URI, which Apple validates -- see the service.
+const push = new WebPushService(context.push, context.secrets, process.env['POPY_PUSH_SUBJECT']);
 const updates = new NpmUpdateChecker({
   versions: readVersions(),
   now: () => systemClock.now(),

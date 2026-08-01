@@ -7,6 +7,12 @@ normative history.
 
 ### Fixed
 
+- **Push notifications never arrived on iPhone**: everything was in place — the
+  service worker, the Settings opt-in, the subscription, the send when a run
+  finishes — but the notifications were signed with a contact address ending in
+  `@localhost`, which Apple rejects outright (403 BadJwtToken) without telling
+  anyone. Popy now signs with a real URL, and `POPY_PUSH_SUBJECT` lets the
+  operator use their own address.
 - **Every delete from the UI looked dead**: the API layer parsed JSON out of
   every ok response, but a DELETE answers 204 with no body, so the parse threw
   after the server had already deleted — the row never left the screen. Chats,

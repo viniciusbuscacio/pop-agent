@@ -19,7 +19,51 @@ import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
 
 const VAPID_PUBLIC = 'push.vapidPublicKey';
 const VAPID_PRIVATE = 'push.vapidPrivateKey';
-const SUBJECT = 'mailto:popy@localhost';
+
+/**
+ * The VAPID `sub` claim: a contact URI for this application server. It looks
+ * like a formality and is not one -- **Apple's push service validates it and
+ * answers 403 `BadJwtToken` when it does not like what it sees**, so a
+ * placeholder here means an iPhone never rings, with nothing in the UI to say
+ * why (measured against web.push.apple.com, 01/08/2026: `mailto:popy@localhost`
+ * -> 403 BadJwtToken; the URL below -> 201 Created).
+ *
+ * `@localhost` is the trap: it is a perfectly good address for a machine
+ * talking to itself and not a domain Apple will accept. The default is the
+ * project's own public URL, which is a real contact point for whoever runs
+ * this server; POPY_PUSH_SUBJECT replaces it with the operator's own address.
+ */
+const DEFAULT_SUBJECT = 'https://github.com/viniciusbuscacio/popy';
+
+/** A host with a dot in it -- `localhost` and bare names are what Apple rejects. */
+const DOMAIN = /^[^\s@<>]+\.[^\s@<>.]+$/;
+
+/** An address with no room for a stray space or an angle bracket either. */
+const ADDRESS = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>.]+$/;
+
+/**
+ * Picks the subject to sign with. An operator override that would be rejected
+ * upstream is dropped for the default rather than honoured: a typo in an
+ * environment variable must not silently switch every notification off.
+ */
+export function vapidSubject(configured?: string): string {
+  const candidate = configured?.trim() ?? '';
+  if (candidate.length === 0) return DEFAULT_SUBJECT;
+
+  if (candidate.startsWith('mailto:')) {
+    return ADDRESS.test(candidate.slice('mailto:'.length)) ? candidate : DEFAULT_SUBJECT;
+  }
+
+  if (candidate.startsWith('https://')) {
+    try {
+      return DOMAIN.test(new URL(candidate).hostname) ? candidate : DEFAULT_SUBJECT;
+    } catch {
+      return DEFAULT_SUBJECT;
+    }
+  }
+
+  return DEFAULT_SUBJECT;
+}
 
 export class WebPushService implements PushService {
   private readonly publicKey: string;
@@ -27,6 +71,8 @@ export class WebPushService implements PushService {
   constructor(
     private readonly repo: PushRepo,
     secrets: SecretsRepo,
+    /** POPY_PUSH_SUBJECT, when the operator wants their own contact URI. */
+    subject?: string,
   ) {
     let publicKey = secrets.get(VAPID_PUBLIC);
     let privateKey = secrets.get(VAPID_PRIVATE);
@@ -37,7 +83,7 @@ export class WebPushService implements PushService {
       secrets.set(VAPID_PUBLIC, publicKey);
       secrets.set(VAPID_PRIVATE, privateKey);
     }
-    webpush.setVapidDetails(SUBJECT, publicKey, privateKey);
+    webpush.setVapidDetails(vapidSubject(subject), publicKey, privateKey);
     this.publicKey = publicKey;
   }
 

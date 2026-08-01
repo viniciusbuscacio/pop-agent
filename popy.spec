@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.39 — 2026-08-01.
+Version 1.40 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -617,7 +617,27 @@ events from stale runs.
 - PWA: app-shell precache; API/SSE never cached; SW update prompt. iOS:
   HTTPS required, safe-areas, `dvh`. Android: WebAPK via manifest. Offline
   is honest: shell + "Popy is offline". Web Push in v0.2 — exactly two
-  triggers: "run finished" and "agent needs confirmation".
+  triggers: "run finished" and "agent needs confirmation" (the second is
+  still to be wired).
+- **Web Push, end to end**: `push-sw.js` is imported into the generated
+  service worker (`workbox.importScripts`) and owns `push` (always shows a
+  notification — `userVisibleOnly` demands it) and `notificationclick`
+  (focus an open window at the deep link, or open one). Settings →
+  Appearance carries the device-scoped opt-in, which asks for permission
+  inside the click itself (iOS refuses a prompt that is not in a user
+  gesture) and registers the subscription with `/v1/push/subscribe`. A
+  finished run calls `PushService.send`; a subscription the service reports
+  gone (404/410) is deleted.
+- **The VAPID `sub` claim is not a formality.** It is a contact URI for the
+  application server, and Apple *validates* it: `web.push.apple.com`
+  answers **403 `BadJwtToken`** for a subject it dislikes, silently — the
+  phone simply never rings and nothing in the UI says why. `@localhost` is
+  the trap: a perfectly good address for a machine talking to itself, and
+  not a domain Apple accepts. Popy signs with a real public URL by default;
+  `POPY_PUSH_SUBJECT` sets the operator's own `mailto:` or `https:` URI,
+  and a value that would be rejected upstream is **dropped for the default
+  rather than honoured** — a typo in an environment variable must not
+  quietly switch every notification off.
 
 ### Artifacts and signed downloads (RF-001–019)
 
@@ -1038,6 +1058,17 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.40 (2026-08-01): **iOS push actually arrives (§14).** The whole chain
+  existed — service worker with `push`/`notificationclick`, the Settings
+  opt-in, `/v1/push/*`, the send on run finish — and delivered nothing on
+  iPhone, because the VAPID `sub` claim was `mailto:popy@localhost` and
+  Apple validates it: measured against web.push.apple.com, that subject
+  answers 403 `BadJwtToken` while a real public URL answers 201. Popy now
+  signs with its own project URL by default, `POPY_PUSH_SUBJECT` takes an
+  operator `mailto:`/`https:` URI, and an override that would be rejected
+  upstream is dropped for the default rather than honoured — a typo must
+  not silently switch every notification off. §14 gains the end-to-end
+  description so the next reader does not have to rediscover the trap.
 - 1.39 (2026-08-01): **A deleted chat takes its work with it (§6), and a
   daily orphan sweep (§21).** `DELETE /v1/chats/:id` now stops the chat's
   run *before* the first row goes: new `RunService.discardChat` aborts the
