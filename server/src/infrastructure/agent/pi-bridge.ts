@@ -120,9 +120,10 @@ export class PiAgentBridge implements AgentBridge {
       translator.handle(event);
     });
 
-    // The safety guard for this run: it feeds on tool output and blocks a
-    // destructive command in a turn that read something suspicious, unless the
-    // user confirms (popy.spec §10).
+    // The safety guard for this run: it feeds on tool output and, in a turn
+    // that read something suspicious, refuses on its own the commands that
+    // would exfiltrate, read a secret, or destroy irreversibly -- no dialog,
+    // the model just gets told no (popy.spec §10). A clean turn runs freely.
     entry.session.setGuard(
       new TaintGuard({
         ...(request.confirm === undefined ? {} : { confirm: request.confirm }),

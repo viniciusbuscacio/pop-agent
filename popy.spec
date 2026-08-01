@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.31 — 2026-07-31.
+Version 1.32 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -395,20 +395,24 @@ LLM) over everything from outside — web, files, notes, tool output:
 - Multilingual prompt-injection regex table (PT included; aw's table as
   conceptual reference, rewritten).
 - Untrusted-data envelope with delimiters ("data, never instructions").
-- **Per-turn taint**: if a turn consumed suspicious external content,
-  subsequent sensitive actions (dangerous shell, note writes) require
-  inline UI confirmation (Allow / Deny in the chat). This is the ONLY
-  brake on yolo mode.
+- **Per-turn taint**: if a turn consumed suspicious external content it
+  becomes tainted for the rest of that turn. Under YOLO mode (the owner's
+  call, 31/07) there is no confirmation card and the user is never asked;
+  the brake is automatic instead. This is the ONLY brake on yolo mode.
 - **Implemented via pi's own `tool_call` / `tool_result` extension hooks**
   (an inline extension Popy registers; `noExtensions` still keeps the
   host's out). A run whose tool output sanitizes as suspicious/high
-  becomes tainted; a **destructive** bash command in a tainted turn
-  (rm -rf, sudo, dd, mkfs, chmod/chown -R, pipe-to-shell, scp/rsync out,
-  fork bomb, redirect outside the workspace) is paused with a `confirm`
-  SSE card and answered by `POST /v1/chats/:id/confirm {runId, allow}`.
-  Silence denies after 5 minutes; a run with no one watching denies at
-  once. Only destructive shapes are gated — gating every command would
-  train the user to click Allow blind.
+  becomes tainted; in a tainted turn a bash command that would **exfiltrate
+  or read a secret** (curl/wget uploading a file, `curl -d/-F @file`,
+  pipe-to-network, scp/rsync out, netcat, or reading secret.key / .env /
+  pi-auth.json / id_rsa / .ssh) or **destroy irreversibly** (rm -rf, sudo,
+  dd, mkfs, chmod/chown -R, pipe-to-shell, fork bomb, redirect outside the
+  workspace) is refused right there: the tool call returns an error telling
+  the model this turn is tainted, so it carries on without that command. No
+  dialog, no `POST /v1/chats/:id/confirm`. A clean turn runs anything (full
+  YOLO). Every refusal is logged (`onFailure` code `turn_tainted`), so the
+  trail survives. Only the exfil/secret/destruction shapes are gated —
+  gating every command would cripple ordinary tainted work.
 
 ## 11. Notes (`infrastructure/notes/`)
 
