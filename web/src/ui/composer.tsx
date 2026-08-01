@@ -474,7 +474,7 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-3 sm:gap-2">
         <input
           ref={picker}
           type="file"
@@ -630,7 +630,7 @@ function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-10 w-10 flex-none place-items-center rounded-full border ${skin}`}
+      className={`grid h-11 w-11 flex-none place-items-center rounded-full border sm:h-10 sm:w-10 ${skin}`}
     >
       {children}
     </button>
