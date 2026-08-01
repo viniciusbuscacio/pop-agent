@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.41 — 2026-08-01.
+Version 1.42 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -795,11 +795,22 @@ reimplemented.
   provider and coming back, and the way back is usually a fresh mount:
   a new tab, a reload, the PWA resumed from the background. The card
   therefore asks for the flow state on mount and adopts a running flow,
-  instead of only knowing about flows it started itself. It also says,
-  in the card, that the browser will land on a blank `localhost` page:
-  that callback address belongs to the server, not to the device doing
-  the browsing, so the whole URL from the address bar is what the
-  pending prompt wants pasted back.
+  instead of only knowing about flows it started itself.
+- **The method choice is Popy's words, not pi's.** pi offers a
+  subscription two ways and calls the browser redirect "(default)" --
+  but that redirect targets `localhost:1455` on the machine doing the
+  browsing, which on a self-hosted install is not the machine running
+  Popy, so it can only end in a URL copied back by hand. The card
+  relabels the two known methods (`device_code`, `browser`) itself and
+  puts the code one -- no callback, works from any device -- first.
+  Methods pi may add later render unrelabelled, as they arrive.
+- **The redirect path is three steps, each said once**: open and
+  approve, expect a page that does not load, paste that page's address.
+  The warning comes *before* the input, because a user who meets the
+  failed page unwarned reads the whole sign-in as broken and stops
+  there. The steps carry the sign-in link, so the transcript drops its
+  duplicate row, and the input uses Popy's own placeholder -- pi's is
+  the loopback URL itself, which reads like something to type.
 
 ### Multi-provider (fase 2 — automatic fallback)
 
@@ -1067,6 +1078,15 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.42 (2026-08-01): **The subscription sign-in stops reading as broken
+  (§15).** pi offers two login methods and advertises the browser
+  redirect as the default; on a self-hosted install that is the one
+  method that cannot finish by itself, and it dead-ends on a blank
+  `localhost` page whose address the user is expected to copy out of
+  the bar. The card now names the choice in Popy's own words with the
+  code method first, and the redirect path reads as three steps that
+  warn about the failed page before asking for its address. Both paths
+  still work; an API key remains the third way in.
 - 1.41 (2026-08-01): **A sign-in survives the round trip (§15).** The
   OAuth card only rendered flows started in that same mount, so coming
   back from the provider -- a reload, a new tab, the PWA resumed --

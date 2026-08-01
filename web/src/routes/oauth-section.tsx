@@ -10,6 +10,32 @@ import { Button } from '../ui/controls';
  * transcript every two seconds and renders it: a link to open, a device code
  * to type, at most one question to answer. No token ever reaches the browser.
  */
+
+/**
+ * The login methods pi offers for a subscription, by the id it sends. Popy
+ * relabels them because pi's own wording sells the wrong one: it calls the
+ * browser redirect "(default)", and that redirect is the one method that
+ * cannot complete on a self-hosted install -- the provider sends the browser
+ * to a loopback address on the machine doing the browsing, which is not the
+ * machine running Popy. The code method has no callback at all, so it is the
+ * one that works from any device, and it leads here.
+ */
+const METHOD_DEVICE_CODE = 'device_code';
+const METHOD_BROWSER = 'browser';
+
+const METHOD_COPY: Record<string, { label: string; hint: string; rank: number }> = {
+  [METHOD_DEVICE_CODE]: {
+    label: t('provider.oauth.method.deviceCode'),
+    hint: t('provider.oauth.method.deviceCodeHint'),
+    rank: 0,
+  },
+  [METHOD_BROWSER]: {
+    label: t('provider.oauth.method.browser'),
+    hint: t('provider.oauth.method.browserHint'),
+    rank: 1,
+  },
+};
+
 export function OAuthSection({
   provider,
   onChanged,
@@ -21,6 +47,10 @@ export function OAuthSection({
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const active = flow !== undefined && !flow.done;
+  // The paste path: pi asks for it only when the browser redirect was chosen
+  // and its own loopback server is still waiting for a code that will never
+  // arrive here. It is the step that needs the most hand-holding.
+  const pastePending = flow?.pending?.type === 'manual_code';
 
   // A finished, successful flow refreshes the card's status from the truth.
   // Done here rather than in an effect so a parent re-render can never loop
@@ -99,6 +129,15 @@ export function OAuthSection({
     }
   }
 
+  async function choose(optionId: string): Promise<void> {
+    try {
+      await providersService.oauthInput(provider.id, optionId);
+      absorb(await providersService.oauthState(provider.id));
+    } catch {
+      // Same: the poll owns the state.
+    }
+  }
+
   async function cancel(): Promise<void> {
     try {
       await providersService.oauthCancel(provider.id);
@@ -123,31 +162,42 @@ export function OAuthSection({
 
       {flow !== undefined ? (
         <div className="flex flex-col gap-2">
-          {flow.events.map((event, index) => (
-            <OAuthEventRow key={index} event={event} />
-          ))}
+          {flow.events.map((event, index) =>
+            // The paste steps below carry the sign-in link themselves, so the
+            // transcript must not offer a second copy of the same link.
+            pastePending && event.type === 'auth_url' ? null : (
+              <OAuthEventRow key={index} event={event} />
+            ),
+          )}
 
           {flow.pending !== undefined && flow.pending.type !== 'select' ? (
             <div className="flex flex-col gap-2">
+              {pastePending ? <PasteSteps events={flow.events} /> : null}
               <label
                 htmlFor={`oauth-answer-${provider.id}`}
-                className="text-sm text-[var(--key-fg-dim)]"
+                // Step three already says what goes in the box; a visible
+                // label here would be the same sentence a third time.
+                className={pastePending ? 'sr-only' : 'text-sm text-[var(--key-fg-dim)]'}
               >
-                {flow.pending.message}
+                {pastePending ? t('provider.oauth.paste.label') : flow.pending.message}
               </label>
-              {flow.pending.type === 'manual_code' ? (
-                <p className="text-xs text-[var(--muted)]">{t('provider.oauth.loopbackHint')}</p>
-              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   id={`oauth-answer-${provider.id}`}
                   data-testid={`provider-oauth-answer-${provider.id}`}
                   type={flow.pending.type === 'secret' ? 'password' : 'text'}
                   autoComplete="off"
-                  placeholder={flow.pending.placeholder ?? t('provider.oauth.answerPlaceholder')}
+                  placeholder={
+                    // pi's own placeholder for this prompt is the loopback URL
+                    // itself, which reads like something to type rather than an
+                    // example of what to paste.
+                    pastePending
+                      ? t('provider.oauth.paste.placeholder')
+                      : flow.pending.placeholder ?? t('provider.oauth.answerPlaceholder')
+                  }
                   value={answer}
                   onChange={(event) => setAnswer(event.target.value)}
-                  className={`w-full rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] ${flow.pending.type === 'manual_code' ? '' : 'max-w-xs'}`}
+                  className={`w-full rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] ${pastePending ? '' : 'max-w-xs'}`}
                 />
                 <Button
                   type="button"
@@ -162,27 +212,12 @@ export function OAuthSection({
           ) : null}
 
           {flow.pending !== undefined && flow.pending.type === 'select' ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-[var(--key-fg-dim)]">{flow.pending.message}</p>
-              <div className="flex flex-wrap gap-2">
-                {(flow.pending.options ?? []).map((option) => (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      void providersService
-                        .oauthInput(provider.id, option.id)
-                        .then(() => providersService.oauthState(provider.id))
-                        .then(absorb)
-                        .catch(() => undefined);
-                    }}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <MethodChoice
+              message={flow.pending.message}
+              options={flow.pending.options ?? []}
+              providerId={provider.id}
+              onChoose={(optionId) => void choose(optionId)}
+            />
           ) : null}
 
           {active && flow.pending === undefined ? (
@@ -236,6 +271,83 @@ export function OAuthSection({
   );
 }
 
+/**
+ * How to sign in, when the flow offers a choice. pi's two known methods get
+ * Popy's own words and the one that works everywhere goes first; anything
+ * else pi may add later is rendered as it arrives, unrelabelled.
+ */
+function MethodChoice({
+  message,
+  options,
+  providerId,
+  onChoose,
+}: {
+  message: string;
+  options: { id: string; label: string; description?: string }[];
+  providerId: string;
+  onChoose: (optionId: string) => void;
+}) {
+  const known = options.length > 0 && options.every((option) => METHOD_COPY[option.id] !== undefined);
+  const ordered = known
+    ? [...options].sort((a, b) => (METHOD_COPY[a.id]?.rank ?? 0) - (METHOD_COPY[b.id]?.rank ?? 0))
+    : options;
+
+  return (
+    <div className="flex flex-col gap-2" data-testid={`provider-oauth-method-${providerId}`}>
+      <p className="text-sm text-[var(--key-fg-dim)]">
+        {known ? t('provider.oauth.method.title') : message}
+      </p>
+      <div className={known ? 'flex flex-col gap-2' : 'flex flex-wrap gap-2'}>
+        {ordered.map((option) => {
+          const copy = METHOD_COPY[option.id];
+          return (
+            <Button
+              key={option.id}
+              type="button"
+              variant="ghost"
+              className={copy === undefined ? '' : 'flex-col items-start gap-0.5 text-left'}
+              onClick={() => onChoose(option.id)}
+            >
+              <span>{copy?.label ?? option.label}</span>
+              {copy === undefined ? null : (
+                <span className="text-xs font-normal text-[var(--muted)]">{copy.hint}</span>
+              )}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The three steps of the browser-redirect path, in order, said once each.
+ * The middle one is the whole reason this exists: the browser lands on a page
+ * that fails to load, and without being told beforehand that this is the
+ * expected outcome, a user reads it as a broken sign-in and gives up there.
+ */
+function PasteSteps({ events }: { events: OAuthStateResponse['events'] }) {
+  let authUrl: string | undefined;
+  for (const event of events) {
+    if (event.type === 'auth_url') authUrl = event.url;
+  }
+
+  return (
+    <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-[var(--screen-fg)]">
+      <li>
+        {t('provider.oauth.paste.step1')}
+        {authUrl === undefined ? null : (
+          <a href={authUrl} target="_blank" rel="noreferrer" className="ml-2 underline">
+            {t('provider.oauth.openLink')}
+          </a>
+        )}
+      </li>
+      <li className="text-[var(--muted)]">{t('provider.oauth.paste.step2')}</li>
+      <li>{t('provider.oauth.paste.step3')}</li>
+    </ol>
+  );
+}
+
 /** One line of the sign-in transcript, rendered by what it is. */
 function OAuthEventRow({ event }: { event: OAuthStateResponse['events'][number] }) {
   switch (event.type) {
@@ -270,7 +382,7 @@ function OAuthEventRow({ event }: { event: OAuthStateResponse['events'][number] 
     case 'device_code':
       return (
         <div className="flex flex-col gap-1">
-          <p className="text-sm text-[var(--muted)]">{t('provider.oauth.deviceCode')}</p>
+          <p className="text-sm text-[var(--screen-fg)]">{t('provider.oauth.deviceCode')}</p>
           <p className="font-mono text-2xl tracking-widest">{event.userCode}</p>
           <a
             href={event.verificationUri}

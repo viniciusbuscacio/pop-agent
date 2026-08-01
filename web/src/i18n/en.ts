@@ -246,9 +246,20 @@ export const en = {
   'provider.oauth.cancel': 'Cancel sign-in',
   'provider.oauth.disconnect': 'Disconnect',
   'provider.oauth.openLink': 'Open the sign-in page',
-  'provider.oauth.deviceCode': 'Enter this code on the page:',
-  'provider.oauth.loopbackHint':
-    'The provider sends your browser to a blank localhost page. That is expected: the callback address belongs to the server, not to the device you are browsing from. Copy the whole URL from the address bar and paste it here.',
+  'provider.oauth.deviceCode': 'Open this page and enter the code:',
+  'provider.oauth.method.title': 'How do you want to sign in?',
+  'provider.oauth.method.deviceCode': 'With a code',
+  'provider.oauth.method.deviceCodeHint':
+    'Open a page at the provider and type a short code. Works from any device.',
+  'provider.oauth.method.browser': 'With a browser redirect',
+  'provider.oauth.method.browserHint':
+    'Only when this browser runs on the same machine as Popy. Otherwise you have to copy a URL back by hand.',
+  'provider.oauth.paste.step1': 'Open the sign-in page and approve.',
+  'provider.oauth.paste.step2':
+    'The browser then lands on a page that does not load. That is expected.',
+  'provider.oauth.paste.step3': 'Copy that page’s address and paste it here.',
+  'provider.oauth.paste.label': 'The address of the page that did not load',
+  'provider.oauth.paste.placeholder': 'Paste the address here',
   'provider.oauth.answerPlaceholder': 'Answer',
   'provider.oauth.submit': 'Submit',
   'provider.oauth.waiting': 'Waiting for the provider…',

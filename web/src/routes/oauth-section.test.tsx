@@ -11,6 +11,10 @@ import { OAuthSection } from './oauth-section';
  * from the background. If the card only knew about flows it had started
  * itself, it would offer "Sign in" again while the server sat waiting for the
  * code -- the dead end this suite exists to prevent.
+ *
+ * The second thing it guards is the choice of method: on a self-hosted
+ * install the browser redirect cannot complete on its own, so the card must
+ * not repeat pi's advice that it is the default.
  */
 
 const oauthState = vi.fn();
@@ -51,6 +55,22 @@ const WAITING_FOR_PASTE = {
   done: false,
 };
 
+/** What pi asks first for a subscription that offers both methods. */
+const CHOOSING_METHOD = {
+  flowId: 'flow-2',
+  providerId: 'openai-codex',
+  events: [],
+  pending: {
+    type: 'select' as const,
+    message: 'Select OpenAI Codex login method:',
+    options: [
+      { id: 'browser', label: 'Browser login (default)' },
+      { id: 'device_code', label: 'Device code login (headless)' },
+    ],
+  },
+  done: false,
+};
+
 afterEach(cleanup);
 
 beforeEach(() => {
@@ -73,14 +93,34 @@ describe('OAuthSection', () => {
     expect(oauthStart).not.toHaveBeenCalled();
   });
 
-  it('explains the blank localhost page while a pasted code is pending', async () => {
+  it('warns that the page will not load before asking for its address', async () => {
     oauthState.mockResolvedValue(WAITING_FOR_PASTE);
 
     render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/blank localhost page/i)).toBeTruthy();
+      expect(screen.getByText(/does not load/i)).toBeTruthy();
     });
+    // The sign-in link belongs to the steps, and appears once -- not again as
+    // a loose transcript row saying the same thing.
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('offers the code method first, in Popy words, not pi defaults', async () => {
+    oauthState.mockResolvedValue(CHOOSING_METHOD);
+
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-oauth-method-openai-codex')).toBeTruthy();
+    });
+    const buttons = screen.getAllByRole('button').map((button) => button.textContent ?? '');
+    const code = buttons.findIndex((text) => text.includes('With a code'));
+    const browser = buttons.findIndex((text) => text.includes('With a browser redirect'));
+    expect(code).toBeGreaterThanOrEqual(0);
+    expect(code).toBeLessThan(browser);
+    // pi calls the redirect "(default)"; on a self-hosted install it is not.
+    expect(screen.queryByText(/default/i)).toBeNull();
   });
 
   it('stays quiet when no sign-in is running', async () => {
