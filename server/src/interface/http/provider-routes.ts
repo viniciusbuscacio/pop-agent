@@ -1,12 +1,15 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type {
+  OAuthStartResponse,
+  OAuthStateResponse,
   ProviderCreditsResponse,
   ProviderStatusDTO,
   ProvidersResponse,
   TestProviderResponse,
   TranscribeResponse,
 } from '@popy/shared';
+import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
@@ -28,6 +31,8 @@ const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
 const customConfigSchema = z
   .object({ baseURL: z.string().url().max(500), defaultModel: z.string().min(1).max(200) })
   .strict();
+/** A prompt answer during OAuth sign-in: a code or an option id, never a key. */
+const oauthInputSchema = z.object({ value: z.string().min(1).max(2000) }).strict();
 
 /** ~25 MB of audio, aw's cap, as base64. */
 const transcribeSchema = z
@@ -36,6 +41,8 @@ const transcribeSchema = z
 
 export interface ProviderRoutesDeps {
   providers: ProviderService;
+  /** The single-active OAuth sign-in flow (popy.spec §15, fase 1.5). */
+  oauthFlows: OAuthFlowService;
   transcriber: Transcriber;
   voiceCleanup: VoiceCleanup;
   /**
@@ -133,6 +140,65 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
+  // Subscription sign-in (popy.spec §15, fase 1.5). The flow lives on the
+  // server; these four routes are the browser's whole view of it: start it,
+  // poll its transcript, answer its one question, stop it. Token material
+  // never crosses this wire in either direction.
+  routes.post('/providers/:id/oauth/start', (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
+    if (status.authType !== 'oauth') {
+      return apiError(c, 404, 'not_found', `"${id}" does not sign in with OAuth.`);
+    }
+    return c.json(deps.oauthFlows.start(id) satisfies OAuthStartResponse);
+  });
+
+  routes.get('/providers/:id/oauth/state', (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const state = deps.oauthFlows.state();
+    if (state === undefined || state.providerId !== id) {
+      return apiError(c, 404, 'not_found', 'No sign-in is running for this provider.');
+    }
+    return c.json(state satisfies OAuthStateResponse);
+  });
+
+  routes.post('/providers/:id/oauth/input', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = oauthInputSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const state = deps.oauthFlows.state();
+    if (state === undefined || state.providerId !== id || !deps.oauthFlows.submit(parsed.data.value)) {
+      return apiError(c, 404, 'not_found', 'The sign-in is not waiting for an answer.');
+    }
+    return c.json({ ok: true });
+  });
+
+  routes.post('/providers/:id/oauth/cancel', (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const state = deps.oauthFlows.state();
+    if (state !== undefined && state.providerId === id) deps.oauthFlows.cancel();
+    return c.json({ ok: true });
+  });
+
+  // Disconnect: drops the stored subscription credential, engine-side.
+  routes.post('/providers/:id/oauth/logout', async (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
+    if (status.authType !== 'oauth') {
+      return apiError(c, 404, 'not_found', `"${id}" does not sign in with OAuth.`);
+    }
+    await deps.providers.disconnect(id);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
+  });
+
   routes.post('/transcribe', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
@@ -174,6 +240,7 @@ function toStatusDto(status: import('../../application/providers/provider-servic
   return {
     id: status.id,
     name: status.name,
+    authType: status.authType,
     configured: status.configured,
     source: status.source,
     defaultModel: status.defaultModel,

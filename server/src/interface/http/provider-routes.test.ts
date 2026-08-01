@@ -55,6 +55,7 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
       {
         id: 'openrouter',
         name: 'OpenRouter',
+        authType: 'api-key',
         configured: openrouter.configured,
         source: openrouter.source,
         defaultModel: 'moonshotai/kimi-k3',
@@ -63,6 +64,7 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
       {
         id: 'openai',
         name: 'OpenAI',
+        authType: 'api-key',
         configured: false,
         source: null,
         defaultModel: 'gpt-4o-mini',
@@ -71,14 +73,34 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
       {
         id: 'anthropic',
         name: 'Anthropic',
+        authType: 'api-key',
         configured: false,
         source: null,
         defaultModel: 'claude-sonnet-4-5',
         allowCustomModel: true,
       },
       {
+        id: 'openai-codex',
+        name: 'OpenAI — ChatGPT subscription',
+        authType: 'oauth',
+        configured: false,
+        source: null,
+        defaultModel: 'gpt-5.5',
+        allowCustomModel: false,
+      },
+      {
+        id: 'github-copilot',
+        name: 'GitHub Copilot subscription',
+        authType: 'oauth',
+        configured: false,
+        source: null,
+        defaultModel: 'gpt-5.4',
+        allowCustomModel: false,
+      },
+      {
         id: 'custom',
         name: 'Custom (OpenAI-compatible)',
+        authType: 'api-key',
         configured: false,
         source: null,
         defaultModel: '',
@@ -303,6 +325,124 @@ describe('PUT /v1/providers/:id/default-model', () => {
       method: 'PUT',
       body: JSON.stringify({ model: 'x' }),
     });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('subscription sign-in routes', () => {
+  const CODEX = 'openai-codex';
+
+  /** Lets the scripted login flow settle its next step. */
+  function flush(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve));
+  }
+
+  it('refuses to start a flow for a provider that uses keys', async () => {
+    const res = await authed('/v1/providers/openrouter/oauth/start', { method: 'POST' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('has no state before a flow starts', async () => {
+    const res = await authed(`/v1/providers/${CODEX}/oauth/state`, {});
+
+    expect(res.status).toBe(404);
+  });
+
+  it('walks the whole flow: start, transcript, answer, connected', async () => {
+    const started = await authed(`/v1/providers/${CODEX}/oauth/start`, { method: 'POST' });
+    expect(started.status).toBe(200);
+    const { flowId } = (await started.json()) as { flowId: string };
+    expect(flowId.length).toBeGreaterThan(0);
+    await flush();
+
+    const state = (await (await authed(`/v1/providers/${CODEX}/oauth/state`)).json()) as {
+      events: unknown[];
+      pending?: { type: string };
+      done: boolean;
+    };
+    expect(state.events).toEqual([
+      { type: 'auth_url', url: 'https://example.test/oauth', instructions: 'Open and approve' },
+    ]);
+    expect(state.pending?.type).toBe('manual_code');
+    expect(state.done).toBe(false);
+
+    const submitted = await authed(`/v1/providers/${CODEX}/oauth/input`, {
+      method: 'POST',
+      body: JSON.stringify({ value: 'good-code' }),
+    });
+    expect(submitted.status).toBe(200);
+    await flush();
+
+    const finished = (await (await authed(`/v1/providers/${CODEX}/oauth/state`)).json()) as {
+      done: boolean;
+      ok?: boolean;
+    };
+    expect(finished).toMatchObject({ done: true, ok: true });
+
+    const providers = (await (await authed('/v1/providers')).json()) as {
+      providers: { id: string; configured: boolean; source: string | null }[];
+    };
+    expect(providers.providers.find((p) => p.id === CODEX)).toMatchObject({
+      configured: true,
+      source: 'oauth',
+    });
+  });
+
+  it('carries the flow s refusal back, and never any token words', async () => {
+    await authed(`/v1/providers/${CODEX}/oauth/start`, { method: 'POST' });
+    await flush();
+
+    await authed(`/v1/providers/${CODEX}/oauth/input`, {
+      method: 'POST',
+      body: JSON.stringify({ value: 'wrong' }),
+    });
+    await flush();
+
+    const res = await authed(`/v1/providers/${CODEX}/oauth/state`);
+    const text = await res.text();
+    expect(JSON.parse(text)).toMatchObject({ done: true, ok: false, error: 'invalid code' });
+    expect(text).not.toMatch(/token|refresh|access/i);
+  });
+
+  it('has nothing to answer when no question is pending', async () => {
+    const res = await authed(`/v1/providers/${CODEX}/oauth/input`, {
+      method: 'POST',
+      body: JSON.stringify({ value: 'anything' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('cancel ends the flow and says so in the transcript', async () => {
+    await authed(`/v1/providers/${CODEX}/oauth/start`, { method: 'POST' });
+    await flush();
+
+    const cancelled = await authed(`/v1/providers/${CODEX}/oauth/cancel`, { method: 'POST' });
+    expect(cancelled.status).toBe(200);
+
+    const state = (await (await authed(`/v1/providers/${CODEX}/oauth/state`)).json()) as {
+      done: boolean;
+      ok?: boolean;
+    };
+    expect(state).toMatchObject({ done: true, ok: false });
+  });
+
+  it('logout disconnects the subscription', async () => {
+    fixture.providerAuth.authed.add(CODEX);
+
+    const res = await authed(`/v1/providers/${CODEX}/oauth/logout`, { method: 'POST' });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      providers: { id: string; configured: boolean }[];
+    };
+    expect(body.providers.find((p) => p.id === CODEX)?.configured).toBe(false);
+  });
+
+  it('logout is not a thing for a key provider', async () => {
+    const res = await authed('/v1/providers/openrouter/oauth/logout', { method: 'POST' });
 
     expect(res.status).toBe(404);
   });

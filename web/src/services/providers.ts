@@ -1,4 +1,11 @@
-import type { ProviderCreditsResponse, ProvidersResponse, TestProviderResponse, TranscribeResponse } from '@popy/shared';
+import type {
+  OAuthStartResponse,
+  OAuthStateResponse,
+  ProviderCreditsResponse,
+  ProvidersResponse,
+  TestProviderResponse,
+  TranscribeResponse,
+} from '@popy/shared';
 import { apiRequest } from './api';
 
 /**
@@ -52,6 +59,41 @@ export const providersService = {
     return apiRequest<ProvidersResponse>('/providers/custom/config', {
       method: 'PUT',
       body: { baseURL, defaultModel },
+    });
+  },
+
+  /**
+   * Subscription sign-in (popy.spec §15, fase 1.5): the flow runs on the
+   * server; the card starts it, polls its transcript and answers its one
+   * question. No token material ever reaches the browser.
+   */
+  oauthStart(providerId: string): Promise<OAuthStartResponse> {
+    return apiRequest<OAuthStartResponse>(`/providers/${providerId}/oauth/start`, {
+      method: 'POST',
+    });
+  },
+
+  oauthState(providerId: string): Promise<OAuthStateResponse> {
+    return apiRequest<OAuthStateResponse>(`/providers/${providerId}/oauth/state`);
+  },
+
+  oauthInput(providerId: string, value: string): Promise<{ ok: boolean }> {
+    return apiRequest<{ ok: boolean }>(`/providers/${providerId}/oauth/input`, {
+      method: 'POST',
+      body: { value },
+    });
+  },
+
+  oauthCancel(providerId: string): Promise<{ ok: boolean }> {
+    return apiRequest<{ ok: boolean }>(`/providers/${providerId}/oauth/cancel`, {
+      method: 'POST',
+    });
+  },
+
+  /** Disconnect: the server drops the stored subscription credential. */
+  oauthLogout(providerId: string): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/${providerId}/oauth/logout`, {
+      method: 'POST',
     });
   },
 

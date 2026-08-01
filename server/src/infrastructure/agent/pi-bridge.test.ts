@@ -167,6 +167,22 @@ class ScriptedEngine implements PiEngine {
   models(): Promise<{ id: string }[]> {
     return Promise.resolve([{ id: 'moonshotai/kimi-k3' }]);
   }
+
+  hasProviderAuth(): boolean {
+    return false;
+  }
+
+  checkProviderAuth(): Promise<{ ok: boolean; message?: string }> {
+    return Promise.resolve({ ok: false, message: 'not signed in' });
+  }
+
+  providerLogin(): Promise<void> {
+    return Promise.reject(new Error('the scripted engine cannot sign in'));
+  }
+
+  providerLogout(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 let db: Database.Database;

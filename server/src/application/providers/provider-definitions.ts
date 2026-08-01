@@ -2,9 +2,10 @@ import type { ModelInfo } from '../ports/agent-bridge.js';
 
 /**
  * The declarative provider list (popy.spec §15: "provider is data, not a
- * class"). Behaviour varies only by auth type -- phase 1 ships api-key
- * alone -- and a vendor quirk is a point `if` somewhere, never a subclass.
- * Adding a provider means adding a literal here.
+ * class"). Behaviour varies only by auth type -- `api-key` stores a key in
+ * the secrets table, `oauth` rides a subscription credential pi's login flow
+ * persisted -- and a vendor quirk is a point `if` somewhere, never a
+ * subclass. Adding a provider means adding a literal here.
  *
  * The ids deliberately match pi-ai's builtin provider ids so the engine's
  * `ModelRuntime.getModel(providerId, modelId)` resolves them without a
@@ -17,7 +18,7 @@ export interface ProviderDefinition {
   name: string;
   /** Informational; the real transport base URL lives in pi's provider. */
   baseURL: string;
-  authType: 'api-key';
+  authType: 'api-key' | 'oauth';
   defaultModel: string;
   allowCustomModel: boolean;
   /** True when pi needs `registerProvider` instead of a builtin. */
@@ -68,6 +69,52 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     staticModels: [
       { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', context: 200_000 },
       { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', context: 200_000 },
+    ],
+  },
+  {
+    // Subscription auth (popy.spec §15, fase 1.5): pi's own OAuth flow signs
+    // in with a ChatGPT Plus/Pro account; no key exists anywhere in Popy.
+    id: 'openai-codex',
+    name: 'OpenAI — ChatGPT subscription',
+    baseURL: '',
+    authType: 'oauth',
+    defaultModel: 'gpt-5.5',
+    allowCustomModel: false,
+    customBaseURL: false,
+    staticModels: [
+      { id: 'gpt-5.4', name: 'GPT-5.4', context: 272_000, pricing: { input: 2.5, output: 15 } },
+      { id: 'gpt-5.5', name: 'GPT-5.5', context: 272_000, pricing: { input: 5, output: 30 } },
+      {
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        context: 272_000,
+        pricing: { input: 1, output: 6 },
+      },
+    ],
+  },
+  {
+    // Subscription auth, same shape: a GitHub Copilot seat via device code.
+    id: 'github-copilot',
+    name: 'GitHub Copilot subscription',
+    baseURL: '',
+    authType: 'oauth',
+    defaultModel: 'gpt-5.4',
+    allowCustomModel: false,
+    customBaseURL: false,
+    staticModels: [
+      { id: 'gpt-5.4', name: 'GPT-5.4', context: 1_000_000, pricing: { input: 2.5, output: 15 } },
+      {
+        id: 'claude-opus-5',
+        name: 'Claude Opus 5',
+        context: 1_000_000,
+        pricing: { input: 5, output: 25 },
+      },
+      {
+        id: 'gemini-3.5-flash',
+        name: 'Gemini 3.5 Flash',
+        context: 200_000,
+        pricing: { input: 1.5, output: 9 },
+      },
     ],
   },
   {

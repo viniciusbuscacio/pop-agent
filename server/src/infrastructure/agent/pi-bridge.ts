@@ -8,6 +8,8 @@ import type {
   AgentRunRequest,
   AgentRunResult,
   ModelInfo,
+  ProviderAuthBridge,
+  ProviderAuthInteraction,
 } from '../../application/ports/agent-bridge.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
 import {
@@ -92,7 +94,7 @@ interface CachedSession {
   lastUsedAt: number;
 }
 
-export class PiAgentBridge implements AgentBridge {
+export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
   private readonly sessions = new Map<string, CachedSession>();
   private sweeper: ReturnType<typeof setInterval> | undefined;
 
@@ -214,6 +216,24 @@ export class PiAgentBridge implements AgentBridge {
 
   listModels(providerId?: string): Promise<ModelInfo[]> {
     return this.deps.engine.models(providerId ?? '');
+  }
+
+  // Subscription auth (popy.spec §15, fase 1.5): the bridge only forwards --
+  // credentials live in the engine's store and never surface here.
+  hasProviderAuth(providerId: string): boolean {
+    return this.deps.engine.hasProviderAuth(providerId);
+  }
+
+  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }> {
+    return this.deps.engine.checkProviderAuth(providerId);
+  }
+
+  providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {
+    return this.deps.engine.providerLogin(providerId, interaction);
+  }
+
+  providerLogout(providerId: string): Promise<void> {
+    return this.deps.engine.providerLogout(providerId);
   }
 
   /**

@@ -62,3 +62,57 @@ export interface AgentBridge {
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(providerId?: string): Promise<ModelInfo[]>;
 }
+
+/**
+ * A question the engine's login flow asks the user (popy.spec §15). These are
+ * the port's own structural types -- the engine's SDK has equivalents, but
+ * the application layer must not know that.
+ */
+export type ProviderAuthPrompt =
+  | { type: 'text' | 'secret' | 'manual_code'; message: string; placeholder?: string }
+  | {
+      type: 'select';
+      message: string;
+      options: readonly { id: string; label: string; description?: string }[];
+    };
+
+/** Something the login flow tells the user. Never token material. */
+export type ProviderAuthEvent =
+  | { type: 'info'; message: string; links?: readonly { url: string; label?: string }[] }
+  | { type: 'auth_url'; url: string; instructions?: string }
+  | {
+      type: 'device_code';
+      userCode: string;
+      verificationUri: string;
+      intervalSeconds?: number;
+      expiresInSeconds?: number;
+    }
+  | { type: 'progress'; message: string };
+
+/** The two callbacks a login flow drives, plus the abort that stops it. */
+export interface ProviderAuthInteraction {
+  signal?: AbortSignal;
+  prompt(prompt: ProviderAuthPrompt): Promise<string>;
+  notify(event: ProviderAuthEvent): void;
+}
+
+/**
+ * The engine's subscription-auth surface (popy.spec §15): whether a provider
+ * holds an OAuth credential, the login flow that obtains one, and the logout
+ * that drops it. Separate from {@link AgentBridge} because running a chat and
+ * signing in to a subscription are different jobs -- the run orchestration
+ * never touches this.
+ */
+export interface ProviderAuthBridge {
+  /** Whether the engine holds working auth for the provider (sync snapshot). */
+  hasProviderAuth(providerId: string): boolean;
+  /** A cheap credential check, in words the user can act on. */
+  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }>;
+  /**
+   * Runs the provider's OAuth flow; the credential is persisted by the
+   * engine's own store and never crosses this boundary.
+   */
+  providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void>;
+  /** Drops the stored credential (disconnect). */
+  providerLogout(providerId: string): Promise<void>;
+}

@@ -10,10 +10,12 @@ import { RunService } from '../application/chat/run-service.js';
 import { TitleService } from '../application/chat/title-service.js';
 import { HealthService } from '../application/health/health-service.js';
 import type { Clock } from '../application/ports/clock.js';
+import type { ProviderAuthInteraction } from '../application/ports/agent-bridge.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
 import type { CompletionRequest, ProviderGateway } from '../application/ports/provider-gateway.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
+import { OAuthFlowService } from '../application/providers/oauth-flow-service.js';
 import { ProviderService } from '../application/providers/provider-service.js';
 import { SettingsService } from '../application/settings/settings-service.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
@@ -108,6 +110,26 @@ export class RefusingGateway implements ProviderGateway {
   }
 }
 
+/**
+ * The engine's subscription-auth surface, scripted (popy.spec §15). The
+ * default login shows one URL, asks for one code and accepts only
+ * "good-code" -- enough to walk the whole wire without pi or a browser.
+ */
+export class FakeProviderAuth {
+  /** Providers the fake engine considers signed in. */
+  readonly authed = new Set<string>();
+
+  login = (providerId: string, interaction: ProviderAuthInteraction): Promise<void> => {
+    interaction.notify({ type: 'auth_url', url: 'https://example.test/oauth', instructions: 'Open and approve' });
+    return interaction
+      .prompt({ type: 'manual_code', message: 'Paste the code shown after approving' })
+      .then((code) => {
+        if (code !== 'good-code') throw new Error('invalid code');
+        this.authed.add(providerId);
+      });
+  };
+}
+
 /** A transcriber the tests script: fixed words, or a failure with words. */
 export class FakeTranscriber {
   transcript = 'what the voice note said';
@@ -130,6 +152,8 @@ export interface TestApp {
   artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
+  /** The scripted subscription auth behind the oauth routes. */
+  providerAuth: FakeProviderAuth;
   secrets: MemorySecrets;
   hub: SseHub;
   clock: FakeClock;
@@ -145,6 +169,8 @@ export interface TestAppOptions {
   envKey?: string;
   /** Swap in a scripted transcriber to test the voice route. */
   transcriber?: FakeTranscriber;
+  /** Swap in a pre-seeded subscription-auth fake to test the oauth routes. */
+  providerAuth?: FakeProviderAuth;
 }
 
 export function createTestApp(
@@ -172,6 +198,7 @@ export function createTestApp(
   const chats = new ChatService({ chats: chatRepo, clock });
 
   const gateway = options.gateway ?? new RefusingGateway();
+  const providerAuth = options.providerAuth ?? new FakeProviderAuth();
   const providers = new ProviderService({
     secrets,
     settings: settingsRepo,
@@ -179,10 +206,24 @@ export function createTestApp(
     clock,
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),
+    engineHasAuth: (providerId) => providerAuth.authed.has(providerId),
+    engineCheckAuth: (providerId) =>
+      Promise.resolve(
+        providerAuth.authed.has(providerId)
+          ? { ok: true }
+          : { ok: false, message: 'Not signed in.' },
+      ),
+    engineLogout: (providerId) => {
+      providerAuth.authed.delete(providerId);
+      return Promise.resolve();
+    },
     defaults: () => {
       const current = settings.read();
       return { provider: current.defaultProvider, model: current.defaultModel };
     },
+  });
+  const oauthFlows = new OAuthFlowService({
+    login: (providerId, interaction) => providerAuth.login(providerId, interaction),
   });
 
   const settings = new SettingsService(settingsRepo);
@@ -218,6 +259,7 @@ export function createTestApp(
     artifacts,
     runs,
     providers,
+    oauthFlows,
     health: new HealthService({
       providers,
       pingDb: () => {
@@ -291,5 +333,5 @@ export function createTestApp(
     webDist: WEB_DIST,
   });
 
-  return { controlLog, app, auth, chats, artifacts, runs, providers, secrets, hub, clock };
+  return { controlLog, app, auth, chats, artifacts, runs, providers, providerAuth, secrets, hub, clock };
 }

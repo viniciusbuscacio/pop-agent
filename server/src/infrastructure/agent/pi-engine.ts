@@ -9,8 +9,12 @@ import type {
   ToolDefinition,
   ToolResultEvent,
 } from '@earendil-works/pi-coding-agent';
-import type { ModelInfo } from '../../application/ports/agent-bridge.js';
+import type {
+  ModelInfo,
+  ProviderAuthInteraction,
+} from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
+import { providerDefinition } from '../../application/providers/provider-definitions.js';
 import type { MemoryRepo } from '../../application/ports/memory-repo.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { envelope } from '../../domain/safety/sanitize.js';
@@ -116,6 +120,14 @@ export interface PiOpenOptions {
 export interface PiEngine {
   open(options: PiOpenOptions): Promise<PiSession>;
   models(providerId: string): Promise<ModelInfo[]>;
+  /** Whether the runtime holds working auth for the provider (sync snapshot). */
+  hasProviderAuth(providerId: string): boolean;
+  /** pi's cheap credential check, in ok/message terms. */
+  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }>;
+  /** Runs pi's OAuth login; the credential lands in the runtime's own store. */
+  providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void>;
+  /** Drops the stored credential (disconnect). */
+  providerLogout(providerId: string): Promise<void>;
 }
 
 export interface SdkPiEngineOptions {
@@ -182,11 +194,19 @@ export interface SdkPiEngineOptions {
  */
 export class SdkPiEngine implements PiEngine {
   private runtime: Promise<ModelRuntime> | undefined;
+  /** The resolved runtime, for the sync auth question below. */
+  private runtimeNow: ModelRuntime | undefined;
   private readonly appliedKeys = new Map<string, string>();
   /** The custom provider registration last applied, to re-register on change. */
   private customRegistered = '';
 
-  constructor(private readonly options: SdkPiEngineOptions) {}
+  constructor(private readonly options: SdkPiEngineOptions) {
+    // Warm the runtime so the sync hasProviderAuth answers truthfully from
+    // the first settings-page load. Only the real engine is ever constructed
+    // (main.ts builds it for POPY_AGENT=pi alone), so a fake install still
+    // never pays to load pi.
+    void this.modelRuntime().catch(() => undefined);
+  }
 
   async open(options: PiOpenOptions): Promise<PiSession> {
     const sdk = await import('@earendil-works/pi-coding-agent');
@@ -391,25 +411,74 @@ export class SdkPiEngine implements PiEngine {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
+  /** Whether the runtime already holds auth for a provider (OAuth included). */
+  hasProviderAuth(providerId: string): boolean {
+    // The question is sync (status endpoints are), the runtime build is not:
+    // warm it and answer "not yet" until it exists. The constructor already
+    // starts the build, so this only matters in the first instants of a boot.
+    if (this.runtimeNow === undefined) {
+      void this.modelRuntime().catch(() => undefined);
+      return false;
+    }
+    return this.runtimeNow.hasConfiguredAuth(providerId);
+  }
+
+  /** pi's own credential check, translated to words a card can show. */
+  async checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }> {
+    const runtime = await this.modelRuntime();
+    const check = await runtime.checkAuth(providerId);
+    if (check === undefined) {
+      return { ok: false, message: 'Not signed in.' };
+    }
+    return { ok: true, ...(check.source === undefined ? {} : { message: check.source }) };
+  }
+
+  /**
+   * pi's interactive OAuth login (popy.spec §15, fase 1.5). The credential is
+   * persisted by the runtime into Popy's own auth file (`authPath`); nothing
+   * comes back to the caller.
+   */
+  async providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {
+    const runtime = await this.modelRuntime();
+    await runtime.login(providerId, 'oauth', interaction);
+  }
+
+  async providerLogout(providerId: string): Promise<void> {
+    const runtime = await this.modelRuntime();
+    await runtime.logout(providerId);
+  }
+
   private async authenticatedRuntime(providerId: string): Promise<ModelRuntime> {
+    const runtime = await this.modelRuntime();
     const key = this.options.apiKey(providerId);
-    if (key === undefined || key.length === 0) {
-      // Points at Settings, never at internals: the user fixes this there.
-      throw new PiEngineError(
-        'provider_not_configured',
-        `no API key for ${providerId}: set one in Settings`,
-      );
+    if (key !== undefined && key.length > 0) {
+      if (providerId === 'custom') this.registerCustom(runtime);
+      // The runtime credential is an in-memory overlay; a key changed in
+      // Settings takes effect on the next run without a restart.
+      if (key !== this.appliedKeys.get(providerId)) {
+        await runtime.setRuntimeApiKey(providerId, key);
+        this.appliedKeys.set(providerId, key);
+      }
+      return runtime;
     }
 
-    const runtime = await this.modelRuntime();
-    if (providerId === 'custom') this.registerCustom(runtime);
-    // The runtime credential is an in-memory overlay; a key changed in Settings
-    // takes effect on the next run without a restart.
-    if (key !== this.appliedKeys.get(providerId)) {
-      await runtime.setRuntimeApiKey(providerId, key);
-      this.appliedKeys.set(providerId, key);
+    // No Popy-stored key. An OAuth provider whose subscription credential
+    // sits in the runtime's store is configured all the same -- a login flow
+    // put it there, and pi resolves it per request. Only declared-oauth
+    // providers take this door: an api-key provider must never quietly ride
+    // ambient host credentials.
+    if (
+      providerDefinition(providerId)?.authType === 'oauth' &&
+      runtime.hasConfiguredAuth(providerId)
+    ) {
+      return runtime;
     }
-    return runtime;
+
+    // Points at Settings, never at internals: the user fixes this there.
+    throw new PiEngineError(
+      'provider_not_configured',
+      `no API key for ${providerId}: set one in Settings`,
+    );
   }
 
   /**
@@ -447,7 +516,10 @@ export class SdkPiEngine implements PiEngine {
   }
 
   private modelRuntime(): Promise<ModelRuntime> {
-    this.runtime ??= this.createRuntime();
+    this.runtime ??= this.createRuntime().then((runtime) => {
+      this.runtimeNow = runtime;
+      return runtime;
+    });
     return this.runtime;
   }
 

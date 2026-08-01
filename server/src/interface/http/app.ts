@@ -8,6 +8,7 @@ import type { BackupService } from '../../application/ports/backup-service.js';
 import type { PushService } from '../../application/ports/push-repo.js';
 import type { WebAuthnGateway } from '../../application/ports/webauthn-repo.js';
 import type { Clock } from '../../application/ports/clock.js';
+import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { Transcriber } from '../../application/ports/transcriber.js';
@@ -45,6 +46,8 @@ export interface AppDeps {
   artifacts: ArtifactService;
   runs: RunService;
   providers: ProviderService;
+  /** The single-active subscription sign-in flow (popy.spec §15). */
+  oauthFlows: OAuthFlowService;
   health: HealthService;
   transcriber: Transcriber;
   voiceCleanup: VoiceCleanup;

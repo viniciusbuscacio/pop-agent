@@ -66,6 +66,7 @@ function status(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
   return {
     id: OPENROUTER,
     name: 'OpenRouter',
+    authType: 'api-key',
     configured: false,
     source: null,
     defaultModel: 'moonshotai/kimi-k3',
@@ -80,6 +81,8 @@ let gateway: ScriptedGateway;
 let clock: TickingClock;
 let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
+let oauthAuthed: Set<string>;
+let checkAuthCalls: string[];
 let defaults: { provider: string; model: string };
 let service: ProviderService;
 
@@ -90,6 +93,8 @@ beforeEach(() => {
   clock = new TickingClock();
   envKey = undefined;
   engineCatalog = [{ id: 'engine/model' }];
+  oauthAuthed = new Set();
+  checkAuthCalls = [];
   defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
   service = new ProviderService({
     secrets,
@@ -98,6 +103,17 @@ beforeEach(() => {
     clock,
     envKey: () => envKey,
     engineModels: () => Promise.resolve(engineCatalog),
+    engineHasAuth: (providerId) => oauthAuthed.has(providerId),
+    engineCheckAuth: (providerId) => {
+      checkAuthCalls.push(providerId);
+      return Promise.resolve(
+        oauthAuthed.has(providerId) ? { ok: true } : { ok: false, message: 'Not signed in.' },
+      );
+    },
+    engineLogout: (providerId) => {
+      oauthAuthed.delete(providerId);
+      return Promise.resolve();
+    },
     defaults: () => defaults,
   });
 });
@@ -260,5 +276,82 @@ describe('resolving the pair', () => {
 
   it('answers the default pair even with nothing configured, so the error points at Settings', () => {
     expect(service.resolve()).toEqual({ providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' });
+  });
+
+  it('treats a signed-in subscription as usable, no key involved', () => {
+    oauthAuthed.add('openai-codex');
+
+    expect(service.resolve({ provider: 'openai-codex', model: '' })).toEqual({
+      providerId: 'openai-codex',
+      modelId: 'gpt-5.5',
+    });
+    expect(service.resolve()).toEqual({ providerId: 'openai-codex', modelId: 'gpt-5.5' });
+  });
+});
+
+describe('subscription (oauth) providers', () => {
+  const CODEX = 'openai-codex';
+
+  it('reports the engine credential as the whole configuration', () => {
+    expect(service.status(CODEX)).toEqual({
+      id: CODEX,
+      name: 'OpenAI — ChatGPT subscription',
+      authType: 'oauth',
+      configured: false,
+      source: null,
+      defaultModel: 'gpt-5.5',
+      allowCustomModel: false,
+    });
+
+    oauthAuthed.add(CODEX);
+
+    expect(service.status(CODEX)).toEqual(
+      expect.objectContaining({ configured: true, source: 'oauth' }),
+    );
+    // Still no key anywhere.
+    expect(service.apiKey(CODEX)).toBeUndefined();
+  });
+
+  it('tests through the engine check, never the HTTP gateways', async () => {
+    oauthAuthed.add(CODEX);
+
+    const result = await service.test(CODEX);
+
+    expect(result).toEqual({ ok: true, latencyMs: 0 });
+    expect(checkAuthCalls).toEqual([CODEX]);
+    expect(gateway.completions).toHaveLength(0);
+  });
+
+  it('hands back the check s words when the credential is gone', async () => {
+    expect(await service.test(CODEX)).toEqual({
+      ok: false,
+      message: 'Not signed in.',
+      latencyMs: 0,
+    });
+  });
+
+  it('answers the engine catalog keyless, never touching a gateway', async () => {
+    expect(await service.models(CODEX)).toEqual({
+      models: [{ id: 'engine/model' }],
+      source: 'engine',
+    });
+    expect(gateway.listed).toBe(0);
+  });
+
+  it('falls back to the pinned static list when the engine has nothing', async () => {
+    engineCatalog = [];
+
+    const { models, source } = await service.models(CODEX);
+
+    expect(source).toBe('static');
+    expect(models.map((model) => model.id)).toContain('gpt-5.5');
+  });
+
+  it('disconnect drops the engine credential', async () => {
+    oauthAuthed.add(CODEX);
+
+    await service.disconnect(CODEX);
+
+    expect(service.status(CODEX)?.configured).toBe(false);
   });
 });

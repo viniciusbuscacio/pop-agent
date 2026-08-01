@@ -7,8 +7,9 @@ import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
 import { TitleService } from './application/chat/title-service.js';
 import { HealthService } from './application/health/health-service.js';
-import type { AgentBridge } from './application/ports/agent-bridge.js';
+import type { AgentBridge, ProviderAuthBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
+import { OAuthFlowService } from './application/providers/oauth-flow-service.js';
 import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
@@ -145,7 +146,7 @@ fileIndex.current =
         onError: (message) => console.warn(`popy file index: ${message}`),
       });
 
-const bridge: AgentBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
+const bridge: AgentBridge & ProviderAuthBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The providers seen by the routes: key precedence (secrets over
 // environment), the key test, and the per-provider model catalog with the
@@ -167,12 +168,21 @@ const providers: ProviderService = new ProviderService({
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: (providerId) => bridge.listModels(providerId),
+  // Subscription providers (popy.spec §15, fase 1.5): the engine owns the
+  // credential; the service only ever asks yes/no questions about it.
+  engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),
+  engineCheckAuth: (providerId) => bridge.checkProviderAuth(providerId),
+  engineLogout: (providerId) => bridge.providerLogout(providerId),
   defaults: () => ({
     provider: settings.read().defaultProvider,
     model: settings.read().defaultModel,
   }),
 });
 customBaseURL = () => providers.customConfig()?.baseURL ?? '';
+// The one interactive sign-in at a time, driven through the bridge.
+const oauthFlows = new OAuthFlowService({
+  login: (providerId, interaction) => bridge.providerLogin(providerId, interaction),
+});
 
 function piBridge(): PiAgentBridge {
   return new PiAgentBridge({
@@ -318,6 +328,7 @@ const app = createApp({
   artifacts,
   runs,
   providers,
+  oauthFlows,
   health,
   transcriber,
   voiceCleanup,

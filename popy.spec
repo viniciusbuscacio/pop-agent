@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.33 — 2026-08-01.
+Version 1.34 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -658,12 +658,13 @@ reimplemented.
 
 - **Provider is data, not a class**: a declarative list of definitions
   `{id, name, baseURL, authType, defaultModel, allowCustomModel}`.
-  Phase 1 only knows `authType: "api-key"`; vendor quirks get a
-  point `if`, not a subclass. Adding a provider = adding a literal.
+  `authType` is `"api-key"` or `"oauth"` (fase 1.5 below); vendor
+  quirks get a point `if`, not a subclass. Adding a provider = adding
+  a literal.
   Phase 1 ships: OpenRouter (default, **default model: Kimi K3**),
   OpenAI, Anthropic, and "custom OpenAI-compatible" (free baseURL).
-  OAuth (GitHub Copilot, OpenAI Codex) comes later — pi already has
-  the flow, the UI is what's missing.
+  Fase 1.5 adds the OAuth pair pi supports natively: `openai-codex`
+  (ChatGPT subscription) and `github-copilot` (Copilot subscription).
 - **Model identity = the pair `(providerId, modelId)`**, always. No
   synthetic string of our own; each provider names the model its way.
   Everywhere that stores `model` today (settings, chats, llm_runs) now
@@ -702,6 +703,33 @@ reimplemented.
   provider + model.
 - Service model (titles, condensation, summaries): Kimi K3 for
   everything initially.
+
+### Subscription OAuth (fase 1.5)
+
+- **Subscription auth rides pi's own login flows** — `openai-codex`
+  (ChatGPT Plus/Pro) and `github-copilot` (Copilot seat). Popy never
+  reimplements an OAuth dance: `ModelRuntime.login` runs the flow and
+  persists the credential into Popy's own auth file
+  (`POPY_DATA_DIR/pi-auth.json`); refresh happens inside pi per
+  request. No key exists anywhere for these providers.
+- **One interactive flow at a time**, server-side
+  (`OAuthFlowService`): `POST /v1/providers/:id/oauth/start` begins it
+  (starting a new flow cancels the previous), `GET .../oauth/state` is
+  the transcript the browser polls (~2 s), `POST .../oauth/input`
+  answers the flow's one pending question, `POST .../oauth/cancel`
+  aborts, `POST .../oauth/logout` disconnects (pi `logout`). A flow
+  nobody finishes times out after 10 minutes.
+- **No token material ever leaves the server**: the state carries only
+  display events (info / auth_url / device_code / progress) and the
+  pending prompt; credentials go from the flow straight into pi's
+  store. The wire shapes are copied field-by-field, never spread.
+- **Status/resolve semantics**: for an oauth definition `configured`
+  = "the engine holds a credential" (`hasConfiguredAuth`), reported as
+  `source: "oauth"`; resolve treats a signed-in subscription exactly
+  like a stored key when electing the pair; test uses pi `checkAuth`
+  instead of the paid HTTP probe; the model catalog answers from pi's
+  built-in list (no gateway, keyless). Session open for an oauth
+  provider must not demand an API key.
 
 ### Multi-provider (fase 2 — FUTURE, do not implement now)
 
@@ -865,6 +893,19 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.34 (2026-08-01): **Subscription providers via OAuth (§15, fase
+  1.5).** `openai-codex` (ChatGPT subscription) and `github-copilot`
+  (Copilot subscription) join the declarative list with
+  `authType: "oauth"`. pi's `ModelRuntime.login` runs the whole flow;
+  Popy adds a single-active `OAuthFlowService` (10-minute timeout, new
+  flow cancels the old), five `/v1/providers/:id/oauth/*` routes
+  (start/state/input/cancel/logout), and the Settings card swaps the
+  key input for Sign in / Disconnect with the flow's transcript inline
+  (auth_url link, device code, one pending question). Credentials live
+  only in pi's store (`pi-auth.json`); no token material on the wire;
+  status reports `source: "oauth"`, resolve counts a signed-in
+  subscription as usable, test wraps pi `checkAuth`, and an oauth
+  session opens keyless.
 - 1.33 (2026-08-01): **Health where the user can see it (§13, §14).** New
   public `GET /v1/health` reporting `{server, provider, db}` from cheap
   cached signals (key configured + last run outcome, `SELECT 1` on the

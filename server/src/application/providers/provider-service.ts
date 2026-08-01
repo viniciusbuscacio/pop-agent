@@ -32,8 +32,10 @@ const TEST_MAX_TOKENS = 5;
 export interface ProviderStatus {
   id: string;
   name: string;
+  /** How the provider authenticates: a stored key, or pi's OAuth login. */
+  authType: 'api-key' | 'oauth';
   configured: boolean;
-  source: 'settings' | 'env' | null;
+  source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
   allowCustomModel: boolean;
   /** The custom provider's endpoint; never a secret. Absent for builtins. */
@@ -73,6 +75,16 @@ export interface ProviderServiceDeps {
    * when there is no key to fetch a live catalog with. Never the network.
    */
   engineModels: (providerId: string) => Promise<ModelInfo[]>;
+  /**
+   * Whether the engine holds an OAuth credential for a provider (popy.spec
+   * §15, fase 1.5). The credential lives in pi's own store; this is the only
+   * question the service ever asks about it.
+   */
+  engineHasAuth: (providerId: string) => boolean;
+  /** The engine's cheap credential check, for the oauth Test button. */
+  engineCheckAuth: (providerId: string) => Promise<{ ok: boolean; message?: string }>;
+  /** Drops the engine's stored OAuth credential (disconnect). */
+  engineLogout: (providerId: string) => Promise<void>;
   /** The global default pair from Settings. Read late; it is a setting. */
   defaults: () => { provider: string; model: string };
 }
@@ -94,6 +106,20 @@ export class ProviderService {
   status(providerId: string): ProviderStatus | undefined {
     const definition = providerDefinition(providerId);
     if (definition === undefined) return undefined;
+    if (definition.authType === 'oauth') {
+      // No key anywhere: configured means the engine holds a subscription
+      // credential, obtained through its own login flow.
+      const connected = this.deps.engineHasAuth(definition.id);
+      return {
+        id: definition.id,
+        name: definition.name,
+        authType: 'oauth',
+        configured: connected,
+        source: connected ? 'oauth' : null,
+        defaultModel: this.storedDefaultModel(definition.id) ?? definition.defaultModel,
+        allowCustomModel: definition.allowCustomModel,
+      };
+    }
     const key = this.deps.secrets.get(keySecretName(providerId));
     const stored = key !== undefined && key.length > 0;
     const env = providerId === DEFAULT_PROVIDER_ID ? this.deps.envKey() : undefined;
@@ -102,6 +128,7 @@ export class ProviderService {
     return {
       id: definition.id,
       name: definition.name,
+      authType: 'api-key',
       configured: stored || fromEnv,
       source: stored ? 'settings' : fromEnv ? 'env' : null,
       defaultModel: custom?.defaultModel ?? this.storedDefaultModel(definition.id) ?? definition.defaultModel,
@@ -124,6 +151,12 @@ export class ProviderService {
 
   clearKey(providerId: string): void {
     this.deps.secrets.delete(keySecretName(providerId));
+  }
+
+  /** Drops an oauth provider's subscription credential (popy.spec §15). */
+  async disconnect(providerId: string): Promise<void> {
+    if (providerDefinition(providerId)?.authType !== 'oauth') return;
+    await this.deps.engineLogout(providerId);
   }
 
   /** Whether the provider the next run would use has a key (health probe). */
@@ -179,9 +212,17 @@ export class ProviderService {
     }
 
     for (const candidate of candidates) {
-      if (this.apiKey(candidate.providerId) !== undefined) return candidate;
+      if (this.usable(candidate.providerId)) return candidate;
     }
     return candidates[candidates.length > 1 ? 1 : 0] ?? this.ref(DEFAULT_PROVIDER_ID, '');
+  }
+
+  /** Whether a provider could serve a run right now: key or subscription. */
+  private usable(providerId: string): boolean {
+    if (providerDefinition(providerId)?.authType === 'oauth') {
+      return this.deps.engineHasAuth(providerId);
+    }
+    return this.apiKey(providerId) !== undefined;
   }
 
   private ref(providerId: string, modelId: string | undefined): ModelRef {
@@ -205,8 +246,23 @@ export class ProviderService {
     providerId: string,
     apiKey?: string,
   ): Promise<{ ok: boolean; message?: string; latencyMs?: number }> {
-    const gateway = this.deps.gateways[providerId];
     const definition = providerDefinition(providerId);
+    if (definition !== undefined && definition.authType === 'oauth') {
+      // No key and no HTTP gateway: the engine owns the credential, so the
+      // engine answers whether it still works.
+      const started = this.deps.clock.now();
+      try {
+        const result = await this.deps.engineCheckAuth(providerId);
+        return { ...result, latencyMs: this.deps.clock.now() - started };
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : 'The check failed.',
+          latencyMs: this.deps.clock.now() - started,
+        };
+      }
+    }
+    const gateway = this.deps.gateways[providerId];
     if (gateway === undefined || definition === undefined) {
       return { ok: false, message: `Unknown provider "${providerId}".` };
     }

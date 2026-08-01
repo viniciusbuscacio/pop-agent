@@ -392,8 +392,10 @@ export interface ModelsResponse {
 export interface ProviderStatusDTO {
   id: string;
   name: string;
+  /** How the provider authenticates: a stored API key, or pi's OAuth login. */
+  authType: 'api-key' | 'oauth';
   configured: boolean;
-  source: 'settings' | 'env' | null;
+  source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
   allowCustomModel: boolean;
   /** The custom provider's endpoint; never a secret (popy.spec §15). */
@@ -446,6 +448,50 @@ export interface TestProviderResponse {
   message?: string;
   /** Round-trip time of the probe, when it ran. */
   latencyMs?: number;
+}
+
+/**
+ * Subscription sign-in (popy.spec §15, fase 1.5). The flow runs on the
+ * server; the browser polls its transcript and answers at most one question.
+ * No token material ever rides these shapes.
+ */
+export type OAuthEventDTO =
+  | { type: 'info'; message: string; links?: readonly { url: string; label?: string }[] }
+  | { type: 'auth_url'; url: string; instructions?: string }
+  | {
+      type: 'device_code';
+      userCode: string;
+      verificationUri: string;
+      intervalSeconds?: number;
+      expiresInSeconds?: number;
+    }
+  | { type: 'progress'; message: string };
+
+/** `POST /v1/providers/:id/oauth/start` — begins the login flow. */
+export interface OAuthStartResponse {
+  flowId: string;
+}
+
+/** `GET /v1/providers/:id/oauth/state` — the flow's transcript so far. */
+export interface OAuthStateResponse {
+  flowId: string;
+  providerId: string;
+  events: OAuthEventDTO[];
+  /** The one question waiting for the user, when the flow asked one. */
+  pending?: {
+    type: 'text' | 'secret' | 'manual_code' | 'select';
+    message: string;
+    placeholder?: string;
+    options?: { id: string; label: string; description?: string }[];
+  };
+  done: boolean;
+  ok?: boolean;
+  error?: string;
+}
+
+/** `POST /v1/providers/:id/oauth/input` — answers the pending question. */
+export interface OAuthInputRequest {
+  value: string;
 }
 
 /**

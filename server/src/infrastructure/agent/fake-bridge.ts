@@ -4,6 +4,7 @@ import type {
   AgentRunRequest,
   AgentRunResult,
   ModelInfo,
+  ProviderAuthBridge,
 } from '../../application/ports/agent-bridge.js';
 
 /**
@@ -31,9 +32,27 @@ const DEFAULT_STEP_MS = 80;
 const TOOL_STEP_MS = 150;
 const SLOW_STEP_MS = 500;
 
-export class FakeAgentBridge implements AgentBridge {
+export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
   /** Overridable so tests do not spend real seconds on the slow script. */
   constructor(private readonly speed = 1) {}
+
+  // The fake engine holds no subscriptions and cannot sign in to one; the
+  // OAuth surface exists so main.ts wires either bridge the same way.
+  hasProviderAuth(): boolean {
+    return false;
+  }
+
+  checkProviderAuth(): Promise<{ ok: boolean; message?: string }> {
+    return Promise.resolve({ ok: false, message: 'The fake engine has no subscriptions.' });
+  }
+
+  providerLogin(): Promise<void> {
+    return Promise.reject(new Error('The fake engine cannot sign in to a subscription.'));
+  }
+
+  providerLogout(): Promise<void> {
+    return Promise.resolve();
+  }
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const { prompt, onEvent, signal } = request;
