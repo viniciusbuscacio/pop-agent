@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type {
+  CreateCustomProviderResponse,
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
@@ -28,8 +29,13 @@ import { apiError } from './errors.js';
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
 const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
-const customConfigSchema = z
-  .object({ baseURL: z.string().url().max(500), defaultModel: z.string().min(1).max(200) })
+const createCustomSchema = z.object({ name: z.string().min(1).max(100).optional() }).strict();
+const patchCustomSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    baseURL: z.string().url().max(500).optional(),
+    defaultModel: z.string().max(200).optional(),
+  })
   .strict();
 /** A prompt answer during OAuth sign-in: a code or an option id, never a key. */
 const oauthInputSchema = z.object({ value: z.string().min(1).max(2000) }).strict();
@@ -129,14 +135,44 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
-  // The custom provider is pure data: an endpoint and a model, never a secret.
-  routes.put('/providers/custom/config', async (c) => {
-    const body = await readJson(c);
-    if (body === undefined) return badBody(c);
-    const parsed = customConfigSchema.safeParse(body);
+  // Unlimited custom providers (popy.spec §15): each instance is pure data --
+  // a name, an endpoint, a model -- created first (the id anchors everything),
+  // edited in place, deleted with its key. Never a secret in any of these.
+  routes.post('/providers/custom', async (c) => {
+    const raw = (await readJson(c)) ?? {};
+    const parsed = createCustomSchema.safeParse(raw);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    deps.providers.setCustomConfig(parsed.data);
+    const instance = deps.providers.createCustom(
+      parsed.data.name === undefined ? {} : { name: parsed.data.name },
+    );
+    return c.json({
+      id: instance.id,
+      providers: deps.providers.statuses().map(toStatusDto),
+    } satisfies CreateCustomProviderResponse);
+  });
+
+  routes.patch('/providers/custom/:id', async (c) => {
+    const id = c.req.param('id');
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = patchCustomSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const patch = {
+      ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }),
+      ...(parsed.data.baseURL === undefined ? {} : { baseURL: parsed.data.baseURL }),
+      ...(parsed.data.defaultModel === undefined ? {} : { defaultModel: parsed.data.defaultModel }),
+    };
+    if (deps.providers.updateCustom(id, patch) === undefined) {
+      return providerNotFound(c, id);
+    }
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
+  });
+
+  routes.delete('/providers/custom/:id', (c) => {
+    const id = c.req.param('id');
+    if (!deps.providers.deleteCustom(id)) return providerNotFound(c, id);
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
@@ -246,5 +282,6 @@ function toStatusDto(status: import('../../application/providers/provider-servic
     defaultModel: status.defaultModel,
     allowCustomModel: status.allowCustomModel,
     ...(status.baseURL === undefined ? {} : { baseURL: status.baseURL }),
+    ...(status.custom === undefined ? {} : { custom: status.custom }),
   };
 }

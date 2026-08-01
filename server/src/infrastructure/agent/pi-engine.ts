@@ -156,11 +156,12 @@ export interface SdkPiEngineOptions {
   /** Read late, not captured: keys can arrive after boot, from Settings. */
   apiKey: (providerId: string) => string | undefined;
   /**
-   * The custom provider's endpoint and model, when configured (popy.spec
-   * §15). pi has no builtin for it, so the engine registers it as an
-   * OpenAI-compatible provider on first use.
+   * The user-created custom instances (popy.spec §15): pi has no builtin for
+   * them, so the engine registers each as an OpenAI-compatible provider,
+   * lazily on first use and again whenever its data changed -- adding or
+   * editing one never needs a restart. Read late, not captured.
    */
-  customProvider?: () => { baseURL: string; defaultModel: string } | undefined;
+  customProviders?: () => { id: string; name: string; baseURL: string; defaultModel: string }[];
   /** The agent's notes vault; its tools are registered on every session. */
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
@@ -197,8 +198,8 @@ export class SdkPiEngine implements PiEngine {
   /** The resolved runtime, for the sync auth question below. */
   private runtimeNow: ModelRuntime | undefined;
   private readonly appliedKeys = new Map<string, string>();
-  /** The custom provider registration last applied, to re-register on change. */
-  private customRegistered = '';
+  /** Per custom id, the registration last applied, to re-register on change. */
+  private readonly customRegistered = new Map<string, string>();
 
   constructor(private readonly options: SdkPiEngineOptions) {
     // Warm the runtime so the sync hasProviderAuth answers truthfully from
@@ -400,6 +401,9 @@ export class SdkPiEngine implements PiEngine {
   /** Listing does not need a key -- the catalog is built into pi. */
   async models(providerId: string): Promise<ModelInfo[]> {
     const runtime = await this.modelRuntime();
+    // A configured custom instance lists its registered model; one still
+    // being filled in simply has no catalog yet.
+    this.registerCustomIfAny(runtime, providerId);
     return runtime
       .getModels(providerId)
       .map((model) => ({
@@ -450,9 +454,12 @@ export class SdkPiEngine implements PiEngine {
 
   private async authenticatedRuntime(providerId: string): Promise<ModelRuntime> {
     const runtime = await this.modelRuntime();
+    // A custom instance registers (or re-registers) lazily on use, so an
+    // instance added or edited in Settings works without a restart. Throws
+    // provider_not_configured when the instance has no URL or model yet.
+    this.registerCustomIfAny(runtime, providerId, { requireConfigured: true });
     const key = this.options.apiKey(providerId);
     if (key !== undefined && key.length > 0) {
-      if (providerId === 'custom') this.registerCustom(runtime);
       // The runtime credential is an in-memory overlay; a key changed in
       // Settings takes effect on the next run without a restart.
       if (key !== this.appliedKeys.get(providerId)) {
@@ -482,28 +489,38 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * The custom provider exists only as data the user typed (popy.spec §15):
-   * register it with pi as an OpenAI-compatible endpoint carrying its one
-   * configured model. Re-registered when the URL or model changes.
+   * A custom instance exists only as data the user typed (popy.spec §15):
+   * when the id names one, register it with pi as an OpenAI-compatible
+   * endpoint carrying its one configured model. Stamped per id, so an edit
+   * re-registers and an untouched instance costs a string compare. Not a
+   * custom id at all: does nothing.
    */
-  private registerCustom(runtime: ModelRuntime): void {
-    const config = this.options.customProvider?.();
-    if (config === undefined || config.baseURL.length === 0 || config.defaultModel.length === 0) {
+  private registerCustomIfAny(
+    runtime: ModelRuntime,
+    providerId: string,
+    options?: { requireConfigured?: boolean },
+  ): void {
+    const instance = this.options
+      .customProviders?.()
+      .find((candidate) => candidate.id === providerId);
+    if (instance === undefined) return;
+    if (instance.baseURL.length === 0 || instance.defaultModel.length === 0) {
+      if (options?.requireConfigured !== true) return;
       throw new PiEngineError(
         'provider_not_configured',
-        'the custom provider needs a URL and a model: set them in Settings',
+        `the custom provider "${instance.name}" needs a URL and a model: set them in Settings`,
       );
     }
-    const stamp = `${config.baseURL} ${config.defaultModel}`;
-    if (stamp === this.customRegistered) return;
-    runtime.registerProvider('custom', {
-      name: 'Custom (OpenAI-compatible)',
-      baseUrl: config.baseURL,
+    const stamp = `${instance.name} ${instance.baseURL} ${instance.defaultModel}`;
+    if (stamp === this.customRegistered.get(providerId)) return;
+    runtime.registerProvider(providerId, {
+      name: instance.name,
+      baseUrl: instance.baseURL,
       api: 'openai-completions',
       models: [
         {
-          id: config.defaultModel,
-          name: config.defaultModel,
+          id: instance.defaultModel,
+          name: instance.defaultModel,
           reasoning: false,
           input: ['text'],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -512,7 +529,7 @@ export class SdkPiEngine implements PiEngine {
         },
       ],
     });
-    this.customRegistered = stamp;
+    this.customRegistered.set(providerId, stamp);
   }
 
   private modelRuntime(): Promise<ModelRuntime> {

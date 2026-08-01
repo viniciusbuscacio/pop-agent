@@ -158,9 +158,6 @@ const gateway = createOpenRouterGateway();
 // chain (which skips penalized providers), the run loop (which penalizes)
 // and the credential writes (which forgive).
 const cooldown = new ProviderCooldown({ clock: systemClock });
-// Read late, not captured: the custom endpoint can change in Settings at any
-// time, and the lambda below is how the gateway sees it without a cycle.
-let customBaseURL = (): string => '';
 const providers: ProviderService = new ProviderService({
   secrets: context.secrets,
   settings: context.settings,
@@ -168,8 +165,9 @@ const providers: ProviderService = new ProviderService({
     openrouter: gateway,
     openai: new OpenAiCompatibleGateway('https://api.openai.com/v1'),
     anthropic: new AnthropicGateway(),
-    custom: new OpenAiCompatibleGateway(() => customBaseURL()),
   },
+  // Each custom instance gets a gateway for its own normalized endpoint.
+  customGateway: (baseURL) => new OpenAiCompatibleGateway(baseURL),
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: (providerId) => bridge.listModels(providerId),
@@ -184,7 +182,9 @@ const providers: ProviderService = new ProviderService({
     model: settings.read().defaultModel,
   }),
 });
-customBaseURL = () => providers.customConfig()?.baseURL ?? '';
+// The single-slot custom of the pre-registry era becomes a registry
+// instance on boot (popy.spec §15); with nothing legacy left this is a no-op.
+providers.migrateLegacyCustom();
 // The one interactive sign-in at a time, driven through the bridge.
 const oauthFlows = new OAuthFlowService({
   login: (providerId, interaction) => bridge.providerLogin(providerId, interaction),
@@ -212,7 +212,7 @@ function piBridge(): PiAgentBridge {
       // credit limit, instead of every turn failing with a 402.
       modelsPath: join(context.dataDir, 'models.json'),
       apiKey: (providerId) => providers.apiKey(providerId),
-      customProvider: () => providers.customConfig(),
+      customProviders: () => providers.listCustom(),
       notesVault,
       memory: context.memory,
       chatStats: (chatId) => ({ messages: context.chats.countMessages(chatId) }),

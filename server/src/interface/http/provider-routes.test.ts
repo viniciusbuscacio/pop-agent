@@ -97,15 +97,6 @@ function expectedProviders(openrouter: { configured: boolean; source: string | n
         defaultModel: 'gpt-5.4',
         allowCustomModel: false,
       },
-      {
-        id: 'custom',
-        name: 'Custom (OpenAI-compatible)',
-        authType: 'api-key',
-        configured: false,
-        source: null,
-        defaultModel: '',
-        allowCustomModel: true,
-      },
     ],
   };
 }
@@ -445,5 +436,104 @@ describe('subscription sign-in routes', () => {
     const res = await authed('/v1/providers/openrouter/oauth/logout', { method: 'POST' });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('custom provider instances (popy.spec §15)', () => {
+  async function createCustom(name?: string): Promise<string> {
+    const res = await authed('/v1/providers/custom', {
+      method: 'POST',
+      body: JSON.stringify(name === undefined ? {} : { name }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string };
+    return body.id;
+  }
+
+  it('creates an instance and answers its id with the refreshed list', async () => {
+    const res = await authed('/v1/providers/custom', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Ollama' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      providers: { id: string; name: string; custom?: boolean }[];
+    };
+    expect(body.id).toMatch(/^custom-[0-9a-f]{10}$/);
+    const card = body.providers.find((provider) => provider.id === body.id);
+    expect(card).toMatchObject({ name: 'Ollama', custom: true });
+  });
+
+  it('edits an instance in place, normalizing the pasted endpoint', async () => {
+    const id = await createCustom('Local');
+
+    const res = await authed(`/v1/providers/custom/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        baseURL: 'http://localhost:11434/v1/chat/completions/',
+        defaultModel: 'llama4',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      providers: { id: string; baseURL?: string; defaultModel: string }[];
+    };
+    expect(body.providers.find((provider) => provider.id === id)).toMatchObject({
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+  });
+
+  it('stores and clears a key under the instance s own id', async () => {
+    const id = await createCustom();
+
+    const put = await authed(`/v1/providers/${id}/key`, {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey: 'sk-local' }),
+    });
+    expect(put.status).toBe(200);
+    const body = (await put.json()) as { providers: { id: string; configured: boolean }[] };
+    expect(body.providers.find((provider) => provider.id === id)?.configured).toBe(true);
+    expect(fixture.secrets.get(`provider.${id}.apiKey`)).toBe('sk-local');
+  });
+
+  it('deletes an instance together with its key', async () => {
+    const id = await createCustom('Doomed');
+    await authed(`/v1/providers/${id}/key`, {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey: 'sk-doomed' }),
+    });
+
+    const res = await authed(`/v1/providers/custom/${id}`, { method: 'DELETE' });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { providers: { id: string }[] };
+    expect(body.providers.some((provider) => provider.id === id)).toBe(false);
+    expect(fixture.secrets.get(`provider.${id}.apiKey`)).toBeUndefined();
+  });
+
+  it('404s edits and deletes of an id that is not ours', async () => {
+    const patch = await authed('/v1/providers/custom/custom-0000000000', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'nope' }),
+    });
+    const remove = await authed('/v1/providers/custom/custom-0000000000', { method: 'DELETE' });
+
+    expect(patch.status).toBe(404);
+    expect(remove.status).toBe(404);
+  });
+
+  it('rejects an endpoint that is not a URL', async () => {
+    const id = await createCustom();
+
+    const res = await authed(`/v1/providers/custom/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ baseURL: 'not a url' }),
+    });
+
+    expect(res.status).toBe(400);
   });
 });

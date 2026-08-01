@@ -87,6 +87,9 @@ let checkAuthCalls: string[];
 let cooldown: ProviderCooldown;
 let defaults: { provider: string; model: string };
 let service: ProviderService;
+/** Seeded ids come first; then a deterministic unique fallback. */
+let nextCustomIds: string[];
+let customIdFallback: number;
 
 beforeEach(() => {
   secrets = new MemorySecrets();
@@ -99,10 +102,15 @@ beforeEach(() => {
   checkAuthCalls = [];
   cooldown = new ProviderCooldown({ clock });
   defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
+  nextCustomIds = [];
+  customIdFallback = 0;
   service = new ProviderService({
     secrets,
     settings,
     gateways: { [OPENROUTER]: gateway },
+    customGateway: () => gateway,
+    customIdSource: () =>
+      nextCustomIds.shift() ?? (customIdFallback++).toString(16).padStart(10, '0'),
     clock,
     envKey: () => envKey,
     engineModels: () => Promise.resolve(engineCatalog),
@@ -429,5 +437,162 @@ describe('the failover chain (popy.spec §15, fase 2)', () => {
     expect(service.resolveChain()).toEqual([
       { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
     ]);
+  });
+});
+
+describe('custom provider instances (popy.spec §15)', () => {
+  it('creates instances with fresh custom- ids, retrying a collision', () => {
+    nextCustomIds = ['aaaaaaaaaa', 'aaaaaaaaaa', 'bbbbbbbbbb'];
+
+    const first = service.createCustom({ name: 'Ollama' });
+    const second = service.createCustom({ name: 'vLLM' });
+
+    expect(first.id).toBe('custom-aaaaaaaaaa');
+    // The colliding roll was discarded and a new one drawn.
+    expect(second.id).toBe('custom-bbbbbbbbbb');
+    expect(service.listCustom().map((instance) => instance.name)).toEqual(['Ollama', 'vLLM']);
+  });
+
+  it('normalizes the pasted endpoint down to the base URL', () => {
+    const instance = service.createCustom({
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1/chat/completions/',
+    });
+
+    expect(instance.baseURL).toBe('http://localhost:11434/v1');
+
+    const updated = service.updateCustom(instance.id, { baseURL: 'http://box:8000/v1///' });
+    expect(updated?.baseURL).toBe('http://box:8000/v1');
+  });
+
+  it('shows up in statuses after the builtins, as an editable custom card', () => {
+    const instance = service.createCustom({ name: 'Ollama', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
+
+    const all = service.statuses();
+    expect(all[all.length - 1]).toEqual({
+      id: instance.id,
+      name: 'Ollama',
+      authType: 'api-key',
+      configured: false,
+      source: null,
+      defaultModel: 'llama4',
+      allowCustomModel: true,
+      baseURL: 'http://localhost:11434/v1',
+      custom: true,
+    });
+  });
+
+  it('keeps each instance s key sealed under its own id', () => {
+    const first = service.createCustom({ name: 'One' });
+    const second = service.createCustom({ name: 'Two' });
+
+    service.setKey(first.id, 'sk-one');
+    service.setKey(second.id, 'sk-two');
+
+    expect(service.apiKey(first.id)).toBe('sk-one');
+    expect(service.apiKey(second.id)).toBe('sk-two');
+    expect(secrets.get(`provider.${first.id}.apiKey`)).toBe('sk-one');
+
+    service.deleteCustom(first.id);
+
+    expect(service.apiKey(first.id)).toBeUndefined();
+    expect(service.apiKey(second.id)).toBe('sk-two');
+  });
+
+  it('joins the failover chain after the builtins, in registry order', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    const a = service.createCustom({ name: 'A', baseURL: 'http://a/v1', defaultModel: 'model-a' });
+    const b = service.createCustom({ name: 'B', baseURL: 'http://b/v1', defaultModel: 'model-b' });
+    service.setKey(a.id, 'sk-a');
+    service.setKey(b.id, 'sk-b');
+
+    expect(service.resolveChain().map((ref) => ref.providerId)).toEqual([
+      OPENROUTER,
+      a.id,
+      b.id,
+    ]);
+    expect(service.resolveChain()[1]?.modelId).toBe('model-a');
+  });
+
+  it('deleting an instance removes its status and degrades its overrides', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    const instance = service.createCustom({ name: 'Gone', baseURL: 'http://x/v1', defaultModel: 'm' });
+    service.setKey(instance.id, 'sk-x');
+
+    expect(service.deleteCustom(instance.id)).toBe(true);
+    expect(service.deleteCustom(instance.id)).toBe(false);
+
+    expect(service.status(instance.id)).toBeUndefined();
+    expect(service.resolve({ provider: instance.id, model: 'm' })).toEqual({
+      providerId: OPENROUTER,
+      modelId: 'moonshotai/kimi-k3',
+    });
+  });
+
+  it('tests through the instance s own endpoint gateway', async () => {
+    const instance = service.createCustom({ name: 'Local', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
+    service.setKey(instance.id, 'sk-local');
+
+    const result = await service.test(instance.id);
+
+    expect(result.ok).toBe(true);
+    expect(gateway.completions[0]?.apiKey).toBe('sk-local');
+    expect(gateway.completions[0]?.model).toBe('llama4');
+  });
+
+  it('refuses to test an instance that has no endpoint yet', async () => {
+    const instance = service.createCustom({ name: 'Empty' });
+    service.setKey(instance.id, 'sk');
+
+    expect((await service.test(instance.id)).message).toBe('Set the endpoint URL before testing.');
+  });
+});
+
+describe('migrating the single-slot custom (popy.spec §15)', () => {
+  it('turns the legacy config and key into one working instance', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    secrets.set('provider.custom.apiKey', 'sk-legacy');
+
+    service.migrateLegacyCustom();
+
+    const [instance] = service.listCustom();
+    expect(instance).toMatchObject({
+      name: 'Custom (OpenAI-compatible)',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    // The key moved under the new id; the legacy entries are gone.
+    expect(service.apiKey(instance?.id ?? '')).toBe('sk-legacy');
+    expect(secrets.get('provider.custom.apiKey')).toBeUndefined();
+    expect(settings.get('provider.custom.config')).toEqual({ baseURL: '', defaultModel: '' });
+  });
+
+  it('lets a chat override still saying "custom" reach the migrated instance', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    secrets.set('provider.custom.apiKey', 'sk-legacy');
+    service.migrateLegacyCustom();
+    const [instance] = service.listCustom();
+
+    expect(service.resolve({ provider: 'custom', model: '' })).toEqual({
+      providerId: instance?.id,
+      modelId: 'llama4',
+    });
+  });
+
+  it('is a no-op with nothing legacy, and does not run twice', () => {
+    service.migrateLegacyCustom();
+    expect(service.listCustom()).toEqual([]);
+
+    settings.set('provider.custom.config', { baseURL: 'http://x/v1', defaultModel: 'm' });
+    service.migrateLegacyCustom();
+    service.migrateLegacyCustom();
+
+    expect(service.listCustom()).toHaveLength(1);
   });
 });

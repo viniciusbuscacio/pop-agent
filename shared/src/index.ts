@@ -398,8 +398,10 @@ export interface ProviderStatusDTO {
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
   allowCustomModel: boolean;
-  /** The custom provider's endpoint; never a secret (popy.spec §15). */
+  /** A custom instance's endpoint; never a secret (popy.spec §15). */
   baseURL?: string;
+  /** True for a user-created custom instance: editable, deletable. */
+  custom?: boolean;
 }
 
 export interface ProvidersResponse {
@@ -418,6 +420,28 @@ export interface ProviderCreditsResponse {
 /** `PUT /v1/providers/:id/key` — write-only: no route ever returns the key. */
 export interface SetProviderKeyRequest {
   apiKey: string;
+}
+
+/**
+ * Unlimited custom OpenAI-compatible providers (popy.spec §15). An instance
+ * is created empty first -- its id anchors the key and the card -- then
+ * edited in place. The key travels only through the ordinary key route.
+ */
+export interface CreateCustomProviderRequest {
+  name?: string;
+}
+
+export interface CreateCustomProviderResponse {
+  /** `custom-` + 10 hex characters. */
+  id: string;
+  providers: ProviderStatusDTO[];
+}
+
+/** `PATCH /v1/providers/custom/:id` — any subset of the instance's data. */
+export interface UpdateCustomProviderRequest {
+  name?: string;
+  baseURL?: string;
+  defaultModel?: string;
 }
 
 /**

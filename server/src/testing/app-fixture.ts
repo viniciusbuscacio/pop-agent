@@ -205,6 +205,8 @@ export function createTestApp(
     secrets,
     settings: settingsRepo,
     gateways: { openrouter: gateway },
+    // Custom instances test against the same scripted gateway.
+    customGateway: () => gateway,
     clock,
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),

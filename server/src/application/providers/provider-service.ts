@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { ModelInfo } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
@@ -5,9 +6,12 @@ import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import {
   DEFAULT_PROVIDER_ID,
-  PROVIDER_DEFINITIONS,
+  allProviderDefinitions,
+  customProviderDefinition,
   keySecretName,
+  normalizeCustomBaseUrl,
   providerDefinition,
+  type CustomProviderInstance,
   type ProviderDefinition,
 } from './provider-definitions.js';
 import type { ProviderCooldown } from './provider-cooldown.js';
@@ -24,7 +28,14 @@ import type { ProviderCooldown } from './provider-cooldown.js';
  */
 
 const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
-const CUSTOM_CONFIG_KEY = 'provider.custom.config';
+
+/** The unlimited-customs registry (popy.spec §15): pure data, never a key. */
+const CUSTOM_REGISTRY_KEY = 'provider.custom.registry';
+/** The single-slot era's config and id; read only by the boot migration. */
+const LEGACY_CUSTOM_CONFIG_KEY = 'provider.custom.config';
+const LEGACY_CUSTOM_ID = 'custom';
+/** Where a chat override saying `custom` now points (set by the migration). */
+const CUSTOM_ALIAS_KEY = 'provider.custom.alias';
 
 /** What the key test sends. Short on purpose: it spends real money. */
 const TEST_PROMPT = 'Reply with exactly: ok';
@@ -39,8 +50,10 @@ export interface ProviderStatus {
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
   allowCustomModel: boolean;
-  /** The custom provider's endpoint; never a secret. Absent for builtins. */
+  /** A custom instance's endpoint; never a secret. Absent for builtins. */
   baseURL?: string;
+  /** True for a user-created custom instance: editable, deletable. */
+  custom?: boolean;
 }
 
 /** Where a catalog answer came from, freshest first. */
@@ -57,8 +70,8 @@ export interface ModelRef {
   modelId: string;
 }
 
-/** The custom provider's user-supplied endpoint and model. */
-export interface CustomProviderConfig {
+/** The single-slot era's settings shape; read only by the boot migration. */
+interface LegacyCustomConfig {
   baseURL: string;
   defaultModel: string;
 }
@@ -66,8 +79,18 @@ export interface CustomProviderConfig {
 export interface ProviderServiceDeps {
   secrets: SecretsRepo;
   settings: SettingsRepo;
-  /** The plain-HTTP face of each provider, by id. */
+  /** The plain-HTTP face of each BUILTIN provider, by id. */
   gateways: Record<string, ProviderGateway>;
+  /**
+   * Builds the gateway for a custom instance's endpoint (popy.spec §15).
+   * Called per use with the instance's normalized base URL.
+   */
+  customGateway?: (baseURL: string) => ProviderGateway;
+  /**
+   * Ten hex characters for a new custom id. Overridable so the collision
+   * retry can be tested; production uses crypto randomness.
+   */
+  customIdSource?: () => string;
   clock: Clock;
   /** The environment's OpenRouter seed key, read late. */
   envKey: () => string | undefined;
@@ -110,7 +133,7 @@ export class ProviderService {
   }
 
   status(providerId: string): ProviderStatus | undefined {
-    const definition = providerDefinition(providerId);
+    const definition = this.definition(providerId);
     if (definition === undefined) return undefined;
     if (definition.authType === 'oauth') {
       // No key anywhere: configured means the engine holds a subscription
@@ -126,25 +149,28 @@ export class ProviderService {
         allowCustomModel: definition.allowCustomModel,
       };
     }
-    const key = this.deps.secrets.get(keySecretName(providerId));
+    const key = this.deps.secrets.get(keySecretName(definition.id));
     const stored = key !== undefined && key.length > 0;
-    const env = providerId === DEFAULT_PROVIDER_ID ? this.deps.envKey() : undefined;
+    const env = definition.id === DEFAULT_PROVIDER_ID ? this.deps.envKey() : undefined;
     const fromEnv = !stored && env !== undefined && env.length > 0;
-    const custom = definition.customBaseURL ? this.customConfig() : undefined;
     return {
       id: definition.id,
       name: definition.name,
       authType: 'api-key',
       configured: stored || fromEnv,
       source: stored ? 'settings' : fromEnv ? 'env' : null,
-      defaultModel: custom?.defaultModel ?? this.storedDefaultModel(definition.id) ?? definition.defaultModel,
+      // A custom instance's model lives in the registry (the definition);
+      // a builtin's user-chosen default lives in settings.
+      defaultModel: definition.customBaseURL
+        ? definition.defaultModel
+        : this.storedDefaultModel(definition.id) ?? definition.defaultModel,
       allowCustomModel: definition.allowCustomModel,
-      ...(custom === undefined ? {} : { baseURL: custom.baseURL }),
+      ...(definition.customBaseURL ? { baseURL: definition.baseURL, custom: true } : {}),
     };
   }
 
   statuses(): ProviderStatus[] {
-    return PROVIDER_DEFINITIONS.map((definition) => {
+    return this.definitions().map((definition) => {
       const status = this.status(definition.id);
       if (status === undefined) throw new Error(`missing definition: ${definition.id}`);
       return status;
@@ -172,24 +198,110 @@ export class ProviderService {
     return this.status(this.resolve().providerId)?.configured ?? false;
   }
 
-  /** The custom provider's endpoint, if the user filled one in. */
-  customConfig(): CustomProviderConfig | undefined {
-    const config = this.deps.settings.get<CustomProviderConfig>(CUSTOM_CONFIG_KEY);
-    if (config === undefined || config.baseURL.length === 0) return undefined;
-    return config;
+  /** The user-created custom instances, in registry (= chain) order. */
+  listCustom(): CustomProviderInstance[] {
+    return this.deps.settings.get<CustomProviderInstance[]>(CUSTOM_REGISTRY_KEY) ?? [];
   }
 
-  setCustomConfig(config: CustomProviderConfig): void {
-    this.deps.settings.set(CUSTOM_CONFIG_KEY, config);
+  /**
+   * Creates a custom instance (popy.spec §15): an id nothing else carries --
+   * `custom-` + 5 random hex bytes, re-rolled on the unlikely collision --
+   * and pure data beside it. The key arrives later through the ordinary
+   * per-provider key route, sealed under this id.
+   */
+  createCustom(input: { name?: string; baseURL?: string; defaultModel?: string }): CustomProviderInstance {
+    const registry = this.listCustom();
+    let id: string;
+    do {
+      id = `custom-${(this.deps.customIdSource ?? defaultCustomIdSource)()}`;
+    } while (registry.some((instance) => instance.id === id));
+
+    const instance: CustomProviderInstance = {
+      id,
+      name: input.name !== undefined && input.name.length > 0 ? input.name : 'Custom provider',
+      baseURL: normalizeCustomBaseUrl(input.baseURL ?? ''),
+      defaultModel: input.defaultModel ?? '',
+    };
+    this.deps.settings.set(CUSTOM_REGISTRY_KEY, [...registry, instance]);
+    return instance;
+  }
+
+  /** Edits a custom instance's data. Undefined when the id is not ours. */
+  updateCustom(
+    id: string,
+    patch: { name?: string; baseURL?: string; defaultModel?: string },
+  ): CustomProviderInstance | undefined {
+    const registry = this.listCustom();
+    const current = registry.find((instance) => instance.id === id);
+    if (current === undefined) return undefined;
+
+    const updated: CustomProviderInstance = {
+      ...current,
+      ...(patch.name === undefined ? {} : { name: patch.name }),
+      ...(patch.baseURL === undefined ? {} : { baseURL: normalizeCustomBaseUrl(patch.baseURL) }),
+      ...(patch.defaultModel === undefined ? {} : { defaultModel: patch.defaultModel }),
+    };
+    this.deps.settings.set(
+      CUSTOM_REGISTRY_KEY,
+      registry.map((instance) => (instance.id === id ? updated : instance)),
+    );
+    return updated;
+  }
+
+  /**
+   * Removes a custom instance and everything that was its: the registry row,
+   * its sealed key, its chosen default and its catalog cache. A chat override
+   * still naming the id silently degrades to the global default, like any
+   * other broken override.
+   */
+  deleteCustom(id: string): boolean {
+    const registry = this.listCustom();
+    if (!registry.some((instance) => instance.id === id)) return false;
+    this.deps.settings.set(
+      CUSTOM_REGISTRY_KEY,
+      registry.filter((instance) => instance.id !== id),
+    );
+    this.deps.secrets.delete(keySecretName(id));
+    // The settings repo has no delete; emptied values mean the same thing.
+    this.deps.settings.set(`provider.${id}.defaultModel`, '');
+    this.deps.settings.set(`models.${id}`, { fetchedAt: 0, models: [] });
+    this.deps.cooldown?.clear(id);
+    return true;
+  }
+
+  /**
+   * One-time boot migration from the single-slot era (popy.spec §15): a
+   * legacy `provider.custom.config` and/or `provider.custom.apiKey` becomes
+   * one registry instance, key and all, and the legacy entries are removed.
+   * The instance's id is remembered as an alias, so a chat override still
+   * saying `custom` resolves to it. Idempotent: with nothing legacy left,
+   * this is a no-op.
+   */
+  migrateLegacyCustom(): void {
+    const legacy = this.deps.settings.get<LegacyCustomConfig>(LEGACY_CUSTOM_CONFIG_KEY);
+    const legacyKey = this.deps.secrets.get(keySecretName(LEGACY_CUSTOM_ID));
+    const hasConfig = legacy !== undefined && legacy.baseURL.length > 0;
+    const hasKey = legacyKey !== undefined && legacyKey.length > 0;
+    if (!hasConfig && !hasKey) return;
+
+    const instance = this.createCustom({
+      name: 'Custom (OpenAI-compatible)',
+      baseURL: legacy?.baseURL ?? '',
+      defaultModel: legacy?.defaultModel ?? '',
+    });
+    if (hasKey) this.deps.secrets.set(keySecretName(instance.id), legacyKey);
+    this.deps.secrets.delete(keySecretName(LEGACY_CUSTOM_ID));
+    this.deps.settings.set(LEGACY_CUSTOM_CONFIG_KEY, { baseURL: '', defaultModel: '' });
+    this.deps.settings.set(CUSTOM_ALIAS_KEY, instance.id);
   }
 
   /** The provider's default model, user-chosen or the definition's. */
   setDefaultModel(providerId: string, model: string): void {
-    const definition = providerDefinition(providerId);
+    const definition = this.definition(providerId);
     if (definition === undefined) return;
     if (definition.customBaseURL) {
-      const config = this.customConfig();
-      this.setCustomConfig({ baseURL: config?.baseURL ?? '', defaultModel: model });
+      // A custom instance's model is registry data, like the rest of it.
+      this.updateCustom(definition.id, { defaultModel: model });
       return;
     }
     // Empty means "back to the definition's default" (no delete on the repo).
@@ -236,15 +348,19 @@ export class ProviderService {
     return this.deps.cooldown?.admissible(chain) ?? chain;
   }
 
-  /** Resolution order: chat override, the global default, then every definition. */
+  /**
+   * Resolution order: chat override, the global default, then every
+   * definition -- builtins first, custom instances after them in registry
+   * order (they join the failover chain there too).
+   */
   private candidates(override?: { provider?: string; model?: string }): ModelRef[] {
     const candidates: ModelRef[] = [];
     if (override !== undefined && override.provider !== undefined && override.provider.length > 0) {
-      candidates.push(this.ref(override.provider, override.model));
+      candidates.push(this.ref(this.canonicalId(override.provider), override.model));
     }
     const defaults = this.deps.defaults();
-    candidates.push(this.ref(defaults.provider, defaults.model));
-    for (const definition of PROVIDER_DEFINITIONS) {
+    candidates.push(this.ref(this.canonicalId(defaults.provider), defaults.model));
+    for (const definition of this.definitions()) {
       candidates.push(this.ref(definition.id, ''));
     }
     return candidates;
@@ -252,14 +368,14 @@ export class ProviderService {
 
   /** Whether a provider could serve a run right now: key or subscription. */
   private usable(providerId: string): boolean {
-    if (providerDefinition(providerId)?.authType === 'oauth') {
+    if (this.definition(providerId)?.authType === 'oauth') {
       return this.deps.engineHasAuth(providerId);
     }
     return this.apiKey(providerId) !== undefined;
   }
 
   private ref(providerId: string, modelId: string | undefined): ModelRef {
-    const definition = providerDefinition(providerId);
+    const definition = this.definition(providerId);
     const configured = this.status(providerId)?.defaultModel ?? '';
     const fallback = definition?.defaultModel ?? '';
     return {
@@ -267,6 +383,39 @@ export class ProviderService {
       modelId:
         modelId !== undefined && modelId.length > 0 ? modelId : configured || fallback,
     };
+  }
+
+  /** Builtins plus the custom instances, the whole list everything iterates. */
+  private definitions(): ProviderDefinition[] {
+    return allProviderDefinitions(this.listCustom());
+  }
+
+  /** Any provider by id: a builtin, or a registry instance dressed as one. */
+  private definition(providerId: string): ProviderDefinition | undefined {
+    const id = this.canonicalId(providerId);
+    const builtin = providerDefinition(id);
+    if (builtin !== undefined) return builtin;
+    const instance = this.listCustom().find((entry) => entry.id === id);
+    return instance === undefined ? undefined : customProviderDefinition(instance);
+  }
+
+  /**
+   * The single-slot era stored `custom` on chats; the migration remembers
+   * which instance that became, and this maps the old name to it.
+   */
+  private canonicalId(providerId: string): string {
+    if (providerId !== LEGACY_CUSTOM_ID) return providerId;
+    return this.deps.settings.get<string>(CUSTOM_ALIAS_KEY) ?? providerId;
+  }
+
+  /** The gateway for a provider: a builtin's own, or one for a custom URL. */
+  private gatewayFor(definition: ProviderDefinition): ProviderGateway | undefined {
+    const builtin = this.deps.gateways[definition.id];
+    if (builtin !== undefined) return builtin;
+    if (definition.customBaseURL && definition.baseURL.length > 0) {
+      return this.deps.customGateway?.(definition.baseURL);
+    }
+    return undefined;
   }
 
   /**
@@ -279,7 +428,7 @@ export class ProviderService {
     providerId: string,
     apiKey?: string,
   ): Promise<{ ok: boolean; message?: string; latencyMs?: number }> {
-    const definition = providerDefinition(providerId);
+    const definition = this.definition(providerId);
     if (definition !== undefined && definition.authType === 'oauth') {
       // No key and no HTTP gateway: the engine owns the credential, so the
       // engine answers whether it still works.
@@ -295,15 +444,20 @@ export class ProviderService {
         };
       }
     }
-    const gateway = this.deps.gateways[providerId];
-    if (gateway === undefined || definition === undefined) {
+    if (definition === undefined) {
       return { ok: false, message: `Unknown provider "${providerId}".` };
     }
-    const key = apiKey ?? this.apiKey(providerId);
+    const gateway = this.gatewayFor(definition);
+    if (gateway === undefined) {
+      return definition.customBaseURL
+        ? { ok: false, message: 'Set the endpoint URL before testing.' }
+        : { ok: false, message: `Unknown provider "${providerId}".` };
+    }
+    const key = apiKey ?? this.apiKey(definition.id);
     if (key === undefined || key.length === 0) {
       return { ok: false, message: 'No API key to test.' };
     }
-    const model = this.ref(providerId, '').modelId;
+    const model = this.ref(definition.id, '').modelId;
     if (model.length === 0) {
       return { ok: false, message: 'Choose a default model before testing.' };
     }
@@ -335,12 +489,12 @@ export class ProviderService {
    * smoke run keyless, so they never touch the network here.
    */
   async models(providerId: string): Promise<{ models: ModelInfo[]; source: ModelCatalogSource }> {
-    const definition = providerDefinition(providerId);
+    const definition = this.definition(providerId);
     if (definition === undefined) return { models: [], source: 'static' };
-    const cacheKey = `models.${providerId}`;
-    const gateway = this.deps.gateways[providerId];
+    const cacheKey = `models.${definition.id}`;
+    const gateway = this.gatewayFor(definition);
 
-    const key = this.apiKey(providerId);
+    const key = this.apiKey(definition.id);
     if (key !== undefined && gateway !== undefined) {
       const cached = this.deps.settings.get<CatalogCache>(cacheKey);
       if (cached !== undefined && this.deps.clock.now() - cached.fetchedAt < CATALOG_TTL_MS) {
@@ -362,20 +516,18 @@ export class ProviderService {
     }
 
     try {
-      const models = await this.deps.engineModels(providerId);
+      const models = await this.deps.engineModels(definition.id);
       if (models.length > 0) return { models, source: 'engine' };
     } catch {
       // The engine failing to list models must not take the catalog down.
     }
-    const staticModels = this.staticFor(definition);
-    return { models: staticModels, source: 'static' };
+    // A custom instance's static catalog is its configured model, already
+    // synthesized into the definition.
+    return { models: [...definition.staticModels], source: 'static' };
   }
+}
 
-  /** The custom provider's static catalog is its configured model. */
-  private staticFor(definition: ProviderDefinition): ModelInfo[] {
-    if (!definition.customBaseURL) return [...definition.staticModels];
-    const config = this.customConfig();
-    if (config === undefined || config.defaultModel.length === 0) return [];
-    return [{ id: config.defaultModel, name: config.defaultModel }];
-  }
+/** Production id randomness: 5 bytes, 10 hex characters. */
+function defaultCustomIdSource(): string {
+  return randomBytes(5).toString('hex');
 }

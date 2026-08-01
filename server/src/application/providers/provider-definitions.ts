@@ -117,21 +117,11 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
       },
     ],
   },
-  {
-    id: 'custom',
-    name: 'Custom (OpenAI-compatible)',
-    baseURL: '',
-    authType: 'api-key',
-    defaultModel: '',
-    allowCustomModel: true,
-    customBaseURL: true,
-    // A custom endpoint's catalog cannot be guessed; the configured model is it.
-    staticModels: [],
-  },
 ];
 
 export const DEFAULT_PROVIDER_ID = 'openrouter';
 
+/** Looks up a BUILTIN definition; custom instances live in the registry. */
 export function providerDefinition(id: string): ProviderDefinition | undefined {
   return PROVIDER_DEFINITIONS.find((definition) => definition.id === id);
 }
@@ -139,4 +129,55 @@ export function providerDefinition(id: string): ProviderDefinition | undefined {
 /** Where a provider's key lives in the sealed secrets store. */
 export function keySecretName(providerId: string): string {
   return `provider.${providerId}.apiKey`;
+}
+
+/**
+ * One user-created OpenAI-compatible provider (popy.spec §15): pure data in
+ * the settings registry, unlimited instances. The key is NOT here -- it sits
+ * in the secrets store under {@link keySecretName} like everyone else's.
+ */
+export interface CustomProviderInstance {
+  /** `custom-` + 5 random hex bytes, unique within the registry. */
+  id: string;
+  name: string;
+  baseURL: string;
+  defaultModel: string;
+}
+
+/** A registry instance dressed as a definition, so nothing downstream cares. */
+export function customProviderDefinition(instance: CustomProviderInstance): ProviderDefinition {
+  return {
+    id: instance.id,
+    name: instance.name,
+    baseURL: instance.baseURL,
+    authType: 'api-key',
+    defaultModel: instance.defaultModel,
+    allowCustomModel: true,
+    customBaseURL: true,
+    // A custom endpoint's catalog cannot be guessed; the configured model is it.
+    staticModels:
+      instance.defaultModel.length > 0
+        ? [{ id: instance.defaultModel, name: instance.defaultModel }]
+        : [],
+  };
+}
+
+/** The whole provider list: the builtins, then the customs in registry order. */
+export function allProviderDefinitions(
+  customs: readonly CustomProviderInstance[],
+): ProviderDefinition[] {
+  return [...PROVIDER_DEFINITIONS, ...customs.map(customProviderDefinition)];
+}
+
+/**
+ * What the user pastes is often the full endpoint; what pi needs is the base.
+ * Trailing slashes and a trailing `/chat/completions` are stripped, nothing
+ * else -- the UI shows the result live, so a surprise is impossible.
+ */
+export function normalizeCustomBaseUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/+$/, '');
 }

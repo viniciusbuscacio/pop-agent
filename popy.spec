@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.35 — 2026-08-01.
+Version 1.36 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -662,9 +662,28 @@ reimplemented.
   quirks get a point `if`, not a subclass. Adding a provider = adding
   a literal.
   Phase 1 ships: OpenRouter (default, **default model: Kimi K3**),
-  OpenAI, Anthropic, and "custom OpenAI-compatible" (free baseURL).
-  Fase 1.5 adds the OAuth pair pi supports natively: `openai-codex`
-  (ChatGPT subscription) and `github-copilot` (Copilot subscription).
+  OpenAI and Anthropic. Fase 1.5 adds the OAuth pair pi supports
+  natively: `openai-codex` (ChatGPT subscription) and `github-copilot`
+  (Copilot subscription). Custom OpenAI-compatible endpoints are
+  user-created instances, unlimited (below).
+- **Unlimited custom providers**: the registry (settings key
+  `provider.custom.registry`) holds `{id, name, baseURL, defaultModel}`
+  per instance; ids are `custom-` + 5 random hex bytes, re-rolled on
+  collision. Each instance's key is sealed under its own id
+  (`provider.<id>.apiKey`) and deleted with it. The definition list
+  everything consumes = builtins + one synthesized definition per
+  instance (customs join resolve/chain after the builtins, in registry
+  order); the engine registers each instance with pi lazily on use, so
+  adding or editing one needs no restart. Base URLs are normalized on
+  save (trailing slashes and a trailing `/chat/completions` stripped;
+  the card shows "requests go to" live). Routes:
+  `POST /v1/providers/custom` (create → id),
+  `PATCH|DELETE /v1/providers/custom/:id`; the single-slot era's
+  `PUT /v1/providers/custom/config` is REMOVED. Migration: on boot, a
+  legacy `provider.custom.config` and/or `provider.custom.apiKey`
+  becomes one registry instance (key and all), the legacy entries are
+  cleared, and `provider.custom.alias` remembers the new id so a chat
+  override still saying `custom` resolves to it.
 - **Model identity = the pair `(providerId, modelId)`**, always. No
   synthetic string of our own; each provider names the model its way.
   Everywhere that stores `model` today (settings, chats, llm_runs) now
@@ -917,6 +936,22 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.36 (2026-08-01): **Unlimited custom providers (§15).** The single
+  fixed `custom` slot becomes a registry of user-created
+  OpenAI-compatible instances (`provider.custom.registry`), ids
+  `custom-` + 5 hex bytes with collision re-roll, one sealed key per
+  instance under `provider.<id>.apiKey`, deleted with it. Definitions,
+  statuses, resolve, the failover chain and the catalog all consume
+  builtins + synthesized instance definitions (customs after builtins,
+  registry order); pi registration is lazy per instance, no restart to
+  add or edit. New routes `POST /v1/providers/custom`,
+  `PATCH|DELETE /v1/providers/custom/:id`; the legacy
+  `PUT /v1/providers/custom/config` is removed with its UI. Settings
+  gains "Add custom provider" cards (name, endpoint with live
+  "requests go to" normalization, model, write-only key, Test,
+  Delete; add-then-cancel discards). Boot migration turns the legacy
+  slot into one instance, moves the key, clears the legacy entries and
+  aliases `custom` → the new id for old chat overrides.
 - 1.35 (2026-08-01): **Automatic provider fallback (§15, fase 2).**
   The run loop iterates a failover chain (override → default → every
   usable provider, deduped, each with its default model) instead of

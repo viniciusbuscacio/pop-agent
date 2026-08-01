@@ -18,7 +18,7 @@ import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
-import { providersService } from '../services/providers';
+import { normalizeBaseUrl, providersService } from '../services/providers';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
 import { voiceService, type VoiceModelStatus } from '../services/voice';
@@ -747,6 +747,10 @@ function ModelSection() {
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
   const [defaultCatalog, setDefaultCatalog] = useState<ModelDTO[]>([]);
+  // A just-created custom instance that was never saved: its Cancel deletes
+  // it again, so add-then-cancel leaves nothing behind.
+  const [pendingNewId, setPendingNewId] = useState<string | undefined>(undefined);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     void reload();
@@ -828,8 +832,32 @@ function ModelSection() {
           key={entry.id}
           provider={entry}
           onChanged={(next) => setProviders(next.providers)}
+          pendingNew={entry.id === pendingNewId}
+          onSettled={() => setPendingNewId(undefined)}
         />
       ))}
+
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="provider-custom-add"
+          disabled={adding}
+          onClick={() => {
+            setAdding(true);
+            providersService
+              .createCustom()
+              .then((created) => {
+                setProviders(created.providers);
+                setPendingNewId(created.id);
+              })
+              .catch(() => undefined)
+              .finally(() => setAdding(false));
+          }}
+        >
+          {t('provider.custom.add')}
+        </Button>
+      </div>
 
       <ServiceModelCard settings={settings} onSave={saveSettings} />
 
@@ -890,9 +918,14 @@ function ServiceModelCard({
 function ProviderCard({
   provider,
   onChanged,
+  pendingNew = false,
+  onSettled,
 }: {
   provider: ProviderStatusDTO;
   onChanged: (response: ProvidersResponse) => void;
+  /** A just-created custom instance nobody saved yet: Cancel discards it. */
+  pendingNew?: boolean;
+  onSettled?: () => void;
 }) {
   const [keyDraft, setKeyDraft] = useState('');
   const [testResult, setTestResult] = useState<string | undefined>(undefined);
@@ -902,12 +935,13 @@ function ProviderCard({
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelDTO[]>([]);
   const [catalogSource, setCatalogSource] = useState<ModelCatalogSource | undefined>(undefined);
+  const [nameDraft, setNameDraft] = useState(provider.name);
   const [urlDraft, setUrlDraft] = useState(provider.baseURL ?? '');
   const [customModelDraft, setCustomModelDraft] = useState(
-    provider.id === 'custom' ? provider.defaultModel : '',
+    provider.custom === true ? provider.defaultModel : '',
   );
 
-  const isCustom = provider.id === 'custom';
+  const isCustom = provider.custom === true;
   // Subscription providers have no key at all: the card swaps the key input
   // for the sign-in flow (popy.spec §15, fase 1.5).
   const isOAuth = provider.authType === 'oauth';
@@ -987,15 +1021,36 @@ function ProviderCard({
     }
   }
 
-  async function saveCustomConfig(): Promise<void> {
+  async function saveCustomInstance(): Promise<void> {
     setBusy(true);
     try {
-      onChanged(await providersService.setCustomConfig(urlDraft, customModelDraft));
+      onChanged(
+        await providersService.updateCustom(provider.id, {
+          name: nameDraft,
+          // Sent already normalized, so what the hint said is what is stored.
+          baseURL: normalizeBaseUrl(urlDraft),
+          defaultModel: customModelDraft,
+        }),
+      );
       setSaved(true);
+      onSettled?.();
+      await loadCatalog();
     } catch {
       setSaved(false);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteCustomInstance(confirmFirst: boolean): Promise<void> {
+    if (confirmFirst && !window.confirm(t('provider.custom.deleteConfirm', { name: provider.name }))) {
+      return;
+    }
+    try {
+      onChanged(await providersService.deleteCustom(provider.id));
+      onSettled?.();
+    } catch {
+      // Leave the card as it is; the next reload tells the truth.
     }
   }
 
@@ -1043,8 +1098,17 @@ function ProviderCard({
       {isCustom ? (
         <div className="flex flex-col gap-3">
           <TextField
-            id="provider-custom-url"
-            data-testid="provider-custom-url"
+            id={`provider-custom-name-${provider.id}`}
+            data-testid={`provider-custom-name-${provider.id}`}
+            type="text"
+            autoComplete="off"
+            label={t('provider.custom.name')}
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.target.value)}
+          />
+          <TextField
+            id={`provider-custom-url-${provider.id}`}
+            data-testid={`provider-custom-url-${provider.id}`}
             type="text"
             autoComplete="off"
             label={t('provider.customBaseURL')}
@@ -1052,24 +1116,53 @@ function ProviderCard({
             value={urlDraft}
             onChange={(event) => setUrlDraft(event.target.value)}
           />
+          {urlDraft.trim().length > 0 ? (
+            <p
+              data-testid={`provider-custom-target-${provider.id}`}
+              className="text-xs text-[var(--muted)]"
+            >
+              {t('provider.custom.requestsGoTo', {
+                url: `${normalizeBaseUrl(urlDraft)}/chat/completions`,
+              })}
+            </p>
+          ) : null}
           <TextField
-            id="provider-custom-model"
-            data-testid="provider-custom-model"
+            id={`provider-custom-model-${provider.id}`}
+            data-testid={`provider-custom-model-${provider.id}`}
             type="text"
             autoComplete="off"
             label={t('provider.customModel')}
             value={customModelDraft}
             onChange={(event) => setCustomModelDraft(event.target.value)}
           />
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              data-testid="provider-custom-save"
-              disabled={busy || urlDraft.length === 0 || customModelDraft.length === 0}
-              onClick={() => void saveCustomConfig()}
+              data-testid={`provider-custom-save-${provider.id}`}
+              disabled={busy || nameDraft.length === 0 || urlDraft.length === 0 || customModelDraft.length === 0}
+              onClick={() => void saveCustomInstance()}
             >
               {t('common.save')}
             </Button>
+            {pendingNew ? (
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid={`provider-custom-cancel-${provider.id}`}
+                onClick={() => void deleteCustomInstance(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="danger"
+                data-testid={`provider-custom-delete-${provider.id}`}
+                onClick={() => void deleteCustomInstance(true)}
+              >
+                {t('provider.custom.delete')}
+              </Button>
+            )}
           </div>
         </div>
       ) : null}

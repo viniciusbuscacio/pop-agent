@@ -1,12 +1,28 @@
 import type {
+  CreateCustomProviderResponse,
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
   ProvidersResponse,
   TestProviderResponse,
   TranscribeResponse,
+  UpdateCustomProviderRequest,
 } from '@popy/shared';
 import { apiRequest } from './api';
+
+/**
+ * What the user pastes is often the full endpoint; what the server stores is
+ * the base. Same rule as the backend (trailing slashes and a trailing
+ * `/chat/completions` stripped), duplicated here so the card can show
+ * "requests go to" live while typing.
+ */
+export function normalizeBaseUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/+$/, '');
+}
 
 /**
  * The providers API (popy.spec §15). Everything is per-provider-id; the key
@@ -54,12 +70,26 @@ export const providersService = {
     });
   },
 
-  /** The custom provider is pure data: an endpoint and a model. */
-  setCustomConfig(baseURL: string, defaultModel: string): Promise<ProvidersResponse> {
-    return apiRequest<ProvidersResponse>('/providers/custom/config', {
-      method: 'PUT',
-      body: { baseURL, defaultModel },
+  /**
+   * Unlimited custom providers (popy.spec §15): create empty (the id anchors
+   * the card and the key), edit in place, delete with everything that was its.
+   */
+  createCustom(name?: string): Promise<CreateCustomProviderResponse> {
+    return apiRequest<CreateCustomProviderResponse>('/providers/custom', {
+      method: 'POST',
+      body: name === undefined ? {} : { name },
     });
+  },
+
+  updateCustom(id: string, patch: UpdateCustomProviderRequest): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/custom/${id}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+  },
+
+  deleteCustom(id: string): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/custom/${id}`, { method: 'DELETE' });
   },
 
   /**
