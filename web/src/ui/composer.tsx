@@ -26,12 +26,14 @@ export function Composer({
   queuedText,
   onSend,
   onStop,
+  onNewChat,
 }: {
   chatId: string;
   busy: boolean;
   queuedText?: string;
   onSend: (text: string, attachments: AttachmentDTO[], artifactIds?: string[]) => void;
   onStop: () => void;
+  onNewChat: () => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
@@ -121,11 +123,16 @@ export function Composer({
   }
 
   function pickSlash(command: SlashCommand): void {
-    persist('');
     setSlashQuery(undefined);
+    if (command.name === 'help') {
+      // The menu with every description IS the help: reopen it unfiltered.
+      persist('/');
+      setSlashQuery('');
+    } else {
+      persist('');
+    }
     area.current?.focus();
-    // Stage 2 wires the actions; the menu already filters and picks.
-    void command;
+    if (command.name === 'new') onNewChat();
   }
 
   const slashMatches =

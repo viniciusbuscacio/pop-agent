@@ -25,6 +25,7 @@ export function ChatPage() {
   const stop = useChatStore((state) => state.stop);
   const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
+  const createChat = useChatStore((state) => state.createChat);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
 
@@ -260,6 +261,9 @@ export function ChatPage() {
         {...(queued === undefined ? {} : { queuedText: queued.text })}
         onSend={(text, attachments, artifactIds) => void send(chatId, text, attachments, artifactIds)}
         onStop={() => void stop(chatId)}
+        onNewChat={() => {
+          void createChat().then((created) => navigate(`/chat/${created.id}`));
+        }}
       />
 
     </>
