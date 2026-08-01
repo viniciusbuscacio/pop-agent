@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -123,6 +123,62 @@ describe('SkillsVault', () => {
     expect(reopened.get('summarize')?.name).toBe('My summarize');
   });
 });
+
+
+  describe('Agent Skills folders (popy.spec §8)', () => {
+    it('discovers a directory holding SKILL.md, recursively', () => {
+      mkdirSync(join(root, 'pack', 'deep-skill'), { recursive: true });
+      writeFileSync(
+        join(root, 'pack', 'deep-skill', 'SKILL.md'),
+        '---\nname: deep-skill\ndescription: Found two levels down. Use when nesting.\n---\n\n# Deep\nBody here.\n',
+      );
+
+      const skill = vault.get('deep-skill');
+      expect(skill?.slug).toBe('deep-skill');
+      expect(skill?.whenToUse).toContain('Found two levels down'); // description is the routing fallback
+      expect(skill?.body).toBe('# Deep\nBody here.');
+      expect(skill?.builtin).toBe(false);
+      expect(vault.all().map((entry) => entry.slug)).toContain('deep-skill');
+    });
+
+    it('does not descend into a skill directory (its folders are assets)', () => {
+      mkdirSync(join(root, 'outer', 'assets'), { recursive: true });
+      writeFileSync(join(root, 'outer', 'SKILL.md'), '---\ndescription: Outer.\n---\nOuter body.');
+      writeFileSync(join(root, 'outer', 'assets', 'SKILL.md'), '---\ndescription: Inner.\n---\nInner body.');
+
+      const slugs = vault.all().map((entry) => entry.slug);
+      expect(slugs).toContain('outer');
+      expect(slugs).not.toContain('assets');
+    });
+
+    it('skips a folder skill without a description (the standard refuses it)', () => {
+      mkdirSync(join(root, 'nodesc'));
+      writeFileSync(join(root, 'nodesc', 'SKILL.md'), '---\nname: nodesc\n---\nBody.');
+      expect(vault.get('nodesc')).toBeUndefined();
+    });
+
+    it('lets a flat .md win on a slug collision', () => {
+      vault.write({
+        slug: 'clash',
+        name: 'Flat',
+        description: 'flat wins',
+        whenToUse: 'flat',
+        body: 'flat body',
+      });
+      mkdirSync(join(root, 'clash'));
+      writeFileSync(join(root, 'clash', 'SKILL.md'), '---\ndescription: folder loses.\n---\nFolder body.');
+      expect(vault.get('clash')?.body).toBe('flat body');
+    });
+
+    it('deletes a folder skill by removing its directory', () => {
+      mkdirSync(join(root, 'doomed', 'scripts'), { recursive: true });
+      writeFileSync(join(root, 'doomed', 'SKILL.md'), '---\ndescription: Bye.\n---\nBody.');
+      writeFileSync(join(root, 'doomed', 'scripts', 'x.sh'), 'echo x');
+      expect(vault.delete('doomed')).toBe(true);
+      expect(vault.get('doomed')).toBeUndefined();
+      expect(existsSync(join(root, 'doomed'))).toBe(false);
+    });
+  });
 
 describe('parse', () => {
   it('reads front matter and body', () => {

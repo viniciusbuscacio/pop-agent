@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import {
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Skill } from '../../domain/skills/skill.js';
 import { SkillsError, type SkillInput, type SkillsRepo } from '../../application/ports/skills-repo.js';
 import { DEFAULT_SKILLS } from './default-skills.js';
@@ -17,6 +18,13 @@ import { DEFAULT_SKILLS } from './default-skills.js';
  * description, whenToUse) and the body below. Popy's own skills are seeded on
  * first boot and marked built-in; the user's are just more files. The Skill
  * Router reads `all()` and picks the relevant few per turn.
+ *
+ * Since §8 (01/08) the vault ALSO discovers the Agent Skills standard
+ * (agentskills.io): any directory containing a `SKILL.md`, found recursively
+ * (a directory that IS a skill is not descended into -- its inner folders are
+ * assets). Slug = directory name; `whenToUse` falls back to the description,
+ * since the standard's front matter has only name/description. Flat .md
+ * skills keep working unchanged and win on a slug collision.
  */
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
@@ -34,16 +42,24 @@ export class SkillsVault implements SkillsRepo {
   }
 
   all(): Skill[] {
-    return readdirSync(this.root)
+    const flat = readdirSync(this.root)
       .filter((file) => file.endsWith('.md'))
       .map((file) => this.readFile(file.slice(0, -3)))
-      .filter((skill): skill is Skill => skill !== undefined)
-      .sort((left, right) => left.name.localeCompare(right.name));
+      .filter((skill): skill is Skill => skill !== undefined);
+    const taken = new Set(flat.map((skill) => skill.slug));
+    const foldered = this.discoverFolderSkills()
+      .filter(({ slug }) => !taken.has(slug))
+      .map(({ slug, path }) => this.readFolderSkill(slug, path))
+      .filter((skill): skill is Skill => skill !== undefined);
+    return [...flat, ...foldered].sort((left, right) => left.name.localeCompare(right.name));
   }
 
   get(slug: string): Skill | undefined {
     if (!SLUG.test(slug)) return undefined;
-    return this.readFile(slug);
+    const flat = this.readFile(slug);
+    if (flat !== undefined) return flat;
+    const found = this.discoverFolderSkills().find((entry) => entry.slug === slug);
+    return found === undefined ? undefined : this.readFolderSkill(found.slug, found.path);
   }
 
   /** Creates or overwrites a user skill. Built-in slugs cannot be shadowed by a bad name. */
@@ -62,8 +78,53 @@ export class SkillsVault implements SkillsRepo {
     const skill = this.get(slug);
     if (skill === undefined) return false;
     if (skill.builtin) throw new SkillsError('Built-in skills cannot be deleted.');
+    const found = this.discoverFolderSkills().find((entry) => entry.slug === slug);
+    if (found !== undefined) {
+      rmSync(dirname(found.path), { recursive: true, force: true });
+      return true;
+    }
     rmSync(join(this.root, `${slug}.md`), { force: true });
     return true;
+  }
+
+  /**
+   * Recursive Agent Skills discovery: every directory holding a SKILL.md is
+   * one skill; a found skill directory is not descended into. Hidden
+   * directories are skipped.
+   */
+  private discoverFolderSkills(dir: string = this.root): { slug: string; path: string }[] {
+    const found: { slug: string; path: string }[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const child = join(dir, entry.name);
+      const skillFile = join(child, 'SKILL.md');
+      if (existsSync(skillFile)) {
+        if (SLUG.test(entry.name)) found.push({ slug: entry.name, path: skillFile });
+        continue;
+      }
+      found.push(...this.discoverFolderSkills(child));
+    }
+    return found;
+  }
+
+  private readFolderSkill(slug: string, path: string): Skill | undefined {
+    let raw: string;
+    try {
+      raw = readFileSync(path, 'utf8');
+    } catch {
+      return undefined;
+    }
+    const parsed = parse(raw);
+    if (parsed.description.length === 0) return undefined; // the standard: no description, no skill
+    return {
+      slug,
+      name: parsed.name.length > 0 ? parsed.name : slug,
+      description: parsed.description,
+      whenToUse: parsed.whenToUse.length > 0 ? parsed.whenToUse : parsed.description,
+      body: parsed.body,
+      builtin: false,
+      ...(parsed.pinned ? { pinned: true } : {}),
+    };
   }
 
   private readFile(slug: string): Skill | undefined {

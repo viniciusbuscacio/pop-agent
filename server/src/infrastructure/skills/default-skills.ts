@@ -55,6 +55,8 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '',
       '## Where things live',
       '- Conversations and messages: SQLite (`popy.db`).',
+      '- Your database is a SQLite file at `POPY_DATA_DIR/popy.db` — tables and',
+      '  safe query recipes are in the skill `self-database`.',
       '- Your pi session per chat: a JSONL file under the data directory.',
       '- Notes: `POPY_DATA_DIR/notes/`. Skills: `POPY_DATA_DIR/skills/`.',
       '- Attachments and files you create: your workspace.',

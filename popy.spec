@@ -264,9 +264,17 @@ with RRF. Three layers, aw's design rewritten:
 Popy ships dozens of built-in skills but injects only the relevant ones per
 user message — selection is 100% local, no LLM call:
 
-- Skill format: markdown with `name` + `description` frontmatter,
-  compatible with pi's SKILL.md. Built-ins live in the repo; user skills in
-  `POPY_DATA_DIR/skills/`.
+- Skill format: two coexisting shapes in `POPY_DATA_DIR/skills/` —
+  (a) the original flat `<slug>.md` with `name` + `description` +
+  `whenToUse` frontmatter (built-ins seeded from the repo keep this), and
+  (b) the **Agent Skills standard** (agentskills.io): a directory holding
+  a `SKILL.md`, discovered recursively (a skill directory's inner folders
+  are assets, not skills). Slug = directory name; `whenToUse` falls back
+  to `description`. Flat wins on a slug collision. Decided 01/08: the
+  ecosystem converged on the standard and **pi implements it natively**,
+  so Popy adopts it in her own scanner rather than patching/translating
+  pi (a patch would break on every pi update). New self-authored skills
+  prefer the folder shape; both shapes route identically.
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end
   user uploads may be in any language; the router's semantic leg is
