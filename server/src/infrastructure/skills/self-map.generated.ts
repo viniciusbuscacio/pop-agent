@@ -8,7 +8,7 @@ export const SELF_MAP = [
   "Key dependencies: pi 0.83.0, hono ^4.6.0, better-sqlite3 ^13.0.2, react ^19.0.0.",
   "",
   "server/src, clean architecture -- dependencies point inward only:",
-  "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (43 modules)",
+  "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (44 modules)",
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (10 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (48 modules)",

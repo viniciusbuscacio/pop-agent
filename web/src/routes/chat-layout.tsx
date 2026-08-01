@@ -35,7 +35,7 @@ export function ChatLayout() {
   return (
     <div className="flex h-dvh overflow-hidden">
       <aside
-        className={`${contentOpen ? 'hidden md:flex' : 'flex'} w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
+        className={`${contentOpen ? 'hidden md:flex' : 'flex'} relative w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
       >
         <ChatList />
       </aside>

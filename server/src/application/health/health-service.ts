@@ -1,5 +1,15 @@
-import type { HealthResponse } from '@popy/shared';
 import type { ProviderService } from '../providers/provider-service.js';
+
+/**
+ * The probe's report, defined here because application code must not import
+ * the wire contract (architecture rule); `shared/HealthResponse` mirrors it
+ * and the HTTP layer marries the two.
+ */
+export interface HealthReport {
+  server: 'ok';
+  provider: 'ok' | 'error';
+  db: 'ok' | 'error';
+}
 
 export interface HealthServiceDeps {
   providers: ProviderService;
@@ -31,15 +41,15 @@ export class HealthService {
     this.lastRunFailed = failed;
   }
 
-  report(): HealthResponse {
-    let db: HealthResponse['db'] = 'ok';
+  report(): HealthReport {
+    let db: HealthReport['db'] = 'ok';
     try {
       this.deps.pingDb();
     } catch {
       db = 'error';
     }
 
-    let provider: HealthResponse['provider'] = 'ok';
+    let provider: HealthReport['provider'] = 'ok';
     if (!this.deps.providers.status().configured) {
       // No key anywhere: every run would fail, so the light is honestly red.
       provider = 'error';

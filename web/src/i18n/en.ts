@@ -75,6 +75,10 @@ export const en = {
   'shell.empty.title': 'Pick up where you left off',
   'shell.empty.body': 'Choose a conversation on the left, or start a new one.',
   'shell.settings': 'Settings',
+  'shell.health.serverOffline': 'Server offline',
+  'shell.health.provider': 'LLM provider disconnected',
+  'shell.health.db': 'Database disconnected',
+  'shell.health.button': 'Something is wrong — show the diagnosis',
 
 
   'chat.placeholder': 'Message Popy…',

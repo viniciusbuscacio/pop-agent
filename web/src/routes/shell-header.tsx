@@ -1,5 +1,8 @@
+import { useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
+import { healthMonitor, type HealthState } from '../services/health';
+import { useDismiss } from '../lib/dismiss';
 
 /**
  * The app header: the wordmark and the Settings gear. The sidebar always
@@ -29,6 +32,81 @@ export function ShellHeader({
         <GearIcon />
       </button>
     </header>
+  );
+}
+
+/**
+ * The floating strip at the BOTTOM of the sidebar (popy.spec §14): wordmark,
+ * health indicator and Settings, always visible while the list scrolls
+ * behind it (the list's own padding keeps the last row clear).
+ */
+export function ShellFooter() {
+  const navigate = useNavigate();
+  return (
+    <footer
+      data-testid="shell-footer"
+      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] p-3"
+    >
+      <span className="font-semibold">{t('app.name')}</span>
+      <span className="flex items-center gap-1">
+        <HealthDot />
+        <button
+          type="button"
+          data-testid="shell-settings"
+          aria-label={t('shell.settings')}
+          onClick={() => navigate('/settings')}
+          className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+        >
+          <GearIcon />
+        </button>
+      </span>
+    </footer>
+  );
+}
+
+/** The diagnosis words for the tooltip and the popover. */
+function diagnosis(state: HealthState): string {
+  if (state.kind === 'offline') return t('shell.health.serverOffline');
+  if (state.kind === 'degraded') {
+    return state.problems
+      .map((problem) => (problem === 'provider' ? t('shell.health.provider') : t('shell.health.db')))
+      .join(' · ');
+  }
+  return '';
+}
+
+/**
+ * Silence means healthy: nothing renders while every check is ok. A problem
+ * shows a small gently pulsing red button (opacity, never stroboscopic);
+ * hover gives the tooltip, click pins the diagnosis open.
+ */
+function HealthDot() {
+  const state = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getState);
+  const [open, setOpen] = useState(false);
+  useDismiss(open, () => setOpen(false));
+
+  if (state.kind === 'ok') return null;
+  const message = diagnosis(state);
+
+  return (
+    <span className="relative">
+      <button
+        type="button"
+        data-testid="health-dot"
+        aria-label={t('shell.health.button')}
+        title={message}
+        onClick={() => setOpen((value) => !value)}
+        className="block h-3 w-3 rounded-full bg-[var(--danger)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
+      />
+      {open ? (
+        <span
+          role="status"
+          className="absolute right-0 bottom-full mb-2 w-max max-w-56 rounded-md border border-[var(--border)] bg-[var(--panel-bg)] px-3 py-1.5 text-xs shadow-lg"
+        >
+          {message}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

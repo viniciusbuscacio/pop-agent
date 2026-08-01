@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
-import { ShellHeader } from './shell-header';
+import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
 import { Button, Segmented } from '../ui/controls';
 
@@ -60,8 +60,6 @@ export function ChatList() {
 
   return (
     <>
-      <ShellHeader />
-
       <div className="flex flex-col gap-2 p-3">
         <div className="relative flex items-center gap-2">
           <div className="flex-1">
@@ -136,10 +134,11 @@ export function ChatList() {
         )}
       </div>
 
+      {/* pb-20 keeps the last row clear of the floating bottom bar (§14). */}
       {segment === 'files' ? (
         <FolderTree />
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-20">
           {viewArchived && !searching ? (
             <p
               data-testid="archived-heading"
@@ -164,6 +163,8 @@ export function ChatList() {
           )}
         </div>
       )}
+
+      <ShellFooter />
     </>
   );
 }
@@ -187,7 +188,7 @@ function FolderTree() {
   const rootCount = (files ?? []).filter((file) => file.folderId === '').length;
 
   return (
-    <div className="flex-1 overflow-y-auto" data-testid="folder-tree">
+    <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
       <button
         type="button"
         data-testid="tree-root"

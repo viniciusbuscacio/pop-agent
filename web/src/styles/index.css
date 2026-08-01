@@ -75,6 +75,18 @@ body {
   vertical-align: baseline;
 }
 
+/* The health dot's gentle pulse (popy.spec §14): opacity only, never
+   stroboscopic. */
+@keyframes health-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 @keyframes streaming-dot {
   0%,
   100% {
