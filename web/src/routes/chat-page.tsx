@@ -346,6 +346,8 @@ export function ChatPage() {
           void createChat().then((created) => navigate(`/chat/${created.id}`));
         }}
         models={models}
+        activeProvider={chat?.provider ?? ''}
+        activeModel={chat?.model ?? ''}
         onSetModel={(model, provider) => void setModel(chatId, model, provider)}
       />
 

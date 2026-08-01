@@ -34,6 +34,8 @@ export function Composer({
   onStop,
   onNewChat,
   models,
+  activeProvider,
+  activeModel,
   onSetModel,
 }: {
   chatId: string;
@@ -43,6 +45,8 @@ export function Composer({
   onStop: () => void;
   onNewChat: () => void;
   models: ModelChoice[];
+  activeProvider: string;
+  activeModel: string;
   onSetModel: (model: string, provider: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -132,7 +136,17 @@ export function Composer({
 
   function updateSlash(value: string, caret: number): void {
     // Slash commands live at position zero only -- a "/" mid-sentence is prose.
-    const match = /^\/([a-z]*)$/.exec(value.slice(0, caret));
+    const before = value.slice(0, caret);
+    // `/model list` is the explicit form of the model picker. Keep the
+    // command in the composer until a model is chosen, just like `/model`.
+    if (/^\/model\s+list$/i.test(before)) {
+      setSlashMode('models');
+      setSlashQuery(undefined);
+      setSlashActive(0);
+      return;
+    }
+    const match = /^\/([a-z]*)$/.exec(before);
+    setSlashMode('commands');
     setSlashQuery(match?.[1]);
   }
 
@@ -475,7 +489,13 @@ export function Composer({
         {voice === 'idle' ? (
           <div className="relative flex-1">
           {slashMode === 'models' ? (
-            <ModelMenu models={models} active={slashActive} onPick={pickModel} />
+            <ModelMenu
+              models={models}
+              active={slashActive}
+              activeProvider={activeProvider}
+              activeModel={activeModel}
+              onPick={pickModel}
+            />
           ) : slashQuery !== undefined && slashMatches.length > 0 ? (
             <SlashMenu options={slashMatches} active={slashActive} onPick={pickSlash} />
           ) : null}

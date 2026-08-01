@@ -70,26 +70,39 @@ export interface ModelChoice {
 export function ModelMenu({
   models,
   active,
+  activeProvider,
+  activeModel,
   onPick,
 }: {
   models: ModelChoice[];
   active: number;
+  activeProvider: string;
+  activeModel: string;
   onPick: (choice: ModelChoice) => void;
 }) {
   const DEFAULT: ModelChoice = { provider: '', model: '', label: t('chat.defaultModel') };
+  const choices = [DEFAULT, ...models];
   return (
     <div data-testid="slash-menu" className={MENU_CLASS}>
-      {[DEFAULT, ...models].map((choice, index) => (
-        <button
-          key={choice.model === '' ? '__default' : `${choice.provider}/${choice.model}`}
-          type="button"
-          data-testid="slash-option"
-          onClick={() => onPick(choice)}
-          className={optionClass(index === active)}
-        >
-          <span className="truncate">{choice.label}</span>
-        </button>
-      ))}
+      {choices.map((choice, index) => {
+        const isCurrent =
+          choice.provider === activeProvider && choice.model === activeModel;
+        return (
+          <button
+            key={choice.model === '' ? '__default' : `${choice.provider}/${choice.model}`}
+            type="button"
+            data-testid="slash-option"
+            aria-current={isCurrent ? 'true' : undefined}
+            onClick={() => onPick(choice)}
+            className={optionClass(index === active)}
+          >
+            <span className="truncate">{choice.label}</span>
+            {isCurrent ? (
+              <span className="ml-auto shrink-0 text-xs text-[var(--accent)]">✓</span>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
