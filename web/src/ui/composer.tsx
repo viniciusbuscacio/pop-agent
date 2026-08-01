@@ -500,7 +500,10 @@ export function Composer({
             onKeyDown={onKeyDown}
             placeholder={t('chat.placeholder')}
             aria-label={t('chat.placeholder')}
-            className="max-h-[33dvh] w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+            // block (not inline-block): an inline textarea leaves baseline
+            // descender space in the wrapper, and with the row's items-end the
+            // buttons aligned to that phantom bottom, sitting ~7px too low.
+            className="block max-h-[33dvh] w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
           />
           </div>
         ) : (
