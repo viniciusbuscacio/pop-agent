@@ -611,14 +611,69 @@ events from stale runs.
 
 ## 15. Providers, models, updates
 
-- Multi-provider, aw's design as reference: OpenRouter (api key — default
-  provider, **default model: Kimi K3**), GitHub Copilot (OAuth device
-  code), OpenAI subscription/Codex (OAuth browser PKCE), OpenAI api key,
-  Azure OpenAI, custom OpenAI-compatible. Verify what pi supports natively;
-  port aw's OAuth flows conceptually for the rest.
-- Service model (titles, condensation, summaries): Kimi K3 for everything
-  initially.
-- Model catalog: live fetch per provider with cache; static fallback.
+### Multi-provider (fase 1)
+
+Design copied conceptually from the Agent Workspace; transport and
+catalog come from pi (`ModelRuntime` + pi-ai `Models`), never
+reimplemented.
+
+- **Provider is data, not a class**: a declarative list of definitions
+  `{id, name, baseURL, authType, defaultModel, allowCustomModel}`.
+  Phase 1 only knows `authType: "api-key"`; vendor quirks get a
+  point `if`, not a subclass. Adding a provider = adding a literal.
+  Phase 1 ships: OpenRouter (default, **default model: Kimi K3**),
+  OpenAI, Anthropic, and "custom OpenAI-compatible" (free baseURL).
+  OAuth (GitHub Copilot, OpenAI Codex) comes later — pi already has
+  the flow, the UI is what's missing.
+- **Model identity = the pair `(providerId, modelId)`**, always. No
+  synthetic string of our own; each provider names the model its way.
+  Everywhere that stores `model` today (settings, chats, llm_runs) now
+  stores the pair; migration treats the old value as OpenRouter
+  (backfill `provider='openrouter'`).
+- **Keys are write-only**: the UI never reads the key back (input starts
+  empty, placeholder "••• configured" when one exists); no endpoint
+  returns key material (only `hasKey: boolean`); keys never in logs,
+  model context or tool results. Storage: the existing encrypted
+  secrets column (secret.key), one row per provider.
+- **Saving ≠ activating**: saving a key/config never hits the network.
+  Validation (one real ~5-token completion, "Reply with exactly: ok")
+  runs only on explicit activation/test; if it fails, the typed config
+  IS kept with a warning — a bad key must not destroy what the user
+  typed.
+- **Model catalog in 3 layers**: live (ModelRuntime refresh now) →
+  cache (last good fetch, in SQLite) → static (built-in list per
+  provider). Responses carry `source: live|cache|static` so the UI can
+  say "cached list, endpoint down". Providers with `allowCustomModel`
+  use free input + datalist.
+- **Per-chat override**: `provider`/`model` columns on the chat row;
+  empty = global default. A broken override (provider without key,
+  model gone) degrades silently to the global default, never an error.
+- **Mid-chat model switch**: the conversation is preserved — only the
+  model adapter/session is rebuilt, never the history; the switch shows
+  as a system bubble in the chat (client-side, NEVER sent to the model
+  — chat override is UI state, not a conversation turn).
+- **The global default is never empty**: if the default provider's key
+  is deleted/disabled, the next configured provider is elected (or an
+  explicit warning). An empty slot silently breaks everything that
+  resolves "the default" (restore, title, voice) while chats look fine.
+- **Endpoints**: `GET /v1/providers` (definitions + hasKey +
+  defaultModel, no secrets), `PUT|DELETE /v1/providers/:id/key`,
+  `POST /v1/providers/:id/test` (the validation completion),
+  `GET /v1/models?provider=<id>` (3-layer catalog). `/model` accepts
+  provider + model.
+- Service model (titles, condensation, summaries): Kimi K3 for
+  everything initially.
+
+### Multi-provider (fase 2 — FUTURE, do not implement now)
+
+- **Ordered fallback**: persisted priority order where #1 IS the
+  default; error classification TYPED by status — fail-forward:
+  401/402/403/404/408/429/5xx/network; never: 400, cancellation.
+- Mid-stream failure does NOT fail over (tokens already rendered) but
+  penalizes the provider; in-memory advisory cooldown (if all are
+  penalized, ignore it and try anyway).
+- Failover is LOUD: log + system bubble in the chat naming
+  from-whom-to-whom.
 
 ### Updates — two channels, one discipline
 
