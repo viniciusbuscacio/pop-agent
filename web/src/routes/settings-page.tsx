@@ -6,6 +6,7 @@ import type {
   ModelDTO,
   ProvidersResponse,
   ProviderStatusDTO,
+  ServerInfoResponse,
   SettingsDTO,
   SkillDTO,
   UsageResponse,
@@ -19,6 +20,7 @@ import { providersService } from '../services/providers';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
 import { voiceService, type VoiceModelStatus } from '../services/voice';
+import { serverService } from '../services/server';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { checkForUpdateNow } from '../services/pwa-update';
@@ -35,6 +37,7 @@ import { Button, Card, Segmented, TextField } from '../ui/controls';
  */
 
 type Section =
+  | 'server'
   | 'general'
   | 'model'
   | 'memory'
@@ -47,6 +50,7 @@ type Section =
   | 'about';
 
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
+  { id: 'server', labelKey: 'settings.section.server' },
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'memory', labelKey: 'settings.section.memory' },
@@ -103,6 +107,7 @@ export function SettingsPage() {
         </nav>
 
         <div className="flex-1">
+          {section === 'server' ? <ServerSection /> : null}
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
@@ -1699,6 +1704,73 @@ function UpdatesSection() {
       </Card>
     </div>
   );
+}
+
+function ServerSection() {
+  const [info, setInfo] = useState<ServerInfoResponse | undefined>(undefined);
+
+  useEffect(() => {
+    serverService
+      .info()
+      .then(setInfo)
+      .catch(() => setInfo(undefined));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <Row label={t('settings.server.cpu')} value={info ? `${info.cpu.model} (${info.cpu.cores})` : '…'} testId="server-cpu" />
+        <Row
+          label={t('settings.server.load')}
+          value={info ? info.cpu.load.map((n) => n.toFixed(2)).join(' / ') : '…'}
+          testId="server-load"
+        />
+        <Row label={t('settings.server.memory')} value={info ? `${formatBytes(info.memory.used)} / ${formatBytes(info.memory.total)}` : '…'} testId="server-memory" />
+        <Row
+          label={t('settings.server.disk')}
+          value={info && info.disk.free !== null && info.disk.total !== null ? `${formatBytes(info.disk.free)} ${t('settings.server.freeOf')} ${formatBytes(info.disk.total)}` : '…'}
+          testId="server-disk"
+        />
+        <Row label={t('settings.server.uptime')} value={info ? formatDuration(info.uptimeSeconds) : '…'} testId="server-uptime" />
+        <Row label={t('settings.server.processUptime')} value={info ? formatDuration(info.processUptimeSeconds) : '…'} testId="server-process-uptime" />
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <Row label={t('settings.server.time')} value={info ? new Date(info.serverTime).toLocaleString() : '…'} testId="server-time" />
+        <Row label={t('settings.server.timezone')} value={info?.timezone ?? '…'} testId="server-timezone" />
+        <Row label={t('settings.server.node')} value={info?.nodeVersion ?? '…'} testId="server-node" />
+        <Row label={t('settings.server.popy')} value={info ? `${info.popyVersion} (${info.commit})` : '…'} testId="server-popy" />
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <Row label={t('settings.server.db')} value={info && info.dbBytes !== null ? formatBytes(info.dbBytes) : '…'} testId="server-db" />
+        <Row label={t('settings.server.workspaceSize')} value={info && info.workspaceBytes !== null ? formatBytes(info.workspaceBytes) : '…'} testId="server-workspace" />
+        <Row label={t('settings.server.dataDir')} value={info?.dataDir ?? '…'} testId="server-datadir" />
+        <Row label={t('settings.server.workspace')} value={info?.workspace ?? '…'} testId="server-workspace-path" />
+      </Card>
+    </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let value = bytes;
+  let unit = -1;
+  do {
+    value /= 1024;
+    unit += 1;
+  } while (value >= 1024 && unit < units.length - 1);
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
+function formatDuration(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
 function AboutSection() {

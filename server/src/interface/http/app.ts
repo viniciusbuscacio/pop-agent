@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AboutResponse } from '@popy/shared';
+import type { AboutResponse, ServerInfoResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
@@ -34,6 +34,7 @@ import { createProviderRoutes } from './provider-routes.js';
 import { createSkillsRoutes } from './skills-routes.js';
 import { createUsageRoutes } from './usage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
+import { createServerRoutes } from './server-routes.js';
 import { SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
 
@@ -63,6 +64,8 @@ export interface AppDeps {
    * port with a live reader would buy nothing.
    */
   versions: AboutResponse;
+  /** Settings -> Server snapshot: measured on each read, so a function. */
+  serverInfo: () => ServerInfoResponse;
   /** Directory holding the built frontend (web/dist). */
   webDist: string;
 }
@@ -87,6 +90,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/v1', createAuthRoutes(deps));
   app.route('/v1', createWebAuthnRoutes(deps));
   app.route('/v1', createSettingsRoutes(deps));
+  app.route('/v1', createServerRoutes(deps));
   app.route('/v1', createProviderRoutes(deps));
   app.route('/v1', createMemoryRoutes(deps));
   app.route('/v1', createSkillsRoutes(deps));

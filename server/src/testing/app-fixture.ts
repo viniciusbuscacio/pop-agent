@@ -252,6 +252,23 @@ export function createTestApp(
     hub,
     clock,
     versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
+    serverInfo: () =>
+      ({
+        cpu: { model: 'Test CPU', cores: 2, load: [0, 0, 0] },
+        memory: { total: 1024, used: 512 },
+        disk: { total: 4096, free: 2048 },
+        uptimeSeconds: 60,
+        processUptimeSeconds: 30,
+        timezone: 'UTC',
+        serverTime: new Date(FIXED_NOW).toISOString(),
+        nodeVersion: process.version,
+        popyVersion: '0.0.0-test',
+        commit: 'abc1234',
+        dbBytes: 100,
+        workspaceBytes: 200,
+        dataDir: '/tmp/data',
+        workspace: '/tmp/workspace',
+      }) satisfies import('@popy/shared').ServerInfoResponse,
     webDist: WEB_DIST,
   });
 

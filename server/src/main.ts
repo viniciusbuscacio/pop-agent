@@ -33,6 +33,7 @@ import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
+import { readServerInfo } from './infrastructure/config/server-info.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { AnthropicGateway } from './infrastructure/providers/anthropic-gateway.js';
 import {
@@ -333,6 +334,7 @@ const app = createApp({
   hub,
   clock: systemClock,
   versions: readVersions(),
+  serverInfo: () => readServerInfo({ dataDir: context.dataDir, workspace, versions: readVersions() }),
   webDist,
 });
 

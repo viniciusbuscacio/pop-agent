@@ -224,6 +224,29 @@ export interface AboutResponse {
 }
 
 /**
+ * `GET /v1/server/info` — Settings → Server. Every field is best-effort:
+ * `null`/`'unknown'` means "could not measure", never a failed request.
+ */
+export interface ServerInfoResponse {
+  cpu: { model: string; cores: number; load: number[] };
+  memory: { total: number; used: number };
+  /** Bytes on the partition holding POPY_DATA_DIR. */
+  disk: { total: number | null; free: number | null };
+  uptimeSeconds: number;
+  processUptimeSeconds: number;
+  timezone: string;
+  serverTime: string;
+  nodeVersion: string;
+  popyVersion: string;
+  /** Short git commit of the running checkout, 'unknown' outside a clone. */
+  commit: string;
+  dbBytes: number | null;
+  workspaceBytes: number | null;
+  dataDir: string;
+  workspace: string;
+}
+
+/**
  * `GET /v1/health` — the sidebar's silence-means-healthy probe (popy.spec
  * §13). Public, cheap, cached signals only: a missing answer means
  * "Server offline", an `error` field means connected-but-degraded.
