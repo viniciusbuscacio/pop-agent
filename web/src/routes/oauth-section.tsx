@@ -46,13 +46,22 @@ export function OAuthSection({
     providersService
       .oauthState(provider.id)
       .then((state) => {
-        if (!dropped && !state.done) setFlow(state);
+        if (dropped || state.done) return;
+        if (provider.configured) {
+          // Already signed in, yet a flow is still waiting for a code: the
+          // leftover of a second attempt nobody needed. Rendering it under
+          // "Connected" states two contradictory things at once, which is
+          // worse than either -- so close it and let the status speak.
+          void providersService.oauthCancel(provider.id).catch(() => undefined);
+          return;
+        }
+        setFlow(state);
       })
       .catch(() => undefined);
     return () => {
       dropped = true;
     };
-  }, [provider.id]);
+  }, [provider.id, provider.configured]);
 
   useEffect(() => {
     if (!active) return;

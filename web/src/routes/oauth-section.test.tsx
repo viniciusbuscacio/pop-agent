@@ -15,13 +15,14 @@ import { OAuthSection } from './oauth-section';
 
 const oauthState = vi.fn();
 const oauthStart = vi.fn();
+const oauthCancel = vi.fn();
 
 vi.mock('../services/providers', () => ({
   providersService: {
     oauthState: (id: string) => oauthState(id) as Promise<unknown>,
     oauthStart: (id: string) => oauthStart(id) as Promise<unknown>,
     oauthInput: vi.fn(),
-    oauthCancel: vi.fn(),
+    oauthCancel: (id: string) => oauthCancel(id) as Promise<unknown>,
     oauthLogout: vi.fn(),
     list: vi.fn(),
   },
@@ -55,6 +56,8 @@ afterEach(cleanup);
 beforeEach(() => {
   oauthState.mockReset();
   oauthStart.mockReset();
+  oauthCancel.mockReset();
+  oauthCancel.mockResolvedValue(undefined);
 });
 
 describe('OAuthSection', () => {
@@ -88,6 +91,19 @@ describe('OAuthSection', () => {
 
     await waitFor(() => {
       expect(oauthState).toHaveBeenCalledWith('openai-codex');
+    });
+    expect(screen.queryByTestId('provider-oauth-answer-openai-codex')).toBeNull();
+  });
+
+  it('does not show a leftover sign-in next to a connected status', async () => {
+    // Two contradictory claims in one card ("Connected" plus "paste your
+    // code") is what made this unreadable in the first place.
+    oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+
+    render(<OAuthSection provider={{ ...PROVIDER, configured: true, source: 'oauth' }} onChanged={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(oauthCancel).toHaveBeenCalledWith('openai-codex');
     });
     expect(screen.queryByTestId('provider-oauth-answer-openai-codex')).toBeNull();
   });
