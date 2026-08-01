@@ -92,6 +92,8 @@ export interface PiSession {
   /** Whether the current model accepts image input (popy.spec §14, RF-014). */
   readonly supportsImages: boolean;
   abort(): Promise<void>;
+  /** pi's native compaction (popy.spec §7): summarize the old span, keep the tail. */
+  compact(): Promise<void>;
   setModel(providerId: string, modelId: string): Promise<void>;
   /** Sets (or clears) the guard pi consults around each tool call. */
   setGuard(guard: ToolGuard | undefined): void;
@@ -151,6 +153,12 @@ export interface SdkPiEngineOptions {
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
   memory?: MemoryRepo;
+  /**
+   * Real numbers for the continuity note (popy.spec §7): how many messages
+   * the chat has stored, so a resumed session knows the size of what it
+   * only partially sees.
+   */
+  chatStats?: (chatId: string) => { messages: number } | undefined;
   /** Hybrid (FTS5 + embeddings) search behind memory_search. */
   memorySearch?: MemorySearcher;
   /** The living document the agent keeps about the user; tools + prompt. */
@@ -254,6 +262,7 @@ export class SdkPiEngine implements PiEngine {
         ...(options.instructions.length === 0 ? [] : [options.instructions]),
         ...this.userMemoryBlock(),
         ...(this.recentChatsCatalog() ?? []),
+        ...this.continuityNote(options),
       ],
     });
     await resourceLoader.reload();
@@ -287,12 +296,21 @@ export class SdkPiEngine implements PiEngine {
       ...buildWebTools(sdk.defineTool),
     ];
 
+    // The compaction policy, explicit instead of inherited defaults
+    // (popy.spec §7): pi summarizes the old span when the context passes
+    // `window - reserveTokens`, keeping a 20k-token tail. inMemory also
+    // keeps a host ~/.pi settings file from leaking in.
+    const settingsManager = sdk.SettingsManager.inMemory({
+      compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
+    });
+
     const { session } = await sdk.createAgentSession({
       cwd: this.options.workspace,
       agentDir: this.options.agentDir,
       modelRuntime: runtime,
       model,
       sessionManager,
+      settingsManager,
       resourceLoader,
       ...(customTools.length === 0 ? {} : { customTools }),
     });
@@ -305,6 +323,29 @@ export class SdkPiEngine implements PiEngine {
    * system prompt (popy.spec §7.1): titles and summaries only, so the agent
    * can offer "shall I open our chat about X?" and reach it with memory_open.
    */
+  /**
+   * A resumed session sees only a slice of the conversation (popy.spec §7):
+   * the continuity note says the real numbers and kills the classic
+   * post-restart hallucination -- answering from memory what a tool result
+   * used to say. Untrusted-data envelope, never bare system authority.
+   */
+  private continuityNote(options: PiOpenOptions): string[] {
+    if (options.sessionFile === undefined || options.sessionFile.length === 0) return [];
+    const stats = this.options.chatStats?.(options.chatId);
+    if (stats === undefined || stats.messages === 0) return [];
+    return [
+      envelope(
+        [
+          'This conversation continues after a server restart or an idle unload.',
+          `The restored context holds the most recent slice of the ${String(stats.messages)} stored messages; older turns were compacted or trimmed.`,
+          'Page back with memory_open or memory_search, and never claim you have no memory before searching.',
+          'Tool results from before the restart may not have survived: re-run the tool instead of answering from memory.',
+        ].join(' '),
+        'session:continuity',
+      ),
+    ];
+  }
+
   private recentChatsCatalog(): string[] | undefined {
     const memory = this.options.memory;
     if (memory === undefined) return undefined;
@@ -453,6 +494,10 @@ class SdkPiSession implements PiSession {
 
   abort(): Promise<void> {
     return this.session.abort();
+  }
+
+  async compact(): Promise<void> {
+    await this.session.compact();
   }
 
   async setModel(providerId: string, modelId: string): Promise<void> {

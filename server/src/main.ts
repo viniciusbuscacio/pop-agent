@@ -194,6 +194,7 @@ function piBridge(): PiAgentBridge {
       customProvider: () => providers.customConfig(),
       notesVault,
       memory: context.memory,
+      chatStats: (chatId) => ({ messages: context.chats.countMessages(chatId) }),
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
       artifacts,

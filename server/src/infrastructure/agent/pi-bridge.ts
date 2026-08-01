@@ -131,8 +131,8 @@ export class PiAgentBridge implements AgentBridge {
       return {};
     }
 
-    const translator = new RunTranslator(onEvent);
-    const unsubscribe = entry.session.subscribe((event) => {
+    let translator = new RunTranslator(onEvent);
+    let unsubscribe = entry.session.subscribe((event) => {
       translator.handle(event);
     });
 
@@ -162,6 +162,31 @@ export class PiAgentBridge implements AgentBridge {
 
     try {
       await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
+
+      // The reactive compaction trigger (popy.spec §7): token accounting
+      // always errs a little, so when the provider refuses the turn for
+      // context overflow, compact and retry the SAME turn -- exactly once,
+      // never in a loop. The user sees one seamless run.
+      if (!signal.aborted && translator.failedOnOverflow()) {
+        this.deps.onFailure?.({
+          chatId,
+          code: 'context_overflow',
+          message: 'provider refused the turn; compacting and retrying once',
+        });
+        unsubscribe();
+        try {
+          await entry.session.compact();
+        } catch {
+          // A failed compaction still deserves the retry: pi's threshold may
+          // simply not have fired yet, and the second attempt costs one turn.
+        }
+        translator = new RunTranslator(onEvent);
+        unsubscribe = entry.session.subscribe((event) => {
+          translator.handle(event);
+        });
+        await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
+      }
+
       translator.finish(signal.aborted);
     } catch (error) {
       translator.fail(signal.aborted ? 'aborted' : errorCode(error), messageOf(error));
@@ -468,6 +493,15 @@ class RunTranslator {
     }
   }
 
+  /**
+   * The run settled on a provider error that names the context window
+   * (popy.spec §7, reactive trigger). pi retries transient failures by
+   * itself; an overflow it only surfaces.
+   */
+  failedOnOverflow(): boolean {
+    return this.lastStopReason === 'error' && isContextOverflow(this.lastErrorMessage);
+  }
+
   /** The run is over: say whether it worked. */
   finish(aborted: boolean): void {
     if (aborted || this.lastStopReason === 'aborted') this.fail('aborted', undefined);
@@ -573,6 +607,14 @@ function extractText(payload: unknown): string {
 }
 
 /** Engine failures the user can fix keep their code; the rest are bugs. */
+/** How a provider says "this did not fit": the wording varies, the meaning does not. */
+const OVERFLOW_PATTERN =
+  /context.{0,24}(length|window|overflow|too long|exceed)|maximum context|prompt is too long|too many tokens|token limit|reduce the length/i;
+
+function isContextOverflow(message: string | undefined): boolean {
+  return message !== undefined && OVERFLOW_PATTERN.test(message);
+}
+
 function errorCode(error: unknown): string {
   if (error instanceof PiEngineError) return error.code;
   return 'operation_error';

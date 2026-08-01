@@ -125,6 +125,13 @@ class ScriptedSession implements PiSession {
     await Promise.resolve();
   }
 
+  compactions = 0;
+
+  compact(): Promise<void> {
+    this.compactions += 1;
+    return Promise.resolve();
+  }
+
   abort(): Promise<void> {
     return Promise.resolve();
   }
@@ -330,6 +337,71 @@ describe('how a run ends', () => {
     expect(events).toContainEqual({ kind: 'error', code: 'provider_error' });
     // The wire carries the code; the log carries what the provider said.
     expect(failures).toEqual([{ code: 'provider_error', message: 'insufficient credit' }]);
+  });
+
+  it('compacts and retries the turn once when the provider reports overflow', async () => {
+    const failures: { code: string }[] = [];
+    bridge = new PiAgentBridge({
+      chats,
+      engine,
+      onFailure: (failure) => failures.push({ code: failure.code }),
+    });
+    let calls = 0;
+    engine.next.onPrompt = () => {
+      calls += 1;
+      if (calls === 1) {
+        engine.next.emit(
+          settled('error', { input: 5, output: 0, cost: 0 }, 'maximum context length exceeded'),
+        );
+      } else {
+        engine.next.emit(textDelta('recovered'));
+        engine.next.emit(settled('stop', { input: 5, output: 3, cost: 0 }));
+      }
+      return Promise.resolve();
+    };
+    const { events, onEvent } = collect();
+
+    await run(onEvent);
+
+    expect(engine.next.compactions).toBe(1);
+    expect(calls).toBe(2);
+    // One seamless run: the retried turn succeeded, no error reached the user.
+    expect(events.some((event) => event.kind === 'error')).toBe(false);
+    expect(events).toContainEqual({ kind: 'delta', text: 'recovered' });
+    expect(failures).toEqual([{ code: 'context_overflow' }]);
+  });
+
+  it('retries an overflow exactly once, never in a loop', async () => {
+    let calls = 0;
+    engine.next.onPrompt = () => {
+      calls += 1;
+      engine.next.emit(
+        settled('error', { input: 5, output: 0, cost: 0 }, 'prompt is too long'),
+      );
+      return Promise.resolve();
+    };
+    const { events, onEvent } = collect();
+
+    await run(onEvent);
+
+    expect(calls).toBe(2); // the first attempt and the single retry
+    expect(engine.next.compactions).toBe(1);
+    expect(events).toContainEqual({ kind: 'error', code: 'provider_error' });
+  });
+
+  it('does not retry a non-overflow provider error', async () => {
+    let calls = 0;
+    engine.next.onPrompt = () => {
+      calls += 1;
+      engine.next.emit(settled('error', { input: 5, output: 0, cost: 0 }, 'insufficient credit'));
+      return Promise.resolve();
+    };
+    const { onEvent } = collect();
+
+    await run(onEvent);
+
+    expect(calls).toBe(1);
+    expect(engine.next.compactions).toBe(0);
   });
 
   it('reports an aborted run as aborted', async () => {
