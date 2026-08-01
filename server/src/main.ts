@@ -167,6 +167,10 @@ function piBridge(): PiAgentBridge {
       agentDir: join(context.dataDir, 'pi-agent'),
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
+      // Operator overrides for the catalog (absent file = none). Lets the
+      // operator cap a model's maxTokens when the provider key is near its
+      // credit limit, instead of every turn failing with a 402.
+      modelsPath: join(context.dataDir, 'models.json'),
       apiKey: () => providers.apiKey(),
       notesVault,
       memory: context.memory,

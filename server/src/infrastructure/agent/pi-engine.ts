@@ -129,6 +129,14 @@ export interface SdkPiEngineOptions {
   authPath: string;
   /** Cache for downloaded catalogs. Nothing downloads them today; see below. */
   modelsStorePath: string;
+  /**
+   * Optional operator overrides for the built-in catalog (pi models.json).
+   * Absent file means no overrides. Exists so a per-model ceiling such as
+   * maxTokens can be lowered when the provider key runs on a tight credit
+   * limit -- OpenRouter rejects a request whose max_tokens exceeds what the
+   * remaining balance can afford, which otherwise bricks every turn.
+   */
+  modelsPath?: string;
   /** Read late, not captured: the key can arrive after boot, from Settings. */
   apiKey: () => string | undefined;
   /** The agent's notes vault; its tools are registered on every session. */
@@ -151,9 +159,10 @@ export interface SdkPiEngineOptions {
  * The real engine.
  *
  * The model runtime is built once and reused. It is deliberately offline
- * (`allowModelNetwork: false`, `modelsPath: null`): pi's built-in OpenRouter
- * catalog already ships the models with their prices, so a boot never waits on
- * a third party and the cost numbers cannot change under us between restarts.
+ * (`allowModelNetwork: false`): pi's built-in OpenRouter catalog already ships
+ * the models with their prices, so a boot never waits on a third party and the
+ * cost numbers cannot change under us between restarts. The only local input
+ * is the optional operator overrides file (`modelsPath`), described above.
  */
 export class SdkPiEngine implements PiEngine {
   private runtime: Promise<ModelRuntime> | undefined;
@@ -360,7 +369,7 @@ export class SdkPiEngine implements PiEngine {
     mkdirSync(this.options.agentDir, { recursive: true });
     return sdk.ModelRuntime.create({
       authPath: this.options.authPath,
-      modelsPath: null,
+      modelsPath: this.options.modelsPath ?? null,
       modelsStorePath: this.options.modelsStorePath,
       allowModelNetwork: false,
     });
