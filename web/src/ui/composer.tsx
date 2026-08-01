@@ -3,6 +3,7 @@ import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
+import { SlashMenu, slashCommands, type SlashCommand } from './slash-menu';
 
 /**
  * The composer, in aw's shape: the textarea on the left, then attach, mic
@@ -39,6 +40,8 @@ export function Composer({
   // @-mentions: files already in Files, attached by reference (no re-upload).
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
+  // Slash commands: a "/" as the very first character opens the command menu.
+  const [slashQuery, setSlashQuery] = useState<string | undefined>(undefined);
   const [allFiles, setAllFiles] = useState<{ id: string; name: string }[] | undefined>(undefined);
   const mentionCaret = useRef(0);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -65,6 +68,7 @@ export function Composer({
     setAttachments([]);
     setMentions([]);
     setMentionQuery(undefined);
+    setSlashQuery(undefined);
     setNotice(undefined);
   }, [storageKey]);
 
@@ -109,6 +113,25 @@ export function Composer({
         .catch(() => setAllFiles([]));
     }
   }
+
+  function updateSlash(value: string, caret: number): void {
+    // Slash commands live at position zero only -- a "/" mid-sentence is prose.
+    const match = /^\/([a-z]*)$/.exec(value.slice(0, caret));
+    setSlashQuery(match?.[1]);
+  }
+
+  function pickSlash(command: SlashCommand): void {
+    persist('');
+    setSlashQuery(undefined);
+    area.current?.focus();
+    // Stage 2 wires the actions; the menu already filters and picks.
+    void command;
+  }
+
+  const slashMatches =
+    slashQuery === undefined
+      ? []
+      : slashCommands().filter((command) => command.name.startsWith(slashQuery.toLowerCase()));
 
   function pickMention(file: { id: string; name: string }): void {
     const caret = mentionCaret.current;
@@ -259,6 +282,19 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (slashQuery !== undefined && slashMatches.length > 0) {
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        const first = slashMatches[0];
+        if (first !== undefined) pickSlash(first);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSlashQuery(undefined);
+        return;
+      }
+    }
     if (mentionQuery !== undefined && mentionMatches.length > 0) {
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
@@ -372,6 +408,9 @@ export function Composer({
         />
         {voice === 'idle' ? (
           <div className="relative flex-1">
+          {slashQuery !== undefined && slashMatches.length > 0 ? (
+            <SlashMenu options={slashMatches} onPick={pickSlash} />
+          ) : null}
           {mentionQuery !== undefined && mentionMatches.length > 0 ? (
             <div
               data-testid="mention-menu"
@@ -398,6 +437,7 @@ export function Composer({
             onChange={(event) => {
               persist(event.target.value);
               updateMention(event.target.value, event.target.selectionStart ?? event.target.value.length);
+              updateSlash(event.target.value, event.target.selectionStart ?? event.target.value.length);
             }}
             onKeyDown={onKeyDown}
             placeholder={t('chat.placeholder')}
