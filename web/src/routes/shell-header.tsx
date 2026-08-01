@@ -45,7 +45,7 @@ export function ShellFooter() {
   return (
     <footer
       data-testid="shell-footer"
-      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] p-3"
+      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-3 md:pb-3"
     >
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">

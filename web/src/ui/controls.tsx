@@ -100,7 +100,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex overflow-hidden rounded-md border border-[var(--border)]"
+      className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-[var(--border)]"
     >
       {options.map((option) => (
         <button
@@ -111,8 +111,8 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           className={
             option.value === value
-              ? 'bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]'
-              : 'px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
+              ? 'shrink-0 bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]'
+              : 'shrink-0 px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
           }
         >
           {option.label}

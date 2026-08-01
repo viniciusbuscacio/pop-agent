@@ -271,6 +271,9 @@ function ChatRow({
   );
 
   function confirmDelete(): void {
+    // History is forever except for an explicit delete (the storage
+    // contract), so the confirm must say this cannot be undone.
+    if (!window.confirm(t('shell.deleteConfirm', { title: chat.title }))) return;
     void remove(chat.id);
   }
 
@@ -397,6 +400,13 @@ function ChatRow({
             the timestamp used to sit there too, hiding the ⋯ under it. */}
         <div className="flex items-baseline justify-between gap-2 pr-6">
           <span className="flex min-w-0 items-baseline gap-1.5">
+            {live !== undefined ? (
+              <span
+                data-testid="chat-live"
+                aria-hidden="true"
+                className="h-2 w-2 shrink-0 self-center rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
+              />
+            ) : null}
             <span className="truncate text-sm font-medium">{chat.title}</span>
             {badge ? (
               <span

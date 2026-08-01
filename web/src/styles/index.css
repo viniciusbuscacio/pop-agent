@@ -27,6 +27,13 @@ body {
   outline-offset: 2px;
 }
 
+/* Selection inside the user's accent bubble inverts the pair, so the
+   highlight stays visible on the coloured background in both themes. */
+.user-bubble ::selection {
+  background: var(--accent-fg);
+  color: var(--accent);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

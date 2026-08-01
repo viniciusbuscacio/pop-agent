@@ -206,6 +206,7 @@ async function run(base: string): Promise<void> {
   // 5
   const settingsDoc = {
     language: 'en',
+    defaultProvider: 'openrouter',
     defaultModel: 'moonshotai/kimi-k3',
     serviceModel: 'moonshotai/kimi-k3',
     customInstructions: 'Keep answers short.',

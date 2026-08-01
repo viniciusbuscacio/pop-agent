@@ -22,7 +22,7 @@ export function ChatMessage({
     return (
       <div className="flex flex-col items-end gap-2" data-testid="message-user">
         {message.content.length > 0 ? (
-          <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap">
+          <div className="user-bubble max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap">
             {message.content}
           </div>
         ) : null}

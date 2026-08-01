@@ -7,7 +7,7 @@ import { create } from 'zustand';
  * every rem in the app scales together.
  */
 
-export type FontSizeChoice = 'small' | 'default' | 'large' | 'xlarge';
+export type FontSizeChoice = 'small' | 'default' | 'large' | 'xlarge' | 'huge';
 
 const STORAGE_KEY = 'popy.fontSize';
 
@@ -16,14 +16,14 @@ const SCALE: Record<FontSizeChoice, string> = {
   default: '100%',
   large: '112.5%',
   xlarge: '125%',
+  huge: '140%',
 };
 
 function storedChoice(): FontSizeChoice {
   try {
     const value = localStorage.getItem(STORAGE_KEY);
-    return value === 'small' || value === 'default' || value === 'large' || value === 'xlarge'
-      ? value
-      : 'default';
+    const valid: FontSizeChoice[] = ['small', 'default', 'large', 'xlarge', 'huge'];
+    return valid.includes(value as FontSizeChoice) ? (value as FontSizeChoice) : 'default';
   } catch {
     return 'default';
   }

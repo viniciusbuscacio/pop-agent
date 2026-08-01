@@ -904,7 +904,6 @@ function ProviderCard({
 
   useEffect(() => {
     void loadCatalog();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider.id, provider.configured]);
 
   async function loadCatalog(): Promise<void> {
@@ -1345,6 +1344,7 @@ function FontSizeCard() {
           { value: 'default', label: t('settings.appearance.fontDefault'), testId: 'settings-font-default' },
           { value: 'large', label: t('settings.appearance.fontLarge'), testId: 'settings-font-large' },
           { value: 'xlarge', label: t('settings.appearance.fontXlarge'), testId: 'settings-font-xlarge' },
+          { value: 'huge', label: t('settings.appearance.fontHuge'), testId: 'settings-font-huge' },
         ]}
       />
       <p className="text-xs text-[var(--muted)]">{t('settings.appearance.fontNote')}</p>
