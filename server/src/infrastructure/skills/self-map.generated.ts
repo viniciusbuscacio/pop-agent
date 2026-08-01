@@ -12,7 +12,7 @@ export const SELF_MAP = [
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (10 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (52 modules)",
-  "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (24 modules)",
+  "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (25 modules)",
   "- `testing/` -- shared test harness helpers (1 module)",
   "",
   "## UI map (generated)",

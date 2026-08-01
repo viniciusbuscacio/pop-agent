@@ -32,6 +32,7 @@ import { createChatRoutes } from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
 import { createMemoryRoutes } from './memory-routes.js';
 import { createProviderRoutes } from './provider-routes.js';
+import { mountApi, publicSurface, sessionGuarded } from './route-registry.js';
 import { createSkillsRoutes } from './skills-routes.js';
 import { createUsageRoutes } from './usage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
@@ -85,34 +86,44 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
-  app.get('/healthz', (c) => c.json({ ok: true }));
+  // Liveness and the sidebar's health probe (popy.spec §13), as their own
+  // mini-app so the typed registry below can bless them explicitly.
+  const health = new Hono();
+  health.get('/healthz', (c) => c.json({ ok: true }));
+  health.get('/v1/health', (c) => c.json(deps.health.report()));
 
-  // The sidebar's health probe (popy.spec §13): public like /healthz -- it
-  // leaks nothing but ok/error flags, and a session check here would make
-  // "signed out" indistinguishable from "server down".
-  app.get('/v1/health', (c) => c.json(deps.health.report()));
-
-  // The signed artifact download carries no session -- the HMAC in the URL is
-  // the whole authorisation (popy.spec §14) -- so it sits before the /v1 guard
-  // and before the static site could mistake it for a missing file.
-  app.route('/', createArtifactDownloadRoutes(deps));
-
-  // Guard everything under /v1 except the handful of public auth endpoints.
-  app.use('/v1/*', authMiddleware(deps.auth));
-  app.route('/v1', createAuthRoutes(deps));
-  app.route('/v1', createWebAuthnRoutes(deps));
-  app.route('/v1', createSettingsRoutes(deps));
-  app.route('/v1', createServerRoutes(deps));
-  app.route('/v1', createProviderRoutes(deps));
-  app.route('/v1', createMemoryRoutes(deps));
-  app.route('/v1', createSkillsRoutes(deps));
-  app.route('/v1', createUsageRoutes(deps));
-  app.route('/v1', createUpdateRoutes(deps));
-  app.route('/v1', createVoiceRoutes(deps));
-  app.route('/v1', createBackupRoutes(deps));
-  app.route('/v1', createPushRoutes(deps));
-  app.route('/v1', createArtifactRoutes(deps));
-  app.route('/v1', createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) }));
+  // The typed route registry (popy.spec §9): every group is either
+  // session-guarded or a declared public surface with a written reason --
+  // an unauthenticated URL cannot be mounted by accident, and the probe in
+  // route-guard.test.ts verifies the runtime half of the same invariant.
+  mountApi(app, authMiddleware(deps.auth), {
+    public: [
+      publicSurface(
+        'liveness and the health dot leak only ok/error flags, and a session check here would make "signed out" indistinguishable from "server down"',
+        health,
+      ),
+      publicSurface(
+        'the HMAC in the artifact download URL is the whole authorisation (popy.spec §14); it must sit before the static site could mistake it for a missing file',
+        createArtifactDownloadRoutes(deps),
+      ),
+    ],
+    guarded: [
+      sessionGuarded(createAuthRoutes(deps)),
+      sessionGuarded(createWebAuthnRoutes(deps)),
+      sessionGuarded(createSettingsRoutes(deps)),
+      sessionGuarded(createServerRoutes(deps)),
+      sessionGuarded(createProviderRoutes(deps)),
+      sessionGuarded(createMemoryRoutes(deps)),
+      sessionGuarded(createSkillsRoutes(deps)),
+      sessionGuarded(createUsageRoutes(deps)),
+      sessionGuarded(createUpdateRoutes(deps)),
+      sessionGuarded(createVoiceRoutes(deps)),
+      sessionGuarded(createBackupRoutes(deps)),
+      sessionGuarded(createPushRoutes(deps)),
+      sessionGuarded(createArtifactRoutes(deps)),
+      sessionGuarded(createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) })),
+    ],
+  });
 
   // Last: anything that is not an API route is the frontend or a 404.
   app.use(createStaticSite(deps.webDist));

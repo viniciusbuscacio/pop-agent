@@ -2,24 +2,15 @@ import type { MiddlewareHandler } from 'hono';
 import { SESSION_TOKEN_HEADER } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import { apiError } from './errors.js';
+import { publicV1PathSet } from './route-registry.js';
 
 /**
- * Routes under /v1 that answer without a session.
- *
- * `/v1/events` is here because EventSource cannot send an Authorization
- * header; authenticating the stream is a Phase 2 decision, and today it only
- * carries a hello-world.
+ * Routes under /v1 that answer without a session: derived from the typed
+ * route registry (popy.spec §9), never duplicated here. Each path's written
+ * reason lives next to its declaration in route-registry.ts, and the probe
+ * in route-guard.test.ts asserts nothing beyond that list slips through.
  */
-const PUBLIC_PATHS: ReadonlySet<string> = new Set([
-  '/v1/auth/state',
-  '/v1/setup',
-  '/v1/login',
-  '/v1/auth/recover',
-  '/v1/events',
-  // Unlocking with a passkey happens before there is a session (popy.spec §9).
-  '/v1/auth/webauthn/login/options',
-  '/v1/auth/webauthn/login/verify',
-]);
+const PUBLIC_PATHS: ReadonlySet<string> = publicV1PathSet();
 
 /**
  * Bearer-token guard for /v1 (popy.spec §9). On a token past its first day it

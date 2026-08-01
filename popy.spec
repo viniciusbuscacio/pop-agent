@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.36 — 2026-08-01.
+Version 1.37 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -417,6 +417,20 @@ user message — selection is 100% local, no LLM call:
   leaked backup leaks no keys; restore on a new machine = re-enter keys. The
   session HMAC secret lives in the same table for the same reason.
   Root-level attackers are out of scope and the README says so.
+- **Type-enforced route protection**: an unauthenticated URL must not
+  compile. Route groups reach the app only through `mountApi()`
+  (interface/http/route-registry.ts), which accepts branded
+  `SessionGuardedRoutes` or a `publicSurface(reason, …)` — a bare Hono
+  does not typecheck, so going public is a loud, greppable act with a
+  written reason. `PUBLIC_V1_PATHS` in the same file is the single
+  source of truth for guard exemptions (the auth middleware derives its
+  allowlist from it; no duplicated literals). The runtime half: the
+  probe in route-guard.test.ts walks every registered /v1 route and
+  fires it without a session — anything not on the declared list must
+  answer 401, and the HMAC download surface must answer 4xx without a
+  valid signature. Future compile-time invariants on the same pattern:
+  SecretString branding, so key material cannot flow into a log or a
+  response type.
 
 ## 10. External-content safety (`domain/safety/`)
 
@@ -936,6 +950,16 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.37 (2026-08-01): **Type-enforced route protection (§9).** Routes
+  mount only through `mountApi()`: branded `SessionGuardedRoutes` vs
+  `publicSurface(reason, …)` — an unauthenticated URL no longer
+  compiles by accident. `PUBLIC_V1_PATHS` becomes the single source of
+  truth for guard exemptions (auth middleware derives from it), each
+  with a written reason. A probe test walks every registered /v1 route
+  sessionless and demands 401 unless declared, and asserts the HMAC
+  download surface answers 4xx without a valid signature. healthz and
+  /v1/health moved into their own mini-app to be blessed explicitly.
+  Listed future: SecretString branding on the same pattern.
 - 1.36 (2026-08-01): **Unlimited custom providers (§15).** The single
   fixed `custom` slot becomes a registry of user-created
   OpenAI-compatible instances (`provider.custom.registry`), ids
