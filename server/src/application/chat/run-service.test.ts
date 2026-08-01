@@ -625,6 +625,8 @@ describe('failing over between providers (popy.spec §15, fase 2)', () => {
       resolveChain: () => chain,
       cooldown: { penalize: (providerId) => penalized.push(providerId) },
       onFallback: (info) => fallbacks.push(info),
+      // Short enough that the suite does not wait a real minute.
+      attemptTimeoutMs: 120,
     });
   }
 
@@ -632,6 +634,39 @@ describe('failing over between providers (popy.spec §15, fase 2)', () => {
     { providerId: 'p1', modelId: 'p1/model' },
     { providerId: 'p2', modelId: 'p2/model' },
   ];
+
+  it('moves on from a provider that accepts the run and then says nothing', async () => {
+    // The dead-endpoint case: the socket is open, nothing ever comes back.
+    // Before the silence deadline this hung forever -- no answer, no error,
+    // no failover, because the chain can only act on an error that returns.
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      if (request.provider === 'p1') {
+        return new Promise((_resolve, reject) => {
+          request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        });
+      }
+      request.onEvent?.({ kind: 'delta', text: 'p2 answered' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'a question');
+    // The deadline is real time, so wait for it rather than fake the clock:
+    // the point of the test is that the run does not need a person to give up.
+    const deadline = Date.now() + 4000;
+    for (;;) {
+      const stored = repo.getMessages(chatId, { limit: 10 });
+      if (stored.some((message) => message.content.includes('p2 answered'))) break;
+      if (Date.now() > deadline) throw new Error('the run never moved past the silent provider');
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(penalized).toContain('p1');
+    expect(fallbacks.map((entry) => entry.code)).toContain('attempt_timeout');
+  });
 
   it('retries the next provider when the first refuses with a 402', async () => {
     withChain(TWO);

@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.43 — 2026-08-01.
+Version 1.44 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -832,11 +832,28 @@ reimplemented.
   the current default is left alone, because an empty slot breaks more
   than a stale one.
 - **The chain**: a run's failover chain = chat override (when usable) →
-  global default pair → the priority list, one entry per provider, each
-  with its own default model (`ProviderService.resolveChain`). Only
-  usable providers (key stored or subscription signed in, and switched
-  on) take a place. With nothing usable it degrades to `[resolve()]`,
-  so the run still fails with the error that points at Settings.
+  the priority list, in order, one entry per provider
+  (`ProviderService.resolveChain`). The global default gets NO entry of
+  its own — it used to sit ahead of the list, a hidden #0 nobody could
+  see or move, so an install whose stored default was a dead endpoint
+  kept starting there however the list was arranged. The default is
+  derived from the list, never a second opinion about order; it still
+  decides the MODEL for its own provider (the list says who answers,
+  the model picker says with what). Only usable providers (key stored
+  or subscription signed in, and switched on) take a place. An install
+  that never edited the list gets its existing default as #1, so
+  removing the old control moved nobody's answers. With nothing usable
+  it degrades to the head of the list, so the run still fails with the
+  error that points at Settings.
+- **An attempt may not hang** (`ATTEMPT_SILENCE_TIMEOUT_MS`, 60 s): one
+  attempt that produces NOTHING — no token, no thinking, no tool — is
+  aborted and the chain moves on, with code `attempt_timeout` (a
+  failover class of its own, deliberately distinct from the user's
+  `aborted`). Without it a dead endpoint does not fail at all: the
+  socket waits on the OS TCP timeout, minutes long, and the chain never
+  runs because it can only act on an error that comes back — the chat
+  just sits there with no answer and no message. Any event at all
+  retires the deadline; a slow first token is not a failure.
 - **Error classification is TYPED** (`shouldFailOver`, application
   layer): by code and HTTP status, never substring-only. Fail-forward:
   401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,
@@ -1095,6 +1112,16 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.44 (2026-08-01): **The list is the only priority, and a dead
+  endpoint no longer freezes the chat (§15).** Two faults met in one
+  bug report: the failover chain still put the stored global default
+  ahead of the user's list — a hidden #0 — and one install's default
+  was an Ollama endpoint on a machine that was switched off. Every new
+  chat went there and hung forever: no answer, no error, no journal
+  line, because the chain can only act on an error that returns and a
+  hung socket never returns. The chain now follows the list alone, and
+  an attempt that says nothing for 60 s is abandoned for the next
+  provider.
 - 1.43 (2026-08-01): **The provider priority is the user's to edit
   (§15).** The failover order was hardcoded — definition order, after a
   global default that lived in its own Settings control — so there was

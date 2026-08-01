@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { shouldFailOver } from './failover.js';
 
+describe('a provider that says nothing', () => {
+  it('fails over on the silence deadline, but never on the user s Stop', () => {
+    expect(shouldFailOver({ code: 'attempt_timeout' })).toBe(true);
+    expect(shouldFailOver({ code: 'aborted' })).toBe(false);
+  });
+});
+
 describe('shouldFailOver', () => {
   it.each([401, 402, 403, 404, 408, 429])('fails over on a %i refusal', (status) => {
     expect(shouldFailOver({ code: 'provider_error', status })).toBe(true);

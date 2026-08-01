@@ -27,7 +27,15 @@ export interface RunFailure {
 const FAILOVER_STATUSES = new Set([401, 402, 403, 404, 408, 429]);
 
 /** Codes that fail over regardless of status. */
-const FAILOVER_CODES = new Set(['network_error', 'provider_not_configured']);
+const FAILOVER_CODES = new Set([
+  'network_error',
+  'provider_not_configured',
+  // An endpoint that accepted the connection and then said nothing. Distinct
+  // from `aborted` on purpose: the user stopping must not fail over, but a
+  // provider that never answers must, or one unreachable endpoint freezes
+  // every chat that starts there.
+  'attempt_timeout',
+]);
 
 /** Codes that never fail over, whatever the status says. */
 const FATAL_CODES = new Set(['aborted', 'turn_tainted']);

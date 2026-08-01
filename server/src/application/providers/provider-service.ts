@@ -225,7 +225,12 @@ export class ProviderService {
   order(): string[] {
     const known = this.definitions().map((definition) => definition.id);
     const ordered: string[] = [];
-    for (const id of this.deps.settings.get<string[]>(ORDER_KEY) ?? []) {
+    const stored = this.deps.settings.get<string[]>(ORDER_KEY);
+    // Never edited: the install's existing global default is #1, so removing
+    // the old separate default control cannot silently move anyone's answers
+    // to another provider. From the first edit on, the list alone decides.
+    const seed = stored ?? [this.canonicalId(this.deps.defaults().provider)];
+    for (const id of seed) {
       const canonical = this.canonicalId(id);
       if (known.includes(canonical) && !ordered.includes(canonical)) ordered.push(canonical);
     }
@@ -439,7 +444,9 @@ export class ProviderService {
     for (const candidate of candidates) {
       if (this.usable(candidate.providerId)) return candidate;
     }
-    return candidates[candidates.length > 1 ? 1 : 0] ?? this.ref(DEFAULT_PROVIDER_ID, '');
+    // Nothing usable: answer the head of the list (never the unusable
+    // override), so the run fails with the error that points at Settings.
+    return this.candidates()[0] ?? this.ref(DEFAULT_PROVIDER_ID, '');
   }
 
   /**
@@ -463,20 +470,25 @@ export class ProviderService {
   }
 
   /**
-   * Resolution order: chat override, the global default, then the priority
-   * list the user edits. The default is kept equal to the list's head by
-   * `electDefault`, so the second entry is normally the same provider as the
-   * first of the list -- the dedup in `resolveChain` collapses it.
+   * Resolution order: the chat's own override, then the priority list. That
+   * is the whole rule. The global default does NOT get an entry of its own --
+   * it used to, ahead of the list, which made it a hidden #0 the user could
+   * not see or move: an install whose stored default was a dead endpoint kept
+   * starting there however the list was arranged. The default is derived from
+   * the list (`electDefault`), never a competing opinion about order.
    */
   private candidates(override?: { provider?: string; model?: string }): ModelRef[] {
     const candidates: ModelRef[] = [];
     if (override !== undefined && override.provider !== undefined && override.provider.length > 0) {
       candidates.push(this.ref(this.canonicalId(override.provider), override.model));
     }
+    // The head keeps the globally chosen model when it is that provider's:
+    // the list decides WHO answers, the model picker decides WITH WHAT. Any
+    // other entry falls back to its own default model.
     const defaults = this.deps.defaults();
-    candidates.push(this.ref(this.canonicalId(defaults.provider), defaults.model));
+    const defaultProvider = this.canonicalId(defaults.provider);
     for (const id of this.order()) {
-      candidates.push(this.ref(id, ''));
+      candidates.push(this.ref(id, id === defaultProvider ? defaults.model : ''));
     }
     return candidates;
   }

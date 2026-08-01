@@ -27,6 +27,18 @@ export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
 /** A paused risky action denies itself after this long (popy.spec §10). */
 export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * How long one attempt may say NOTHING -- no token, no thinking, no tool --
+ * before it is abandoned for the next provider (popy.spec §15, fase 2).
+ *
+ * Without it a dead endpoint does not fail: the socket waits on the operating
+ * system's TCP timeout, minutes long, and the failover chain never runs
+ * because it can only act on an error that comes back. The chat just sits
+ * there, no answer and no message. Generous on purpose -- a big local model
+ * loading from disk can take most of a minute to say its first word.
+ */
+export const ATTEMPT_SILENCE_TIMEOUT_MS = 60 * 1000;
+
 export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
   | { ok: false; reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' };
@@ -49,6 +61,8 @@ export interface RunDeps {
   maxConcurrentRuns?: number;
   /** Overridable so tests do not wait five minutes for a denial. */
   confirmTimeoutMs?: number;
+  /** Overridable so tests do not wait a minute for a silent provider. */
+  attemptTimeoutMs?: number;
   /** Offered every finished run; decides by itself whether to rewrite. */
   titles?: { maybeRetitle(chatId: string): Promise<void> };
   /** Where what the run cost is written down (popy.spec §14). */
@@ -486,6 +500,22 @@ export class RunService {
     let failure: RunFailure | undefined;
     let result: AgentRunResult = {};
 
+    // The silence deadline. Any event at all proves the provider is alive and
+    // retires it; until then, this is what stops a hung endpoint from holding
+    // the whole run. Its own controller, so the abort is telling apart from
+    // the user's Stop, which must never fail over.
+    const silence = new AbortController();
+    let spoke = false;
+    let timedOut = false;
+    const deadline = setTimeout(
+      () => {
+        if (spoke) return;
+        timedOut = true;
+        silence.abort();
+      },
+      this.deps.attemptTimeoutMs ?? ATTEMPT_SILENCE_TIMEOUT_MS,
+    );
+
     try {
       result = await bridge.run({
         chatId: run.chatId,
@@ -494,8 +524,10 @@ export class RunService {
         provider: pair.providerId,
         attachments: run.attachments,
         confirm: (question) => this.askConfirm(run, question),
-        signal: run.controller.signal,
+        signal: AbortSignal.any([run.controller.signal, silence.signal]),
         onEvent: (event) => {
+          spoke = true;
+          clearTimeout(deadline);
           // Fragments accumulate on the run itself, so a client mounting
           // mid-run can be handed everything that already streamed
           // ({@link liveRun}); seq marks each one so nothing is counted twice.
@@ -548,7 +580,13 @@ export class RunService {
       });
     } catch {
       failure ??= { code: 'operation_error' };
+    } finally {
+      clearTimeout(deadline);
     }
+
+    // Our own abort, not the bridge's opinion of it: whatever error the abort
+    // surfaced, the truth is that this provider never said anything.
+    if (timedOut) failure = { code: 'attempt_timeout' };
 
     const usage = result.usage;
     if (usage !== undefined && this.deps.llmRuns !== undefined) {
