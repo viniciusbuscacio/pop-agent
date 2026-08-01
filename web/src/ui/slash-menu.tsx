@@ -21,28 +21,63 @@ export function slashCommands(): SlashCommand[] {
   ];
 }
 
+const MENU_CLASS =
+  'absolute bottom-full left-0 z-20 mb-1 flex max-h-56 w-72 flex-col overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg';
+
+function optionClass(active: boolean): string {
+  return `flex items-baseline gap-2 truncate px-3 py-1.5 text-left ${
+    active ? 'bg-[var(--hover-overlay)]' : ''
+  }`;
+}
+
 export function SlashMenu({
   options,
+  active,
   onPick,
 }: {
   options: SlashCommand[];
+  active: number;
   onPick: (command: SlashCommand) => void;
 }) {
   return (
-    <div
-      data-testid="slash-menu"
-      className="absolute bottom-full left-0 z-20 mb-1 flex max-h-56 w-72 flex-col overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-    >
-      {options.map((command) => (
+    <div data-testid="slash-menu" className={MENU_CLASS}>
+      {options.map((command, index) => (
         <button
           key={command.name}
           type="button"
           data-testid="slash-option"
           onClick={() => onPick(command)}
-          className="flex items-baseline gap-2 truncate px-3 py-1.5 text-left hover:bg-[var(--hover-overlay)]"
+          className={optionClass(index === active)}
         >
           <span>/{command.name}</span>
           <span className="truncate text-xs text-[var(--muted)]">{command.description}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The /model submenu: same look, but options are model ids ('' = default). */
+export function ModelMenu({
+  models,
+  active,
+  onPick,
+}: {
+  models: string[];
+  active: number;
+  onPick: (model: string) => void;
+}) {
+  return (
+    <div data-testid="slash-menu" className={MENU_CLASS}>
+      {['', ...models].map((model, index) => (
+        <button
+          key={model === '' ? '__default' : model}
+          type="button"
+          data-testid="slash-option"
+          onClick={() => onPick(model)}
+          className={optionClass(index === active)}
+        >
+          <span className="truncate">{model === '' ? t('chat.defaultModel') : model}</span>
         </button>
       ))}
     </div>

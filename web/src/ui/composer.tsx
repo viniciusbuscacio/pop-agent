@@ -3,7 +3,7 @@ import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
-import { SlashMenu, slashCommands, type SlashCommand } from './slash-menu';
+import { ModelMenu, SlashMenu, slashCommands, type SlashCommand } from './slash-menu';
 
 /**
  * The composer, in aw's shape: the textarea on the left, then attach, mic
@@ -27,6 +27,8 @@ export function Composer({
   onSend,
   onStop,
   onNewChat,
+  models,
+  onSetModel,
 }: {
   chatId: string;
   busy: boolean;
@@ -34,6 +36,8 @@ export function Composer({
   onSend: (text: string, attachments: AttachmentDTO[], artifactIds?: string[]) => void;
   onStop: () => void;
   onNewChat: () => void;
+  models: string[];
+  onSetModel: (model: string) => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
@@ -44,6 +48,9 @@ export function Composer({
   const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
   // Slash commands: a "/" as the very first character opens the command menu.
   const [slashQuery, setSlashQuery] = useState<string | undefined>(undefined);
+  // Picking /model swaps the command menu for the model list, same spot.
+  const [slashMode, setSlashMode] = useState<'commands' | 'models'>('commands');
+  const [slashActive, setSlashActive] = useState(0);
   const [allFiles, setAllFiles] = useState<{ id: string; name: string }[] | undefined>(undefined);
   const mentionCaret = useRef(0);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -71,6 +78,7 @@ export function Composer({
     setMentions([]);
     setMentionQuery(undefined);
     setSlashQuery(undefined);
+    setSlashMode('commands');
     setNotice(undefined);
   }, [storageKey]);
 
@@ -123,16 +131,29 @@ export function Composer({
   }
 
   function pickSlash(command: SlashCommand): void {
-    setSlashQuery(undefined);
     if (command.name === 'help') {
       // The menu with every description IS the help: reopen it unfiltered.
       persist('/');
       setSlashQuery('');
-    } else {
-      persist('');
+      setSlashActive(0);
+      area.current?.focus();
+      return;
     }
+    persist('');
+    setSlashQuery(undefined);
     area.current?.focus();
     if (command.name === 'new') onNewChat();
+    if (command.name === 'model') {
+      setSlashMode('models');
+      setSlashActive(0);
+    }
+  }
+
+  function pickModel(model: string): void {
+    setSlashMode('commands');
+    setSlashQuery(undefined);
+    onSetModel(model);
+    area.current?.focus();
   }
 
   const slashMatches =
@@ -289,11 +310,39 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (slashQuery !== undefined && slashMatches.length > 0) {
+    if (slashMode === 'models') {
+      const count = models.length + 1;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSlashActive((current) =>
+          (current + (event.key === 'ArrowDown' ? 1 : -1) + count) % count,
+        );
+        return;
+      }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        const first = slashMatches[0];
-        if (first !== undefined) pickSlash(first);
+        pickModel(slashActive === 0 ? '' : (models[slashActive - 1] ?? ''));
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSlashMode('commands');
+        setSlashQuery(undefined);
+        return;
+      }
+    } else if (slashQuery !== undefined && slashMatches.length > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSlashActive((current) =>
+          (current + (event.key === 'ArrowDown' ? 1 : -1) + slashMatches.length) %
+          slashMatches.length,
+        );
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        const picked = slashMatches[Math.min(slashActive, slashMatches.length - 1)];
+        if (picked !== undefined) pickSlash(picked);
         return;
       }
       if (event.key === 'Escape') {
@@ -415,8 +464,10 @@ export function Composer({
         />
         {voice === 'idle' ? (
           <div className="relative flex-1">
-          {slashQuery !== undefined && slashMatches.length > 0 ? (
-            <SlashMenu options={slashMatches} onPick={pickSlash} />
+          {slashMode === 'models' ? (
+            <ModelMenu models={models} active={slashActive} onPick={pickModel} />
+          ) : slashQuery !== undefined && slashMatches.length > 0 ? (
+            <SlashMenu options={slashMatches} active={slashActive} onPick={pickSlash} />
           ) : null}
           {mentionQuery !== undefined && mentionMatches.length > 0 ? (
             <div
