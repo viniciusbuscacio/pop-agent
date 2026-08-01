@@ -19,6 +19,9 @@ export interface ChatRepo {
   /** A manual rename turns auto-titling off; nothing turns it back on today. */
   setAutoTitle(id: string, autoTitle: boolean): void;
 
+  /** Append-only forensic log of every title a chat ever had (popy.spec §14). */
+  recordTitle(entry: { chatId: string; title: string; turn: number; source: 'auto' | 'manual'; createdAt: string }): void;
+
   /**
    * Records where pi keeps this conversation's own session file. Popy never
    * reads that file -- it only needs the path to hand back when the chat wakes

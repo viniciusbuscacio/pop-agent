@@ -1,4 +1,5 @@
 import type { Message } from '../../domain/chat/chat.js';
+import { fallbackTitle, isGenericTitle, uniqueTitle } from '../../domain/chat/title.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { EventSink } from '../ports/event-sink.js';
 import type { ProviderGateway } from '../ports/provider-gateway.js';
@@ -23,7 +24,7 @@ const EVERY = 10;
 const MAX_MESSAGES = 12;
 const MAX_CHARS_PER_MESSAGE = 280;
 
-const MAX_TITLE_LENGTH = 60;
+const MAX_TITLE_LENGTH = 40;
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_ANSWER_TOKENS = 220;
 
@@ -49,17 +50,27 @@ export class TitleService {
 
   /** Called after every finished run; decides by itself whether to work. */
   async maybeRetitle(chatId: string): Promise<void> {
+    const skip = (reason: string): void => {
+      this.deps.onFailure?.(`auto-title ${chatId}: skipped (${reason})`);
+    };
+
     const chat = this.deps.chats.get(chatId);
-    if (chat === undefined || !chat.autoTitle) return;
+    if (chat === undefined) return skip('chat-gone');
+    if (!chat.autoTitle) return skip('manual-rename');
 
     const turns = this.deps.chats.countUserMessages(chatId);
-    if (turns < FIRST_TURN || (turns - FIRST_TURN) % EVERY !== 0) return;
-
-    const apiKey = this.deps.apiKey();
-    if (apiKey === undefined) return;
+    if (turns < FIRST_TURN || (turns - FIRST_TURN) % EVERY !== 0) {
+      return skip(`cadence (turn ${String(turns)})`);
+    }
 
     const messages = this.deps.chats.getMessages(chatId, { limit: MAX_MESSAGES });
-    if (messages.length === 0) return;
+    if (messages.length === 0) return skip('no-messages');
+
+    const apiKey = this.deps.apiKey();
+    if (apiKey === undefined) {
+      this.fallback(chatId, chat.title, messages, 'no-api-key');
+      return;
+    }
 
     let answer: string;
     try {
@@ -73,17 +84,55 @@ export class TitleService {
       this.deps.onFailure?.(
         `auto-title failed for ${chatId}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
+      this.fallback(chatId, chat.title, messages, 'llm-error');
       return;
     }
 
     const parsed = parseTitleAnswer(answer);
-    if (parsed.title !== undefined) {
-      this.deps.chats.rename(chatId, parsed.title);
-      this.deps.sink.emit({ kind: 'title', chatId, title: parsed.title });
+    if (parsed.title === undefined) {
+      this.deps.onFailure?.(`auto-title ${chatId}: unparseable answer`);
+      this.fallback(chatId, chat.title, messages, 'parse-failed');
+    } else if (parsed.title.toLowerCase() === chat.title.toLowerCase()) {
+      skip('same-title');
+    } else {
+      const title = uniqueTitle(
+        parsed.title,
+        this.deps.chats.titles().filter((entry) => entry.toLowerCase() !== chat.title.toLowerCase()),
+      );
+      this.deps.chats.rename(chatId, title);
+      this.deps.chats.recordTitle({
+        chatId,
+        title,
+        turn: turns,
+        source: 'auto',
+        createdAt: new Date().toISOString(),
+      });
+      this.deps.sink.emit({ kind: 'title', chatId, title });
     }
     if (parsed.summary !== undefined) {
       this.deps.chats.setSummary(chatId, parsed.summary);
     }
+  }
+
+  /**
+   * The LLM is out (no key, refused, gibberish): a chat still carrying a
+   * starter name gets the deterministic one instead -- a title always exists.
+   */
+  private fallback(chatId: string, currentTitle: string, messages: Message[], why: string): void {
+    if (!isGenericTitle(currentTitle)) return;
+    const firstUser = messages.find((message) => message.role === 'user' && message.content.length > 0);
+    if (firstUser === undefined) return;
+    const title = fallbackTitle(firstUser.content, this.deps.chats.titles());
+    this.deps.chats.rename(chatId, title);
+    this.deps.chats.recordTitle({
+      chatId,
+      title,
+      turn: this.deps.chats.countUserMessages(chatId),
+      source: 'auto',
+      createdAt: new Date().toISOString(),
+    });
+    this.deps.sink.emit({ kind: 'title', chatId, title });
+    this.deps.onFailure?.(`auto-title ${chatId}: deterministic fallback (${why})`);
   }
 }
 
@@ -125,12 +174,18 @@ export function parseTitleAnswer(answer: string): { title?: string; summary?: st
     title = lines[0];
   }
 
-  const cleanTitle = title === undefined ? undefined : tidy(title).slice(0, MAX_TITLE_LENGTH).trim();
+  const cleanTitle =
+    title === undefined
+      ? undefined
+      : tidy(title)
+          .replace(/[.!?,;:\u2026]+$/, '')
+          .slice(0, MAX_TITLE_LENGTH)
+          .trim();
   const cleanSummary =
     summary === undefined ? undefined : tidy(summary).slice(0, MAX_SUMMARY_LENGTH).trim();
 
   return {
-    ...(cleanTitle === undefined || cleanTitle.length === 0 ? {} : { title: cleanTitle }),
+    ...(cleanTitle === undefined || cleanTitle.length < 2 ? {} : { title: cleanTitle }),
     ...(cleanSummary === undefined || cleanSummary.length === 0 ? {} : { summary: cleanSummary }),
   };
 }

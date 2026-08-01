@@ -88,6 +88,12 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET pi_session_id = ? WHERE id = ?').run(piSessionId, id);
   }
 
+  recordTitle(entry: { chatId: string; title: string; turn: number; source: 'auto' | 'manual'; createdAt: string }): void {
+    this.db
+      .prepare('INSERT INTO chat_titles (chat_id, title, turn, source, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(entry.chatId, entry.title, entry.turn, entry.source, entry.createdAt);
+  }
+
   setSummary(id: string, summary: string): void {
     this.db.prepare('UPDATE chats SET summary = ? WHERE id = ?').run(summary, id);
   }

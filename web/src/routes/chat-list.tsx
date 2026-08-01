@@ -321,7 +321,9 @@ function ChatRow({
 
   async function commitRename(): Promise<void> {
     setEditing(false);
-    if (draft.trim() !== chat.title) await rename(chat.id, draft);
+    // Empty means "I changed my mind", not "name it nothing".
+    const trimmed = draft.trim();
+    if (trimmed.length > 0 && trimmed !== chat.title) await rename(chat.id, trimmed);
   }
 
   if (editing) {
@@ -407,7 +409,19 @@ function ChatRow({
                 className="h-2 w-2 shrink-0 self-center rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
               />
             ) : null}
-            <span className="truncate text-sm font-medium">{chat.title}</span>
+            <span
+              className="truncate text-sm font-medium"
+              onDoubleClick={(event) => {
+                // Inline rename (popy.spec §14): double-click does what
+                // the menu's Rename does, one gesture less.
+                event.preventDefault();
+                event.stopPropagation();
+                setDraft(chat.title);
+                setEditing(true);
+              }}
+            >
+              {chat.title}
+            </span>
             {badge ? (
               <span
                 data-testid="archived-badge"

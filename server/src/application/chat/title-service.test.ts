@@ -160,6 +160,71 @@ describe('when the title job runs', () => {
     expect(failures).toHaveLength(1);
   });
 
+  it('falls back to a deterministic title when a generic chat has no key', async () => {
+    chats.rename(CHAT, 'Chat 7'); // the starter name nobody chose
+    apiKey = undefined;
+    seedTurns(3);
+
+    await service.maybeRetitle(CHAT);
+
+    expect(gateway.requests).toHaveLength(0);
+    expect(chats.get(CHAT)?.title).toBe('Question 1 2'.slice(0, 0) || 'Question 1'); // from the first user words
+    expect(chats.get(CHAT)?.title).not.toBe('Chat 7');
+  });
+
+  it('names a colliding title uniquely, case-insensitive', async () => {
+    chats.create({
+      id: 'chat-other',
+      title: 'kimi pricing',
+      model: '',
+      provider: '',
+      archived: false,
+      piSessionId: '',
+      summary: '',
+      autoTitle: true,
+      createdAt: T0,
+      updatedAt: T0,
+    });
+    seedTurns(3);
+
+    await service.maybeRetitle(CHAT);
+
+    expect(chats.get(CHAT)?.title).toBe('Kimi pricing 2');
+  });
+
+  it('records every auto-title in the forensic log', async () => {
+    seedTurns(3);
+
+    await service.maybeRetitle(CHAT);
+
+    const rows = db
+      .prepare('SELECT title, turn, source FROM chat_titles WHERE chat_id = ?')
+      .all(CHAT) as { title: string; turn: number; source: string }[];
+    expect(rows).toEqual([{ title: 'Kimi pricing', turn: 3, source: 'auto' }]);
+  });
+
+  it('logs the reason of every skip', async () => {
+    const failures: string[] = [];
+    service = new TitleService({
+      chats,
+      gateway,
+      apiKey: () => apiKey,
+      serviceModel: () => 'moonshotai/kimi-k3',
+      sink: { emit: (event) => events.push(event) },
+      onFailure: (message) => failures.push(message),
+    });
+    seedTurns(2); // below the cadence
+
+    await service.maybeRetitle(CHAT);
+    expect(failures[0]).toContain('cadence');
+
+    failures.length = 0;
+    seedTurns(1); // turn 3 now
+    gateway.answer = `TITLE: Question 1\nSUMMARY: same as before`;
+    await service.maybeRetitle(CHAT);
+    expect(failures[0]).toContain('same-title');
+  });
+
   it('keeps the title when the answer has no usable one', async () => {
     gateway.answer = '   ';
     seedTurns(3);
@@ -229,6 +294,13 @@ describe('parsing the answer', () => {
 
   it('takes the first line when the model skipped the labels', () => {
     expect(parseTitleAnswer('Grocery list')).toEqual({ title: 'Grocery list' });
+  });
+
+  it('sheds trailing punctuation and refuses near-empty titles', () => {
+    expect(parseTitleAnswer('TITLE: Kimi pricing!\nSUMMARY: x').title).toBe('Kimi pricing');
+    expect(parseTitleAnswer('TITLE: "Costs."\nSUMMARY: x').title).toBe('Costs');
+    expect(parseTitleAnswer('TITLE: a\nSUMMARY: x').title).toBeUndefined();
+    expect(parseTitleAnswer('TITLE: !\nSUMMARY: x').title).toBeUndefined();
   });
 
   it('caps a runaway title', () => {

@@ -1,6 +1,6 @@
-import { DEFAULT_CHAT_TITLE, type Attachment, type ToolRecord } from '../../domain/chat/chat.js';
+import { type Attachment, type ToolRecord } from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
-import { fallbackTitle } from '../../domain/chat/title.js';
+import { fallbackTitle, isGenericTitle } from '../../domain/chat/title.js';
 import type { AgentBridge, AgentRunResult } from '../ports/agent-bridge.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -147,9 +147,16 @@ export class RunService {
 
     // A sidebar full of "New chat" is a sidebar you cannot read. Phase 3 lets
     // a model write this; until then the first message names the chat.
-    if (isFirstMessage && chat.title === DEFAULT_CHAT_TITLE) {
+    if (isFirstMessage && isGenericTitle(chat.title)) {
       const title = fallbackTitle(text, this.deps.chats.titles());
       this.deps.chats.rename(chatId, title);
+      this.deps.chats.recordTitle({
+        chatId,
+        title,
+        turn: 1,
+        source: 'auto',
+        createdAt: now,
+      });
       this.deps.sink.emit({ kind: 'title', chatId, title });
     }
 

@@ -47,7 +47,7 @@ describe('chat collection', () => {
 
     const created = await newChat();
 
-    expect(created.title).toBe('New chat');
+    expect(created.title).toBe('Chat 1'); // deterministic starter, lowest free N
     const { chats } = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });

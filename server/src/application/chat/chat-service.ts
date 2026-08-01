@@ -1,4 +1,5 @@
 import { DEFAULT_CHAT_TITLE, type Chat, type ChatSummary, type Message } from '../../domain/chat/chat.js';
+import { nextChatTitle } from '../../domain/chat/title.js';
 import { newChatId } from '../../domain/ids.js';
 import type { ChatPurger } from '../ports/chat-purger.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
@@ -22,9 +23,12 @@ export class ChatService {
 
   create(): Chat {
     const now = new Date(this.deps.clock.now()).toISOString();
+    // The deterministic starter (popy.spec §14): "Chat N", lowest free N
+    // among the living chats, so a brand-new sidebar is already readable.
+    const starter = nextChatTitle(this.deps.chats.list({ archived: false }).map((c) => c.title));
     return this.deps.chats.create({
       id: newChatId(),
-      title: DEFAULT_CHAT_TITLE,
+      title: starter,
       model: '',
       provider: '',
       archived: false,
@@ -49,9 +53,17 @@ export class ChatService {
 
     const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
     // An empty rename means "undo my title", not "leave it blank".
-    this.deps.chats.rename(id, trimmed.length > 0 ? trimmed : DEFAULT_CHAT_TITLE);
+    const chosen = trimmed.length > 0 ? trimmed : DEFAULT_CHAT_TITLE;
+    this.deps.chats.rename(id, chosen);
     // A name chosen by hand is not the machine's to improve on.
     this.deps.chats.setAutoTitle(id, false);
+    this.deps.chats.recordTitle({
+      chatId: id,
+      title: chosen,
+      turn: this.deps.chats.countUserMessages(id),
+      source: 'manual',
+      createdAt: new Date().toISOString(),
+    });
     return this.deps.chats.get(id);
   }
 

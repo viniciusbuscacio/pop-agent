@@ -178,7 +178,7 @@ messages(id, chat_id, role, content, thinking, tools_json,
          attachments_json, created_at)
 messages_fts      -- FTS5 external-content table over messages.content
 messages_vec      -- sqlite-vec embeddings (message-level)
-chat_titles(chat_id, title, source, created_at)
+chat_titles(chat_id, title, turn, source, created_at)  -- append-only, §14
 user_memory(doc, backup, last_condensed_at)     -- single-row living doc
 settings(key, value)                            -- JSON per key
 secrets(key, value_encrypted)                   -- §9, secret.key encrypted
@@ -528,16 +528,22 @@ events from stale runs.
 - Thinking: collapsed streaming card. Tool calls: card per call with
   real-time output; consecutive calls group. Sensitive-action confirmation
   renders inline in the chat (§10).
-- Auto-title, **fallback first**: the first message of a chat still called
-  "New chat" names it immediately, with no model involved (stop-word scheme,
-  PT/EN, title-cased, de-duplicated). A sidebar of twenty "New chat" entries
-  is unreadable, and the fallback is also what runs when the provider is
-  down, out of credit or not configured. Once a provider exists the LLM title
-  takes over on top of it:
-- Auto-title (LLM): aw's scheme — first title at the 3rd user turn, regenerate
-  every 10 turns, chat's own model, TITLE+SUMMARY prompt in the
-  conversation's language, LLM-less fallback (4 words, PT/EN stop-words),
-  dedup suffix, manual rename disables auto forever.
+- Chat titles: a chat is born with the deterministic starter **"Chat N"**
+  (lowest free N among the living chats). The first user message renames a
+  still-generic chat immediately, with no model involved (stop-word scheme,
+  PT/EN, title-cased, de-duplicated case-insensitively with " 2", " 3"…).
+  The fallback is also what runs when the provider is down, out of credit or
+  not configured. Once a provider exists the LLM title takes over on top of
+  it:
+- Auto-title (LLM): aw's scheme — ONE call writes TITLE (≤40 chars) +
+  SUMMARY together; first title at the 3rd user turn, regenerate every 10
+  turns, service model, prompt in the conversation's language, tolerant
+  parse (<2 chars = failure), LLM-less fallback (4 words, PT/EN stop-words),
+  manual rename disables auto forever (a rename by the agent does NOT).
+  Every skip logs its reason (manual-rename, cadence, same-title…) so "why
+  didn't it rename?" is one log line. The summary lands on the chat row and
+  feeds the recent-chats catalog (§7.1) — infinite chats stay indexed.
+  `chat_titles` is append-only: every title, its user turn, auto|manual.
 - **Usage dashboard** (Settings → Usage): full cost control from
   `llm_runs` — per day, per provider, per model, per conversation.
 - Files the agent creates: download link in chat when a tool reports a
