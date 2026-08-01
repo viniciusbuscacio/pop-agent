@@ -4,12 +4,11 @@ import type { ArtifactDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
-import { ShellHeader } from './shell-header';
 import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
-import { Button } from '../ui/controls';
+import { Button, Segmented } from '../ui/controls';
 
 /**
  * The content pane of Files (31/07, explorer layout): on a wide screen it
@@ -163,19 +162,36 @@ export function FilesPage() {
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
-      {/* On a phone this screen replaces the sidebar, and the app's top bar
-          must not vanish with it (Vinicius, 31/07): same header, own copy. */}
-      <ShellHeader className="md:hidden" settingsTestId="files-shell-settings" />
+      {/* Files is a first-class mobile segment, just like Chats and Tasks.
+          Keep the same segmented header instead of replacing it with a
+          one-off wordmark/back-button header. */}
+      <div className="border-b border-[var(--border)] p-3 md:hidden">
+        <Segmented<'chats' | 'files' | 'tasks'>
+          ariaLabel={t('shell.segments')}
+          value="files"
+          onChange={(value) => {
+            if (value === 'tasks') {
+              navigate('/tasks');
+              return;
+            }
+            if (value === 'chats') {
+              let lastChat = '';
+              try {
+                lastChat = localStorage.getItem('popy.lastChat') ?? '';
+              } catch {
+                // Fall back to the chat list when storage is unavailable.
+              }
+              navigate(lastChat.length > 0 ? `/chat/${lastChat}` : '/');
+            }
+          }}
+          options={[
+            { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
+            { value: 'files', label: t('shell.segFiles'), testId: 'segment-files' },
+            { value: 'tasks', label: t('shell.segTasks'), testId: 'segment-tasks' },
+          ]}
+        />
+      </div>
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
-        <button
-          type="button"
-          data-testid="files-back"
-          aria-label={t('common.back')}
-          onClick={() => navigate('/')}
-          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
-        >
-          ←
-        </button>
         <div className="flex min-w-0 flex-1 items-center gap-1" data-testid="files-breadcrumb">
           <button
             type="button"
