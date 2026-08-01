@@ -213,10 +213,14 @@ describe('finishing a run', () => {
     expect(sink.of('error')[0]?.code).toBe('provider_error');
     expect(sink.of('done')).toHaveLength(0);
     const messages = repo.getMessages(chatId, { limit: 10 });
-    expect(messages[messages.length - 1]?.content).toBe('I was saying');
+    expect(messages[messages.length - 2]?.content).toBe('I was saying');
+    // ...and the failure itself is marked, persisted, forever.
+    const mark = messages[messages.length - 1];
+    expect(mark?.role).toBe('system');
+    expect(mark?.content).toContain('provider_error');
   });
 
-  it('stores nothing when a run fails before saying anything', async () => {
+  it('persists a system mark when a run fails before saying anything', async () => {
     const chatId = newChat();
     bridge.script = (request) => {
       request.onEvent({ kind: 'error', code: 'provider_error' });
@@ -226,7 +230,28 @@ describe('finishing a run', () => {
     runs.startRun(chatId, 'question');
     await runs.whenIdle();
 
-    expect(repo.getMessages(chatId, { limit: 10 })).toHaveLength(1); // just the user's
+    // History is forever: the user SAW an error, so the error is in the
+    // history (user question + system mark), surviving any reload.
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages).toHaveLength(2);
+    const mark = messages[messages.length - 1];
+    expect(mark?.role).toBe('system');
+    expect(mark?.content).toBe('That answer could not be finished. (provider_error)');
+  });
+
+  it('marks a stopped answer as stopped, not a generic failure', async () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'error', code: 'aborted' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.role).toBe('system');
+    expect(messages[messages.length - 1]?.content).toBe('You stopped this answer.');
   });
 
   it('treats a thrown adapter as a failed run rather than a crash', async () => {
@@ -266,7 +291,8 @@ describe('stopping a run', () => {
 
     expect(sink.of('error')[0]?.code).toBe('aborted');
     const messages = repo.getMessages(chatId, { limit: 10 });
-    expect(messages[messages.length - 1]?.content).toBe('partial');
+    expect(messages[messages.length - 2]?.content).toBe('partial');
+    expect(messages[messages.length - 1]?.content).toBe('You stopped this answer.');
   });
 
   it('reports nothing to stop when the chat is idle', () => {

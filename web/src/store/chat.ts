@@ -279,25 +279,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const answered = live.content.length > 0 || live.thinking.length > 0 || live.tools.length > 0;
         const messageId = event.kind === 'done' ? event.messageId : `local-${runId}`;
 
+        // The server persists the same mark (a system message on failure,
+        // the answer on success); this local copy makes it visible without
+        // waiting for a reload, and the next openChat replaces it with the
+        // stored truth.
+        const stored: MessageDTO[] = answered
+          ? [
+              {
+                id: messageId,
+                chatId,
+                role: 'assistant',
+                content: live.content,
+                thinking: live.thinking,
+                tools: live.tools,
+                attachments: [],
+                createdAt: new Date().toISOString(),
+              },
+            ]
+          : [];
+        if (event.kind === 'error') {
+          stored.push({
+            id: `local-${runId}-error`,
+            chatId,
+            role: 'system',
+            content:
+              event.code === 'aborted'
+                ? 'You stopped this answer.'
+                : `That answer could not be finished. (${event.code})`,
+            thinking: '',
+            tools: [],
+            attachments: [],
+            createdAt: new Date().toISOString(),
+          });
+        }
+
         set((state) => ({
-          messages: answered
-            ? {
-                ...state.messages,
-                [chatId]: [
-                  ...(state.messages[chatId] ?? []),
-                  {
-                    id: messageId,
-                    chatId,
-                    role: 'assistant',
-                    content: live.content,
-                    thinking: live.thinking,
-                    tools: live.tools,
-                    attachments: [],
-                    createdAt: new Date().toISOString(),
-                  },
-                ],
-              }
-            : state.messages,
+          messages:
+            stored.length > 0
+              ? {
+                  ...state.messages,
+                  [chatId]: [...(state.messages[chatId] ?? []), ...stored],
+                }
+              : state.messages,
           live: without(state.live, chatId),
           failures:
             event.kind === 'error'

@@ -223,7 +223,7 @@ function toMessage(row: MessageRow): Message {
   return {
     id: row.id,
     chatId: row.chat_id,
-    role: row.role === 'assistant' ? 'assistant' : 'user',
+    role: row.role === 'assistant' ? 'assistant' : row.role === 'system' ? 'system' : 'user',
     content: row.content,
     thinking: row.thinking,
     tools: parseJson<ToolRecord[]>(row.tools_json, []),

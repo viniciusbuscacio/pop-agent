@@ -263,7 +263,7 @@ export interface ToolCallDTO {
 export interface MessageDTO {
   id: string;
   chatId: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   thinking: string;
   tools: ToolCallDTO[];

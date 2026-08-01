@@ -30,7 +30,7 @@ export interface ChatSummary extends Chat {
   preview: string;
 }
 
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = 'user' | 'assistant' | 'system';
 
 export type ToolStatus = 'start' | 'output' | 'done' | 'error';
 

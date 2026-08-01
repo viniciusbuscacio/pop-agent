@@ -35,6 +35,9 @@ export function ChatPage() {
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [missed, setMissed] = useState(0);
+  // The floating "↓" is the visible half of follow mode being off.
+  const [showJump, setShowJump] = useState(false);
+  const touchY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     // Remembered per device, so the Chats segment reopens where you were.
@@ -47,6 +50,7 @@ export function ChatPage() {
     // was on screen: a reload mid-run must not show the answer twice.
     void openChat(chatId);
     setMissed(0);
+    setShowJump(false);
     atBottom.current = true;
   }, [chatId, openChat]);
 
@@ -108,17 +112,54 @@ export function ChatPage() {
       setMissed(0);
     } else {
       setMissed((count) => count + 1);
+      setShowJump(true);
     }
   }, [messages?.length, streamedLength]);
 
-  function onScroll(): void {
+  // "Is the reader at the bottom?" with aw's tolerance: generous enough that
+  // a bounce or an address-bar resize keeps follow mode.
+  const BOTTOM_TOLERANCE_PX = 40;
+
+  function distanceFromBottom(): number {
     const element = scroller.current;
-    if (element === null) return;
-    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
-    // 96px, aw's threshold: generous enough that a bounce or an address-bar
-    // resize does not break follow mode, small enough that scrolling up does.
-    atBottom.current = distance < 96;
-    if (atBottom.current) setMissed(0);
+    if (element === null) return 0;
+    return element.scrollHeight - element.scrollTop - element.clientHeight;
+  }
+
+  function disarm(): void {
+    atBottom.current = false;
+    setShowJump(true);
+  }
+
+  // Follow mode is disarmed by the READER's hand, never by scrollTop math:
+  // programmatic scrolls (the autoscroll itself) move scrollTop too, and
+  // mistaking them for the reader is the classic jumpy-scroll bug. A wheel
+  // up or a finger dragging content down means "let me read above".
+  function onWheel(event: React.WheelEvent): void {
+    if (event.deltaY < 0 && distanceFromBottom() > BOTTOM_TOLERANCE_PX) disarm();
+  }
+
+  function onTouchStart(event: React.TouchEvent): void {
+    touchY.current = event.touches[0]?.clientY;
+  }
+
+  function onTouchMove(event: React.TouchEvent): void {
+    const start = touchY.current;
+    const now = event.touches[0]?.clientY;
+    if (start === undefined || now === undefined) return;
+    if (now > start + 4 && distanceFromBottom() > BOTTOM_TOLERANCE_PX) disarm();
+    touchY.current = now;
+  }
+
+  // Reaching the bottom -- by finger, wheel or the jump button -- rearms
+  // follow mode. This one MAY come from scrollTop: it only fires when the
+  // bottom is actually visible, which is true however we got there.
+  function onScroll(): void {
+    if (distanceFromBottom() < BOTTOM_TOLERANCE_PX) {
+      atBottom.current = true;
+      setShowJump(false);
+      setMissed(0);
+    }
   }
 
   function jumpToLatest(): void {
@@ -126,6 +167,7 @@ export function ChatPage() {
     if (element === null) return;
     atBottom.current = true;
     element.scrollTop = element.scrollHeight;
+    setShowJump(false);
     setMissed(0);
   }
 
@@ -193,6 +235,9 @@ export function ChatPage() {
       <div
         ref={scroller}
         onScroll={onScroll}
+        onWheel={onWheel}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         data-testid="chat-scroller"
         className="relative flex-1 overflow-y-auto"
       >
@@ -262,14 +307,20 @@ export function ChatPage() {
         </div>
       </div>
 
-      {missed > 0 ? (
+      {showJump ? (
         <button
           type="button"
           data-testid="jump-to-latest"
           onClick={jumpToLatest}
-          className="mx-auto mb-2 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-1.5 text-xs shadow-lg"
+          aria-label={t('chat.jumpToLatest')}
+          className="mx-auto mb-2 flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
         >
-          {t('chat.jumpToLatest')}
+          <span aria-hidden="true">↓</span>
+          {missed > 0 ? (
+            <span data-testid="jump-to-latest-badge" className="text-xs text-[var(--accent)]">
+              {t('chat.newMessages')}
+            </span>
+          ) : null}
         </button>
       ) : null}
 

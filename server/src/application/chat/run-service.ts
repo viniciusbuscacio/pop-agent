@@ -400,8 +400,8 @@ export class RunService {
     let messageId = '';
 
     // On success the message is always stored, so `done` can carry a real id.
-    // On failure it is stored only if the answer had started -- a user who
-    // watched half a reply appear should still find it after a reload.
+    // On failure a partial answer is still stored -- a user who watched half
+    // a reply appear should find it after a reload.
     if (failure === undefined || somethingArrived) {
       messageId = chats.appendMessage({
         id: newMessageId(),
@@ -413,8 +413,27 @@ export class RunService {
         attachments: [],
         createdAt: finishedAt,
       }).id;
-      chats.touch(run.chatId, finishedAt);
     }
+    // EVERY failure also leaves a persisted system message (popy.spec §6): an
+    // error that existed only as an SSE event vanishes on reload, and the
+    // user who saw it can no longer ask "what happened?". History is forever.
+    if (failure !== undefined) {
+      chats.appendMessage({
+        id: newMessageId(),
+        chatId: run.chatId,
+        role: 'system',
+        content:
+          failure === 'aborted'
+            ? 'You stopped this answer.'
+            : `That answer could not be finished. (${failure})`,
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: finishedAt,
+      });
+    }
+    // A message was always appended (the answer, or the error mark).
+    chats.touch(run.chatId, finishedAt);
 
     sink.emit(
       failure === undefined

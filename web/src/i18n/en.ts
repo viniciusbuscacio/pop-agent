@@ -113,7 +113,8 @@ export const en = {
     'This run read untrusted external content, so a risky command is held until you decide.',
   'chat.confirm.allow': 'Allow',
   'chat.confirm.deny': 'Deny',
-  'chat.jumpToLatest': '↓ New messages',
+  'chat.jumpToLatest': 'Jump to the latest messages',
+  'chat.newMessages': 'New messages',
   'chat.model': 'Model',
   'chat.defaultModel': 'Default model',
 

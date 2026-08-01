@@ -18,6 +18,16 @@ export function ChatMessage({
 }) {
   const showThinking = useThinkingStore((state) => state.show);
 
+  // A run that failed or was stopped leaves this mark in the history
+  // forever (popy.spec §6): quiet, centered, unmistakably not a reply.
+  if (message.role === 'system') {
+    return (
+      <p data-testid="message-system" className="text-center text-xs text-[var(--danger)]">
+        {message.content}
+      </p>
+    );
+  }
+
   if (message.role === 'user') {
     return (
       <div className="flex flex-col items-end gap-2" data-testid="message-user">
