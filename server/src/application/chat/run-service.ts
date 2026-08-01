@@ -31,6 +31,16 @@ export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
   | { ok: false; reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' };
 
+/**
+ * How a run ended, for whoever asked to be told ({@link RunService.whenRunEnds}).
+ * The background-task scheduler is the caller: it writes the code down as the
+ * task's last status (popy.spec §21).
+ */
+export type RunOutcome = { ok: true } | { ok: false; code: string };
+
+/** Outcomes kept for a run nobody was waiting on yet, so a fast finish is not lost. */
+const REMEMBERED_OUTCOMES = 50;
+
 export interface RunDeps {
   chats: ChatRepo;
   bridge: AgentBridge;
@@ -128,6 +138,9 @@ export class RunService {
   private readonly idleWaiters: (() => void)[] = [];
   /** Risky actions paused mid-run, keyed by runId, awaiting Allow/Deny. */
   private readonly confirms = new Map<string, PendingConfirm>();
+  /** Who asked to be told when a run ends, and the outcomes nobody claimed. */
+  private readonly runWaiters = new Map<string, ((outcome: RunOutcome) => void)[]>();
+  private readonly endedRuns = new Map<string, RunOutcome>();
   private running = 0;
   /**
    * The operator's "Stop LLM" switch (Settings → Server, LOTE 6): while set,
@@ -195,7 +208,12 @@ export class RunService {
 
     // A sidebar full of "New chat" is a sidebar you cannot read. Phase 3 lets
     // a model write this; until then the first message names the chat.
-    if (isFirstMessage && isGenericTitle(chat.title)) {
+    //
+    // `autoTitle` is the same veto the service model respects (popy.spec §14):
+    // a name chosen by hand is not the machine's to improve on, and a
+    // background task's chat is named after the task before its first message
+    // ever arrives (§21) -- even when the task is called "Chat 4".
+    if (isFirstMessage && chat.autoTitle && isGenericTitle(chat.title)) {
       const title = fallbackTitle(text, this.deps.chats.titles());
       this.deps.chats.rename(chatId, title);
       this.deps.chats.recordTitle({
@@ -279,6 +297,45 @@ export class RunService {
     });
   }
 
+  /**
+   * Resolves when this run ends, with how it ended (popy.spec §21). The
+   * scheduler needs a run's outcome, not just its events, and an SSE sink is
+   * a broadcast rather than an answer to one question.
+   *
+   * A run that finished before anyone asked is still answerable: the last few
+   * outcomes are remembered, which covers the case of a bridge that refuses
+   * synchronously and so ends the run inside `startRun` itself.
+   */
+  whenRunEnds(runId: string): Promise<RunOutcome> {
+    const ended = this.endedRuns.get(runId);
+    if (ended !== undefined) {
+      this.endedRuns.delete(runId);
+      return Promise.resolve(ended);
+    }
+    return new Promise<RunOutcome>((resolve) => {
+      const waiters = this.runWaiters.get(runId);
+      if (waiters === undefined) this.runWaiters.set(runId, [resolve]);
+      else waiters.push(resolve);
+    });
+  }
+
+  /** Tells everyone waiting on a run how it went, or remembers it briefly. */
+  private endRun(runId: string, outcome: RunOutcome): void {
+    const waiters = this.runWaiters.get(runId);
+    if (waiters !== undefined) {
+      this.runWaiters.delete(runId);
+      for (const resolve of waiters) resolve(outcome);
+      return;
+    }
+    this.endedRuns.set(runId, outcome);
+    // Bounded: this is a convenience for a caller that may never come, not a
+    // log. The oldest entry goes when the map grows past the ceiling.
+    if (this.endedRuns.size > REMEMBERED_OUTCOMES) {
+      const oldest = this.endedRuns.keys().next().value;
+      if (oldest !== undefined) this.endedRuns.delete(oldest);
+    }
+  }
+
   /** Whether the operator has the LLM switched off. */
   isLlmStopped(): boolean {
     return this.llmHalted;
@@ -322,6 +379,7 @@ export class RunService {
     this.runs.delete(runId);
     this.runIdByChat.delete(chatId);
     this.deps.sink.emit({ kind: 'error', chatId, runId, code: 'aborted' });
+    this.endRun(runId, { ok: false, code: 'aborted' });
     this.settle();
     return true;
   }
@@ -597,6 +655,12 @@ export class RunService {
     });
     // Embed the new messages for semantic memory, off the reply path (§7).
     this.deps.indexMessages?.();
+
+    // And whoever asked in code rather than over the stream (popy.spec §21).
+    this.endRun(
+      run.runId,
+      failure === undefined ? { ok: true } : { ok: false, code: failure.code },
+    );
 
     this.finish(run);
   }

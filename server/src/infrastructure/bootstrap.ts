@@ -9,6 +9,7 @@ import type { MemoryRepo } from '../application/ports/memory-repo.js';
 import type { PushRepo } from '../application/ports/push-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
+import type { TaskRepo } from '../application/ports/task-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
 import type { UserMemoryRepo } from '../application/ports/user-memory-repo.js';
 import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
@@ -28,6 +29,7 @@ import { SqliteUsageRepo } from './db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
 import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
+import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
@@ -45,6 +47,8 @@ export interface AppContext {
   embeddings: EmbeddingsRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
+  /** Background tasks (popy.spec §21). */
+  tasks: TaskRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
   /** The health endpoint's cheap liveness query (popy.spec §13). */
@@ -74,6 +78,7 @@ export function bootstrap(): AppContext {
     embeddings: new SqliteEmbeddingsRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
+    tasks: new SqliteTaskRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),
     pingDb: () => {

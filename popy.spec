@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.37 — 2026-08-01.
+Version 1.38 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -948,8 +948,90 @@ covers "forgot password AND recovery key" for whoever has shell.
   per-session skill scoping (§8); pi's abort behavior on running bash
   (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
 
+## 21. Background tasks (`application/tasks/`)
+
+- A **task** is a prompt with a schedule: the third tab of the sidebar,
+  next to Chats and Files. Two kinds and no more — `once` (runs at the
+  next tick, then switches itself off) and `interval` (every N minutes,
+  forever). A cron expression is a language; this is a personal agent.
+- Table `tasks` (migration 017): title, prompt, `schedule_kind`,
+  `interval_minutes`, `next_run_at`, `enabled`, `created_at`, and the last
+  run's `last_run_at` / `last_status` / `last_chat_id`. Times are epoch
+  milliseconds here, unlike the ISO strings of the chat tables: everything
+  about a schedule is arithmetic on what the clock port returns. The wire
+  DTO converts back to ISO, like every other timestamp the API hands out.
+- The **scheduler** lives in `application/`, with the clock AND the timer
+  injected (`ports/timer.ts`), so the whole thing is unit-tested without a
+  wall-clock second passing. It ticks every 30s, wired in main.ts after the
+  server is listening.
+- **Serialised, FIFO, never two at once.** Each due task is appended to a
+  single queue worked one at a time. A task run is a full agent turn with a
+  workspace and a process group behind it; two racing on a small VPS is how
+  a personal server falls over. The global run ceiling would not help — it
+  counts chats, and every task run opens a new one.
+- Each run: open a fresh chat, **rename it to the task's title through the
+  manual-rename path** (which switches `auto_title` off, so neither the
+  deterministic first-message fallback nor the service model will ever
+  rewrite a name the user chose — §14), post the prompt as a user message,
+  and run it through the normal `RunService`. Failover, context compaction,
+  usage accounting and persisted error messages all apply, and the result is
+  readable as an ordinary conversation.
+- On finish: `last_run_at`, `last_status` (`ok` or the failure code),
+  `last_chat_id`; an interval task is parked one interval **from when it
+  finished**, not from when it was due, so a task slower than its own
+  interval cannot queue up behind itself; a `once` task is switched off.
+  One journal line per run.
+- **A failing task never crashes or stalls the scheduler.** The catch is
+  total: the failure becomes the run's status and the queue moves on. A
+  task already running is not queued again by the next tick, and a task
+  deleted while it waits is skipped.
+- `RunService.whenRunEnds(runId)` is how the scheduler learns the outcome:
+  an SSE sink is a broadcast, not an answer to one question. Outcomes for
+  runs nobody asked about yet are remembered briefly and bounded.
+- Routes (all session-guarded): `GET|POST /v1/tasks`,
+  `GET|PATCH|DELETE /v1/tasks/:id`, `POST /v1/tasks/:id/run-now` (202 —
+  queued, never inline), `POST /v1/tasks/:id/toggle`. Bodies are strict
+  Zod; an interval with no minutes is a 400. New error code:
+  `task_not_found`.
+- Any change to the schedule, and any switch back on, **re-parks**
+  `next_run_at` from now: an edit from "every 6 hours" to "every 5 minutes"
+  must not still wait six hours, and a task switched on after a month off
+  must not fire the same second.
+- UI: the list is the sidebar (like Chats, so on a phone it *is* the
+  screen) — title, human-readable schedule, next run, the enabled switch,
+  and the last status linking to the conversation it happened in; Run now
+  and Delete-with-confirm in the row menu. Create/edit is a **full-screen
+  route**, never a drawer (§14), with Save and Cancel.
+- **Internal maintenance** (`ports/maintenance-job.ts`) rides the same
+  tick rather than owning timers of its own. A maintenance job is not a
+  task: no row, no chat, no agent tool, invisible in the UI.
+
 ## Changelog
 
+- 1.38 (2026-08-01): **Background tasks (§21).** New third sidebar tab —
+  a prompt with a schedule (`once` or every N minutes), table `tasks`
+  (migration 017), repo port + SQLite adapter. The scheduler lives in
+  `application/` with the clock and the timer both injected
+  (`ports/timer.ts`), ticks every 30s from main.ts, and works one single
+  FIFO queue — never two task runs at once, because every run is a full
+  agent turn and each opens its own chat. A run opens a fresh
+  conversation, renames it to the task title through the manual-rename
+  path (so `auto_title` goes off and no titler ever overwrites it), and
+  goes through the normal RunService for failover, compaction and error
+  persistence. Finishing records last_run_at / last_status / last_chat_id,
+  parks an interval task one interval from when it *finished*, and
+  switches a `once` task off; a failing run is a recorded status, never an
+  exception that stalls the queue. New `RunService.whenRunEnds(runId)`
+  answers "how did this run end?" in code, which an SSE broadcast cannot.
+  Routes `GET|POST /v1/tasks`, `GET|PATCH|DELETE /v1/tasks/:id`,
+  `run-now` (202, queued) and `toggle`, all session-guarded, strict Zod,
+  new code `task_not_found`. Editing a schedule or switching a task back
+  on re-parks it from now. UI: Chats | Files | Tasks, the list in the
+  sidebar with switch / Run now / Delete, create and edit as a full-screen
+  route. Also: the first-message title fallback now respects `auto_title`,
+  so a hand-picked name is never overwritten even when it looks generic.
+  New `ports/maintenance-job.ts`: internal housekeeping rides the same
+  tick without being an agent-visible task.
 - 1.37 (2026-08-01): **Type-enforced route protection (§9).** Routes
   mount only through `mountApi()`: branded `SessionGuardedRoutes` vs
   `publicSurface(reason, …)` — an unauthenticated URL no longer

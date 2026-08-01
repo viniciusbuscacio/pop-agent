@@ -19,11 +19,15 @@ import { OAuthFlowService } from '../application/providers/oauth-flow-service.js
 import { ProviderCooldown } from '../application/providers/provider-cooldown.js';
 import { ProviderService } from '../application/providers/provider-service.js';
 import { SettingsService } from '../application/settings/settings-service.js';
+import { TaskScheduler } from '../application/tasks/task-scheduler.js';
+import { TaskService } from '../application/tasks/task-service.js';
+import type { Timer } from '../application/ports/timer.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
 import { SqliteArtifactRepo } from '../infrastructure/db/sqlite-artifact-repo.js';
 import { SqliteFolderRepo } from '../infrastructure/db/sqlite-folder-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
@@ -144,6 +148,9 @@ export class FakeTranscriber {
   }
 }
 
+/** A timer that never fires: the tests drive the scheduler by hand. */
+const inertTimer: Timer = { every: () => () => undefined };
+
 export interface TestApp {
   app: Hono;
   /** Danger-zone calls the test inspects (LOTE 6). */
@@ -152,6 +159,8 @@ export interface TestApp {
   chats: ChatService;
   artifacts: ArtifactService;
   runs: RunService;
+  tasks: TaskService;
+  taskScheduler: TaskScheduler;
   providers: ProviderService;
   /** The scripted subscription auth behind the oauth routes. */
   providerAuth: FakeProviderAuth;
@@ -172,6 +181,8 @@ export interface TestAppOptions {
   transcriber?: FakeTranscriber;
   /** Swap in a pre-seeded subscription-auth fake to test the oauth routes. */
   providerAuth?: FakeProviderAuth;
+  /** Drive the task scheduler's tick by hand (popy.spec §21). */
+  timer?: Timer;
 }
 
 export function createTestApp(
@@ -196,7 +207,6 @@ export function createTestApp(
   // nobody should wait thirty real seconds for the slow one.
   const bridge = new FakeAgentBridge(200);
   const hub = new SseHub();
-  const chats = new ChatService({ chats: chatRepo, clock });
 
   const gateway = options.gateway ?? new RefusingGateway();
   const providerAuth = options.providerAuth ?? new FakeProviderAuth();
@@ -259,6 +269,21 @@ export function createTestApp(
     }),
   });
 
+  // Built after the run service, because the task scheduler below needs both.
+  const chats = new ChatService({ chats: chatRepo, clock });
+
+  // Background tasks (popy.spec §21). The timer is inert: nothing ticks by
+  // itself in a test, and `run-now` drives the queue directly.
+  const taskRepo = new SqliteTaskRepo(db);
+  const tasks = new TaskService({ tasks: taskRepo, clock });
+  const taskScheduler = new TaskScheduler({
+    tasks: taskRepo,
+    chats,
+    runs,
+    clock,
+    timer: options.timer ?? inertTimer,
+  });
+
   const controlLog: string[] = [];
   const app = createApp({
     auth,
@@ -266,6 +291,8 @@ export function createTestApp(
     chats,
     artifacts,
     runs,
+    tasks,
+    taskScheduler,
     providers,
     oauthFlows,
     health: new HealthService({
@@ -341,5 +368,19 @@ export function createTestApp(
     webDist: WEB_DIST,
   });
 
-  return { controlLog, app, auth, chats, artifacts, runs, providers, providerAuth, secrets, hub, clock };
+  return {
+    controlLog,
+    app,
+    auth,
+    chats,
+    artifacts,
+    runs,
+    tasks,
+    taskScheduler,
+    providers,
+    providerAuth,
+    secrets,
+    hub,
+    clock,
+  };
 }

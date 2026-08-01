@@ -13,6 +13,8 @@ import { LoginPage } from './routes/login-page';
 import { RecoverPage } from './routes/recover-page';
 import { SettingsPage } from './routes/settings-page';
 import { SetupPage } from './routes/setup-page';
+import { TaskFormPage } from './routes/task-form-page';
+import { TasksIntro } from './routes/tasks-list';
 import { UpdatePrompt } from './ui/update-prompt';
 
 /**
@@ -82,6 +84,23 @@ function Boot() {
           </Protected>
         }
       />
+      {/* Creating or editing a task is a full screen, never a drawer (§14). */}
+      <Route
+        path="/tasks/new"
+        element={
+          <Protected status={status}>
+            <TaskFormPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/tasks/:taskId/edit"
+        element={
+          <Protected status={status}>
+            <TaskFormPage />
+          </Protected>
+        }
+      />
       <Route
         path="/settings/*"
         element={
@@ -102,6 +121,7 @@ function Boot() {
         <Route path="chat/:chatId" element={<ChatPage />} />
         <Route path="files" element={<FilesPage />} />
         <Route path="files/:folderId" element={<FilesPage />} />
+        <Route path="tasks" element={<TasksIntro />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

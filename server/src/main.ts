@@ -13,6 +13,9 @@ import { OAuthFlowService } from './application/providers/oauth-flow-service.js'
 import { ProviderCooldown } from './application/providers/provider-cooldown.js';
 import { ProviderService } from './application/providers/provider-service.js';
 import { SettingsService } from './application/settings/settings-service.js';
+import { TaskScheduler } from './application/tasks/task-scheduler.js';
+import { TaskService } from './application/tasks/task-service.js';
+import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
@@ -269,7 +272,6 @@ const purger = new FsChatPurger({
     if (bridge instanceof PiAgentBridge) bridge.forget(chatId);
   },
 });
-const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
 const health = new HealthService({ providers, pingDb: context.pingDb });
 const runs = new RunService({
   chats: context.chats,
@@ -314,6 +316,20 @@ const runs = new RunService({
   }),
 });
 
+// Built after the run service, because the task scheduler below needs both.
+const chats = new ChatService({ chats: context.chats, clock: systemClock, purger });
+
+// Background tasks (popy.spec §21): the rows and the queue that runs them.
+const tasks = new TaskService({ tasks: context.tasks, clock: systemClock });
+const taskScheduler = new TaskScheduler({
+  tasks: context.tasks,
+  chats,
+  runs,
+  clock: systemClock,
+  timer: intervalTimer,
+  onJournal: (line) => console.log(line),
+});
+
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
 // The model is selected in Settings and downloaded on demand; POPY_WHISPER_MODEL
 // still pins an explicit path for an operator who wants one.
@@ -344,6 +360,8 @@ const app = createApp({
   chats,
   artifacts,
   runs,
+  tasks,
+  taskScheduler,
   providers,
   oauthFlows,
   health,
@@ -436,6 +454,9 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.exit(0);
   });
 }
+
+// Nothing runs itself until the server is actually up (popy.spec §21).
+taskScheduler.start();
 
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`popy server listening on http://${info.address}:${info.port}`);

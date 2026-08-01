@@ -7,7 +7,11 @@ import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
+import { TasksList } from './tasks-list';
 import { Button, Segmented } from '../ui/controls';
+
+/** What the sidebar is showing: conversations, the file tree, or tasks. */
+type Segment = 'chats' | 'files' | 'tasks';
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
@@ -20,7 +24,9 @@ export function ChatList() {
 
   const filesRoot = useMatch('/files');
   const filesFolder = useMatch('/files/:folderId');
-  const segment: 'chats' | 'files' = filesRoot !== null || filesFolder !== null ? 'files' : 'chats';
+  const tasksRoot = useMatch('/tasks');
+  const segment: Segment =
+    filesRoot !== null || filesFolder !== null ? 'files' : tasksRoot !== null ? 'tasks' : 'chats';
   const [filter, setFilter] = useState('');
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
@@ -63,11 +69,15 @@ export function ChatList() {
       <div className="flex flex-col gap-2 p-3">
         <div className="relative flex items-center gap-2">
           <div className="flex-1">
-            <Segmented<'chats' | 'files'>
+            <Segmented<Segment>
               ariaLabel={t('shell.segments')}
               value={segment}
               onChange={(value) => {
                 setListMenu(false);
+                if (value === 'tasks') {
+                  navigate('/tasks');
+                  return;
+                }
                 if (value === 'files') {
                   const folder = read('popy.lastFolder');
                   navigate(folder !== undefined && folder.length > 0 ? `/files/${folder}` : '/files');
@@ -83,6 +93,7 @@ export function ChatList() {
               options={[
                 { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
                 { value: 'files', label: t('shell.segFiles'), testId: 'segment-files' },
+                { value: 'tasks', label: t('shell.segTasks'), testId: 'segment-tasks' },
               ]}
             />
           </div>
@@ -122,21 +133,29 @@ export function ChatList() {
           </Button>
         ) : null}
 
-        {segment === 'files' ? null : (
+        {segment === 'tasks' ? (
+          <Button type="button" data-testid="shell-new-task" onClick={() => navigate('/tasks/new')}>
+            {t('tasks.new')}
+          </Button>
+        ) : null}
+
+        {segment === 'chats' ? (
         <input
           data-testid="chat-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder={segment === 'chats' ? t('shell.filter') : t('shell.filterFiles')}
+          placeholder={t('shell.filter')}
           aria-label={t('shell.filter')}
           className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
         />
-        )}
+        ) : null}
       </div>
 
       {/* pb-20 keeps the last row clear of the floating bottom bar (§14). */}
       {segment === 'files' ? (
         <FolderTree />
+      ) : segment === 'tasks' ? (
+        <TasksList />
       ) : (
         <div className="flex-1 overflow-y-auto pb-20">
           {viewArchived && !searching ? (

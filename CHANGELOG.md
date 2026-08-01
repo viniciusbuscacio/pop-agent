@@ -21,6 +21,12 @@ normative history.
 
 ### Added
 
+- **Background tasks**: a third sidebar tab next to Chats and Files. A task is
+  a prompt with a schedule — once, or every N minutes/hours. Each run opens its
+  own conversation named after the task and goes through the normal chat
+  pipeline, so failover, compaction and error messages all apply and the result
+  is readable like any other chat. Task runs are serialised: never two at once.
+  Run now, an enabled switch, and a full-screen create/edit form.
 - **Home list redesign**: Chats | Artefacts segments on top; search reaches
   archived chats (badged); archived browsing moved to the ... menu. The
   Artefacts segment lists every artifact across every chat.

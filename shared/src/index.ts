@@ -366,6 +366,62 @@ export interface ConfirmResponse {
   answered: boolean;
 }
 
+/**
+ * A background task as the Tasks screen shows it (popy.spec §21). Times are
+ * ISO strings on the wire, like every other timestamp the API hands out, even
+ * though the table stores epoch milliseconds.
+ */
+export type TaskScheduleKindDTO = 'once' | 'interval';
+
+export interface TaskDTO {
+  id: string;
+  title: string;
+  prompt: string;
+  scheduleKind: TaskScheduleKindDTO;
+  /** Present only for `interval`. */
+  intervalMinutes?: number;
+  /** When it next runs; absent when nothing is scheduled. */
+  nextRunAt?: string;
+  enabled: boolean;
+  createdAt: string;
+  lastRunAt?: string;
+  /** `ok`, or the code the last run failed with. */
+  lastStatus?: string;
+  /** The conversation the last run wrote into, so the status can link to it. */
+  lastChatId?: string;
+}
+
+/** `GET /v1/tasks` */
+export interface TasksResponse {
+  tasks: TaskDTO[];
+}
+
+/** `POST /v1/tasks` */
+export interface CreateTaskRequest {
+  title: string;
+  prompt: string;
+  scheduleKind: TaskScheduleKindDTO;
+  intervalMinutes?: number;
+}
+
+/** `PATCH /v1/tasks/:id` — every field optional, the rest is left alone. */
+export interface UpdateTaskRequest {
+  title?: string;
+  prompt?: string;
+  scheduleKind?: TaskScheduleKindDTO;
+  intervalMinutes?: number;
+}
+
+/** `POST /v1/tasks/:id/toggle` — the enabled switch. */
+export interface ToggleTaskRequest {
+  enabled: boolean;
+}
+
+/** `POST /v1/tasks/:id/run-now` — queued, not run inline; 202. */
+export interface RunTaskNowResponse {
+  started: boolean;
+}
+
 /** One row of the model catalog. Everything past the id is best-effort. */
 export interface ModelDTO {
   id: string;

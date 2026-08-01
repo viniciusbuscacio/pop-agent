@@ -4,6 +4,8 @@ import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
+import type { TaskService } from '../../application/tasks/task-service.js';
+import type { TaskScheduler } from '../../application/tasks/task-scheduler.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
 import type { PushService } from '../../application/ports/push-repo.js';
 import type { WebAuthnGateway } from '../../application/ports/webauthn-repo.js';
@@ -34,6 +36,7 @@ import { createMemoryRoutes } from './memory-routes.js';
 import { createProviderRoutes } from './provider-routes.js';
 import { mountApi, publicSurface, sessionGuarded } from './route-registry.js';
 import { createSkillsRoutes } from './skills-routes.js';
+import { createTaskRoutes } from './task-routes.js';
 import { createUsageRoutes } from './usage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { createServerRoutes } from './server-routes.js';
@@ -46,6 +49,9 @@ export interface AppDeps {
   chats: ChatService;
   artifacts: ArtifactService;
   runs: RunService;
+  /** Background tasks (popy.spec §21): the rows, and the queue that runs them. */
+  tasks: TaskService;
+  taskScheduler: TaskScheduler;
   providers: ProviderService;
   /** The single-active subscription sign-in flow (popy.spec §15). */
   oauthFlows: OAuthFlowService;
@@ -121,6 +127,7 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createBackupRoutes(deps)),
       sessionGuarded(createPushRoutes(deps)),
       sessionGuarded(createArtifactRoutes(deps)),
+      sessionGuarded(createTaskRoutes(deps)),
       sessionGuarded(createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) })),
     ],
   });
