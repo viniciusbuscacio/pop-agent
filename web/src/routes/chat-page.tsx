@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { chatsService } from '../services/chats';
 import { eventStream } from '../services/events';
 import { providersService } from '../services/providers';
+import type { ModelChoice } from '../ui/slash-menu';
 import { useChatStore } from '../store/chat';
 import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from '../ui/chat-message';
@@ -29,7 +30,7 @@ export function ChatPage() {
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
 
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ModelChoice[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -58,16 +59,39 @@ export function ChatPage() {
   }, [chatId, openChat]);
 
   useEffect(() => {
-    void chatsService
-      .models()
-      .then(({ models: available }) => setModels(available.map((model) => model.id)))
-      .catch(() => setModels([]));
-    // The banner only appears on a definite "no": a failed lookup must not
-    // nag someone whose provider is fine.
-    void providersService
-      .list()
-      .then(({ providers }) => setUnconfigured(providers.every((entry) => !entry.configured)))
-      .catch(() => setUnconfigured(false));
+    // The pickable pairs (popy.spec §15): every provider that has a catalog
+    // contributes its models, labelled with the provider when there are
+    // several. A failed provider just contributes nothing.
+    void (async () => {
+      try {
+        const { providers } = await providersService.list();
+        setUnconfigured(providers.every((entry) => !entry.configured));
+        const perProvider = await Promise.all(
+          providers.map(async (entry) => {
+            try {
+              const catalog = await chatsService.models(entry.id);
+              return { entry, models: catalog.models };
+            } catch {
+              return { entry, models: [] };
+            }
+          }),
+        );
+        const withModels = perProvider.filter(({ models: list }) => list.length > 0);
+        const several = withModels.length > 1;
+        setModels(
+          withModels.flatMap(({ entry, models: list }) =>
+            list.map((model) => ({
+              provider: entry.id,
+              model: model.id,
+              label: several ? `${entry.name} · ${model.id}` : model.id,
+            })),
+          ),
+        );
+      } catch {
+        setModels([]);
+        setUnconfigured(false);
+      }
+    })();
   }, []);
 
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
@@ -146,14 +170,20 @@ export function ChatPage() {
         <select
           data-testid="chat-model"
           aria-label={t('chat.model')}
-          value={chat?.model ?? ''}
-          onChange={(event) => void setModel(chatId, event.target.value)}
+          value={chat === undefined || chat.model === '' ? '' : `${chat.provider}||${chat.model}`}
+          onChange={(event) => {
+            const [provider = '', model = ''] = event.target.value.split('||');
+            void setModel(chatId, model, provider);
+          }}
           className="max-w-28 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)] sm:max-w-48"
         >
           <option value="">{t('chat.defaultModel')}</option>
-          {models.map((model) => (
-            <option key={model} value={model}>
-              {model}
+          {models.map((choice) => (
+            <option
+              key={`${choice.provider}/${choice.model}`}
+              value={`${choice.provider}||${choice.model}`}
+            >
+              {choice.label}
             </option>
           ))}
         </select>
@@ -265,7 +295,7 @@ export function ChatPage() {
           void createChat().then((created) => navigate(`/chat/${created.id}`));
         }}
         models={models}
-        onSetModel={(model) => void setModel(chatId, model)}
+        onSetModel={(model, provider) => void setModel(chatId, model, provider)}
       />
 
     </>

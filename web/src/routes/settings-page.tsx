@@ -4,6 +4,7 @@ import type {
   AboutResponse,
   ModelCatalogSource,
   ModelDTO,
+  ProvidersResponse,
   ProviderStatusDTO,
   SettingsDTO,
   SkillDTO,
@@ -730,21 +731,15 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
 };
 
 /**
- * The provider and the models (popy.spec §15). The key field is write-only:
- * what was stored is reported as "configured", never echoed back.
+ * The providers and the models (popy.spec §15). One card picks the global
+ * default pair; below it, one card per provider carries its write-only key,
+ * its key test and its default model. Provider is data: the list comes from
+ * GET /v1/providers, never hardcoded here.
  */
 function ModelSection() {
-  const [provider, setProvider] = useState<ProviderStatusDTO | undefined>(undefined);
+  const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
-  const [models, setModels] = useState<ModelDTO[]>([]);
-  const [catalogSource, setCatalogSource] = useState<ModelCatalogSource | undefined>(undefined);
-
-  const [keyDraft, setKeyDraft] = useState('');
-  const [testResult, setTestResult] = useState<string | undefined>(undefined);
-  const [testOk, setTestOk] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [defaultCatalog, setDefaultCatalog] = useState<ModelDTO[]>([]);
 
   useEffect(() => {
     void reload();
@@ -752,25 +747,184 @@ function ModelSection() {
 
   async function reload(): Promise<void> {
     try {
-      const [providersResponse, settingsDoc, modelsResponse] = await Promise.all([
+      const [providersResponse, settingsDoc] = await Promise.all([
         providersService.list(),
         settingsService.read(),
-        chatsService.models(),
       ]);
-      setProvider(providersResponse.providers[0]);
+      setProviders(providersResponse.providers);
       setSettings(settingsDoc);
-      setModels(modelsResponse.models);
-      setCatalogSource(modelsResponse.source);
+      const catalog = await chatsService.models(settingsDoc.defaultProvider);
+      setDefaultCatalog(catalog.models);
     } catch {
       // The section renders what it has; a failed load leaves it empty.
     }
   }
 
-  async function test(): Promise<void> {
+  async function saveSettings(next: Partial<SettingsDTO>): Promise<void> {
+    if (settings === undefined) return;
+    try {
+      const written = await settingsService.write({ ...settings, ...next });
+      setSettings(written);
+      if (next.defaultProvider !== undefined) {
+        const catalog = await chatsService.models(written.defaultProvider);
+        setDefaultCatalog(catalog.models);
+      }
+    } catch {
+      // The select snaps back on the next load; nothing was stored.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold">{t('provider.globalDefault')}</h2>
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="settings-default-provider"
+            className="text-sm text-[var(--key-fg-dim)]"
+          >
+            {t('provider.defaultProvider')}
+          </label>
+          <select
+            id="settings-default-provider"
+            data-testid="settings-default-provider"
+            value={settings?.defaultProvider ?? ''}
+            onChange={(event) => {
+              const providerId = event.target.value;
+              const status = providers.find((entry) => entry.id === providerId);
+              void saveSettings({
+                defaultProvider: providerId,
+                defaultModel: status?.defaultModel ?? '',
+              });
+            }}
+            className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
+          >
+            {providers.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.configured ? entry.name : `${entry.name} — ${t('provider.notConfigured')}`}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[var(--muted)]">{t('provider.globalDefaultHint')}</p>
+        </div>
+        <ModelPicker
+          id="settings-default-model"
+          label={t('provider.defaultModel')}
+          models={defaultCatalog}
+          value={settings?.defaultModel ?? ''}
+          onChange={(model) => void saveSettings({ defaultModel: model })}
+        />
+      </Card>
+
+      {providers.map((entry) => (
+        <ProviderCard
+          key={entry.id}
+          provider={entry}
+          onChanged={(next) => setProviders(next.providers)}
+        />
+      ))}
+
+      <ServiceModelCard settings={settings} onSave={saveSettings} />
+
+      <VoiceModelCard />
+      <VoiceCleanupCard />
+    </div>
+  );
+}
+
+/** Titles and summaries stay on the default provider's catalog for now. */
+function ServiceModelCard({
+  settings,
+  onSave,
+}: {
+  settings: SettingsDTO | undefined;
+  onSave: (next: Partial<SettingsDTO>) => Promise<void>;
+}) {
+  const [models, setModels] = useState<ModelDTO[]>([]);
+  const [source, setSource] = useState<ModelCatalogSource | undefined>(undefined);
+
+  useEffect(() => {
+    void chatsService
+      .models()
+      .then((catalog) => {
+        setModels(catalog.models);
+        setSource(catalog.source);
+      })
+      .catch(() => setModels([]));
+  }, []);
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <ModelPicker
+        id="settings-service-model"
+        label={t('provider.serviceModel')}
+        hint={t('provider.serviceModelHint')}
+        models={models}
+        value={settings?.serviceModel ?? ''}
+        onChange={(model) => void onSave({ serviceModel: model })}
+      />
+      {source !== undefined ? (
+        <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
+          {t('provider.modelsInfo', {
+            count: models.length,
+            source: t(CATALOG_SOURCE_KEYS[source]),
+          })}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * One provider: its write-only key (the placeholder says "configured", the
+ * stored value is never read back), the test that proves a key works, and
+ * its default model. The custom provider also carries its endpoint URL.
+ */
+function ProviderCard({
+  provider,
+  onChanged,
+}: {
+  provider: ProviderStatusDTO;
+  onChanged: (response: ProvidersResponse) => void;
+}) {
+  const [keyDraft, setKeyDraft] = useState('');
+  const [testResult, setTestResult] = useState<string | undefined>(undefined);
+  const [testOk, setTestOk] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [models, setModels] = useState<ModelDTO[]>([]);
+  const [catalogSource, setCatalogSource] = useState<ModelCatalogSource | undefined>(undefined);
+  const [urlDraft, setUrlDraft] = useState(provider.baseURL ?? '');
+  const [customModelDraft, setCustomModelDraft] = useState(
+    provider.id === 'custom' ? provider.defaultModel : '',
+  );
+
+  const isCustom = provider.id === 'custom';
+
+  useEffect(() => {
+    void loadCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider.id, provider.configured]);
+
+  async function loadCatalog(): Promise<void> {
+    try {
+      const catalog = await chatsService.models(provider.id);
+      setModels(catalog.models);
+      setCatalogSource(catalog.source);
+    } catch {
+      setModels([]);
+    }
+  }
+
+  async function testKey(): Promise<void> {
     setTesting(true);
     setTestResult(undefined);
     try {
-      const result = await providersService.test(keyDraft.length > 0 ? keyDraft : undefined);
+      const result = await providersService.test(
+        provider.id,
+        keyDraft.length > 0 ? keyDraft : undefined,
+      );
       setTestOk(result.ok);
       setTestResult(
         result.ok
@@ -791,15 +945,12 @@ function ModelSection() {
     if (keyDraft.length === 0) return;
     setBusy(true);
     try {
-      const response = await providersService.setKey(keyDraft);
-      setProvider(response.providers[0]);
+      onChanged(await providersService.setKey(provider.id, keyDraft));
       setKeyDraft('');
       setTestResult(undefined);
       setSaved(true);
       // A fresh key can unlock the live catalog.
-      const catalog = await chatsService.models();
-      setModels(catalog.models);
-      setCatalogSource(catalog.source);
+      await loadCatalog();
     } catch {
       setSaved(false);
     } finally {
@@ -809,143 +960,172 @@ function ModelSection() {
 
   async function removeKey(): Promise<void> {
     try {
-      const response = await providersService.clearKey();
-      setProvider(response.providers[0]);
+      onChanged(await providersService.clearKey(provider.id));
     } catch {
-      // Leave the section as it is; the next reload tells the truth.
+      // Leave the card as it is; the next reload tells the truth.
     }
   }
 
-  async function saveModels(next: Partial<SettingsDTO>): Promise<void> {
-    if (settings === undefined) return;
+  async function saveCustomConfig(): Promise<void> {
+    setBusy(true);
     try {
-      setSettings(await settingsService.write({ ...settings, ...next }));
+      onChanged(await providersService.setCustomConfig(urlDraft, customModelDraft));
+      setSaved(true);
     } catch {
-      // The select snaps back on the next load; nothing was stored.
+      setSaved(false);
+    } finally {
+      setBusy(false);
     }
   }
 
-  const statusLabel =
-    provider === undefined || !provider.configured
-      ? t('provider.notConfigured')
-      : provider.source === 'env'
-        ? t('provider.configuredEnv')
-        : t('provider.configured');
+  async function saveDefaultModel(model: string): Promise<void> {
+    try {
+      onChanged(await providersService.setDefaultModel(provider.id, model));
+    } catch {
+      // The select snaps back on the next load.
+    }
+  }
+
+  const statusLabel = !provider.configured
+    ? t('provider.notConfigured')
+    : provider.source === 'env'
+      ? t('provider.configuredEnv')
+      : t('provider.configured');
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-base font-semibold">{t('provider.title')}</h2>
-          <span
-            data-testid="provider-status"
-            className={
-              provider?.configured === true
-                ? 'text-sm text-[var(--success)]'
-                : 'text-sm text-[var(--muted)]'
-            }
-          >
-            {statusLabel}
-          </span>
-        </div>
+    <Card className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-base font-semibold">{provider.name}</h2>
+        <span
+          data-testid={`provider-status-${provider.id}`}
+          className={
+            provider.configured ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--muted)]'
+          }
+        >
+          {statusLabel}
+        </span>
+      </div>
 
-        <TextField
-          id="provider-key"
-          data-testid="provider-key"
-          type="password"
-          autoComplete="off"
-          label={t('provider.keyLabel')}
-          hint={t('provider.keyHint')}
-          value={keyDraft}
-          onChange={(event) => {
-            setKeyDraft(event.target.value);
-            setSaved(false);
-            setTestResult(undefined);
-          }}
-        />
-
-        {testResult !== undefined ? (
-          <p
-            data-testid="provider-test-result"
-            role="status"
-            className={testOk ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--danger)]'}
-          >
-            {testResult}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            data-testid="provider-save"
-            disabled={busy || keyDraft.length === 0}
-            onClick={() => void saveKey()}
-          >
-            {t('common.save')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            data-testid="provider-test"
-            disabled={testing || (keyDraft.length === 0 && provider?.configured !== true)}
-            onClick={() => void test()}
-          >
-            {testing ? t('provider.testing') : t('provider.test')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setKeyDraft('');
-              setTestResult(undefined);
-              setSaved(false);
-            }}
-          >
-            {t('common.cancel')}
-          </Button>
-          {provider?.source === 'settings' ? (
+      {isCustom ? (
+        <div className="flex flex-col gap-3">
+          <TextField
+            id="provider-custom-url"
+            data-testid="provider-custom-url"
+            type="text"
+            autoComplete="off"
+            label={t('provider.customBaseURL')}
+            hint={t('provider.customBaseURLHint')}
+            value={urlDraft}
+            onChange={(event) => setUrlDraft(event.target.value)}
+          />
+          <TextField
+            id="provider-custom-model"
+            data-testid="provider-custom-model"
+            type="text"
+            autoComplete="off"
+            label={t('provider.customModel')}
+            value={customModelDraft}
+            onChange={(event) => setCustomModelDraft(event.target.value)}
+          />
+          <div>
             <Button
               type="button"
-              variant="danger"
-              data-testid="provider-remove"
-              onClick={() => void removeKey()}
+              data-testid="provider-custom-save"
+              disabled={busy || urlDraft.length === 0 || customModelDraft.length === 0}
+              onClick={() => void saveCustomConfig()}
             >
-              {t('provider.removeKey')}
+              {t('common.save')}
             </Button>
-          ) : null}
-          {saved ? <span className="text-sm text-[var(--success)]">{t('provider.saved')}</span> : null}
+          </div>
         </div>
-      </Card>
+      ) : null}
 
-      <Card className="flex flex-col gap-4">
-        <ModelPicker
-          id="settings-default-model"
-          label={t('provider.defaultModel')}
-          models={models}
-          value={settings?.defaultModel ?? ''}
-          onChange={(model) => void saveModels({ defaultModel: model })}
-        />
-        <ModelPicker
-          id="settings-service-model"
-          label={t('provider.serviceModel')}
-          hint={t('provider.serviceModelHint')}
-          models={models}
-          value={settings?.serviceModel ?? ''}
-          onChange={(model) => void saveModels({ serviceModel: model })}
-        />
-        {catalogSource !== undefined ? (
-          <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
-            {t('provider.modelsInfo', {
-              count: models.length,
-              source: t(CATALOG_SOURCE_KEYS[catalogSource]),
-            })}
-          </p>
+      <TextField
+        id={`provider-key-${provider.id}`}
+        data-testid={`provider-key-${provider.id}`}
+        type="password"
+        autoComplete="off"
+        label={t('provider.keyLabel')}
+        hint={t('provider.keyHint')}
+        placeholder={provider.configured ? t('provider.keyConfiguredPlaceholder') : undefined}
+        value={keyDraft}
+        onChange={(event) => {
+          setKeyDraft(event.target.value);
+          setSaved(false);
+          setTestResult(undefined);
+        }}
+      />
+
+      {testResult !== undefined ? (
+        <p
+          data-testid={`provider-test-result-${provider.id}`}
+          role="status"
+          className={testOk ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--danger)]'}
+        >
+          {testResult}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          data-testid={`provider-save-${provider.id}`}
+          disabled={busy || keyDraft.length === 0}
+          onClick={() => void saveKey()}
+        >
+          {t('common.save')}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid={`provider-test-${provider.id}`}
+          disabled={testing || (keyDraft.length === 0 && !provider.configured)}
+          onClick={() => void testKey()}
+        >
+          {testing ? t('provider.testing') : t('provider.test')}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setKeyDraft('');
+            setTestResult(undefined);
+            setSaved(false);
+          }}
+        >
+          {t('common.cancel')}
+        </Button>
+        {provider.source === 'settings' ? (
+          <Button
+            type="button"
+            variant="danger"
+            data-testid={`provider-remove-${provider.id}`}
+            onClick={() => void removeKey()}
+          >
+            {t('provider.removeKey')}
+          </Button>
         ) : null}
-      </Card>
+        {saved ? <span className="text-sm text-[var(--success)]">{t('provider.saved')}</span> : null}
+      </div>
 
-      <VoiceModelCard />
-      <VoiceCleanupCard />
-    </div>
+      {!isCustom ? (
+        <ModelPicker
+          id={`provider-model-${provider.id}`}
+          label={t('provider.defaultForProvider')}
+          models={models}
+          value={provider.defaultModel}
+          onChange={(model) => void saveDefaultModel(model)}
+        />
+      ) : null}
+      {catalogSource !== undefined && models.length > 0 ? (
+        <p data-testid={`catalog-source-${provider.id}`} className="text-xs text-[var(--muted)]">
+          {t('provider.modelsInfo', {
+            count: models.length,
+            source: t(CATALOG_SOURCE_KEYS[catalogSource]),
+          })}
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

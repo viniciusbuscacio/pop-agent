@@ -3,7 +3,13 @@ import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
-import { ModelMenu, SlashMenu, slashCommands, type SlashCommand } from './slash-menu';
+import {
+  ModelMenu,
+  SlashMenu,
+  slashCommands,
+  type ModelChoice,
+  type SlashCommand,
+} from './slash-menu';
 
 /**
  * The composer, in aw's shape: the textarea on the left, then attach, mic
@@ -36,8 +42,8 @@ export function Composer({
   onSend: (text: string, attachments: AttachmentDTO[], artifactIds?: string[]) => void;
   onStop: () => void;
   onNewChat: () => void;
-  models: string[];
-  onSetModel: (model: string) => void;
+  models: ModelChoice[];
+  onSetModel: (model: string, provider: string) => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
@@ -149,10 +155,10 @@ export function Composer({
     }
   }
 
-  function pickModel(model: string): void {
+  function pickModel(choice: ModelChoice): void {
     setSlashMode('commands');
     setSlashQuery(undefined);
-    onSetModel(model);
+    onSetModel(choice.model, choice.provider);
     area.current?.focus();
   }
 
@@ -321,7 +327,11 @@ export function Composer({
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        pickModel(slashActive === 0 ? '' : (models[slashActive - 1] ?? ''));
+        pickModel(
+          slashActive === 0
+            ? { provider: '', model: '', label: '' }
+            : (models[slashActive - 1] ?? { provider: '', model: '', label: '' }),
+        );
         return;
       }
       if (event.key === 'Escape') {

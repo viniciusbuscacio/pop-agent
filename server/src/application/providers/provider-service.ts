@@ -104,7 +104,7 @@ export class ProviderService {
       name: definition.name,
       configured: stored || fromEnv,
       source: stored ? 'settings' : fromEnv ? 'env' : null,
-      defaultModel: custom?.defaultModel ?? definition.defaultModel,
+      defaultModel: custom?.defaultModel ?? this.storedDefaultModel(definition.id) ?? definition.defaultModel,
       allowCustomModel: definition.allowCustomModel,
       ...(custom === undefined ? {} : { baseURL: custom.baseURL }),
     };
@@ -140,6 +140,24 @@ export class ProviderService {
 
   setCustomConfig(config: CustomProviderConfig): void {
     this.deps.settings.set(CUSTOM_CONFIG_KEY, config);
+  }
+
+  /** The provider's default model, user-chosen or the definition's. */
+  setDefaultModel(providerId: string, model: string): void {
+    const definition = providerDefinition(providerId);
+    if (definition === undefined) return;
+    if (definition.customBaseURL) {
+      const config = this.customConfig();
+      this.setCustomConfig({ baseURL: config?.baseURL ?? '', defaultModel: model });
+      return;
+    }
+    // Empty means "back to the definition's default" (no delete on the repo).
+    this.deps.settings.set(`provider.${providerId}.defaultModel`, model);
+  }
+
+  private storedDefaultModel(providerId: string): string | undefined {
+    const stored = this.deps.settings.get<string>(`provider.${providerId}.defaultModel`);
+    return stored !== undefined && stored.length > 0 ? stored : undefined;
   }
 
   /**

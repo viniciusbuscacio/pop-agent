@@ -165,7 +165,7 @@ function ProviderStep({ onDone }: { onDone: () => void }) {
     setTesting(true);
     setTestResult(undefined);
     try {
-      const result = await providersService.test(apiKey);
+      const result = await providersService.test('openrouter', apiKey);
       setTestOk(result.ok);
       setTestResult(
         result.ok
@@ -186,7 +186,7 @@ function ProviderStep({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(undefined);
     try {
-      await providersService.setKey(apiKey);
+      await providersService.setKey('openrouter', apiKey);
       onDone();
     } catch {
       setError(t('error.generic'));

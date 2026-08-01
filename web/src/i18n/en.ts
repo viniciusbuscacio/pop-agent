@@ -194,6 +194,15 @@ export const en = {
   'provider.serviceModel': 'Service model',
   'provider.serviceModelHint': 'The model Popy uses for background work like titles.',
   'provider.saved': 'Saved',
+  'provider.globalDefault': 'Global default',
+  'provider.defaultProvider': 'Default provider',
+  'provider.globalDefaultHint':
+    'Used by every chat that does not pick its own model. If its key is removed, the next configured provider takes over.',
+  'provider.keyConfiguredPlaceholder': '•••••••• (configured — enter a new key to replace)',
+  'provider.defaultForProvider': 'Default model for this provider',
+  'provider.customBaseURL': 'Endpoint URL',
+  'provider.customBaseURLHint': 'Any OpenAI-compatible API, e.g. http://localhost:11434/v1',
+  'provider.customModel': 'Model',
 
   'chat.noProvider': 'Popy has no model to talk to yet. Configure a provider in Settings.',
   'chat.noProviderLink': 'Open Settings',

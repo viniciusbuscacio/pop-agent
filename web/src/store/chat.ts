@@ -48,7 +48,7 @@ interface ChatState {
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
-  setModel: (chatId: string, model: string) => Promise<void>;
+  setModel: (chatId: string, model: string, provider: string) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
   apply: (event: StreamEvent) => void;
   reset: () => void;
@@ -177,8 +177,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await Promise.all([get().loadChats(), get().loadArchived()]);
   },
 
-  async setModel(chatId, model) {
-    const updated = await chatsService.patch(chatId, { model });
+  async setModel(chatId, model, provider) {
+    // The pair is the identity (popy.spec §15): they always travel together.
+    const updated = await chatsService.patch(chatId, { model, provider });
     set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
   },
 

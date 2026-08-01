@@ -23,6 +23,7 @@ import { apiError } from './errors.js';
 
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
+const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
 const customConfigSchema = z
   .object({ baseURL: z.string().url().max(500), defaultModel: z.string().min(1).max(200) })
   .strict();
@@ -88,6 +89,20 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       ...(result.latencyMs === undefined ? {} : { latencyMs: result.latencyMs }),
     };
     return c.json(response);
+  });
+
+  // The provider's default model: the pair's provider half already has a
+  // home (Settings), this is the per-provider half (popy.spec §15).
+  routes.put('/providers/:id/default-model', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = defaultModelSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    deps.providers.setDefaultModel(id, parsed.data.model);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
   // The custom provider is pure data: an endpoint and a model, never a secret.

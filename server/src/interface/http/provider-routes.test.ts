@@ -283,3 +283,27 @@ describe('POST /v1/transcribe', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('PUT /v1/providers/:id/default-model', () => {
+  it('stores the provider default and reports it back', async () => {
+    const res = await authed('/v1/providers/anthropic/default-model', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'claude-haiku-4-5' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { providers: { id: string; defaultModel: string }[] };
+    expect(body.providers.find((p) => p.id === 'anthropic')?.defaultModel).toBe(
+      'claude-haiku-4-5',
+    );
+  });
+
+  it('404s on a provider that does not exist', async () => {
+    const res = await authed('/v1/providers/nope/default-model', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'x' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});

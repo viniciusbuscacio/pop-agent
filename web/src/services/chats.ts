@@ -60,7 +60,9 @@ export const chatsService = {
     });
   },
 
-  models(): Promise<ModelsResponse> {
-    return apiRequest<ModelsResponse>('/models');
+  models(providerId?: string): Promise<ModelsResponse> {
+    return apiRequest<ModelsResponse>(
+      providerId === undefined ? '/models' : `/models?provider=${providerId}`,
+    );
   },
 };

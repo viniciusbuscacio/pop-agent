@@ -25,7 +25,9 @@ const MENU_CLASS =
   'absolute bottom-full left-0 z-20 mb-1 flex max-h-56 w-72 flex-col overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg';
 
 function optionClass(active: boolean): string {
-  return `flex items-baseline gap-2 truncate px-3 py-1.5 text-left ${
+  // shrink-0: inside a max-h flex-col the rows must overflow (and scroll),
+  // never squeeze -- hundreds of catalog models would shrink to dashes.
+  return `flex shrink-0 items-baseline gap-2 truncate px-3 py-1.5 text-left ${
     active ? 'bg-[var(--hover-overlay)]' : ''
   }`;
 }
@@ -57,27 +59,35 @@ export function SlashMenu({
   );
 }
 
-/** The /model submenu: same look, but options are model ids ('' = default). */
+/** One pickable model: the pair is the identity (popy.spec §15). */
+export interface ModelChoice {
+  provider: string;
+  model: string;
+  label: string;
+}
+
+/** The /model submenu: same look, but options are (provider, model) pairs. */
 export function ModelMenu({
   models,
   active,
   onPick,
 }: {
-  models: string[];
+  models: ModelChoice[];
   active: number;
-  onPick: (model: string) => void;
+  onPick: (choice: ModelChoice) => void;
 }) {
+  const DEFAULT: ModelChoice = { provider: '', model: '', label: t('chat.defaultModel') };
   return (
     <div data-testid="slash-menu" className={MENU_CLASS}>
-      {['', ...models].map((model, index) => (
+      {[DEFAULT, ...models].map((choice, index) => (
         <button
-          key={model === '' ? '__default' : model}
+          key={choice.model === '' ? '__default' : `${choice.provider}/${choice.model}`}
           type="button"
           data-testid="slash-option"
-          onClick={() => onPick(model)}
+          onClick={() => onPick(choice)}
           className={optionClass(index === active)}
         >
-          <span className="truncate">{model === '' ? t('chat.defaultModel') : model}</span>
+          <span className="truncate">{choice.label}</span>
         </button>
       ))}
     </div>
