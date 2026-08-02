@@ -90,7 +90,7 @@ export function SettingsPage() {
       </header>
 
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-4 md:w-[90%] md:max-w-none md:flex-row">
-        <nav className="flex gap-1 overflow-x-auto md:w-48 md:flex-col">
+        <nav className="flex gap-1 overflow-x-auto md:w-48 md:shrink-0 md:flex-col">
           {SECTIONS.map((entry) => (
             <button
               key={entry.id}
@@ -109,7 +109,16 @@ export function SettingsPage() {
           ))}
         </nav>
 
-        <div className="flex-1">
+        {/*
+          `min-w-0` is load-bearing, not decoration. A flex item defaults to
+          `min-width: auto`, so without it this column refuses to shrink below
+          the widest thing inside it -- one long skill description was enough
+          to push the whole page wider than the window, which put a horizontal
+          scrollbar on Settings and scrolled the nav off the left edge. It also
+          means `truncate` inside a section never fires: the column yields
+          instead of the text being cut.
+        */}
+        <div className="min-w-0 flex-1">
           {section === 'server' ? <ServerSection /> : null}
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}

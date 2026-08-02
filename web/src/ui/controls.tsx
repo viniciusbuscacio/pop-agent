@@ -127,6 +127,13 @@ export interface SegmentedOption<T extends string> {
   testId: string;
 }
 
+/**
+ * `self-start` is what makes the `inline-flex` below mean anything. Every
+ * caller puts this inside a `flex flex-col`, where the default
+ * `align-items: stretch` widens a child to the whole column -- so the border
+ * ran to the far edge of the card with dead space after the last option.
+ * `max-w-full` still keeps it inside a column narrower than the options.
+ */
 export function Segmented<T extends string>({
   options,
   value,
@@ -142,7 +149,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-[var(--border)]"
+      className="inline-flex max-w-full flex-wrap self-start overflow-hidden rounded-md border border-[var(--border)]"
     >
       {options.map((option) => (
         <button
