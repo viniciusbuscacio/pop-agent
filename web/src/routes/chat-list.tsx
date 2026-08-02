@@ -83,7 +83,32 @@ export function ChatList() {
       {/* Skills and MCP put everything in the right-hand pane, so the toolbar
           strip would be an empty box under the navigation. */}
       <div className={segment === 'agent' ? 'hidden' : 'flex flex-col gap-2 p-3'}>
-        <div className="relative flex items-center justify-end gap-2">
+        {/* The primary action and the list menu share one line: the ⋯ on a row
+            of its own was a strip of empty sidebar above the button. */}
+        <div className="relative flex items-center gap-2">
+          {segment === 'chats' ? (
+            <Button
+              type="button"
+              data-testid="shell-new-chat"
+              className="flex-1"
+              disabled={creating}
+              onClick={() => void startChat()}
+            >
+              {t('shell.newChat')}
+            </Button>
+          ) : null}
+
+          {segment === 'tasks' ? (
+            <Button
+              type="button"
+              data-testid="shell-new-task"
+              className="flex-1"
+              onClick={() => navigate('/tasks/new')}
+            >
+              {t('tasks.new')}
+            </Button>
+          ) : null}
+
           {segment === 'chats' ? (
             <button
               type="button"
@@ -113,18 +138,6 @@ export function ChatList() {
             </div>
           ) : null}
         </div>
-
-        {segment === 'chats' ? (
-          <Button type="button" data-testid="shell-new-chat" disabled={creating} onClick={() => void startChat()}>
-            {t('shell.newChat')}
-          </Button>
-        ) : null}
-
-        {segment === 'tasks' ? (
-          <Button type="button" data-testid="shell-new-task" onClick={() => navigate('/tasks/new')}>
-            {t('tasks.new')}
-          </Button>
-        ) : null}
 
         {segment === 'chats' ? (
         <input
