@@ -605,8 +605,8 @@ function SkillsSection() {
 
       <div className="flex flex-col gap-2">
         {skills.map((skill) => (
-          <Card key={skill.slug} className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+          <Card key={skill.slug} className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{skill.name}</span>
                 {skill.builtin ? (
@@ -617,7 +617,7 @@ function SkillsSection() {
               </div>
               <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
             </div>
-            <div className="flex flex-none gap-1">
+            <div className="flex flex-none flex-wrap gap-1">
               <Button type="button" variant="ghost" onClick={() => setEditing(skill)}>
                 {t('skills.edit')}
               </Button>
