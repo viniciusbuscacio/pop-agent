@@ -330,6 +330,11 @@ export const en = {
   'files.emptyCta': 'Drag files here or tap Upload.',
   'files.renameFolder': 'Rename folder',
   'files.deleteFolder': 'Delete folder',
+  'files.expand': 'Show subfolders',
+  'files.collapse': 'Hide subfolders',
+  'files.newSubfolder': 'New subfolder',
+  'files.newSubfolderPrompt': 'Subfolder name:',
+  'files.noResults': 'Nothing matches “{query}”.',
 
   'files.upload': 'Upload',
   'files.download': 'Download',

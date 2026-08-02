@@ -3,6 +3,7 @@ import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { ArtifactRepo } from '../application/ports/artifact-repo.js';
 import type { ArtifactChunksRepo } from '../application/ports/artifact-chunks-repo.js';
 import type { FolderRepo } from '../application/ports/folder-repo.js';
+import type { PathIndexRepo } from '../application/ports/path-index-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
@@ -18,6 +19,7 @@ import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
 import { SqliteArtifactChunksRepo } from './db/sqlite-artifact-chunks-repo.js';
 import { SqliteFolderRepo } from './db/sqlite-folder-repo.js';
+import { SqlitePathIndexRepo } from './db/sqlite-path-index-repo.js';
 import { SqliteArtifactRepo } from './db/sqlite-artifact-repo.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
@@ -42,6 +44,8 @@ export interface AppContext {
   artifacts: ArtifactRepo;
   artifactChunks: ArtifactChunksRepo;
   folders: FolderRepo;
+  /** The Files search index (popy.spec §14). */
+  pathIndex: PathIndexRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
@@ -73,6 +77,7 @@ export function bootstrap(): AppContext {
     artifacts: new SqliteArtifactRepo(db),
     artifactChunks: new SqliteArtifactChunksRepo(db),
     folders: new SqliteFolderRepo(db),
+    pathIndex: new SqlitePathIndexRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),

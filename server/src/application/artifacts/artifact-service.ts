@@ -28,6 +28,13 @@ export interface ArtifactServiceDeps {
   clock: Clock;
   /** Told after bytes+record are stored, so the file index can trail along. */
   onStored?: (artifactId: string) => void;
+  /**
+   * Told after any change to the set of Files -- a file added, renamed, moved
+   * or deleted, or a folder created, renamed or deleted -- so the Files search
+   * index can be rebuilt (popy.spec §14). Kept as a callback so this service
+   * does not depend on the index.
+   */
+  onFilesChanged?: () => void;
 }
 
 export interface NewArtifactInput {
@@ -79,6 +86,7 @@ export class ArtifactService {
       });
       this.deps.store.write(existing.chatId, existing.id, bytes);
       this.deps.onStored?.(existing.id);
+      this.deps.onFilesChanged?.();
       return { ...existing, mime: input.mime, size: bytes.length, version, updatedAt: now };
     }
 
@@ -92,6 +100,7 @@ export class ArtifactService {
     });
     this.deps.store.write(stored.chatId, stored.id, bytes);
     this.deps.onStored?.(stored.id);
+    this.deps.onFilesChanged?.();
     return stored;
   }
 
@@ -130,40 +139,88 @@ export class ArtifactService {
 
   /** Renames a file's display name. */
   rename(id: string, name: string): boolean {
-    return this.deps.repo.rename(id, name, new Date(this.deps.clock.now()).toISOString());
+    const renamed = this.deps.repo.rename(id, name, new Date(this.deps.clock.now()).toISOString());
+    if (renamed) this.deps.onFilesChanged?.();
+    return renamed;
   }
 
   /** Moves a file to a folder ('' = the root). The folder must exist. */
   move(id: string, folderId: string): boolean {
     if (folderId !== '' && this.deps.folders.get(folderId) === undefined) return false;
-    return this.deps.repo.setFolder(id, folderId, new Date(this.deps.clock.now()).toISOString());
+    const moved = this.deps.repo.setFolder(id, folderId, new Date(this.deps.clock.now()).toISOString());
+    if (moved) this.deps.onFilesChanged?.();
+    return moved;
   }
 
   listFolders(): Folder[] {
     return this.deps.folders.list();
   }
 
-  createFolder(name: string): Folder {
-    return this.deps.folders.insert(
-      createFolder(name, new Date(this.deps.clock.now()).toISOString()),
-    );
-  }
-
-  renameFolder(id: string, name: string): boolean {
-    return this.deps.folders.rename(id, name);
+  /** One folder by id, or undefined -- used to validate a parent before create. */
+  getFolder(id: string): Folder | undefined {
+    return this.deps.folders.get(id);
   }
 
   /**
-   * Deletes a folder AND every file inside it -- records and bytes both; the
-   * UI warns before calling (decision of 31/07).
+   * Creates a folder, optionally inside another ('' = the root). The caller
+   * must have checked the parent exists; a duplicate name among siblings throws
+   * (the UNIQUE index is the contract), surfaced as a conflict by the route.
+   */
+  createFolder(name: string, parentId = ''): Folder {
+    const folder = this.deps.folders.insert(
+      createFolder(name, parentId, new Date(this.deps.clock.now()).toISOString()),
+    );
+    this.deps.onFilesChanged?.();
+    return folder;
+  }
+
+  renameFolder(id: string, name: string): boolean {
+    const renamed = this.deps.folders.rename(id, name);
+    if (renamed) this.deps.onFilesChanged?.();
+    return renamed;
+  }
+
+  /**
+   * Deletes a folder AND everything under it -- every descendant folder and
+   * every file in the subtree, records and bytes both; the UI warns before
+   * calling (decision of 31/07, extended to the subtree on 02/08). Files go
+   * first so no artifact FK blocks a folder, and folders go deepest-first so no
+   * parent is removed while a child still points at it.
    */
   deleteFolder(id: string): boolean {
-    if (this.deps.folders.get(id) === undefined) return false;
-    for (const artifact of this.deps.repo.listByFolder(id)) {
-      this.deps.repo.delete(artifact.id);
-      this.deps.store.remove(artifact.chatId, artifact.id);
+    const root = this.deps.folders.get(id);
+    if (root === undefined) return false;
+
+    const all = this.deps.folders.list();
+    const childrenOf = new Map<string, Folder[]>();
+    for (const folder of all) {
+      const siblings = childrenOf.get(folder.parentId) ?? [];
+      siblings.push(folder);
+      childrenOf.set(folder.parentId, siblings);
     }
-    return this.deps.folders.delete(id);
+
+    // Pre-order walk: a parent always lands before its descendants, so the
+    // reverse is a safe deletion order (descendants first).
+    const subtree: Folder[] = [];
+    const stack: Folder[] = [root];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (current === undefined) break;
+      subtree.push(current);
+      for (const child of childrenOf.get(current.id) ?? []) stack.push(child);
+    }
+
+    for (const folder of subtree) {
+      for (const artifact of this.deps.repo.listByFolder(folder.id)) {
+        this.deps.repo.delete(artifact.id);
+        this.deps.store.remove(artifact.chatId, artifact.id);
+      }
+    }
+    for (const folder of subtree.reverse()) {
+      this.deps.folders.delete(folder.id);
+    }
+    this.deps.onFilesChanged?.();
+    return true;
   }
 
   /** Removes the record and the bytes. Returns false if there was no such id. */
@@ -172,6 +229,7 @@ export class ArtifactService {
     if (artifact === undefined) return false;
     this.deps.repo.delete(id);
     this.deps.store.remove(artifact.chatId, id);
+    this.deps.onFilesChanged?.();
     return true;
   }
 

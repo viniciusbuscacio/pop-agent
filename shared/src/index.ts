@@ -162,15 +162,29 @@ export interface ArtifactDTO {
   createdAt: string;
 }
 
-/** A folder in Files (flat tree). */
+/** A folder in Files (a nested tree). */
 export interface FolderDTO {
   id: string;
   name: string;
+  /** The containing folder id; '' = the root of Files. */
+  parentId: string;
   createdAt: string;
 }
 
 export interface FoldersResponse {
   folders: FolderDTO[];
+}
+
+/**
+ * A hit from `GET /v1/files/search` (popy.spec §14): a folder or a file that
+ * matches, carried with its full path so the UI can show where it lives.
+ */
+export type FilesSearchHitDTO =
+  | { kind: 'folder'; path: string; folder: FolderDTO }
+  | { kind: 'file'; path: string; file: ArtifactDTO };
+
+export interface FilesSearchResponse {
+  hits: FilesSearchHitDTO[];
 }
 
 export interface ArtifactsResponse {

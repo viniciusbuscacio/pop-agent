@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ArtifactDTO, FolderDTO } from '@popy/shared';
+import type { ArtifactDTO, FilesSearchHitDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
@@ -12,10 +12,12 @@ import { Button, Select } from '../ui/controls';
 import { SidebarNav } from './sidebar-nav';
 
 /**
- * The content pane of Files (31/07, explorer layout): on a wide screen it
- * fills the right side while the sidebar shows the folder tree; on a phone it
- * is its own screen with a back button. Shows one folder (or the root):
- * breadcrumb, toolbar, drag-and-drop upload, batch selection, per-item menus.
+ * The content pane of Files (02/08, nested explorer): folders can hold folders
+ * now, so the folder list is a tree -- each folder with children carries a +/-
+ * toggle that opens it in place, while its name still navigates in. Search runs
+ * against the server's path index and returns folders as well as files, from
+ * anywhere in the tree, each shown with its full path. On a phone the search box
+ * sits on its own full-width line so the buttons do not crush it.
  */
 export function FilesPage() {
   const { folderId } = useParams();
@@ -27,6 +29,8 @@ export function FilesPage() {
   const reload = useFilesStore((state) => state.reload);
 
   const [filter, setFilter] = useState('');
+  const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -53,6 +57,33 @@ export function FilesPage() {
     }
   }, [folderId]);
 
+  const searching = filter.trim().length > 0;
+
+  // Search hits the server's path index (folders + files, whole tree). Debounced
+  // so a fast typist does not fire a request per keystroke; the data is small.
+  useEffect(() => {
+    const query = filter.trim();
+    if (query.length === 0) {
+      setSearchHits(undefined);
+      return;
+    }
+    let live = true;
+    const handle = setTimeout(() => {
+      void artifactsService
+        .search(query)
+        .then((response) => {
+          if (live) setSearchHits(response.hits);
+        })
+        .catch(() => {
+          if (live) setSearchHits([]);
+        });
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(handle);
+    };
+  }, [filter]);
+
   const openFolder: FolderDTO | undefined = folders.find((entry) => entry.id === folderId);
 
   // A dead link (deleted folder) falls back to the root once folders arrived.
@@ -62,6 +93,23 @@ export function FilesPage() {
     }
   }, [folderId, openFolder, files, navigate]);
 
+  const currentParent = openFolder?.id ?? '';
+
+  function childFolders(parentId: string): FolderDTO[] {
+    return folders.filter((folder) => folder.parentId === parentId);
+  }
+  function fileCount(id: string): number {
+    return (files ?? []).filter((file) => file.folderId === id).length;
+  }
+  function toggleExpanded(id: string): void {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function upload(list: FileList | File[] | null): Promise<void> {
     const entries = list === null ? [] : Array.from(list);
     if (entries.length === 0) return;
@@ -69,7 +117,7 @@ export function FilesPage() {
     try {
       for (const [index, file] of entries.entries()) {
         setUploading({ done: index, total: entries.length });
-        await artifactsService.uploadToFiles(file, openFolder?.id ?? '');
+        await artifactsService.uploadToFiles(file, currentParent);
       }
     } finally {
       setUploading(undefined);
@@ -94,10 +142,13 @@ export function FilesPage() {
     await reload();
   }
 
+  // A folder created here lands under the folder you are in (a subfolder), or at
+  // the root when you are at the root.
   async function newFolder(): Promise<void> {
-    const name = window.prompt(t('files.newFolderPrompt'));
+    const inside = openFolder !== undefined;
+    const name = window.prompt(inside ? t('files.newSubfolderPrompt') : t('files.newFolderPrompt'));
     if (name === null || name.trim().length === 0) return;
-    await foldersService.create(name.trim());
+    await foldersService.create(name.trim(), currentParent);
     await reload();
   }
 
@@ -109,10 +160,11 @@ export function FilesPage() {
   }
 
   // YOLO mode (31/07): destructive actions just happen -- no dialogs anywhere.
+  // Deleting a folder takes its whole subtree (server side).
   async function deleteFolder(folder: FolderDTO): Promise<void> {
     await foldersService.remove(folder.id);
     await reload();
-    navigate('/files');
+    if (folder.id === openFolder?.id) navigate('/files');
   }
 
   function toggleSelected(id: string): void {
@@ -137,16 +189,95 @@ export function FilesPage() {
   }
 
   const titles = new Map([...chats, ...archived].map((chat) => [chat.id, chat.title]));
-  const searching = filter.trim().length > 0;
-  const visibleFiles = (files ?? []).filter(
-    (file) =>
-      file.name.toLowerCase().includes(filter.toLowerCase()) &&
-      (searching || file.folderId === (openFolder?.id ?? '')),
-  );
-  const visibleFolders =
-    searching || openFolder !== undefined
-      ? []
-      : folders.filter((folder) => folder.name.toLowerCase().includes(filter.toLowerCase()));
+  const visibleFiles = (files ?? []).filter((file) => file.folderId === currentParent);
+  const rootFolders = childFolders(currentParent);
+
+  const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
+  const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
+
+  // One folder row of the tree, plus its children when expanded. A plain
+  // recursive render helper (not a nested component), so the tree reconciles
+  // cleanly and no React namespace is needed for the return type.
+  function renderFolder(folder: FolderDTO, depth: number) {
+    const hasChildren = childFolders(folder.id).length > 0;
+    const isOpen = expanded.has(folder.id);
+    return (
+      <li key={folder.id} className="relative">
+        <div
+          className="flex items-center gap-1 py-2.5 pr-2 hover:bg-[var(--hover-overlay)]"
+          style={{ paddingLeft: `${String(0.75 + depth * 1.25)}rem` }}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              data-testid="folder-expand"
+              aria-label={isOpen ? t('files.collapse') : t('files.expand')}
+              aria-expanded={isOpen}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => toggleExpanded(folder.id)}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
+            >
+              {isOpen ? '−' : '+'}
+            </button>
+          ) : (
+            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            data-testid="folder-row"
+            onClick={() => navigate(`/files/${folder.id}`)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <FolderIcon />
+            <span className="truncate text-sm font-medium">{folder.name}</span>
+            <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
+              {t('files.count', { count: fileCount(folder.id) })}
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="folder-row-menu"
+            aria-label={t('shell.chatMenu')}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
+            className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+          >
+            ⋯
+          </button>
+        </div>
+        {menuFor === folder.id ? (
+          <div
+            onPointerDown={(event) => event.stopPropagation()}
+            role="menu"
+            className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+          >
+            <MenuItem
+              testId="folder-rename"
+              label={t('files.renameFolder')}
+              onClick={() => {
+                setMenuFor(undefined);
+                void renameFolder(folder);
+              }}
+            />
+            <MenuItem
+              testId="folder-delete"
+              label={t('files.deleteFolder')}
+              danger
+              onClick={() => {
+                setMenuFor(undefined);
+                void deleteFolder(folder);
+              }}
+            />
+          </div>
+        ) : null}
+        {hasChildren && isOpen ? (
+          <ul>
+            {childFolders(folder.id).map((child) => renderFolder(child, depth + 1))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
 
   return (
     <div
@@ -227,7 +358,10 @@ export function FilesPage() {
         </span>
       </header>
 
-      <div className="flex items-center gap-2 p-3 pb-2">
+      {/* On a phone the buttons alone fill the line, so the search box was
+          being squeezed into a sliver. It wraps onto its own full-width line
+          below them instead; from `sm` up there is room to share one row. */}
+      <div className="flex flex-wrap items-center gap-2 p-3 pb-2">
         <input
           ref={picker}
           type="file"
@@ -242,12 +376,10 @@ export function FilesPage() {
         <Button type="button" data-testid="files-upload" onClick={() => picker.current?.click()}>
           {t('files.upload')}
         </Button>
-        {openFolder === undefined ? (
-          <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
-            {t('files.newFolder')}
-          </Button>
-        ) : null}
-        {visibleFiles.length > 0 ? (
+        <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
+          {openFolder === undefined ? t('files.newFolder') : t('files.newSubfolder')}
+        </Button>
+        {!searching && visibleFiles.length > 0 ? (
           <Button
             type="button"
             variant="ghost"
@@ -266,7 +398,7 @@ export function FilesPage() {
           onChange={(event) => setFilter(event.target.value)}
           placeholder={t('shell.filterFiles')}
           aria-label={t('shell.filterFiles')}
-          className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+          className="w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
         />
       </div>
 
@@ -276,7 +408,7 @@ export function FilesPage() {
         </p>
       ) : null}
 
-      {selecting && selected.size > 0 ? (
+      {!searching && selecting && selected.size > 0 ? (
         <div className="flex items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
           <span className="text-xs text-[var(--muted)]">
             {t('files.selected', { count: selected.size })}
@@ -311,153 +443,198 @@ export function FilesPage() {
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {visibleFolders.length > 0 ? (
-          <ul data-testid="folder-list">
-            {visibleFolders.map((folder) => (
-              <li key={folder.id} className="relative">
-                <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
-                  <button
-                    type="button"
-                    data-testid="folder-row"
-                    onClick={() => navigate(`/files/${folder.id}`)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  >
-                    <FolderIcon />
-                    <span className="truncate text-sm font-medium">{folder.name}</span>
-                    <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-                      {t('files.count', {
-                        count: (files ?? []).filter((file) => file.folderId === folder.id).length,
-                      })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="folder-row-menu"
-                    aria-label={t('shell.chatMenu')}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
-                    className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                  >
-                    ⋯
-                  </button>
-                </div>
-                {menuFor === folder.id ? (
-                  <div
-                    onPointerDown={(event) => event.stopPropagation()}
-                    role="menu"
-                    className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                  >
-                    <MenuItem
-                      testId="folder-rename"
-                      label={t('files.renameFolder')}
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void renameFolder(folder);
-                      }}
-                    />
-                    <MenuItem
-                      testId="folder-delete"
-                      label={t('files.deleteFolder')}
-                      danger
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void deleteFolder(folder);
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {files === undefined ? null : visibleFiles.length === 0 && visibleFolders.length === 0 ? (
-          <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-            <p className="text-sm text-[var(--muted)]">
-              {openFolder === undefined ? t('files.none') : t('files.emptyFolder')}
-            </p>
-            <p className="text-xs text-[var(--muted)]">{t('files.emptyCta')}</p>
-          </div>
-        ) : (
-          <ul data-testid="all-artifacts">
-            {visibleFiles.map((file) => (
-              <li key={file.id} className="relative">
-                <div
-                  data-testid="artifact-row"
-                  className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
-                >
-                  {selecting ? (
-                    // A row selector has no visible label of its own, so the
-                    // file's name is the only name it can carry.
-                    <input
-                      type="checkbox"
-                      data-testid="file-check"
-                      aria-label={file.name}
-                      checked={selected.has(file.id)}
-                      onChange={() => toggleSelected(file.id)}
-                    />
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {file.name}
-                        {file.version > 1 ? (
-                          <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
-                        ) : null}
+        {searching ? (
+          searchHits === undefined ? null : folderHits.length === 0 && fileHits.length === 0 ? (
+            <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
+              <p className="text-sm text-[var(--muted)]">{t('files.noResults', { query: filter.trim() })}</p>
+            </div>
+          ) : (
+            <ul data-testid="files-search-results">
+              {folderHits.map((hit) =>
+                hit.kind === 'folder' ? (
+                  <li key={`folder-${hit.folder.id}`} className="relative">
+                    <button
+                      type="button"
+                      data-testid="search-folder-row"
+                      onClick={() => navigate(`/files/${hit.folder.id}`)}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-[var(--hover-overlay)]"
+                    >
+                      <FolderIcon />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{hit.folder.name}</span>
+                        <span className="block truncate text-xs text-[var(--muted)]">{hit.path}</span>
                       </span>
-                      <button
-                        type="button"
-                        data-testid="file-menu"
-                        aria-label={t('shell.chatMenu')}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
-                        className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                      >
-                        ⋯
-                      </button>
+                      <span className="shrink-0 text-xs text-[var(--muted)]">
+                        {t('files.count', { count: fileCount(hit.folder.id) })}
+                      </span>
+                    </button>
+                  </li>
+                ) : null,
+              )}
+              {fileHits.map((hit) =>
+                hit.kind === 'file' ? (
+                  <li key={`file-${hit.file.id}`} className="relative">
+                    <div
+                      data-testid="artifact-row"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {hit.file.name}
+                            {hit.file.version > 1 ? (
+                              <span className="ml-1 text-xs text-[var(--muted)]">v{hit.file.version}</span>
+                            ) : null}
+                          </span>
+                          <button
+                            type="button"
+                            data-testid="file-menu"
+                            aria-label={t('shell.chatMenu')}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => setMenuFor((v) => (v === hit.file.id ? undefined : hit.file.id))}
+                            className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+                          >
+                            ⋯
+                          </button>
+                        </div>
+                        <span className="block truncate text-xs text-[var(--muted)]">{hit.path}</span>
+                      </div>
                     </div>
-                    <span className="block truncate text-xs text-[var(--muted)]">
-                      {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
-                      {formatSize(file.size)} · {relativeTime(file.createdAt)}
-                    </span>
-                  </div>
-                </div>
-                {menuFor === file.id ? (
-                  <div
-                    onPointerDown={(event) => event.stopPropagation()}
-                    role="menu"
-                    className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                  >
-                    <MenuItem
-                      testId="file-download"
-                      label={t('files.download')}
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void download(file.id);
-                      }}
-                    />
-                    <MenuItem
-                      testId="file-rename"
-                      label={t('shell.rename')}
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void renameFile(file);
-                      }}
-                    />
-                    <MenuItem
-                      testId="file-delete"
-                      label={t('shell.delete')}
-                      danger
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void deleteFile(file);
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+                    {menuFor === hit.file.id ? (
+                      <div
+                        onPointerDown={(event) => event.stopPropagation()}
+                        role="menu"
+                        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+                      >
+                        <MenuItem
+                          testId="file-download"
+                          label={t('files.download')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void download(hit.file.id);
+                          }}
+                        />
+                        <MenuItem
+                          testId="file-rename"
+                          label={t('shell.rename')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void renameFile(hit.file);
+                          }}
+                        />
+                        <MenuItem
+                          testId="file-delete"
+                          label={t('shell.delete')}
+                          danger
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void deleteFile(hit.file);
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          )
+        ) : (
+          <>
+            {rootFolders.length > 0 ? (
+              <ul data-testid="folder-list">
+                {rootFolders.map((folder) => renderFolder(folder, 0))}
+              </ul>
+            ) : null}
+
+            {files === undefined ? null : visibleFiles.length === 0 && rootFolders.length === 0 ? (
+              <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
+                <p className="text-sm text-[var(--muted)]">
+                  {openFolder === undefined ? t('files.none') : t('files.emptyFolder')}
+                </p>
+                <p className="text-xs text-[var(--muted)]">{t('files.emptyCta')}</p>
+              </div>
+            ) : (
+              <ul data-testid="all-artifacts">
+                {visibleFiles.map((file) => (
+                  <li key={file.id} className="relative">
+                    <div
+                      data-testid="artifact-row"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
+                    >
+                      {selecting ? (
+                        // A row selector has no visible label of its own, so the
+                        // file's name is the only name it can carry.
+                        <input
+                          type="checkbox"
+                          data-testid="file-check"
+                          aria-label={file.name}
+                          checked={selected.has(file.id)}
+                          onChange={() => toggleSelected(file.id)}
+                        />
+                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {file.name}
+                            {file.version > 1 ? (
+                              <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
+                            ) : null}
+                          </span>
+                          <button
+                            type="button"
+                            data-testid="file-menu"
+                            aria-label={t('shell.chatMenu')}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
+                            className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+                          >
+                            ⋯
+                          </button>
+                        </div>
+                        <span className="block truncate text-xs text-[var(--muted)]">
+                          {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
+                          {formatSize(file.size)} · {relativeTime(file.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                    {menuFor === file.id ? (
+                      <div
+                        onPointerDown={(event) => event.stopPropagation()}
+                        role="menu"
+                        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+                      >
+                        <MenuItem
+                          testId="file-download"
+                          label={t('files.download')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void download(file.id);
+                          }}
+                        />
+                        <MenuItem
+                          testId="file-rename"
+                          label={t('shell.rename')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void renameFile(file);
+                          }}
+                        />
+                        <MenuItem
+                          testId="file-delete"
+                          label={t('shell.delete')}
+                          danger
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            void deleteFile(file);
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </div>

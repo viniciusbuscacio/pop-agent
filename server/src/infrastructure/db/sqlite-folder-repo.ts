@@ -6,6 +6,7 @@ import type { Db } from './types.js';
 interface FolderRow {
   id: string;
   name: string;
+  parent_id: string | null;
   created_at: string;
 }
 
@@ -22,12 +23,17 @@ export class SqliteFolderRepo implements FolderRepo {
 
   insert(folder: Folder): Folder {
     const insert = this.db.prepare(
-      'INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)',
+      'INSERT INTO folders (id, name, parent_id, created_at) VALUES (?, ?, ?, ?)',
     );
     let current = folder;
     for (let attempt = 0; ; attempt += 1) {
       try {
-        insert.run(current.id, current.name, current.createdAt);
+        insert.run(
+          current.id,
+          current.name,
+          current.parentId === '' ? null : current.parentId,
+          current.createdAt,
+        );
         return current;
       } catch (error) {
         if (attempt >= 1 || !isPrimaryKeyCollision(error)) throw error;
@@ -58,5 +64,10 @@ export class SqliteFolderRepo implements FolderRepo {
 }
 
 function toFolder(row: FolderRow): Folder {
-  return { id: row.id, name: row.name, createdAt: row.created_at };
+  return {
+    id: row.id,
+    name: row.name,
+    parentId: row.parent_id ?? '',
+    createdAt: row.created_at,
+  };
 }

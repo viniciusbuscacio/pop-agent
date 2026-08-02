@@ -5,8 +5,29 @@ normative history.
 
 ## Unreleased
 
+### Added
+
+- **Nested folders in Files**: a folder can hold folders as well as files.
+  Each folder with subfolders carries a `+`/`−` toggle in the tree -- in the
+  sidebar and the content pane -- that opens it in place, while its name still
+  navigates in. "New folder" inside a folder makes a subfolder. Same name
+  under different parents is allowed (`Projetos/specs` and `Clientes/specs`);
+  a duplicate among siblings is refused. Deleting a folder takes its whole
+  subtree with it -- descendant folders and their files, records and bytes
+  both.
+- **Files search actually finds folders, and searches the whole tree**: search
+  used to filter the loaded file list in the browser, which hid folders and
+  missed anything below the open folder. A materialised path index in the
+  database now backs `GET /v1/files/search`, matching a name or any path
+  segment across the tree and returning folders first, then files, each shown
+  with its full path. The index is rebuilt after every Files change, at boot,
+  and once a day at 01:00 as a safety net.
+
 ### Fixed
 
+- **The Files search box was a sliver on a phone**: the toolbar buttons filled
+  the line and left it squeezed. It now drops to its own full-width line below
+  them on a phone, and shares the row from `sm` up.
 - **Push notifications never arrived on iPhone**: everything was in place — the
   service worker, the Settings opt-in, the subscription, the send when a run
   finishes — but the notifications were signed with a contact address ending in

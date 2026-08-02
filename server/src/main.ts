@@ -19,8 +19,10 @@ import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { WorkspaceSweeper } from './infrastructure/agent/workspace-sweeper.js';
+import { FilesReindexJob } from './infrastructure/agent/files-reindex-job.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
+import { PathIndexService } from './application/artifacts/path-index.js';
 import { FileIndexer } from './application/artifacts/file-indexer.js';
 import { filesCatalogBlock } from './application/artifacts/files-catalog.js';
 import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
@@ -87,6 +89,21 @@ const artifactsDir = ensureArtifactsDir(context.dataDir);
 // Built before the bridge so the pi engine can hand the agent save_artifact.
 // A holder, not a let: the service is built before the embedder exists.
 const fileIndex: { current: FileIndexer | undefined } = { current: undefined };
+// The Files search index (popy.spec §14): folders and files, name and full
+// path, in one table the search hits directly. Rebuilt after every Files
+// change (below), at boot (here) and once a day (a maintenance job). It is a
+// cache, so a rebuild failure must never take the boot down.
+const pathIndex = new PathIndexService({
+  folders: context.folders,
+  artifacts: context.artifacts,
+  index: context.pathIndex,
+  onJournal: (line) => console.log(line),
+});
+try {
+  pathIndex.reindex();
+} catch (error) {
+  console.warn(`popy files reindex at boot failed: ${error instanceof Error ? error.message : 'unknown'}`);
+}
 const artifacts = new ArtifactService({
   repo: context.artifacts,
   folders: context.folders,
@@ -95,6 +112,14 @@ const artifacts = new ArtifactService({
   clock: systemClock,
   // Off the request path: a stored file is indexed for files_search moments later.
   onStored: (artifactId) => void fileIndex.current?.index(artifactId),
+  // Keep the Files search index in step with every add/rename/move/delete.
+  onFilesChanged: () => {
+    try {
+      pathIndex.reindex();
+    } catch (error) {
+      console.warn(`popy files reindex failed: ${error instanceof Error ? error.message : 'unknown'}`);
+    }
+  },
 });
 // Best-effort text extraction for read_artifact: PDF/DOCX/OCR via system
 // binaries (popy.spec §14). Paths overridable for an unusual install.
@@ -358,6 +383,14 @@ const taskScheduler = new TaskScheduler({
       now: () => systemClock.now(),
       onJournal: (line) => console.log(line),
     }),
+    // Files search index safety net: a daily 01:00 rebuild in case a crash or a
+    // hand-edited database left the index adrift (it is kept current on every
+    // change and at boot, so this should never actually be needed).
+    new FilesReindexJob({
+      reindex: () => pathIndex.reindex(),
+      now: () => systemClock.now(),
+      onJournal: (line) => console.log(line),
+    }),
   ],
   onJournal: (line) => console.log(line),
 });
@@ -391,6 +424,7 @@ const app = createApp({
   settings,
   chats,
   artifacts,
+  pathIndex,
   runs,
   tasks,
   taskScheduler,

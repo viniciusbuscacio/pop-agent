@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AboutResponse, ServerInfoResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import type { PathIndexService } from '../../application/artifacts/path-index.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { TaskService } from '../../application/tasks/task-service.js';
@@ -48,6 +49,8 @@ export interface AppDeps {
   settings: SettingsService;
   chats: ChatService;
   artifacts: ArtifactService;
+  /** The Files search index (popy.spec §14): powers GET /files/search. */
+  pathIndex: PathIndexService;
   runs: RunService;
   /** Background tasks (popy.spec §21): the rows, and the queue that runs them. */
   tasks: TaskService;

@@ -1145,6 +1145,34 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.47 (2026-08-02): **Folders nest, and Files search has an index (§14, §6,
+  §21).** Folders were flat with a global `UNIQUE(name)`; they gain a
+  `parent_id` (migration 020) so a folder holds folders as well as files,
+  and "unique among siblings" (a `UNIQUE(COALESCE(parent_id,''), name)`
+  index) replaces the global one, so `Projetos/specs` and `Clientes/specs`
+  coexist. The parent is fixed at creation and never moves, so no cycle can
+  form; deleting a folder takes its whole subtree -- descendant folders and
+  their files, records and bytes both (files first, folders deepest-first,
+  so no FK dangles). Rebuilding `folders` while `artifacts.folder_id`
+  references it needed care: RENAME rewrites the child FK to follow the
+  renamed table, so the migration builds the new table under a temp name,
+  drops `folders`, then renames the temp *into* `folders` (the child FK text
+  stays `REFERENCES folders`, now resolving to the rebuilt table),
+  `defer_foreign_keys` covering the window -- verified against the real db
+  (`foreign_key_check` clean). The Files list is now a tree in both the
+  sidebar and the content pane: a folder with children carries a `+`/`-`
+  toggle that opens it in place, while its name still navigates in. Search
+  no longer filters the loaded list in the browser (which hid folders and
+  missed anything below the open folder); a materialised `path_index` table
+  holds every folder and file with its full path, and `GET /v1/files/search`
+  matches a name or any path segment across the whole tree, returning
+  folders first then files, each with its path. The index is a cache:
+  `PathIndexService.reindex` rebuilds it whole after every Files mutation
+  (an `onFilesChanged` hook on the artifact service), once at boot, and once
+  a day at 01:00 local as a safety net (a `FilesReindexJob` maintenance job
+  on the scheduler's tick). On a phone the Files search box drops to its own
+  full-width line so the toolbar buttons no longer crush it.
+
 - 1.46 (2026-08-02): **The field controls are primitives now (§14).** Two
   layout bugs had just been fixed in one shared component each and
   disappeared from five screens at once; an audit then found the places

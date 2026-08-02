@@ -5,10 +5,15 @@ import type {
   ArtifactsResponse,
   ArtifactLinkResponse,
   ArtifactVersionsResponse,
+  FolderDTO,
   FoldersResponse,
+  FilesSearchResponse,
+  FilesSearchHitDTO,
 } from '@popy/shared';
 import type { Artifact } from '../../domain/artifacts/artifact.js';
+import type { Folder } from '../../domain/artifacts/folder.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import type { PathIndexService } from '../../application/artifacts/path-index.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import { apiError } from './errors.js';
 import { badBody, readJson, schemaError } from './body.js';
@@ -25,6 +30,8 @@ const MAX_ARTIFACT_BYTES = MAX_ARTIFACT_MB * 1024 * 1024;
  */
 export interface ArtifactRoutesDeps {
   artifacts: ArtifactService;
+  /** The Files search index (popy.spec §14): powers GET /files/search. */
+  pathIndex: PathIndexService;
   chats: ChatService;
 }
 
@@ -120,27 +127,46 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
       : c.json(toDto(updated));
   });
 
-  // Folders: a flat tree the user manages from the Files tab.
+  // Folders: a nested tree the user manages from the Files tab.
   routes.get('/folders', (c) =>
-    c.json({ folders: deps.artifacts.listFolders() } satisfies FoldersResponse),
+    c.json({ folders: deps.artifacts.listFolders().map(toFolderDto) } satisfies FoldersResponse),
   );
+
+  // Search folders and files by name or path, across the whole tree, out of the
+  // materialised index (popy.spec §14). Folders first, then files.
+  routes.get('/files/search', (c) => {
+    const query = c.req.query('q') ?? '';
+    const hits = deps.pathIndex.search(query).flatMap<FilesSearchHitDTO>((hit) => {
+      if (hit.kind === 'folder') {
+        const folder = deps.artifacts.getFolder(hit.refId);
+        return folder === undefined ? [] : [{ kind: 'folder', path: hit.path, folder: toFolderDto(folder) }];
+      }
+      const file = deps.artifacts.get(hit.refId);
+      return file === undefined ? [] : [{ kind: 'file', path: hit.path, file: toDto(file) }];
+    });
+    return c.json({ hits } satisfies FilesSearchResponse);
+  });
 
   routes.post('/folders', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
     const parsed = folderSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
+    const parentId = parsed.data.parentId ?? '';
+    if (parentId !== '' && deps.artifacts.getFolder(parentId) === undefined) {
+      return apiError(c, 404, 'not_found', 'No such parent folder.');
+    }
     try {
-      return c.json(deps.artifacts.createFolder(parsed.data.name), 201);
+      return c.json(toFolderDto(deps.artifacts.createFolder(parsed.data.name, parentId)), 201);
     } catch {
-      return apiError(c, 409, 'conflict', 'A folder with that name already exists.');
+      return apiError(c, 409, 'conflict', 'A folder with that name already exists here.');
     }
   });
 
   routes.patch('/folders/:id', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
-    const parsed = folderSchema.safeParse(body);
+    const parsed = folderRenameSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
     try {
       return deps.artifacts.renameFolder(c.req.param('id'), parsed.data.name)
@@ -190,10 +216,22 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
   return routes;
 }
 
-const folderSchema = z.object({ name: z.string().min(1).max(120) }).strict();
+const folderSchema = z
+  .object({ name: z.string().min(1).max(120), parentId: z.string().max(60).optional() })
+  .strict();
+const folderRenameSchema = z.object({ name: z.string().min(1).max(120) }).strict();
 const artifactPatchSchema = z
   .object({ name: z.string().min(1).max(255).optional(), folderId: z.string().max(60).optional() })
   .strict();
+
+function toFolderDto(folder: Folder): FolderDTO {
+  return {
+    id: folder.id,
+    name: folder.name,
+    parentId: folder.parentId,
+    createdAt: folder.createdAt,
+  };
+}
 
 function toDto(artifact: Artifact): ArtifactDTO {
   return {

@@ -1,4 +1,11 @@
-import type { ArtifactDTO, ArtifactsResponse, ArtifactLinkResponse, FolderDTO, FoldersResponse } from '@popy/shared';
+import type {
+  ArtifactDTO,
+  ArtifactsResponse,
+  ArtifactLinkResponse,
+  FolderDTO,
+  FoldersResponse,
+  FilesSearchResponse,
+} from '@popy/shared';
 import { apiRequest, apiUpload } from './api';
 
 /** Artifacts for a conversation (popy.spec §14, RF-002/009). */
@@ -43,6 +50,11 @@ export const artifactsService = {
   move(id: string, folderId: string): Promise<ArtifactDTO> {
     return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { folderId } });
   },
+
+  /** Searches folders and files by name or path, across the whole tree. */
+  search(query: string): Promise<FilesSearchResponse> {
+    return apiRequest<FilesSearchResponse>(`/files/search?q=${encodeURIComponent(query)}`);
+  },
 };
 
 /** Folders of the Files tab: a flat tree the user manages. */
@@ -51,8 +63,12 @@ export const foldersService = {
     return apiRequest<FoldersResponse>('/folders');
   },
 
-  create(name: string): Promise<FolderDTO> {
-    return apiRequest<FolderDTO>('/folders', { method: 'POST', body: { name } });
+  /** Creates a folder; empty parentId = the root of Files. */
+  create(name: string, parentId = ''): Promise<FolderDTO> {
+    return apiRequest<FolderDTO>('/folders', {
+      method: 'POST',
+      body: parentId.length > 0 ? { name, parentId } : { name },
+    });
   },
 
   rename(id: string, name: string): Promise<void> {

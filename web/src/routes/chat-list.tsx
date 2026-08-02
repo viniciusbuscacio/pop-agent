@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate, useParams } from 'react-router-dom';
-import type { ChatDTO } from '@popy/shared';
+import type { ChatDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useChatStore } from '../store/chat';
@@ -201,12 +201,72 @@ function FolderTree() {
   const files = useFilesStore((state) => state.files);
   const folders = useFilesStore((state) => state.folders);
   const reload = useFilesStore((state) => state.reload);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   const rootCount = (files ?? []).filter((file) => file.folderId === '').length;
+
+  function childFolders(parentId: string): FolderDTO[] {
+    return folders.filter((folder) => folder.parentId === parentId);
+  }
+  function toggle(id: string): void {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // A row and, when open, its children -- indented by depth. A plain recursive
+  // helper, so the tree reconciles cleanly.
+  function renderRow(folder: FolderDTO, depth: number) {
+    const kids = childFolders(folder.id);
+    const isOpen = expanded.has(folder.id);
+    return (
+      <div key={folder.id}>
+        <div
+          className={`flex items-center gap-1 pr-4 ${
+            folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
+          }`}
+          style={{ paddingLeft: `${String(0.5 + depth * 1)}rem` }}
+        >
+          {kids.length > 0 ? (
+            <button
+              type="button"
+              data-testid="tree-expand"
+              aria-label={isOpen ? t('files.collapse') : t('files.expand')}
+              aria-expanded={isOpen}
+              onClick={() => toggle(folder.id)}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
+            >
+              {isOpen ? '−' : '+'}
+            </button>
+          ) : (
+            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            data-testid="tree-folder"
+            onClick={() => navigate(`/files/${folder.id}`)}
+            className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left"
+          >
+            <FolderIcon />
+            <span className="truncate text-sm">{folder.name}</span>
+            <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
+              {t('files.count', {
+                count: (files ?? []).filter((file) => file.folderId === folder.id).length,
+              })}
+            </span>
+          </button>
+        </div>
+        {kids.length > 0 && isOpen ? kids.map((child) => renderRow(child, depth + 1)) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
@@ -224,25 +284,7 @@ function FolderTree() {
           {t('files.count', { count: rootCount })}
         </span>
       </button>
-      {folders.map((folder) => (
-        <button
-          key={folder.id}
-          type="button"
-          data-testid="tree-folder"
-          onClick={() => navigate(`/files/${folder.id}`)}
-          className={`flex w-full items-center gap-2 py-2.5 pr-4 pl-8 text-left ${
-            folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
-          }`}
-        >
-          <FolderIcon />
-          <span className="truncate text-sm">{folder.name}</span>
-          <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-            {t('files.count', {
-              count: (files ?? []).filter((file) => file.folderId === folder.id).length,
-            })}
-          </span>
-        </button>
-      ))}
+      {childFolders('').map((folder) => renderRow(folder, 0))}
     </div>
   );
 }

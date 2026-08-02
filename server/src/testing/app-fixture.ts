@@ -26,11 +26,13 @@ import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
+import { PathIndexService } from '../application/artifacts/path-index.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
 import { SqliteArtifactRepo } from '../infrastructure/db/sqlite-artifact-repo.js';
 import { SqliteFolderRepo } from '../infrastructure/db/sqlite-folder-repo.js';
+import { SqlitePathIndexRepo } from '../infrastructure/db/sqlite-path-index-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
@@ -246,13 +248,22 @@ export function createTestApp(
   });
 
   const settings = new SettingsService(settingsRepo);
+  const artifactRepo = new SqliteArtifactRepo(db);
+  const folderRepo = new SqliteFolderRepo(db);
+  const pathIndex = new PathIndexService({
+    folders: folderRepo,
+    artifacts: artifactRepo,
+    index: new SqlitePathIndexRepo(db),
+  });
   const artifacts = new ArtifactService({
-    repo: new SqliteArtifactRepo(db),
-    folders: new SqliteFolderRepo(db),
+    repo: artifactRepo,
+    folders: folderRepo,
     store: new FsArtifactStore(mkdtempSync(join(tmpdir(), 'popy-test-artifacts-'))),
     secretKey: Buffer.from('test-artifact-signing-key-000000'),
     clock,
+    onFilesChanged: () => pathIndex.reindex(),
   });
+  pathIndex.reindex();
   // Wired exactly the way main.ts wires it: with no key configured the title
   // job is a silent no-op, which is what the fake-bridge tests need.
   const runs = new RunService({
@@ -301,6 +312,7 @@ export function createTestApp(
     settings,
     chats,
     artifacts,
+    pathIndex,
     runs,
     tasks,
     taskScheduler,

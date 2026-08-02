@@ -152,4 +152,77 @@ describe('ArtifactService', () => {
     );
     expect(service.mintVersionLink(v1.id, 9)).toBeUndefined();
   });
+
+  describe('nested folders', () => {
+    it('creates a subfolder and allows the same name under a different parent', () => {
+      const projects = service.createFolder('Projects');
+      const clients = service.createFolder('Clients');
+      const specsA = service.createFolder('specs', projects.id);
+      const specsB = service.createFolder('specs', clients.id);
+
+      expect(specsA.parentId).toBe(projects.id);
+      expect(specsB.parentId).toBe(clients.id);
+      expect(service.getFolder(specsA.id)?.name).toBe('specs');
+      // Two 'specs' can coexist under different parents.
+      expect(service.listFolders().filter((f) => f.name === 'specs')).toHaveLength(2);
+    });
+
+    it('rejects a duplicate name among siblings', () => {
+      const parent = service.createFolder('Parent');
+      service.createFolder('dup', parent.id);
+      expect(() => service.createFolder('dup', parent.id)).toThrow();
+    });
+
+    it('deletes a folder and its whole subtree -- descendant folders and their files, bytes and all', () => {
+      const top = service.createFolder('top');
+      const mid = service.createFolder('mid', top.id);
+      const leaf = service.createFolder('leaf', mid.id);
+
+      const atTop = service.create(
+        { chatId: '', folderId: top.id, name: 'a.txt', mime: 'text/plain', source: 'upload' },
+        Buffer.from('a'),
+      );
+      const atLeaf = service.create(
+        { chatId: '', folderId: leaf.id, name: 'b.txt', mime: 'text/plain', source: 'upload' },
+        Buffer.from('b'),
+      );
+      const topBytes = store.pathOf('', atTop.id);
+      const leafBytes = store.pathOf('', atLeaf.id);
+      expect(existsSync(topBytes)).toBe(true);
+      expect(existsSync(leafBytes)).toBe(true);
+
+      expect(service.deleteFolder(top.id)).toBe(true);
+
+      // Every folder in the subtree is gone.
+      expect(service.getFolder(top.id)).toBeUndefined();
+      expect(service.getFolder(mid.id)).toBeUndefined();
+      expect(service.getFolder(leaf.id)).toBeUndefined();
+      // Every file in the subtree is gone, records and bytes both.
+      expect(service.get(atTop.id)).toBeUndefined();
+      expect(service.get(atLeaf.id)).toBeUndefined();
+      expect(existsSync(topBytes)).toBe(false);
+      expect(existsSync(leafBytes)).toBe(false);
+    });
+
+    it('reports a change through onFilesChanged for folder and file mutations', () => {
+      let changes = 0;
+      const witness = new ArtifactService({
+        repo: new SqliteArtifactRepo(db),
+        folders: new SqliteFolderRepo(db),
+        store,
+        secretKey: KEY,
+        clock: new FakeClock(),
+        onFilesChanged: () => {
+          changes += 1;
+        },
+      });
+      const folder = witness.createFolder('watched');
+      witness.create(
+        { chatId: '', folderId: folder.id, name: 'c.txt', mime: 'text/plain', source: 'upload' },
+        Buffer.from('c'),
+      );
+      witness.deleteFolder(folder.id);
+      expect(changes).toBe(3);
+    });
+  });
 });
