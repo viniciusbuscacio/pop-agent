@@ -89,7 +89,7 @@ export function SettingsPage() {
         <h1 className="text-lg font-semibold">{t('settings.title')}</h1>
       </header>
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 p-4 md:flex-row">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 p-4 md:w-[90%] md:max-w-none md:flex-row">
         <nav className="flex gap-1 overflow-x-auto md:w-48 md:flex-col">
           {SECTIONS.map((entry) => (
             <button
