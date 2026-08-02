@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.45 — 2026-08-01.
+Version 1.46 — 2026-08-02.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -614,6 +614,20 @@ events from stale runs.
 - `data-testid` on every interactive control, kebab-case and named after
   the thing (`setup-password`, `login-submit`, `settings-theme-dark`);
   basic real a11y (visible focus, keyboard nav, `aria-live` on streaming).
+- **Every field control comes from `ui/controls.tsx`** — `TextField`,
+  `Select`, `TextArea`, `CheckField`, plus `Button`, `Card` and
+  `Segmented`. A hand-rolled `<select>` or `<textarea>` with its own class
+  string is a bug waiting to be fixed N times; they had already drifted
+  apart before the primitives existed. The field skin lives in one
+  constant and the two sizes (`md` for a labelled form field, `sm` for a
+  toolbar control) are a **prop, never a `className` override**: two
+  competing `px-` classes are settled by the order Tailwind emitted them,
+  not the order they were written.
+  - A primitive given no `label` renders bare, so a toolbar keeps its flex
+    row instead of gaining a wrapper — and then `aria-label` is mandatory,
+    because it is the only name the tree will ever get.
+  - Layout classes (widths, `flex-1`) still come through `className`; only
+    the skin is owned by the primitive.
 - Theme: follows the system (`prefers-color-scheme`) + manual
   System/Light/Dark override. **Never sent to the server** — it belongs to
   the device, lives in `localStorage`, and is applied by an inline script
@@ -1131,6 +1145,18 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.46 (2026-08-02): **The field controls are primitives now (§14).** Two
+  layout bugs had just been fixed in one shared component each and
+  disappeared from five screens at once; an audit then found the places
+  where that leverage did not exist — eight hand-rolled `<select>`, five
+  `<textarea>`, five raw checkboxes, each carrying its own copy of the
+  field class string, already drifted. `Select`, `TextArea` and a shared
+  `Field` shell join `TextField`/`CheckField` in `ui/controls.tsx`, with
+  the skin in one constant and size as a prop. `<Button>` was measured
+  too and left alone: none of the 41 raw `<button>` imitate it — they are
+  icon buttons and list rows. One real a11y hole closed on the way: the
+  file-row checkbox had no accessible name, and the interval unit select
+  answered to "Schedule", the same name as the group around it.
 - 1.45 (2026-08-01): **A task can run without shouting (§21), and a note
   can be added to (§11).** Both came out of the same job: a task on a
   ten-minute interval writing to one markdown file. It buzzed the phone

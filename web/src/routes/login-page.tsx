@@ -5,7 +5,7 @@ import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { passkeyService } from '../services/passkey';
 import { useAuthStore } from '../store/auth';
-import { Button, Card, CenteredScreen, TextField } from '../ui/controls';
+import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 
 /**
  * Vault-style login: one password field, no user name (popy.spec §9).
@@ -93,15 +93,13 @@ export function LoginPage() {
             </p>
           ) : null}
 
-          <label className="flex items-center gap-2 text-sm text-[var(--key-fg-dim)]">
-            <input
-              type="checkbox"
-              data-testid="login-keep-signed-in"
-              checked={keepSignedIn}
-              onChange={(event) => setKeepSignedIn(event.target.checked)}
-            />
-            {t('login.keepSignedIn')}
-          </label>
+          <CheckField
+            id="login-keep-signed-in"
+            testId="login-keep-signed-in"
+            label={t('login.keepSignedIn')}
+            checked={keepSignedIn}
+            onChange={setKeepSignedIn}
+          />
 
           <Button
             type="submit"

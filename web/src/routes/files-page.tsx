@@ -8,7 +8,7 @@ import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
-import { Button, Segmented } from '../ui/controls';
+import { Button, Segmented, Select } from '../ui/controls';
 
 /**
  * The content pane of Files (31/07, explorer layout): on a wide screen it
@@ -301,8 +301,11 @@ export function FilesPage() {
           <span className="text-xs text-[var(--muted)]">
             {t('files.selected', { count: selected.size })}
           </span>
-          <select
+          <Select
+            id="files-move-to"
+            size="sm"
             data-testid="files-move-to"
+            aria-label={t('files.moveTo')}
             defaultValue=""
             onChange={(event) => {
               if (event.target.value === '') return;
@@ -310,7 +313,6 @@ export function FilesPage() {
               event.target.value = '';
               void moveSelected(target);
             }}
-            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs"
           >
             <option value="">{t('files.moveTo')}</option>
             <option value="root">{t('files.rootCrumb')}</option>
@@ -321,7 +323,7 @@ export function FilesPage() {
                   {folder.name}
                 </option>
               ))}
-          </select>
+          </Select>
           <Button type="button" variant="danger" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
             {t('shell.delete')}
           </Button>
@@ -405,9 +407,12 @@ export function FilesPage() {
                   className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
                 >
                   {selecting ? (
+                    // A row selector has no visible label of its own, so the
+                    // file's name is the only name it can carry.
                     <input
                       type="checkbox"
                       data-testid="file-check"
+                      aria-label={file.name}
                       checked={selected.has(file.id)}
                       onChange={() => toggleSelected(file.id)}
                     />

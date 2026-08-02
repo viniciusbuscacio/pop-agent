@@ -31,7 +31,7 @@ import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
-import { Button, Card, Segmented, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
 
 /**
  * Settings as a full screen with a back button -- never a drawer or a modal
@@ -168,38 +168,29 @@ function GeneralSection() {
 
   return (
     <Card className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="settings-language" className="text-sm text-[var(--key-fg-dim)]">
-          {t('settings.general.language')}
-        </label>
-        <select
-          id="settings-language"
-          data-testid="settings-language"
-          defaultValue="en"
-          className="w-48 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-        >
-          <option value="en">English</option>
-        </select>
-      </div>
+      <Select
+        id="settings-language"
+        data-testid="settings-language"
+        label={t('settings.general.language')}
+        defaultValue="en"
+        className="w-48"
+      >
+        <option value="en">English</option>
+      </Select>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="settings-instructions" className="text-sm text-[var(--key-fg-dim)]">
-          {t('settings.general.instructions')}
-        </label>
-        <textarea
-          id="settings-instructions"
-          data-testid="settings-instructions"
-          rows={5}
-          maxLength={4000}
-          value={instructions}
-          onChange={(event) => {
-            setInstructions(event.target.value);
-            setSaved(false);
-          }}
-          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
-        />
-        <p className="text-xs text-[var(--muted)]">{t('settings.general.instructionsHint')}</p>
-      </div>
+      <TextArea
+        id="settings-instructions"
+        data-testid="settings-instructions"
+        label={t('settings.general.instructions')}
+        hint={t('settings.general.instructionsHint')}
+        rows={5}
+        maxLength={4000}
+        value={instructions}
+        onChange={(event) => {
+          setInstructions(event.target.value);
+          setSaved(false);
+        }}
+      />
 
       <div className="flex items-center gap-2">
         <Button
@@ -273,25 +264,21 @@ function MemorySection() {
 
   return (
     <Card className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="settings-memory" className="text-sm text-[var(--key-fg-dim)]">
-          {t('settings.memory.label')}
-        </label>
-        <textarea
-          id="settings-memory"
-          data-testid="settings-memory"
-          rows={10}
-          maxLength={8000}
-          value={doc}
-          placeholder={t('settings.memory.empty')}
-          onChange={(event) => {
-            setDoc(event.target.value);
-            setSaved(false);
-          }}
-          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 font-mono text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
-        />
-        <p className="text-xs text-[var(--muted)]">{t('settings.memory.hint')}</p>
-      </div>
+      <TextArea
+        id="settings-memory"
+        data-testid="settings-memory"
+        label={t('settings.memory.label')}
+        hint={t('settings.memory.hint')}
+        rows={10}
+        maxLength={8000}
+        value={doc}
+        placeholder={t('settings.memory.empty')}
+        onChange={(event) => {
+          setDoc(event.target.value);
+          setSaved(false);
+        }}
+        className="font-mono text-sm"
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" data-testid="settings-memory-save" disabled={busy} onClick={() => void save()}>
@@ -707,19 +694,15 @@ function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: (
         value={whenToUse}
         onChange={(event) => setWhenToUse(event.target.value)}
       />
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="skill-body" className="text-sm text-[var(--key-fg-dim)]">
-          {t('skills.field.body')}
-        </label>
-        <textarea
-          id="skill-body"
-          data-testid="skill-body"
-          rows={10}
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 font-mono text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
-        />
-      </div>
+      <TextArea
+        id="skill-body"
+        data-testid="skill-body"
+        label={t('skills.field.body')}
+        rows={10}
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        className="font-mono text-sm"
+      />
 
       {error !== undefined ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
@@ -1285,36 +1268,30 @@ function VoiceCleanupCard() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          data-testid="voice-cleanup-toggle"
-          checked={settings.voiceCleanup}
-          onChange={(event) => void save({ voiceCleanup: event.target.checked })}
-        />
-        {t('voice.cleanup')}
-      </label>
-      <p className="text-xs text-[var(--muted)]">{t('voice.cleanupNote')}</p>
+      <CheckField
+        id="voice-cleanup-toggle"
+        testId="voice-cleanup-toggle"
+        label={t('voice.cleanup')}
+        hint={t('voice.cleanupNote')}
+        checked={settings.voiceCleanup}
+        onChange={(checked) => void save({ voiceCleanup: checked })}
+      />
       {settings.voiceCleanup ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="voice-cleanup-model" className="text-sm text-[var(--key-fg-dim)]">
-            {t('voice.cleanupModel')}
-          </label>
-          <select
-            id="voice-cleanup-model"
-            data-testid="voice-cleanup-model"
-            value={settings.voiceCleanupModel}
-            onChange={(event) => void save({ voiceCleanupModel: event.target.value })}
-            className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-          >
-            <option value="">{t('voice.cleanupModelDefault')}</option>
-            {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select
+          id="voice-cleanup-model"
+          data-testid="voice-cleanup-model"
+          label={t('voice.cleanupModel')}
+          value={settings.voiceCleanupModel}
+          onChange={(event) => void save({ voiceCleanupModel: event.target.value })}
+          className="w-full max-w-md"
+        >
+          <option value="">{t('voice.cleanupModelDefault')}</option>
+          {models.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </Select>
       ) : null}
     </Card>
   );
@@ -1358,28 +1335,24 @@ function VoiceModelCard() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="voice-model" className="text-sm text-[var(--key-fg-dim)]">
-          {t('voice.model')}
-        </label>
-        <select
-          id="voice-model"
-          data-testid="voice-model"
-          value={selected}
-          disabled={busy}
-          onChange={(event) => void choose(event.target.value)}
-          className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-        >
-          {status.map((model) => (
-            <option key={model.name} value={model.name}>
-              {model.name} · {model.approxMb} MB
-              {model.installed ? '' : ` · ${t('voice.notInstalled')}`}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-[var(--muted)]">{t('voice.hint')}</p>
-        {note !== undefined ? <p className="text-xs text-[var(--muted)]">{note}</p> : null}
-      </div>
+      <Select
+        id="voice-model"
+        data-testid="voice-model"
+        label={t('voice.model')}
+        value={selected}
+        disabled={busy}
+        onChange={(event) => void choose(event.target.value)}
+        className="w-full max-w-md"
+        hint={t('voice.hint')}
+      >
+        {status.map((model) => (
+          <option key={model.name} value={model.name}>
+            {model.name} · {model.approxMb} MB
+            {model.installed ? '' : ` · ${t('voice.notInstalled')}`}
+          </option>
+        ))}
+      </Select>
+      {note !== undefined ? <p className="text-xs text-[var(--muted)]">{note}</p> : null}
     </Card>
   );
 }
@@ -1404,26 +1377,22 @@ function ModelPicker({
   const known = models.some((model) => model.id === value);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm text-[var(--key-fg-dim)]">
-        {label}
-      </label>
-      <select
-        id={id}
-        data-testid={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-      >
-        {known || value.length === 0 ? null : <option value={value}>{value}</option>}
-        {models.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.name === undefined ? model.id : `${model.name} — ${model.id}`}
-          </option>
-        ))}
-      </select>
-      {hint !== undefined ? <p className="text-xs text-[var(--muted)]">{hint}</p> : null}
-    </div>
+    <Select
+      id={id}
+      data-testid={id}
+      label={label}
+      {...(hint === undefined ? {} : { hint })}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full max-w-md"
+    >
+      {known || value.length === 0 ? null : <option value={value}>{value}</option>}
+      {models.map((model) => (
+        <option key={model.id} value={model.id}>
+          {model.name === undefined ? model.id : `${model.name} — ${model.id}`}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -1507,24 +1476,20 @@ function AppUpdatesCard() {
   return (
     <Card className="flex flex-col gap-3">
       <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.updates.checkTitle')}</span>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="update-interval" className="text-sm text-[var(--key-fg-dim)]">
-          {t('settings.updates.every')}
-        </label>
-        <select
-          id="update-interval"
-          data-testid="update-interval"
-          value={intervalMinutes}
-          onChange={(event) => setIntervalMinutes(Number(event.target.value))}
-          className="w-full max-w-xs rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)]"
-        >
-          {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
-            <option key={minutes} value={minutes}>
-              {intervalLabel(minutes)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Select
+        id="update-interval"
+        data-testid="update-interval"
+        label={t('settings.updates.every')}
+        value={intervalMinutes}
+        onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+        className="w-full max-w-xs"
+      >
+        {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
+          <option key={minutes} value={minutes}>
+            {intervalLabel(minutes)}
+          </option>
+        ))}
+      </Select>
       <div>
         <Button
           type="button"

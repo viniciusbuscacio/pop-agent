@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { tasksService } from '../services/tasks';
 import { useTasksStore } from '../store/tasks';
-import { Button, Card, CheckField, Segmented, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
 
 /**
  * Creating and editing a background task (popy.spec §21) as a **full screen**
@@ -127,21 +127,16 @@ export function TaskFormPage() {
               onChange={(event) => setTitle(event.target.value)}
             />
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="task-prompt" className="text-sm text-[var(--key-fg-dim)]">
-                {t('tasks.form.prompt')}
-              </label>
-              <textarea
-                id="task-prompt"
-                data-testid="task-prompt"
-                rows={8}
-                maxLength={8000}
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
-              />
-              <p className="text-xs text-[var(--muted)]">{t('tasks.form.promptHint')}</p>
-            </div>
+            <TextArea
+              id="task-prompt"
+              data-testid="task-prompt"
+              label={t('tasks.form.prompt')}
+              hint={t('tasks.form.promptHint')}
+              rows={8}
+              maxLength={8000}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+            />
 
             <div className="flex flex-col gap-2">
               <span className="text-sm text-[var(--key-fg-dim)]">{t('tasks.form.schedule')}</span>
@@ -160,25 +155,26 @@ export function TaskFormPage() {
               />
               {scheduleKind === 'interval' ? (
                 <div className="flex items-center gap-2">
-                  <input
+                  <TextField
+                    id="task-interval"
                     type="number"
                     min={1}
                     data-testid="task-interval"
                     aria-label={t('tasks.form.interval')}
                     value={every}
                     onChange={(event) => setEvery(event.target.value)}
-                    className="w-24 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                    className="w-24"
                   />
-                  <select
+                  <Select
+                    id="task-interval-unit"
                     data-testid="task-interval-unit"
-                    aria-label={t('tasks.form.schedule')}
+                    aria-label={t('tasks.form.unit')}
                     value={unit}
                     onChange={(event) => setUnit(event.target.value === 'hours' ? 'hours' : 'minutes')}
-                    className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 outline-none focus:border-[var(--accent)]"
                   >
                     <option value="minutes">{t('tasks.form.unitMinutes')}</option>
                     <option value="hours">{t('tasks.form.unitHours')}</option>
-                  </select>
+                  </Select>
                 </div>
               ) : (
                 <p className="text-xs text-[var(--muted)]">{t('tasks.form.onceHint')}</p>

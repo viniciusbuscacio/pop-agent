@@ -117,6 +117,8 @@ export const en = {
   'chat.newMessages': 'New messages',
   'chat.model': 'Model',
   'chat.defaultModel': 'Default model',
+  'chat.searchModels': 'Search models…',
+  'chat.noModelsFound': 'No models found',
 
   'settings.title': 'Settings',
   'provider.credits': 'Balance: {remaining} remaining · {used} used',
@@ -442,6 +444,9 @@ export const en = {
   'tasks.form.schedule': 'Schedule',
   'tasks.form.once': 'Once',
   'tasks.form.interval': 'Every',
+  // Its own name, not "Schedule": the group around it is already called that,
+  // and two controls answering to one name is a maze in a screen reader.
+  'tasks.form.unit': 'Unit',
   'tasks.form.unitMinutes': 'minutes',
   'tasks.form.unitHours': 'hours',
   'tasks.form.onceHint': 'Runs once, within the next minute, then switches itself off.',

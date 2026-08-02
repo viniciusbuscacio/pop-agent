@@ -5,7 +5,7 @@ import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { providersService } from '../services/providers';
 import { useAuthStore } from '../store/auth';
-import { Button, Card, CenteredScreen, TextField } from '../ui/controls';
+import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 
 /**
@@ -109,15 +109,13 @@ export function SetupPage() {
 
             <RecoveryKeyPanel recoveryKey={recoveryKey} idPrefix="setup" />
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="setup-saved-key"
-                checked={saved}
-                onChange={(event) => setSaved(event.target.checked)}
-              />
-              {t('setup.recovery.confirm')}
-            </label>
+            <CheckField
+              id="setup-saved-key"
+              testId="setup-saved-key"
+              label={t('setup.recovery.confirm')}
+              checked={saved}
+              onChange={setSaved}
+            />
 
             <Button
               type="button"

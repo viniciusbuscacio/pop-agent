@@ -9,6 +9,7 @@ import { useChatStore } from '../store/chat';
 import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
+import { ModelPicker } from '../ui/controls';
 
 /** One conversation: history, whatever is streaming, and the composer. */
 export function ChatPage() {
@@ -209,26 +210,25 @@ export function ChatPage() {
           </span>
         </button>
 
-        <select
-          data-testid="chat-model"
-          aria-label={t('chat.model')}
+        <ModelPicker
+          id="chat-model"
+          label={t('chat.model')}
+          placeholder={t('chat.searchModels')}
+          noResults={t('chat.noModelsFound')}
           value={chat === undefined || chat.model === '' ? '' : `${chat.provider}||${chat.model}`}
-          onChange={(event) => {
-            const [provider = '', model = ''] = event.target.value.split('||');
+          options={[
+            { value: '', label: t('chat.defaultModel') },
+            ...models.map((choice) => ({
+              value: `${choice.provider}||${choice.model}`,
+              label: choice.label,
+            })),
+          ]}
+          onChange={(value) => {
+            const [provider = '', model = ''] = value.split('||');
             void setModel(chatId, model, provider);
           }}
-          className="max-w-28 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)] sm:max-w-48"
-        >
-          <option value="">{t('chat.defaultModel')}</option>
-          {models.map((choice) => (
-            <option
-              key={`${choice.provider}/${choice.model}`}
-              value={`${choice.provider}||${choice.model}`}
-            >
-              {choice.label}
-            </option>
-          ))}
-        </select>
+          className="max-w-28 sm:max-w-48"
+        />
 
       </header>
 
