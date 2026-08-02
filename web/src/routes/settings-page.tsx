@@ -551,7 +551,7 @@ function Stat({ label, value, testId }: { label: string; value: string; testId?:
  * create or edit one -- never a side drawer (permanent house veto). Built-in
  * skills can be edited but not deleted.
  */
-function SkillsSection() {
+export function SkillsSection() {
   const [skills, setSkills] = useState<SkillDTO[]>([]);
   const [editing, setEditing] = useState<SkillDTO | 'new' | undefined>(undefined);
 

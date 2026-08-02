@@ -308,6 +308,7 @@ export const en = {
   'shell.navTasks': 'Tasks',
   'shell.navSkills': 'Skills',
   'shell.navMcp': 'MCP',
+  'mcp.placeholder': 'MCP configuration will be available here.',
   'shell.segChats': 'Chats',
   'shell.segFiles': 'Files',
   'shell.segTasks': 'Tasks',

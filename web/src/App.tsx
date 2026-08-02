@@ -16,6 +16,7 @@ import { SetupPage } from './routes/setup-page';
 import { TaskFormPage } from './routes/task-form-page';
 import { TasksIntro } from './routes/tasks-list';
 import { McpPage } from './routes/mcp-page';
+import { SkillsPage } from './routes/skills-page';
 import { UpdatePrompt } from './ui/update-prompt';
 
 /**
@@ -111,14 +112,6 @@ function Boot() {
         }
       />
       <Route
-        path="/mcp"
-        element={
-          <Protected status={status}>
-            <McpPage />
-          </Protected>
-        }
-      />
-      <Route
         path="/"
         element={
           <Protected status={status}>
@@ -131,6 +124,13 @@ function Boot() {
         <Route path="files" element={<FilesPage />} />
         <Route path="files/:folderId" element={<FilesPage />} />
         <Route path="tasks" element={<TasksIntro />} />
+        {/*
+          Skills and MCP are children of the shell, not siblings of it: they
+          are reached from the Agent row in the sidebar, and a destination
+          that unmounts the navigation you just used is not a group button.
+        */}
+        <Route path="skills" element={<SkillsPage />} />
+        <Route path="mcp" element={<McpPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

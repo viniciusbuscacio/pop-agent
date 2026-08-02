@@ -11,8 +11,12 @@ import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '../ui/controls';
 
-/** What the sidebar is showing: conversations, the file tree, or tasks. */
-type Segment = 'chats' | 'files' | 'tasks';
+/**
+ * What the sidebar is showing: conversations, the file tree, tasks, or -- for
+ * the Agent destinations whose content lives entirely in the right-hand pane
+ * -- nothing but the navigation itself.
+ */
+type Segment = 'chats' | 'files' | 'tasks' | 'agent';
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
@@ -26,8 +30,16 @@ export function ChatList() {
   const filesRoot = useMatch('/files');
   const filesFolder = useMatch('/files/:folderId');
   const tasksRoot = useMatch('/tasks');
+  const skillsRoot = useMatch('/skills');
+  const mcpRoot = useMatch('/mcp');
   const segment: Segment =
-    filesRoot !== null || filesFolder !== null ? 'files' : tasksRoot !== null ? 'tasks' : 'chats';
+    filesRoot !== null || filesFolder !== null
+      ? 'files'
+      : tasksRoot !== null
+        ? 'tasks'
+        : skillsRoot !== null || mcpRoot !== null
+          ? 'agent'
+          : 'chats';
   const [filter, setFilter] = useState('');
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
@@ -68,7 +80,9 @@ export function ChatList() {
   return (
     <>
       <SidebarNav />
-      <div className="flex flex-col gap-2 p-3">
+      {/* Skills and MCP put everything in the right-hand pane, so the toolbar
+          strip would be an empty box under the navigation. */}
+      <div className={segment === 'agent' ? 'hidden' : 'flex flex-col gap-2 p-3'}>
         <div className="relative flex items-center justify-end gap-2">
           {segment === 'chats' ? (
             <button
@@ -125,7 +139,9 @@ export function ChatList() {
       </div>
 
       {/* pb-20 keeps the last row clear of the floating bottom bar (§14). */}
-      {segment === 'files' ? (
+      {segment === 'agent' ? (
+        <div className="flex-1" />
+      ) : segment === 'files' ? (
         <FolderTree />
       ) : segment === 'tasks' ? (
         <TasksList />

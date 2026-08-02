@@ -9,18 +9,20 @@ type AgentSection = 'tasks' | 'skills' | 'mcp';
 export function SidebarNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const agentSection: AgentSection =
-    location.pathname === '/tasks'
-      ? 'tasks'
-      : location.pathname === '/mcp'
-        ? 'mcp'
-        : 'skills';
-  const mainSection: MainSection =
-    location.pathname.startsWith('/files')
-      ? 'files'
-      : location.pathname === '/tasks' || location.pathname === '/mcp' || location.search.includes('section=skills')
-        ? 'agent'
-        : 'chat';
+  // Every Agent destination is a route of its own inside the shell, so which
+  // one is current is read off the path alone -- no query string, and nothing
+  // that can be true on a screen where this nav is not even mounted.
+  const AGENT_PATHS: Record<string, AgentSection> = {
+    '/tasks': 'tasks',
+    '/skills': 'skills',
+    '/mcp': 'mcp',
+  };
+  const agentSection = AGENT_PATHS[location.pathname];
+  const mainSection: MainSection = location.pathname.startsWith('/files')
+    ? 'files'
+    : agentSection !== undefined
+      ? 'agent'
+      : 'chat';
 
   function selectMain(value: MainSection): void {
     if (value === 'files') {
@@ -33,9 +35,7 @@ export function SidebarNav() {
   }
 
   function selectAgent(value: AgentSection): void {
-    if (value === 'tasks') navigate('/tasks');
-    if (value === 'skills') navigate('/settings?section=skills');
-    if (value === 'mcp') navigate('/mcp');
+    navigate(`/${value}`);
   }
 
   return (
@@ -50,7 +50,7 @@ export function SidebarNav() {
           { value: 'agent', label: t('shell.navAgent'), testId: 'sidebar-agent' },
         ]}
       />
-      {mainSection === 'agent' ? (
+      {mainSection === 'agent' && agentSection !== undefined ? (
         <Segmented<AgentSection>
           ariaLabel={t('shell.agentNavigation')}
           value={agentSection}

@@ -18,9 +18,15 @@ export function ChatLayout() {
   const openChat = useMatch('/chat/:chatId');
   const filesRoot = useMatch('/files');
   const filesFolder = useMatch('/files/:folderId');
+  const skills = useMatch('/skills');
+  const mcp = useMatch('/mcp');
   // On a phone, Files is its own screen (back returns to the list), exactly
   // like a conversation; on a wide screen the sidebar stays as the tree.
-  const contentOpen = openChat !== null || filesRoot !== null || filesFolder !== null;
+  // Skills and MCP behave the same way: their content lives in the right-hand
+  // pane, so on a narrow screen that pane has to become the screen or the
+  // sidebar would cover a page you just asked for.
+  const contentOpen =
+    openChat !== null || filesRoot !== null || filesFolder !== null || skills !== null || mcp !== null;
 
   useEffect(() => {
     // One stream for the whole session; the store fans events out from here.

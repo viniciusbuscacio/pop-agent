@@ -17,7 +17,7 @@ export const SELF_MAP = [
   "",
   "## UI map (generated)",
   "",
-  "PWA routes: /setup, /login, /recover, /chat/:chatId/artifacts, /tasks/new, /tasks/:taskId/edit, /settings/*, /, /chat/:chatId, /files, /files/:folderId, /tasks.",
+  "PWA routes: /setup, /login, /recover, /chat/:chatId/artifacts, /tasks/new, /tasks/:taskId/edit, /settings/*, /, /chat/:chatId, /files, /files/:folderId, /tasks, /skills, /mcp.",
   "Settings sections: Server, General, Model, Memory, Skills, Usage, Backup, Appearance, Security, About, Updates.",
   "Deep links: /settings?section=<name> opens a section directly.",
 ].join('\n');
