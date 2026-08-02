@@ -14,6 +14,8 @@ export interface TaskPatch {
   intervalMinutes?: number | undefined;
   nextRunAt?: number | undefined;
   enabled?: boolean;
+  notifyOnFinish?: boolean;
+  archiveChat?: boolean;
 }
 
 /** What a finished run writes back onto the task. */

@@ -147,7 +147,9 @@ export class TaskScheduler {
       chatId = chat.id;
       this.deps.chats.rename(chat.id, task.title);
 
-      const started = this.deps.runs.startRun(chat.id, task.prompt);
+      const started = this.deps.runs.startRun(chat.id, task.prompt, [], {
+        notify: task.notifyOnFinish,
+      });
       if (started.ok) {
         const outcome = await this.deps.runs.whenRunEnds(started.runId);
         status = outcome.ok ? 'ok' : outcome.code;
@@ -158,6 +160,19 @@ export class TaskScheduler {
       // Nothing a single task does may take the scheduler with it: the failure
       // becomes this run's status and the queue moves on.
       status = 'operation_error';
+    }
+
+    // Filed as soon as it is written, when the task asked for that: a task on
+    // a short interval otherwise buries the sidebar under its own output. The
+    // conversation is still there and the task's last status still links to
+    // it. Archiving is never allowed to change the run's recorded outcome, so
+    // a failure here is swallowed exactly like the run's own.
+    if (task.archiveChat && chatId.length > 0) {
+      try {
+        this.deps.chats.setArchived(chatId, true);
+      } catch {
+        // The run happened; where its chat sits is not worth a lost status.
+      }
     }
 
     const finishedAt = this.deps.clock.now();

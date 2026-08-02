@@ -23,8 +23,9 @@ export class SqliteTaskRepo implements TaskRepo {
       .prepare(
         `INSERT INTO tasks
            (id, title, prompt, schedule_kind, interval_minutes, next_run_at,
-            enabled, created_at, last_run_at, last_status, last_chat_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
+            enabled, notify_on_finish, archive_chat, created_at,
+            last_run_at, last_status, last_chat_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
       )
       .run(
         task.id,
@@ -34,6 +35,8 @@ export class SqliteTaskRepo implements TaskRepo {
         task.intervalMinutes ?? null,
         task.nextRunAt ?? null,
         task.enabled ? 1 : 0,
+        task.notifyOnFinish ? 1 : 0,
+        task.archiveChat ? 1 : 0,
         task.createdAt,
       );
     return task;
@@ -59,6 +62,10 @@ export class SqliteTaskRepo implements TaskRepo {
     if ('intervalMinutes' in patch) put('interval_minutes', patch.intervalMinutes ?? null);
     if ('nextRunAt' in patch) put('next_run_at', patch.nextRunAt ?? null);
     if (patch.enabled !== undefined) put('enabled', patch.enabled ? 1 : 0);
+    if (patch.notifyOnFinish !== undefined) {
+      put('notify_on_finish', patch.notifyOnFinish ? 1 : 0);
+    }
+    if (patch.archiveChat !== undefined) put('archive_chat', patch.archiveChat ? 1 : 0);
     if (sets.length === 0) return;
 
     values.push(id);
@@ -107,6 +114,8 @@ interface TaskRow {
   interval_minutes: number | null;
   next_run_at: number | null;
   enabled: number;
+  notify_on_finish: number;
+  archive_chat: number;
   created_at: number;
   last_run_at: number | null;
   last_status: string | null;
@@ -122,6 +131,8 @@ function toTask(row: TaskRow): Task {
     ...(row.interval_minutes === null ? {} : { intervalMinutes: row.interval_minutes }),
     ...(row.next_run_at === null ? {} : { nextRunAt: row.next_run_at }),
     enabled: row.enabled === 1,
+    notifyOnFinish: row.notify_on_finish === 1,
+    archiveChat: row.archive_chat === 1,
     createdAt: row.created_at,
     ...(row.last_run_at === null ? {} : { lastRunAt: row.last_run_at }),
     ...(row.last_status === null ? {} : { lastStatus: row.last_status }),

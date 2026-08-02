@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { tasksService } from '../services/tasks';
 import { useTasksStore } from '../store/tasks';
-import { Button, Card, Segmented, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Segmented, TextField } from '../ui/controls';
 
 /**
  * Creating and editing a background task (popy.spec §21) as a **full screen**
@@ -24,6 +24,8 @@ export function TaskFormPage() {
   const [scheduleKind, setScheduleKind] = useState<'once' | 'interval'>('once');
   const [every, setEvery] = useState('30');
   const [unit, setUnit] = useState<Unit>('minutes');
+  const [notifyOnFinish, setNotifyOnFinish] = useState(true);
+  const [archiveChat, setArchiveChat] = useState(false);
   const [loading, setLoading] = useState(taskId !== undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -38,6 +40,8 @@ export function TaskFormPage() {
         setTitle(task.title);
         setPrompt(task.prompt);
         setScheduleKind(task.scheduleKind);
+        setNotifyOnFinish(task.notifyOnFinish);
+        setArchiveChat(task.archiveChat);
         const minutes = task.intervalMinutes ?? 30;
         // Whole hours read as hours; anything else stays in minutes, so a
         // 90-minute schedule is not silently rounded on its way to the form.
@@ -77,6 +81,8 @@ export function TaskFormPage() {
         prompt: prompt.trim(),
         scheduleKind,
         ...(scheduleKind === 'interval' ? { intervalMinutes: minutes } : {}),
+        notifyOnFinish,
+        archiveChat,
       };
       if (taskId === undefined) await tasksService.create(body);
       else await tasksService.update(taskId, body);
@@ -177,6 +183,28 @@ export function TaskFormPage() {
               ) : (
                 <p className="text-xs text-[var(--muted)]">{t('tasks.form.onceHint')}</p>
               )}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+              <span className="text-sm text-[var(--key-fg-dim)]">
+                {t('tasks.form.whenDone')}
+              </span>
+              <CheckField
+                id="task-notify"
+                testId="task-notify"
+                label={t('tasks.form.notify')}
+                hint={t('tasks.form.notifyHint')}
+                checked={notifyOnFinish}
+                onChange={setNotifyOnFinish}
+              />
+              <CheckField
+                id="task-archive"
+                testId="task-archive"
+                label={t('tasks.form.archive')}
+                hint={t('tasks.form.archiveHint')}
+                checked={archiveChat}
+                onChange={setArchiveChat}
+              />
             </div>
 
             {error !== undefined ? (

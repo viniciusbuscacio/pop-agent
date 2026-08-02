@@ -383,6 +383,10 @@ export interface TaskDTO {
   /** When it next runs; absent when nothing is scheduled. */
   nextRunAt?: string;
   enabled: boolean;
+  /** Push a notification when a run finishes. Default on. */
+  notifyOnFinish: boolean;
+  /** Archive the conversation a run wrote into, as soon as it ends. Default off. */
+  archiveChat: boolean;
   createdAt: string;
   lastRunAt?: string;
   /** `ok`, or the code the last run failed with. */
@@ -402,6 +406,8 @@ export interface CreateTaskRequest {
   prompt: string;
   scheduleKind: TaskScheduleKindDTO;
   intervalMinutes?: number;
+  notifyOnFinish?: boolean;
+  archiveChat?: boolean;
 }
 
 /** `PATCH /v1/tasks/:id` — every field optional, the rest is left alone. */
@@ -410,6 +416,8 @@ export interface UpdateTaskRequest {
   prompt?: string;
   scheduleKind?: TaskScheduleKindDTO;
   intervalMinutes?: number;
+  notifyOnFinish?: boolean;
+  archiveChat?: boolean;
 }
 
 /** `POST /v1/tasks/:id/toggle` — the enabled switch. */

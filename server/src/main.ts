@@ -298,7 +298,10 @@ const runs = new RunService({
   },
   // When a run ends, tell the phone -- even with the PWA closed (popy.spec §14).
   notifyDone: (info) => {
+    // Counted either way: a task that runs quietly is still a run that
+    // succeeded or failed, and health would otherwise stop seeing it.
     health.noteRun(info.failed, info.code);
+    if (!info.notify) return;
     const chat = context.chats.get(info.chatId);
     void push
       .send({

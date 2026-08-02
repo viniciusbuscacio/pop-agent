@@ -445,6 +445,13 @@ export const en = {
   'tasks.form.unitMinutes': 'minutes',
   'tasks.form.unitHours': 'hours',
   'tasks.form.onceHint': 'Runs once, within the next minute, then switches itself off.',
+  'tasks.form.whenDone': 'When a run finishes',
+  'tasks.form.notify': 'Notify me',
+  'tasks.form.notifyHint':
+    'Sends a push when the run ends. Turn this off for a task that runs often.',
+  'tasks.form.archive': 'Archive the conversation',
+  'tasks.form.archiveHint':
+    'Files the chat as soon as the run ends, so a frequent task does not fill the sidebar. It stays readable from the task’s last status.',
   'tasks.form.saveFailed': 'The task could not be saved.',
 
   'error.generic': 'Something went wrong. Try again.',

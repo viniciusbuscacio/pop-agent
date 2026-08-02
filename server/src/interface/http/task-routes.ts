@@ -25,6 +25,8 @@ const createSchema = z
     prompt: z.string().min(1).max(MAX_PROMPT),
     scheduleKind,
     intervalMinutes: intervalMinutes.optional(),
+    notifyOnFinish: z.boolean().optional(),
+    archiveChat: z.boolean().optional(),
   })
   .strict()
   // An interval without minutes is a schedule that cannot be honoured.
@@ -44,6 +46,8 @@ const updateSchema = z
     prompt: z.string().min(1).max(MAX_PROMPT).optional(),
     scheduleKind: scheduleKind.optional(),
     intervalMinutes: intervalMinutes.optional(),
+    notifyOnFinish: z.boolean().optional(),
+    archiveChat: z.boolean().optional(),
   })
   .strict();
 
@@ -122,6 +126,8 @@ function toTaskDto(task: Task): TaskDTO {
     ...(task.intervalMinutes === undefined ? {} : { intervalMinutes: task.intervalMinutes }),
     ...(task.nextRunAt === undefined ? {} : { nextRunAt: iso(task.nextRunAt) }),
     enabled: task.enabled,
+    notifyOnFinish: task.notifyOnFinish,
+    archiveChat: task.archiveChat,
     createdAt: iso(task.createdAt),
     ...(task.lastRunAt === undefined ? {} : { lastRunAt: iso(task.lastRunAt) }),
     ...(task.lastStatus === undefined ? {} : { lastStatus: task.lastStatus }),

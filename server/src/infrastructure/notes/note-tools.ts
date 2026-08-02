@@ -77,8 +77,10 @@ export function buildNoteTools(defineTool: DefineTool, vault: NotesVault): ToolD
     name: 'notes_write',
     label: 'Write a note',
     description:
-      'Creates or overwrites a note in your vault (path must end in .md). Folders are created as needed.',
-    promptSnippet: 'notes_write(path, content) — save a note',
+      'Creates or REPLACES a note in your vault (path must end in .md). Folders are created ' +
+      'as needed. This throws away whatever the note held before -- when you mean to add to a ' +
+      'note, use notes_append.',
+    promptSnippet: 'notes_write(path, content) — save a note (replaces it)',
     parameters: Type.Object({
       path: Type.String({ description: 'Vault-relative .md path' }),
       content: Type.String({ description: 'The full markdown content' }),
@@ -94,7 +96,33 @@ export function buildNoteTools(defineTool: DefineTool, vault: NotesVault): ToolD
     },
   });
 
-  return [list, read, search, write];
+  // Adding to a note is its own tool because the alternative -- read, glue,
+  // write it all back -- silently loses everything past the read cap, and
+  // costs a full copy of the note in context for a two-line addition.
+  const append = defineTool({
+    name: 'notes_append',
+    label: 'Add to a note',
+    description:
+      'Adds text to the END of a note, keeping everything already in it (path must end in .md). ' +
+      'Creates the note, and any folders, when it does not exist yet. Prefer this over ' +
+      'notes_write whenever you are adding to a note rather than replacing it.',
+    promptSnippet: 'notes_append(path, content) — add to the end of a note',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Vault-relative .md path' }),
+      content: Type.String({ description: 'The markdown to add at the end' }),
+    }),
+    execute: (_id, params) => {
+      const { path, content } = params as { path: string; content: string };
+      try {
+        const saved = vault.append(path, content);
+        return Promise.resolve(text(`Added to ${saved}.`));
+      } catch (error) {
+        return Promise.resolve(errorResult(error));
+      }
+    },
+  });
+
+  return [list, read, search, write, append];
 }
 
 function errorResult(error: unknown): {

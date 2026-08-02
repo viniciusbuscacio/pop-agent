@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.44 — 2026-08-01.
+Version 1.45 — 2026-08-01.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -477,7 +477,13 @@ vault integration — Obsidian-compatible by being plain .md; users may
 sync/open it externally.
 
 - Agent tools: `notes_list`, `notes_read` (size cap), `notes_search`
-  (snippets + file-count guard), `notes_write`.
+  (snippets + file-count guard), `notes_write`, `notes_append`.
+- **`notes_append` is a real operation, not sugar over write.** `read` is
+  capped, so read-glue-write on a note past the cap saves the truncated
+  copy and deletes the rest; append writes straight to the end and cannot
+  lose what it never read. It creates the note when absent, and inserts a
+  newline first when the note does not end in one, so an added heading can
+  never land on the end of the previous paragraph.
 - Path jail, ported line-by-line as a concept from aw: resolve real path
   (symlinks) against the notes root, reject `..` and absolute escapes.
 
@@ -1038,7 +1044,8 @@ covers "forgot password AND recovery key" for whoever has shell.
   forever). A cron expression is a language; this is a personal agent.
 - Table `tasks` (migration 017): title, prompt, `schedule_kind`,
   `interval_minutes`, `next_run_at`, `enabled`, `created_at`, and the last
-  run's `last_run_at` / `last_status` / `last_chat_id`. Times are epoch
+  run's `last_run_at` / `last_status` / `last_chat_id`; migration 018 adds
+  `notify_on_finish` (default 1) and `archive_chat` (default 0). Times are epoch
   milliseconds here, unlike the ISO strings of the chat tables: everything
   about a schedule is arithmetic on what the clock port returns. The wire
   DTO converts back to ISO, like every other timestamp the API hands out.
@@ -1063,6 +1070,18 @@ covers "forgot password AND recovery key" for whoever has shell.
   finished**, not from when it was due, so a task slower than its own
   interval cannot queue up behind itself; a `once` task is switched off.
   One journal line per run.
+- **Two switches for what a finished run does to the rest of the app**, both
+  per task, because the defaults that suit a once-a-day task are exactly
+  wrong for one that runs every ten minutes:
+  - `notifyOnFinish` (default on) — the finished-run push (§14). Off is
+    passed down as `RunService.startRun(..., { notify: false })`, which
+    silences **only** the push: `notifyDone` still fires, so the run is
+    still counted for health. A quiet task is not an invisible one.
+  - `archiveChat` (default off) — the run's conversation is archived the
+    moment the run ends, so a frequent task stops burying the sidebar under
+    its own output. The chat is untouched otherwise and `last_chat_id`
+    still links to it. Archiving is wrapped in its own catch: where a
+    conversation sits must never rewrite the run's recorded status.
 - **A failing task never crashes or stalls the scheduler.** The catch is
   total: the failure becomes the run's status and the queue moves on. A
   task already running is not queued again by the next tick, and a task
@@ -1112,6 +1131,19 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.45 (2026-08-01): **A task can run without shouting (§21), and a note
+  can be added to (§11).** Both came out of the same job: a task on a
+  ten-minute interval writing to one markdown file. It buzzed the phone
+  every ten minutes and opened a chat in the sidebar every ten minutes,
+  so the schedule that worked was the one you switch off; and the only
+  way to write was `notes_write`, which replaces the file, so "add to
+  this note" meant read-glue-write — silent truncation above the 64 KiB
+  read cap and a full copy of the note in context for a two-line
+  addition. Tasks gain `notifyOnFinish` and `archiveChat` (migration
+  018); `startRun` gains `{ notify }`, which silences the push alone and
+  still counts the run for health. The vault gains `append`, exposed as
+  `notes_append`, which writes past the end of the file without reading
+  it and guarantees the added text starts its own line.
 - 1.44 (2026-08-01): **The list is the only priority, and a dead
   endpoint no longer freezes the chat (§15).** Two faults met in one
   bug report: the failover chain still put the stored global default

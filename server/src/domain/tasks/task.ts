@@ -20,6 +20,20 @@ export interface Task {
   /** When the scheduler should pick it up; absent means nothing is scheduled. */
   nextRunAt?: number;
   enabled: boolean;
+  /**
+   * Whether a finished run pushes a notification (popy.spec §14). On by
+   * default, because a task the user asked for is news -- but a task running
+   * every ten minutes is a phone buzzing every ten minutes, and the switch is
+   * the difference between a useful schedule and one the user turns off.
+   */
+  notifyOnFinish: boolean;
+  /**
+   * Whether the conversation the run wrote into is archived when it ends. Off
+   * by default. A frequent task otherwise buries the sidebar under its own
+   * output; the chat is still there, still linked from the task's last status,
+   * just filed.
+   */
+  archiveChat: boolean;
   createdAt: number;
   lastRunAt?: number;
   /** `ok`, or the failure code the run ended with. */

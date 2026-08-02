@@ -61,6 +61,48 @@ export function TextField({
   );
 }
 
+/**
+ * A labelled switch for a plain on/off setting. The whole row is the label, so
+ * the hit target on a phone is the sentence and not a 16-pixel box.
+ */
+export function CheckField({
+  label,
+  hint,
+  id,
+  checked,
+  onChange,
+  testId,
+}: {
+  label: string;
+  hint?: string;
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  testId?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="flex cursor-pointer items-center gap-2.5 text-sm">
+        <input
+          id={id}
+          type="checkbox"
+          data-testid={testId}
+          checked={checked}
+          aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+          onChange={(event) => onChange(event.target.checked)}
+          className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+        />
+        <span className="text-[var(--screen-fg)]">{label}</span>
+      </label>
+      {hint === undefined ? null : (
+        <p id={`${id}-hint`} className="pl-[1.625rem] text-xs text-[var(--muted)]">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div

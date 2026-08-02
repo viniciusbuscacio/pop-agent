@@ -86,6 +86,8 @@ class FakeTimer implements Timer {
 }
 
 let timer: FakeTimer;
+/** What the run service asked the outside world to announce, per finished run. */
+let announced: { chatId: string; notify: boolean }[];
 
 function build(jobs: MaintenanceJob[] = []): void {
   scheduler = new TaskScheduler({
@@ -107,7 +109,14 @@ beforeEach(() => {
   bridge = new ScriptedBridge();
   chatRepo = new SqliteChatRepo(db);
   taskRepo = new SqliteTaskRepo(db);
-  runs = new RunService({ chats: chatRepo, bridge, sink: new SilentSink(), clock });
+  announced = [];
+  runs = new RunService({
+    chats: chatRepo,
+    bridge,
+    sink: new SilentSink(),
+    clock,
+    notifyDone: (info) => announced.push({ chatId: info.chatId, notify: info.notify }),
+  });
   chats = new ChatService({ chats: chatRepo, clock });
   tasks = new TaskService({ tasks: taskRepo, clock });
   timer = new FakeTimer();
@@ -181,6 +190,61 @@ describe('a due task', () => {
     await scheduler.whenIdle();
 
     expect(bridge.prompts).toHaveLength(1);
+  });
+});
+
+describe('what happens when a run finishes', () => {
+  it('announces the run by default, so an ordinary task still reaches the phone', async () => {
+    tasks.create({ title: 'Briefing', prompt: 'a', scheduleKind: 'once' });
+
+    await scheduler.tick();
+
+    expect(announced).toHaveLength(1);
+    expect(announced[0]?.notify).toBe(true);
+  });
+
+  it('runs quietly when the task asked not to be notified', async () => {
+    tasks.create({
+      title: 'Every ten minutes',
+      prompt: 'a',
+      scheduleKind: 'interval',
+      intervalMinutes: 10,
+      notifyOnFinish: false,
+    });
+    clock.advance(10 * MINUTE);
+
+    await scheduler.tick();
+
+    // Still a finished run the health service must see -- only the push is off.
+    expect(announced).toHaveLength(1);
+    expect(announced[0]?.notify).toBe(false);
+  });
+
+  it('archives the conversation when the task asked for it, and links to it anyway', async () => {
+    const task = tasks.create({
+      title: 'Noisy',
+      prompt: 'a',
+      scheduleKind: 'once',
+      archiveChat: true,
+    });
+
+    await scheduler.tick();
+
+    const stored = taskRepo.get(task.id);
+    expect(stored?.lastChatId).toBeDefined();
+    expect(chatRepo.list({ archived: false })).toEqual([]);
+    expect(chatRepo.list({ archived: true }).map((chat) => chat.id)).toEqual([stored?.lastChatId]);
+    // The status is still 'ok': filing the chat is not part of the outcome.
+    expect(stored?.lastStatus).toBe('ok');
+  });
+
+  it('leaves the conversation in the sidebar by default', async () => {
+    tasks.create({ title: 'Ordinary', prompt: 'a', scheduleKind: 'once' });
+
+    await scheduler.tick();
+
+    expect(chatRepo.list({ archived: false })).toHaveLength(1);
+    expect(chatRepo.list({ archived: true })).toEqual([]);
   });
 });
 

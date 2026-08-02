@@ -39,6 +39,17 @@ export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export const ATTEMPT_SILENCE_TIMEOUT_MS = 60 * 1000;
 
+/** Per-run knobs. Everything absent is the ordinary chat behaviour. */
+export interface StartRunOptions {
+  /**
+   * Push a notification when this run finishes. Default true. A background
+   * task whose notification is switched off passes false (popy.spec §21) --
+   * a task on a ten-minute interval is otherwise a phone buzzing every ten
+   * minutes.
+   */
+  notify?: boolean;
+}
+
 export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
   | { ok: false; reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' };
@@ -67,8 +78,17 @@ export interface RunDeps {
   titles?: { maybeRetitle(chatId: string): Promise<void> };
   /** Where what the run cost is written down (popy.spec §14). */
   llmRuns?: LlmRunsRepo;
-  /** Told when a run finished, to push a notification (popy.spec §14). */
-  notifyDone?: (info: { chatId: string; failed: boolean; code?: string }) => void;
+  /**
+   * Told when a run finished, to push a notification (popy.spec §14) and to
+   * count the run for health. `notify` false means only the push is skipped --
+   * a background task with its notification switched off (§21) still happened.
+   */
+  notifyDone?: (info: {
+    chatId: string;
+    failed: boolean;
+    notify: boolean;
+    code?: string;
+  }) => void;
   /** Told after a run's messages are stored, to embed them (popy.spec §7). */
   indexMessages?: () => void;
   /**
@@ -95,6 +115,8 @@ interface PendingRun {
   provider: string;
   attachments: Attachment[];
   controller: AbortController;
+  /** False silences the finished-run push for this run alone (popy.spec §21). */
+  notify: boolean;
   started: boolean;
   /** Fragments emitted so far -- the sequence number of the last one. */
   seq: number;
@@ -172,8 +194,17 @@ export class RunService {
   /**
    * Persists the user's message and schedules the run, then returns: the
    * answer arrives over the event stream, not in this response.
+   *
+   * `options.notify` is the one thing a caller may turn off: a background task
+   * with its notification switched off still runs exactly like any other run,
+   * it just does not reach for the phone at the end (popy.spec §21).
    */
-  startRun(chatId: string, text: string, attachments: Attachment[] = []): StartRunResult {
+  startRun(
+    chatId: string,
+    text: string,
+    attachments: Attachment[] = [],
+    options: StartRunOptions = {},
+  ): StartRunResult {
     const chat = this.deps.chats.get(chatId);
     if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
     if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
@@ -248,6 +279,7 @@ export class RunService {
       provider: chat.provider,
       attachments,
       controller: new AbortController(),
+      notify: options.notify ?? true,
       started: false,
       seq: 0,
       content: '',
@@ -727,9 +759,12 @@ export class RunService {
       this.deps.titles.maybeRetitle(run.chatId).catch(() => undefined);
     }
     // A push so the phone hears about it with the PWA closed (popy.spec §14).
+    // `notify` is carried rather than obeyed here: this hook is also where the
+    // run is counted for health, and a quiet task is still a run that happened.
     this.deps.notifyDone?.({
       chatId: run.chatId,
       failed: failure !== undefined,
+      notify: run.notify,
       ...(failure === undefined ? {} : { code: failure.code }),
     });
     // Embed the new messages for semantic memory, off the reply path (§7).

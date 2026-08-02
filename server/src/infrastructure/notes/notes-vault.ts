@@ -1,6 +1,11 @@
 import {
+  appendFileSync,
+  closeSync,
+  existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   statSync,
   writeFileSync,
@@ -66,6 +71,26 @@ export class NotesVault {
     return relative(this.jail.rootPath, absolute).split('\\').join('/');
   }
 
+  /**
+   * Adds to the end of a note, creating it when it is not there yet, and
+   * returns the vault-relative path.
+   *
+   * Its own operation rather than a read-then-{@link write}, because
+   * {@link read} is capped: a note past the cap would come back truncated and
+   * writing that copy back would delete the rest of it. Appending straight to
+   * the file cannot lose what it never read.
+   */
+  append(path: string, content: string): string {
+    const absolute = this.jail.resolve(path);
+    mkdirSync(dirname(absolute), { recursive: true });
+    // The new text always starts its own line: a heading glued onto the end of
+    // the previous paragraph is a different document.
+    const size = existsSync(absolute) ? statSync(absolute).size : 0;
+    const separator = size > 0 && !endsWithNewline(absolute, size) ? '\n' : '';
+    appendFileSync(absolute, `${separator}${content}`);
+    return relative(this.jail.rootPath, absolute).split('\\').join('/');
+  }
+
   /** A plain substring search across the vault, case-insensitive, capped. */
   search(query: string): NoteHit[] {
     const needle = query.trim().toLowerCase();
@@ -108,5 +133,17 @@ export class NotesVault {
         out.push(relative(this.jail.rootPath, full).split('\\').join('/'));
       }
     }
+  }
+}
+
+/** Reads the one byte that decides it, so appending never loads a whole note. */
+function endsWithNewline(absolute: string, size: number): boolean {
+  const fd = openSync(absolute, 'r');
+  try {
+    const tail = Buffer.alloc(1);
+    readSync(fd, tail, 0, 1, size - 1);
+    return tail[0] === 0x0a;
+  } finally {
+    closeSync(fd);
   }
 }

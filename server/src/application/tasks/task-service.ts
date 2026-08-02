@@ -29,6 +29,8 @@ export interface TaskInput {
   prompt: string;
   scheduleKind: TaskScheduleKind;
   intervalMinutes?: number | undefined;
+  notifyOnFinish?: boolean | undefined;
+  archiveChat?: boolean | undefined;
 }
 
 export interface TaskEdit {
@@ -36,6 +38,8 @@ export interface TaskEdit {
   prompt?: string | undefined;
   scheduleKind?: TaskScheduleKind | undefined;
   intervalMinutes?: number | undefined;
+  notifyOnFinish?: boolean | undefined;
+  archiveChat?: boolean | undefined;
 }
 
 export interface TaskServiceDeps {
@@ -65,6 +69,10 @@ export class TaskService {
       ...(schedule.intervalMinutes === undefined ? {} : { intervalMinutes: schedule.intervalMinutes }),
       nextRunAt: firstRunAt(schedule, now),
       enabled: true,
+      // Notifying is what every task did before the switch existed, so an
+      // omitted field keeps that; filing the conversation away is a choice.
+      notifyOnFinish: input.notifyOnFinish ?? true,
+      archiveChat: input.archiveChat ?? false,
       createdAt: now,
     });
   }
@@ -82,6 +90,8 @@ export class TaskService {
     this.deps.tasks.update(id, {
       ...(edit.title === undefined ? {} : { title: clip(edit.title, MAX_TITLE) }),
       ...(edit.prompt === undefined ? {} : { prompt: clip(edit.prompt, MAX_PROMPT) }),
+      ...(edit.notifyOnFinish === undefined ? {} : { notifyOnFinish: edit.notifyOnFinish }),
+      ...(edit.archiveChat === undefined ? {} : { archiveChat: edit.archiveChat }),
       scheduleKind: schedule.scheduleKind,
       intervalMinutes: schedule.intervalMinutes,
       // A schedule the user just changed must be re-parked, or an edit from
