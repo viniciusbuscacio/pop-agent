@@ -8,7 +8,8 @@ import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
 import { TasksList } from './tasks-list';
-import { Button, Segmented } from '../ui/controls';
+import { SidebarNav } from './sidebar-nav';
+import { Button } from '../ui/controls';
 
 /** What the sidebar is showing: conversations, the file tree, or tasks. */
 type Segment = 'chats' | 'files' | 'tasks';
@@ -66,37 +67,9 @@ export function ChatList() {
 
   return (
     <>
+      <SidebarNav />
       <div className="flex flex-col gap-2 p-3">
-        <div className="relative flex items-center gap-2">
-          <div className="flex-1">
-            <Segmented<Segment>
-              ariaLabel={t('shell.segments')}
-              value={segment}
-              onChange={(value) => {
-                setListMenu(false);
-                if (value === 'tasks') {
-                  navigate('/tasks');
-                  return;
-                }
-                if (value === 'files') {
-                  const folder = read('popy.lastFolder');
-                  navigate(folder !== undefined && folder.length > 0 ? `/files/${folder}` : '/files');
-                  return;
-                }
-                // Back to the conversation that was open, if it still exists.
-                const last = read('popy.lastChat');
-                const alive =
-                  last !== undefined &&
-                  [...chats, ...archived].some((chat) => chat.id === last);
-                navigate(alive ? `/chat/${last}` : '/');
-              }}
-              options={[
-                { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
-                { value: 'files', label: t('shell.segFiles'), testId: 'segment-files' },
-                { value: 'tasks', label: t('shell.segTasks'), testId: 'segment-tasks' },
-              ]}
-            />
-          </div>
+        <div className="relative flex items-center justify-end gap-2">
           {segment === 'chats' ? (
             <button
               type="button"
@@ -243,15 +216,6 @@ function FolderTree() {
       ))}
     </div>
   );
-}
-
-/** localStorage, but never throwing on a device that refuses it. */
-function read(key: string): string | undefined {
-  try {
-    return localStorage.getItem(key) ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** How far a finger must travel before the swipe action fires. */
@@ -414,20 +378,13 @@ function ChatRow({
         to={`/chat/${chat.id}`}
         data-testid="chat-row"
         className={({ isActive }) =>
-          `flex flex-col gap-0.5 px-4 py-3 ${isActive ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'}`
+          `relative flex flex-col gap-0.5 px-4 py-3 ${isActive ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'}`
         }
       >
         {/* The top-right corner belongs to the row menu (Vinicius, 31/07):
             the timestamp used to sit there too, hiding the ⋯ under it. */}
         <div className="flex items-baseline justify-between gap-2 pr-6">
           <span className="flex min-w-0 items-baseline gap-1.5">
-            {live !== undefined ? (
-              <span
-                data-testid="chat-live"
-                aria-hidden="true"
-                className="h-2 w-2 shrink-0 self-center rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
-              />
-            ) : null}
             <span
               className="truncate text-sm font-medium"
               onDoubleClick={(event) => {
@@ -451,9 +408,16 @@ function ChatRow({
             ) : null}
           </span>
         </div>
-        <span className="truncate text-xs text-[var(--muted)]">
+        <span className="truncate pr-6 text-xs text-[var(--muted)]">
           {live !== undefined ? t('chat.answering') : chat.preview}
         </span>
+        {live !== undefined ? (
+          <span
+            data-testid="chat-live"
+            aria-hidden="true"
+            className="absolute top-1/2 right-3 h-2 w-2 -translate-y-1/2 rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
+          />
+        ) : null}
       </NavLink>
 
       {/*

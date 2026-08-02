@@ -8,7 +8,8 @@ import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
-import { Button, Segmented, Select } from '../ui/controls';
+import { Button, Select } from '../ui/controls';
+import { SidebarNav } from './sidebar-nav';
 
 /**
  * The content pane of Files (31/07, explorer layout): on a wide screen it
@@ -162,29 +163,8 @@ export function FilesPage() {
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
-      {/* Files is a first-class mobile segment, just like Chats and Tasks.
-          Keep the same segmented header instead of replacing it with a
-          one-off wordmark/back-button header. */}
-      <div className="border-b border-[var(--border)] p-3 md:hidden">
-        <Segmented<'chats' | 'files' | 'tasks'>
-          ariaLabel={t('shell.segments')}
-          value="files"
-          onChange={(value) => {
-            if (value === 'tasks') {
-              navigate('/tasks');
-              return;
-            }
-            if (value === 'chats') {
-              // Files opens Chats as the list, never the last conversation.
-              navigate('/');
-            }
-          }}
-          options={[
-            { value: 'chats', label: t('shell.segChats'), testId: 'segment-chats' },
-            { value: 'files', label: t('shell.segFiles'), testId: 'segment-files' },
-            { value: 'tasks', label: t('shell.segTasks'), testId: 'segment-tasks' },
-          ]}
-        />
+      <div className="border-b border-[var(--border)] md:hidden">
+        <SidebarNav />
       </div>
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
         <div className="flex min-w-0 flex-1 items-center gap-1" data-testid="files-breadcrumb">

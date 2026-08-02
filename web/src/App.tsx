@@ -15,6 +15,7 @@ import { SettingsPage } from './routes/settings-page';
 import { SetupPage } from './routes/setup-page';
 import { TaskFormPage } from './routes/task-form-page';
 import { TasksIntro } from './routes/tasks-list';
+import { McpPage } from './routes/mcp-page';
 import { UpdatePrompt } from './ui/update-prompt';
 
 /**
@@ -106,6 +107,14 @@ function Boot() {
         element={
           <Protected status={status}>
             <SettingsPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/mcp"
+        element={
+          <Protected status={status}>
+            <McpPage />
           </Protected>
         }
       />
