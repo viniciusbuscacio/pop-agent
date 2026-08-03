@@ -45,6 +45,8 @@ import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
 import { fetchOpenRouterCredits } from './infrastructure/providers/openrouter-credits.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
+import { StorageService } from './application/storage/storage-service.js';
+import { NodeDiskUsage } from './infrastructure/storage/node-disk-usage.js';
 import { AnthropicGateway } from './infrastructure/providers/anthropic-gateway.js';
 import {
   OpenAiCompatibleGateway,
@@ -84,6 +86,10 @@ if (agent !== 'fake' && agent !== 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const artifactsDir = ensureArtifactsDir(context.dataDir);
+// Beside the data directory, never inside it: a backup must not end up in the
+// next backup. Named once because the storage report has to count it too --
+// it is usually the heaviest thing on the disk (§16 keeps ten of them).
+const backupsDir = join(context.dataDir, '..', 'popy-backups');
 // Artifacts: the agent's outputs and the user's uploads, tracked per chat and
 // downloadable only through an HMAC-signed link keyed off secret.key (§14).
 // Built before the bridge so the pi engine can hand the agent save_artifact.
@@ -437,12 +443,21 @@ const app = createApp({
   userMemory: context.userMemory,
   skills: skillsVault,
   usage: context.usage,
+  storage: new StorageService({
+    repo: context.storage,
+    disk: new NodeDiskUsage(),
+    dataDir: context.dataDir,
+    artifactsDir,
+    workspace,
+    backupsDir,
+    modelDirs: [join(context.dataDir, 'voice-models'), join(context.dataDir, 'models')],
+  }),
   push,
   webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
   updates,
   backups: new TarBackupService({
     dataDir: context.dataDir,
-    backupsDir: join(context.dataDir, '..', 'popy-backups'),
+    backupsDir,
     now: () => new Date(systemClock.now()).toISOString(),
   }),
   // OpenRouter balance for the provider card (LOTE 6): cached 60s so a

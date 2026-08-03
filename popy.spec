@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.50 — 2026-08-03.
+Version 1.51 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1179,6 +1179,30 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.51 (2026-08-03): **Measure the disk before limiting it (§14, §16).** A
+  trash and a quota for Files were asked for; this lands the measurement
+  first, on the principle that a limit chosen without looking caps the
+  wrong thing. New `GET /v1/storage` + Settings -> Storage: one line per
+  kind of weight, heaviest first, with the filesystem's own free space
+  beside it. `application/storage/storage-service` composes two new ports
+  -- `StorageRepo` (what only SQL knows: live files vs archived versions,
+  and how much of the db is derived index) and `DiskUsage` (directories,
+  files, statfs; every method answers instead of throwing, because a
+  directory that does not exist yet is a normal install state worth a
+  zero). Nothing is counted twice: the artifacts directory is measured
+  once and split by the database's own size column, and the index is
+  shown as a slice of the database file rather than added to it. Backups
+  are counted although they live OUTSIDE the data directory -- they are
+  ten full copies of it (§16), which is the point.
+  **The first install it was pointed at settled the argument**: 1.7 GB of
+  downloaded whisper weights against 224 KB of files, and 1.5 GB of that
+  a `medium` model that is not even the configured default. Downloaded
+  weights therefore get their own line rather than sitting inside
+  "everything else" -- the biggest number on a disk must be the most
+  legible one, not the least. Open questions the numbers now inform, not
+  yet decided: the trash itself, a Files quota, pruning old versions,
+  removing unused voice models, and whether backups should keep ten full
+  copies of the artifacts at all.
 - 1.50 (2026-08-03): **Pull down to refresh, on the phone (§14, §15).** An
   installed PWA has to build this itself: Safari's own pull-to-refresh
   exists in a browser tab and NOT in standalone display mode, which is how

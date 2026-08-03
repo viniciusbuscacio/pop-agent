@@ -10,6 +10,7 @@ import type {
   ServerInfoResponse,
   SettingsDTO,
   SkillDTO,
+  StorageResponse,
   UsageResponse,
 } from '@popy/shared';
 import { t } from '../i18n';
@@ -45,6 +46,7 @@ type Section =
   | 'model'
   | 'memory'
   | 'usage'
+  | 'storage'
   | 'backup'
   | 'appearance'
   | 'updates'
@@ -57,6 +59,7 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'memory', labelKey: 'settings.section.memory' },
   { id: 'usage', labelKey: 'settings.section.usage' },
+  { id: 'storage', labelKey: 'settings.section.storage' },
   { id: 'backup', labelKey: 'settings.section.backup' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
   { id: 'updates', labelKey: 'settings.section.updates' },
@@ -122,6 +125,7 @@ export function SettingsPage() {
           {section === 'model' ? <ModelSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
           {section === 'usage' ? <UsageSection /> : null}
+          {section === 'storage' ? <StorageSection /> : null}
           {section === 'backup' ? <BackupSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}
           {section === 'updates' ? <UpdatesSection /> : null}
@@ -530,6 +534,96 @@ function UsageSection() {
       )}
     </div>
   );
+}
+
+/**
+ * Where the disk went (popy.spec §14). Measurement before any quota: a limit
+ * chosen without this screen is a guess, and the guess is usually wrong about
+ * which line is the expensive one. Sorted heaviest first for the same reason
+ * -- the answer to "what is eating my disk" should be the first row, not
+ * something the reader has to find.
+ */
+function StorageSection() {
+  const [storage, setStorage] = useState<StorageResponse | undefined>(undefined);
+
+  useEffect(() => {
+    settingsService
+      .storage()
+      .then(setStorage)
+      .catch(() => setStorage(undefined));
+  }, []);
+
+  if (storage === undefined) return <Card>{t('app.loading')}</Card>;
+
+  const rows = [...storage.entries].sort((left, right) => right.bytes - left.bytes);
+  const largest = rows[0]?.bytes ?? 0;
+  const usedPercent =
+    storage.disk === undefined || storage.disk.totalBytes === 0
+      ? undefined
+      : Math.round(((storage.disk.totalBytes - storage.disk.freeBytes) / storage.disk.totalBytes) * 100);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--muted)]">{t('storage.intro')}</p>
+        <div className="grid grid-cols-2 gap-3 text-center">
+          <Stat label={t('storage.total')} value={bytes(storage.totalBytes)} testId="storage-total" />
+          <Stat
+            label={t('storage.free')}
+            value={storage.disk === undefined ? '—' : bytes(storage.disk.freeBytes)}
+          />
+        </div>
+        {usedPercent === undefined ? null : (
+          <p className="text-xs text-[var(--muted)]">
+            {t('storage.diskUsed', { percent: usedPercent, total: bytes(storage.disk?.totalBytes ?? 0) })}
+          </p>
+        )}
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <div key={row.key} className="flex flex-col gap-1" data-testid={`storage-${row.key}`}>
+            <div className="flex items-baseline justify-between gap-4 text-sm">
+              <span className="font-medium">{t(`storage.key.${row.key}` as 'storage.key.files')}</span>
+              <span className="shrink-0 text-[var(--muted)]">
+                {bytes(row.bytes)}
+                {/* A count beside a zero reads as a bug rather than as a
+                    fact: 1 item weighing 0 B is a version row whose copy is
+                    not on disk, which this screen cannot explain in four
+                    words. The size is the honest part; show only that. */}
+                {row.count === undefined || row.bytes === 0
+                  ? ''
+                  : ` · ${t('storage.items', { count: row.count })}`}
+              </span>
+            </div>
+            {/* A bar against the biggest line, not against the disk: the point
+                is which of these is the heavy one relative to the others. */}
+            <span className="h-1 w-full overflow-hidden rounded-full bg-[var(--hover-overlay)]">
+              <span
+                className="block h-full rounded-full bg-[var(--accent)]"
+                style={{ width: `${String(largest === 0 ? 0 : Math.max((row.bytes / largest) * 100, 1))}%` }}
+              />
+            </span>
+            <span className="text-xs text-[var(--muted)]">
+              {t(`storage.hint.${row.key}` as 'storage.hint.files')}
+            </span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+/** Sizes people read: three significant digits and the unit they expect. */
+function bytes(value: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? String(size) : size.toFixed(size >= 100 ? 0 : 1)} ${units[unit] ?? 'B'}`;
 }
 
 function Stat({ label, value, testId }: { label: string; value: string; testId?: string }) {

@@ -25,6 +25,9 @@ import type { Timer } from '../application/ports/timer.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
+import { StorageService } from '../application/storage/storage-service.js';
+import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
+import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { PathIndexService } from '../application/artifacts/path-index.js';
 import { migrate } from '../infrastructure/db/migrate.js';
@@ -287,6 +290,8 @@ export function createTestApp(
   // chat's work first, then purges what it left in the workspace. The
   // workspace is a throwaway directory, so a test can look at it.
   const workspace = mkdtempSync(join(tmpdir(), 'popy-test-workspace-'));
+  // One throwaway data directory, shared by the pieces that measure it.
+  const dataDir = mkdtempSync(join(tmpdir(), 'popy-test-data-'));
   const chats = new ChatService({
     chats: chatRepo,
     clock,
@@ -333,6 +338,17 @@ export function createTestApp(
     userMemory: new SqliteUserMemoryRepo(db),
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
     usage: new SqliteUsageRepo(db),
+    // A real service over a throwaway directory: the report has to survive
+    // folders that do not exist, which is exactly the fixture's shape.
+    storage: new StorageService({
+      repo: new SqliteStorageRepo(db),
+      disk: new NodeDiskUsage(),
+      dataDir,
+      artifactsDir: join(dataDir, 'artifacts'),
+      workspace,
+      backupsDir: join(dataDir, 'backups'),
+      modelDirs: [join(dataDir, 'voice-models')],
+    }),
     push: {
       vapidPublicKey: () => 'test-vapid-key',
       subscribe: () => undefined,
@@ -351,7 +367,7 @@ export function createTestApp(
         }),
     },
     backups: new TarBackupService({
-      dataDir: mkdtempSync(join(tmpdir(), 'popy-test-data-')),
+      dataDir,
       backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),
       now: () => new Date(clock.now()).toISOString(),
     }),

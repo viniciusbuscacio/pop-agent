@@ -12,6 +12,7 @@ import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import type { TaskRepo } from '../application/ports/task-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
+import type { StorageRepo } from '../application/ports/storage-repo.js';
 import type { UserMemoryRepo } from '../application/ports/user-memory-repo.js';
 import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
@@ -28,6 +29,7 @@ import { SqliteMemoryRepo } from './db/sqlite-memory-repo.js';
 import { SqlitePushRepo } from './db/sqlite-push-repo.js';
 import { SqliteSecretsRepo } from './db/sqlite-secrets-repo.js';
 import { SqliteUsageRepo } from './db/sqlite-usage-repo.js';
+import { SqliteStorageRepo } from './db/sqlite-storage-repo.js';
 import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
 import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
@@ -51,6 +53,8 @@ export interface AppContext {
   embeddings: EmbeddingsRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
+  /** What the database can say about its own weight (popy.spec §14). */
+  storage: StorageRepo;
   /** Background tasks (popy.spec §21). */
   tasks: TaskRepo;
   push: PushRepo;
@@ -83,6 +87,7 @@ export function bootstrap(): AppContext {
     embeddings: new SqliteEmbeddingsRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
+    storage: new SqliteStorageRepo(db),
     tasks: new SqliteTaskRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),

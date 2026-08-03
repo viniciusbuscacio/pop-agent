@@ -19,6 +19,7 @@ import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import type { VoiceModelStore } from '../../application/ports/voice-models.js';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { UsageRepo } from '../../application/ports/usage-repo.js';
+import type { StorageService } from '../../application/storage/storage-service.js';
 import type { HealthService } from '../../application/health/health-service.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
@@ -39,6 +40,7 @@ import { mountApi, publicSurface, sessionGuarded } from './route-registry.js';
 import { createSkillsRoutes } from './skills-routes.js';
 import { createTaskRoutes } from './task-routes.js';
 import { createUsageRoutes } from './usage-routes.js';
+import { createStorageRoutes } from './storage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { createServerRoutes } from './server-routes.js';
 import { SseHub } from './sse-hub.js';
@@ -65,6 +67,7 @@ export interface AppDeps {
   userMemory: UserMemoryRepo;
   skills: SkillsRepo;
   usage: UsageRepo;
+  storage: StorageService;
   backups: BackupService;
   push: PushService;
   webauthn: WebAuthnGateway;
@@ -125,6 +128,7 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createMemoryRoutes(deps)),
       sessionGuarded(createSkillsRoutes(deps)),
       sessionGuarded(createUsageRoutes(deps)),
+      sessionGuarded(createStorageRoutes(deps)),
       sessionGuarded(createUpdateRoutes(deps)),
       sessionGuarded(createVoiceRoutes(deps)),
       sessionGuarded(createBackupRoutes(deps)),

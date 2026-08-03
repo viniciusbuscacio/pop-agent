@@ -119,6 +119,36 @@ export interface BackupsResponse {
   backups: BackupDTO[];
 }
 
+/**
+ * `GET /v1/storage` — where the disk went (popy.spec §14). One line per kind
+ * of weight, measured before any quota exists, because a limit chosen without
+ * looking is a guess about which line is the expensive one.
+ */
+export type StorageKeyDTO =
+  | 'files'
+  | 'versions'
+  | 'index'
+  | 'database'
+  | 'models'
+  | 'workspace'
+  | 'other'
+  | 'backups';
+
+export interface StorageEntryDTO {
+  key: StorageKeyDTO;
+  bytes: number;
+  /** How many things the line counts, where counting means anything. */
+  count?: number;
+}
+
+export interface StorageResponse {
+  /** Everything Popy is responsible for, the backups included. */
+  totalBytes: number;
+  entries: StorageEntryDTO[];
+  /** The filesystem holding the data directory, when the platform reports it. */
+  disk?: { freeBytes: number; totalBytes: number };
+}
+
 /** `GET /v1/usage` — the cost dashboard (popy.spec §14). */
 export interface UsageResponse {
   total: { runs: number; tokensIn: number; tokensOut: number; cost: number };
