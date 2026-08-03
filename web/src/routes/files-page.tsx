@@ -474,7 +474,17 @@ export function FilesPage() {
               event.target.value = '';
             }}
           />
-          <Button type="button" size="sm" data-testid="files-upload" onClick={() => picker.current?.click()}>
+          {/* Ghost like the ones beside it: three ways of putting something
+              into this folder, none of them more the point than the others,
+              so a raised Upload file only looked like a different kind of
+              control (Vinicius, 03/08). */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-upload"
+            onClick={() => picker.current?.click()}
+          >
             {t('files.uploadFile')}
           </Button>
           <Button
