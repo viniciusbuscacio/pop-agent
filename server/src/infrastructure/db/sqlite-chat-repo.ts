@@ -84,6 +84,40 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET model = ?, provider = ? WHERE id = ?').run(model, provider, id);
   }
 
+  recordRecentModel(entry: { provider: string; model: string; usedAt: string }): void {
+    if (entry.model === '') return;
+    const record = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO recent_models (provider, model, used_at) VALUES (?, ?, ?)
+           ON CONFLICT(provider, model) DO UPDATE SET used_at = excluded.used_at`,
+        )
+        .run(entry.provider, entry.model, entry.usedAt);
+      this.db
+        .prepare(
+          `DELETE FROM recent_models
+            WHERE (provider, model) NOT IN (
+              SELECT provider, model FROM recent_models
+               ORDER BY used_at DESC, rowid DESC LIMIT 10
+            )`,
+        )
+        .run();
+    });
+    record();
+  }
+
+  recentModels(limit: number): { provider: string; model: string; usedAt: string }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT provider, model, used_at
+           FROM recent_models
+          ORDER BY used_at DESC, rowid DESC
+          LIMIT ?`,
+      )
+      .all(Math.min(Math.max(limit, 1), 10)) as RecentModelRow[];
+    return rows.map((row) => ({ provider: row.provider, model: row.model, usedAt: row.used_at }));
+  }
+
   setPiSessionId(id: string, piSessionId: string): void {
     this.db.prepare('UPDATE chats SET pi_session_id = ? WHERE id = ?').run(piSessionId, id);
   }
@@ -184,6 +218,12 @@ export class SqliteChatRepo implements ChatRepo {
     const rows = this.db.prepare('SELECT title FROM chats').all() as { title: string }[];
     return rows.map((row) => row.title);
   }
+}
+
+interface RecentModelRow {
+  provider: string;
+  model: string;
+  used_at: string;
 }
 
 interface ChatRow {

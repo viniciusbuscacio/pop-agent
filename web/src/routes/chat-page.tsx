@@ -6,10 +6,8 @@ import { eventStream } from '../services/events';
 import { providersService } from '../services/providers';
 import type { ModelChoice } from '../ui/slash-menu';
 import { useChatStore } from '../store/chat';
-import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
-import { ModelPicker } from '../ui/controls';
 
 /** One conversation: history, whatever is streaming, and the composer. */
 export function ChatPage() {
@@ -28,9 +26,6 @@ export function ChatPage() {
   const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
   const createChat = useChatStore((state) => state.createChat);
-  const showThinking = useThinkingStore((state) => state.show);
-  const toggleThinking = useThinkingStore((state) => state.toggle);
-
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -69,7 +64,10 @@ export function ChatPage() {
     // several. A failed provider just contributes nothing.
     void (async () => {
       try {
-        const { providers } = await providersService.list();
+        const [{ providers }, recentResponse] = await Promise.all([
+          providersService.list(),
+          chatsService.recentModels().catch(() => ({ models: [] })), 
+        ]);
         setUnconfigured(providers.every((entry) => !entry.configured));
         const perProvider = await Promise.all(
           providers.map(async (entry) => {
@@ -83,15 +81,26 @@ export function ChatPage() {
         );
         const withModels = perProvider.filter(({ models: list }) => list.length > 0);
         const several = withModels.length > 1;
-        setModels(
-          withModels.flatMap(({ entry, models: list }) =>
-            list.map((model) => ({
-              provider: entry.id,
-              model: model.id,
-              label: several ? `${entry.name} · ${model.id}` : model.id,
-            })),
-          ),
+        const catalog = withModels.flatMap(({ entry, models: list }) =>
+          list.map((model) => ({
+            provider: entry.id,
+            model: model.id,
+            label: several ? `${entry.name} · ${model.id}` : model.id,
+          })),
         );
+        const catalogByKey = new Map(catalog.map((choice) => [`${choice.provider}||${choice.model}`, choice]));
+        const recent = recentResponse.models.map((entry) =>
+          catalogByKey.get(`${entry.provider}||${entry.model}`) ?? {
+            provider: entry.provider,
+            model: entry.model,
+            label: `${entry.provider} · ${entry.model}`,
+          },
+        );
+        const recentKeys = new Set(recent.map((choice) => `${choice.provider}||${choice.model}`));
+        setModels([
+          ...recent,
+          ...catalog.filter((choice) => !recentKeys.has(`${choice.provider}||${choice.model}`)),
+        ]);
       } catch {
         setModels([]);
         setUnconfigured(false);
@@ -186,50 +195,6 @@ export function ChatPage() {
         </button>
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
 
-        {/*
-          Per-chat knobs live in the header (Vinicius, 31/07, reversing the
-          strip-under-the-composer decision from earlier the same day):
-          always visible while reading, no fighting the composer for space.
-        */}
-        <button
-          type="button"
-          data-testid="thinking-visibility"
-          aria-pressed={showThinking}
-          aria-label={showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
-          onClick={toggleThinking}
-          title={t('chat.thinkingVisibility')}
-          className={`rounded-md border border-[var(--border)] px-2 py-1 text-xs ${
-            showThinking
-              ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
-              : 'text-[var(--muted)]'
-          }`}
-        >
-          💭{' '}
-          <span className="hidden sm:inline">
-            {showThinking ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
-          </span>
-        </button>
-
-        <ModelPicker
-          id="chat-model"
-          label={t('chat.model')}
-          placeholder={t('chat.searchModels')}
-          noResults={t('chat.noModelsFound')}
-          value={chat === undefined || chat.model === '' ? '' : `${chat.provider}||${chat.model}`}
-          options={[
-            { value: '', label: t('chat.defaultModel') },
-            ...models.map((choice) => ({
-              value: `${choice.provider}||${choice.model}`,
-              label: choice.label,
-            })),
-          ]}
-          onChange={(value) => {
-            const [provider = '', model = ''] = value.split('||');
-            void setModel(chatId, model, provider);
-          }}
-          className="max-w-28 sm:max-w-48"
-        />
-
       </header>
 
       <div
@@ -301,7 +266,11 @@ export function ChatPage() {
 
           {failure !== undefined ? (
             <p data-testid="run-error" role="alert" className="text-sm text-[var(--danger)]">
-              {failure === 'aborted' ? t('chat.stopped') : t('chat.failed')}
+              {failure === 'aborted'
+                ? t('chat.stopped')
+                : failure === 'interrupted'
+                  ? t('chat.interrupted')
+                  : t('chat.failed')}
             </p>
           ) : null}
         </div>

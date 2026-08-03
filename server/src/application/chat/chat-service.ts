@@ -82,7 +82,12 @@ export class ChatService {
   setModel(id: string, model: string, provider: string): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setModel(id, model, provider);
+    this.deps.chats.recordRecentModel({ provider, model, usedAt: new Date(this.deps.clock.now()).toISOString() });
     return this.deps.chats.get(id);
+  }
+
+  recentModels(): { provider: string; model: string; usedAt: string }[] {
+    return this.deps.chats.recentModels(10);
   }
 
   /**

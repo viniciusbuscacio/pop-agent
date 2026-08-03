@@ -3,6 +3,7 @@ import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
+import { useThinkingStore } from '../store/thinking';
 import {
   ModelMenu,
   SlashMenu,
@@ -10,6 +11,7 @@ import {
   type ModelChoice,
   type SlashCommand,
 } from './slash-menu';
+import { ModelPicker } from './controls';
 
 /**
  * The composer, in aw's shape: the textarea on the left, then attach, mic
@@ -53,6 +55,8 @@ export function Composer({
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const showThinking = useThinkingStore((state) => state.show);
+  const toggleThinking = useThinkingStore((state) => state.toggle);
   // @-mentions: files already in Files, attached by reference (no re-upload).
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
@@ -555,7 +559,29 @@ export function Composer({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="relative flex items-center justify-end gap-2">
+        <ModelPicker
+          id="composer-model"
+          label={t('chat.model')}
+          placeholder={t('chat.searchModels')}
+          noResults={t('chat.noModelsFound')}
+          compactLabel="M"
+          value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
+          options={[
+            { value: '', label: t('chat.defaultModel') },
+            ...models.map((choice) => ({
+              value: `${choice.provider}||${choice.model}`,
+              label: choice.label,
+            })),
+          ]}
+          onChange={(value) => {
+            const [provider = '', model = ''] = value.split('||');
+            onSetModel(model, provider);
+          }}
+        />
+
+        <ThinkingButton show={showThinking} onToggle={toggleThinking} />
+
         <IconButton
           testId="composer-attach"
           label={t('chat.attach')}
@@ -597,6 +623,27 @@ export function Composer({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The thinking visibility control sits beside the attachment action. */
+function ThinkingButton({ show, onToggle }: { show: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      data-testid="thinking-visibility"
+      aria-pressed={show}
+      aria-label={show ? t('chat.thinkingOn') : t('chat.thinkingOff')}
+      title={show ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
+      onClick={onToggle}
+      className={`grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold transition-colors ${
+        show
+          ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
+          : 'text-[var(--muted)]'
+      }`}
+    >
+      <span aria-hidden="true">T</span>
+    </button>
   );
 }
 

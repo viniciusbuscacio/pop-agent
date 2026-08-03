@@ -203,6 +203,7 @@ export function ModelPicker({
   noResults = 'No models found',
   onChange,
   className = '',
+  compactLabel,
 }: {
   id: string;
   label: string;
@@ -212,6 +213,7 @@ export function ModelPicker({
   noResults?: string;
   onChange: (value: string) => void;
   className?: string;
+  compactLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -239,7 +241,7 @@ export function ModelPicker({
   }
 
   return (
-    <div ref={root} className={`relative min-w-0 ${className}`}>
+    <div ref={root} className={`min-w-0 ${className}`}>
       <span id={`${id}-label`} className="sr-only">{label}</span>
       <button
         id={id}
@@ -250,12 +252,14 @@ export function ModelPicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((shown) => !shown)}
-        className={fieldClass('sm', 'max-w-full truncate')}
+        className={compactLabel === undefined
+          ? fieldClass('sm', 'max-w-full truncate')
+          : 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] bg-[var(--input-bg)] p-0 text-sm font-semibold text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'}
       >
-        {current}
+        {compactLabel ?? current}
       </button>
       {open ? (
-        <div className="absolute right-0 z-20 mt-1 w-72 max-w-[min(85vw,18rem)] rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg">
+        <div className="absolute right-0 bottom-full z-20 mb-1 w-72 max-w-[min(85vw,18rem)] rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg">
           <input
             ref={search}
             type="search"

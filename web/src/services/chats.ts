@@ -5,6 +5,7 @@ import type {
   ConfirmResponse,
   MessagesResponse,
   ModelsResponse,
+  RecentModelsResponse,
   PatchChatRequest,
   SendMessageResponse,
   StopRunResponse,
@@ -64,5 +65,9 @@ export const chatsService = {
     return apiRequest<ModelsResponse>(
       providerId === undefined ? '/models' : `/models?provider=${providerId}`,
     );
+  },
+
+  recentModels(): Promise<RecentModelsResponse> {
+    return apiRequest<RecentModelsResponse>('/recent-models');
   },
 };

@@ -462,6 +462,16 @@ export interface ModelsResponse {
   source: ModelCatalogSource;
 }
 
+export interface RecentModelDTO {
+  provider: string;
+  model: string;
+  usedAt: string;
+}
+
+export interface RecentModelsResponse {
+  models: RecentModelDTO[];
+}
+
 /**
  * `GET /v1/providers` — whether each provider can be used, never the key
  * itself. `source` says where the key came from, because a key set by the

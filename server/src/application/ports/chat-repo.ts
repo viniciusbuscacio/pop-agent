@@ -14,6 +14,8 @@ export interface ChatRepo {
   rename(id: string, title: string): void;
   setArchived(id: string, archived: boolean): void;
   setModel(id: string, model: string, provider: string): void;
+  recordRecentModel(entry: { provider: string; model: string; usedAt: string }): void;
+  recentModels(limit: number): { provider: string; model: string; usedAt: string }[];
   setSummary(id: string, summary: string): void;
 
   /** A manual rename turns auto-titling off; nothing turns it back on today. */

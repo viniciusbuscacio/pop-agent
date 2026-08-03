@@ -18,7 +18,16 @@ self.addEventListener('push', (event) => {
     badge: '/icon-192.png',
     data: { url: data.url || '/' },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const appIsVisible = clients.some((client) => {
+        if (client.visibilityState !== 'visible') return false;
+        return new URL(client.url).origin === self.location.origin;
+      });
+      if (!appIsVisible) return self.registration.showNotification(title, options);
+      return undefined;
+    }),
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

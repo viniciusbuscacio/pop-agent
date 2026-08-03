@@ -185,6 +185,16 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json({ answered: deps.runs.resolveConfirm(id, parsed.data.runId, parsed.data.allow) });
   });
 
+  routes.get('/recent-models', (c) => {
+    return c.json({
+      models: deps.chats.recentModels().map((entry) => ({
+        provider: entry.provider,
+        model: entry.model,
+        usedAt: entry.usedAt,
+      })),
+    });
+  });
+
   routes.get('/models', async (c) => {
     // The catalog is per provider (popy.spec §15); absent param means the
     // provider the next run would actually use.
