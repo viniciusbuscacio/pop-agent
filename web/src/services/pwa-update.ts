@@ -77,15 +77,75 @@ export async function applyUpdate(): Promise<void> {
   };
   // Fires thanks to clientsClaim in the generated worker (vite.config.ts).
   navigator.serviceWorker?.addEventListener('controllerchange', reload, { once: true });
-  // Belt for a worker that was already waiting before this page existed:
-  // its own activation is just as good a signal as the controller change.
-  const waiting = registration?.waiting;
-  waiting?.addEventListener('statechange', () => {
-    if (waiting.state === 'activated') reload();
-  });
+
+  // One press must jump to the *newest* build, not to whatever was waiting when
+  // the banner first appeared. Between the banner and the click no check runs
+  // unless the tab was hidden and shown, so a burst of builds leaves the
+  // waiting worker stale -- and activating a stale worker only advances one
+  // version, which is why catching up took a Reload per build (reload, update,
+  // reload, update...). Re-check now: update() fetches the current sw.js and,
+  // if it is newer, starts installing it, replacing the waiting worker. It
+  // only becomes `waiting` once its precache finishes, so wait for that
+  // before activating it.
+  let target: ServiceWorker | undefined;
+  try {
+    await registration?.update();
+    target = await newestWaitingWorker(registration);
+  } catch {
+    // Offline or unsupported: fall through to whatever is already waiting.
+  }
+  target ??= registration?.waiting ?? undefined;
+
   // Last resort only -- long enough that it can no longer win the race.
   setTimeout(reload, 8000);
+
+  if (target !== undefined) {
+    const worker = target;
+    // Its own activation is as good a reload signal as the controller change.
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'activated') reload();
+    });
+    // The generated worker calls skipWaiting() on this message (vite.config.ts).
+    worker.postMessage({ type: 'SKIP_WAITING' });
+    return;
+  }
+
+  // Nothing waited (already current, or a worker still mid-flight): hand off to
+  // the library, which messages its own tracked worker and reloads.
   await updateSW?.(true);
+}
+
+/**
+ * The freshest worker to activate, after a re-check. `registration.update()`
+ * resolves once the newest sw.js has been fetched and compared, but a worker
+ * it finds newer is still *installing* then -- it reaches `waiting` only after
+ * its precache completes. Grabbing `registration.waiting` too early would skip
+ * to the previous build, so we wait for the in-flight worker to finish first.
+ */
+async function newestWaitingWorker(
+  reg: ServiceWorkerRegistration | undefined,
+  timeoutMs = 5000,
+): Promise<ServiceWorker | undefined> {
+  if (reg === undefined) return undefined;
+  const installing = reg.installing;
+  if (installing !== null) {
+    await new Promise<void>((resolve) => {
+      const settle = (): void => {
+        // 'installed' is the waiting state; the terminal states end the wait too.
+        if (
+          installing.state === 'installed' ||
+          installing.state === 'activated' ||
+          installing.state === 'redundant'
+        ) {
+          installing.removeEventListener('statechange', settle);
+          resolve();
+        }
+      };
+      installing.addEventListener('statechange', settle);
+      setTimeout(resolve, timeoutMs);
+    });
+  }
+  return reg.waiting ?? undefined;
 }
 
 function restartTimer(): void {
