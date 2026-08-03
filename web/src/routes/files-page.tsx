@@ -4,6 +4,7 @@ import type { ArtifactDTO, FilesSearchHitDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
+import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
@@ -253,11 +254,12 @@ export function FilesPage() {
   const allSelected =
     visibleFiles.length > 0 && visibleFiles.every((file) => selected.has(file.id));
 
-  // Five steps at most on the line (Vinicius, 03/08). Past that the ones in
-  // front collapse into a … that lists them in order, Files first, and the …
-  // takes the first of the five slots -- so the line never grows: five names,
-  // or the … and the four folders nearest to where you are.
-  const CRUMB_LIMIT = 5;
+  // Five steps on a wide screen, three on a phone (Vinicius, 03/08): five of
+  // them at 390px squeezed every name down to "Fol…", which is the breadcrumb
+  // failing at its one job. Past the limit the ones in front collapse into a
+  // … that lists them in order, Files first, and the … takes the first slot --
+  // so the line never grows either way.
+  const CRUMB_LIMIT = useMediaQuery(MD_BREAKPOINT) ? 5 : 3;
   const crumbs = trail();
   const deep = crumbs.length > CRUMB_LIMIT;
   const collapsed = deep ? crumbs.slice(0, crumbs.length - (CRUMB_LIMIT - 1)) : [];
