@@ -339,14 +339,14 @@ export function FilesPage() {
         {/* Where you are, and the way back. The app's own text colour rather
             than the link blue: this is a title that happens to be clickable,
             so it is the heaviest thing on the screen after the navigation.
-            Only inside a folder -- at the root the nav above already says
-            Files. */}
-        {openFolder !== undefined ? (
-          <nav
-            data-testid="files-breadcrumb"
-            aria-label={t('files.breadcrumb')}
-            className="relative flex items-center gap-1.5 text-base font-semibold text-[var(--screen-fg)]"
-          >
+            Always on screen, the root included -- a line that appears only
+            once you are deep makes the screen jump, and "Files" on its own is
+            the title of the root (Vinicius, 03/08). */}
+        <nav
+          data-testid="files-breadcrumb"
+          aria-label={t('files.breadcrumb')}
+          className="relative flex items-center gap-1.5 text-base font-semibold text-[var(--screen-fg)]"
+        >
             {collapsed.length > 0 ? (
               <button
                 type="button"
@@ -400,8 +400,7 @@ export function FilesPage() {
                 ))}
               </div>
             ) : null}
-          </nav>
-        ) : null}
+        </nav>
 
         {/* On a phone the buttons alone fill the line, so the search box was
             being squeezed into a sliver. It wraps onto its own full-width line
