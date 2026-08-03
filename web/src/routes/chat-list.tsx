@@ -277,16 +277,21 @@ function FolderTree() {
 
   // A row and, when open, its children -- indented by depth. A plain recursive
   // helper, so the tree reconciles cleanly.
+  //
+  // A top-level row starts at the sidebar's own left edge: the +/- lives in the
+  // 1rem gutter the chat rows use as padding, so the folder icon lands exactly
+  // where a chat's title does instead of floating a column further right
+  // (Vinicius, 03/08).
   function renderRow(folder: FolderDTO, depth: number) {
     const kids = childFolders(folder.id);
     const isOpen = expanded.has(folder.id);
     return (
       <div key={folder.id} className="relative">
         <div
-          className={`group flex items-center gap-1 pr-1 ${
+          className={`group flex items-center pr-1 ${
             folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
           }`}
-          style={{ paddingLeft: `${String(0.5 + depth * 1)}rem` }}
+          style={{ paddingLeft: `${String(depth * 0.75)}rem` }}
           onContextMenu={(event) => {
             event.preventDefault();
             setMenuFor(folder.id);
@@ -299,12 +304,12 @@ function FolderTree() {
               aria-label={isOpen ? t('files.collapse') : t('files.expand')}
               aria-expanded={isOpen}
               onClick={() => toggle(folder.id)}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
+              className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
             >
               {isOpen ? '−' : '+'}
             </button>
           ) : (
-            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="h-5 w-4 shrink-0" aria-hidden="true" />
           )}
           <button
             type="button"
