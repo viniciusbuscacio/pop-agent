@@ -1,4 +1,5 @@
 import { SESSION_TOKEN_HEADER } from '@popy/shared';
+import { healthMonitor } from './health';
 import { session } from './session';
 
 /**
@@ -30,6 +31,24 @@ export function setSessionLostHandler(handler: SessionLostHandler): void {
   onSessionLost = handler;
 }
 
+/**
+ * Every request doubles as a connection probe. A fetch that never reached the
+ * server is the loudest evidence there is, and waiting for the next keepalive
+ * to rediscover it would leave the user watching a send that did nothing with
+ * nothing on screen to explain it. An answer -- any answer, a 500 included --
+ * proves the opposite just as fast.
+ */
+async function probed(request: () => Promise<Response>): Promise<Response> {
+  try {
+    const response = await request();
+    healthMonitor.reportReachable();
+    return response;
+  } catch (error) {
+    healthMonitor.reportUnreachable();
+    throw error;
+  }
+}
+
 export async function apiRequest<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
@@ -39,11 +58,13 @@ export async function apiRequest<T>(
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
-  const response = await fetch(`${BASE}${path}`, {
-    method: init.method ?? 'GET',
-    headers,
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-  });
+  const response = await probed(() =>
+    fetch(`${BASE}${path}`, {
+      method: init.method ?? 'GET',
+      headers,
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    }),
+  );
 
   // The server hands back a fresh token once the current one is a day old.
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
@@ -69,7 +90,7 @@ export async function apiDownload(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
-  const response = await fetch(`${BASE}${path}`, { headers });
+  const response = await probed(() => fetch(`${BASE}${path}`, { headers }));
   if (!response.ok) throw await toApiError(response);
   return response.blob();
 }
@@ -81,7 +102,9 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   // No content-type header: the browser sets the multipart boundary itself.
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
-  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+  const response = await probed(() =>
+    fetch(`${BASE}${path}`, { method: 'POST', headers, body: form }),
+  );
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
   if (renewed !== null && renewed.length > 0) session.refresh(renewed);
 

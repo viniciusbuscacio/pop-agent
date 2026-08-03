@@ -75,7 +75,6 @@ export function ShellFooter() {
 
 /** The diagnosis words for the tooltip and the popover. */
 function diagnosis(state: HealthState): string {
-  if (state.kind === 'offline') return t('shell.health.serverOffline');
   if (state.kind === 'degraded') {
     return state.problems
       .map((problem) => (problem === 'provider' ? t('shell.health.provider') : t('shell.health.db')))
@@ -88,13 +87,18 @@ function diagnosis(state: HealthState): string {
  * Silence means healthy: nothing renders while every check is ok. A problem
  * shows a small gently pulsing red button (opacity, never stroboscopic);
  * hover gives the tooltip, click pins the diagnosis open.
+ *
+ * Degraded only. A server the app cannot reach at all is the connection
+ * banner's to announce (ui/connection-banner) -- it is not a diagnosis the
+ * user can act on, and saying it twice would only make the loud one look
+ * optional.
  */
 function HealthDot() {
   const state = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getState);
   const [open, setOpen] = useState(false);
   useDismiss(open, () => setOpen(false));
 
-  if (state.kind === 'ok') return null;
+  if (state.kind !== 'degraded') return null;
   const message = diagnosis(state);
 
   return (

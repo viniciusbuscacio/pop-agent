@@ -18,6 +18,7 @@ import { TasksIntro } from './routes/tasks-list';
 import { McpPage } from './routes/mcp-page';
 import { SkillsPage } from './routes/skills-page';
 import { UpdatePrompt } from './ui/update-prompt';
+import { ConnectionBanner } from './ui/connection-banner';
 import { Toasts } from './ui/toasts';
 
 /**
@@ -27,6 +28,12 @@ import { Toasts } from './ui/toasts';
 export function App() {
   return (
     <BrowserRouter>
+      {/*
+        Above the router, so an unreachable server is announced on every screen
+        -- including the login the failed boot falls back to, which otherwise
+        just looks like the app forgot who you are.
+      */}
+      <ConnectionBanner />
       <UpdatePrompt />
       <Toasts />
       <Boot />

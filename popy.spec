@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.46 — 2026-08-02.
+Version 1.48 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -552,15 +552,42 @@ events from stale runs.
   lives at the BOTTOM of the sidebar**, floating above the endlessly
   scrolling list (the list keeps a padding-bottom so the last row is never
   hidden), and carries the **health indicator**: silence means healthy —
-  nothing renders while `/v1/health` is all `ok`; a problem shows a small
-  gently pulsing red button (opacity animation, never stroboscopic) whose
-  tooltip/click names the diagnosis ("Server offline", "LLM provider
-  disconnected", "Database disconnected"). The frontend polls `/v1/health`
-  lightly (~10s, backing off while the tab is hidden). Diagnosis only;
-  maintenance actions come later. **Narrow screens follow the
+  nothing renders while `/v1/health` is all `ok`; a *degraded* server (it
+  answered, but something inside is sick) shows a small gently pulsing red
+  button (opacity animation, never stroboscopic) whose tooltip/click names
+  the diagnosis ("LLM provider disconnected", "Database disconnected").
+  Diagnosis only; maintenance actions come later. **Narrow screens follow the
   Telegram model rather than a drawer**: the list *is* the screen, and
   opening something is a route change, so the phone's back gesture means
   what the user expects.
+- **A server the app cannot reach is announced, not hinted** — a full-width
+  bar at the top of every screen (`ui/connection-banner`), above the router
+  so the failed boot's fallback to login carries it too. The dot is for
+  diagnoses the user could act on; an unreachable server is a wall, and the
+  PWA hides it well: every screen still paints from the service worker's
+  cache, so the app looks alive and only the answers stop. Three states,
+  because the next move differs in each — **"You're offline."** (the device
+  has no network: theirs to fix), **"Server is offline."** + *"Your internet
+  is working — the problem is on the server. Nothing you typed was lost.
+  Trying to reconnect…"* (naming the culprit is the point; without it the
+  first suspect is always the wi-fi), and **"Back online."** for 3s, because
+  an outage that ends in silence leaves you poking at the app to find out
+  whether it is safe to type again. A bar, never a modal: the conversations
+  already loaded stay readable. "Trying to reconnect…" is only honest if it
+  is true, so the retry is real, plus a "Try now" button.
+- **Connection cadence** (`services/health`): healthy it is a keepalive —
+  one `/v1/health` a minute; unreachable it is a retry — 5s doubling to 30s,
+  because the only thing anyone wants then is the moment it comes back.
+  `navigator.onLine === false` skips the request entirely (nothing can
+  succeed with the radio down) and tells the two failures apart. Nothing runs
+  while the page is hidden: iOS freezes a backgrounded PWA within seconds, so
+  a surviving timer would only resume holding a verdict from whenever the
+  system suspended it — the poll stops on `pagehide`/hidden and fires
+  immediately on `pageshow`/visible, the same pair `services/events` uses.
+  **The wake-up probe matters more than the interval.** Every real request is
+  also a probe: `services/api` reports a fetch that never landed at once
+  (waiting up to a minute would leave a send that did nothing unexplained)
+  and any answer, a 500 included, clears it just as fast.
 - **Never a side drawer/panel for forms** (permanent veto). Settings is a
   full-screen view: General, Appearance, Model, Memory, Notes, Web Access,
   API, Usage, Backup, Updates, About. Every Save has a Cancel.
@@ -1145,6 +1172,31 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.48 (2026-08-03): **A server that is down says so (§14).** A 12px dot at
+  the bottom of the sidebar was the only sign that the app could not reach
+  its server, and in a PWA that is nearly invisible: every screen still
+  paints from the service worker's cache, so the app looks alive and only
+  the answers stop coming. New `ui/connection-banner` -- a full-width bar
+  at the top of every screen, mounted above the router so the failed boot's
+  fallback to login carries it too. Three states rather than one, because
+  the user's next move differs: "You're offline." (their network),
+  "Server is offline. Your internet is working -- the problem is on the
+  server. Nothing you typed was lost. Trying to reconnect..." (naming the
+  culprit is the point: otherwise the first suspect is always the wi-fi),
+  and "Back online." for 3s, so an outage does not end in silence. A bar,
+  never a modal -- the conversations already loaded stay readable, and
+  taking them away would remove the only thing that still works. The health
+  dot keeps the *degraded* diagnoses, which are the ones a user could act
+  on. `services/health` becomes the connection monitor: a 60s keepalive
+  while healthy, a 5s-doubling-to-30s retry while unreachable (so "trying
+  to reconnect" is true, plus a "Try now" button), `navigator.onLine ===
+  false` short-circuiting the request and separating the two failures, and
+  a hard stop while the page is hidden -- iOS freezes a backgrounded PWA
+  within seconds, so a surviving timer would resume holding a verdict from
+  whenever the system suspended it. It wakes on `pageshow`/visible like
+  `services/events` already did: the wake-up probe matters more than the
+  interval. `services/api` now doubles every request as a probe, so a send
+  that never landed raises the banner immediately instead of a minute later.
 - 1.47 (2026-08-02): **Folders nest, and Files search has an index (§14, §6,
   §21).** Folders were flat with a global `UNIQUE(name)`; they gain a
   `parent_id` (migration 020) so a folder holds folders as well as files,

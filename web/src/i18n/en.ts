@@ -79,10 +79,20 @@ export const en = {
   'shell.empty.title': 'Pick up where you left off',
   'shell.empty.body': 'Choose a conversation on the left, or start a new one.',
   'shell.settings': 'Settings',
-  'shell.health.serverOffline': 'Server offline',
   'shell.health.provider': 'LLM provider disconnected',
   'shell.health.db': 'Database disconnected',
   'shell.health.button': 'Something is wrong — show the diagnosis',
+
+  // The connection banner. It names the culprit on purpose: without it the
+  // first thing anyone blames is their own wi-fi.
+  'connection.serverOffline': 'Server is offline.',
+  'connection.serverOfflineDetail':
+    'Your internet is working — the problem is on the server. Nothing you typed was lost. Trying to reconnect…',
+  'connection.deviceOffline': "You're offline.",
+  'connection.deviceOfflineDetail':
+    'This device has no internet connection. Popy reconnects on its own once it does.',
+  'connection.back': 'Back online.',
+  'connection.retry': 'Try now',
 
 
   'chat.placeholder': 'Message Popy…',
