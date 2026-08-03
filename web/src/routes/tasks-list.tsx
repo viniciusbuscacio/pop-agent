@@ -81,7 +81,13 @@ function TaskRow({ task }: { task: TaskDTO }) {
   }
 
   return (
-    <li className="group relative border-b border-[var(--border)] px-4 py-3 last:border-b-0">
+    <li
+      className="group relative border-b border-[var(--border)] px-4 py-3 last:border-b-0"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuOpen(true);
+      }}
+    >
       <div className="flex items-start gap-2 pr-6">
         {/*
           The switch: aria-pressed rather than a checkbox, because it acts the

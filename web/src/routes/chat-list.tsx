@@ -7,7 +7,9 @@ import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
+import { foldersService } from '../services/artifacts';
 import { useSkillsStore } from '../store/skills';
+import { skillsService } from '../services/skills';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '../ui/controls';
@@ -240,10 +242,26 @@ function FolderTree() {
   const folders = useFilesStore((state) => state.folders);
   const reload = useFilesStore((state) => state.reload);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Same actions as the file pane's folder rows, so a folder is managed from
+  // wherever you see it (Vinicius, 03/08).
+  async function renameFolder(folder: FolderDTO): Promise<void> {
+    const name = window.prompt(t('files.renamePrompt'), folder.name);
+    if (name === null || name.trim().length === 0 || name === folder.name) return;
+    await foldersService.rename(folder.id, name.trim());
+    await reload();
+  }
+  async function deleteFolder(folder: FolderDTO): Promise<void> {
+    await foldersService.remove(folder.id);
+    await reload();
+    if (folder.id === folderId) navigate('/files');
+  }
 
   function childFolders(parentId: string): FolderDTO[] {
     return folders.filter((folder) => folder.parentId === parentId);
@@ -263,12 +281,16 @@ function FolderTree() {
     const kids = childFolders(folder.id);
     const isOpen = expanded.has(folder.id);
     return (
-      <div key={folder.id}>
+      <div key={folder.id} className="relative">
         <div
-          className={`flex items-center gap-1 pr-4 ${
+          className={`group flex items-center gap-1 pr-1 ${
             folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
           }`}
           style={{ paddingLeft: `${String(0.5 + depth * 1)}rem` }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setMenuFor(folder.id);
+          }}
         >
           {kids.length > 0 ? (
             <button
@@ -298,7 +320,42 @@ function FolderTree() {
               })}
             </span>
           </button>
+          <button
+            type="button"
+            data-testid="tree-folder-menu"
+            aria-label={t('shell.chatMenu')}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
+            className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+          >
+            ⋯
+          </button>
         </div>
+        {menuFor === folder.id ? (
+          <div
+            onPointerDown={(event) => event.stopPropagation()}
+            role="menu"
+            className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+          >
+            <MenuItem
+              testId="tree-folder-rename"
+              label={t('shell.rename')}
+              onClick={() => {
+                setMenuFor(undefined);
+                void renameFolder(folder);
+              }}
+            />
+            <MenuItem
+              testId="tree-folder-delete"
+              label={t('shell.delete')}
+              danger
+              onClick={() => {
+                setMenuFor(undefined);
+                void deleteFolder(folder);
+              }}
+            />
+          </div>
+        ) : null}
         {kids.length > 0 && isOpen ? kids.map((child) => renderRow(child, depth + 1)) : null}
       </div>
     );
@@ -321,10 +378,18 @@ function SkillsList({ filter }: { filter: string }) {
   const { slug } = useParams();
   const skills = useSkillsStore((state) => state.skills);
   const reload = useSkillsStore((state) => state.reload);
+  const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  async function removeSkill(skill: SkillDTO): Promise<void> {
+    await skillsService.remove(skill.slug);
+    await reload();
+    if (slug === skill.slug) navigate('/skills');
+  }
 
   if (skills === undefined) return <div className="flex-1" />;
 
@@ -341,25 +406,70 @@ function SkillsList({ filter }: { filter: string }) {
       ) : (
         <ul>
           {shown.map((skill: SkillDTO) => (
-            <li key={skill.slug}>
-              <button
-                type="button"
-                data-testid="skill-row"
-                onClick={() => navigate(`/skills/${skill.slug}`)}
-                className={`flex w-full flex-col gap-0.5 px-4 py-3 text-left ${
+            <li key={skill.slug} className="group relative">
+              <div
+                className={`flex items-center gap-1 pr-1 ${
                   slug === skill.slug ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'
                 }`}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenuFor(skill.slug);
+                }}
               >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-sm font-medium">{skill.name}</span>
-                  {skill.builtin ? (
-                    <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
-                      {t('skills.builtin')}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="truncate text-xs text-[var(--muted)]">{skill.description}</span>
-              </button>
+                <button
+                  type="button"
+                  data-testid="skill-row"
+                  onClick={() => navigate(`/skills/${skill.slug}`)}
+                  className="flex min-w-0 flex-1 flex-col gap-0.5 px-4 py-3 text-left"
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{skill.name}</span>
+                    {skill.builtin ? (
+                      <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
+                        {t('skills.builtin')}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="truncate text-xs text-[var(--muted)]">{skill.description}</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="skill-row-menu"
+                  aria-label={t('shell.chatMenu')}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setMenuFor((v) => (v === skill.slug ? undefined : skill.slug))}
+                  className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                >
+                  ⋯
+                </button>
+              </div>
+              {menuFor === skill.slug ? (
+                <div
+                  onPointerDown={(event) => event.stopPropagation()}
+                  role="menu"
+                  className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+                >
+                  <MenuItem
+                    testId="skill-row-edit"
+                    label={t('skills.edit')}
+                    onClick={() => {
+                      setMenuFor(undefined);
+                      navigate(`/skills/${skill.slug}`);
+                    }}
+                  />
+                  {skill.builtin ? null : (
+                    <MenuItem
+                      testId="skill-row-delete"
+                      label={t('skills.delete')}
+                      danger
+                      onClick={() => {
+                        setMenuFor(undefined);
+                        void removeSkill(skill);
+                      }}
+                    />
+                  )}
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -537,6 +647,10 @@ function ChatRow({
       <NavLink
         to={`/chat/${chat.id}`}
         data-testid="chat-row"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenuOpen(true);
+        }}
         className={({ isActive }) =>
           `relative flex flex-col gap-0.5 px-4 py-3 ${isActive ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'}`
         }
