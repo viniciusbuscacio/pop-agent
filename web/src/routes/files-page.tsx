@@ -432,24 +432,26 @@ export function FilesPage() {
               event.target.value = '';
             }}
           />
-          <Button type="button" data-testid="files-upload" onClick={() => picker.current?.click()}>
+          <Button type="button" size="sm" data-testid="files-upload" onClick={() => picker.current?.click()}>
             {t('files.uploadFile')}
           </Button>
           <Button
             type="button"
             variant="ghost"
+            size="sm"
             data-testid="files-upload-folder"
             onClick={() => folderPicker.current?.click()}
           >
             {t('files.uploadFolder')}
           </Button>
-          <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
+          <Button type="button" variant="ghost" size="sm" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
           {!searching && visibleFiles.length > 0 ? (
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               data-testid="files-select"
               onClick={() => {
                 setSelecting((value) => !value);

@@ -18,7 +18,22 @@ type ButtonVariant = 'primary' | 'ghost' | 'danger';
 // navigation, and a New chat button in the same weight right under it read as
 // a second title rather than an action (Vinicius, 03/08).
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
+  'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
+
+/**
+ * Size is a prop, never a `text-`/`px-` handed in through `className`: two
+ * competing Tailwind classes are resolved by the order the stylesheet happened
+ * to emit them in, not by the order they were written -- the same reason the
+ * field primitives take one.
+ */
+const BUTTON_SIZES = {
+  /** The default: a button that is the point of its screen or its dialog. */
+  md: 'px-4 py-2 text-sm',
+  /** A toolbar of them above a list, where the list is the point. */
+  sm: 'px-3 py-1.5 text-xs',
+} as const;
+
+export type ButtonSize = keyof typeof BUTTON_SIZES;
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
@@ -31,10 +46,16 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-  return <button className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${className}`} {...props} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return (
+    <button
+      className={`${BUTTON_BASE} ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${className}`}
+      {...props}
+    />
+  );
 }
 
 /**
