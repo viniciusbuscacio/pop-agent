@@ -250,15 +250,18 @@ export function FilesPage() {
   const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
   const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
 
-  // Three steps at most on the line, so a deep folder does not push the
-  // breadcrumb onto a second row: the ones in front collapse into a … that
-  // lists them in order, Files first (Vinicius, 03/08).
   const allSelected =
     visibleFiles.length > 0 && visibleFiles.every((file) => selected.has(file.id));
 
+  // Five steps at most on the line (Vinicius, 03/08). Past that the ones in
+  // front collapse into a … that lists them in order, Files first, and the …
+  // takes the first of the five slots -- so the line never grows: five names,
+  // or the … and the four folders nearest to where you are.
+  const CRUMB_LIMIT = 5;
   const crumbs = trail();
-  const collapsed = crumbs.length > 3 ? crumbs.slice(0, crumbs.length - 2) : [];
-  const shownCrumbs = crumbs.length > 3 ? crumbs.slice(-2) : crumbs;
+  const deep = crumbs.length > CRUMB_LIMIT;
+  const collapsed = deep ? crumbs.slice(0, crumbs.length - (CRUMB_LIMIT - 1)) : [];
+  const shownCrumbs = deep ? crumbs.slice(-(CRUMB_LIMIT - 1)) : crumbs;
 
   // A folder row of the open folder's list. No indent and no expander: this
   // pane shows one level, the same way it shows its files, and the sidebar is
