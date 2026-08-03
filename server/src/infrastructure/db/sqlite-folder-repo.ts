@@ -8,6 +8,7 @@ interface FolderRow {
   name: string;
   parent_id: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 function isPrimaryKeyCollision(error: unknown): boolean {
@@ -16,6 +17,9 @@ function isPrimaryKeyCollision(error: unknown): boolean {
     (error as { code?: string }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
   );
 }
+
+/** The trash is invisible to every ordinary query -- see the artifact repo. */
+const LIVE = 'deleted_at IS NULL';
 
 /** SQLite adapter for {@link FolderRepo}. */
 export class SqliteFolderRepo implements FolderRepo {
@@ -43,14 +47,14 @@ export class SqliteFolderRepo implements FolderRepo {
   }
 
   get(id: string): Folder | undefined {
-    const row = this.db.prepare('SELECT * FROM folders WHERE id = ?').get(id) as
+    const row = this.db.prepare(`SELECT * FROM folders WHERE id = ? AND ${LIVE}`).get(id) as
       | FolderRow
       | undefined;
     return row === undefined ? undefined : toFolder(row);
   }
 
   list(): Folder[] {
-    const rows = this.db.prepare('SELECT * FROM folders ORDER BY name').all() as FolderRow[];
+    const rows = this.db.prepare(`SELECT * FROM folders WHERE ${LIVE} ORDER BY name`).all() as FolderRow[];
     return rows.map(toFolder);
   }
 
@@ -61,6 +65,42 @@ export class SqliteFolderRepo implements FolderRepo {
   delete(id: string): boolean {
     return this.db.prepare('DELETE FROM folders WHERE id = ?').run(id).changes > 0;
   }
+
+  trash(id: string, at: string): boolean {
+    return (
+      this.db.prepare(`UPDATE folders SET deleted_at = ? WHERE id = ? AND ${LIVE}`).run(at, id)
+        .changes > 0
+    );
+  }
+
+  restore(id: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE folders SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL')
+        .run(id).changes > 0
+    );
+  }
+
+  listTrashed(): Folder[] {
+    const rows = this.db
+      .prepare('SELECT * FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC')
+      .all() as FolderRow[];
+    return rows.map(toFolder);
+  }
+
+  getTrashed(id: string): Folder | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM folders WHERE id = ? AND deleted_at IS NOT NULL')
+      .get(id) as FolderRow | undefined;
+    return row === undefined ? undefined : toFolder(row);
+  }
+
+  listTrashedBefore(cutoff: string): Folder[] {
+    const rows = this.db
+      .prepare('SELECT * FROM folders WHERE deleted_at IS NOT NULL AND deleted_at < ?')
+      .all(cutoff) as FolderRow[];
+    return rows.map(toFolder);
+  }
 }
 
 function toFolder(row: FolderRow): Folder {
@@ -69,5 +109,6 @@ function toFolder(row: FolderRow): Folder {
     name: row.name,
     parentId: row.parent_id ?? '',
     createdAt: row.created_at,
+    ...(row.deleted_at === null ? {} : { deletedAt: row.deleted_at }),
   };
 }

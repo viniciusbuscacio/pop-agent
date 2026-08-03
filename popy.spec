@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.51 — 2026-08-03.
+Version 1.52 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1179,6 +1179,36 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.52 (2026-08-03): **Files has a trash (§14, §6, §21).** Deleting a file
+  or a folder is reversible for **30 days** -- the number Drive, Dropbox and
+  iOS use, so nobody has to learn a new one. Migration 021: `deleted_at` on
+  `artifacts` and `folders`. **Soft delete, never a move**: the bytes stay
+  where they are under the same id, because moving them into a `trash/`
+  directory would double the paths one file can live at and a crash halfway
+  would leave an orphan nobody can find.
+  Four decisions worth keeping. (1) **The index goes immediately.** A
+  trashed file's chunks and embeddings are dropped the moment it is deleted
+  (`onDeindexed`, wired in main.ts) -- thirty days of the agent still finding
+  and citing a file the user threw away is the worst kind of bug, silent and
+  embarrassing. A restore reindexes through `onStored`. (2) **The bin never
+  reaches into the live tree**: `folders_sibling_name` became a partial
+  unique index (`WHERE deleted_at IS NULL`), so a deleted folder cannot stop
+  you creating another with its name. Restoring into a name that was taken
+  meanwhile answers **409 `name_taken`**, not a crash and not a silent
+  rename. (3) **A subtree is one thing.** Deleting a folder stamps its whole
+  subtree with ONE instant, so it expires together, lists as a single entry,
+  and comes back together. Restoring anything also restores its trashed
+  ancestors -- a folder's parent is fixed at creation (§6), so dropping an
+  orphan at the root would be moving something the user only asked to
+  undelete. (4) **A purge takes the archived versions too**, via a new
+  `ArtifactStore.removeVersion`; freeing only the current bytes would leave
+  copies on disk under a name nothing points at. `TrashSweeper` (a
+  MaintenanceJob on the daily tick) empties what is past its window;
+  thirty days is a floor, not a deadline. `GET /v1/trash`,
+  `POST /v1/trash/{files,folders}/:id/restore`,
+  `DELETE /v1/trash/{files,folders}/:id`, `DELETE /v1/trash`, and a Trash
+  screen reached from the Files toolbar that says how many days each thing
+  has left.
 - 1.51 (2026-08-03): **Measure the disk before limiting it (§14, §16).** A
   trash and a quota for Files were asked for; this lands the measurement
   first, on the principle that a limit chosen without looking caps the

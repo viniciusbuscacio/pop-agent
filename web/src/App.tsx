@@ -8,6 +8,7 @@ import { useAuthStore } from './store/auth';
 import { ChatLayout, NoChatSelected } from './routes/chat-layout';
 import { ChatPage } from './routes/chat-page';
 import { FilesPage } from './routes/files-page';
+import { TrashPage } from './routes/trash-page';
 import { ArtifactsPage } from './routes/artifacts-page';
 import { LoginPage } from './routes/login-page';
 import { RecoverPage } from './routes/recover-page';
@@ -114,6 +115,8 @@ function Boot() {
         <Route index element={<NoChatSelected />} />
         <Route path="chat/:chatId" element={<ChatPage />} />
         <Route path="files" element={<FilesPage />} />
+        {/* Before files/:folderId, or "trash" would be read as a folder id. */}
+        <Route path="files/trash" element={<TrashPage />} />
         <Route path="files/:folderId" element={<FilesPage />} />
         <Route path="tasks" element={<TasksIntro />} />
         <Route path="tasks/new" element={<TaskFormPage />} />

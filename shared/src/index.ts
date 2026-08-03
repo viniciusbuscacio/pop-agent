@@ -234,6 +234,28 @@ export interface ArtifactVersionsResponse {
   versions: ArtifactVersionDTO[];
 }
 
+/**
+ * `GET /v1/trash` — what deleting put aside (popy.spec §14). Files and folders
+ * together; only the top of each deleted subtree, because that is what the
+ * user actually deleted and the only thing a restore can mean on its own.
+ */
+export interface TrashEntryDTO {
+  kind: 'file' | 'folder';
+  id: string;
+  name: string;
+  /** Where it lived, as a path. Empty means the root of Files. */
+  path: string;
+  /** Bytes for a file; 0 for a folder. */
+  size: number;
+  deletedAt: string;
+  /** When the sweeper is allowed to take it for good. */
+  purgeAt: string;
+}
+
+export interface TrashResponse {
+  entries: TrashEntryDTO[];
+}
+
 /** `POST /v1/artifacts/:id/link` — a fresh HMAC-signed download URL (RF-004). */
 export interface ArtifactLinkResponse {
   url: string;

@@ -7,5 +7,11 @@ export interface FolderRepo {
   get(id: string): Folder | undefined;
   list(): Folder[];
   rename(id: string, name: string): boolean;
+  /** Removes the record for good; only the trash sweeper and a purge call it. */
   delete(id: string): boolean;
+  trash(id: string, at: string): boolean;
+  restore(id: string): boolean;
+  listTrashed(): Folder[];
+  getTrashed(id: string): Folder | undefined;
+  listTrashedBefore(cutoff: string): Folder[];
 }

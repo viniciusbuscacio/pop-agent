@@ -374,6 +374,20 @@ export const en = {
   'files.selectFile': 'Select file',
   'files.selectFolder': 'Select folder',
   'files.openFile': 'Open file',
+  // The trash. Every row says how many days it has left: a bin that only says
+  // "deleted" makes you guess whether it is safe to leave something in it.
+  'trash.title': 'Trash',
+  'trash.intro': 'Deleted files and folders stay here for 30 days, then go for good.',
+  'trash.backToFiles': 'Back to Files',
+  'trash.empty': 'Empty trash',
+  'trash.empty.none': 'The trash is empty.',
+  'trash.restore': 'Restore',
+  'trash.purge': 'Delete forever',
+  'trash.daysLeft': '{days} day(s) left',
+  'trash.purgeConfirm': 'Delete "{name}" for good? This one cannot be undone.',
+  'trash.emptyConfirm': 'Delete all {count} item(s) for good? This cannot be undone.',
+  'trash.nameTaken': 'Something called "{name}" is already there. Rename it, then restore this.',
+  'trash.restoreFailed': 'That could not be restored.',
   'files.deleteSelectedConfirm': 'Delete the {count} selected file(s)? This cannot be undone.',
   'files.deleteSelectedMixedConfirm':
     'Delete {files} file(s) and {folders} folder(s), with everything inside them? This cannot be undone.',

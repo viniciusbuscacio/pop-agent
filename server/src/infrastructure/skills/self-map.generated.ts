@@ -8,7 +8,7 @@ export const SELF_MAP = [
   "Key dependencies: pi 0.83.0, hono ^4.6.0, better-sqlite3 ^13.0.2, react ^19.0.0.",
   "",
   "server/src, clean architecture -- dependencies point inward only:",
-  "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (59 modules)",
+  "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (60 modules)",
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (12 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (58 modules)",
@@ -17,7 +17,7 @@ export const SELF_MAP = [
   "",
   "## UI map (generated)",
   "",
-  "PWA routes: /setup, /login, /recover, /chat/:chatId/artifacts, /settings/*, /, /chat/:chatId, /files, /files/:folderId, /tasks, /tasks/new, /tasks/:taskId, /skills, /skills/new, /skills/:slug, /mcp.",
+  "PWA routes: /setup, /login, /recover, /chat/:chatId/artifacts, /settings/*, /, /chat/:chatId, /files, /files/trash, /files/:folderId, /tasks, /tasks/new, /tasks/:taskId, /skills, /skills/new, /skills/:slug, /mcp.",
   "Settings sections: Server, General, Model, Memory, Usage, Storage, Backup, Appearance, Security, About, Updates.",
   "Deep links: /settings?section=<name> opens a section directly.",
 ].join('\n');

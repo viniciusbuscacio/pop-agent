@@ -87,7 +87,9 @@ describe('ArtifactService', () => {
     expect(service.mintLink('file-does-not-exist')).toBeUndefined();
   });
 
-  it('deletes the record and the bytes', () => {
+  it('sends a delete to the trash, and takes the bytes only on the purge', () => {
+    // Delete stopped being final on 03/08: the record goes out of sight at
+    // once, the bytes wait out the retention window. See trash.test.ts.
     const artifact = service.create(
       { chatId: 'chat-1', name: 'a.txt', mime: 'text/plain', source: 'agent' },
       Buffer.from('x'),
@@ -96,8 +98,12 @@ describe('ArtifactService', () => {
 
     expect(service.delete(artifact.id)).toBe(true);
     expect(service.get(artifact.id)).toBeUndefined();
-    expect(existsSync(path)).toBe(false);
+    expect(existsSync(path)).toBe(true);
+    // Already in the trash: deleting again is not a second delete.
     expect(service.delete(artifact.id)).toBe(false);
+
+    expect(service.purge(artifact.id)).toBe(true);
+    expect(existsSync(path)).toBe(false);
   });
 
   it('versions a re-save under the same name, keeping the old bytes', () => {
@@ -197,9 +203,15 @@ describe('ArtifactService', () => {
       expect(service.getFolder(top.id)).toBeUndefined();
       expect(service.getFolder(mid.id)).toBeUndefined();
       expect(service.getFolder(leaf.id)).toBeUndefined();
-      // Every file in the subtree is gone, records and bytes both.
+      // Every file in the subtree is out of sight; the bytes wait for the
+      // purge, so the whole subtree can come back (see trash.test.ts).
       expect(service.get(atTop.id)).toBeUndefined();
       expect(service.get(atLeaf.id)).toBeUndefined();
+      expect(existsSync(topBytes)).toBe(true);
+      expect(existsSync(leafBytes)).toBe(true);
+
+      // Purging the trashed folder is what actually frees the disk.
+      expect(service.purgeFolder(top.id)).toBe(true);
       expect(existsSync(topBytes)).toBe(false);
       expect(existsSync(leafBytes)).toBe(false);
     });

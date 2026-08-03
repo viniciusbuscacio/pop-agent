@@ -26,7 +26,16 @@ interface ArtifactRow {
   source: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
+
+/**
+ * The trash is invisible to every ordinary query (popy.spec §14). The filter
+ * is one constant used by all of them rather than a condition each query
+ * repeats: a listing that forgot it would quietly resurrect deleted files, and
+ * that is not the kind of mistake a reviewer catches by eye.
+ */
+const LIVE = 'deleted_at IS NULL';
 
 /** SQLite adapter for {@link ArtifactRepo}. */
 export class SqliteArtifactRepo implements ArtifactRepo {
@@ -62,7 +71,7 @@ export class SqliteArtifactRepo implements ArtifactRepo {
   }
 
   get(id: string): Artifact | undefined {
-    const row = this.db.prepare('SELECT * FROM artifacts WHERE id = ?').get(id) as
+    const row = this.db.prepare(`SELECT * FROM artifacts WHERE id = ? AND ${LIVE}`).get(id) as
       | ArtifactRow
       | undefined;
     return row === undefined ? undefined : toArtifact(row);
@@ -70,14 +79,14 @@ export class SqliteArtifactRepo implements ArtifactRepo {
 
   listByChat(chatId: string): Artifact[] {
     const rows = this.db
-      .prepare('SELECT * FROM artifacts WHERE chat_id = ? ORDER BY created_at, rowid')
+      .prepare(`SELECT * FROM artifacts WHERE chat_id = ? AND ${LIVE} ORDER BY created_at, rowid`)
       .all(chatId) as ArtifactRow[];
     return rows.map(toArtifact);
   }
 
   listAll(): Artifact[] {
     const rows = this.db
-      .prepare('SELECT * FROM artifacts ORDER BY created_at DESC, rowid DESC')
+      .prepare(`SELECT * FROM artifacts WHERE ${LIVE} ORDER BY created_at DESC, rowid DESC`)
       .all() as ArtifactRow[];
     return rows.map(toArtifact);
   }
@@ -86,10 +95,10 @@ export class SqliteArtifactRepo implements ArtifactRepo {
     const rows = (
       folderId === ''
         ? this.db
-            .prepare('SELECT * FROM artifacts WHERE folder_id IS NULL ORDER BY created_at DESC, rowid DESC')
+            .prepare(`SELECT * FROM artifacts WHERE folder_id IS NULL AND ${LIVE} ORDER BY created_at DESC, rowid DESC`)
             .all()
         : this.db
-            .prepare('SELECT * FROM artifacts WHERE folder_id = ? ORDER BY created_at DESC, rowid DESC')
+            .prepare(`SELECT * FROM artifacts WHERE folder_id = ? AND ${LIVE} ORDER BY created_at DESC, rowid DESC`)
             .all(folderId)
     ) as ArtifactRow[];
     return rows.map(toArtifact);
@@ -113,6 +122,47 @@ export class SqliteArtifactRepo implements ArtifactRepo {
 
   delete(id: string): boolean {
     return this.db.prepare('DELETE FROM artifacts WHERE id = ?').run(id).changes > 0;
+  }
+
+  trash(id: string, at: string): boolean {
+    return (
+      this.db
+        .prepare(`UPDATE artifacts SET deleted_at = ? WHERE id = ? AND ${LIVE}`)
+        .run(at, id).changes > 0
+    );
+  }
+
+  restore(id: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE artifacts SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL')
+        .run(id).changes > 0
+    );
+  }
+
+  listTrashed(): Artifact[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM artifacts WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, rowid DESC',
+      )
+      .all() as ArtifactRow[];
+    return rows.map(toArtifact);
+  }
+
+  getTrashed(id: string): Artifact | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM artifacts WHERE id = ? AND deleted_at IS NOT NULL')
+      .get(id) as ArtifactRow | undefined;
+    return row === undefined ? undefined : toArtifact(row);
+  }
+
+  listTrashedBefore(cutoff: string): Artifact[] {
+    // Strictly older than the cutoff: ISO strings compare lexicographically,
+    // which is exactly chronological for the same-length UTC form used here.
+    const rows = this.db
+      .prepare('SELECT * FROM artifacts WHERE deleted_at IS NOT NULL AND deleted_at < ?')
+      .all(cutoff) as ArtifactRow[];
+    return rows.map(toArtifact);
   }
 
   addVersion(id: string, version: ArtifactVersion): void {
@@ -164,5 +214,6 @@ function toArtifact(row: ArtifactRow): Artifact {
     source: row.source as ArtifactSource,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.deleted_at === null ? {} : { deletedAt: row.deleted_at }),
   };
 }

@@ -44,14 +44,17 @@ beforeEach(() => {
   db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   migrate(db);
+  chunks = new SqliteArtifactChunksRepo(db);
   service = new ArtifactService({
     repo: new SqliteArtifactRepo(db),
     folders: new SqliteFolderRepo(db),
     store: new FsArtifactStore(root),
     secretKey: Buffer.from('k'.repeat(32)),
     clock: new FakeClock(),
+    // Wired exactly the way main.ts wires it: the trash keeps the row, so
+    // dropping the chunks is now the service's job, not the FK's.
+    onDeindexed: (artifactId) => chunks.replaceFor(artifactId, []),
   });
-  chunks = new SqliteArtifactChunksRepo(db);
   indexer = new FileIndexer({
     artifacts: service,
     chunks,
@@ -83,7 +86,10 @@ describe('FileIndexer', () => {
     expect(hits[0]?.snippet).toContain('telhado');
   });
 
-  it('drops a deleted file from the index (FK cascade)', async () => {
+  it('drops a deleted file from the index at once, before the trash expires', async () => {
+    // The FK cascade used to do this, because delete meant delete. With a
+    // trash the row survives, so the service reports it instead -- and it has
+    // to, or the agent keeps citing a file the user threw away for thirty days.
     const doc = storeText('contrato.txt', 'o contrato de aluguel');
     await indexer.backfill();
     expect(chunks.indexedArtifactIds().has(doc.id)).toBe(true);

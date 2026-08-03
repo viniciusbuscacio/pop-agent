@@ -19,6 +19,12 @@ export interface ArtifactStore {
   pathOfVersion(chatId: string, artifactId: string, version: number): string;
   /** Removes one artifact's bytes. Best-effort: already gone is success. */
   remove(chatId: string, artifactId: string): void;
+  /**
+   * Removes one archived version's bytes. Purging a file has to take its
+   * history with it, or the copies stay on disk under a name nothing points
+   * at -- space that no screen can explain and nothing will ever reclaim.
+   */
+  removeVersion(chatId: string, artifactId: string, version: number): void;
   /** Removes a whole chat's directory when the conversation is deleted. */
   removeChat(chatId: string): void;
 }

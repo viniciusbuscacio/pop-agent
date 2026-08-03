@@ -574,6 +574,15 @@ export function FilesPage() {
           <Button type="button" variant="ghost" size="sm" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-trash"
+            onClick={() => navigate('/files/trash')}
+          >
+            {t('trash.title')}
+          </Button>
           <input
             data-testid="files-filter"
             value={filter}

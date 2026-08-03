@@ -12,6 +12,8 @@ export interface Folder {
   /** The containing folder id; '' = the root of Files. */
   parentId: string;
   createdAt: string;
+  /** When it went to the trash, ISO. Absent means live. */
+  deletedAt?: string;
 }
 
 export function createFolder(name: string, parentId: string, now: string): Folder {

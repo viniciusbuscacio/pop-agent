@@ -51,6 +51,10 @@ export class FsArtifactStore implements ArtifactStore {
     safeRemove(this.pathOf(chatId, artifactId));
   }
 
+  removeVersion(chatId: string, artifactId: string, version: number): void {
+    safeRemove(this.pathOfVersion(chatId, artifactId, version));
+  }
+
   removeChat(chatId: string): void {
     safeRemove(join(this.root, this.dirOf(chatId)));
   }

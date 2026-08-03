@@ -23,6 +23,12 @@ export interface Artifact {
   source: ArtifactSource;
   createdAt: string;
   updatedAt: string;
+  /**
+   * When it went to the trash, ISO. Absent means live. Soft delete keeps the
+   * bytes exactly where they are under the same id -- the timestamp is the
+   * whole mechanism, and the sweeper that empties the trash reads it.
+   */
+  deletedAt?: string;
 }
 
 export interface NewArtifact {

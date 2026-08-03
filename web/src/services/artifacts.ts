@@ -5,6 +5,7 @@ import type {
   FolderDTO,
   FoldersResponse,
   FilesSearchResponse,
+  TrashResponse,
 } from '@popy/shared';
 import { apiRequest, apiUpload } from './api';
 
@@ -64,6 +65,31 @@ export const artifactsService = {
   /** Searches folders and files by name or path, across the whole tree. */
   search(query: string): Promise<FilesSearchResponse> {
     return apiRequest<FilesSearchResponse>(`/files/search?q=${encodeURIComponent(query)}`);
+  },
+};
+
+/**
+ * The Files trash (popy.spec §14). The kind is in the path rather than
+ * inferred from the id: a file and a folder fail for different reasons, and a
+ * route that had to look in both tables would answer 404 for "it is a folder,
+ * and its name is taken".
+ */
+export const trashService = {
+  list(): Promise<TrashResponse> {
+    return apiRequest<TrashResponse>('/trash');
+  },
+
+  restore(kind: 'file' | 'folder', id: string): Promise<void> {
+    return apiRequest<void>(`/trash/${kind}s/${id}/restore`, { method: 'POST' });
+  },
+
+  /** Skips the retention window for one thing. */
+  purge(kind: 'file' | 'folder', id: string): Promise<void> {
+    return apiRequest<void>(`/trash/${kind}s/${id}`, { method: 'DELETE' });
+  },
+
+  empty(): Promise<void> {
+    return apiRequest<void>('/trash', { method: 'DELETE' });
   },
 };
 

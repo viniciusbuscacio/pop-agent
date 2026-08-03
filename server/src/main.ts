@@ -19,6 +19,7 @@ import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { WorkspaceSweeper } from './infrastructure/agent/workspace-sweeper.js';
+import { TrashSweeper } from './application/artifacts/trash-sweeper.js';
 import { FilesReindexJob } from './infrastructure/agent/files-reindex-job.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
@@ -118,6 +119,9 @@ const artifacts = new ArtifactService({
   clock: systemClock,
   // Off the request path: a stored file is indexed for files_search moments later.
   onStored: (artifactId) => void fileIndex.current?.index(artifactId),
+  // A deleted file must stop being findable at once, not in thirty days:
+  // dropping its chunks is what stops the agent citing it (popy.spec §14).
+  onDeindexed: (artifactId) => context.artifactChunks.replaceFor(artifactId, []),
   // Keep the Files search index in step with every add/rename/move/delete.
   onFilesChanged: () => {
     try {
@@ -379,6 +383,9 @@ const taskScheduler = new TaskScheduler({
   clock: systemClock,
   timer: intervalTimer,
   jobs: [
+    // The trash empties itself once a day (popy.spec §14): thirty days is a
+    // floor, not a deadline, so a daily check is the right cadence.
+    new TrashSweeper({ artifacts, onJournal: (line) => console.log(line) }),
     new WorkspaceSweeper({
       workspace,
       liveChatIds: () =>
