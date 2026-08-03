@@ -27,6 +27,8 @@ let retryMs = FIRST_RETRY_MS;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let stopped = true;
 let watchingVisibility = false;
+/** Whether the stream has ever opened; a later open is a reconnection. */
+let everConnected = false;
 const listeners = new Set<Listener>();
 const resumeListeners = new Set<ResumeListener>();
 
@@ -46,6 +48,9 @@ export const eventStream = {
     source?.close();
     source = undefined;
     retryMs = FIRST_RETRY_MS;
+    // A fresh start (after a logout/login) must treat its first open as a
+    // first connection, not a reconnection, so it does not fire a catch-up.
+    everConnected = false;
   },
 
   subscribe(listener: Listener): () => void {
@@ -113,6 +118,16 @@ async function connect(): Promise<void> {
 
   connection.addEventListener('open', () => {
     retryMs = FIRST_RETRY_MS;
+    // A later open is a reconnection: the stream was down for a while -- a
+    // server restart, a network blip -- and any events in that gap were
+    // missed. Tell the app to catch up, exactly like returning from the
+    // background, so a run the server ended while we were disconnected is
+    // reconciled instead of spinning forever. A foreground desktop tab never
+    // fires visibilitychange, so without this its stuck run would never clear.
+    if (everConnected) {
+      for (const listener of resumeListeners) listener();
+    }
+    everConnected = true;
   });
 
   connection.addEventListener('message', (message: MessageEvent<string>) => {

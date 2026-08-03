@@ -109,9 +109,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { messages, live } = await chatsService.messages(chatId);
     set((state) => ({
       messages: { ...state.messages, [chatId]: messages },
-      ...(live !== undefined && !finished.has(live.runId)
-        ? { live: { ...state.live, [chatId]: live } }
-        : {}),
+      // The server is authoritative about what is in flight. It reports a run:
+      // adopt its snapshot (a client that mounted mid-run starts from all that
+      // already streamed). It reports none: drop any run this tab still
+      // believed was alive -- otherwise a run the server ended while we were
+      // disconnected (a restart, a crash) leaves the composer showing Stop
+      // forever. The reloaded history already carries the interruption mark.
+      live:
+        live !== undefined && !finished.has(live.runId)
+          ? { ...state.live, [chatId]: live }
+          : without(state.live, chatId),
     }));
   },
 
@@ -157,7 +164,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async stop(chatId) {
-    await chatsService.stop(chatId);
+    // Do not rely exclusively on SSE for the terminal event. On a sleeping
+    // phone (or while the connection is reconnecting), the POST can succeed
+    // but its error event may never reach this tab; the composer would then
+    // remain stuck showing Stop forever.
+    const runId = get().live[chatId]?.runId;
+    if (runId === undefined) return;
+
+    let stopped = false;
+    try {
+      ({ stopped } = await chatsService.stop(chatId));
+    } catch {
+      // The request itself failed -- offline, or the server is down. The user
+      // asked to stop all the same, so reconcile locally below rather than
+      // leave the run spinning.
+    }
+
+    // Whatever the backend said, once we asked to stop, this tab must not keep
+    // showing the run as alive. `stopped: true` means a live run was aborted
+    // (pi killed its process group). `stopped: false` means there was nothing
+    // to abort -- the run had already died on a restart or a crash while we
+    // were disconnected. Either way, finish it locally now that the backend
+    // call has returned, so Stop always does something and the interruption is
+    // marked. If the SSE terminal event already won the race this is a no-op.
+    const current = get().live[chatId];
+    if (current?.runId === runId) {
+      get().apply({ kind: 'error', chatId, runId, code: stopped ? 'aborted' : 'interrupted' });
+    }
   },
 
   async respondConfirm(chatId, runId, allow) {
@@ -305,7 +338,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             content:
               event.code === 'aborted'
                 ? 'You stopped this answer.'
-                : `That answer could not be finished. (${event.code})`,
+                : event.code === 'interrupted'
+                  ? 'This answer was interrupted — the server may have restarted.'
+                  : `That answer could not be finished. (${event.code})`,
             thinking: '',
             tools: [],
             attachments: [],

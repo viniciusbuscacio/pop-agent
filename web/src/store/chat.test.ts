@@ -123,6 +123,43 @@ describe('streaming into the live buffer', () => {
   });
 });
 
+describe('stopping a run', () => {
+  it('clears the composer even when the terminal SSE event is missed', async () => {
+    await useChatStore.getState().send(CHAT, 'stop me');
+    stop.mockResolvedValue({ stopped: true });
+
+    await useChatStore.getState().stop(CHAT);
+
+    expect(stop).toHaveBeenCalledWith(CHAT);
+    expect(live()).toBeUndefined();
+    expect(messages().at(-1)?.content).toBe('You stopped this answer.');
+  });
+
+  it('does not synthesize a stop when the server had nothing to stop', async () => {
+    stop.mockResolvedValue({ stopped: false });
+
+    await useChatStore.getState().stop(CHAT);
+
+    expect(live()).toBeUndefined();
+    expect(messages()).toHaveLength(0);
+  });
+
+  it('reconciles a run the server no longer knows (a restart) as interrupted', async () => {
+    // The tab thinks a run is live, but the server restarted while we were
+    // connected: its process is gone, so stop answers `false`. The composer
+    // must still stop showing Stop, and the interruption must be marked.
+    await useChatStore.getState().send(CHAT, 'was running when it restarted');
+    stop.mockResolvedValue({ stopped: false });
+
+    await useChatStore.getState().stop(CHAT);
+
+    expect(live()).toBeUndefined();
+    expect(messages().at(-1)?.content).toBe(
+      'This answer was interrupted — the server may have restarted.',
+    );
+  });
+});
+
 describe('mounting mid-run', () => {
   it('seeds the live view from the server snapshot and drops what it already contains', async () => {
     // aw's partial-reply buffer: a reload mid-run starts from everything that
@@ -158,6 +195,19 @@ describe('mounting mid-run', () => {
       messages: [],
       live: { runId: RUN, status: 'running', seq: 1, content: 'hello', thinking: '', tools: [] },
     };
+    await useChatStore.getState().openChat(CHAT);
+
+    expect(live()).toBeUndefined();
+  });
+
+  it('clears a run this tab still thought was live when the server reports none', async () => {
+    // A run streamed here, then the server ended it while we were disconnected
+    // (a restart). On reconnect openChat refetches: no live run, so the stale
+    // spinner must go instead of hanging forever.
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'half an answer' });
+    expect(live()?.runId).toBe(RUN);
+
+    messagesBody.value = { messages: [], live: undefined };
     await useChatStore.getState().openChat(CHAT);
 
     expect(live()).toBeUndefined();

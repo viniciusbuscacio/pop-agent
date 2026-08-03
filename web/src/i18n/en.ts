@@ -107,6 +107,7 @@ export const en = {
   'chat.answering': 'Answering…',
   'chat.waitingTurn': 'Waiting for a free slot…',
   'chat.stopped': 'You stopped this answer.',
+  'chat.interrupted': 'This answer was interrupted — the server may have restarted.',
   'chat.failed': 'That answer could not be finished.',
   'chat.confirm.title': 'Allow Popy to {action}?',
   'chat.confirm.why':
