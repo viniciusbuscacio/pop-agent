@@ -39,13 +39,18 @@ export function ShellHeader({
  * The floating strip at the BOTTOM of the sidebar (popy.spec §14): wordmark,
  * health indicator and Settings, always visible while the list scrolls
  * behind it (the list's own padding keeps the last row clear).
+ *
+ * The bottom padding is a max(), not a sum: adding the iPhone's home-indicator
+ * inset to the normal 0.75rem floated the row ~46px off the edge, which read
+ * as "too high" on a phone (Vinicius, 03/08). max() leaves every screen
+ * without an inset exactly as it was and still clears the indicator.
  */
 export function ShellFooter() {
   const navigate = useNavigate();
   return (
     <footer
       data-testid="shell-footer"
-      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-3 md:pb-3"
+      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-3 md:pb-3"
     >
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">

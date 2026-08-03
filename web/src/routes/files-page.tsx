@@ -10,14 +10,16 @@ import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
 import { Button, Select } from '../ui/controls';
 import { SidebarNav } from './sidebar-nav';
+import { ShellFooter } from './shell-header';
 
 /**
- * The content pane of Files (02/08, nested explorer): folders can hold folders
- * now, so the folder list is a tree -- each folder with children carries a +/-
- * toggle that opens it in place, while its name still navigates in. Search runs
- * against the server's path index and returns folders as well as files, from
- * anywhere in the tree, each shown with its full path. On a phone the search box
- * sits on its own full-width line so the buttons do not crush it.
+ * The content pane of Files: the folders and files of ONE folder, listed at the
+ * same indent, with a breadcrumb saying where that is (Vinicius, 03/08). You go
+ * down by opening a folder and back up through the breadcrumb; the expandable
+ * tree lives in the sidebar, where it does not compete with this list. Search
+ * runs against the server's path index and returns folders as well as files,
+ * from anywhere in the tree, each shown with its full path. On a phone the
+ * search box sits on its own full-width line so the buttons do not crush it.
  */
 export function FilesPage() {
   const { folderId } = useParams();
@@ -30,13 +32,13 @@ export function FilesPage() {
 
   const [filter, setFilter] = useState('');
   const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const folderPicker = useRef<HTMLInputElement>(null);
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
@@ -101,13 +103,19 @@ export function FilesPage() {
   function fileCount(id: string): number {
     return (files ?? []).filter((file) => file.folderId === id).length;
   }
-  function toggleExpanded(id: string): void {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+
+  // The chain root → … → open folder, for the breadcrumb. The length guard is
+  // for a parent link that somehow points at an ancestor: a cycle must not
+  // hang the render.
+  function trail(): FolderDTO[] {
+    const chain: FolderDTO[] = [];
+    let current = openFolder;
+    while (current !== undefined && chain.length < 64) {
+      chain.unshift(current);
+      const parentId = current.parentId;
+      current = parentId === '' ? undefined : folders.find((entry) => entry.id === parentId);
+    }
+    return chain;
   }
 
   async function upload(list: FileList | File[] | null): Promise<void> {
@@ -118,6 +126,42 @@ export function FilesPage() {
       for (const [index, file] of entries.entries()) {
         setUploading({ done: index, total: entries.length });
         await artifactsService.uploadToFiles(file, currentParent);
+      }
+    } finally {
+      setUploading(undefined);
+    }
+    await reload();
+  }
+
+  /**
+   * A directory upload arrives as a flat list where each file remembers the
+   * path it came from ("Reports/Q3/summary.pdf"), so the tree is rebuilt here:
+   * every directory on the way is created once and the file lands inside its
+   * own folder. Flattening everything into the current folder would lose the
+   * shape the user picked.
+   */
+  async function uploadFolder(list: FileList | null): Promise<void> {
+    const entries = list === null ? [] : Array.from(list);
+    if (entries.length === 0) return;
+    setUploading({ done: 0, total: entries.length });
+    const made = new Map<string, string>();
+    try {
+      for (const [index, file] of entries.entries()) {
+        setUploading({ done: index, total: entries.length });
+        let path = '';
+        let parent = currentParent;
+        for (const segment of file.webkitRelativePath.split('/').slice(0, -1)) {
+          path = path === '' ? segment : `${path}/${segment}`;
+          const known = made.get(path);
+          if (known === undefined) {
+            const folder = await foldersService.create(segment, parent);
+            made.set(path, folder.id);
+            parent = folder.id;
+          } else {
+            parent = known;
+          }
+        }
+        await artifactsService.uploadToFiles(file, parent);
       }
     } finally {
       setUploading(undefined);
@@ -195,33 +239,13 @@ export function FilesPage() {
   const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
   const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
 
-  // One folder row of the tree, plus its children when expanded. A plain
-  // recursive render helper (not a nested component), so the tree reconciles
-  // cleanly and no React namespace is needed for the return type.
-  function renderFolder(folder: FolderDTO, depth: number) {
-    const hasChildren = childFolders(folder.id).length > 0;
-    const isOpen = expanded.has(folder.id);
+  // A folder row of the open folder's list. No indent and no expander: this
+  // pane shows one level, the same way it shows its files, and the sidebar is
+  // where a folder opens in place (Vinicius, 03/08).
+  function renderFolder(folder: FolderDTO) {
     return (
       <li key={folder.id} className="relative">
-        <div
-          className="flex items-center gap-1 py-2.5 pr-2 hover:bg-[var(--hover-overlay)]"
-          style={{ paddingLeft: `${String(0.75 + depth * 1.25)}rem` }}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              data-testid="folder-expand"
-              aria-label={isOpen ? t('files.collapse') : t('files.expand')}
-              aria-expanded={isOpen}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => toggleExpanded(folder.id)}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
-            >
-              {isOpen ? '−' : '+'}
-            </button>
-          ) : (
-            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
-          )}
+        <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
           <button
             type="button"
             data-testid="folder-row"
@@ -270,18 +294,13 @@ export function FilesPage() {
             />
           </div>
         ) : null}
-        {hasChildren && isOpen ? (
-          <ul>
-            {childFolders(folder.id).map((child) => renderFolder(child, depth + 1))}
-          </ul>
-        ) : null}
       </li>
     );
   }
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-1 flex-col ${dragging ? 'outline-2 outline-dashed outline-[var(--accent)] -outline-offset-2' : ''}`}
+      className={`relative flex h-full min-h-0 flex-1 flex-col ${dragging ? 'outline-2 outline-dashed outline-[var(--accent)] -outline-offset-2' : ''}`}
       data-testid="files-view"
       onDragOver={(event) => {
         event.preventDefault();
@@ -294,51 +313,118 @@ export function FilesPage() {
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
-      <div className="border-b border-[var(--border)] md:hidden">
+      {/* The phone's copy of the nav. No rule under it: the sidebar's copy has
+          none either, and the line only ever showed up on this one screen. */}
+      <div className="md:hidden">
         <SidebarNav />
       </div>
-      {/* On a phone the buttons alone fill the line, so the search box was
-          being squeezed into a sliver. It wraps onto its own full-width line
-          below them instead; from `sm` up there is room to share one row. */}
-      <div className="flex flex-wrap items-center gap-2 p-3 pb-2">
-        <input
-          ref={picker}
-          type="file"
-          multiple
-          hidden
-          data-testid="files-upload-input"
-          onChange={(event) => {
-            void upload(event.target.files);
-            event.target.value = '';
-          }}
-        />
-        <Button type="button" data-testid="files-upload" onClick={() => picker.current?.click()}>
-          {t('files.upload')}
-        </Button>
-        <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
-          {openFolder === undefined ? t('files.newFolder') : t('files.newSubfolder')}
-        </Button>
-        {!searching && visibleFiles.length > 0 ? (
+
+      <div className="flex flex-col gap-2 p-3 pb-2">
+        {/* Where you are, and the way back: every ancestor is a link, the open
+            folder is the plain last word. Only inside a folder -- at the root
+            the nav above already says Files. */}
+        {openFolder !== undefined ? (
+          <nav
+            data-testid="files-breadcrumb"
+            aria-label={t('files.breadcrumb')}
+            className="flex flex-wrap items-center gap-1 text-sm"
+          >
+            <button
+              type="button"
+              data-testid="crumb-root"
+              onClick={() => navigate('/files')}
+              className="text-[var(--accent)] hover:underline"
+            >
+              {t('files.rootCrumb')}
+            </button>
+            {trail().map((folder, index, chain) => (
+              <span key={folder.id} className="flex min-w-0 items-center gap-1">
+                <span className="text-[var(--muted)]">/</span>
+                {index === chain.length - 1 ? (
+                  <span className="truncate font-semibold" data-testid="crumb-current">
+                    {folder.name}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="crumb-ancestor"
+                    onClick={() => navigate(`/files/${folder.id}`)}
+                    className="truncate text-[var(--accent)] hover:underline"
+                  >
+                    {folder.name}
+                  </button>
+                )}
+              </span>
+            ))}
+          </nav>
+        ) : null}
+
+        {/* On a phone the buttons alone fill the line, so the search box was
+            being squeezed into a sliver. It wraps onto its own full-width line
+            below them instead; from `sm` up there is room to share one row. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            data-testid="files-upload-input"
+            onChange={(event) => {
+              void upload(event.target.files);
+              event.target.value = '';
+            }}
+          />
+          {/* React has no prop for a directory picker, but the attribute is
+              what makes the browser offer one; where it is not supported the
+              input simply stays a file picker. */}
+          <input
+            ref={folderPicker}
+            type="file"
+            multiple
+            hidden
+            data-testid="files-upload-folder-input"
+            {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+            onChange={(event) => {
+              void uploadFolder(event.target.files);
+              event.target.value = '';
+            }}
+          />
+          <Button type="button" data-testid="files-upload" onClick={() => picker.current?.click()}>
+            {t('files.uploadFile')}
+          </Button>
           <Button
             type="button"
             variant="ghost"
-            data-testid="files-select"
-            onClick={() => {
-              setSelecting((value) => !value);
-              setSelected(new Set());
-            }}
+            data-testid="files-upload-folder"
+            onClick={() => folderPicker.current?.click()}
           >
-            {selecting ? t('common.cancel') : t('files.select')}
+            {t('files.uploadFolder')}
           </Button>
-        ) : null}
-        <input
-          data-testid="files-filter"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={t('shell.filterFiles')}
-          aria-label={t('shell.filterFiles')}
-          className="w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
-        />
+          <Button type="button" variant="ghost" data-testid="files-new-folder" onClick={() => void newFolder()}>
+            {t('files.newFolder')}
+          </Button>
+          {!searching && visibleFiles.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="files-select"
+              onClick={() => {
+                setSelecting((value) => !value);
+                setSelected(new Set());
+              }}
+            >
+              {selecting ? t('common.cancel') : t('files.select')}
+            </Button>
+          ) : null}
+          <input
+            data-testid="files-filter"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t('shell.filterFiles')}
+            aria-label={t('shell.filterFiles')}
+            className="w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
+          />
+        </div>
       </div>
 
       {uploading !== undefined ? (
@@ -381,7 +467,8 @@ export function FilesPage() {
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* pb-20 on a phone keeps the last row clear of the bottom bar below. */}
+      <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
         {searching ? (
           searchHits === undefined ? null : folderHits.length === 0 && fileHits.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
@@ -481,7 +568,7 @@ export function FilesPage() {
           <>
             {rootFolders.length > 0 ? (
               <ul data-testid="folder-list">
-                {rootFolders.map((folder) => renderFolder(folder, 0))}
+                {rootFolders.map((folder) => renderFolder(folder))}
               </ul>
             ) : null}
 
@@ -575,6 +662,13 @@ export function FilesPage() {
             )}
           </>
         )}
+      </div>
+
+      {/* On a phone Files IS the screen, not a pane beside the sidebar, so it
+          carries the sidebar's bottom bar too -- otherwise Popy, the health
+          dot and Settings disappear the moment you open Files. */}
+      <div className="md:hidden">
+        <ShellFooter />
       </div>
     </div>
   );
