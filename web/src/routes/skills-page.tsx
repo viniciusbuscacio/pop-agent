@@ -34,7 +34,9 @@ export function SkillsPage() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-      <div className="border-b border-[var(--border)] md:hidden">
+      {/* The phone's copy of the nav, with no rule under it -- the sidebar's
+          copy has none, so the line only ever showed on the pane screens. */}
+      <div className="md:hidden">
         <SidebarNav />
       </div>
       {slug === undefined ? (

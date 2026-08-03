@@ -12,12 +12,16 @@ export function SidebarNav() {
   // Every Agent destination is a route of its own inside the shell, so which
   // one is current is read off the path alone -- no query string, and nothing
   // that can be true on a screen where this nav is not even mounted.
-  const AGENT_PATHS: Record<string, AgentSection> = {
-    '/tasks': 'tasks',
-    '/skills': 'skills',
-    '/mcp': 'mcp',
-  };
-  const agentSection = AGENT_PATHS[location.pathname];
+  //
+  // An open item counts as its section: matching the bare path only meant that
+  // opening a skill (/skills/know-thyself) or a task (/tasks/new) dropped the
+  // highlight back onto Chat, which is not even where you were (Vinicius,
+  // 03/08).
+  const AGENT_SECTIONS: AgentSection[] = ['tasks', 'skills', 'mcp'];
+  const agentSection = AGENT_SECTIONS.find(
+    (section) =>
+      location.pathname === `/${section}` || location.pathname.startsWith(`/${section}/`),
+  );
   const mainSection: MainSection = location.pathname.startsWith('/files')
     ? 'files'
     : agentSection !== undefined

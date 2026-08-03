@@ -11,8 +11,9 @@ export function McpPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
       {/* On a phone this pane IS the screen, so it carries the navigation
-          itself — exactly what Files does. Without it there is no way back. */}
-      <div className="border-b border-[var(--border)] md:hidden">
+          itself — exactly what Files does. Without it there is no way back.
+          No rule under it: the sidebar's copy has none either. */}
+      <div className="md:hidden">
         <SidebarNav />
       </div>
       <div className="flex flex-1 items-center justify-center p-8">
