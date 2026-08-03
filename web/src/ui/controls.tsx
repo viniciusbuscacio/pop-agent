@@ -470,3 +470,35 @@ export function Segmented<T extends string>({
     </div>
   );
 }
+
+/**
+ * One row of a popup menu. Lives here rather than beside any one screen: the
+ * Files rows, the breadcrumb's overflow and anything else that opens a menu
+ * have to look identical, and a second hand-written copy is how they stop
+ * being identical.
+ */
+export function MenuItem({
+  label,
+  onClick,
+  testId,
+  danger = false,
+}: {
+  label: string;
+  onClick: () => void;
+  testId: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      data-testid={testId}
+      onClick={onClick}
+      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${
+        danger ? 'text-[var(--danger)]' : ''
+      }`}
+    >
+      {label}
+    </button>
+  );
+}

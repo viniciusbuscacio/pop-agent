@@ -9,7 +9,8 @@ import { relativeTime } from '../lib/time';
 import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
-import { Button, Select } from '../ui/controls';
+import { Button, MenuItem, Select } from '../ui/controls';
+import { Breadcrumb } from '../ui/breadcrumb';
 import { PullToRefresh } from '../ui/pull-to-refresh';
 import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
@@ -35,7 +36,6 @@ export function FilesPage() {
   const [filter, setFilter] = useState('');
   const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
-  const [crumbMenu, setCrumbMenu] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Folders are ticked in their own set rather than sharing the file one: the
@@ -49,7 +49,6 @@ export function FilesPage() {
   const folderPicker = useRef<HTMLInputElement>(null);
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
-  useDismiss(crumbMenu, () => setCrumbMenu(false));
 
   useEffect(() => {
     void reload();
@@ -343,10 +342,6 @@ export function FilesPage() {
   // way. The phone number is the smaller one because names truncate there
   // long before they do on a desktop.
   const CRUMB_LIMIT = useMediaQuery(MD_BREAKPOINT) ? 7 : 4;
-  const crumbs = trail();
-  const deep = crumbs.length > CRUMB_LIMIT;
-  const collapsed = deep ? crumbs.slice(0, crumbs.length - (CRUMB_LIMIT - 1)) : [];
-  const shownCrumbs = deep ? crumbs.slice(-(CRUMB_LIMIT - 1)) : crumbs;
 
   // A folder row of the open folder's list. No indent and no expander: this
   // pane shows one level, the same way it shows its files, and the sidebar is
@@ -448,76 +443,7 @@ export function FilesPage() {
       </div>
 
       <div className="flex flex-col gap-2 p-3 pb-2">
-        {/* Where you are, and the way back. The app's own text colour rather
-            than the link blue: this is a title that happens to be clickable,
-            so it is the heaviest thing on the screen after the navigation.
-            Always on screen, the root included -- a line that appears only
-            once you are deep makes the screen jump, and "Files" on its own is
-            the title of the root (Vinicius, 03/08). */}
-        <nav
-          data-testid="files-breadcrumb"
-          aria-label={t('files.breadcrumb')}
-          className="relative flex items-center gap-1.5 text-base font-semibold text-[var(--screen-fg)]"
-        >
-            {collapsed.length > 0 ? (
-              <button
-                type="button"
-                data-testid="crumb-more"
-                aria-label={t('files.crumbsAbove')}
-                aria-expanded={crumbMenu}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => setCrumbMenu((value) => !value)}
-                className="rounded px-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
-              >
-                …
-              </button>
-            ) : null}
-            {shownCrumbs.map((crumb, index) => (
-              <span key={crumb.id === '' ? 'root' : crumb.id} className="flex min-w-0 items-center gap-1.5">
-                {index > 0 || collapsed.length > 0 ? (
-                  <span className="shrink-0 text-[var(--muted)]">&gt;</span>
-                ) : null}
-                {index === shownCrumbs.length - 1 ? (
-                  <span className="truncate" data-testid="crumb-current">
-                    {crumb.name}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid="crumb-link"
-                    onClick={() => openCrumb(crumb.id)}
-                    className="truncate hover:underline"
-                  >
-                    {crumb.name}
-                  </button>
-                )}
-              </span>
-            ))}
-            {/* No ⋯ of its own here (Vinicius, 03/08). It held one entry,
-                "Select files", and a menu beside the title is a second place
-                to look for something the row's own ⋯ already offers -- so
-                selection starts from the file or folder you mean, and the
-                breadcrumb goes back to saying only where you are. */}
-            {crumbMenu ? (
-              <div
-                onPointerDown={(event) => event.stopPropagation()}
-                role="menu"
-                className="absolute top-8 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm font-normal shadow-lg"
-              >
-                {collapsed.map((crumb) => (
-                  <MenuItem
-                    key={crumb.id === '' ? 'root' : crumb.id}
-                    testId="crumb-menu-item"
-                    label={crumb.name}
-                    onClick={() => {
-                      setCrumbMenu(false);
-                      openCrumb(crumb.id);
-                    }}
-                  />
-                ))}
-              </div>
-            ) : null}
-        </nav>
+        <Breadcrumb crumbs={trail()} limit={CRUMB_LIMIT} onOpen={openCrumb} />
 
         {/* On a phone the buttons alone fill the line, so the search box was
             being squeezed into a sliver. It wraps onto its own full-width line
@@ -949,32 +875,6 @@ function toggled(current: Set<string>, id: string, addOnly = false): Set<string>
   if (next.has(id) && !addOnly) next.delete(id);
   else next.add(id);
   return next;
-}
-
-function MenuItem({
-  label,
-  onClick,
-  testId,
-  danger = false,
-}: {
-  label: string;
-  onClick: () => void;
-  testId: string;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      data-testid={testId}
-      onClick={onClick}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${
-        danger ? 'text-[var(--danger)]' : ''
-      }`}
-    >
-      {label}
-    </button>
-  );
 }
 
 function formatSize(bytes: number): string {

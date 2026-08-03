@@ -8,6 +8,7 @@ import { useFilesStore } from '../store/files';
 import { useNotificationsStore } from '../store/notifications';
 import { Button } from '../ui/controls';
 import { PullToRefresh } from '../ui/pull-to-refresh';
+import { Breadcrumb } from '../ui/breadcrumb';
 import { FolderIcon } from './files-page';
 import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
@@ -82,12 +83,20 @@ export function TrashPage() {
         <SidebarNav />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3 pb-2">
-        <span className="text-base font-semibold">{t('trash.title')}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 pb-2">
+        {/* The same breadcrumb Files uses, so the Trash reads as a place
+            inside it rather than a screen you were sent to -- and "Files" is
+            the way back, which is why the Back button that used to sit here
+            is gone (Vinicius, 03/08). */}
+        <Breadcrumb
+          crumbs={[
+            { id: '', name: t('files.rootCrumb') },
+            { id: 'trash', name: t('trash.title') },
+          ]}
+          limit={4}
+          onOpen={() => navigate('/files')}
+        />
         <span className="flex items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/files')}>
-            {t('trash.backToFiles')}
-          </Button>
           {entries !== undefined && entries.length > 0 ? (
             <Button
               type="button"
@@ -101,7 +110,7 @@ export function TrashPage() {
           ) : null}
         </span>
       </div>
-      <p className="px-4 pb-2 text-xs text-[var(--muted)]">{t('trash.intro')}</p>
+      <p className="px-3 pb-2 text-xs text-[var(--muted)]">{t('trash.intro')}</p>
 
       <PullToRefresh onRefresh={load} className="pb-20 md:pb-0" testId="trash-list">
         {entries === undefined ? null : entries.length === 0 ? (

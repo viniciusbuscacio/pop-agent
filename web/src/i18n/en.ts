@@ -378,7 +378,6 @@ export const en = {
   // "deleted" makes you guess whether it is safe to leave something in it.
   'trash.title': 'Trash',
   'trash.intro': 'Deleted files and folders stay here for 30 days, then go for good.',
-  'trash.backToFiles': 'Back to Files',
   'trash.empty': 'Empty trash',
   'trash.empty.none': 'The trash is empty.',
   'trash.restore': 'Restore',

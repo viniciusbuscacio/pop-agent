@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.52 — 2026-08-03.
+Version 1.53 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1179,6 +1179,16 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.53 (2026-08-03): **The Trash is a place inside Files, not a screen you
+  were sent to (§14).** It carries the same breadcrumb -- `Files > Trash`,
+  with `Files` as the way back, which is why the Back button it used to
+  have is gone (Vinicius, 03/08). The breadcrumb moved out of files-page
+  into `ui/Breadcrumb` (crumbs + limit + onOpen, owning its own collapse
+  menu) and `MenuItem` moved to `ui/controls`, its real home: two screens
+  had to look identical, and this codebase already has the lesson written
+  down about a look that gets hand-copied into a second place (FIELD_BASE).
+  The Trash entry in the Files toolbar is the drawn bin, no word -- among
+  four worded buttons "Trash" read like a fifth action rather than a place.
 - 1.52 (2026-08-03): **Files has a trash (§14, §6, §21).** Deleting a file
   or a folder is reversible for **30 days** -- the number Drive, Dropbox and
   iOS use, so nobody has to learn a new one. Migration 021: `deleted_at` on
