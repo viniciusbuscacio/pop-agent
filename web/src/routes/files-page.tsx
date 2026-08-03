@@ -254,12 +254,12 @@ export function FilesPage() {
   const allSelected =
     visibleFiles.length > 0 && visibleFiles.every((file) => selected.has(file.id));
 
-  // Five steps on a wide screen, three on a phone (Vinicius, 03/08): five of
-  // them at 390px squeezed every name down to "Fol…", which is the breadcrumb
-  // failing at its one job. Past the limit the ones in front collapse into a
-  // … that lists them in order, Files first, and the … takes the first slot --
-  // so the line never grows either way.
-  const CRUMB_LIMIT = useMediaQuery(MD_BREAKPOINT) ? 5 : 3;
+  // Seven steps on a wide screen, four on a phone (Vinicius, 03/08). Past the
+  // limit the ones in front collapse into a … that lists them in order, Files
+  // first, and the … takes the first slot -- so the line never grows either
+  // way. The phone number is the smaller one because names truncate there
+  // long before they do on a desktop.
+  const CRUMB_LIMIT = useMediaQuery(MD_BREAKPOINT) ? 7 : 4;
   const crumbs = trail();
   const deep = crumbs.length > CRUMB_LIMIT;
   const collapsed = deep ? crumbs.slice(0, crumbs.length - (CRUMB_LIMIT - 1)) : [];
