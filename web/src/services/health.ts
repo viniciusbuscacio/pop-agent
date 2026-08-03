@@ -83,7 +83,7 @@ class HealthMonitor {
   reportUnreachable = (): void => {
     // Nobody subscribed means nothing renders and no timer should be left
     // running -- the monitor is stopped, and a stray request does not start it.
-    if (this.listeners.size === 0) return;
+    if (this.listeners.size === 0 || this.mocked()) return;
     this.setState(deviceIsOffline() ? { kind: 'device-offline' } : { kind: 'offline' });
     this.schedule(this.nextDelay());
   };
@@ -95,11 +95,21 @@ class HealthMonitor {
    * sick is not something an unrelated 200 can vouch for.
    */
   reportReachable = (): void => {
-    if (this.listeners.size === 0) return;
+    if (this.listeners.size === 0 || this.mocked()) return;
     if (this.state.kind !== 'offline' && this.state.kind !== 'device-offline') return;
     this.setState({ kind: 'ok' });
     this.schedule(this.nextDelay());
   };
+
+  /**
+   * A faked verdict has to survive the real traffic around it. The login
+   * screen alone asks `/auth/state` and gets a 200, which would clear a
+   * mocked outage before anyone could photograph it -- the hatch exists
+   * precisely to look at the banner on a server that is perfectly fine.
+   */
+  private mocked(): boolean {
+    return mockParam() !== null;
+  }
 
   private setState(state: HealthState): void {
     if (JSON.stringify(state) === JSON.stringify(this.state)) return;

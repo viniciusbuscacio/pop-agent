@@ -26,6 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   setOnLine(true);
   setHidden(false);
+  history.replaceState(null, '', '/');
 });
 
 describe('healthMonitor', () => {
@@ -130,6 +131,21 @@ describe('healthMonitor', () => {
 
     monitor.reportReachable();
     expect(monitor.getState()).toEqual({ kind: 'ok' });
+    unsubscribe();
+  });
+
+  it('keeps a faked outage faked, whatever the real traffic says', async () => {
+    // The hatch exists to photograph the banner on a healthy server, so the
+    // login screen's own successful /auth/state must not wash it away.
+    history.replaceState(null, '', '/?health=mock-offline');
+    const monitor = await freshMonitor();
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('{}')));
+
+    const unsubscribe = monitor.subscribe(() => undefined);
+    await vi.waitFor(() => expect(monitor.getState()).toEqual({ kind: 'offline' }));
+
+    monitor.reportReachable();
+    expect(monitor.getState()).toEqual({ kind: 'offline' });
     unsubscribe();
   });
 });
