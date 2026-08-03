@@ -36,8 +36,13 @@ const BUTTON_SIZES = {
 export type ButtonSize = keyof typeof BUTTON_SIZES;
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+  // Not the accent: the blue belongs to the selected segment of a group, and
+  // nowhere else, so that colour always means "this is where you are" instead
+  // of also meaning "press this" (Vinicius, 03/08). A primary action is the
+  // raised surface -- panel over the screen background, in both themes -- and
+  // a ghost stays flat on it.
   primary:
-    'bg-[var(--accent)] text-[var(--accent-fg)] hover:enabled:bg-[var(--accent-hover)] border border-transparent',
+    'bg-[var(--panel-bg)] text-[var(--screen-fg)] border border-[var(--border)] hover:enabled:bg-[var(--panel-hover)]',
   ghost:
     'bg-transparent text-[var(--screen-fg)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
   danger:
