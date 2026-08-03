@@ -574,14 +574,20 @@ export function FilesPage() {
           <Button type="button" variant="ghost" size="sm" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
+          {/* Icon-only: the bin is the one control here everybody already
+              recognises without reading, and among four worded buttons the
+              word "Trash" read like a fifth action rather than a place to go.
+              The label stays for a screen reader and for the hover tooltip. */}
           <Button
             type="button"
             variant="ghost"
             size="sm"
             data-testid="files-trash"
+            aria-label={t('trash.title')}
+            title={t('trash.title')}
             onClick={() => navigate('/files/trash')}
           >
-            {t('trash.title')}
+            <TrashIcon />
           </Button>
           <input
             data-testid="files-filter"
@@ -906,6 +912,21 @@ export function FilesPage() {
 }
 
 /** Line-style folder, matching the app's stroked icons. */
+/** The bin, drawn -- never an emoji (permanent house veto). */
+export function TrashIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 7h16M10 4h4a1 1 0 0 1 1 1v2H9V5a1 1 0 0 1 1-1ZM6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M10 11v6M14 11v6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function FolderIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
