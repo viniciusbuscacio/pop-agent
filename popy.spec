@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.49 — 2026-08-03.
+Version 1.50 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1179,6 +1179,29 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.50 (2026-08-03): **Pull down to refresh, on the phone (§14, §15).** An
+  installed PWA has to build this itself: Safari's own pull-to-refresh
+  exists in a browser tab and NOT in standalone display mode, which is how
+  Popy runs on a phone, so the gesture every phone user knows was simply
+  missing. `lib/pull-to-refresh` + `ui/PullToRefresh` wrap a scroll area;
+  the chat list and Files use it. Chrome's model, not iOS's -- the list
+  stays put and a spinner slides over it, because translating the scroller
+  would fight the row menus that position against it. The gesture is
+  decided once and never taken back, the same rule the chat rows' swipe
+  follows: it must start at `scrollTop` 0, go downward, and be more down
+  than sideways, or it belongs to the scroll or to the row's own
+  delete/archive. Once it is ours, `preventDefault` on a non-passive
+  `touchmove` is also what stops iOS rubber-banding the whole app.
+  **A pull refreshes the data AND asks the server for a new build**, which
+  is the other thing a phone cannot find out on its own (§15: an installed
+  PWA only re-checks its worker on navigation). The two run under
+  `allSettled` -- a server that is down must not stop the cached list from
+  redrawing. New `services/update-signal` keeps that reachable without
+  spreading the poison: `services/pwa-update` imports
+  `virtual:pwa-register`, which resolves only inside a vite build, so
+  anything importing it becomes unimportable from a test (the reason
+  oauth-section was carved out of settings-page). `ui/update-prompt` stays
+  the single door and registers the real checker on mount.
 - 1.49 (2026-08-03): **Files acts on the row you point at (§14, §6).** The ⋯
   beside the breadcrumb is gone: it held one entry, "Select files", and a
   menu next to the title was a second place to look for something the row's

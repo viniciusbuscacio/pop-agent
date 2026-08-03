@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ChatDTO, FolderDTO, SkillDTO } from '@popy/shared';
 import { t } from '../i18n';
@@ -13,6 +13,7 @@ import { skillsService } from '../services/skills';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '../ui/controls';
+import { PullToRefresh } from '../ui/pull-to-refresh';
 
 /**
  * What the sidebar is showing. Every main destination is now an explorer: a
@@ -50,6 +51,12 @@ export function ChatList() {
   useEffect(() => {
     void loadChats();
     void loadArchived();
+  }, [loadChats, loadArchived]);
+
+  // Both lists, because the archived one is a click away and a stale count in
+  // that heading is the kind of thing a pull is meant to fix.
+  const refreshChats = useCallback(async (): Promise<void> => {
+    await Promise.all([loadChats(), loadArchived()]);
   }, [loadChats, loadArchived]);
 
   // A search belongs to one list; carrying "foo" from Chats into Skills would
@@ -199,7 +206,7 @@ export function ChatList() {
       ) : segment === 'mcp' ? (
         <McpSidebar />
       ) : (
-        <div className="flex-1 overflow-y-auto pb-20">
+        <PullToRefresh onRefresh={refreshChats} className="pb-20">
           {viewArchived && !searching ? (
             <p
               data-testid="archived-heading"
@@ -222,7 +229,7 @@ export function ChatList() {
               ))}
             </ul>
           )}
-        </div>
+        </PullToRefresh>
       )}
 
       <ShellFooter />

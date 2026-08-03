@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
-import { applyUpdate, setUpdateIntervalMs, startUpdateChecks } from '../services/pwa-update';
+import {
+  applyUpdate,
+  checkForUpdateNow,
+  setUpdateIntervalMs,
+  startUpdateChecks,
+} from '../services/pwa-update';
+import { setUpdateChecker } from '../services/update-signal';
 import { useUpdatesStore } from '../store/updates';
 
 /**
@@ -19,6 +25,10 @@ export function UpdatePrompt() {
 
   useEffect(() => {
     startUpdateChecks(() => setNeedsRefresh(true));
+    // This component is the app's only door to the virtual PWA module, so it
+    // is also where the rest of the app is handed a way to trigger a check --
+    // pull-to-refresh asks through services/update-signal.
+    setUpdateChecker(checkForUpdateNow);
   }, []);
 
   useEffect(() => {

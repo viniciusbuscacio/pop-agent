@@ -10,6 +10,7 @@ import { artifactsService, foldersService } from '../services/artifacts';
 import { useChatStore } from '../store/chat';
 import { useFilesStore } from '../store/files';
 import { Button, Select } from '../ui/controls';
+import { PullToRefresh } from '../ui/pull-to-refresh';
 import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
 
@@ -661,7 +662,7 @@ export function FilesPage() {
       ) : null}
 
       {/* pb-20 on a phone keeps the last row clear of the bottom bar below. */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+      <PullToRefresh onRefresh={reload} className="pb-20 md:pb-0">
         {searching ? (
           searchHits === undefined ? null : folderHits.length === 0 && fileHits.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
@@ -883,7 +884,7 @@ export function FilesPage() {
             )}
           </>
         )}
-      </div>
+      </PullToRefresh>
 
       {/* On a phone Files IS the screen, not a pane beside the sidebar, so it
           carries the sidebar's bottom bar too -- otherwise Popy, the health
