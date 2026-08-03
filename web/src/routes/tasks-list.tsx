@@ -13,7 +13,7 @@ import { Button } from '../ui/controls';
  * and creating or editing one is a route change to a full-screen form -- never
  * a drawer (§14).
  */
-export function TasksList() {
+export function TasksList({ filter = '' }: { filter?: string }) {
   const tasks = useTasksStore((state) => state.tasks);
   const reload = useTasksStore((state) => state.reload);
 
@@ -23,13 +23,17 @@ export function TasksList() {
 
   if (tasks === undefined) return null;
 
+  const query = filter.trim().toLowerCase();
+  const shown =
+    query.length === 0 ? tasks : tasks.filter((task) => task.title.toLowerCase().includes(query));
+
   return (
     <div className="flex-1 overflow-y-auto pb-20">
-      {tasks.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('tasks.none')}</p>
       ) : (
         <ul data-testid="task-list">
-          {tasks.map((task) => (
+          {shown.map((task) => (
             <TaskRow key={task.id} task={task} />
           ))}
         </ul>
@@ -110,7 +114,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
           <button
             type="button"
             data-testid="task-open"
-            onClick={() => navigate(`/tasks/${task.id}/edit`)}
+            onClick={() => navigate(`/tasks/${task.id}`)}
             className="block w-full truncate text-left text-sm font-medium"
           >
             {task.title}
@@ -153,7 +157,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
             label={t('tasks.edit')}
             onClick={() => {
               setMenuOpen(false);
-              navigate(`/tasks/${task.id}/edit`);
+              navigate(`/tasks/${task.id}`);
             }}
           />
           <MenuItem

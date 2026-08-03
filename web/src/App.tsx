@@ -18,6 +18,7 @@ import { TasksIntro } from './routes/tasks-list';
 import { McpPage } from './routes/mcp-page';
 import { SkillsPage } from './routes/skills-page';
 import { UpdatePrompt } from './ui/update-prompt';
+import { Toasts } from './ui/toasts';
 
 /**
  * Boot decides the screen (popy.spec §9): a server with no account goes to the
@@ -27,6 +28,7 @@ export function App() {
   return (
     <BrowserRouter>
       <UpdatePrompt />
+      <Toasts />
       <Boot />
     </BrowserRouter>
   );
@@ -86,23 +88,6 @@ function Boot() {
           </Protected>
         }
       />
-      {/* Creating or editing a task is a full screen, never a drawer (§14). */}
-      <Route
-        path="/tasks/new"
-        element={
-          <Protected status={status}>
-            <TaskFormPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/tasks/:taskId/edit"
-        element={
-          <Protected status={status}>
-            <TaskFormPage />
-          </Protected>
-        }
-      />
       <Route
         path="/settings/*"
         element={
@@ -124,12 +109,16 @@ function Boot() {
         <Route path="files" element={<FilesPage />} />
         <Route path="files/:folderId" element={<FilesPage />} />
         <Route path="tasks" element={<TasksIntro />} />
+        <Route path="tasks/new" element={<TaskFormPage />} />
+        <Route path="tasks/:taskId" element={<TaskFormPage />} />
         {/*
-          Skills and MCP are children of the shell, not siblings of it: they
-          are reached from the Agent row in the sidebar, and a destination
-          that unmounts the navigation you just used is not a group button.
+          Tasks, Skills and MCP are explorers like Chat and Files: the sidebar
+          carries the list, and these panes carry the selected item. Children
+          of the shell, so the navigation you just used stays mounted.
         */}
         <Route path="skills" element={<SkillsPage />} />
+        <Route path="skills/new" element={<SkillsPage />} />
+        <Route path="skills/:slug" element={<SkillsPage />} />
         <Route path="mcp" element={<McpPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

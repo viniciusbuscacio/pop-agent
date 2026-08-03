@@ -2,11 +2,10 @@ import { t } from '../i18n';
 import { SidebarNav } from './sidebar-nav';
 
 /**
- * Placeholder destination for MCP management until the server API exists.
- *
- * A pane of the shell, not a screen of its own: it is reached from the Agent
- * row in the sidebar, which has to still be there when you arrive. Hence no
- * back arrow either -- the sidebar is the way back.
+ * MCP as the right-hand pane of the shell (popy.spec §14), reached from the
+ * Agent row. The server API does not exist yet, so this is a placeholder --
+ * the sidebar carries the (empty) list and the search, matching Skills and the
+ * rest of the explorer; here is only where the detail will live.
  */
 export function McpPage() {
   return (
@@ -16,12 +15,9 @@ export function McpPage() {
       <div className="border-b border-[var(--border)] md:hidden">
         <SidebarNav />
       </div>
-      <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
-        <h1 className="text-lg font-semibold">{t('shell.navMcp')}</h1>
-      </header>
-      <main className="mx-auto w-full max-w-2xl p-6">
-        <p className="text-sm text-[var(--muted)]">{t('mcp.placeholder')}</p>
-      </main>
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="max-w-sm text-center text-sm text-[var(--muted)]">{t('mcp.placeholder')}</p>
+      </div>
     </div>
   );
 }

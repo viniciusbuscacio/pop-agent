@@ -96,7 +96,7 @@ export function TaskFormPage() {
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
       <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
         <button
           type="button"

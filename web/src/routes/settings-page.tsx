@@ -627,7 +627,7 @@ export function SkillsSection() {
   );
 }
 
-function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
+export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
   const [slug, setSlug] = useState(skill?.slug ?? '');
   const [name, setName] = useState(skill?.name ?? '');
   const [description, setDescription] = useState(skill?.description ?? '');

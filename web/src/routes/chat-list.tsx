@@ -1,22 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useMatch, useNavigate, useParams } from 'react-router-dom';
-import type { ChatDTO, FolderDTO } from '@popy/shared';
+import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import type { ChatDTO, FolderDTO, SkillDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
+import { useSkillsStore } from '../store/skills';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '../ui/controls';
 
 /**
- * What the sidebar is showing: conversations, the file tree, tasks, or -- for
- * the Agent destinations whose content lives entirely in the right-hand pane
- * -- nothing but the navigation itself.
+ * What the sidebar is showing. Every main destination is now an explorer: a
+ * list here, the selected item in the right-hand pane -- chats, files, tasks,
+ * skills, and MCP (a placeholder until its API exists).
  */
-type Segment = 'chats' | 'files' | 'tasks' | 'agent';
+type Segment = 'chats' | 'files' | 'tasks' | 'skills' | 'mcp';
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
@@ -27,18 +28,16 @@ export function ChatList() {
   const loadArchived = useChatStore((state) => state.loadArchived);
   const createChat = useChatStore((state) => state.createChat);
 
-  const filesRoot = useMatch('/files');
-  const filesFolder = useMatch('/files/:folderId');
-  const tasksRoot = useMatch('/tasks');
-  const skillsRoot = useMatch('/skills');
-  const mcpRoot = useMatch('/mcp');
-  const segment: Segment =
-    filesRoot !== null || filesFolder !== null
-      ? 'files'
-      : tasksRoot !== null
-        ? 'tasks'
-        : skillsRoot !== null || mcpRoot !== null
-          ? 'agent'
+  const location = useLocation();
+  const path = location.pathname;
+  const segment: Segment = path.startsWith('/files')
+    ? 'files'
+    : path.startsWith('/tasks')
+      ? 'tasks'
+      : path.startsWith('/skills')
+        ? 'skills'
+        : path.startsWith('/mcp')
+          ? 'mcp'
           : 'chats';
   const [filter, setFilter] = useState('');
   const [viewArchived, setViewArchived] = useState(false);
@@ -50,6 +49,12 @@ export function ChatList() {
     void loadChats();
     void loadArchived();
   }, [loadChats, loadArchived]);
+
+  // A search belongs to one list; carrying "foo" from Chats into Skills would
+  // hide everything for no reason.
+  useEffect(() => {
+    setFilter('');
+  }, [segment]);
 
   const searching = filter.trim().length > 0;
   const match = (chat: ChatDTO): boolean =>
@@ -80,9 +85,7 @@ export function ChatList() {
   return (
     <>
       <SidebarNav />
-      {/* Skills and MCP put everything in the right-hand pane, so the toolbar
-          strip would be an empty box under the navigation. */}
-      <div className={segment === 'agent' ? 'hidden' : 'flex flex-col gap-2 p-3'}>
+      <div className="flex flex-col gap-2 p-3">
         {/* The primary action and the list menu share one line: the ⋯ on a row
             of its own was a strip of empty sidebar above the button. */}
         <div className="relative flex items-center gap-2">
@@ -106,6 +109,17 @@ export function ChatList() {
               onClick={() => navigate('/tasks/new')}
             >
               {t('tasks.new')}
+            </Button>
+          ) : null}
+
+          {segment === 'skills' ? (
+            <Button
+              type="button"
+              data-testid="shell-new-skill"
+              className="flex-1"
+              onClick={() => navigate('/skills/new')}
+            >
+              {t('skills.new')}
             </Button>
           ) : null}
 
@@ -149,15 +163,39 @@ export function ChatList() {
           className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
         />
         ) : null}
+        {segment === 'tasks' || segment === 'skills' || segment === 'mcp' ? (
+          <input
+            data-testid="list-filter"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t(
+              segment === 'tasks'
+                ? 'shell.searchTasks'
+                : segment === 'skills'
+                  ? 'shell.searchSkills'
+                  : 'shell.searchMcp',
+            )}
+            aria-label={t(
+              segment === 'tasks'
+                ? 'shell.searchTasks'
+                : segment === 'skills'
+                  ? 'shell.searchSkills'
+                  : 'shell.searchMcp',
+            )}
+            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+          />
+        ) : null}
       </div>
 
       {/* pb-20 keeps the last row clear of the floating bottom bar (§14). */}
-      {segment === 'agent' ? (
-        <div className="flex-1" />
-      ) : segment === 'files' ? (
+      {segment === 'files' ? (
         <FolderTree />
       ) : segment === 'tasks' ? (
-        <TasksList />
+        <TasksList filter={filter} />
+      ) : segment === 'skills' ? (
+        <SkillsList filter={filter} />
+      ) : segment === 'mcp' ? (
+        <McpSidebar />
       ) : (
         <div className="flex-1 overflow-y-auto pb-20">
           {viewArchived && !searching ? (
@@ -206,8 +244,6 @@ function FolderTree() {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  const rootCount = (files ?? []).filter((file) => file.folderId === '').length;
 
   function childFolders(parentId: string): FolderDTO[] {
     return folders.filter((folder) => folder.parentId === parentId);
@@ -270,21 +306,74 @@ function FolderTree() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
-      <button
-        type="button"
-        data-testid="tree-root"
-        onClick={() => navigate('/files')}
-        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left ${
-          folderId === undefined ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
-        }`}
-      >
-        <FolderIcon />
-        <span className="truncate text-sm">{t('files.rootCrumb')}</span>
-        <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-          {t('files.count', { count: rootCount })}
-        </span>
-      </button>
       {childFolders('').map((folder) => renderRow(folder, 0))}
+    </div>
+  );
+}
+
+/**
+ * The skills list in the sidebar (popy.spec §8), the explorer twin of the
+ * folder tree: the shared store keeps it in step with the editor pane, and a
+ * row opens that skill on the right. Filtered by the sidebar search.
+ */
+function SkillsList({ filter }: { filter: string }) {
+  const navigate = useNavigate();
+  const { slug } = useParams();
+  const skills = useSkillsStore((state) => state.skills);
+  const reload = useSkillsStore((state) => state.reload);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  if (skills === undefined) return <div className="flex-1" />;
+
+  const query = filter.trim().toLowerCase();
+  const shown =
+    query.length === 0
+      ? skills
+      : skills.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(query));
+
+  return (
+    <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
+      {shown.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('skills.none')}</p>
+      ) : (
+        <ul>
+          {shown.map((skill: SkillDTO) => (
+            <li key={skill.slug}>
+              <button
+                type="button"
+                data-testid="skill-row"
+                onClick={() => navigate(`/skills/${skill.slug}`)}
+                className={`flex w-full flex-col gap-0.5 px-4 py-3 text-left ${
+                  slug === skill.slug ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{skill.name}</span>
+                  {skill.builtin ? (
+                    <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
+                      {t('skills.builtin')}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="truncate text-xs text-[var(--muted)]">{skill.description}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** MCP has no server API yet, so the list is a placeholder -- the shell is
+ * here (nav, search, the pane) so the detail slots in when it exists. */
+function McpSidebar() {
+  return (
+    <div className="flex-1 overflow-y-auto pb-20">
+      <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('mcp.none')}</p>
     </div>
   );
 }
@@ -486,7 +575,7 @@ function ChatRow({
           <span
             data-testid="chat-live"
             aria-hidden="true"
-            className="absolute top-1/2 right-3 h-2 w-2 -translate-y-1/2 rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
+            className="absolute right-3 bottom-3 h-2 w-2 rounded-full bg-[var(--accent)] motion-safe:animate-[health-pulse_2s_ease-in-out_infinite]"
           />
         ) : null}
       </NavLink>
@@ -502,7 +591,7 @@ function ChatRow({
         aria-label={t('shell.chatMenu')}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setMenuOpen((value) => !value)}
-        className="absolute top-2 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+        className="absolute top-1 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯
       </button>

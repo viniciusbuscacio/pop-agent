@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
 import { useThinkingStore } from '../store/thinking';
+import { useNotificationsStore } from '../store/notifications';
 import {
   ModelMenu,
   SlashMenu,
@@ -57,6 +58,7 @@ export function Composer({
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
+  const notify = useNotificationsStore((state) => state.notify);
   // @-mentions: files already in Files, attached by reference (no re-upload).
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
@@ -580,7 +582,15 @@ export function Composer({
           }}
         />
 
-        <ThinkingButton show={showThinking} onToggle={toggleThinking} />
+        <ThinkingButton
+          show={showThinking}
+          onToggle={() => {
+            // Announce the new state through the in-app notification channel;
+            // `showThinking` is still the pre-toggle value here.
+            toggleThinking();
+            notify(showThinking ? t('chat.thinkingHidden') : t('chat.thinkingShown'));
+          }}
+        />
 
         <IconButton
           testId="composer-attach"
