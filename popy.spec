@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.48 — 2026-08-03.
+Version 1.49 — 2026-08-03.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -454,6 +454,13 @@ LLM) over everything from outside — web, files, notes, tool output:
   becomes tainted for the rest of that turn. Under YOLO mode (the owner's
   call, 31/07) there is no confirmation card and the user is never asked;
   the brake is automatic instead. This is the ONLY brake on yolo mode.
+- **YOLO is about the AGENT, never about the person's thumb** (Vinicius,
+  03/08). It means a run does not stop mid-task to ask permission. It does
+  not mean the UI is free of dialogs: a destructive tap the *user* makes —
+  deleting a folder and everything under it, a batch delete — still asks
+  first, because a ⋯ menu on a phone puts Delete a few millimetres from
+  Rename and there is no undo behind it. A confirm must state the real
+  blast radius (the whole subtree's file count, not the direct children's).
 - **Implemented via pi's own `tool_call` / `tool_result` extension hooks**
   (an inline extension Popy registers; `noExtensions` still keeps the
   host's out). A run whose tool output sanitizes as suspicious/high
@@ -1172,6 +1179,29 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.49 (2026-08-03): **Files acts on the row you point at (§14, §6).** The ⋯
+  beside the breadcrumb is gone: it held one entry, "Select files", and a
+  menu next to the title was a second place to look for something the row's
+  own ⋯ could offer. Selection now starts from the item itself -- "Select
+  folder" first in a folder's menu, "Select file" second in a file's -- and
+  **folders are selectable too**, with their own checkbox and their own set,
+  so a batch can mix both. Move to… hides while a folder is ticked, because
+  a folder's parent is fixed at creation (§6) and moving one is not a thing
+  that exists. **"Open file"** is the new first entry of a file's menu: the
+  download route takes `?inline=1` and, for types
+  `domain/artifacts/inline-view` allows, serves `Content-Disposition:
+  inline` so the browser displays it -- PDF, image, plain text, audio,
+  video, with text-ish types (markdown, csv, json) relabelled `text/plain`
+  so they are read rather than saved. An **allowlist, never a denylist**:
+  `text/html` and `image/svg+xml` are excluded on purpose, because uploaded
+  markup rendered inline on Popy's own origin can read the session token;
+  anything unrecognised downloads, as before. `nosniff` and a `sandbox` CSP
+  ride along. A web page cannot hand a file to the operating system's
+  default application -- that door is closed to every website -- so "open in
+  the system viewer" means the browser's, and the share sheet from there.
+  The flag sits outside the HMAC on purpose: it authorises nothing the
+  signature did not already, and signing it would void every link already
+  handed out.
 - 1.48 (2026-08-03): **A server that is down says so (§14).** A 12px dot at
   the bottom of the sidebar was the only sign that the app could not reach
   its server, and in a PWA that is nearly invisible: every screen still

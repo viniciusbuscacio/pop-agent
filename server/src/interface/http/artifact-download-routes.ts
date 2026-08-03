@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { Hono, type Context } from 'hono';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import { inlineView } from '../../domain/artifacts/inline-view.js';
 import { apiError } from './errors.js';
 
 /**
@@ -8,6 +9,13 @@ import { apiError } from './errors.js';
  * `/v1`, so it carries no session — the HMAC signature in the URL is the whole
  * authorisation. A bad or forged signature, an expired link or an unknown id
  * are all refused; nothing about the filesystem is ever revealed.
+ *
+ * `?inline=1` asks to display rather than save (the Files screen's "Open
+ * file"). It is a request, not an instruction: only the types
+ * `domain/artifacts/inline-view` allows are shown, everything else still
+ * downloads. The flag deliberately sits outside the signature — it cannot
+ * reach anything the signature did not already authorise, and covering it
+ * would only invalidate every link already handed out.
  */
 export interface ArtifactDownloadRoutesDeps {
   artifacts: ArtifactService;
@@ -22,7 +30,7 @@ export function createArtifactDownloadRoutes(deps: ArtifactDownloadRoutesDeps): 
       c.req.query('expires'),
       c.req.query('sig'),
     );
-    return serve(c, resolution);
+    return serve(c, resolution, c.req.query('inline') === '1');
   });
 
   routes.get('/artifacts/:id/versions/:version/download', (c) => {
@@ -43,6 +51,7 @@ export function createArtifactDownloadRoutes(deps: ArtifactDownloadRoutesDeps): 
 function serve(
   c: Context,
   resolution: ReturnType<ArtifactService['resolveDownload']>,
+  wantsInline = false,
 ): Response {
   switch (resolution.status) {
     case 'expired':
@@ -54,11 +63,19 @@ function serve(
       return apiError(c, 403, 'forbidden', 'Invalid download link.');
     case 'ok': {
       const { artifact, path } = resolution;
+      const view = wantsInline ? inlineView(artifact.mime) : undefined;
+      const filename = sanitizeFilename(artifact.name);
       return new Response(nodeStreamToWeb(createReadStream(path)), {
         headers: {
-          'content-type': artifact.mime,
-          'content-disposition': `attachment; filename="${sanitizeFilename(artifact.name)}"`,
+          'content-type': view?.contentType ?? artifact.mime,
+          'content-disposition': `${view === undefined ? 'attachment' : 'inline'}; filename="${filename}"`,
           'cache-control': 'private, no-store',
+          // Belt and braces for the inline case: nosniff stops the browser
+          // from deciding these bytes are really HTML, and the sandbox denies
+          // scripts and same-origin access to whatever does get rendered.
+          // Harmless on a download, so they are not worth branching on.
+          'x-content-type-options': 'nosniff',
+          'content-security-policy': 'sandbox',
         },
       });
     }

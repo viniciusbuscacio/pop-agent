@@ -30,6 +30,16 @@ export const artifactsService = {
     return apiRequest<ArtifactLinkResponse>(`/artifacts/${id}/link`, { method: 'POST' });
   },
 
+  /**
+   * The same signed link, asking the server to display the file rather than
+   * save it. The server has the last word: a type it will not show inline
+   * (anything scriptable, anything it does not recognise) downloads as usual.
+   */
+  async viewUrl(id: string): Promise<string> {
+    const { url } = await artifactsService.link(id);
+    return `${url}&inline=1`;
+  },
+
   remove(id: string): Promise<void> {
     return apiRequest<void>(`/artifacts/${id}`, { method: 'DELETE' });
   },

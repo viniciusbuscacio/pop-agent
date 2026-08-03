@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ArtifactDTO, FilesSearchHitDTO, FolderDTO } from '@popy/shared';
 import { t } from '../i18n';
-import { saveFromLink } from '../lib/download';
+import { saveFromLink, viewFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
@@ -35,9 +35,13 @@ export function FilesPage() {
   const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [crumbMenu, setCrumbMenu] = useState(false);
-  const [folderMenu, setFolderMenu] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Folders are ticked in their own set rather than sharing the file one: the
+  // two obey different rules downstream (a folder cannot be moved, and
+  // deleting one takes its whole subtree), and an id alone would not say which
+  // kind it is.
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -45,7 +49,6 @@ export function FilesPage() {
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
   useDismiss(crumbMenu, () => setCrumbMenu(false));
-  useDismiss(folderMenu, () => setFolderMenu(false));
 
   useEffect(() => {
     void reload();
@@ -107,6 +110,26 @@ export function FilesPage() {
   }
   function fileCount(id: string): number {
     return (files ?? []).filter((file) => file.folderId === id).length;
+  }
+
+  /**
+   * Every file the server would delete along with this folder -- its own plus
+   * each descendant's. A confirm that counted only the direct children would
+   * understate the damage exactly where it matters most, and the seen-set is
+   * the same cycle guard the breadcrumb keeps.
+   */
+  function subtreeFileCount(id: string): number {
+    const seen = new Set<string>();
+    const queue = [id];
+    let total = 0;
+    while (queue.length > 0) {
+      const current = queue.pop() as string;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      total += fileCount(current);
+      for (const child of childFolders(current)) queue.push(child.id);
+    }
+    return total;
   }
 
   // The breadcrumb's steps, root first: Files, then every folder down to the
@@ -186,6 +209,17 @@ export function FilesPage() {
     saveFromLink(url);
   }
 
+  /**
+   * Opens the file in a new tab and lets the browser show it: a PDF, image,
+   * text or video lands in the system's own viewer, and on a phone the share
+   * sheet from there is what hands it to a real app. A web page cannot launch
+   * the OS default program itself, so anything the browser will not display
+   * (a .docx, a .zip) downloads instead and the OS takes over from there.
+   */
+  function openFile(id: string): void {
+    viewFromLink(artifactsService.viewUrl(id));
+  }
+
   async function renameFile(file: ArtifactDTO): Promise<void> {
     const name = window.prompt(t('files.renamePrompt'), file.name);
     if (name === null || name.trim().length === 0 || name === file.name) return;
@@ -215,32 +249,77 @@ export function FilesPage() {
     await reload();
   }
 
-  // YOLO mode (31/07): destructive actions just happen -- no dialogs anywhere.
-  // Deleting a folder takes its whole subtree (server side).
+  /**
+   * Deleting a folder takes its whole subtree (server side), so this one asks
+   * first. YOLO (31/07) is about the AGENT not stopping to ask permission in
+   * the middle of a task; it was never about the person's own thumb. A ⋯ menu
+   * on a phone puts Delete folder a few millimetres from Rename, and there is
+   * no undo behind it (Vinicius, 03/08).
+   */
   async function deleteFolder(folder: FolderDTO): Promise<void> {
+    const confirmed = window.confirm(
+      t('files.deleteFolderConfirm', { name: folder.name, count: subtreeFileCount(folder.id) }),
+    );
+    if (!confirmed) return;
     await foldersService.remove(folder.id);
     await reload();
     if (folder.id === openFolder?.id) navigate('/files');
   }
 
   function toggleSelected(id: string): void {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelected((current) => toggled(current, id));
   }
 
-  async function deleteSelected(): Promise<void> {
-    for (const id of selected) await artifactsService.remove(id);
+  function toggleFolderSelected(id: string): void {
+    setSelectedFolders((current) => toggled(current, id));
+  }
+
+  /**
+   * Selection now starts from the item you are pointing at, not from a mode
+   * switch above the list: ticking this one and turning the mode on are the
+   * same gesture. Already selecting, it adds to what is there rather than
+   * throwing it away -- the menu is still reachable mid-selection, and losing
+   * the previous ticks would be the surprise.
+   */
+  function startSelection(fileId?: string, folderId?: string): void {
+    setSelecting(true);
+    if (fileId !== undefined) setSelected((current) => toggled(current, fileId, true));
+    if (folderId !== undefined) setSelectedFolders((current) => toggled(current, folderId, true));
+  }
+
+  function clearSelection(): void {
     setSelecting(false);
-    await reload();
+    setSelected(new Set());
+    setSelectedFolders(new Set());
   }
 
+  // Files first, then folders: a folder takes its whole subtree with it, and
+  // deleting a file whose folder is already gone would be a 404 either way.
+  async function deleteSelected(): Promise<void> {
+    // Batch delete is the easiest one to fire by accident -- the button sits
+    // where Move to… was a moment ago -- and with a folder ticked it reaches
+    // far past the rows on screen.
+    const message =
+      selectedFolders.size === 0
+        ? t('files.deleteSelectedConfirm', { count: selected.size })
+        : t('files.deleteSelectedMixedConfirm', {
+            files: selected.size,
+            folders: selectedFolders.size,
+          });
+    if (!window.confirm(message)) return;
+    for (const id of selected) await artifactsService.remove(id);
+    for (const id of selectedFolders) await foldersService.remove(id);
+    const closedTheOpenOne = openFolder !== undefined && selectedFolders.has(openFolder.id);
+    clearSelection();
+    await reload();
+    if (closedTheOpenOne) navigate('/files');
+  }
+
+  // Files only: a folder's parent is fixed at creation (popy.spec §6), which
+  // is what keeps the tree acyclic, so Move to… is hidden while one is ticked.
   async function moveSelected(target: string): Promise<void> {
     for (const id of selected) await artifactsService.move(id, target);
-    setSelecting(false);
+    clearSelection();
     await reload();
   }
 
@@ -251,8 +330,11 @@ export function FilesPage() {
   const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
   const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
 
+  const selectedCount = selected.size + selectedFolders.size;
   const allSelected =
-    visibleFiles.length > 0 && visibleFiles.every((file) => selected.has(file.id));
+    visibleFiles.length + rootFolders.length > 0 &&
+    visibleFiles.every((file) => selected.has(file.id)) &&
+    rootFolders.every((folder) => selectedFolders.has(folder.id));
 
   // Seven steps on a wide screen, four on a phone (Vinicius, 03/08). Past the
   // limit the ones in front collapse into a … that lists them in order, Files
@@ -272,6 +354,17 @@ export function FilesPage() {
     return (
       <li key={folder.id} className="relative">
         <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
+          {selecting ? (
+            // Same as a file row: the folder's name is the only label the
+            // checkbox can carry.
+            <input
+              type="checkbox"
+              data-testid="folder-check"
+              aria-label={folder.name}
+              checked={selectedFolders.has(folder.id)}
+              onChange={() => toggleFolderSelected(folder.id)}
+            />
+          ) : null}
           <button
             type="button"
             data-testid="folder-row"
@@ -301,6 +394,14 @@ export function FilesPage() {
             role="menu"
             className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
           >
+            <MenuItem
+              testId="folder-select"
+              label={t('files.selectFolder')}
+              onClick={() => {
+                setMenuFor(undefined);
+                startSelection(undefined, folder.id);
+              }}
+            />
             <MenuItem
               testId="folder-rename"
               label={t('files.renameFolder')}
@@ -391,38 +492,11 @@ export function FilesPage() {
                 )}
               </span>
             ))}
-            {!searching && visibleFiles.length > 0 ? (
-              <span className="relative">
-                <button
-                  type="button"
-                  data-testid="files-folder-menu"
-                  aria-label={t('files.folderMenu')}
-                  aria-expanded={folderMenu}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => setFolderMenu((value) => !value)}
-                  className="rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
-                >
-                  ⋯
-                </button>
-                {folderMenu ? (
-                  <div
-                    onPointerDown={(event) => event.stopPropagation()}
-                    role="menu"
-                    className="absolute top-8 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm font-normal shadow-lg"
-                  >
-                    <MenuItem
-                      testId="files-select"
-                      label={t('files.select')}
-                      onClick={() => {
-                        setFolderMenu(false);
-                        setSelecting(true);
-                        setSelected(new Set());
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </span>
-            ) : null}
+            {/* No ⋯ of its own here (Vinicius, 03/08). It held one entry,
+                "Select files", and a menu beside the title is a second place
+                to look for something the row's own ⋯ already offers -- so
+                selection starts from the file or folder you mean, and the
+                breadcrumb goes back to saying only where you are. */}
             {crumbMenu ? (
               <div
                 onPointerDown={(event) => event.stopPropagation()}
@@ -527,9 +601,12 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-select-all"
-            onClick={() =>
-              setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.id)))
-            }
+            onClick={() => {
+              setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.id)));
+              setSelectedFolders(
+                allSelected ? new Set() : new Set(rootFolders.map((folder) => folder.id)),
+              );
+            }}
           >
             {allSelected ? t('files.clearSelection') : t('files.selectAll')}
           </Button>
@@ -538,18 +615,19 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-select-cancel"
-            onClick={() => {
-              setSelecting(false);
-              setSelected(new Set());
-            }}
+            onClick={clearSelection}
           >
             {t('common.cancel')}
           </Button>
           <span className="text-xs text-[var(--muted)]">
-            {t('files.selected', { count: selected.size })}
+            {t('files.selected', { count: selectedCount })}
           </span>
-          {selected.size === 0 ? null : (
+          {selectedCount === 0 ? null : (
           <>
+          {/* A folder's parent never changes (popy.spec §6), so Move to…
+              steps aside while one is ticked rather than offering something
+              it would have to refuse half of. */}
+          {selectedFolders.size > 0 ? null : (
           <Select
             id="files-move-to"
             size="sm"
@@ -573,6 +651,7 @@ export function FilesPage() {
                 </option>
               ))}
           </Select>
+          )}
           <Button type="button" variant="danger" size="sm" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
             {t('shell.delete')}
           </Button>
@@ -646,6 +725,18 @@ export function FilesPage() {
                         role="menu"
                         className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
                       >
+                        <MenuItem
+                          testId="file-open"
+                          label={t('files.openFile')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            openFile(hit.file.id);
+                          }}
+                        />
+                        {/* No "Select file" here: selection is a property of
+                            a folder's listing, and the batch bar is hidden
+                            while a search is on screen. An entry that did
+                            nothing would be worse than its absence. */}
                         <MenuItem
                           testId="file-download"
                           label={t('files.download')}
@@ -744,6 +835,22 @@ export function FilesPage() {
                         className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
                       >
                         <MenuItem
+                          testId="file-open"
+                          label={t('files.openFile')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            openFile(file.id);
+                          }}
+                        />
+                        <MenuItem
+                          testId="file-select"
+                          label={t('files.selectFile')}
+                          onClick={() => {
+                            setMenuFor(undefined);
+                            startSelection(file.id);
+                          }}
+                        />
+                        <MenuItem
                           testId="file-download"
                           label={t('files.download')}
                           onClick={() => {
@@ -800,6 +907,17 @@ export function FolderIcon() {
       />
     </svg>
   );
+}
+
+/**
+ * A new set with `id` flipped, or forced in when `addOnly`. Files and folders
+ * keep separate sets and both tick the same way, so the rule lives here once.
+ */
+function toggled(current: Set<string>, id: string, addOnly = false): Set<string> {
+  const next = new Set(current);
+  if (next.has(id) && !addOnly) next.delete(id);
+  else next.add(id);
+  return next;
 }
 
 function MenuItem({

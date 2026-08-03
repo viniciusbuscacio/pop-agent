@@ -341,13 +341,18 @@ export const en = {
   'files.emptyFolder': 'This folder is empty.',
   'files.rootCrumb': 'Files',
   'files.count': '{count} file(s)',
-  'files.select': 'Select files',
   'files.selectAll': 'Select all items',
   'files.clearSelection': 'Clear selection',
-  'files.folderMenu': 'What you can do in this folder',
   'files.selected': '{count} selected',
   'files.moveTo': 'Move to…',
+  // Selection starts from the item's own menu now, so the words name what
+  // gets ticked rather than announcing a mode.
+  'files.selectFile': 'Select file',
+  'files.selectFolder': 'Select folder',
+  'files.openFile': 'Open file',
   'files.deleteSelectedConfirm': 'Delete the {count} selected file(s)? This cannot be undone.',
+  'files.deleteSelectedMixedConfirm':
+    'Delete {files} file(s) and {folders} folder(s), with everything inside them? This cannot be undone.',
   'files.uploading': 'Uploading {done} of {total}…',
   'files.emptyCta': 'Drag files here or tap Upload.',
   'files.renameFolder': 'Rename folder',
@@ -366,8 +371,10 @@ export const en = {
   'files.newFolderPrompt': 'Folder name:',
   'files.renamePrompt': 'New name:',
   'files.deleteConfirm': 'Delete "{name}"? Its download links stop working.',
+  // "Everything inside it" rather than a list: the count is the whole subtree,
+  // subfolders included, because that is what the server actually deletes.
   'files.deleteFolderConfirm':
-    'Delete the folder "{name}" AND the {count} file(s) inside it? This cannot be undone.',
+    'Delete "{name}" and everything inside it — {count} file(s)? This cannot be undone.',
   'settings.section.updates': 'Updates',
   'voice.cleanup': 'Improve transcripts with AI',
   'voice.cleanupNote':
