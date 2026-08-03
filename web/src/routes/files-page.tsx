@@ -34,6 +34,7 @@ export function FilesPage() {
   const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [crumbMenu, setCrumbMenu] = useState(false);
+  const [folderMenu, setFolderMenu] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
@@ -43,6 +44,7 @@ export function FilesPage() {
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
   useDismiss(crumbMenu, () => setCrumbMenu(false));
+  useDismiss(folderMenu, () => setFolderMenu(false));
 
   useEffect(() => {
     void reload();
@@ -251,6 +253,9 @@ export function FilesPage() {
   // Three steps at most on the line, so a deep folder does not push the
   // breadcrumb onto a second row: the ones in front collapse into a … that
   // lists them in order, Files first (Vinicius, 03/08).
+  const allSelected =
+    visibleFiles.length > 0 && visibleFiles.every((file) => selected.has(file.id));
+
   const crumbs = trail();
   const collapsed = crumbs.length > 3 ? crumbs.slice(0, crumbs.length - 2) : [];
   const shownCrumbs = crumbs.length > 3 ? crumbs.slice(-2) : crumbs;
@@ -381,6 +386,38 @@ export function FilesPage() {
                 )}
               </span>
             ))}
+            {!searching && visibleFiles.length > 0 ? (
+              <span className="relative">
+                <button
+                  type="button"
+                  data-testid="files-folder-menu"
+                  aria-label={t('files.folderMenu')}
+                  aria-expanded={folderMenu}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setFolderMenu((value) => !value)}
+                  className="rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
+                >
+                  ⋯
+                </button>
+                {folderMenu ? (
+                  <div
+                    onPointerDown={(event) => event.stopPropagation()}
+                    role="menu"
+                    className="absolute top-8 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm font-normal shadow-lg"
+                  >
+                    <MenuItem
+                      testId="files-select"
+                      label={t('files.select')}
+                      onClick={() => {
+                        setFolderMenu(false);
+                        setSelecting(true);
+                        setSelected(new Set());
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </span>
+            ) : null}
             {crumbMenu ? (
               <div
                 onPointerDown={(event) => event.stopPropagation()}
@@ -447,20 +484,6 @@ export function FilesPage() {
           <Button type="button" variant="ghost" size="sm" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
-          {!searching && visibleFiles.length > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              data-testid="files-select"
-              onClick={() => {
-                setSelecting((value) => !value);
-                setSelected(new Set());
-              }}
-            >
-              {selecting ? t('common.cancel') : t('files.select')}
-            </Button>
-          ) : null}
           <input
             data-testid="files-filter"
             value={filter}
@@ -478,11 +501,40 @@ export function FilesPage() {
         </p>
       ) : null}
 
-      {!searching && selecting && selected.size > 0 ? (
-        <div className="flex items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
+      {/* While selecting, the bar is always there: Select all is the point of
+          turning selection on for a whole folder, and Cancel is the way out
+          now that the toolbar button is gone (Vinicius, 03/08). Move and
+          Delete only join once something is actually ticked. */}
+      {!searching && selecting ? (
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-select-all"
+            onClick={() =>
+              setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.id)))
+            }
+          >
+            {allSelected ? t('files.clearSelection') : t('files.selectAll')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-select-cancel"
+            onClick={() => {
+              setSelecting(false);
+              setSelected(new Set());
+            }}
+          >
+            {t('common.cancel')}
+          </Button>
           <span className="text-xs text-[var(--muted)]">
             {t('files.selected', { count: selected.size })}
           </span>
+          {selected.size === 0 ? null : (
+          <>
           <Select
             id="files-move-to"
             size="sm"
@@ -506,9 +558,11 @@ export function FilesPage() {
                 </option>
               ))}
           </Select>
-          <Button type="button" variant="danger" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
+          <Button type="button" variant="danger" size="sm" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
             {t('shell.delete')}
           </Button>
+          </>
+          )}
         </div>
       ) : null}
 
