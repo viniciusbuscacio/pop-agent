@@ -33,6 +33,7 @@ export function FilesPage() {
   const [filter, setFilter] = useState('');
   const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [crumbMenu, setCrumbMenu] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
@@ -41,6 +42,7 @@ export function FilesPage() {
   const folderPicker = useRef<HTMLInputElement>(null);
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
+  useDismiss(crumbMenu, () => setCrumbMenu(false));
 
   useEffect(() => {
     void reload();
@@ -104,10 +106,10 @@ export function FilesPage() {
     return (files ?? []).filter((file) => file.folderId === id).length;
   }
 
-  // The chain root → … → open folder, for the breadcrumb. The length guard is
-  // for a parent link that somehow points at an ancestor: a cycle must not
-  // hang the render.
-  function trail(): FolderDTO[] {
+  // The breadcrumb's steps, root first: Files, then every folder down to the
+  // one that is open. The length guard is for a parent link that somehow
+  // points at an ancestor -- a cycle must not hang the render.
+  function trail(): { id: string; name: string }[] {
     const chain: FolderDTO[] = [];
     let current = openFolder;
     while (current !== undefined && chain.length < 64) {
@@ -115,7 +117,14 @@ export function FilesPage() {
       const parentId = current.parentId;
       current = parentId === '' ? undefined : folders.find((entry) => entry.id === parentId);
     }
-    return chain;
+    return [
+      { id: '', name: t('files.rootCrumb') },
+      ...chain.map((folder) => ({ id: folder.id, name: folder.name })),
+    ];
+  }
+
+  function openCrumb(id: string): void {
+    navigate(id === '' ? '/files' : `/files/${id}`);
   }
 
   async function upload(list: FileList | File[] | null): Promise<void> {
@@ -239,6 +248,13 @@ export function FilesPage() {
   const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
   const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
 
+  // Three steps at most on the line, so a deep folder does not push the
+  // breadcrumb onto a second row: the ones in front collapse into a … that
+  // lists them in order, Files first (Vinicius, 03/08).
+  const crumbs = trail();
+  const collapsed = crumbs.length > 3 ? crumbs.slice(0, crumbs.length - 2) : [];
+  const shownCrumbs = crumbs.length > 3 ? crumbs.slice(-2) : crumbs;
+
   // A folder row of the open folder's list. No indent and no expander: this
   // pane shows one level, the same way it shows its files, and the sidebar is
   // where a folder opens in place (Vinicius, 03/08).
@@ -320,42 +336,70 @@ export function FilesPage() {
       </div>
 
       <div className="flex flex-col gap-2 p-3 pb-2">
-        {/* Where you are, and the way back: every ancestor is a link, the open
-            folder is the plain last word. Only inside a folder -- at the root
-            the nav above already says Files. */}
+        {/* Where you are, and the way back. The app's own text colour rather
+            than the link blue: this is a title that happens to be clickable,
+            so it is the heaviest thing on the screen after the navigation.
+            Only inside a folder -- at the root the nav above already says
+            Files. */}
         {openFolder !== undefined ? (
           <nav
             data-testid="files-breadcrumb"
             aria-label={t('files.breadcrumb')}
-            className="flex flex-wrap items-center gap-1 text-sm"
+            className="relative flex items-center gap-1.5 text-base font-semibold text-[var(--screen-fg)]"
           >
-            <button
-              type="button"
-              data-testid="crumb-root"
-              onClick={() => navigate('/files')}
-              className="text-[var(--accent)] hover:underline"
-            >
-              {t('files.rootCrumb')}
-            </button>
-            {trail().map((folder, index, chain) => (
-              <span key={folder.id} className="flex min-w-0 items-center gap-1">
-                <span className="text-[var(--muted)]">/</span>
-                {index === chain.length - 1 ? (
-                  <span className="truncate font-semibold" data-testid="crumb-current">
-                    {folder.name}
+            {collapsed.length > 0 ? (
+              <button
+                type="button"
+                data-testid="crumb-more"
+                aria-label={t('files.crumbsAbove')}
+                aria-expanded={crumbMenu}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => setCrumbMenu((value) => !value)}
+                className="rounded px-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
+              >
+                …
+              </button>
+            ) : null}
+            {shownCrumbs.map((crumb, index) => (
+              <span key={crumb.id === '' ? 'root' : crumb.id} className="flex min-w-0 items-center gap-1.5">
+                {index > 0 || collapsed.length > 0 ? (
+                  <span className="shrink-0 text-[var(--muted)]">&gt;</span>
+                ) : null}
+                {index === shownCrumbs.length - 1 ? (
+                  <span className="truncate" data-testid="crumb-current">
+                    {crumb.name}
                   </span>
                 ) : (
                   <button
                     type="button"
-                    data-testid="crumb-ancestor"
-                    onClick={() => navigate(`/files/${folder.id}`)}
-                    className="truncate text-[var(--accent)] hover:underline"
+                    data-testid="crumb-link"
+                    onClick={() => openCrumb(crumb.id)}
+                    className="truncate hover:underline"
                   >
-                    {folder.name}
+                    {crumb.name}
                   </button>
                 )}
               </span>
             ))}
+            {crumbMenu ? (
+              <div
+                onPointerDown={(event) => event.stopPropagation()}
+                role="menu"
+                className="absolute top-8 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm font-normal shadow-lg"
+              >
+                {collapsed.map((crumb) => (
+                  <MenuItem
+                    key={crumb.id === '' ? 'root' : crumb.id}
+                    testId="crumb-menu-item"
+                    label={crumb.name}
+                    onClick={() => {
+                      setCrumbMenu(false);
+                      openCrumb(crumb.id);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
           </nav>
         ) : null}
 

@@ -40,17 +40,21 @@ export function ShellHeader({
  * health indicator and Settings, always visible while the list scrolls
  * behind it (the list's own padding keeps the last row clear).
  *
- * The bottom padding is a max(), not a sum: adding the iPhone's home-indicator
- * inset to the normal 0.75rem floated the row ~46px off the edge, which read
- * as "too high" on a phone (Vinicius, 03/08). max() leaves every screen
- * without an inset exactly as it was and still clears the indicator.
+ * The bottom padding measures the phone rather than guessing at it:
+ * env(safe-area-inset-bottom) is what the browser reports for THIS device --
+ * 34px where a home indicator has to stay clear, 0 on a home-button iPhone,
+ * an Android, or a desktop. Adding our own 0.75rem on top of that number
+ * floated the row ~46px off the edge, which read as too high; taking 0.5rem
+ * back off it drops the bar ~8px further while still leaving the indicator
+ * its room. The max() is the floor for every screen that reports no inset --
+ * they keep the plain 0.75rem and never move (Vinicius, 03/08).
  */
 export function ShellFooter() {
   const navigate = useNavigate();
   return (
     <footer
       data-testid="shell-footer"
-      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-3 md:pb-3"
+      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 pt-3 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)-0.5rem))] md:px-3 md:pb-3"
     >
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">

@@ -344,6 +344,7 @@ export const en = {
   'files.newSubfolderPrompt': 'Subfolder name:',
   'files.noResults': 'Nothing matches “{query}”.',
   'files.breadcrumb': 'Where you are',
+  'files.crumbsAbove': 'Folders above this one',
 
   'files.uploadFile': 'Upload file',
   'files.uploadFolder': 'Upload folder',
