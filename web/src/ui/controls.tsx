@@ -14,8 +14,11 @@ import type {
 
 type ButtonVariant = 'primary' | 'ghost' | 'danger';
 
+// Not semibold: the app has exactly one heavy line, the Chat/Files/Agent
+// navigation, and a New chat button in the same weight right under it read as
+// a second title rather than an action (Vinicius, 03/08).
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-default';
+  'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
