@@ -44,7 +44,6 @@ type Section =
   | 'general'
   | 'model'
   | 'memory'
-  | 'skills'
   | 'usage'
   | 'backup'
   | 'appearance'
@@ -57,7 +56,6 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'memory', labelKey: 'settings.section.memory' },
-  { id: 'skills', labelKey: 'settings.section.skills' },
   { id: 'usage', labelKey: 'settings.section.usage' },
   { id: 'backup', labelKey: 'settings.section.backup' },
   { id: 'appearance', labelKey: 'settings.section.appearance' },
@@ -123,7 +121,6 @@ export function SettingsPage() {
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
-          {section === 'skills' ? <SkillsSection /> : null}
           {section === 'usage' ? <UsageSection /> : null}
           {section === 'backup' ? <BackupSection /> : null}
           {section === 'appearance' ? <AppearanceSection /> : null}

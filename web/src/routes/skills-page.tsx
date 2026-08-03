@@ -5,10 +5,8 @@ import { SidebarNav } from './sidebar-nav';
 /**
  * Skills as a pane of the shell, reached from the Agent row in the sidebar.
  *
- * The body is the very same {@link SkillsSection} that Settings renders, not a
- * copy of it: two entry points to one screen is fine, two implementations of
- * it is how they drift. Settings keeps its Skills tab -- somebody who went
- * looking for it there should still find it.
+ * The body is the shared {@link SkillsSection} implementation, so the feature
+ * has one editor and one source of truth.
  */
 export function SkillsPage() {
   return (

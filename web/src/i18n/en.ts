@@ -153,7 +153,6 @@ export const en = {
 
   'settings.section.model': 'Model',
   'settings.section.memory': 'Memory',
-  'settings.section.skills': 'Skills',
   'settings.section.usage': 'Usage',
   'settings.section.backup': 'Backup',
   'settings.section.appearance': 'Appearance',
