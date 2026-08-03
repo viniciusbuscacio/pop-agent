@@ -297,67 +297,6 @@ export function FilesPage() {
       <div className="border-b border-[var(--border)] md:hidden">
         <SidebarNav />
       </div>
-      <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
-        <div className="flex min-w-0 flex-1 items-center gap-1" data-testid="files-breadcrumb">
-          <button
-            type="button"
-            data-testid="crumb-root"
-            onClick={() => navigate('/files')}
-            className={`text-sm ${openFolder === undefined ? 'font-semibold text-[var(--screen-fg)]' : 'text-[var(--accent)] hover:underline'}`}
-          >
-            {t('files.rootCrumb')}
-          </button>
-          {openFolder !== undefined ? (
-            <>
-              <span className="text-sm text-[var(--muted)]">/</span>
-              <span className="truncate text-sm font-semibold" data-testid="crumb-folder">
-                {openFolder.name}
-              </span>
-              <div className="relative">
-                <button
-                  type="button"
-                  data-testid="folder-menu"
-                  aria-label={t('shell.chatMenu')}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => setMenuFor((v) => (v === openFolder.id ? undefined : openFolder.id))}
-                  className="rounded px-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-                >
-                  ⋯
-                </button>
-                {menuFor === openFolder.id ? (
-                  <div
-                    onPointerDown={(event) => event.stopPropagation()}
-                    role="menu"
-                    className="absolute top-7 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                  >
-                    <MenuItem
-                      testId="folder-rename"
-                      label={t('files.renameFolder')}
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void renameFolder(openFolder);
-                      }}
-                    />
-                    <MenuItem
-                      testId="folder-delete"
-                      label={t('files.deleteFolder')}
-                      danger
-                      onClick={() => {
-                        setMenuFor(undefined);
-                        void deleteFolder(openFolder);
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </div>
-        <span className="shrink-0 text-xs text-[var(--muted)]" data-testid="files-count">
-          {t('files.count', { count: visibleFiles.length })}
-        </span>
-      </header>
-
       {/* On a phone the buttons alone fill the line, so the search box was
           being squeezed into a sliver. It wraps onto its own full-width line
           below them instead; from `sm` up there is room to share one row. */}
