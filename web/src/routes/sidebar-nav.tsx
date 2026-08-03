@@ -44,6 +44,7 @@ export function SidebarNav() {
         ariaLabel={t('shell.navigation')}
         value={mainSection}
         onChange={selectMain}
+        bold
         options={[
           { value: 'chat', label: t('shell.navChat'), testId: 'sidebar-chat' },
           { value: 'files', label: t('shell.navFiles'), testId: 'sidebar-files' },

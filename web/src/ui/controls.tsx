@@ -406,12 +406,16 @@ export function Segmented<T extends string>({
   value,
   onChange,
   ariaLabel,
+  bold = false,
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;
+  /** Heavier labels, for the one control that names the whole app's screens. */
+  bold?: boolean;
 }) {
+  const weight = bold ? ' font-semibold' : '';
   return (
     <div
       role="group"
@@ -427,8 +431,8 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           className={
             option.value === value
-              ? 'shrink-0 bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]'
-              : 'shrink-0 px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
+              ? `shrink-0 bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]${weight}`
+              : `shrink-0 px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]${weight}`
           }
         >
           {option.label}
