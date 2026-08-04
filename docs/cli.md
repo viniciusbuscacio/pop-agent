@@ -5,8 +5,9 @@ spec stays normative (§17 needs the split described in "Naming" below);
 this document explains what the CLI is, what it is *not*, and the one
 genuinely new mechanism it introduces: **remote brain, local hands**.
 
-Decisions here came from a design conversation on 2026-08-02. Where the
-maintainer chose between options, that is marked *(decided)*.
+Decisions here came from design conversations on 2026-08-02 and
+2026-08-04. Where the maintainer chose between options, that is marked
+*(decided)*.
 
 ## What it is
 
@@ -57,7 +58,10 @@ client holds one secret: a session token.
 | Does `cwd` matter? | **No.** No trust prompt, no project concept. The whole machine is the ground; the launch directory is only where `bash` starts *(decided)* |
 | `popy` run on the server itself? | Same rule, no special case: hands are "the machine that typed", which there happens to be the server *(decided)* |
 | Confirmations | **Yolo**: never ask *(decided)* |
-| Taint guard | **Stays on.** The threat it answers is injection (a web page telling her to read `~/.ssh/id_rsa`), not the maintainer *(decided)* |
+| Taint guard | **Stays on, and learns which machine it is guarding.** The threat it answers is injection (a web page telling her to read `~/.ssh/id_rsa`), not the maintainer *(decided)* — see Guarding two machines |
+| Hands channel | **WebSocket** *(decided)* — see Why a WebSocket |
+| Dead hands | **Heartbeat**, 15 s ping, gone after three unanswered *(decided)* — see Losing the hands |
+| Ownership mid-run | **Never changes mid-run.** Open a chat that is already answering and you watch; the hands are yours from the next message *(decided)* |
 | Tool behaviour | **Reuse pi's own operations**, not a re-implementation *(decided)* |
 | Long commands | No timeout while the hands channel is alive and heart-beating; the run dies when the channel dies *(decided)* |
 | Live output | Printed **locally, as it happens**; the server receives the final result. No reverse streaming in v1 *(decided)* |
@@ -172,6 +176,74 @@ the read channel for everyone.
 A tool request is the same shape with a larger payload and a longer wait.
 This is a second instance of a tested pattern, not new ground.
 
+## Guarding two machines
+
+The taint guard (spec §10) refuses a small set of commands in a turn that
+read something suspicious from outside. Its list of protected files was
+written for the server:
+
+```
+secret.key · pi-auth.json · .env · id_rsa · id_ed25519 · authorized_keys · .ssh/
+```
+
+On the server that list is exactly right. Pointed at a laptop it is a lock
+on the right door of the wrong house. `secret.key` and `pi-auth.json` do
+not exist there; meanwhile everything a work machine actually keeps --
+`~/.aws/credentials`, `~/.config/gh/hosts.yml`, `.npmrc`,
+`.git-credentials`, `~/.kube/config`, the macOS keychain -- is absent from
+the list. A laptop's secret surface is far larger than a server
+workspace's, and none of it was considered.
+
+**The rule does not change; the list travels with the machine.** *(decided
+2026-08-04)* The guard is told where a command is bound for and applies
+that target's list:
+
+- **server** — what it protects today, unchanged.
+- **hands** — SSH keys, plus the credential files a developer machine
+  carries. Popy's own server files are dropped: they are not there.
+
+The destructive shapes (`rm -rf`, `sudo`, `dd`, pipe-to-shell, fork bomb)
+stay refused on both. The attacker in this threat model is a page the
+agent read, not the person at the keyboard, and that page is no more
+welcome to run `sudo` on the laptop than on the server. None of this is
+felt in ordinary use: the guard only exists inside a tainted turn.
+
+## Losing the hands
+
+"No timeout while the channel is alive" is the right rule and the easy
+half. The hard half is noticing when it stops being alive, because a
+closed laptop lid does not close a TCP connection -- it leaves one
+standing, dead, for minutes. And a parked run holds the queue slot, so
+one sleeping laptop stalls the chat for the phone too.
+
+**Two clocks, and keeping them apart is the whole design** *(decided
+2026-08-04)*:
+
+- **The heartbeat** measures the machine. A ping every **15 s**; three
+  unanswered (**45 s**) and the server declares the hands gone: the
+  pending call fails, the run aborts and is persisted as interrupted --
+  the same treatment a run already gets when the server restarts
+  mid-flight -- and the queue slot is freed.
+- **The command** is not measured at all. A twenty-minute `npm install`
+  is ordinary, and the laptop answers pings happily while it runs.
+
+The limit is not "this is taking too long". It is "this machine stopped
+answering", which is a different question and the only one worth asking.
+
+## Why a WebSocket
+
+*(decided 2026-08-04)* Ping/pong is a WebSocket frame, with a deadline the
+server sets -- which is precisely the mechanism the section above needs.
+Long-poll + POST would mean building that heartbeat by hand on top.
+
+The `confirm` precedent argues for long-poll and it is a fair argument,
+but `confirm` waits seconds for a human; this waits hours for a machine
+that may quietly disappear. The failure mode is the deciding factor, not
+the happy path.
+
+SSE is untouched: it stays the read channel for the PWA and for every
+spectator. The WebSocket exists only for hands, and only the CLI opens it.
+
 ## Protocol sketch
 
 **Attach.** The CLI connects, presents its session token, and describes
@@ -191,9 +263,11 @@ server's disk. The agent cannot tell the difference.
 output live in the terminal, and posts the final result back. No timeout
 while the channel heart-beats.
 
-**Detach.** When the channel closes, any pending tool call fails, the run
-aborts and is persisted as interrupted — the same treatment a run gets
-when the server restarts mid-flight. Reopening the chat in the PWA is
+**Detach.** When the channel closes — or stops answering pings for 45 s,
+which is the same thing arriving late — any pending tool call fails, the
+run aborts and is persisted as interrupted, and the queue slot is freed.
+That is the same treatment a run gets when the server restarts
+mid-flight. Reopening the chat in the PWA is
 fine; the system tools are simply **absent from the prompt**, and she can
 say she no longer has access to that machine.
 
@@ -250,8 +324,10 @@ with `fake-bridge`.
    token renewal)
 2. Event stream + reducer + `popy "…"` one-shot (proves SSE, dedupe by
    `seq`; no TUI yet)
-3. Hands channel: identity, ownership, remote operations server-side,
-   pi's local operations client-side
+3. Hands channel: the WebSocket, identity, ownership (never mid-run), the
+   heartbeat, remote operations server-side, pi's local operations
+   client-side, and the guard's second list — the laptop is unprotected
+   until that list exists, so it lands with the channel, not after it
 4. TUI on top of what already works
 5. `popyman`, and the §17 rewrite
 
@@ -262,13 +338,13 @@ compromised, the laptop follows. This is accepted: it is the maintainer's
 own server, on his own tailnet, and the client-side blast radius is
 already the same as the ssh session he would have opened anyway. The
 taint guard stays enabled precisely because the realistic attacker is not
-the maintainer but a web page the agent read.
+the maintainer but a web page the agent read — which is also why it needs
+a list for the laptop before the laptop is reachable at all (see Guarding
+two machines).
 
 ## Open
 
 - Packaging for a machine without npm (a Mac under corporate policy) —
   deliberately out of scope until it blocks something.
-- Whether the hands channel is a WebSocket or long-poll + POST; the
-  `confirm` precedent works either way, WebSocket is cleaner.
 - Whether the `StreamEvent` reducer moves to `@popy/shared` (preferred)
   or is written once more for the terminal.
