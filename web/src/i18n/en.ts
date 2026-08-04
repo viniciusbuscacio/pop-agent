@@ -204,7 +204,8 @@ export const en = {
   'storage.hint.workspace': 'Where the agent reads and writes while it works.',
   'storage.hint.other': 'Notes, skills and the agent\'s own sessions.',
   'storage.hint.backups': 'Full copies of everything above. Ten are kept.',
-  'usage.intro': 'What your conversations have cost, from the provider\'s own numbers.',
+  'usage.intro':
+    "What your conversations have cost. A provider you pay by the key is billed per token; a subscription is not, so those runs count tokens and cost nothing.",
   'usage.totalCost': 'Total spent',
   'usage.runs': 'Runs',
   'usage.tokens': 'Tokens (in / out)',

@@ -126,6 +126,23 @@ export function providerDefinition(id: string): ProviderDefinition | undefined {
   return PROVIDER_DEFINITIONS.find((definition) => definition.id === id);
 }
 
+/**
+ * Whether a provider charges for the tokens a run spends (popy.spec §14, §15).
+ *
+ * A subscription does not. pi reports a `cost` for every run regardless --
+ * tokens times the model's catalogue price -- which is the real bill for an
+ * api-key provider and pure fiction for an OAuth one. Booking that fiction
+ * made Settings -> Usage overstate real spending by ~US$4.90 across 151 runs
+ * before anyone noticed, and a screen about money must never round upward
+ * (Vinicius, 03/08).
+ *
+ * A provider nobody recognises is assumed to bill: a custom OpenAI-compatible
+ * endpoint is somebody's paid key, and guessing "free" would hide a real cost.
+ */
+export function billsPerToken(providerId: string): boolean {
+  return providerDefinition(providerId)?.authType !== 'oauth';
+}
+
 /** Where a provider's key lives in the sealed secrets store. */
 export function keySecretName(providerId: string): string {
   return `provider.${providerId}.apiKey`;

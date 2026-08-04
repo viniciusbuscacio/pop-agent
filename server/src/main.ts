@@ -12,6 +12,7 @@ import { systemClock } from './application/ports/clock.js';
 import { OAuthFlowService } from './application/providers/oauth-flow-service.js';
 import { ProviderCooldown } from './application/providers/provider-cooldown.js';
 import { ProviderService } from './application/providers/provider-service.js';
+import { billsPerToken } from './application/providers/provider-definitions.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { TaskService } from './application/tasks/task-service.js';
@@ -284,10 +285,18 @@ function piBridge(): PiAgentBridge {
     // Until Phase 3 step 4 gives them a table, both land in the log -- which is
     // still the difference between "it failed" and knowing why.
     onUsage: (usage) => {
+      // What was actually billed, not what pi's catalogue says it would have
+      // cost: a subscription charges nothing per token, and a log line reading
+      // "usd=0.002207" for a free run is the same lie the Usage screen told.
+      // The estimate is still worth printing -- it is what avulso would have
+      // been -- but only where it cannot be mistaken for a charge.
+      const billed = billsPerToken(usage.provider);
       console.log(
         `popy run usage: chat=${usage.chatId} model=${usage.model} ` +
           `in=${String(usage.inputTokens)} out=${String(usage.outputTokens)} ` +
-          `usd=${usage.cost.toFixed(6)}`,
+          (billed
+            ? `usd=${usage.cost.toFixed(6)}`
+            : `usd=0 (subscription; catalogue ${usage.cost.toFixed(6)})`),
       );
     },
     onFailure: (failure) => {

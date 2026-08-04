@@ -6,6 +6,7 @@ import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
+import { billsPerToken } from '../providers/provider-definitions.js';
 import { shouldFailOver, type RunFailure } from './failover.js';
 
 /**
@@ -631,7 +632,10 @@ export class RunService {
         model: usage.model,
         tokensIn: usage.inputTokens,
         tokensOut: usage.outputTokens,
-        cost: usage.cost,
+        // A subscription bills nothing per token, whatever the catalogue says.
+        // The token counts stay: they are true either way, and they are what
+        // makes a subscription's usage comparable to a paid one's.
+        cost: billsPerToken(usage.provider) ? usage.cost : 0,
         createdAt: new Date(clock.now()).toISOString(),
       });
     }
