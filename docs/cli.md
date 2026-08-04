@@ -16,10 +16,10 @@ terminal is an ordinary Popy chat: it appears in the PWA, it enters
 memory, it costs from the same budget, it passes the same taint guard, it
 gets the same title treatment. Nothing about it is a side channel.
 
-The difference is where the agent's hands are. While a terminal is
-attached she has **two pairs**: the system tools she always had, running
-on the server, and a second set running **on the machine that typed
-`popy`**. Popy's own tools (memory, notes, skills, artifacts,
+The difference is where the agent's hands are. Answering a message that
+came from a terminal she has **two pairs**: the system tools she always
+had, running on the server, and a second set running **on the machine
+that typed it**. Popy's own tools (memory, notes, skills, artifacts,
 `web_fetch`) keep running on the server, as always.
 
 *(Revised 04/08. This first said the system tools MOVE to the terminal's
@@ -36,8 +36,9 @@ same truncation. The server's set keeps the plain names (`bash`, `read`,
 `write`, `edit`) because it is always there: a phone session has only
 that one, and a tool must not change meaning depending on whether a
 terminal happens to be open. The terminal's set is prefixed
-(`local_bash`, `local_read`, …) and exists only while one owns the hands.
-The system prompt says which machine each is, by hostname and OS.
+(`local_bash`, `local_read`, …) and exists only in runs started from a
+terminal. The system prompt says which machine each is, by hostname and
+OS.
 
 ```
    MacBook / ThinkPad / the server itself          ubuntu-home (or any Popy)
@@ -78,7 +79,7 @@ client holds one secret: a session token.
 | Taint guard | **Stays on, and learns which machine it is guarding.** The threat it answers is injection (a web page telling her to read `~/.ssh/id_rsa`), not the maintainer *(decided)* — see Guarding two machines |
 | Hands channel | **WebSocket** *(decided)* — see Why a WebSocket |
 | Dead hands | **Heartbeat**, 15 s ping, gone after three unanswered *(decided)* — see Losing the hands |
-| Ownership mid-run | **Never changes mid-run.** Open a chat that is already answering and you watch; the hands are yours from the next message *(decided)* |
+| Whose hands are they? | **The sender's.** A message carries the hands of the machine that typed it, for the whole run it starts. There is no owner, no takeover, no spectator *(decided 04/08)* — see Whose hands |
 | Tool behaviour | **Reuse pi's own operations**, not a re-implementation *(decided)* |
 | Long commands | No timeout while the hands channel is alive and heart-beating; the run dies when the channel dies *(decided)* |
 | Live output | Printed **locally, as it happens**; the server receives the final result. No reverse streaming in v1 *(decided)* |
@@ -328,13 +329,11 @@ everything"). That is right for `delta` and `title`. It is wrong for
 "run `rm -rf build/` on your machine", which has **one** addressee: if the
 phone has the PWA open, it would receive the request too.
 
-Two properties are therefore required and do not exist today:
-
-1. **Connection identity** — the client announces itself on connect.
-2. **Hand ownership** — a chat records *which* connection is its hands.
-   Only that connection receives tool requests. A second terminal on the
-   same chat is a spectator unless it explicitly takes over; someone must
-   own the hands, or two machines run `npm install` at once.
+One property is therefore required and does not exist today:
+**connection identity** — the client announces itself on connect, and a
+tool request is addressed to one connection instead of broadcast. Which
+connection that is comes from the message (see Whose hands), so the
+channel only has to be able to address it.
 
 Rather than teach the SSE hub identity and risk the PWA's path, the CLI
 opens a **second, bidirectional channel** dedicated to hands. SSE stays
@@ -351,6 +350,44 @@ the read channel for everyone.
 
 A tool request is the same shape with a larger payload and a longer wait.
 This is a second instance of a tested pattern, not new ground.
+
+## Whose hands
+
+**The sender's** *(decided 04/08)*. A message carries the hands of the
+machine that typed it, for the whole run it starts. Sent from the
+MacBook, the run gets the MacBook's `local_*` tools; sent from the phone,
+the run has the server's tools and nothing else; sent from the ThinkPad,
+the ThinkPad's. Nothing is attached to the *chat*.
+
+*(Replaces an earlier design where the chat had a hands **owner** — the
+first client to open it — so that a message from the phone would run
+`local_bash` on whichever laptop had opened the chat. Two things killed
+it. The laptop may simply be off, and a message must never depend on a
+machine the sender is not looking at. And it needed a takeover protocol,
+a spectator rule, and a story for two terminals racing — machinery for a
+question that stops existing when hands follow the message.)*
+
+The rule earns its keep by deleting problems rather than answering them:
+
+- **Two terminals on one chat.** MacBook and ThinkPad, same conversation.
+  Each message runs on the machine it was typed on. No conflict to
+  resolve, because there was never one pair to fight over.
+- **The phone.** It has no local hands, so it never has to be told it
+  cannot have them; it gets the server's tools, which is what a phone
+  session always had.
+- **Reading the history back.** The machine is recorded on the message,
+  not on the chat, so a `local_bash` from last Tuesday is unambiguous
+  even though the terminal that ran it is long gone. This is what makes
+  a chat used on two machines legible instead of a guess.
+- **Mid-run changes.** There are none to consider. The hands are fixed
+  when the message is accepted; attaching or detaching a terminal
+  afterwards does not reach into a run already in flight.
+
+The cost is that the agent cannot reach a machine that is not the one
+talking to her. Asked from the phone to fix something on the laptop, she
+can only say the laptop is not here. That is the honest answer — the
+laptop may be in a bag — and the alternative was a message silently
+depending on hardware the sender cannot see.
 
 ## Guarding two machines
 
@@ -427,16 +464,26 @@ its machine: hostname, platform, architecture, cwd, client version. The
 server checks that version against its minimum and refuses the attach
 below it, answering with its own version and the install command so the
 client can print something actionable rather than a protocol error (see
-Version compatibility). Otherwise it records the connection and — for
-chats this client creates or opens — marks it as the hands owner. The
-machine description is injected into the system prompt so she never
-suggests `apt install` on a Mac.
+Version compatibility). Otherwise it records the connection, and that
+record is what a message can later point at. Nothing is claimed at attach
+time: connecting a terminal does not change any chat.
 
-**Tool registration.** When a run belongs to a chat with hands attached,
-the server builds pi's coding tools with **remote operations**: the same
+**Send.** A message posted by the CLI names its own connection. The
+server stores that on the message and the run inherits it; a message from
+the PWA names nothing and gets a server-only run. This is the whole of
+"whose hands" — one field on the message, decided when it is accepted and
+never revisited.
+
+**Tool registration.** When a run's message named a connection, the
+server builds pi's coding tools with **remote operations**: the same
 `ToolDefinition`s, the same schemas and limits, but the `*Operations`
-implementations forward to the owning connection instead of touching the
-server's disk. The agent cannot tell the difference.
+implementations forward to that connection instead of touching the
+server's disk. The agent cannot tell the difference. That connection's
+machine description — hostname, platform, architecture, cwd — goes into
+the system prompt for this run, so she never suggests `apt install` on a
+Mac. When the message named no connection, only the server's set is
+registered: the `local_*` tools are absent from the prompt entirely, and
+the machine description with them.
 
 **Execution.** Server emits a tool request; the CLI runs it through pi's
 **local** operations (`createLocalBashOperations` and friends), prints
@@ -447,9 +494,8 @@ while the channel heart-beats.
 which is the same thing arriving late — any pending tool call fails, the
 run aborts and is persisted as interrupted, and the queue slot is freed.
 That is the same treatment a run gets when the server restarts
-mid-flight. Reopening the chat in the PWA is
-fine; the system tools are simply **absent from the prompt**, and she can
-say she no longer has access to that machine.
+mid-flight. Nothing else in the chat is affected: the next message brings
+whatever hands *it* was typed with, or none if it came from the phone.
 
 **Consequence, stated plainly:** with two sets she can move things
 between the machines herself — read on the server, write on the laptop —
@@ -509,7 +555,7 @@ with `fake-bridge`.
 2. Event stream + reducer + `popy "…"` one-shot (proves SSE, dedupe by
    `seq`; no TUI yet)
 3. Hands channel — **done 04/08**. The WebSocket, the attach with the
-   machine's own description, ownership, the heartbeat, remote operations
+   machine's own description, the heartbeat, remote operations
    server-side, and the guard's second list, which landed WITH the channel
    and not after it. pi's tool definitions are registered a second time
    with remote operations (`local_bash`, `local_read`, `local_write`,
