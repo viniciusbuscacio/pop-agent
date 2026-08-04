@@ -5,6 +5,7 @@ import {
   ProcessTerminal,
   Text,
   TUI,
+  type Component,
   type Terminal,
 } from '@earendil-works/pi-tui';
 import type { ChatSession } from '../../application/session.js';
@@ -106,12 +107,28 @@ export class ChatScreen {
 
   /** A finished block of text, appended and never touched again. */
   say(text: string): void {
-    this.tui.addChild(new Text(text));
-    this.tui.requestRender();
+    this.append(new Text(text));
   }
 
   private markdown(text: string): void {
-    this.tui.addChild(new Markdown(text, 0, 0, markdownTheme));
+    this.append(new Markdown(text, 0, 0, markdownTheme));
+  }
+
+  /**
+   * Adds to the transcript and puts the editor back underneath it.
+   *
+   * The TUI only appends -- there is no insert -- so a child added after the
+   * editor renders BELOW it. Left alone, that is a screen where you type at
+   * the top and your words appear at the bottom, which is exactly what it did
+   * (Vinicius, 04/08). The editor is lifted and set down again on every
+   * append, and focus is reasserted because removing the focused component
+   * drops it.
+   */
+  private append(component: Component): void {
+    this.tui.removeChild(this.editor);
+    this.tui.addChild(component);
+    this.tui.addChild(this.editor);
+    this.tui.setFocus(this.editor);
     this.tui.requestRender();
   }
 
@@ -136,10 +153,10 @@ export class ChatScreen {
 
     if (this.streaming === undefined) {
       this.streaming = new Text(shown);
-      this.tui.addChild(this.streaming);
-    } else {
-      this.streaming.setText(shown);
+      this.append(this.streaming);
+      return;
     }
+    this.streaming.setText(shown);
     this.tui.requestRender();
   }
 

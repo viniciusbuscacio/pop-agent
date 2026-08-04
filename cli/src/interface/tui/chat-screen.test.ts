@@ -101,6 +101,22 @@ describe('ChatScreen', () => {
     expect(plain().split('Forty-two.').length - 1).toBe(1);
   });
 
+  it('keeps the editor below the transcript, never above it', async () => {
+    // The TUI only appends, so a line added after the editor renders BELOW
+    // it: you would type at the top and watch your words appear at the
+    // bottom. The editor draws horizontal rules around itself, so where the
+    // first rule falls relative to the text is where the editor is.
+    const { terminal, plain } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    screen.say('a line of transcript');
+    await flush();
+
+    const frame = plain();
+    expect(frame.indexOf('a line of transcript')).toBeGreaterThan(-1);
+    expect(frame.indexOf('a line of transcript')).toBeLessThan(frame.lastIndexOf('─'));
+  });
+
   it('says why a run failed instead of showing an empty answer', async () => {
     const { terminal, plain } = recorder();
     const { screen } = screenWith(terminal);
