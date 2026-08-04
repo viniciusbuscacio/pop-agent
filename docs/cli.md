@@ -172,8 +172,11 @@ does. Attach already carries the client version (see Protocol sketch);
 the server has to read it.
 
 **The server holds two numbers** *(decided 04/08)*: its own version, and
-the oldest client it still accepts. The second is set by hand and moves
-rarely — only when the wire changes in a way an older client cannot
+the oldest client it still accepts. Both live on the server and only
+there — no endpoint for the client to consult beforehand, no copy of the
+rule shipped in the client where it could disagree. The client learns the
+answer by attaching and being told. The second number is set by hand and
+moves rarely — only when the wire changes in a way an older client cannot
 survive. Most releases do not touch it.
 
 | Client vs. minimum | What happens |
@@ -379,6 +382,13 @@ The rule earns its keep by deleting problems rather than answering them:
   not on the chat, so a `local_bash` from last Tuesday is unambiguous
   even though the terminal that ran it is long gone. This is what makes
   a chat used on two machines legible instead of a guess.
+- **A chat with both kinds of message in it.** Nothing hides or replays
+  differently: commands run on the MacBook are shown as what they were,
+  read later from the phone with no MacBook in sight. Neither the reader
+  nor the model needs protecting from that *(decided 04/08)*.
+- **Two `popy` on one machine**, different chats, commands at the same
+  time. Fine, and not a case worth designing for: same machine, separate
+  runs *(decided 04/08)*.
 - **Mid-run changes.** There are none to consider. The hands are fixed
   when the message is accepted; attaching or detaching a terminal
   afterwards does not reach into a run already in flight.
@@ -489,6 +499,18 @@ the machine description with them.
 **local** operations (`createLocalBashOperations` and friends), prints
 output live in the terminal, and posts the final result back. No timeout
 while the channel heart-beats.
+
+**Big and unreadable files** *(decided 04/08)*. Two answers, both plain:
+
+- **Over 100 MB**, the client says so and asks before sending. Waiting is
+  allowed — it is the maintainer's own network and his own patience.
+- **Not text**, the server says it cannot read it. A photo or a zip is
+  not a failure to handle, just a file it has nothing to say about.
+
+Nothing streams in chunks and nothing gets clever. The size cap and the
+truncation stay on the server with the rest of the rules; the 100 MB
+warning is on the client because that is the end that knows before the
+bytes move.
 
 **Detach.** When the channel closes — or stops answering pings for 45 s,
 which is the same thing arriving late — any pending tool call fails, the
