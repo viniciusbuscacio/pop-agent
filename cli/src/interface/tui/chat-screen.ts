@@ -1,4 +1,5 @@
 import {
+  CombinedAutocompleteProvider,
   Editor,
   Markdown,
   matchesKey,
@@ -7,6 +8,7 @@ import {
   Text,
   TUI,
   type Component,
+  type SlashCommand,
   type Terminal,
 } from '@earendil-works/pi-tui';
 import type { ChatSession } from '../../application/session.js';
@@ -30,11 +32,26 @@ import { editorTheme, markdownTheme, paint } from './theme.js';
  * long conversation from redrawing itself on every token.
  */
 
-const HELP = `  /new      start a fresh conversation
-  /stop     interrupt the answer in flight
-  /think    show or hide the reasoning
-  /help     this
-  /quit     leave (or Ctrl+C)`;
+/**
+ * The commands, in one list.
+ *
+ * They feed two things that used to be written twice and would have drifted:
+ * the `/help` text, and the autocomplete menu the editor pops when you type a
+ * slash. That menu is pi-tui's, and not registering a provider is why typing
+ * `/` showed nothing at all -- the commands worked, they were just
+ * undiscoverable (Vinicius, 04/08).
+ */
+const COMMANDS: SlashCommand[] = [
+  { name: 'new', description: 'Start a fresh conversation' },
+  { name: 'stop', description: 'Interrupt the answer in flight' },
+  { name: 'think', description: 'Show or hide the reasoning' },
+  { name: 'help', description: 'List these commands' },
+  { name: 'quit', description: 'Leave (or Ctrl+C)' },
+];
+
+const HELP = COMMANDS.map(
+  (command) => `  /${command.name.padEnd(8)}${command.description ?? ''}`,
+).join('\n');
 
 export interface ScreenOptions {
   session: ChatSession;
@@ -68,6 +85,11 @@ export class ChatScreen {
     this.title = options.title ?? 'New conversation';
     this.header = new Text('', 0, 0);
     this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
+    // Typing `/` now opens the menu, with Tab completing. The base path is the
+    // launch directory, which is what pi-tui completes files against -- worth
+    // knowing that until the hands channel lands (step 3) those files are on
+    // THIS machine and the agent's tools still run on the server.
+    this.editor.setAutocompleteProvider(new CombinedAutocompleteProvider(COMMANDS, process.cwd()));
 
     this.tui.addChild(this.header);
     this.tui.addChild(this.editor);
