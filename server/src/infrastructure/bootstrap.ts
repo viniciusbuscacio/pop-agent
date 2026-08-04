@@ -7,6 +7,7 @@ import type { PathIndexRepo } from '../application/ports/path-index-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
+import type { McpRepo } from '../application/ports/mcp-repo.js';
 import type { PushRepo } from '../application/ports/push-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
@@ -34,6 +35,7 @@ import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
 import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
+import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
 
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
@@ -57,6 +59,7 @@ export interface AppContext {
   storage: StorageRepo;
   /** Background tasks (popy.spec §21). */
   tasks: TaskRepo;
+  mcp: McpRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
   /** The health endpoint's cheap liveness query (popy.spec §13). */
@@ -89,6 +92,7 @@ export function bootstrap(): AppContext {
     usage: new SqliteUsageRepo(db),
     storage: new SqliteStorageRepo(db),
     tasks: new SqliteTaskRepo(db),
+    mcp: new SqliteMcpRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),
     pingDb: () => {

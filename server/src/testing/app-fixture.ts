@@ -43,6 +43,8 @@ import { TarBackupService } from '../infrastructure/backup/tar-backup-service.js
 import { WebAuthnService } from '../infrastructure/auth/webauthn-service.js';
 import { SqliteWebAuthnRepo } from '../infrastructure/db/sqlite-webauthn-repo.js';
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
+import { SqliteMcpRepo } from '../infrastructure/db/sqlite-mcp-repo.js';
+import { McpService } from '../application/mcp/mcp-service.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
 
@@ -292,6 +294,7 @@ export function createTestApp(
   const workspace = mkdtempSync(join(tmpdir(), 'popy-test-workspace-'));
   // One throwaway data directory, shared by the pieces that measure it.
   const dataDir = mkdtempSync(join(tmpdir(), 'popy-test-data-'));
+  const mcp = new McpService({ repo: new SqliteMcpRepo(db), secrets: new MemorySecrets(), dataDir });
   const chats = new ChatService({
     chats: chatRepo,
     clock,
@@ -337,6 +340,7 @@ export function createTestApp(
     },
     userMemory: new SqliteUserMemoryRepo(db),
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
+    mcp,
     usage: new SqliteUsageRepo(db),
     // A real service over a throwaway directory: the report has to survive
     // folders that do not exist, which is exactly the fixture's shape.

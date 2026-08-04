@@ -182,6 +182,8 @@ export interface SdkPiEngineOptions {
   artifactExtractor?: ArtifactExtractor;
   /** Semantic search over Files, when the embedder exists. */
   fileSearch?: FileSearch;
+  /** MCP tools are built per session so enabled servers and capabilities stay current. */
+  mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
 }
 
 /**
@@ -315,6 +317,7 @@ export class SdkPiEngine implements PiEngine {
             this.options.fileSearch,
           )),
       ...buildWebTools(sdk.defineTool),
+      ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
     ];
 
     // The compaction policy, explicit instead of inherited defaults

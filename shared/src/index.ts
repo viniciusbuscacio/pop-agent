@@ -24,6 +24,8 @@ export interface LockedError extends ApiError {
  */
 export const SESSION_TOKEN_HEADER = 'x-popy-token';
 
+export * from './mcp.js';
+
 /** `GET /v1/auth/state` — decides between the setup wizard and the login screen. */
 export interface AuthStateResponse {
   setupDone: boolean;

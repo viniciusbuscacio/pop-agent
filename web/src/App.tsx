@@ -130,6 +130,8 @@ function Boot() {
         <Route path="skills/new" element={<SkillsPage />} />
         <Route path="skills/:slug" element={<SkillsPage />} />
         <Route path="mcp" element={<McpPage />} />
+        <Route path="mcp/new" element={<McpPage />} />
+        <Route path="mcp/:id" element={<McpPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
