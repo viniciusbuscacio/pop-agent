@@ -13,6 +13,7 @@ export const SELF_MAP = [
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (12 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (61 modules)",
   "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (30 modules)",
+  "- `manager/` -- see popy.spec (2 modules)",
   "- `testing/` -- shared test harness helpers (1 module)",
   "",
   "## UI map (generated)",

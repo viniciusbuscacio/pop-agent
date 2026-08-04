@@ -1002,12 +1002,47 @@ channels above):
 - **Restore only with the server stopped**: `popy restore <file>`. Never
   over a running server. Restore UI: maybe later.
 
-## 17. CLI
+## 17. Two CLIs
 
-`popy start | backup | restore <file> | update [--to vX.Y.Z] |
-reset-password | access-list <add|remove|list|clean>`. `reset-password`
-covers "forgot password AND recovery key" for whoever has shell.
-`access-list clean` is the maintenance escape hatch for §18 lockouts.
+Not one command with a mode: `popy` and `popyman` are separate programs
+with separate audiences, and the split is what keeps the everyday one
+installable. Full design in `docs/cli.md`.
+
+**`popy`** — the chat client. Ships as `@popy/cli`, installs on any
+machine (`npm i -g <server>/cli-X.Y.Z.tgz`, served by the server itself),
+and carries no server code: no `better-sqlite3`, no `argon2`, nothing
+that knows where `secret.key` lives. A conversation started there is an
+ordinary Popy chat, and while it is open the agent also has a second set
+of tools running on the machine that typed it (`local_bash`,
+`local_read`, ...). Those hands belong to the MESSAGE, not to the chat.
+
+    popy | popy "question" | popy -p "…"
+    popy login | logout | servers | chats
+
+**`popyman`** — the operator's tool. Ships with the server, runs only
+there, and is the only thing that touches systemd, the SQLite file and
+the backups directory.
+
+    popyman start | stop | restart | status
+    popyman backup | backups | restore <name>
+    popyman reset-password
+    popyman update
+
+`reset-password` covers "forgot the password AND the recovery key" for
+whoever has shell: no proof is asked for, because owning the machine is
+already the proof, which is also why it exists nowhere else — an HTTP
+route with the same power would be a password reset for anyone who found
+the URL. It bumps the session epoch, so every signed-in device is signed
+out, and prints a new recovery key once.
+
+`access-list` is named in §18 and **not built**: there is no IP access
+list to manage yet. `popyman access-list` says so rather than pretending.
+
+**Client/server versions.** The server holds its own version and the
+oldest client it accepts; the hands channel's attach compares them.
+Compatible is silent, merely behind prints one line with the install
+command, and below the minimum is refused with that command. The minimum
+is set by hand and moves only when the wire changes.
 
 ## 18. Production exposure
 
@@ -1182,6 +1217,35 @@ covers "forgot password AND recovery key" for whoever has shell.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.57 (2026-08-04): **Two CLIs, and a server that hands out its own
+  client (§17).** `popy` is the chat client and `popyman` the operator's
+  tool; keeping them one command would drag `better-sqlite3`, `argon2`
+  and code that knows where `secret.key` lives onto every laptop that
+  wants to chat from a terminal. `popyman` ships with the server and is
+  the only thing touching systemd, SQLite and the backups directory;
+  `reset-password` lives there and NOWHERE else, because it proves
+  nothing and owning the machine is the proof -- an HTTP route with the
+  same power would be a password reset for anyone who found the URL.
+  `access-list` is named in §18 and is **not built**; the command says so
+  rather than pretending.
+  Distribution: `npm i -g <server>/cli-X.Y.Z.tgz`, chosen because for
+  self-hosted software the thing you run should hand you the thing you
+  talk to it with, and the install line then carries its own address. It
+  is NOT what prevents client/server drift -- that was the earlier
+  reasoning and it only holds on the day of the install; the server moves
+  on and the laptop keeps what it was handed. **The attach compares the
+  versions**: silent when compatible, one line when merely behind, and
+  refused with the install command below `MIN_CLIENT_VERSION`, which is
+  set by hand and moves only when the wire changes. Packing bundles every
+  `@popy/*` into `dist/` and leaves the two public dependencies external,
+  which is what makes the tarball installable at all (`npm pack` alone
+  404s on `@popy/shared`).
+  Also: **hands belong to the message, not the chat** (docs/cli.md). A
+  chat used to have an owner, so a message from the phone ran commands on
+  whichever laptop had opened it -- possibly one that is shut. The
+  terminal now names itself on each message (`x-popy-hands`), which
+  deleted the ownership map, the claim frame and the spectator rule.
 
 - 1.56 (2026-08-04): **Every message remembers where it came from (§13).**
   Migration 024 adds `client`, `client_platform` and `client_ip` to

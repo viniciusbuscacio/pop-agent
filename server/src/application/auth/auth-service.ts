@@ -131,6 +131,41 @@ export class AuthService {
     return { ok: true, token: this.issueToken(epoch), recoveryKey: nextRecoveryKey };
   }
 
+  /**
+   * The way back in for whoever holds the shell (popy.spec §17): no current
+   * password, no recovery key, because the case it exists for is having lost
+   * both. `popyman reset-password` is the only caller, and it can only run on
+   * the server itself, next to the database it is rewriting.
+   *
+   * It is deliberately NOT reachable over HTTP. Everything else here proves
+   * something before it acts; this proves nothing, and the only thing keeping
+   * it honest is that reaching it already means owning the machine. Exposing
+   * it on a route would turn that into a password reset for anyone who found
+   * the URL.
+   *
+   * Burns the recovery key too. Leaving the old one valid would mean a reset
+   * that did not actually close the door it was called to close, and the
+   * caller has to write the new one down.
+   */
+  async resetPassword(next: string): Promise<{ ok: true; recoveryKey: string } | { ok: false }> {
+    const record = this.record();
+    if (record === undefined) return { ok: false };
+    if (!isAcceptablePassword(next)) return { ok: false };
+
+    const recoveryKey = generateRecoveryKey();
+    // The epoch bump is what signs every existing session out. A reset that
+    // left them standing would hand the account back while whoever prompted
+    // the reset kept their token.
+    this.deps.settings.set(AUTH_KEY, {
+      ...record,
+      passwordHash: await this.deps.hasher.hash(next),
+      recoveryKeyHash: hashRecoveryKey(recoveryKey),
+      epoch: record.epoch + 1,
+    } satisfies AuthRecord);
+
+    return { ok: true, recoveryKey };
+  }
+
   async changePassword(current: string, next: string): Promise<ChangePasswordResult> {
     const record = this.record();
     if (record === undefined) return { ok: false, reason: 'invalid_credentials' };
