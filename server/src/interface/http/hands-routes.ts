@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { upgradeWebSocket } from '@hono/node-server';
+import { compareVersions, installCommand, MIN_CLIENT_VERSION } from '@popy/shared';
 import { entityId } from '../../domain/ids.js';
 import type { HandsMachine, HandsRegistry } from '../../application/hands/hands-registry.js';
 
@@ -22,6 +23,13 @@ import type { HandsMachine, HandsRegistry } from '../../application/hands/hands-
  *
  * Session-guarded like everything under `/v1`: the handshake is an ordinary
  * GET, so the bearer token is checked before any frame is exchanged.
+ *
+ * The attach is also where client and server compare versions (docs/cli.md,
+ * Version compatibility). Three outcomes, and the asymmetry is deliberate:
+ * silence when they are compatible, a line the client may print when it is
+ * merely behind, and a refusal carrying the install command when it is below
+ * the minimum. A protocol error nobody can read is the thing being prevented,
+ * and it is prevented by never letting that pair connect at all.
  */
 
 /** What a terminal sends to introduce itself. Anything else is refused. */
@@ -32,6 +40,8 @@ interface AttachFrame {
 
 export interface HandsRoutesDeps {
   hands: HandsRegistry;
+  /** This server's own version, for the comparison on attach. */
+  versions: { popyVersion: string };
 }
 
 export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
@@ -39,7 +49,7 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
 
   routes.get(
     '/hands',
-    upgradeWebSocket(() => {
+    upgradeWebSocket((c) => {
       // Per connection, and deliberately outside the handlers: `onOpen` has
       // no machine to report yet, so the registry only hears about this one
       // once its `attach` frame arrives.
@@ -64,6 +74,28 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
           if (frame.kind === 'attach' && !attached) {
             const machine = (frame as AttachFrame).machine;
             if (machine === undefined || typeof machine.hostname !== 'string') return;
+
+            const client = typeof machine.clientVersion === 'string' ? machine.clientVersion : '';
+            const server = deps.versions.popyVersion;
+            const install = installCommand(originOf(c.req.url), server);
+
+            if (client.length === 0 || compareVersions(client, MIN_CLIENT_VERSION) < 0) {
+              // Refused, not tolerated: this pair cannot speak, and letting
+              // them try produces exactly the unreadable failure the version
+              // check exists to prevent. The command comes with the refusal
+              // because the client is stuck until someone runs it.
+              ws.send(
+                JSON.stringify({
+                  kind: 'outdated',
+                  minimum: MIN_CLIENT_VERSION,
+                  server,
+                  install,
+                }),
+              );
+              ws.close();
+              return;
+            }
+
             attached = true;
             deps.hands.attach({
               id,
@@ -74,7 +106,19 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
             // The id goes back because the terminal has to name itself when
             // it posts a message: that is what binds a run to THIS machine
             // (docs/cli.md, Whose hands). Attaching alone claims nothing.
-            ws.send(JSON.stringify({ kind: 'attached', id }));
+            //
+            // `update` rides along only when the client is behind, and the
+            // client shows it as one dim line. Not a prompt: a question asked
+            // on every launch is answered `n` on reflex, and then the reflex
+            // is what answers the one that mattered.
+            const behind = compareVersions(client, server) < 0;
+            ws.send(
+              JSON.stringify({
+                kind: 'attached',
+                id,
+                ...(behind ? { update: { server, install } } : {}),
+              }),
+            );
             return;
           }
 
@@ -118,4 +162,17 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
   );
 
   return routes;
+}
+
+/**
+ * The address this server was reached at, so the install command names the
+ * host the user actually typed -- a tailnet name from the laptop, localhost
+ * on the server itself. A README cannot get that right; the request can.
+ */
+function originOf(requestUrl: string): string {
+  try {
+    return new URL(requestUrl).origin;
+  } catch {
+    return '';
+  }
 }

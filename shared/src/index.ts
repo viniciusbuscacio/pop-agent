@@ -54,6 +54,51 @@ export const CLIENT_PLATFORM_HEADER = 'x-popy-client-platform';
 export const HANDS_HEADER = 'x-popy-hands';
 
 /**
+ * The oldest `popy` this server will talk to (docs/cli.md, Version
+ * compatibility).
+ *
+ * Set BY HAND, and moved only when the wire changes in a way an older client
+ * cannot survive -- the REST shapes, the StreamEvent shapes, the hands
+ * frames. Most releases do not touch it, which is the point: a version number
+ * that rises every release blocks clients that were working fine.
+ *
+ * It lives here and nowhere else. There is no endpoint for a client to
+ * consult beforehand and no copy shipped inside the client: the client learns
+ * the answer by attaching and being told, so the two can never disagree.
+ */
+export const MIN_CLIENT_VERSION = '0.2.0';
+
+/**
+ * Compares two `major.minor.patch` strings. Negative when `a` is older.
+ *
+ * Deliberately not semver-complete: Popy's own versions have no pre-release
+ * or build metadata, and a dependency to compare three integers would be a
+ * dependency to keep.
+ */
+export function compareVersions(a: string, b: string): number {
+  const parts = (value: string): number[] =>
+    value
+      .split('.')
+      .slice(0, 3)
+      .map((piece) => Number.parseInt(piece, 10))
+      .map((piece) => (Number.isFinite(piece) ? piece : 0));
+  const left = parts(a);
+  const right = parts(b);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+/** The command that installs this server's own client (docs/cli.md). */
+export function installCommand(origin: string, version: string): string {
+  // The version is in the FILENAME because npm caches by URL: without it an
+  // update silently reinstalls whatever was fetched the first time.
+  return `npm i -g ${origin.replace(/\/$/, '')}/cli-${version}.tgz`;
+}
+
+/**
  * `web` is a browser tab; `pwa` the same app installed and running
  * standalone; `desktop` the embedded shell (not built yet). `mobile` is
  * absent on purpose -- it is a shape of screen, not a client, and lives in

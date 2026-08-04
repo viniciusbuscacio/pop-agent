@@ -11,6 +11,12 @@ const VERSION = '0.2.0';
 
 const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
+const behindLine = (client: string, server: string, install: string): string =>
+  `  popy ${client} · server ${server} · update: ${install}`;
+const outdatedLines = (client: string, minimum: string, install: string): string[] => [
+  `This popy is ${client}; the server needs ${minimum} or newer, so the local tools are off.`,
+  `  ${install}`,
+];
 const ranHere = (command: string): string =>
   `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
@@ -49,6 +55,15 @@ export async function chat(
     version: VERSION,
     onEvent: (event) => {
       if (event.kind === 'attached') screen.say(handsReady());
+      // Behind but talking: one line, said once, and never a question. A
+      // prompt on every launch is answered `n` on reflex, and the reflex is
+      // then what answers the one that mattered (docs/cli.md).
+      if (event.kind === 'behind') screen.say(behindLine(VERSION, event.server, event.install));
+      // Refused: the conversation still works over REST, only the hands are
+      // gone, so this says what is missing instead of killing the screen.
+      if (event.kind === 'outdated') {
+        for (const line of outdatedLines(VERSION, event.minimum, event.install)) screen.say(line);
+      }
       // Said out loud, because it happened on YOUR machine and nothing else
       // on screen would show it.
       if (event.kind === 'ran') screen.say(ranHere(event.command));

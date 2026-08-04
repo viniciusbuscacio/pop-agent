@@ -27,6 +27,10 @@ export interface HandsOptions {
 
 export type HandsEvent =
   | { kind: 'attached' }
+  /** Attached, but the server is newer. One line, never a prompt. */
+  | { kind: 'behind'; server: string; install: string }
+  /** Refused: this pair cannot speak. The command is what unblocks it. */
+  | { kind: 'outdated'; minimum: string; server: string; install: string }
   /** Something ran here; the screen says so, because it happened on YOUR machine. */
   | { kind: 'ran'; command: string }
   | { kind: 'closed' };
@@ -59,6 +63,8 @@ export class Hands {
   private socket: WebSocket | undefined;
   /** The name the server gave this connection on attach. */
   private id: string | undefined;
+  /** Set when the server refused the version; the close that follows is not news. */
+  private refused = false;
 
   constructor(private readonly options: HandsOptions) {}
 
@@ -88,7 +94,14 @@ export class Hands {
     });
 
     socket.on('message', (data: Buffer | string) => {
-      let frame: { kind?: string; id?: string };
+      let frame: {
+        kind?: string;
+        id?: string;
+        minimum?: string;
+        server?: string;
+        install?: string;
+        update?: { server?: string; install?: string };
+      };
       try {
         frame = JSON.parse(String(data)) as typeof frame;
       } catch {
@@ -98,12 +111,30 @@ export class Hands {
         socket.send(JSON.stringify({ kind: 'pong' }));
         return;
       }
+      if (frame.kind === 'outdated') {
+        // The server hung up; nothing here should retry into a wall.
+        this.refused = true;
+        this.options.onEvent?.({
+          kind: 'outdated',
+          minimum: frame.minimum ?? '',
+          server: frame.server ?? '',
+          install: frame.install ?? '',
+        });
+        return;
+      }
       if (frame.kind === 'attached') {
         // Kept, because every message this terminal sends has to name it:
         // that is what gives the run its second pair of hands (docs/cli.md,
         // Whose hands). Attaching by itself claims no conversation.
         if (typeof frame.id === 'string') this.id = frame.id;
         this.options.onEvent?.({ kind: 'attached' });
+        if (frame.update !== undefined) {
+          this.options.onEvent?.({
+            kind: 'behind',
+            server: frame.update.server ?? '',
+            install: frame.update.install ?? '',
+          });
+        }
         return;
       }
       if (frame.kind === 'call') {
@@ -114,6 +145,7 @@ export class Hands {
 
     socket.on('close', () => {
       this.id = undefined;
+      if (this.refused) return;
       this.options.onEvent?.({ kind: 'closed' });
     });
 
