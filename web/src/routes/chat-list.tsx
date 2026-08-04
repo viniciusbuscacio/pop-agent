@@ -9,6 +9,7 @@ import { ShellFooter } from './shell-header';
 import { useFilesStore } from '../store/files';
 import { foldersService } from '../services/artifacts';
 import { useSkillsStore } from '../store/skills';
+import { useMcpStore } from '../store/mcp';
 import { skillsService } from '../services/skills';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
@@ -30,6 +31,7 @@ export function ChatList() {
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
   const createChat = useChatStore((state) => state.createChat);
+  const reloadMcp = useMcpStore((state) => state.reload);
 
   const location = useLocation();
   const path = location.pathname;
@@ -129,6 +131,20 @@ export function ChatList() {
               onClick={() => navigate('/skills/new')}
             >
               {t('skills.new')}
+            </Button>
+          ) : null}
+
+          {segment === 'mcp' ? (
+            <Button
+              type="button"
+              data-testid="shell-new-mcp"
+              className="flex-1"
+              onClick={() => {
+                void reloadMcp();
+                navigate('/mcp/new');
+              }}
+            >
+              New MCP
             </Button>
           ) : null}
 

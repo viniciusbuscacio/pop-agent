@@ -18,7 +18,7 @@ export function McpPage() {
       <div className="md:hidden"><SidebarNav /></div>
       {id === undefined ? (
         <div className="p-6">
-          <div className="mb-5 flex items-center justify-between"><div><h1 className="text-xl font-semibold">MCP</h1><p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p></div><Button onClick={() => navigate('/mcp/new')}>Add New</Button></div>
+          <div className="mb-5 flex items-center justify-between"><div><h1 className="text-xl font-semibold">MCP</h1><p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p></div>null</div>
           <div className="grid gap-3">{servers?.map((server) => <Card key={server.id} className="flex items-center justify-between gap-4"><div><div className="font-medium">{server.name}</div><div className="text-sm text-[var(--muted)]">{server.transport} · {server.status}</div></div><div className="flex gap-2"><Button variant="ghost" onClick={() => void mcpService.toggle(server.id).then(() => reload())}>{server.enabled ? 'OFF' : 'ON'}</Button><Button variant="ghost" onClick={() => navigate(`/mcp/${server.id}`)}>Edit</Button></div></Card>)}{servers?.length === 0 ? <p className="py-8 text-center text-sm text-[var(--muted)]">No MCP servers yet.</p> : null}</div>
         </div>
       ) : current !== undefined || id === 'new' ? <McpEditor server={current} onDone={() => { void reload(); navigate('/mcp'); }} /> : null}
