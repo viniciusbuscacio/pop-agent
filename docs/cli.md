@@ -91,27 +91,60 @@ client holds one secret: a session token.
 ## Language
 
 TypeScript, as a fourth workspace in the monorepo, inside the same gate.
-Three pieces the CLI depends on exist only in JS/TS, and each one is the
-direct consequence of a decision above:
 
-1. **pi's local operations.** pi exports `createLocalBashOperations`,
-   `createBashTool`, `createReadTool`, `createEditTool`,
-   `createWriteTool`, plus the `BashOperations` / `ReadOperations` /
-   `EditOperations` / `WriteOperations` interfaces and the truncation
-   helpers. The library deliberately separates *what a tool is* from
-   *what touches the disk* — which is exactly the seam this design needs
-   (see Protocol). Any other language means re-implementing output
-   truncation, file size caps, stdin handling and error shapes by hand,
-   and watching them drift from the server on the next pi release.
-2. **`@earendil-works/pi-tui`**, published standalone at pi's own
-   version: differential rendering, `Editor` with IME support,
-   `Container`, autocomplete, ANSI-aware wrapping. "Looks like pi"
-   becomes a dependency instead of a project.
-3. **`@popy/shared`**, so the compiler breaks the CLI when the wire
-   changes — the rule that has kept the PWA from drifting (spec §3, §13).
+*(Rewritten 04/08. The three reasons below were written before step 3
+existed. Two of them turned out not to survive it, and leaving them
+standing would mean a future reader either reopens this on a false
+premise or accepts it without checking. The decision is unchanged; the
+reason is now one thing, not three.)*
+
+**The reason is `@earendil-works/pi-tui`.** Published standalone at pi's
+own version, in lockstep: differential rendering, `Editor` with IME
+support, key parsing across terminals including the kitty protocol,
+bracketed paste, markdown to ANSI, autocomplete, fuzzy matching, and
+pi's own keybindings. "Looks like pi" is a dependency instead of a
+project, and `npm update` brings next year's terminal fixes too. That is
+the whole of it, and it is enough.
+
+The two that did not survive:
+
+1. ~~**pi's local operations.**~~ The plan was for the terminal to run
+   pi's `createLocalBashOperations` and friends, so that output
+   truncation, file size caps and error shapes would not be
+   hand-written twice. Step 3 did the opposite and better: the
+   definitions and every rule in them stay on the **server**, and the
+   terminal end is only a disk and a shell — about sixty lines of
+   `spawn` and `fs`. Nothing to re-implement means nothing that can
+   drift, in any language.
+2. ~~**`@popy/shared` for compile-time wire coupling.**~~ Real, but
+   small: the wire is a handful of REST calls, the `StreamEvent` shapes
+   and the hands frames. Another language would hand-write those structs
+   and cover them with a contract test. Worth something; not worth a
+   language.
+
+**Go was considered and refused (Vinicius, 04/08).** It wins on
+distribution, which is the thing this section's open question is about:
+one static binary of ~10 MB, no runtime, `scp` it anywhere. Against that
+is the TUI — roughly 350 lines of screen composition that today ride on
+pi-tui and would become a project of their own, maintained by hand and
+no longer improving when pi does.
+
+The asymmetry decided it. The gain is **once** (install Node), the cost
+is **forever** (own a TUI, and forgo every later pi release). Trading a
+one-time annoyance for a permanent one is a bad trade.
+
+**What would reverse it**, stated so it is recognised when it arrives:
+the day `popy` has to run somewhere Node cannot be installed — handed to
+someone who is not a developer, or a machine under corporate policy. Then
+"install Node first" stops being a convenience of the maintainer's and
+becomes a wall, and Go earns it.
 
 Distribution to a machine without npm is a packaging question, resolved
-when it comes up; it does not affect the design.
+when it comes up; it does not affect the design. Measured 04/08: a single
+esbuild bundle of the CLI is ~460 KB and runs login, chats, the TUI, the
+WebSocket and remote hands with no `node_modules` at all — ESM **with a
+`createRequire` banner**, because plain ESM dies on a dynamic `require`
+inside a dependency and plain CJS dies on `import.meta`.
 
 ## Naming
 
