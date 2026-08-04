@@ -10,6 +10,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@popy/shared": "*"
+    "@popy/shared": "*",
+    "@earendil-works/pi-tui": "0.83.0"
   }
 }

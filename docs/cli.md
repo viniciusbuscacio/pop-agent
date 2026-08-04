@@ -98,8 +98,13 @@ when it comes up; it does not affect the design.
 
 ## Naming
 
-- **`popy`** — the client. New workspace `cli/`, package `@popy/cli`, no
-  native dependencies, installable anywhere.
+- **`popy`** — the client. New workspace `cli/`, package `@popy/cli`,
+  installable anywhere. *(Correction, 04/08: this said "no native
+  dependencies". `pi-tui` ships prebuilt `.node` binaries for macOS and
+  Windows -- `darwin-modifiers`, `win32-console-mode` -- so the claim was
+  wrong. They are prebuilds, not a compile step, and Linux has none and
+  degrades without them, so nothing about installability changes; but the
+  sentence that the packaging question rests on has to be true.)*
 - **`popyman`** — the manager: `start | stop | restart` of the Popy
   service, plus the operator surface the spec already lists
   (`backup | restore | update | reset-password | access-list`). Ships with
@@ -328,7 +333,14 @@ with `fake-bridge`.
    heartbeat, remote operations server-side, pi's local operations
    client-side, and the guard's second list — the laptop is unprotected
    until that list exists, so it lands with the channel, not after it
-4. TUI on top of what already works
+4. TUI on top of what already works — **done 04/08**: `pi-tui` as a
+   dependency, not a copy. The widgets, the differential renderer, the
+   editor with IME, key parsing, markdown-to-ANSI and the keybindings come
+   from the library and update with it. What is written here is the
+   composition: header, transcript, which slash commands Popy has. pi's own
+   screen is not importable (`pi-coding-agent` exports `.` and
+   `./rpc-entry`; its CLI is a bundled bin), and copying it would buy
+   today's look at the price of every later release.
 5. `popyman`, and the §17 rewrite
 
 ## Security note

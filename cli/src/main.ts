@@ -5,6 +5,7 @@ import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
 import { PopyApi } from './infrastructure/api.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
 import { ask, chats, login, logout, servers, type Context, type Terminal } from './interface/commands.js';
+import { chat } from './interface/chat.js';
 
 /**
  * Composition root (docs/cli.md, "Layout"). The one place that knows there is
@@ -14,6 +15,7 @@ import { ask, chats, login, logout, servers, type Context, type Terminal } from 
 
 const USAGE = `popy — a terminal client for your Popy
 
+  popy                       open the interactive screen
   popy "question"            ask, print the answer, exit
   popy -p "question"         the same, spelled out for scripts
   popy login <url>           sign in and remember the server
@@ -52,6 +54,8 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
 
   switch (command) {
     case undefined:
+      // A bare `popy` opens the screen; `--help` is how you ask for the list.
+      return chat(context, chatId === undefined ? {} : { chatId });
     case '--help':
     case '-h':
       terminal.line(USAGE);
