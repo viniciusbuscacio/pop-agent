@@ -25,12 +25,14 @@ export function ChatLayout() {
   // covers /skills/new, /tasks/:taskId covers /tasks/new -- both the detail.
   const skillDetail = useMatch('/skills/:slug');
   const taskDetail = useMatch('/tasks/:taskId');
+  const mcpDetail = useMatch('/mcp/:id');
   const contentOpen =
     openChat !== null ||
     filesRoot !== null ||
     filesFolder !== null ||
     skillDetail !== null ||
-    taskDetail !== null;
+    taskDetail !== null ||
+    mcpDetail !== null;
 
   useEffect(() => {
     // One stream for the whole session; the store fans events out from here.

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { McpAuthKind, McpServerDTO, McpTransport } from '@popy/shared';
 import { mcpService } from '../services/mcp';
 import { useMcpStore } from '../store/mcp';
@@ -8,20 +8,22 @@ import { Button, Card, CheckField, TextArea, TextField } from '../ui/controls';
 
 export function McpPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const isNew = location.pathname === '/mcp/new';
   const navigate = useNavigate();
   const servers = useMcpStore((state) => state.servers);
   const reload = useMcpStore((state) => state.reload);
   useEffect(() => { void reload(); }, [reload]);
-  const current = id === 'new' ? undefined : servers?.find((server) => server.id === id);
+  const current = isNew || id === 'new' ? undefined : servers?.find((server) => server.id === id);
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
       <div className="md:hidden"><SidebarNav /></div>
-      {id === undefined ? (
+      {id === undefined && !isNew ? (
         <div className="p-6">
-          <div className="mb-5 flex items-center justify-between"><div><h1 className="text-xl font-semibold">MCP</h1><p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p></div>null</div>
+          <div className="mb-5 flex items-center justify-between"><div><h1 className="text-xl font-semibold">MCP</h1><p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p></div></div>
           <div className="grid gap-3">{servers?.map((server) => <Card key={server.id} className="flex items-center justify-between gap-4"><div><div className="font-medium">{server.name}</div><div className="text-sm text-[var(--muted)]">{server.transport} · {server.status}</div></div><div className="flex gap-2"><Button variant="ghost" onClick={() => void mcpService.toggle(server.id).then(() => reload())}>{server.enabled ? 'OFF' : 'ON'}</Button><Button variant="ghost" onClick={() => navigate(`/mcp/${server.id}`)}>Edit</Button></div></Card>)}{servers?.length === 0 ? <p className="py-8 text-center text-sm text-[var(--muted)]">No MCP servers yet.</p> : null}</div>
         </div>
-      ) : current !== undefined || id === 'new' ? <McpEditor server={current} onDone={() => { void reload(); navigate('/mcp'); }} /> : null}
+      ) : current !== undefined || isNew || id === 'new' ? <McpEditor server={current} onDone={() => { void reload(); navigate('/mcp'); }} /> : null}
     </div>
   );
 }
