@@ -11,8 +11,8 @@
 # still starts when the file is absent, which is the normal state of a fresh
 # clone: no key simply means no provider is configured yet.
 #
-# Install:  sudo cp deploy/popy-dev.service /etc/systemd/system/
-#           sudo systemctl daemon-reload && sudo systemctl enable --now popy-dev
+# Install:  sudo cp deploy/popy-service.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now popy-service
 
 [Unit]
 Description=Popy dev server (tsx, sources from ~/dev/popy)

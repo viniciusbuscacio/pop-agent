@@ -526,7 +526,7 @@ const app = createApp({
     const service =
       process.env['POPY_SERVICE_CONTROL'] === 'fake'
         ? createFakeServiceControl()
-        : createSystemdControl(process.env['POPY_SERVICE_NAME'] ?? 'popy-dev');
+        : createSystemdControl(process.env['POPY_SERVICE_NAME'] ?? 'popy-service');
     return {
       restart: () => service.restart(),
       stop: () => service.stop(),

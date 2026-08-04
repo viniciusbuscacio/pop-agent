@@ -1112,7 +1112,7 @@ is set by hand and moves only when the wire changes.
   systemd + Node 22 (`npm run build` + systemd unit example in repo).
   Docker: maybe later, never required.
 - The test server runs the dev build under **systemd**
-  (`deploy/popy-dev.service`: sources through tsx, absolute `ExecStart`
+  (`deploy/popy-service.service`: sources through tsx, absolute `ExecStart`
   because systemd's boot PATH is minimal), so the tailnet URL answers
   after a reboot with nobody logged in. The production unit points at the
   compiled `dist/` instead.

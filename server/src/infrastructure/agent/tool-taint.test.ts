@@ -28,7 +28,7 @@ describe('isDestructiveBash', () => {
     'ls /home/vinicius/.popy 2>/dev/null',
     'find . -name "*.ts" 2>/dev/null | head',
     'node -e "const f = xs.filter(n=>/runtime|model/i.test(n))"',
-    'journalctl -u popy-dev 2>&1 | tail -5',
+    'journalctl -u popy-service 2>&1 | tail -5',
   ];
 
   it('catches the destructive shapes', () => {

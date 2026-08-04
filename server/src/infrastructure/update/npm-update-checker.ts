@@ -16,7 +16,7 @@ const REGISTRY = 'https://registry.npmjs.org';
 const CACHE_MS = 60 * 60 * 1000;
 const TIMEOUT_MS = 8000;
 
-const UPDATE_COMMAND = 'cd ~/dev/popy && git pull && npm ci && npm run gate && sudo systemctl restart popy-dev';
+const UPDATE_COMMAND = 'cd ~/dev/popy && git pull && npm ci && npm run gate && sudo systemctl restart popy-service';
 
 export interface NpmUpdateCheckerDeps {
   versions: Versions;

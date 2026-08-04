@@ -21,7 +21,7 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
       calls.push(verb);
       return 0;
     },
-    unit: 'popy-dev',
+    unit: 'popy-service',
     backups: {
       create: () => ({ name: 'popy-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
       list: () => [],
@@ -44,11 +44,11 @@ describe('popyman', () => {
   });
 
   it('says which unit it is acting on', async () => {
-    // A box can carry popy and popy-dev at once, and "Failed to stop
+    // A box can carry popy and popy-service at once, and "Failed to stop
     // popy.service" is a true sentence about the wrong service.
     const h = harness();
     await run(['stop'], h.deps);
-    expect(h.out.join('\n')).toContain('popy-dev');
+    expect(h.out.join('\n')).toContain('popy-service');
   });
 
   it('does not announce status, which speaks for itself', async () => {
@@ -142,10 +142,10 @@ describe('popyman', () => {
     // Asking for a password to READ is a habit worth not teaching; and
     // without sudo the other three fall to polkit, whose text agent answers
     // "Authentication failure" on a plain SSH session.
-    expect(systemctlArgv('status', 'popy-dev', false).command).toBe('systemctl');
-    expect(systemctlArgv('stop', 'popy-dev', false)).toEqual({
+    expect(systemctlArgv('status', 'popy-service', false).command).toBe('systemctl');
+    expect(systemctlArgv('stop', 'popy-service', false)).toEqual({
       command: 'sudo',
-      args: ['systemctl', 'stop', 'popy-dev'],
+      args: ['systemctl', 'stop', 'popy-service'],
     });
   });
 

@@ -3,7 +3,7 @@
 Status: **PREPARED, NOT YET RUN.** Written 2026-08-01 alongside commits
 `cb54bde` (automatic taint brake) and `ec8a983` (redirect false-positive fix).
 Do not run the live-attack section against the production instance
-(`popy-dev`, port 8787) — it uses a throwaway instance only.
+(`popy-service`, port 8787) — it uses a throwaway instance only.
 
 ## Why
 

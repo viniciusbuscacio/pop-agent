@@ -42,7 +42,7 @@ function resolveUnit(): string {
       .map((name) => name.replace(/\.service$/, '')),
   );
 
-  return ['popy', 'popy-dev'].find((name) => installed.has(name)) ?? 'popy';
+  return ['popy', 'popy-service'].find((name) => installed.has(name)) ?? 'popy';
 }
 
 const UNIT = resolveUnit();
