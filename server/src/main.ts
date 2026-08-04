@@ -74,6 +74,8 @@ const hostname = process.env['POPY_BIND'] ?? '127.0.0.1';
 // Resolves the same from src/ (tsx) and dist/ (compiled): both sit two levels
 // below the repo root.
 const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
+/** Where `npm run pack:cli` leaves the tarball the server hands out. */
+const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
 
 // Composition root: the one place that knows every layer (popy.spec §3).
 const context = bootstrap();
@@ -538,6 +540,7 @@ const app = createApp({
     };
   })(),
   webDist,
+  cliPack,
 });
 
 // The notify-only update channel (popy.spec §15, Vinicius 31/07): when a

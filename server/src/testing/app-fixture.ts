@@ -67,6 +67,8 @@ export const FIXED_NOW = 1_700_000_000_000;
 
 /** The real build output: the gate builds before it tests, so it is there. */
 export const WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
+/** The packed client (docs/cli.md, Distribution); absent unless `pack:cli` ran. */
+export const CLI_PACK = fileURLToPath(new URL('../../../cli/pack', import.meta.url));
 
 export class MemorySettings implements SettingsRepo {
   private readonly rows = new Map<string, string>();
@@ -413,6 +415,7 @@ export function createTestApp(
         workspace: '/tmp/workspace',
       }) satisfies import('@popy/shared').ServerInfoResponse,
     webDist: WEB_DIST,
+    cliPack: CLI_PACK,
   });
 
   return {

@@ -22,7 +22,8 @@
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",
     "selfmap:check": "tsx tools/generate-self-map.ts --check",
-    "smoke": "tsx tools/smoke.ts"
+    "smoke": "tsx tools/smoke.ts",
+    "pack:cli": "tsx tools/pack-cli.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -34,6 +35,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.2.0",
+    "esbuild": "^0.28.1",
     "eslint": "^9.0.0",
     "happy-dom": "^20.11.1",
     "playwright": "^1.62.1",

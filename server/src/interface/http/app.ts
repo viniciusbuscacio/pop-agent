@@ -27,6 +27,7 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createArtifactRoutes } from './artifact-routes.js';
+import { createCliDownloadRoutes } from './cli-download-routes.js';
 import { createArtifactDownloadRoutes } from './artifact-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
@@ -99,6 +100,8 @@ export interface AppDeps {
   credits?: (providerId: string) => Promise<{ remaining: number; used: number } | undefined>;
   /** Directory holding the built frontend (web/dist). */
   webDist: string;
+  /** Directory holding the packed CLI tarball (cli/pack); see Distribution. */
+  cliPack: string;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -123,6 +126,10 @@ export function createApp(deps: AppDeps): Hono {
       publicSurface(
         'the HMAC in the artifact download URL is the whole authorisation (popy.spec §14); it must sit before the static site could mistake it for a missing file',
         createArtifactDownloadRoutes(deps),
+      ),
+      publicSurface(
+        'npm cannot log in, so the client tarball must answer without a session (docs/cli.md, Distribution); it carries the client code and this server version, no secrets and no user data, and the version in the filename is compared before anything is read from disk',
+        createCliDownloadRoutes(deps),
       ),
     ],
     guarded: [
