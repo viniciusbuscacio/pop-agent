@@ -233,6 +233,7 @@ export function ModelPicker({
   onChange,
   className = '',
   compactLabel,
+  layout = 'toolbar',
 }: {
   id: string;
   label: string;
@@ -243,6 +244,16 @@ export function ModelPicker({
   onChange: (value: string) => void;
   className?: string;
   compactLabel?: string;
+  /**
+   * Where the list opens and how wide the closed control is.
+   *
+   * 'toolbar' is the composer's geometry: a chip that opens upward, because
+   * down there is the screen edge. In a form that same list floats up over
+   * the page header, detached from the field it belongs to, and stops reading
+   * as that field's dropdown at all -- so 'field' opens downward at the full
+   * width of the row, like every other control beside it (Vinicius, 04/08).
+   */
+  layout?: 'toolbar' | 'field';
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -281,14 +292,24 @@ export function ModelPicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((shown) => !shown)}
-        className={compactLabel === undefined
-          ? fieldClass('sm', 'max-w-full truncate')
-          : 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] bg-[var(--input-bg)] p-0 text-sm font-semibold text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'}
+        className={
+          compactLabel !== undefined
+            ? 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] bg-[var(--input-bg)] p-0 text-sm font-semibold text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
+            : layout === 'field'
+              ? fieldClass('md', 'w-full truncate text-left')
+              : fieldClass('sm', 'max-w-full truncate')
+        }
       >
         {compactLabel ?? current}
       </button>
       {open ? (
-        <div className="absolute right-0 bottom-full z-20 mb-1 w-72 max-w-[min(85vw,18rem)] rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg">
+        <div
+          className={`absolute z-20 rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg ${
+            layout === 'field'
+              ? 'top-full right-0 left-0 mt-1 w-full'
+              : 'right-0 bottom-full mb-1 w-72 max-w-[min(85vw,18rem)]'
+          }`}
+        >
           <input
             ref={search}
             type="search"

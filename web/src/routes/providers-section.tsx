@@ -467,10 +467,13 @@ function ConfigureProvider({
           // thing saying what the chip is. `relative` is what its popup
           // anchors to -- without it the list positions against whatever
           // ancestor happens to be positioned.
-          <div className="relative flex min-w-0 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor="provider-model" className="text-sm font-medium">
               {t('provider.model')}
             </label>
+            {/* `relative` wraps the control ALONE: with the hint inside it,
+                the list opened a line below the field and read as detached. */}
+            <div className="relative">
             <ModelPicker
               id="provider-model"
               label={t('provider.model')}
@@ -479,7 +482,9 @@ function ConfigureProvider({
               placeholder={t('chat.searchModels')}
               noResults={t('chat.noModelsFound')}
               onChange={setModel}
+              layout="field"
             />
+            </div>
             <span className="text-xs text-[var(--muted)]">{t('provider.modelHint')}</span>
           </div>
         ) : (
