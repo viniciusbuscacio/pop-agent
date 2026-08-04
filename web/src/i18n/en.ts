@@ -165,6 +165,7 @@ export const en = {
   'settings.server.dangerHint': 'Restart and stop act on the systemd service. Stop LLM / Restart LLM only switch the model runtime off and on.',
 
   'settings.section.model': 'Model',
+  'settings.section.audio': 'Audio',
   'settings.section.memory': 'Memory',
   'settings.section.usage': 'Usage',
   'settings.section.storage': 'Storage',

@@ -44,6 +44,7 @@ type Section =
   | 'server'
   | 'general'
   | 'model'
+  | 'audio'
   | 'memory'
   | 'usage'
   | 'storage'
@@ -57,6 +58,7 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'server', labelKey: 'settings.section.server' },
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
+  { id: 'audio', labelKey: 'settings.section.audio' },
   { id: 'memory', labelKey: 'settings.section.memory' },
   { id: 'usage', labelKey: 'settings.section.usage' },
   { id: 'storage', labelKey: 'settings.section.storage' },
@@ -123,6 +125,7 @@ export function SettingsPage() {
           {section === 'server' ? <ServerSection /> : null}
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ModelSection /> : null}
+          {section === 'audio' ? <AudioSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
           {section === 'usage' ? <UsageSection /> : null}
           {section === 'storage' ? <StorageSection /> : null}
@@ -927,7 +930,19 @@ function ModelSection() {
       </div>
 
       <ServiceModelCard settings={settings} onSave={saveSettings} />
+    </div>
+  );
+}
 
+/**
+ * Voice, on its own (Vinicius, 03/08). These two lived under Model, where
+ * "Model" meant the one that answers you -- so a whisper model and a
+ * transcript cleanup sat under a heading that was about something else, and
+ * anyone looking for the microphone had no reason to open it.
+ */
+function AudioSection() {
+  return (
+    <div className="flex flex-col gap-4">
       <VoiceModelCard />
       <VoiceCleanupCard />
     </div>

@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.53 — 2026-08-03.
+Version 1.54 — 2026-08-04.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -596,8 +596,12 @@ events from stale runs.
   (waiting up to a minute would leave a send that did nothing unexplained)
   and any answer, a 500 included, clears it just as fast.
 - **Never a side drawer/panel for forms** (permanent veto). Settings is a
-  full-screen view: General, Appearance, Model, Memory, Notes, Web Access,
-  API, Usage, Backup, Updates, About. Every Save has a Cancel.
+  full-screen view: Server, General, Model, **Audio**, Memory, Usage,
+  Storage, Backup, Appearance, Updates, Security, About. Every Save has a
+  Cancel. **Model means the model that answers you** -- the whisper model
+  and the transcript cleanup moved out to Audio (Vinicius, 03/08), because
+  under Model they sat beneath a heading about something else and anyone
+  looking for the microphone had no reason to open it.
 - Rendering v0.1: markdown (react-markdown + remark-gfm, sanitized, no raw
   HTML) + code highlight (Shiki, themes synced light/dark, copy button,
   language label). Mermaid/KaTeX: later.
@@ -1179,6 +1183,13 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.54 (2026-08-04): **Audio is its own Settings section (§14).** "Voice
+  model (whisper)" and "Improve transcripts with AI" were the last two
+  cards under Model, where Model means the one that answers you -- so a
+  transcription model and a cleanup pass sat under a heading about
+  something else, and anyone looking for the microphone had no reason to
+  open it. Both cards move to a new **Audio** section, unchanged; they were
+  already self-contained, so the move is a relocation, not a rewrite.
 - 1.53 (2026-08-03): **The Trash is a place inside Files, not a screen you
   were sent to (§14).** It carries the same breadcrumb -- `Files > Trash`,
   with `Files` as the way back, which is why the Back button it used to
