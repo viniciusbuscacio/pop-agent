@@ -7,6 +7,21 @@ import { FALLBACK_MODELS } from './openrouter.js';
 import { ProviderCooldown } from './provider-cooldown.js';
 import { ProviderService, type ProviderStatus } from './provider-service.js';
 
+/**
+ * createCustom can refuse now: the registry has a 265 ceiling. No test here is
+ * anywhere near it, so a refusal means the test itself is wrong -- which is
+ * worth a thrown error rather than fifteen non-null assertions.
+ */
+function mustCreate(
+  service: ProviderService,
+  input: { name?: string; baseURL?: string; defaultModel?: string },
+) {
+  const made = service.createCustom(input);
+  if (made === undefined) throw new Error('the custom provider registry was unexpectedly full');
+  return made;
+}
+
+
 class MemorySettings implements SettingsRepo {
   private readonly rows = new Map<string, string>();
   get<T>(key: string): T | undefined {
@@ -454,7 +469,7 @@ describe('the priority list', () => {
   });
 
   it('forgets a deleted custom instance instead of holding its position', () => {
-    const instance = service.createCustom({ name: 'Ollama', baseURL: 'http://x/v1', defaultModel: 'llama4' });
+    const instance = mustCreate(service, { name: 'Ollama', baseURL: 'http://x/v1', defaultModel: 'llama4' });
     service.setOrder([instance.id, OPENROUTER]);
     expect(service.order()[0]).toBe(instance.id);
 
@@ -540,8 +555,8 @@ describe('custom provider instances (popy.spec §15)', () => {
   it('creates instances with fresh custom- ids, retrying a collision', () => {
     nextCustomIds = ['aaaaaaaaaa', 'aaaaaaaaaa', 'bbbbbbbbbb'];
 
-    const first = service.createCustom({ name: 'Ollama' });
-    const second = service.createCustom({ name: 'vLLM' });
+    const first = mustCreate(service, { name: 'Ollama' });
+    const second = mustCreate(service, { name: 'vLLM' });
 
     expect(first.id).toBe('custom-aaaaaaaaaa');
     // The colliding roll was discarded and a new one drawn.
@@ -550,7 +565,7 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 
   it('normalizes the pasted endpoint down to the base URL', () => {
-    const instance = service.createCustom({
+    const instance = mustCreate(service, {
       name: 'Local',
       baseURL: 'http://localhost:11434/v1/chat/completions/',
     });
@@ -562,7 +577,7 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 
   it('shows up in statuses after the builtins, as an editable custom card', () => {
-    const instance = service.createCustom({ name: 'Ollama', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
+    const instance = mustCreate(service, { name: 'Ollama', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
 
     const all = service.statuses();
     expect(all[all.length - 1]).toEqual({
@@ -581,8 +596,8 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 
   it('keeps each instance s key sealed under its own id', () => {
-    const first = service.createCustom({ name: 'One' });
-    const second = service.createCustom({ name: 'Two' });
+    const first = mustCreate(service, { name: 'One' });
+    const second = mustCreate(service, { name: 'Two' });
 
     service.setKey(first.id, 'sk-one');
     service.setKey(second.id, 'sk-two');
@@ -599,8 +614,8 @@ describe('custom provider instances (popy.spec §15)', () => {
 
   it('joins the failover chain after the builtins, in registry order', () => {
     service.setKey(OPENROUTER, 'sk-or');
-    const a = service.createCustom({ name: 'A', baseURL: 'http://a/v1', defaultModel: 'model-a' });
-    const b = service.createCustom({ name: 'B', baseURL: 'http://b/v1', defaultModel: 'model-b' });
+    const a = mustCreate(service, { name: 'A', baseURL: 'http://a/v1', defaultModel: 'model-a' });
+    const b = mustCreate(service, { name: 'B', baseURL: 'http://b/v1', defaultModel: 'model-b' });
     service.setKey(a.id, 'sk-a');
     service.setKey(b.id, 'sk-b');
 
@@ -614,7 +629,7 @@ describe('custom provider instances (popy.spec §15)', () => {
 
   it('deleting an instance removes its status and degrades its overrides', () => {
     service.setKey(OPENROUTER, 'sk-or');
-    const instance = service.createCustom({ name: 'Gone', baseURL: 'http://x/v1', defaultModel: 'm' });
+    const instance = mustCreate(service, { name: 'Gone', baseURL: 'http://x/v1', defaultModel: 'm' });
     service.setKey(instance.id, 'sk-x');
 
     expect(service.deleteCustom(instance.id)).toBe(true);
@@ -628,7 +643,7 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 
   it('tests through the instance s own endpoint gateway', async () => {
-    const instance = service.createCustom({ name: 'Local', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
+    const instance = mustCreate(service, { name: 'Local', baseURL: 'http://localhost:11434/v1', defaultModel: 'llama4' });
     service.setKey(instance.id, 'sk-local');
 
     const result = await service.test(instance.id);
@@ -639,7 +654,7 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 
   it('refuses to test an instance that has no endpoint yet', async () => {
-    const instance = service.createCustom({ name: 'Empty' });
+    const instance = mustCreate(service, { name: 'Empty' });
     service.setKey(instance.id, 'sk');
 
     expect((await service.test(instance.id)).message).toBe('Set the endpoint URL before testing.');

@@ -15,6 +15,7 @@ export const en = {
   'common.copied': 'Copied',
   'common.download': 'Download',
   'common.comingSoon': 'Coming soon',
+  'common.edit': 'Edit',
 
   'setup.welcome.title': 'Welcome to Popy',
   'setup.welcome.body':
@@ -164,6 +165,35 @@ export const en = {
   'settings.server.llmStopConfirm': 'Stop only the LLM? Active answers are aborted and new messages are refused; the web app keeps working.',
   'settings.server.dangerHint': 'Restart and stop act on the systemd service. Stop LLM / Restart LLM only switch the model runtime off and on.',
 
+  // Providers, rebuilt around adding one at a time (03/08). The screen says
+  // what you have, not everything Popy could talk to.
+  'provider.add': 'Add provider',
+  'provider.add.intro': 'Pick the one you want to set up. You can add as many as you like.',
+  'provider.add.openrouter': 'OpenRouter — API key',
+  'provider.add.openai': 'OpenAI — API key',
+  'provider.add.openaiSubscription': 'OpenAI — ChatGPT subscription',
+  'provider.add.anthropic': 'Anthropic — API key',
+  'provider.add.copilot': 'GitHub Copilot — subscription',
+  'provider.add.custom': 'Custom (OpenAI-compatible) — API key',
+  'provider.add.failed': 'That could not be added.',
+  'provider.alreadyAdded': 'already added',
+  'provider.none': 'No providers yet. Add one and Popy can start answering.',
+  'provider.priorityBadge': 'Priority {n}',
+  'provider.bySubscription': 'subscription',
+  'provider.deleteConfirm':
+    'Remove "{name}"? A key has to be pasted again, and a subscription signed into again.',
+  'provider.priority': 'Priority',
+  'provider.priorityHint': 'Number 1 answers. If it refuses, Popy walks down the list.',
+  'provider.key': 'API key',
+  'provider.key.replace': 'Replace the API key',
+  'provider.key.storedHint': 'A key is stored. Leave this empty to keep it.',
+  'provider.model': 'Model',
+  'provider.modelHint': 'Which model this provider answers with by default.',
+  'provider.test.run': 'Test connection',
+  'provider.test.running': 'Testing…',
+  'provider.test.ok': 'It answered.',
+  'provider.test.failed': 'It did not answer.',
+  'provider.saveFailed': 'That could not be saved.',
   'settings.section.model': 'Model',
   'settings.section.audio': 'Audio',
   'settings.section.memory': 'Memory',

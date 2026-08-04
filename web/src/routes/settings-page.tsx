@@ -2,11 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   AboutResponse,
-  ProviderCreditsResponse,
   ModelCatalogSource,
   ModelDTO,
-  ProvidersResponse,
-  ProviderStatusDTO,
   ServerInfoResponse,
   SettingsDTO,
   SkillDTO,
@@ -14,13 +11,11 @@ import type {
   UsageResponse,
 } from '@popy/shared';
 import { t } from '../i18n';
-import { OAuthSection } from './oauth-section';
-import { PriorityList } from './priority-list';
+import { ProvidersSection } from './providers-section';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
-import { normalizeBaseUrl, providersService } from '../services/providers';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
 import { voiceService, type VoiceModelStatus } from '../services/voice';
@@ -124,7 +119,7 @@ export function SettingsPage() {
         <div className="min-w-0 flex-1">
           {section === 'server' ? <ServerSection /> : null}
           {section === 'general' ? <GeneralSection /> : null}
-          {section === 'model' ? <ModelSection /> : null}
+          {section === 'model' ? <ProvidersSection /> : null}
           {section === 'audio' ? <AudioSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
           {section === 'usage' ? <UsageSection /> : null}
@@ -170,7 +165,13 @@ function GeneralSection() {
     }
   }
 
+  async function saveOne(next: Partial<SettingsDTO>): Promise<void> {
+    if (settings === undefined) return;
+    setSettings(await settingsService.write({ ...settings, ...next }));
+  }
+
   return (
+    <div className="flex flex-col gap-4">
     <Card className="flex flex-col gap-4">
       <Select
         id="settings-language"
@@ -218,6 +219,13 @@ function GeneralSection() {
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
     </Card>
+
+    {/* Which model does the work nobody asked for -- titles, summaries. It
+        used to sit under Model, which is now only about providers (Vinicius,
+        03/08). It is a background behaviour, so it lives with the other
+        general ones rather than being dropped along with the old screen. */}
+    <ServiceModelCard settings={settings} onSave={saveOne} />
+    </div>
   );
 }
 
@@ -830,125 +838,6 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
  * its key test and its default model. Provider is data: the list comes from
  * GET /v1/providers, never hardcoded here.
  */
-function ModelSection() {
-  const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
-  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
-  const [defaultCatalog, setDefaultCatalog] = useState<ModelDTO[]>([]);
-  // A just-created custom instance that was never saved: its Cancel deletes
-  // it again, so add-then-cancel leaves nothing behind.
-  const [pendingNewId, setPendingNewId] = useState<string | undefined>(undefined);
-  const [adding, setAdding] = useState(false);
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
-  async function reload(): Promise<void> {
-    try {
-      const [providersResponse, settingsDoc] = await Promise.all([
-        providersService.list(),
-        settingsService.read(),
-      ]);
-      setProviders(providersResponse.providers);
-      setSettings(settingsDoc);
-      const catalog = await chatsService.models(settingsDoc.defaultProvider);
-      setDefaultCatalog(catalog.models);
-    } catch {
-      // The section renders what it has; a failed load leaves it empty.
-    }
-  }
-
-  async function saveSettings(next: Partial<SettingsDTO>): Promise<void> {
-    if (settings === undefined) return;
-    try {
-      const written = await settingsService.write({ ...settings, ...next });
-      setSettings(written);
-      if (next.defaultProvider !== undefined) {
-        const catalog = await chatsService.models(written.defaultProvider);
-        setDefaultCatalog(catalog.models);
-      }
-    } catch {
-      // The select snaps back on the next load; nothing was stored.
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-4">
-        <h2 className="text-base font-semibold">{t('provider.priority.title')}</h2>
-        {/* One lever, not two: the head of this list is the global default,
-            so there is no separate "default provider" control to contradict
-            it (popy.spec §15, fase 2). */}
-        <PriorityList
-          providers={providers}
-          onChanged={(next) => {
-            setProviders(next.providers);
-            // The head may have just become the default; re-read it so the
-            // model picker below is the new head's catalog, not the old.
-            void reload();
-          }}
-        />
-        <ModelPicker
-          id="settings-default-model"
-          label={t('provider.defaultModel')}
-          models={defaultCatalog}
-          value={settings?.defaultModel ?? ''}
-          onChange={(model) => void saveSettings({ defaultModel: model })}
-        />
-      </Card>
-
-      {providers.map((entry) => (
-        <ProviderCard
-          key={entry.id}
-          provider={entry}
-          onChanged={(next) => setProviders(next.providers)}
-          pendingNew={entry.id === pendingNewId}
-          onSettled={() => setPendingNewId(undefined)}
-        />
-      ))}
-
-      <div>
-        <Button
-          type="button"
-          variant="ghost"
-          data-testid="provider-custom-add"
-          disabled={adding}
-          onClick={() => {
-            setAdding(true);
-            providersService
-              .createCustom()
-              .then((created) => {
-                setProviders(created.providers);
-                setPendingNewId(created.id);
-              })
-              .catch(() => undefined)
-              .finally(() => setAdding(false));
-          }}
-        >
-          {t('provider.custom.add')}
-        </Button>
-      </div>
-
-      <ServiceModelCard settings={settings} onSave={saveSettings} />
-    </div>
-  );
-}
-
-/**
- * Voice, on its own (Vinicius, 03/08). These two lived under Model, where
- * "Model" meant the one that answers you -- so a whisper model and a
- * transcript cleanup sat under a heading that was about something else, and
- * anyone looking for the microphone had no reason to open it.
- */
-function AudioSection() {
-  return (
-    <div className="flex flex-col gap-4">
-      <VoiceModelCard />
-      <VoiceCleanupCard />
-    </div>
-  );
-}
-
 /** Titles and summaries stay on the default provider's catalog for now. */
 function ServiceModelCard({
   settings,
@@ -997,350 +886,12 @@ function ServiceModelCard({
  * stored value is never read back), the test that proves a key works, and
  * its default model. The custom provider also carries its endpoint URL.
  */
-function ProviderCard({
-  provider,
-  onChanged,
-  pendingNew = false,
-  onSettled,
-}: {
-  provider: ProviderStatusDTO;
-  onChanged: (response: ProvidersResponse) => void;
-  /** A just-created custom instance nobody saved yet: Cancel discards it. */
-  pendingNew?: boolean;
-  onSettled?: () => void;
-}) {
-  const [keyDraft, setKeyDraft] = useState('');
-  const [testResult, setTestResult] = useState<string | undefined>(undefined);
-  const [testOk, setTestOk] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [models, setModels] = useState<ModelDTO[]>([]);
-  const [catalogSource, setCatalogSource] = useState<ModelCatalogSource | undefined>(undefined);
-  const [nameDraft, setNameDraft] = useState(provider.name);
-  const [urlDraft, setUrlDraft] = useState(provider.baseURL ?? '');
-  const [customModelDraft, setCustomModelDraft] = useState(
-    provider.custom === true ? provider.defaultModel : '',
-  );
-
-  const isCustom = provider.custom === true;
-  // Subscription providers have no key at all: the card swaps the key input
-  // for the sign-in flow (popy.spec §15, fase 1.5).
-  const isOAuth = provider.authType === 'oauth';
-
-  // The balance row (LOTE 6): undefined = still loading or hidden. ANY error
-  // hides it silently -- a balance you cannot see is never a broken card.
-  const [credits, setCredits] = useState<ProviderCreditsResponse | undefined>(undefined);
-
-  useEffect(() => {
-    if (!provider.configured) return;
-    providersService
-      .credits(provider.id)
-      .then(setCredits)
-      .catch(() => setCredits(undefined));
-  }, [provider.id, provider.configured]);
-
-  useEffect(() => {
-    void loadCatalog();
-  }, [provider.id, provider.configured]);
-
-  async function loadCatalog(): Promise<void> {
-    try {
-      const catalog = await chatsService.models(provider.id);
-      setModels(catalog.models);
-      setCatalogSource(catalog.source);
-    } catch {
-      setModels([]);
-    }
-  }
-
-  async function testKey(): Promise<void> {
-    setTesting(true);
-    setTestResult(undefined);
-    try {
-      const result = await providersService.test(
-        provider.id,
-        keyDraft.length > 0 ? keyDraft : undefined,
-      );
-      setTestOk(result.ok);
-      setTestResult(
-        result.ok
-          ? result.latencyMs === undefined
-            ? t('provider.testOk')
-            : t('provider.testOkLatency', { ms: result.latencyMs })
-          : t('provider.testFailed', { message: result.message ?? '' }),
-      );
-    } catch {
-      setTestOk(false);
-      setTestResult(t('error.generic'));
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  async function saveKey(): Promise<void> {
-    if (keyDraft.length === 0) return;
-    setBusy(true);
-    try {
-      onChanged(await providersService.setKey(provider.id, keyDraft));
-      setKeyDraft('');
-      setTestResult(undefined);
-      setSaved(true);
-      // A fresh key can unlock the live catalog.
-      await loadCatalog();
-    } catch {
-      setSaved(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeKey(): Promise<void> {
-    try {
-      onChanged(await providersService.clearKey(provider.id));
-    } catch {
-      // Leave the card as it is; the next reload tells the truth.
-    }
-  }
-
-  async function saveCustomInstance(): Promise<void> {
-    setBusy(true);
-    try {
-      onChanged(
-        await providersService.updateCustom(provider.id, {
-          name: nameDraft,
-          // Sent already normalized, so what the hint said is what is stored.
-          baseURL: normalizeBaseUrl(urlDraft),
-          defaultModel: customModelDraft,
-        }),
-      );
-      setSaved(true);
-      onSettled?.();
-      await loadCatalog();
-    } catch {
-      setSaved(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deleteCustomInstance(confirmFirst: boolean): Promise<void> {
-    if (confirmFirst && !window.confirm(t('provider.custom.deleteConfirm', { name: provider.name }))) {
-      return;
-    }
-    try {
-      onChanged(await providersService.deleteCustom(provider.id));
-      onSettled?.();
-    } catch {
-      // Leave the card as it is; the next reload tells the truth.
-    }
-  }
-
-  async function saveDefaultModel(model: string): Promise<void> {
-    try {
-      onChanged(await providersService.setDefaultModel(provider.id, model));
-    } catch {
-      // The select snaps back on the next load.
-    }
-  }
-
-  const statusLabel = isOAuth
-    ? provider.configured
-      ? t('provider.oauth.connected')
-      : t('provider.oauth.notConnected')
-    : !provider.configured
-      ? t('provider.notConfigured')
-      : provider.source === 'env'
-        ? t('provider.configuredEnv')
-        : t('provider.configured');
-
+function AudioSection() {
   return (
-    <Card className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-base font-semibold">{provider.name}</h2>
-        <span
-          data-testid={`provider-status-${provider.id}`}
-          className={
-            provider.configured ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--muted)]'
-          }
-        >
-          {statusLabel}
-        </span>
-      </div>
-
-      {credits !== undefined ? (
-        <p data-testid={`provider-credits-${provider.id}`} className="text-sm text-[var(--muted)]">
-          {t('provider.credits', {
-            remaining: credits.remaining.toFixed(2),
-            used: credits.used.toFixed(2),
-          })}
-        </p>
-      ) : null}
-
-      {isCustom ? (
-        <div className="flex flex-col gap-3">
-          <TextField
-            id={`provider-custom-name-${provider.id}`}
-            data-testid={`provider-custom-name-${provider.id}`}
-            type="text"
-            autoComplete="off"
-            label={t('provider.custom.name')}
-            value={nameDraft}
-            onChange={(event) => setNameDraft(event.target.value)}
-          />
-          <TextField
-            id={`provider-custom-url-${provider.id}`}
-            data-testid={`provider-custom-url-${provider.id}`}
-            type="text"
-            autoComplete="off"
-            label={t('provider.customBaseURL')}
-            hint={t('provider.customBaseURLHint')}
-            value={urlDraft}
-            onChange={(event) => setUrlDraft(event.target.value)}
-          />
-          {urlDraft.trim().length > 0 ? (
-            <p
-              data-testid={`provider-custom-target-${provider.id}`}
-              className="text-xs text-[var(--muted)]"
-            >
-              {t('provider.custom.requestsGoTo', {
-                url: `${normalizeBaseUrl(urlDraft)}/chat/completions`,
-              })}
-            </p>
-          ) : null}
-          <TextField
-            id={`provider-custom-model-${provider.id}`}
-            data-testid={`provider-custom-model-${provider.id}`}
-            type="text"
-            autoComplete="off"
-            label={t('provider.customModel')}
-            value={customModelDraft}
-            onChange={(event) => setCustomModelDraft(event.target.value)}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              data-testid={`provider-custom-save-${provider.id}`}
-              disabled={busy || nameDraft.length === 0 || urlDraft.length === 0 || customModelDraft.length === 0}
-              onClick={() => void saveCustomInstance()}
-            >
-              {t('common.save')}
-            </Button>
-            {pendingNew ? (
-              <Button
-                type="button"
-                variant="ghost"
-                data-testid={`provider-custom-cancel-${provider.id}`}
-                onClick={() => void deleteCustomInstance(false)}
-              >
-                {t('common.cancel')}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="danger"
-                data-testid={`provider-custom-delete-${provider.id}`}
-                onClick={() => void deleteCustomInstance(true)}
-              >
-                {t('provider.custom.delete')}
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {isOAuth ? <OAuthSection provider={provider} onChanged={onChanged} /> : null}
-
-      {isOAuth ? null : (
-      <>
-      <TextField
-        id={`provider-key-${provider.id}`}
-        data-testid={`provider-key-${provider.id}`}
-        type="password"
-        autoComplete="off"
-        label={t('provider.keyLabel')}
-        hint={t('provider.keyHint')}
-        placeholder={provider.configured ? t('provider.keyConfiguredPlaceholder') : undefined}
-        value={keyDraft}
-        onChange={(event) => {
-          setKeyDraft(event.target.value);
-          setSaved(false);
-          setTestResult(undefined);
-        }}
-      />
-
-      {testResult !== undefined ? (
-        <p
-          data-testid={`provider-test-result-${provider.id}`}
-          role="status"
-          className={testOk ? 'text-sm text-[var(--success)]' : 'text-sm text-[var(--danger)]'}
-        >
-          {testResult}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          data-testid={`provider-save-${provider.id}`}
-          disabled={busy || keyDraft.length === 0}
-          onClick={() => void saveKey()}
-        >
-          {t('common.save')}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          data-testid={`provider-test-${provider.id}`}
-          disabled={testing || (keyDraft.length === 0 && !provider.configured)}
-          onClick={() => void testKey()}
-        >
-          {testing ? t('provider.testing') : t('provider.test')}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            setKeyDraft('');
-            setTestResult(undefined);
-            setSaved(false);
-          }}
-        >
-          {t('common.cancel')}
-        </Button>
-        {provider.source === 'settings' ? (
-          <Button
-            type="button"
-            variant="danger"
-            data-testid={`provider-remove-${provider.id}`}
-            onClick={() => void removeKey()}
-          >
-            {t('provider.removeKey')}
-          </Button>
-        ) : null}
-        {saved ? <span className="text-sm text-[var(--success)]">{t('provider.saved')}</span> : null}
-      </div>
-      </>
-      )}
-
-      {!isCustom ? (
-        <ModelPicker
-          id={`provider-model-${provider.id}`}
-          label={t('provider.defaultForProvider')}
-          models={models}
-          value={provider.defaultModel}
-          onChange={(model) => void saveDefaultModel(model)}
-        />
-      ) : null}
-      {catalogSource !== undefined && models.length > 0 ? (
-        <p data-testid={`catalog-source-${provider.id}`} className="text-xs text-[var(--muted)]">
-          {t('provider.modelsInfo', {
-            count: models.length,
-            source: t(CATALOG_SOURCE_KEYS[catalogSource]),
-          })}
-        </p>
-      ) : null}
-    </Card>
+    <div className="flex flex-col gap-4">
+      <VoiceModelCard />
+      <VoiceCleanupCard />
+    </div>
   );
 }
 

@@ -11,7 +11,10 @@ import type {
   TranscribeResponse,
 } from '@popy/shared';
 import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
-import type { ProviderService } from '../../application/providers/provider-service.js';
+import {
+  MAX_CUSTOM_PROVIDERS,
+  type ProviderService,
+} from '../../application/providers/provider-service.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import { badBody, readJson, schemaError } from './body.js';
@@ -171,6 +174,14 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     const instance = deps.providers.createCustom(
       parsed.data.name === undefined ? {} : { name: parsed.data.name },
     );
+    if (instance === undefined) {
+      return apiError(
+        c,
+        409,
+        'too_many_providers',
+        `A Popy install holds at most ${String(MAX_CUSTOM_PROVIDERS)} custom providers.`,
+      );
+    }
     return c.json({
       id: instance.id,
       providers: deps.providers.statuses().map(toStatusDto),

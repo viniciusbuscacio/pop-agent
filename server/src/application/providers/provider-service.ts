@@ -43,6 +43,8 @@ const CUSTOM_ALIAS_KEY = 'provider.custom.alias';
  * numbered list can never disagree with what a new chat actually uses.
  */
 const ORDER_KEY = 'provider.order';
+/** See {@link ProviderService.createCustom}. */
+export const MAX_CUSTOM_PROVIDERS = 256;
 /** The ids the user switched off. Off means out of the chain entirely. */
 const DISABLED_KEY = 'provider.disabled';
 
@@ -318,8 +320,15 @@ export class ProviderService {
    * and pure data beside it. The key arrives later through the ordinary
    * per-provider key route, sealed under this id.
    */
-  createCustom(input: { name?: string; baseURL?: string; defaultModel?: string }): CustomProviderInstance {
+  createCustom(
+    input: { name?: string; baseURL?: string; defaultModel?: string },
+  ): CustomProviderInstance | undefined {
     const registry = this.listCustom();
+    // A ceiling nobody will meet, which is the point: the priority list is a
+    // 1..N dropdown, and N has to be a number a person can hold. 256 is far
+    // past any real install and still stops a runaway loop from writing
+    // thousands of rows into one settings value (Vinicius, 03/08).
+    if (registry.length >= MAX_CUSTOM_PROVIDERS) return undefined;
     let id: string;
     do {
       id = `custom-${(this.deps.customIdSource ?? defaultCustomIdSource)()}`;
@@ -408,6 +417,9 @@ export class ProviderService {
       baseURL: legacy?.baseURL ?? '',
       defaultModel: legacy?.defaultModel ?? '',
     });
+    // Only a registry already at the ceiling can refuse, which cannot be true
+    // on the single-slot install this migration exists for.
+    if (instance === undefined) return;
     if (hasKey) this.deps.secrets.set(keySecretName(instance.id), legacyKey);
     this.deps.secrets.delete(keySecretName(LEGACY_CUSTOM_ID));
     this.deps.settings.set(LEGACY_CUSTOM_CONFIG_KEY, { baseURL: '', defaultModel: '' });

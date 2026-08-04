@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.54 — 2026-08-04.
+Version 1.55 — 2026-08-04.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1183,6 +1183,32 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.55 (2026-08-04): **Providers are added, not configured (§14, §15).** The
+  Model screen used to show every provider Popy knows about, configured or
+  not, each an open form -- six cards to read before finding the one you had
+  set up, plus a separate drag-to-reorder priority list. Now the screen says
+  what you HAVE: an **Add provider** button, then one card per configured
+  provider with Edit and Delete. Adding walks a wizard -- pick from the six
+  (OpenRouter / OpenAI / OpenAI subscription / Anthropic / GitHub Copilot /
+  Custom), give it what that one needs, choose a **Priority**. A builtin
+  already set up is offered greyed as "already added"; custom instances can
+  be added as often as you like.
+  **Priority is a 1..N dropdown over the configured providers**, replacing
+  the drag list (`priority-list.tsx` deleted): "who answers first" is the
+  question a person asks, and a drag gesture answers it only once learned.
+  N counts configured providers only -- "priority 3" has to mean the third
+  thing that answers, not the third row of a list including providers never
+  set up. It writes the same `provider.order` the fallback chain already
+  reads (§15 fase 2), so the engine did not change at all.
+  Every provider can be **tested**, subscriptions included -- the server
+  checks those with pi's own auth check rather than a paid probe, so hiding
+  the button there made no sense. **Model** is a searchable picker over the
+  provider's own catalogue, falling back to a typed field where the endpoint
+  publishes none (a custom Ollama, typically) -- an empty picker is a dead
+  end. `MAX_CUSTOM_PROVIDERS = 256` caps how many custom instances exist **at
+  once**, never how many ever existed: deleting frees its place (Vinicius,
+  04/08). The service model (titles, summaries) moved to General; it is a
+  background behaviour, not a provider.
 - 1.54 (2026-08-04): **Audio is its own Settings section (§14).** "Voice
   model (whisper)" and "Improve transcripts with AI" were the last two
   cards under Model, where Model means the one that answers you -- so a
