@@ -260,7 +260,7 @@ function piBridge(): PiAgentBridge {
       // pi's own config, credentials and catalog cache, all inside Popy's data
       // directory: a ~/.pi on the host must not reach into this process.
       // The terminal's tools, when one is attached to this chat.
-      localTools: (sdk, chatId) => buildLocalTools(sdk, hands, chatId),
+      localTools: (sdk, handsConnectionId) => buildLocalTools(sdk, hands, handsConnectionId),
       agentDir: join(context.dataDir, 'pi-agent'),
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),

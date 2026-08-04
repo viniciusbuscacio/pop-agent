@@ -23,7 +23,12 @@ export interface Context {
   terminal: Terminal;
   profile: string;
   /** Built per command so a fresh token can be stored as soon as it arrives. */
-  api: (options: { url: string; token?: string }) => PopyApi;
+  api: (options: {
+    url: string;
+    token?: string;
+    /** This terminal's hands connection, read per call (docs/cli.md, Whose hands). */
+    handsConnectionId?: () => string | undefined;
+  }) => PopyApi;
 }
 
 export async function login(

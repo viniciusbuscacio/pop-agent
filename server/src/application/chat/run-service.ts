@@ -57,6 +57,16 @@ export interface StartRunOptions {
    * change because of it.
    */
   client?: MessageClient;
+  /**
+   * The terminal that typed this message, when one did (docs/cli.md, Whose
+   * hands). It rides on the MESSAGE and not on the chat: a laptop that is
+   * shut must never be reachable through a message sent from the phone, and
+   * a chat answered from two machines has to stay legible when read back.
+   *
+   * Fixed here and never revisited -- attaching or detaching a terminal
+   * later does not reach into a run already in flight.
+   */
+  handsConnectionId?: string;
 }
 
 export type StartRunResult =
@@ -126,6 +136,8 @@ interface PendingRun {
   controller: AbortController;
   /** False silences the finished-run push for this run alone (popy.spec §21). */
   notify: boolean;
+  /** The terminal whose hands this run has, if its message named one. */
+  handsConnectionId: string | undefined;
   started: boolean;
   /** Fragments emitted so far -- the sequence number of the last one. */
   seq: number;
@@ -300,6 +312,7 @@ export class RunService {
       attachments,
       controller: new AbortController(),
       notify: options.notify ?? true,
+      handsConnectionId: options.handsConnectionId,
       started: false,
       seq: 0,
       content: '',
@@ -575,6 +588,9 @@ export class RunService {
         model: pair.modelId,
         provider: pair.providerId,
         attachments: run.attachments,
+        ...(run.handsConnectionId === undefined
+          ? {}
+          : { handsConnectionId: run.handsConnectionId }),
         confirm: (question) => this.askConfirm(run, question),
         signal: AbortSignal.any([run.controller.signal, silence.signal]),
         onEvent: (event) => {

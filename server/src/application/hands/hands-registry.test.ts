@@ -29,46 +29,40 @@ function fake(id: string, hostname = id) {
 }
 
 describe('HandsRegistry', () => {
-  it('gives the hands to the terminal that asked', () => {
+  it('finds the terminal a message named', () => {
     const registry = new HandsRegistry();
     const mac = fake('c1');
     registry.attach(mac.connection);
 
-    expect(registry.claim('chat-1', 'c1')).toBe('c1');
-    expect(registry.handsFor('chat-1')).toBe(mac.connection);
+    expect(registry.connection('c1')).toBe(mac.connection);
   });
 
-  it('keeps a second terminal as a spectator', () => {
-    // Someone has to own them, or two machines run npm install at once.
-    const registry = new HandsRegistry();
-    const first = fake('c1');
-    const second = fake('c2');
-    registry.attach(first.connection);
-    registry.attach(second.connection);
-
-    registry.claim('chat-1', 'c1');
-    expect(registry.claim('chat-1', 'c2')).toBe('c1');
-    expect(registry.handsFor('chat-1')).toBe(first.connection);
-  });
-
-  it('frees the chat when its terminal leaves', () => {
-    const registry = new HandsRegistry();
-    const first = fake('c1');
-    const second = fake('c2');
-    registry.attach(first.connection);
-    registry.attach(second.connection);
-    registry.claim('chat-1', 'c1');
-
-    registry.detach('c1');
-    expect(registry.handsFor('chat-1')).toBeUndefined();
-    // And the next terminal can take them.
-    expect(registry.claim('chat-1', 'c2')).toBe('c2');
-  });
-
-  it('has no hands for a chat nobody claimed', () => {
+  it('has nothing for a message that named nobody', () => {
+    // Every message from the PWA. Not an error: the run simply has the
+    // server's tools, which is what a phone session always had.
     const registry = new HandsRegistry();
     registry.attach(fake('c1').connection);
-    expect(registry.handsFor('chat-9')).toBeUndefined();
+    expect(registry.connection(undefined)).toBeUndefined();
+  });
+
+  it('has nothing for a terminal that already left', () => {
+    const registry = new HandsRegistry();
+    registry.attach(fake('c1').connection);
+    registry.detach('c1');
+    expect(registry.connection('c1')).toBeUndefined();
+  });
+
+  it('keeps two terminals apart', () => {
+    // The whole reason hands follow the message: a MacBook and a ThinkPad in
+    // one conversation each answer their own, with nothing to arbitrate.
+    const registry = new HandsRegistry();
+    const mac = fake('c1', 'macbook');
+    const think = fake('c2', 'thinkpad');
+    registry.attach(mac.connection);
+    registry.attach(think.connection);
+
+    expect(registry.connection('c1')).toBe(mac.connection);
+    expect(registry.connection('c2')).toBe(think.connection);
   });
 
   it('pings, and lets go of a machine that stops answering', () => {
@@ -77,15 +71,14 @@ describe('HandsRegistry', () => {
     const registry = new HandsRegistry();
     const mac = fake('c1');
     registry.attach(mac.connection);
-    registry.claim('chat-1', 'c1');
 
     for (let beat = 0; beat < MISSED_PINGS_BEFORE_GONE; beat += 1) registry.beat();
     expect(mac.sent).toHaveLength(MISSED_PINGS_BEFORE_GONE);
-    expect(registry.handsFor('chat-1')).toBe(mac.connection);
+    expect(registry.connection('c1')).toBe(mac.connection);
 
     registry.beat();
     expect(mac.isClosed()).toBe(true);
-    expect(registry.handsFor('chat-1')).toBeUndefined();
+    expect(registry.connection('c1')).toBeUndefined();
   });
 
   it('forgives a machine that answers, however long its command takes', () => {
@@ -103,10 +96,13 @@ describe('HandsRegistry', () => {
     expect(registry.attached()).toHaveLength(1);
   });
 
-  it('ignores a claim from a terminal that is not attached', () => {
+  it('refuses a call for a terminal that is not there', () => {
+    // Rejecting beats falling back to the server: "run this on my machine"
+    // answered by the wrong machine is worse than an error.
     const registry = new HandsRegistry();
-    expect(registry.claim('chat-1', 'ghost')).toBeUndefined();
-    expect(registry.handsFor('chat-1')).toBeUndefined();
+    return expect(
+      registry.call('ghost', { tool: 'bash', input: {} }, () => undefined),
+    ).rejects.toThrow();
   });
 
   it('lists what is attached, for the prompt and the log', () => {

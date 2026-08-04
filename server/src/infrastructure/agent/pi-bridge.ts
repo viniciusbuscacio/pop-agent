@@ -89,6 +89,13 @@ interface CachedSession {
   modelId: string;
   /** What the session was opened with; a change means reopening. */
   instructions: string;
+  /**
+   * The terminal whose tools are registered in this session, if any. pi fixes
+   * the tool list when the session opens, so a message from a DIFFERENT
+   * machine -- or from the phone, naming none -- has to reopen it, exactly
+   * like changed instructions below (docs/cli.md, Whose hands).
+   */
+  handsConnectionId: string | undefined;
   /** Runs currently using it; a session in use is never swept. */
   busy: number;
   lastUsedAt: number;
@@ -128,7 +135,12 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
 
     let entry: CachedSession;
     try {
-      entry = await this.acquire(chatId, pair.providerId, pair.modelId);
+      entry = await this.acquire(
+        chatId,
+        pair.providerId,
+        pair.modelId,
+        request.handsConnectionId,
+      );
     } catch (error) {
       const code = errorCode(error);
       onEvent({ kind: 'error', code });
@@ -310,14 +322,21 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     chatId: string,
     providerId: string,
     modelId: string,
+    handsConnectionId: string | undefined,
   ): Promise<CachedSession> {
     const instructions = this.deps.instructions?.() ?? '';
 
     let cached = this.sessions.get(chatId);
-    // Instructions live in the system prompt, which pi fixes when the session
-    // opens. Reopening from the JSONL is the same move that survives a restart,
-    // so a changed setting costs one transparent reload, not the conversation.
-    if (cached !== undefined && cached.instructions !== instructions && cached.busy === 0) {
+    // Instructions live in the system prompt, and the local tools live in the
+    // tool list; pi fixes both when the session opens. Reopening from the
+    // JSONL is the same move that survives a restart, so either change costs
+    // one transparent reload, not the conversation. The hands belong to this
+    // MESSAGE, so answering from the laptop and then from the phone reopens
+    // once each way -- which is the price of the tools meaning one machine.
+    const stale =
+      cached !== undefined &&
+      (cached.instructions !== instructions || cached.handsConnectionId !== handsConnectionId);
+    if (cached !== undefined && stale && cached.busy === 0) {
       cached.session.dispose();
       this.sessions.delete(chatId);
       cached = undefined;
@@ -343,6 +362,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       sessionFile: chat?.piSessionId,
       instructions,
       chatId,
+      ...(handsConnectionId === undefined ? {} : { handsConnectionId }),
     });
 
     const entry: CachedSession = {
@@ -351,6 +371,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       providerId,
       modelId,
       instructions,
+      handsConnectionId,
       busy: 1,
       lastUsedAt: Date.now(),
     };

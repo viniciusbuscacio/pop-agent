@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
+  HANDS_HEADER,
   isClientKind,
   type ChatDTO,
   type MessageDTO,
@@ -204,11 +205,18 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     }
 
     const client = readClient(c);
+    // Which terminal typed this, if one did. Not validated here: the registry
+    // answers "is that connection still attached", and an id that names
+    // nobody costs the run its second pair of hands and nothing else.
+    const hands = c.req.header(HANDS_HEADER);
     const result = deps.runs.startRun(
       c.req.param('id'),
       parsed.data.text,
       [...(parsed.data.attachments ?? []), ...referenced],
-      client === undefined ? {} : { client },
+      {
+        ...(client === undefined ? {} : { client }),
+        ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
+      },
     );
     if (!result.ok) {
       if (result.reason === 'chat_not_found') return chatNotFound(c);

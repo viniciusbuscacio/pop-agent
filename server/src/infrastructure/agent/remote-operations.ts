@@ -18,15 +18,16 @@ import type { HandsRegistry } from '../../application/hands/hands-registry.js';
  * definitions twice rather than writing a second family of tools that would
  * drift on the next pi release.
  *
- * Everything is per chat, because the hands are: two conversations can be
- * attached to two different machines at the same time.
+ * Everything is per connection, because the hands are: the run carries the
+ * terminal that sent its message, and two conversations answered from two
+ * machines reach two machines (docs/cli.md, Whose hands).
  *
  * Infrastructure, not application: it speaks pi's types, and the boundary
  * test is right to keep a third-party import out of the pure layer.
  */
-export function remoteOperations(hands: HandsRegistry, chatId: string) {
+export function remoteOperations(hands: HandsRegistry, connectionId: string) {
   const call = (tool: string, input: unknown, onOutput: (chunk: string) => void = () => undefined) =>
-    hands.call(chatId, { tool, input }, onOutput);
+    hands.call(connectionId, { tool, input }, onOutput);
 
   const bash: BashOperations = {
     exec: async (command, cwd, options) => {

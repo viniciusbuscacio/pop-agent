@@ -11,8 +11,6 @@ const VERSION = '0.2.0';
 
 const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
-const handsTaken = (): string =>
-  'Another terminal owns this conversation; this one is watching.';
 const ranHere = (command: string): string =>
   `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
@@ -41,7 +39,31 @@ export async function chat(
     return 1;
   }
 
-  const api = context.api({ url: profile.url, token: profile.token });
+
+  // The hands channel, alongside the chat and never in front of it: a server
+  // that refuses the upgrade leaves the conversation working and the local
+  // tools simply absent (docs/cli.md step 3).
+  const hands = new Hands({
+    url: profile.url,
+    token: profile.token,
+    version: VERSION,
+    onEvent: (event) => {
+      if (event.kind === 'attached') screen.say(handsReady());
+      // Said out loud, because it happened on YOUR machine and nothing else
+      // on screen would show it.
+      if (event.kind === 'ran') screen.say(ranHere(event.command));
+    },
+  });
+
+  // Every message this terminal sends names the connection above, which is
+  // what gives its run the local tools. Read per call: the socket may attach
+  // after this line and drop before the last request (docs/cli.md, Whose
+  // hands).
+  const api = context.api({
+    url: profile.url,
+    token: profile.token,
+    handsConnectionId: () => hands.connectionId,
+  });
 
   const session = new ChatSession(
     {
@@ -64,26 +86,9 @@ export async function chat(
     },
   );
 
-  // The hands channel, alongside the chat and never in front of it: a server
-  // that refuses the upgrade leaves the conversation working and the local
-  // tools simply absent (docs/cli.md step 3).
-  const hands = new Hands({
-    url: profile.url,
-    token: profile.token,
-    version: VERSION,
-    onEvent: (event) => {
-      if (event.kind === 'attached') screen.say(handsReady());
-      if (event.kind === 'claimed' && !event.mine) screen.say(handsTaken());
-      // Said out loud, because it happened on YOUR machine and nothing else
-      // on screen would show it.
-      if (event.kind === 'ran') screen.say(ranHere(event.command));
-    },
-  });
-
   const screen = new ChatScreen({
     session,
     server: profile.url,
-    onChatOpened: (chatId) => hands.claim(chatId),
   });
   if (options.chatId !== undefined) session.open(options.chatId);
 

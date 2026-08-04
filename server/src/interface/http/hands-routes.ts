@@ -71,6 +71,9 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
               send: (payload) => ws.send(JSON.stringify(payload)),
               close: () => ws.close(),
             });
+            // The id goes back because the terminal has to name itself when
+            // it posts a message: that is what binds a run to THIS machine
+            // (docs/cli.md, Whose hands). Attaching alone claims nothing.
             ws.send(JSON.stringify({ kind: 'attached', id }));
             return;
           }
@@ -100,15 +103,6 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
               ...(result.error === undefined ? {} : { error: result.error }),
             });
             return;
-          }
-
-          if (frame.kind === 'claim' && attached) {
-            const chatId = (frame as { chatId?: string }).chatId;
-            if (typeof chatId !== 'string' || chatId.length === 0) return;
-            const owner = deps.hands.claim(chatId, id);
-            // Told either way: a terminal that did not get the hands is a
-            // spectator and should say so rather than look broken.
-            ws.send(JSON.stringify({ kind: 'claimed', chatId, mine: owner === id }));
           }
         },
 

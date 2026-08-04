@@ -6,20 +6,24 @@
  * way to send, so the rules below can be tested without a network. The
  * transport lives in `interface/http/hands-routes`.
  *
- * Three rules, each answering a way this goes wrong:
+ * Two rules, each answering a way this goes wrong:
  *
- * 1. **A chat has at most one pair of hands.** The event stream deliberately
+ * 1. **A call is addressed to one connection.** The event stream deliberately
  *    sends everything to everyone -- right for "here is a word of the answer",
  *    wrong for "run this on your machine", which has exactly one addressee.
- * 2. **Ownership never changes mid-run.** Opening a chat that is already
- *    answering makes you a spectator until it ends; the hands are yours from
- *    the next message. Otherwise a tool call parked on one connection would
- *    have to be answered by another (Vinicius, 04/08).
- * 3. **A silent connection is a gone connection.** A closed laptop lid does
+ *    WHICH connection is not this file's business: it comes from the message,
+ *    which named the terminal that typed it (docs/cli.md, Whose hands). This
+ *    registry only has to be able to find it and to notice when it leaves.
+ * 2. **A silent connection is a gone connection.** A closed laptop lid does
  *    not close a TCP socket, and a run parked on a sleeping machine holds the
  *    queue for every other client. The heartbeat measures the MACHINE, never
  *    the command: a twenty-minute install is ordinary and answers pings all
  *    the way through.
+ *
+ * *(Revised 04/08. A chat used to have an OWNER -- the first terminal to open
+ * it -- so a message from the phone ran commands on whichever laptop had
+ * opened the chat, possibly one that is shut. Hands now follow the message,
+ * which deleted the ownership map, the claim frame and the spectator rule.)*
  */
 
 import { entityId } from '../../domain/ids.js';
@@ -78,8 +82,6 @@ export interface HandsCall {
 
 export class HandsRegistry {
   private readonly entries = new Map<string, Entry>();
-  /** chatId -> connection id. */
-  private readonly owners = new Map<string, string>();
   /** callId -> what is waiting for it. */
   private readonly pending = new Map<string, Pending>();
 
@@ -97,9 +99,6 @@ export class HandsRegistry {
     if (entry === undefined) return;
     this.entries.delete(connectionId);
     this.releaseCalls(connectionId);
-    for (const [chatId, owner] of [...this.owners]) {
-      if (owner === connectionId) this.owners.delete(chatId);
-    }
     this.onJournal?.(`popy hands: detached ${entry.connection.machine.hostname}`);
   }
 
@@ -110,30 +109,20 @@ export class HandsRegistry {
   }
 
   /**
-   * Claims the hands for a chat, unless someone else already holds them.
-   * Returns who holds them afterwards, which may be the other connection.
+   * The terminal a message named, if it is still attached.
+   *
+   * Undefined covers both "it left" and "the message named nobody", and the
+   * caller treats them the same: no second pair of hands this run.
    */
-  claim(chatId: string, connectionId: string): string | undefined {
-    if (!this.entries.has(connectionId)) return this.owners.get(chatId);
-    const current = this.owners.get(chatId);
-    if (current !== undefined && current !== connectionId && this.entries.has(current)) {
-      return current;
-    }
-    this.owners.set(chatId, connectionId);
-    return connectionId;
-  }
-
-  /** The connection that runs this chat's local tools, if any is attached. */
-  handsFor(chatId: string): HandsConnection | undefined {
-    const owner = this.owners.get(chatId);
-    if (owner === undefined) return undefined;
-    return this.entries.get(owner)?.connection;
+  connection(connectionId: string | undefined): HandsConnection | undefined {
+    if (connectionId === undefined) return undefined;
+    return this.entries.get(connectionId)?.connection;
   }
 
   /**
-   * Runs something on the chat's terminal and waits for the answer.
+   * Runs something on the terminal that sent the message, and waits.
    *
-   * Rejects when no terminal holds the hands, rather than falling back to the
+   * Rejects when that terminal is gone, rather than falling back to the
    * server: "run this on my machine" answered by the wrong machine is worse
    * than an error, and the model can be told plainly that the terminal left.
    *
@@ -142,8 +131,12 @@ export class HandsRegistry {
    * clock on the call would cut exactly the long build the terminal exists
    * for. When the machine does go, `releaseCalls` fails everything pending.
    */
-  call(chatId: string, request: HandsCall, onOutput: (chunk: string) => void): Promise<HandsResult> {
-    const connection = this.handsFor(chatId);
+  call(
+    connectionId: string,
+    request: HandsCall,
+    onOutput: (chunk: string) => void,
+  ): Promise<HandsResult> {
+    const connection = this.connection(connectionId);
     if (connection === undefined) {
       return Promise.reject(new Error('No terminal is attached to this conversation.'));
     }

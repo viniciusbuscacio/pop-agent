@@ -21,13 +21,12 @@ export interface HandsOptions {
   url: string;
   token: string;
   version: string;
-  /** Told when the socket opens, closes, or the server answers a claim. */
+  /** Told when the socket opens or closes, and when something ran here. */
   onEvent?: (event: HandsEvent) => void;
 }
 
 export type HandsEvent =
   | { kind: 'attached' }
-  | { kind: 'claimed'; chatId: string; mine: boolean }
   /** Something ran here; the screen says so, because it happened on YOUR machine. */
   | { kind: 'ran'; command: string }
   | { kind: 'closed' };
@@ -58,6 +57,8 @@ function runCommand(
 
 export class Hands {
   private socket: WebSocket | undefined;
+  /** The name the server gave this connection on attach. */
+  private id: string | undefined;
 
   constructor(private readonly options: HandsOptions) {}
 
@@ -87,7 +88,7 @@ export class Hands {
     });
 
     socket.on('message', (data: Buffer | string) => {
-      let frame: { kind?: string; chatId?: string; mine?: boolean };
+      let frame: { kind?: string; id?: string };
       try {
         frame = JSON.parse(String(data)) as typeof frame;
       } catch {
@@ -98,6 +99,10 @@ export class Hands {
         return;
       }
       if (frame.kind === 'attached') {
+        // Kept, because every message this terminal sends has to name it:
+        // that is what gives the run its second pair of hands (docs/cli.md,
+        // Whose hands). Attaching by itself claims no conversation.
+        if (typeof frame.id === 'string') this.id = frame.id;
         this.options.onEvent?.({ kind: 'attached' });
         return;
       }
@@ -105,16 +110,10 @@ export class Hands {
         void this.run(frame as unknown as CallFrame, socket);
         return;
       }
-      if (frame.kind === 'claimed' && typeof frame.chatId === 'string') {
-        this.options.onEvent?.({
-          kind: 'claimed',
-          chatId: frame.chatId,
-          mine: frame.mine === true,
-        });
-      }
     });
 
     socket.on('close', () => {
+      this.id = undefined;
       this.options.onEvent?.({ kind: 'closed' });
     });
 
@@ -185,14 +184,18 @@ export class Hands {
     }
   }
 
-  /** Asks to be this chat's hands. The server answers with who holds them. */
-  claim(chatId: string): void {
-    if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({ kind: 'claim', chatId }));
+  /**
+   * What this terminal is called on the server, once attached. Undefined
+   * before that and after the socket drops -- a message sent then names
+   * nobody and runs with the server's tools, which is the honest answer.
+   */
+  get connectionId(): string | undefined {
+    return this.socket?.readyState === WebSocket.OPEN ? this.id : undefined;
   }
 
   close(): void {
     this.socket?.close();
     this.socket = undefined;
+    this.id = undefined;
   }
 }

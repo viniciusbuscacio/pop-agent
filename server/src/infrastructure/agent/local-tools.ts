@@ -24,17 +24,19 @@ type Sdk = typeof import('@earendil-works/pi-coding-agent');
 export function buildLocalTools(
   sdk: Sdk,
   hands: HandsRegistry,
-  chatId: string,
+  connectionId: string | undefined,
 ): ToolDefinition[] {
-  const connection = hands.handsFor(chatId);
+  const connection = hands.connection(connectionId);
   // No terminal, no second pair: the tools are absent from the prompt rather
   // than present and failing, so she can say she has no access to that
-  // machine instead of trying and apologising.
+  // machine instead of trying and apologising. Both cases land here -- a
+  // message from the PWA, which named no terminal, and a terminal that has
+  // since left.
   if (connection === undefined) return [];
 
   const { machine } = connection;
   const where = `${machine.hostname} (${machine.platform}/${machine.arch})`;
-  const operations = remoteOperations(hands, chatId);
+  const operations = remoteOperations(hands, connection.id);
 
   // Typed by what it actually touches, not by ToolDefinition: each of pi's
   // definitions is a narrower generic, and the contravariant `renderCall`

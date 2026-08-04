@@ -1,4 +1,9 @@
-import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@popy/shared';
+import {
+  CLIENT_HEADER,
+  CLIENT_PLATFORM_HEADER,
+  HANDS_HEADER,
+  SESSION_TOKEN_HEADER,
+} from '@popy/shared';
 import type {
   ChatDTO,
   ChatListResponse,
@@ -34,6 +39,13 @@ export interface ApiOptions {
   token?: string;
   /** Told when the server issues a fresh token, so the profile can store it. */
   onToken?: (token: string) => void;
+  /**
+   * This terminal's hands connection, read at call time and not captured:
+   * the socket may attach after the first request and drop before the last.
+   * Undefined means the message names no machine, and the run gets the
+   * server's tools only (docs/cli.md, Whose hands).
+   */
+  handsConnectionId?: () => string | undefined;
   /** Injected so tests never open a socket. */
   fetch?: typeof globalThis.fetch;
 }
@@ -86,6 +98,8 @@ export class PopyApi {
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
     };
+    const hands = this.options.handsConnectionId?.();
+    if (hands !== undefined) headers[HANDS_HEADER] = hands;
     if (init.body !== undefined) headers['content-type'] = 'application/json';
     if (this.options.token !== undefined) headers['authorization'] = `Bearer ${this.options.token}`;
 

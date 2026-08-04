@@ -115,6 +115,13 @@ export interface PiOpenOptions {
   instructions: string;
   /** The conversation this session serves, so save_artifact can attribute. */
   chatId: string;
+  /**
+   * The terminal that typed the message this run answers, if it was one
+   * (docs/cli.md, Whose hands). Undefined for the PWA, and the run then has
+   * the server's tools only. Fixed when the message was accepted: attaching
+   * or detaching a terminal afterwards does not reach into a run in flight.
+   */
+  handsConnectionId?: string;
 }
 
 export interface PiEngine {
@@ -185,14 +192,14 @@ export interface SdkPiEngineOptions {
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
   /**
-   * The second pair of hands (docs/cli.md step 3): pi's own tools built again
-   * with remote operations, when a terminal is attached to this chat. Given
-   * the whole sdk rather than `defineTool`, because these are pi's tool
-   * definitions re-pointed, not new tools.
+   * The second pair of hands (docs/cli.md, Whose hands): pi's own tools built
+   * again with remote operations, pointed at the terminal that sent this
+   * run's message. Given the whole sdk rather than `defineTool`, because
+   * these are pi's tool definitions re-pointed, not new tools.
    */
   localTools?: (
     sdk: typeof import('@earendil-works/pi-coding-agent'),
-    chatId: string,
+    handsConnectionId: string | undefined,
   ) => ToolDefinition[];
 }
 
@@ -328,7 +335,7 @@ export class SdkPiEngine implements PiEngine {
           )),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
-      ...(this.options.localTools?.(sdk, options.chatId) ?? []),
+      ...(this.options.localTools?.(sdk, options.handsConnectionId) ?? []),
     ];
 
     // The compaction policy, explicit instead of inherited defaults

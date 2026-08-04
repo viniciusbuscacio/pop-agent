@@ -40,6 +40,20 @@ export const CLIENT_HEADER = 'x-popy-client';
 export const CLIENT_PLATFORM_HEADER = 'x-popy-client-platform';
 
 /**
+ * The terminal that typed this message, named by the id its hands channel
+ * gave it on attach (docs/cli.md, Whose hands).
+ *
+ * On the message and not on the chat: the hands belong to whoever is typing,
+ * so a laptop that is shut is never reachable through a message sent from the
+ * phone, and a conversation answered from two machines stays legible when it
+ * is read back later.
+ *
+ * Only the CLI sends it. An unknown or departed id is not an error -- the run
+ * simply has the server's tools, exactly like a message from the PWA.
+ */
+export const HANDS_HEADER = 'x-popy-hands';
+
+/**
  * `web` is a browser tab; `pwa` the same app installed and running
  * standalone; `desktop` the embedded shell (not built yet). `mobile` is
  * absent on purpose -- it is a shape of screen, not a client, and lives in
