@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ModelInfo } from '../ports/agent-bridge.js';
+import { ProviderGatewayError } from '../ports/provider-gateway.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
@@ -50,7 +51,9 @@ class MemorySecrets implements SecretsRepo {
 class ScriptedGateway implements ProviderGateway {
   catalog: ModelInfo[] = [{ id: 'live/model' }];
   failListing = false;
-  failCompleting: string | undefined;
+  /** A string becomes a plain Error; an Error is rejected as given, which is
+   *  how a typed ProviderGatewayError reaches the code under test. */
+  failCompleting: string | Error | undefined;
   listed = 0;
   completions: CompletionRequest[] = [];
 
@@ -63,7 +66,9 @@ class ScriptedGateway implements ProviderGateway {
   complete(request: CompletionRequest): Promise<string> {
     this.completions.push(request);
     if (this.failCompleting !== undefined) {
-      return Promise.reject(new Error(this.failCompleting));
+      return Promise.reject(
+        this.failCompleting instanceof Error ? this.failCompleting : new Error(this.failCompleting),
+      );
     }
     return Promise.resolve('ok');
   }
@@ -351,17 +356,27 @@ describe('subscription (oauth) providers', () => {
 
     const result = await service.test(CODEX);
 
-    expect(result).toEqual({ ok: true, latencyMs: 0 });
+    // No latency: the check reads a stored credential and never leaves the
+    // machine, so a millisecond figure would describe a round trip to the
+    // provider that never happened.
+    expect(result).toEqual({ ok: true });
     expect(checkAuthCalls).toEqual([CODEX]);
     expect(gateway.completions).toHaveLength(0);
   });
 
   it('hands back the check s words when the credential is gone', async () => {
-    expect(await service.test(CODEX)).toEqual({
-      ok: false,
-      message: 'Not signed in.',
-      latencyMs: 0,
+    expect(await service.test(CODEX)).toEqual({ ok: false, message: 'Not signed in.' });
+  });
+
+  it('passes a provider that answered without words, because the key still worked', async () => {
+    // A reasoning model handed the five-token ceiling spends them thinking and
+    // returns an empty message. Real work fails on that -- a title needs words
+    // -- but a CONNECTION test asking "is this key good?" was answered.
+    gateway.failCompleting = new ProviderGatewayError('The provider answered without a message.', {
+      reachable: true,
     });
+
+    expect(await service.test(OPENROUTER, 'sk-fine')).toEqual({ ok: true, latencyMs: 0 });
   });
 
   it('answers the engine catalog keyless, never touching a gateway', async () => {

@@ -85,7 +85,9 @@ export class OpenAiCompatibleGateway implements ProviderGateway {
     };
     const content = body.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
-      throw new ProviderGatewayError('The provider answered without a message.');
+      throw new ProviderGatewayError('The provider answered without a message.', {
+        reachable: true,
+      });
     }
     return content;
   }

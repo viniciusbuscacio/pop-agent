@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { ModelInfo } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
+import { ProviderGatewayError } from '../ports/provider-gateway.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
@@ -324,10 +325,13 @@ export class ProviderService {
     input: { name?: string; baseURL?: string; defaultModel?: string },
   ): CustomProviderInstance | undefined {
     const registry = this.listCustom();
-    // A ceiling nobody will meet, which is the point: the priority list is a
-    // 1..N dropdown, and N has to be a number a person can hold. 256 is far
-    // past any real install and still stops a runaway loop from writing
-    // thousands of rows into one settings value (Vinicius, 03/08).
+    // How many can exist AT ONCE, never how many have ever existed: the
+    // registry is the live list, so deleting one frees its place and an
+    // install that adds and removes for years never creeps toward the ceiling
+    // (Vinicius, 03/08). 256 is far past any real install and still stops a
+    // runaway loop from writing thousands of rows into one settings value --
+    // the priority list is a 1..N dropdown, and N has to stay a number a
+    // person can hold.
     if (registry.length >= MAX_CUSTOM_PROVIDERS) return undefined;
     let id: string;
     do {
@@ -573,16 +577,16 @@ export class ProviderService {
     const definition = this.definition(providerId);
     if (definition !== undefined && definition.authType === 'oauth') {
       // No key and no HTTP gateway: the engine owns the credential, so the
-      // engine answers whether it still works.
-      const started = this.deps.clock.now();
+      // engine answers whether it still works. No latency is reported, and
+      // that is the honest part -- this reads a stored credential and never
+      // leaves the machine, so a millisecond figure would describe a round
+      // trip to the provider that did not happen (Vinicius, 04/08).
       try {
-        const result = await this.deps.engineCheckAuth(providerId);
-        return { ...result, latencyMs: this.deps.clock.now() - started };
+        return await this.deps.engineCheckAuth(providerId);
       } catch (error) {
         return {
           ok: false,
           message: error instanceof Error ? error.message : 'The check failed.',
-          latencyMs: this.deps.clock.now() - started,
         };
       }
     }
@@ -615,10 +619,17 @@ export class ProviderService {
       await gateway.complete(request);
       return { ok: true, latencyMs: this.deps.clock.now() - started };
     } catch (error) {
+      const latencyMs = this.deps.clock.now() - started;
+      // Answered, just without words: the key and the endpoint are fine, and
+      // that is the whole question a connection test asks. TEST_MAX_TOKENS is
+      // five, which a reasoning model spends on thinking alone.
+      if (error instanceof ProviderGatewayError && error.reachable) {
+        return { ok: true, latencyMs };
+      }
       return {
         ok: false,
         message: error instanceof Error ? error.message : 'The test failed.',
-        latencyMs: this.deps.clock.now() - started,
+        latencyMs,
       };
     }
   }

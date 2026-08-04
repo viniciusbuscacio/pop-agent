@@ -192,6 +192,11 @@ export const en = {
   'provider.test.run': 'Test connection',
   'provider.test.running': 'Testing…',
   'provider.test.ok': 'It answered.',
+  'provider.test.okLatency': 'It answered in {ms} ms.',
+  'provider.test.signedIn': 'The subscription credential is valid.',
+  // Worth saying out loud: on a paid key this is a real request, not a ping.
+  'provider.test.hint':
+    'Sends one tiny request and times the answer. A few tokens on a paid key; nothing on a subscription.',
   'provider.test.failed': 'It did not answer.',
   'provider.saveFailed': 'That could not be saved.',
   'settings.section.model': 'Model',

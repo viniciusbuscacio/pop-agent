@@ -376,7 +376,18 @@ function ConfigureProvider({
         provider.id,
         apiKey.trim().length > 0 ? apiKey.trim() : undefined,
       );
-      setNote(result.ok ? t('provider.test.ok') : (result.message ?? t('provider.test.failed')));
+      // The round trip is the useful half of the answer: "it works" and "it
+      // works, in four seconds" are different findings, and the second one is
+      // what tells you a provider is alive but not worth being first.
+      if (!result.ok) {
+        setNote(result.message ?? t('provider.test.failed'));
+      } else if (result.latencyMs === undefined) {
+        // A subscription's check never leaves the machine, so there is no
+        // round trip to report and claiming one would be a small lie.
+        setNote(isOAuth ? t('provider.test.signedIn') : t('provider.test.ok'));
+      } else {
+        setNote(t('provider.test.okLatency', { ms: Math.round(result.latencyMs) }));
+      }
     } catch {
       setNote(t('provider.test.failed'));
     } finally {
@@ -482,6 +493,7 @@ function ConfigureProvider({
             </span>
           )}
         </div>
+        <p className="-mt-1 text-xs text-[var(--muted)]">{t('provider.test.hint')}</p>
 
         {/* A dropdown of what this provider actually offers, which is the
             only way to choose among OpenRouter's hundreds. A custom endpoint

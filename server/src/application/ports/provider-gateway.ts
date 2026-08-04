@@ -9,9 +9,19 @@ import type { ModelInfo } from './agent-bridge.js';
 
 /** The provider said no; its own words are worth keeping for the user. */
 export class ProviderGatewayError extends Error {
-  constructor(message: string) {
+  /**
+   * The provider was reached and answered properly -- it just did not produce
+   * text. Real work still fails on that (a title needs words), but a
+   * *connection* test must not: a reasoning model handed a five-token ceiling
+   * spends them thinking and returns an empty message, which said "your key
+   * is broken" about a key that worked perfectly (Vinicius, 04/08).
+   */
+  readonly reachable: boolean;
+
+  constructor(message: string, options: { reachable?: boolean } = {}) {
     super(message);
     this.name = 'ProviderGatewayError';
+    this.reachable = options.reachable ?? false;
   }
 }
 

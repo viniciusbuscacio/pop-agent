@@ -70,7 +70,9 @@ export class AnthropicGateway implements ProviderGateway {
     };
     const text = body.content?.find((part) => part.type === 'text')?.text;
     if (typeof text !== 'string') {
-      throw new ProviderGatewayError('The provider answered without a message.');
+      throw new ProviderGatewayError('The provider answered without a message.', {
+        reachable: true,
+      });
     }
     return text;
   }
