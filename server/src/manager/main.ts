@@ -18,34 +18,18 @@ import { join } from 'node:path';
 import { run, systemctlArgv, type ManagerDeps, type ServiceVerb } from './commands.js';
 
 /**
- * Which unit to act on.
+ * The unit. One name, fixed (Vinicius, 04/08).
  *
- * `POPY_SERVICE` wins. Otherwise the installed units are asked, in
- * preference order, and the first that exists is used -- because a box that
- * runs the dev unit and has no `popy.service` would otherwise get "Failed to
- * stop popy.service", which is a true sentence about the wrong service.
- * Falls back to `popy` when nothing is installed, so the error names the
- * thing a production install would have.
+ * An earlier version asked systemd which `popy*` units were installed and
+ * took the first that existed. That was written to paper over a wrong
+ * default, and it bought a command whose target depended on what happened to
+ * be on the box -- fine on the one machine it was tested on, and a guess
+ * everywhere else. A tool that stops a service should be predictable about
+ * WHICH service before it is clever about finding one.
+ *
+ * `POPY_SERVICE` still overrides, for a box running two.
  */
-function resolveUnit(): string {
-  const chosen = process.env['POPY_SERVICE'];
-  if (chosen !== undefined && chosen.length > 0) return chosen;
-
-  const listed = spawnSync('systemctl', ['list-unit-files', '--no-legend', 'popy*.service'], {
-    encoding: 'utf8',
-  });
-  const installed = new Set(
-    (listed.stdout ?? '')
-      .split('\n')
-      .map((line) => line.trim().split(/\s+/)[0])
-      .filter((name): name is string => name !== undefined && name.endsWith('.service'))
-      .map((name) => name.replace(/\.service$/, '')),
-  );
-
-  return ['popy', 'popy-service'].find((name) => installed.has(name)) ?? 'popy';
-}
-
-const UNIT = resolveUnit();
+const UNIT = process.env['POPY_SERVICE'] ?? 'popy-service';
 
 function service(verb: ServiceVerb): number {
   // `sudo` for the verbs that change something. Without it systemd hands the

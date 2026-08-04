@@ -71,9 +71,8 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     case 'stop':
     case 'restart':
     case 'status':
-      // Named out loud. A box can have `popy` and `popy-service` side by side,
-      // and "Failed to stop popy.service" is a baffling answer to a command
-      // that never said which service it meant.
+      // Named out loud, because "Failed to stop popy.service" was a baffling
+      // answer to a command that never said which service it meant.
       if (command !== 'status') deps.out(`${command} ${deps.unit}`);
       return deps.service(command);
 
