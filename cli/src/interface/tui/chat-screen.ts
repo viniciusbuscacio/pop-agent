@@ -2,6 +2,7 @@ import {
   Editor,
   Markdown,
   matchesKey,
+  Spacer,
   ProcessTerminal,
   Text,
   TUI,
@@ -58,12 +59,14 @@ export class ChatScreen {
   /** The answer being streamed. Replaced by Markdown once it settles. */
   private streaming: Text | undefined;
   private thinkingShown = false;
+  /** Whether anything has been asked yet, so the first turn has no gap above. */
+  private spoken = false;
   private title: string;
 
   constructor(private readonly options: ScreenOptions) {
     this.tui = new TUI(options.terminal ?? new ProcessTerminal());
     this.title = options.title ?? 'New conversation';
-    this.header = new Text('');
+    this.header = new Text('', 0, 0);
     this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
 
     this.tui.addChild(this.header);
@@ -105,9 +108,18 @@ export class ChatScreen {
     process.exit(0);
   }
 
-  /** A finished block of text, appended and never touched again. */
+  /**
+   * A finished block of text, appended and never touched again.
+   *
+   * `Text` pads by default -- a blank line above AND below -- while
+   * `Markdown` here does not, so a streamed answer occupied three lines and
+   * the same words rendered afterwards occupied one. Every answer that
+   * finished therefore shrank its block by two and pulled the editor up with
+   * it, which is what "the line I type jumps" was (Vinicius, 04/08). The two
+   * have to be the same shape, so nothing pads.
+   */
   say(text: string): void {
-    this.append(new Text(text));
+    this.append(new Text(text, 0, 0));
   }
 
   private markdown(text: string): void {
@@ -152,7 +164,7 @@ export class ChatScreen {
     if (shown.length === 0) return;
 
     if (this.streaming === undefined) {
-      this.streaming = new Text(shown);
+      this.streaming = new Text(shown, 0, 0);
       this.append(this.streaming);
       return;
     }
@@ -194,6 +206,13 @@ export class ChatScreen {
       return;
     }
 
+    // A blank line before the question and none after it: a turn is a
+    // question and its answer, and the eye needs the gap between turns, not
+    // inside them.
+    // Spacer, not an empty Text: `Text` trims, so whitespace-only content
+    // renders zero lines and the separator silently is not there.
+    if (this.spoken) this.append(new Spacer(1));
+    this.spoken = true;
     this.say(paint.cyan(`> ${text}`));
     try {
       await this.options.session.ask(text);
