@@ -17,10 +17,27 @@ memory, it costs from the same budget, it passes the same taint guard, it
 gets the same title treatment. Nothing about it is a side channel.
 
 The difference is where the agent's hands are. While a terminal is
-attached, the **system tools** (`bash`, `read`, `write`, `edit`, and the
-rest of pi's coding tools) execute **on the machine that typed `popy`** —
-not in `POPY_DATA_DIR`'s workspace. Popy's own tools (memory, notes,
-skills, artifacts, `web_fetch`) keep running on the server, as always.
+attached she has **two pairs**: the system tools she always had, running
+on the server, and a second set running **on the machine that typed
+`popy`**. Popy's own tools (memory, notes, skills, artifacts,
+`web_fetch`) keep running on the server, as always.
+
+*(Revised 04/08. This first said the system tools MOVE to the terminal's
+machine while one is attached, and that a `popy` on the MacBook therefore
+had no access to the server's files — "hands follow the keyboard". Both
+was chosen instead: she should be able to read a file on the server and
+write it to the laptop in one turn, and moving the tools would have made
+the same tool mean different machines depending on who was connected.)*
+
+**Two sets, not one tool with a switch.** pi separates *what a tool is*
+from *what touches the disk*, so the same `ToolDefinition`s are registered
+twice with two `*Operations` implementations — same schemas, same limits,
+same truncation. The server's set keeps the plain names (`bash`, `read`,
+`write`, `edit`) because it is always there: a phone session has only
+that one, and a tool must not change meaning depending on whether a
+terminal happens to be open. The terminal's set is prefixed
+(`local_bash`, `local_read`, …) and exists only while one owns the hands.
+The system prompt says which machine each is, by hostname and OS.
 
 ```
    MacBook / ThinkPad / the server itself          ubuntu-home (or any Popy)
@@ -276,11 +293,15 @@ mid-flight. Reopening the chat in the PWA is
 fine; the system tools are simply **absent from the prompt**, and she can
 say she no longer has access to that machine.
 
-**Consequence, stated plainly:** a `popy` open on the MacBook has no
-direct access to the server's files. To touch `~/dev/popy`, open `popy`
-there over ssh — hands follow the keyboard. (Or let her use `ssh`
-herself; both machines are on the same tailnet. That is her choice, not
-architecture.)
+**Consequence, stated plainly:** with two sets she can move things
+between the machines herself — read on the server, write on the laptop —
+and the tool name is the only thing that says which is which. That places
+the whole weight on the tool descriptions and on the prompt naming both
+machines, which is the cost of the choice.
+
+It also means one turn can touch two machines, so the guard evaluates
+each call against the list for the machine it is bound for (see Guarding
+two machines). The tool name is what selects the list.
 
 ## Client shape
 
