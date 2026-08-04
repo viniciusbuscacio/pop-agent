@@ -1,0 +1,15 @@
+{
+  "name": "@popy/cli",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "popy": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@popy/shared": "*"
+  }
+}

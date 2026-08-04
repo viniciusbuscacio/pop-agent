@@ -3,7 +3,7 @@
 export const SELF_MAP = [
   "## Repo map (generated -- npm run selfmap)",
   "",
-  "Monorepo, npm workspaces: shared, server, web. `shared` is the wire",
+  "Monorepo, npm workspaces: shared, server, web, cli. `shared` is the wire",
   "contract (pure DTOs); `server` and `web` both import it.",
   "Key dependencies: pi 0.83.0, hono ^4.6.0, better-sqlite3 ^13.0.2, react ^19.0.0.",
   "",
