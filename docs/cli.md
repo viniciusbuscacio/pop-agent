@@ -139,12 +139,70 @@ someone who is not a developer, or a machine under corporate policy. Then
 "install Node first" stops being a convenience of the maintainer's and
 becomes a wall, and Go earns it.
 
-Distribution to a machine without npm is a packaging question, resolved
-when it comes up; it does not affect the design. Measured 04/08: a single
-esbuild bundle of the CLI is ~460 KB and runs login, chats, the TUI, the
-WebSocket and remote hands with no `node_modules` at all — ESM **with a
-`createRequire` banner**, because plain ESM dies on a dynamic `require`
-inside a dependency and plain CJS dies on `import.meta`.
+## Distribution
+
+**The server serves its own client** *(Vinicius, 04/08; evaluated, not yet
+built)*:
+
+```
+npm i -g https://your-popy.example/cli-0.2.0.tgz
+```
+
+Chosen over publishing to the public registry for one reason that is not
+about convenience: **the client cannot drift from the server it talks
+to.** The two share a wire — REST, the `StreamEvent` shapes, the hands
+frames — and a registry lets someone pair a 0.2 server with a 0.4 client
+and fail in a way nobody can read. Downloaded from the server, the
+version is that server's, always. For self-hosted software that is the
+right shape: the thing you run hands you the thing you talk to it with.
+
+It also makes the install line carry its own address, which a README
+cannot get wrong.
+
+**What actually lands**, measured 04/08 — 2.9 MB, no compilation:
+
+| | |
+|---|---|
+| `@earendil-works/pi-tui` | 2.0 MB |
+| `marked` (pi-tui's) | 460 KB |
+| `ws` | 196 KB |
+| `get-east-asian-width` | 36 KB |
+| the CLI's own `dist/` | 244 KB |
+
+None of it native. What does NOT come: `better-sqlite3` and `argon2`
+(both compile C++), `@huggingface/transformers` (hundreds of MB), React,
+vite, the PWA, playwright, the server. That list is the whole point —
+telling someone to clone the monorepo and `npm install` hands them all of
+it to build a chat client.
+
+**One thing blocks it today, and it is measured, not guessed.** `npm pack
+-w @popy/cli` produces a 49 KB tarball that does not install:
+
+```
+npm error 404 '@popy/shared@*' is not in this registry
+```
+
+`@popy/shared` is a workspace dependency; outside the monorepo npm looks
+for it on the public registry and finds nothing. The CLI uses three
+string constants from it. They have to be inlined at build time, leaving
+two public dependencies.
+
+**Two details still to decide.** The tarball route must answer without a
+session, because npm cannot log in — a new public surface, which §18 has
+rules about. And npm caches by URL, so the filename needs the version in
+it or an update silently installs the old one; the Settings → About card
+is the natural place to show the current command.
+
+**Alternatives measured the same day**, kept so they are not re-derived:
+a single esbuild bundle is 460 KB and runs everything with no
+`node_modules` at all — but it is `node popy.mjs`, not a command on the
+PATH, and it must be ESM **with a `createRequire` banner**, because plain
+ESM dies on a dynamic `require` inside a dependency and plain CJS dies on
+`import.meta`. A Go binary would be ~10 MB and need no runtime; see
+Language for why that is not the trade being made. A Node SEA is ~120 MB,
+because it carries the whole Node binary, and needs codesigning to
+cross-build for macOS.
+
 
 ## Naming
 
