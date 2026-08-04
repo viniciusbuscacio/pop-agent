@@ -1,4 +1,4 @@
-import { SESSION_TOKEN_HEADER } from '@popy/shared';
+import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@popy/shared';
 import { healthMonitor } from './health';
 import { session } from './session';
 
@@ -49,12 +49,42 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
   }
 }
 
+/**
+ * Which client this is, and what it is running on (popy.spec §13).
+ *
+ * `web` and `pwa` are the same code; the only real difference is whether it
+ * was installed, which `display-mode: standalone` is exactly the question
+ * for. A form factor is NOT a client -- "PWA on an iPhone" would otherwise
+ * be two answers at once -- so the phone half is carried as the platform.
+ */
+function clientHeaders(): Record<string, string> {
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as { standalone?: boolean }).standalone === true);
+  return {
+    [CLIENT_HEADER]: standalone ? 'pwa' : 'web',
+    [CLIENT_PLATFORM_HEADER]: platformName(),
+  };
+}
+
+/** Coarse on purpose: the model needs "an iPhone", not a build number. */
+function platformName(): string {
+  const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(agent)) return 'ios';
+  if (/Android/i.test(agent)) return 'android';
+  if (/Macintosh/i.test(agent)) return 'macos';
+  if (/Windows/i.test(agent)) return 'windows';
+  if (/Linux/i.test(agent)) return 'linux';
+  return '';
+}
+
 export async function apiRequest<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const token = session.token();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = clientHeaders();
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 

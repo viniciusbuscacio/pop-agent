@@ -24,6 +24,34 @@ export interface LockedError extends ApiError {
  */
 export const SESSION_TOKEN_HEADER = 'x-popy-token';
 
+/**
+ * Which client sent a request (popy.spec §13). Set once in each client's API
+ * layer, so every call carries it -- including the ones nobody has written
+ * yet -- and recorded on the message so the history remembers where each turn
+ * happened, not just where this one is.
+ *
+ * Deliberately NOT called `source`: that name is already two other things in
+ * Popy (an artifact is `agent`/`upload`, a chat title is `auto`/`manual`).
+ *
+ * A client with a token can forge this, and on a single-user install that
+ * means the owner lying to himself. It is context, never a security decision.
+ */
+export const CLIENT_HEADER = 'x-popy-client';
+export const CLIENT_PLATFORM_HEADER = 'x-popy-client-platform';
+
+/**
+ * `web` is a browser tab; `pwa` the same app installed and running
+ * standalone; `desktop` the embedded shell (not built yet). `mobile` is
+ * absent on purpose -- it is a shape of screen, not a client, and lives in
+ * the platform instead, or "PWA on an iPhone" would be two answers at once.
+ */
+export const CLIENT_KINDS = ['web', 'pwa', 'desktop', 'cli', 'api', 'task'] as const;
+export type ClientKind = (typeof CLIENT_KINDS)[number];
+
+export function isClientKind(value: string): value is ClientKind {
+  return (CLIENT_KINDS as readonly string[]).includes(value);
+}
+
 export * from './mcp.js';
 
 /** `GET /v1/auth/state` — decides between the setup wizard and the login screen. */

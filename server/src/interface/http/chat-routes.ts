@@ -1,8 +1,16 @@
 import { Hono, type Context } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { ChatDTO, MessageDTO, ModelDTO } from '@popy/shared';
-import type { Chat, ChatSummary, Message } from '../../domain/chat/chat.js';
+import {
+  CLIENT_HEADER,
+  CLIENT_PLATFORM_HEADER,
+  isClientKind,
+  type ChatDTO,
+  type MessageDTO,
+  type ModelDTO,
+} from '@popy/shared';
+import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/chat/chat.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
@@ -66,6 +74,49 @@ export interface ChatRoutesDeps {
   providers: ProviderService;
   hub: SseHub;
   tickets: EventTickets;
+}
+
+/**
+ * Who sent this, off the headers (popy.spec §13).
+ *
+ * Validated against the known list rather than stored as given: an unknown
+ * value would end up in the model's context and in the history as if it meant
+ * something. A client that says nothing is recorded as nothing -- which is
+ * the truth, and better than guessing "web".
+ *
+ * Forgeable by anyone holding the token, which on a single-user install means
+ * the owner. It is context, never a security decision.
+ */
+function readClient(c: Context): MessageClient | undefined {
+  const kind = c.req.header(CLIENT_HEADER);
+  if (kind === undefined || !isClientKind(kind)) return undefined;
+
+  const platform = c.req.header(CLIENT_PLATFORM_HEADER);
+  // Two sources, in that order. Behind a reverse proxy the socket is the
+  // proxy and only the forwarded header knows the caller; connecting straight
+  // to the port there IS no header, and reading only that recorded nothing at
+  // all for every direct connection -- which is most of them.
+  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  const socket = connInfo(c);
+  const ip = forwarded !== undefined && forwarded.length > 0 ? forwarded : socket;
+
+  return {
+    kind,
+    ...(platform === undefined || platform.length === 0 ? {} : { platform: platform.slice(0, 40) }),
+    ...(ip === undefined ? {} : { ip }),
+  };
+}
+
+/** The socket's own address, when the adapter can say. */
+function connInfo(c: Context): string | undefined {
+  try {
+    const address = getConnInfo(c).remote.address;
+    // ::ffff:127.0.0.1 is IPv4 wearing an IPv6 hat; store the address itself.
+    return address === undefined ? undefined : address.replace(/^::ffff:/, '');
+  } catch {
+    // A runtime without connection info is not a reason to refuse a message.
+    return undefined;
+  }
 }
 
 export function createChatRoutes(deps: ChatRoutesDeps): Hono {
@@ -152,10 +203,12 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       });
     }
 
+    const client = readClient(c);
     const result = deps.runs.startRun(
       c.req.param('id'),
       parsed.data.text,
       [...(parsed.data.attachments ?? []), ...referenced],
+      client === undefined ? {} : { client },
     );
     if (!result.ok) {
       if (result.reason === 'chat_not_found') return chatNotFound(c);

@@ -172,8 +172,9 @@ export class SqliteChatRepo implements ChatRepo {
   appendMessage(message: Message): Message {
     const insert = this.db.prepare(
       `INSERT INTO messages
-         (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at,
+          client, client_platform, client_ip)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = message;
     for (let attempt = 0; ; attempt += 1) {
@@ -187,6 +188,9 @@ export class SqliteChatRepo implements ChatRepo {
           JSON.stringify(current.tools),
           JSON.stringify(current.attachments),
           current.createdAt,
+          current.client?.kind ?? null,
+          current.client?.platform ?? null,
+          current.client?.ip ?? null,
         );
         return current;
       } catch (error) {
@@ -194,6 +198,18 @@ export class SqliteChatRepo implements ChatRepo {
         current = { ...current, id: entityId('message') };
       }
     }
+  }
+
+  lastClientKind(chatId: string): string | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT client FROM messages
+          WHERE chat_id = ? AND role = 'user' AND client IS NOT NULL
+       ORDER BY created_at DESC, rowid DESC
+          LIMIT 1`,
+      )
+      .get(chatId) as { client: string } | undefined;
+    return row?.client;
   }
 
   touch(chatId: string, at: string): void {
@@ -248,6 +264,9 @@ interface MessageRow {
   tools_json: string;
   attachments_json: string;
   created_at: string;
+  client: string | null;
+  client_platform: string | null;
+  client_ip: string | null;
 }
 
 function toChat(row: ChatRow): Chat {
@@ -275,6 +294,21 @@ function toMessage(row: MessageRow): Message {
     tools: parseJson<ToolRecord[]>(row.tools_json, []),
     attachments: parseJson<Attachment[]>(row.attachments_json, []),
     createdAt: row.created_at,
+    // Absent, not empty: a message written before the column existed, or one
+    // the server itself wrote, genuinely has no client.
+    ...(row.client === null || row.client === undefined
+      ? {}
+      : {
+          client: {
+            kind: row.client,
+            ...(row.client_platform === null || row.client_platform === undefined
+              ? {}
+              : { platform: row.client_platform }),
+            ...(row.client_ip === null || row.client_ip === undefined
+              ? {}
+              : { ip: row.client_ip }),
+          },
+        }),
   };
 }
 

@@ -47,6 +47,12 @@ export interface ChatRepo {
 
   /** True when the title is still the untouched default (drives auto-titling). */
   countMessages(chatId: string): number;
+  /**
+   * Which client the last user message in this chat came through, or
+   * undefined when there is none or it predates the field. Read before the
+   * new message is stored, so the service can tell a change from a repeat.
+   */
+  lastClientKind(chatId: string): string | undefined;
 
   /** How many turns the user has taken -- the auto-title cadence counts these. */
   countUserMessages(chatId: string): number;

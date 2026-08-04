@@ -1,4 +1,4 @@
-import { SESSION_TOKEN_HEADER } from '@popy/shared';
+import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@popy/shared';
 import type {
   ChatDTO,
   ChatListResponse,
@@ -80,7 +80,12 @@ export class PopyApi {
   }
 
   async request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      // Set here and nowhere else, so every call carries it -- including the
+      // ones nobody has written yet (popy.spec §13).
+      [CLIENT_HEADER]: 'cli',
+      [CLIENT_PLATFORM_HEADER]: process.platform,
+    };
     if (init.body !== undefined) headers['content-type'] = 'application/json';
     if (this.options.token !== undefined) headers['authorization'] = `Bearer ${this.options.token}`;
 

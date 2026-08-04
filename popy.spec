@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.55 — 2026-08-04.
+Version 1.56 — 2026-08-04.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1183,6 +1183,34 @@ covers "forgot password AND recovery key" for whoever has shell.
 
 ## Changelog
 
+- 1.56 (2026-08-04): **Every message remembers where it came from (§13).**
+  Migration 024 adds `client`, `client_platform` and `client_ip` to
+  `messages`. **Per message, not per connection**, because a conversation
+  moves between devices and the value is reading that back later; a
+  connection only ever answers "where are we right now", which is the one
+  thing the user could have said out loud (Vinicius, 04/08).
+  Vocabulary: `web | pwa | desktop | cli | api | task`. **`mobile` is
+  deliberately absent** -- a form factor is not a client, and "PWA on an
+  iPhone" would otherwise be two answers at once; the phone half is the
+  platform. Named `client`, NOT `source`: that word is already an
+  artifact's `agent`/`upload` and a title's `auto`/`manual`.
+  Carried in `x-popy-client` / `x-popy-client-platform`, set once in each
+  client's api layer so every call has it, and validated at the edge --
+  an unknown value is recorded as nothing rather than passed through into
+  the model's context. NULL is the honest value for the 427 rows that
+  predate this and for every assistant and system message, which no client
+  sent. A header is **forgeable by anyone holding the token**, which on a
+  single-user install means the owner: it is context, never a security
+  decision.
+  **The agent is told only when the channel CHANGES** (`channel-note.ts`),
+  plus once at the start of a conversation. Repeating "this came from the
+  CLI" on all fifty turns is fifty copies of a fact that mattered once,
+  paid for on every request. **The IP never reaches the model**: it answers
+  "who connected", which is an audit question, and nothing she says would
+  change for it -- what enters the context enters the memory and the
+  backups forever. It is read from `x-forwarded-for` behind a proxy and
+  from the socket otherwise; reading only the header recorded nothing for
+  every direct connection.
 - 1.55 (2026-08-04): **Providers are added, not configured (§14, §15).** The
   Model screen used to show every provider Popy knows about, configured or
   not, each an open form -- six cards to read before finding the one you had

@@ -1,4 +1,4 @@
-import { type Attachment, type ToolRecord } from '../../domain/chat/chat.js';
+import { type Attachment, type MessageClient, type ToolRecord } from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
 import { fallbackTitle, isGenericTitle } from '../../domain/chat/title.js';
 import type { AgentBridge, AgentRunResult } from '../ports/agent-bridge.js';
@@ -7,6 +7,7 @@ import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 import { billsPerToken } from '../providers/provider-definitions.js';
+import { channelNote } from './channel-note.js';
 import { shouldFailOver, type RunFailure } from './failover.js';
 
 /**
@@ -49,6 +50,13 @@ export interface StartRunOptions {
    * minutes.
    */
   notify?: boolean;
+  /**
+   * Which client sent this, recorded on the message (popy.spec §13). The
+   * `ip` half is stored and never reaches the model: it answers "who
+   * connected", which is an audit question, and no answer of hers would
+   * change because of it.
+   */
+  client?: MessageClient;
 }
 
 export type StartRunResult =
@@ -240,6 +248,12 @@ export class RunService {
       return { ok: false, reason: 'llm_stopped' };
     }
 
+    // What the last message came through, read BEFORE this one is stored:
+    // the agent is told only when the channel changes, because repeating
+    // "this came from the CLI" on all fifty turns of a conversation is fifty
+    // copies of a fact that mattered once (Vinicius, 04/08).
+    const previousClient = this.deps.chats.lastClientKind(chatId);
+
     const userMessage = this.deps.chats.appendMessage({
       id: newMessageId(),
       chatId,
@@ -249,6 +263,7 @@ export class RunService {
       tools: [],
       attachments,
       createdAt: now,
+      ...(options.client === undefined ? {} : { client: options.client }),
     });
     this.deps.chats.touch(chatId, now);
 
@@ -272,10 +287,14 @@ export class RunService {
       this.deps.sink.emit({ kind: 'title', chatId, title });
     }
 
+    const note = channelNote(options.client, previousClient);
+
     const run: PendingRun = {
       runId: newRunId(),
       chatId,
-      prompt: text,
+      // The note rides this turn's prompt only; the stored message keeps the
+      // user's own words, so the history is not littered with framing.
+      prompt: note === undefined ? text : `${note}\n\n${text}`,
       model: chat.model,
       provider: chat.provider,
       attachments,

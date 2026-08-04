@@ -62,6 +62,20 @@ export interface Message {
   tools: ToolRecord[];
   attachments: Attachment[];
   createdAt: string;
+  /**
+   * Which client the user sent this from (popy.spec §13). Absent on every
+   * assistant and system message -- those are born on the server -- and on
+   * anything written before the field existed, where a value would be a guess
+   * recorded as a fact.
+   */
+  client?: MessageClient;
+}
+
+/** Where a message came from. `ip` is for audit and never reaches the model. */
+export interface MessageClient {
+  kind: string;
+  platform?: string;
+  ip?: string;
 }
 
 export const DEFAULT_CHAT_TITLE = 'New chat';
