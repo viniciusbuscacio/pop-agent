@@ -200,6 +200,26 @@ ask whether the previous client survives it. A test that fails when those
 files change without the number changing is worth having as a prod; it
 cannot make the call.
 
+**The whole of it**, once per machine:
+
+```
+brew install node                          # or apt, or whatever that machine uses
+npm i -g https://your-popy.example/cli-0.2.0.tgz
+popy login
+```
+
+Then `popy`. On the server the first line is already true — Popy runs on
+Node there.
+
+**Node is required, and there is no version of this that is not**
+*(decided 04/08)*. The single-file bundle below does not escape it: it is
+still `node popy.mjs`. The only real escapes are Go and a Node SEA, and
+both cost the TUI or 120 MB. Language already made this trade and named
+what would reverse it — the day `popy` has to run on a machine the
+maintainer does not control. While the machines are his, `brew install
+node` is a one-time annoyance and writing a terminal UI by hand is a
+permanent one.
+
 **What actually lands**, measured 04/08 — 2.9 MB, no compilation:
 
 | | |
