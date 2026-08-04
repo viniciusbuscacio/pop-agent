@@ -26,6 +26,7 @@ import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
 import { StorageService } from '../application/storage/storage-service.js';
+import { HandsRegistry } from '../application/hands/hands-registry.js';
 import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
 import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
@@ -342,6 +343,9 @@ export function createTestApp(
     skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
     mcp,
     usage: new SqliteUsageRepo(db),
+    // No terminal ever attaches in a fixture; the registry is here so the
+    // shape is complete and the routes mount.
+    hands: new HandsRegistry(),
     // A real service over a throwaway directory: the report has to survive
     // folders that do not exist, which is exactly the fixture's shape.
     storage: new StorageService({

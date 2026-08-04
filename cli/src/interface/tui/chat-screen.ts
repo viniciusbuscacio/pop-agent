@@ -67,6 +67,12 @@ export interface ScreenOptions {
   terminal?: Terminal;
   /** Called instead of exiting, so a test is not killed by /quit. */
   onExit?: () => void;
+  /**
+   * Told which chat this screen is on, once it has one. The hands are claimed
+   * per chat and a chat does not exist until the first message creates it, so
+   * this fires after the ask rather than at start-up.
+   */
+  onChatOpened?: (chatId: string) => void;
 }
 
 export class ChatScreen {
@@ -238,6 +244,8 @@ export class ChatScreen {
     this.say(paint.cyan(`> ${text}`));
     try {
       await this.options.session.ask(text);
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
     } catch (error) {
       this.say(paint.red(error instanceof Error ? error.message : 'That did not send.'));
     }

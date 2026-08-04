@@ -1,8 +1,18 @@
+import { hostname } from 'node:os';
 import { ChatSession } from '../application/session.js';
 import { DEFAULT_PROFILE } from '../application/profiles.js';
 import { readEvents } from '../infrastructure/events.js';
 import type { Context } from './commands.js';
+import { Hands } from '../infrastructure/hands.js';
 import { ChatScreen } from './tui/chat-screen.js';
+
+/** Kept next to the package, not read from it: no JSON import at runtime. */
+const VERSION = '0.2.0';
+
+const handsReady = (): string =>
+  `This machine (${hostname()}) is attached: local tools run here.`;
+const handsTaken = (): string =>
+  'Another terminal owns this conversation; this one is watching.';
 
 /**
  * Wiring for the interactive screen: the profile, the ports the session needs,
@@ -52,9 +62,27 @@ export async function chat(
     },
   );
 
-  const screen = new ChatScreen({ session, server: profile.url });
+  // The hands channel, alongside the chat and never in front of it: a server
+  // that refuses the upgrade leaves the conversation working and the local
+  // tools simply absent (docs/cli.md step 3).
+  const hands = new Hands({
+    url: profile.url,
+    token: profile.token,
+    version: VERSION,
+    onEvent: (event) => {
+      if (event.kind === 'attached') screen.say(handsReady());
+      if (event.kind === 'claimed' && !event.mine) screen.say(handsTaken());
+    },
+  });
+
+  const screen = new ChatScreen({
+    session,
+    server: profile.url,
+    onChatOpened: (chatId) => hands.claim(chatId),
+  });
   if (options.chatId !== undefined) session.open(options.chatId);
 
+  hands.connect();
   screen.start();
   // Resolves only when the stream ends; the screen exits the process itself
   // on Ctrl+C or /quit.

@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { serve } from '@hono/node-server';
+import { serve, type WebSocketServerLike } from '@hono/node-server';
+import { WebSocketServer } from 'ws';
+import { HandsRegistry, PING_EVERY_MS } from './application/hands/hands-registry.js';
 import { Type } from 'typebox';
 import { envelope } from './domain/safety/sanitize.js';
 import { AuthService } from './application/auth/auth-service.js';
@@ -90,6 +92,8 @@ if (agent !== 'fake' && agent !== 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
+// Which terminals are attached and whose hands they are (docs/cli.md step 3).
+const hands = new HandsRegistry((line) => console.log(line));
 const artifactsDir = ensureArtifactsDir(context.dataDir);
 // Beside the data directory, never inside it: a backup must not end up in the
 // next backup. Named once because the storage report has to count it too --
@@ -474,6 +478,7 @@ const app = createApp({
   skills: skillsVault,
   mcp,
   usage: context.usage,
+  hands,
   storage: new StorageService({
     repo: context.storage,
     disk: new NodeDiskUsage(),
@@ -570,7 +575,21 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 // Nothing runs itself until the server is actually up (popy.spec §21).
 taskScheduler.start();
 
-serve({ fetch: app.fetch, port, hostname }, (info) => {
+// The hands channel needs a WebSocket server the adaptor can upgrade onto
+// (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.
+const wss = new WebSocketServer({ noServer: true });
+
+// One timer for every attached terminal: 15s between pings, gone after three
+// silences. A closed laptop lid does not close a socket, and a run parked on a
+// sleeping machine would hold the queue for the phone too.
+setInterval(() => hands.beat(), PING_EVERY_MS).unref();
+
+// The cast is the honest kind: `ws`'s emitter overloads are broader than the
+// adaptor's structural `WebSocketServerLike`, so the compiler cannot prove a
+// match the runtime shapes already have.
+serve(
+  { fetch: app.fetch, port, hostname, websocket: { server: wss as unknown as WebSocketServerLike } },
+  (info) => {
   console.log(`popy server listening on http://${info.address}:${info.port}`);
   console.log(`popy data dir ${context.dataDir}`);
   console.log(
@@ -586,5 +605,6 @@ serve({ fetch: app.fetch, port, hostname }, (info) => {
     void indexer.backfill();
   }
   // Catch up the file index the same way (files stored while no embedder ran).
-  void fileIndex.current?.backfill();
-});
+    void fileIndex.current?.backfill();
+  },
+);
