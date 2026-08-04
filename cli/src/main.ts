@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
