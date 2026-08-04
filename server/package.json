@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b && chmod +x dist/manager/main.js"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.83.0",

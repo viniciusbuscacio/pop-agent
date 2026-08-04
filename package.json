@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -b && npm run typecheck -w @popy/web && tsc --noEmit -p tools",
     "test": "vitest run",
-    "build": "tsc -b && npm run build -w @popy/web",
+    "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @popy/web",
     "gate": "npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke",
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",

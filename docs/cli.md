@@ -300,10 +300,24 @@ cross-build for macOS.
   wrong. They are prebuilds, not a compile step, and Linux has none and
   degrades without them, so nothing about installability changes; but the
   sentence that the packaging question rests on has to be true.)*
-- **`popyman`** — the manager: `start | stop | restart` of the Popy
-  service, plus the operator surface the spec already lists
-  (`backup | restore | update | reset-password | access-list`). Ships with
-  the server, runs only there, touches SQLite, `secret.key` and systemd.
+- **`popyman`** — the manager: `start | stop | restart | status` of the
+  Popy service, plus `backup | backups | restore | reset-password |
+  update`. Ships with the server, runs only there, touches SQLite,
+  `secret.key` and systemd. (`access-list` is in spec §18 and is not
+  built; the command says so rather than pretending.)
+
+  **On PATH, once per install:**
+
+  ```
+  npm run build
+  sudo ln -sf "$PWD/server/dist/manager/main.js" /usr/local/bin/popyman
+  ```
+
+  There is no `npm i -g` here on purpose -- `popyman` is not a package
+  anybody installs, it is the server's own tool, and a symlink to the
+  build is the honest shape of that. The build sets the executable bit,
+  because `tsc` writes a plain file and a fresh clone would otherwise
+  produce a `popyman` that exists and cannot run.
 
 The split is not cosmetic: keeping them together would drag
 `better-sqlite3` and code that knows where `secret.key` lives onto every
