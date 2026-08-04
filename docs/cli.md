@@ -87,6 +87,7 @@ client holds one secret: a session token.
 | Thinking | Streamed, dimmed, toggleable, remembered per machine *(decided)* |
 | Where files land | The existing tool split already answers it: `write`/`edit` touch the local machine (your Obsidian vault, your repo); `save_artifact` produces a server-side artifact visible in Files. The model already chooses between them *(decided)* |
 | Language | **TypeScript** *(decided)* — see Language |
+| Client/server version mismatch | **The server sets a minimum and the attach enforces it**: silent when compatible, one dim line when merely behind, refused with the install command when below the minimum. Never a silent auto-update *(decided)* — see Version compatibility |
 
 ## Language
 
@@ -148,16 +149,52 @@ built)*:
 npm i -g https://your-popy.example/cli-0.2.0.tgz
 ```
 
-Chosen over publishing to the public registry for one reason that is not
-about convenience: **the client cannot drift from the server it talks
-to.** The two share a wire — REST, the `StreamEvent` shapes, the hands
-frames — and a registry lets someone pair a 0.2 server with a 0.4 client
-and fail in a way nobody can read. Downloaded from the server, the
-version is that server's, always. For self-hosted software that is the
-right shape: the thing you run hands you the thing you talk to it with.
+Chosen over publishing to the public registry because for self-hosted
+software it is the right shape: **the thing you run hands you the thing
+you talk to it with.** The install line carries its own address, which a
+README cannot get wrong, and what it hands you is that server's own
+version, not whatever the registry's `latest` happens to be.
 
-It also makes the install line carry its own address, which a README
-cannot get wrong.
+*(Corrected 04/08. This first said the reason was that "the client cannot
+drift from the server it talks to". That is only true on the day of the
+install. The server moves to 0.3 and the laptop keeps the 0.2 it was
+handed — the same mismatch, arrived at from the other side. Serving the
+tarball is still the right choice; it just is not what stops drift. That
+is the next section, and it has to exist either way.)*
+
+### Version compatibility
+
+The two ends share a wire — REST, the `StreamEvent` shapes, the hands
+frames — and a mismatched pair fails in a way nobody can read. Nothing
+about *where the client came from* prevents that; only the handshake
+does. Attach already carries the client version (see Protocol sketch);
+the server has to read it.
+
+**The server holds two numbers** *(decided 04/08)*: its own version, and
+the oldest client it still accepts. The second is set by hand and moves
+rarely — only when the wire changes in a way an older client cannot
+survive. Most releases do not touch it.
+
+| Client vs. minimum | What happens |
+|---|---|
+| At or above | **Nothing.** No banner, no prompt. |
+| Below the current version, at or above the minimum | **One dim line**, once per new version: `popy 0.2.0 · server 0.3.0 · update: npm i -g https://…/cli-0.3.0.tgz` |
+| Below the minimum | **Refuses to attach.** Prints the exact install command and offers to run it: `Install now? [Y/n]` |
+
+The asymmetry is the point. In the optional case a prompt would be
+answered `n` on reflex and would train the reflex; a line that scrolls
+past costs nothing and is still there when wanted. In the blocking case
+the client is not usable anyway, so asking is not an interruption — it is
+the way forward, and the one moment where installing on the user's behalf
+is not a surprise. Nothing auto-updates silently, and nothing tries to
+replace a running process mid-session.
+
+**Knowing when to raise the minimum** is a judgement, not a detection.
+The wire lives in few places — the `/v1` routes, the `StreamEvent`
+shapes, the hands frames. A commit that touches one of them is the cue to
+ask whether the previous client survives it. A test that fails when those
+files change without the number changing is worth having as a prod; it
+cannot make the call.
 
 **What actually lands**, measured 04/08 — 2.9 MB, no compilation:
 
@@ -169,11 +206,21 @@ cannot get wrong.
 | `get-east-asian-width` | 36 KB |
 | the CLI's own `dist/` | 244 KB |
 
-None of it native. What does NOT come: `better-sqlite3` and `argon2`
-(both compile C++), `@huggingface/transformers` (hundreds of MB), React,
-vite, the PWA, playwright, the server. That list is the whole point —
-telling someone to clone the monorepo and `npm install` hands them all of
-it to build a chat client.
+Nothing in it compiles. `pi-tui` does ship prebuilt `.node` binaries for
+macOS and Windows (see Naming) — native files, but downloaded ready, not
+a build step, and Linux has none and degrades without them. What does NOT
+come: `better-sqlite3` and `argon2` (both compile C++),
+`@huggingface/transformers` (hundreds of MB), React, vite, the PWA,
+playwright, the server. That list is the whole point — telling someone to
+clone the monorepo and `npm install` hands them all of it to build a chat
+client.
+
+**The server hands over the shell, not the contents.** The 49 KB tarball
+comes from your machine; the 2.9 MB of dependencies still resolve from
+the public registry. That is fine everywhere it is meant to run, and it
+closes one door: a machine walled off from npmjs is not helped by this
+route at all. It is the same machine as the "no Node" case in Language,
+and it stays where that section put it.
 
 **One thing blocks it today, and it is measured, not guessed.** `npm pack
 -w @popy/cli` produces a 49 KB tarball that does not install:
@@ -183,15 +230,31 @@ npm error 404 '@popy/shared@*' is not in this registry
 ```
 
 `@popy/shared` is a workspace dependency; outside the monorepo npm looks
-for it on the public registry and finds nothing. The CLI uses three
-string constants from it. They have to be inlined at build time, leaving
-two public dependencies.
+for it on the public registry and finds nothing.
+
+**The rule that fixes it, stated generally**: the build bundles every
+`@popy/*` import into the CLI's own `dist/`, and leaves `pi-tui`, `ws`
+and `marked` external. The published `package.json` then lists three
+public dependencies and no workspace ones, and packing works regardless
+of how much of `shared` the CLI grows into.
+
+Today that is three string constants and inlining them by hand would do.
+Stating it as a rule instead costs nothing now and settles the question
+left Open below: if the `StreamEvent` reducer moves into `@popy/shared`
+to stop being written twice, packaging does not notice. Sized for the
+small case, the rule would have had to be redone for the large one.
+
+This is a partial bundle, and it belongs in the comparison below: it
+keeps `popy` a command on the PATH, unlike the full bundle, and keeps the
+wire types shareable, unlike hand-inlining.
 
 **Two details still to decide.** The tarball route must answer without a
 session, because npm cannot log in — a new public surface, which §18 has
 rules about. And npm caches by URL, so the filename needs the version in
-it or an update silently installs the old one; the Settings → About card
-is the natural place to show the current command.
+it or an update silently installs the old one; this is why the version is
+in the path everywhere it appears above, including in the line the client
+prints when it is behind. Settings → About showing the current command is
+then a convenience, not the mechanism.
 
 **Alternatives measured the same day**, kept so they are not re-derived:
 a single esbuild bundle is 460 KB and runs everything with no
@@ -361,9 +424,13 @@ spectator. The WebSocket exists only for hands, and only the CLI opens it.
 
 **Attach.** The CLI connects, presents its session token, and describes
 its machine: hostname, platform, architecture, cwd, client version. The
-server records the connection and — for chats this client creates or
-opens — marks it as the hands owner. The machine description is injected
-into the system prompt so she never suggests `apt install` on a Mac.
+server checks that version against its minimum and refuses the attach
+below it, answering with its own version and the install command so the
+client can print something actionable rather than a protocol error (see
+Version compatibility). Otherwise it records the connection and — for
+chats this client creates or opens — marks it as the hands owner. The
+machine description is injected into the system prompt so she never
+suggests `apt install` on a Mac.
 
 **Tool registration.** When a run belongs to a chat with hands attached,
 the server builds pi's coding tools with **remote operations**: the same
@@ -458,6 +525,10 @@ with `fake-bridge`.
    `./rpc-entry`; its CLI is a bundled bin), and copying it would buy
    today's look at the price of every later release.
 5. `popyman`, and the §17 rewrite
+6. Distribution — the bundled pack, the unauthenticated tarball route,
+   and the version handshake. The handshake is the half that is not
+   optional: without it the packaging is a delivery mechanism with
+   nothing checking what it delivered
 
 ## Security note
 
@@ -472,7 +543,13 @@ two machines).
 
 ## Open
 
-- Packaging for a machine without npm (a Mac under corporate policy) —
-  deliberately out of scope until it blocks something.
+- Packaging for a machine that cannot install Node, or cannot reach the
+  public registry — the two are usually the same machine. Deliberately
+  out of scope until it blocks something; serving the tarball does not
+  address it (see Distribution), and Language already names it as the
+  thing that would reverse the choice of TypeScript.
 - Whether the `StreamEvent` reducer moves to `@popy/shared` (preferred)
-  or is written once more for the terminal.
+  or is written once more for the terminal. No longer a packaging
+  question — bundling every `@popy/*` into `dist/` makes either answer
+  pack the same. What is left is whether one reducer can serve a DOM and
+  a terminal without bending to fit both.
