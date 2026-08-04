@@ -184,6 +184,16 @@ export interface SdkPiEngineOptions {
   fileSearch?: FileSearch;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
+  /**
+   * The second pair of hands (docs/cli.md step 3): pi's own tools built again
+   * with remote operations, when a terminal is attached to this chat. Given
+   * the whole sdk rather than `defineTool`, because these are pi's tool
+   * definitions re-pointed, not new tools.
+   */
+  localTools?: (
+    sdk: typeof import('@earendil-works/pi-coding-agent'),
+    chatId: string,
+  ) => ToolDefinition[];
 }
 
 /**
@@ -318,6 +328,7 @@ export class SdkPiEngine implements PiEngine {
           )),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
+      ...(this.options.localTools?.(sdk, options.chatId) ?? []),
     ];
 
     // The compaction policy, explicit instead of inherited defaults

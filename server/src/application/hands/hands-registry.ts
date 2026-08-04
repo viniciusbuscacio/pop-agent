@@ -22,6 +22,8 @@
  *    the way through.
  */
 
+import { entityId } from '../../domain/ids.js';
+
 /** How often the server pings, and how many silences it forgives. */
 export const PING_EVERY_MS = 15_000;
 export const MISSED_PINGS_BEFORE_GONE = 3;
@@ -51,10 +53,35 @@ interface Entry {
   unanswered: number;
 }
 
+/** One tool call in flight on a terminal. */
+interface Pending {
+  connectionId: string;
+  settle: (result: HandsResult) => void;
+  onOutput: (chunk: string) => void;
+}
+
+/** What a terminal reports back when a call finishes. */
+export interface HandsResult {
+  ok: boolean;
+  /** Everything the command wrote, already streamed through `onOutput` too. */
+  output: string;
+  /** Process exit code, when the call was a command. */
+  exitCode?: number | null;
+  /** Why it could not run at all -- not the command's own failure. */
+  error?: string;
+}
+
+export interface HandsCall {
+  tool: string;
+  input: unknown;
+}
+
 export class HandsRegistry {
   private readonly entries = new Map<string, Entry>();
   /** chatId -> connection id. */
   private readonly owners = new Map<string, string>();
+  /** callId -> what is waiting for it. */
+  private readonly pending = new Map<string, Pending>();
 
   constructor(private readonly onJournal?: (line: string) => void) {}
 
@@ -69,6 +96,7 @@ export class HandsRegistry {
     const entry = this.entries.get(connectionId);
     if (entry === undefined) return;
     this.entries.delete(connectionId);
+    this.releaseCalls(connectionId);
     for (const [chatId, owner] of [...this.owners]) {
       if (owner === connectionId) this.owners.delete(chatId);
     }
@@ -100,6 +128,56 @@ export class HandsRegistry {
     const owner = this.owners.get(chatId);
     if (owner === undefined) return undefined;
     return this.entries.get(owner)?.connection;
+  }
+
+  /**
+   * Runs something on the chat's terminal and waits for the answer.
+   *
+   * Rejects when no terminal holds the hands, rather than falling back to the
+   * server: "run this on my machine" answered by the wrong machine is worse
+   * than an error, and the model can be told plainly that the terminal left.
+   *
+   * There is no timeout here on purpose. The heartbeat is what decides a
+   * machine is gone; a command may legitimately take twenty minutes, and a
+   * clock on the call would cut exactly the long build the terminal exists
+   * for. When the machine does go, `releaseCalls` fails everything pending.
+   */
+  call(chatId: string, request: HandsCall, onOutput: (chunk: string) => void): Promise<HandsResult> {
+    const connection = this.handsFor(chatId);
+    if (connection === undefined) {
+      return Promise.reject(new Error('No terminal is attached to this conversation.'));
+    }
+    const callId = entityId('call');
+    return new Promise<HandsResult>((resolve) => {
+      this.pending.set(callId, { connectionId: connection.id, settle: resolve, onOutput });
+      connection.send({ kind: 'call', callId, tool: request.tool, input: request.input });
+    });
+  }
+
+  /** A chunk of output arrived for a call still running. */
+  output(callId: string, chunk: string): void {
+    this.pending.get(callId)?.onOutput(chunk);
+  }
+
+  /** A call finished. Unknown ids are ignored: a late reply is not an error. */
+  settle(callId: string, result: HandsResult): void {
+    const pending = this.pending.get(callId);
+    if (pending === undefined) return;
+    this.pending.delete(callId);
+    pending.settle(result);
+  }
+
+  /** Fails everything a departing terminal was still running. */
+  private releaseCalls(connectionId: string): void {
+    for (const [callId, pending] of [...this.pending]) {
+      if (pending.connectionId !== connectionId) continue;
+      this.pending.delete(callId);
+      pending.settle({
+        ok: false,
+        output: '',
+        error: 'The terminal disconnected before this finished.',
+      });
+    }
   }
 
   /** Every attached terminal, for a status screen or a log line. */

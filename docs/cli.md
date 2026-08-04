@@ -350,10 +350,14 @@ with `fake-bridge`.
    token renewal)
 2. Event stream + reducer + `popy "…"` one-shot (proves SSE, dedupe by
    `seq`; no TUI yet)
-3. Hands channel: the WebSocket, identity, ownership (never mid-run), the
-   heartbeat, remote operations server-side, pi's local operations
-   client-side, and the guard's second list — the laptop is unprotected
-   until that list exists, so it lands with the channel, not after it
+3. Hands channel — **done 04/08**. The WebSocket, the attach with the
+   machine's own description, ownership, the heartbeat, remote operations
+   server-side, and the guard's second list, which landed WITH the channel
+   and not after it. pi's tool definitions are registered a second time
+   with remote operations (`local_bash`, `local_read`, `local_write`,
+   `local_edit`); the terminal end is only a disk and a shell, because
+   every rule -- truncation, size caps, error shapes -- stays on the
+   server where the definitions are.
 4. TUI on top of what already works — **done 04/08**: `pi-tui` as a
    dependency, not a copy. The widgets, the differential renderer, the
    editor with IME, key parsing, markdown-to-ANSI and the keybindings come

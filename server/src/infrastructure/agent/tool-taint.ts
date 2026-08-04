@@ -35,6 +35,33 @@ const DESTRUCTIVE = [
  * an injected web page reaches for first (labs 1, 6, 7 of the Microsoft
  * AI-Red-Teaming playground: "make the model reveal passwords.txt").
  */
+/**
+ * The verbs that read a file out. Shared: how you read a secret does not
+ * depend on whose machine it is.
+ */
+const READERS =
+  '(cat|less|more|head|tail|xxd|od|strings|hexdump|base64|nl|tac|cp|mv|grep|awk|sed|dd|scp|rsync)';
+
+/**
+ * The files worth protecting, per machine (docs/cli.md, "Guarding two
+ * machines").
+ *
+ * The list used to be one, written for the server. Pointed at a laptop it was
+ * a lock on the right door of the wrong house: `secret.key` and
+ * `pi-auth.json` are not there, while everything a work machine actually
+ * keeps -- cloud credentials, a GitHub token, the keychain -- was absent
+ * (Vinicius, 04/08). The rule does not change; the list travels with the
+ * machine.
+ */
+const SECRETS: Record<GuardedMachine, string> = {
+  server: '(secret\\.key|pi-auth\\.json|\\.env\\b|id_rsa\\b|id_ed25519\\b|authorized_keys\\b|\\.ssh\\/)',
+  hands:
+    '(id_rsa\\b|id_ed25519\\b|authorized_keys\\b|\\.ssh\\/|\\.aws\\/|\\.config\\/gh\\/|\\.npmrc\\b|\\.git-credentials\\b|\\.kube\\/|\\.netrc\\b|Library\\/Keychains|\\.docker\\/config\\.json)',
+};
+
+/** Which machine a command is bound for; the tool name decides. */
+export type GuardedMachine = 'server' | 'hands';
+
 const EXFIL_OR_SECRET = [
   // curl/wget uploading a local file (POST body, form, or --upload).
   /\bcurl\b[^|&;]*(-T\b|--upload-file\b|(-d|--data|--data-binary|--data-raw|--data-urlencode)\s+@|(-F|--form)\s+\S*@)/i,
@@ -43,23 +70,38 @@ const EXFIL_OR_SECRET = [
   /\b(scp|rsync)\b/i,
   /\|\s*(curl|wget|nc|ncat|netcat)\b/i,
   /\b(nc|ncat|netcat)\b\s+\S/i, // netcat with an argument (a host/port)
-  // Reading, copying, or encoding one of the named secrets.
-  /\b(cat|less|more|head|tail|xxd|od|strings|hexdump|base64|nl|tac|cp|mv|grep|awk|sed|dd|scp|rsync)\b[^|]*(secret\.key|pi-auth\.json|\.env\b|id_rsa\b|id_ed25519\b|authorized_keys\b|\.ssh\/)/i,
 ];
+
+/** Reading, copying or encoding one of THAT machine's secrets. */
+function readsSecretOf(machine: GuardedMachine): RegExp {
+  return new RegExp(`\\b${READERS}\\b[^|]*${SECRETS[machine]}`, 'i');
+}
 
 /** True when a bash command matches one of the destructive shapes above. */
 export function isDestructiveBash(command: string): boolean {
   return DESTRUCTIVE.some((pattern) => pattern.test(command));
 }
 
-/** True when a bash command would send data out or read a secret. */
-export function isExfilOrSecretRead(command: string): boolean {
-  return EXFIL_OR_SECRET.some((pattern) => pattern.test(command));
+/** True when a bash command would send data out or read that machine's secrets. */
+export function isExfilOrSecretRead(command: string, machine: GuardedMachine = 'server'): boolean {
+  if (EXFIL_OR_SECRET.some((pattern) => pattern.test(command))) return true;
+  return readsSecretOf(machine).test(command);
 }
 
-/** The commands a tainted turn refuses to run. */
-export function isBlockedUnderTaint(command: string): boolean {
-  return isDestructiveBash(command) || isExfilOrSecretRead(command);
+/**
+ * The commands a tainted turn refuses to run. Destruction and exfiltration are
+ * refused on BOTH machines: the attacker in this model is a page the agent
+ * read, and that page is no more welcome to run `sudo` on the laptop.
+ */
+export function isBlockedUnderTaint(command: string, machine: GuardedMachine = 'server'): boolean {
+  return isDestructiveBash(command) || isExfilOrSecretRead(command, machine);
+}
+
+/** Which machine a tool runs on. Local tools carry the prefix; nothing else. */
+export function machineOfTool(tool: string): GuardedMachine | undefined {
+  if (tool === 'bash') return 'server';
+  if (tool === 'local_bash') return 'hands';
+  return undefined;
 }
 
 export interface TaintGuardDeps {
@@ -98,10 +140,11 @@ export class TaintGuard implements ToolGuard {
     tool: string,
     input: Record<string, unknown>,
   ): Promise<{ block: boolean; reason?: string }> {
-    if (!this.tainted || tool !== 'bash') return Promise.resolve({ block: false });
+    const machine = machineOfTool(tool);
+    if (!this.tainted || machine === undefined) return Promise.resolve({ block: false });
 
     const command = typeof input['command'] === 'string' ? input['command'] : '';
-    if (!isBlockedUnderTaint(command)) return Promise.resolve({ block: false });
+    if (!isBlockedUnderTaint(command, machine)) return Promise.resolve({ block: false });
 
     this.deps.onTaint?.({
       risk: 'high',

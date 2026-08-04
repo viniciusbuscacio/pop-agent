@@ -75,6 +75,33 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
             return;
           }
 
+          // A command still running, streaming as it goes.
+          if (frame.kind === 'output' && attached) {
+            const { callId, chunk } = frame as { callId?: string; chunk?: string };
+            if (typeof callId === 'string' && typeof chunk === 'string') {
+              deps.hands.output(callId, chunk);
+            }
+            return;
+          }
+
+          if (frame.kind === 'result' && attached) {
+            const result = frame as {
+              callId?: string;
+              ok?: boolean;
+              output?: string;
+              exitCode?: number | null;
+              error?: string;
+            };
+            if (typeof result.callId !== 'string') return;
+            deps.hands.settle(result.callId, {
+              ok: result.ok === true,
+              output: typeof result.output === 'string' ? result.output : '',
+              ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
+              ...(result.error === undefined ? {} : { error: result.error }),
+            });
+            return;
+          }
+
           if (frame.kind === 'claim' && attached) {
             const chatId = (frame as { chatId?: string }).chatId;
             if (typeof chatId !== 'string' || chatId.length === 0) return;

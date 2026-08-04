@@ -13,6 +13,8 @@ const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
 const handsTaken = (): string =>
   'Another terminal owns this conversation; this one is watching.';
+const ranHere = (command: string): string =>
+  `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
 /**
  * Wiring for the interactive screen: the profile, the ports the session needs,
@@ -72,6 +74,9 @@ export async function chat(
     onEvent: (event) => {
       if (event.kind === 'attached') screen.say(handsReady());
       if (event.kind === 'claimed' && !event.mine) screen.say(handsTaken());
+      // Said out loud, because it happened on YOUR machine and nothing else
+      // on screen would show it.
+      if (event.kind === 'ran') screen.say(ranHere(event.command));
     },
   });
 

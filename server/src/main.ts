@@ -34,6 +34,7 @@ import { filesCatalogBlock } from './application/artifacts/files-catalog.js';
 import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
+import { buildLocalTools } from './infrastructure/agent/local-tools.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
 import { SkillsVault } from './infrastructure/skills/skills-vault.js';
 import { TransformersEmbedder } from './infrastructure/embeddings/transformers-embedder.js';
@@ -258,6 +259,8 @@ function piBridge(): PiAgentBridge {
       sessionsDir: join(context.dataDir, 'sessions'),
       // pi's own config, credentials and catalog cache, all inside Popy's data
       // directory: a ~/.pi on the host must not reach into this process.
+      // The terminal's tools, when one is attached to this chat.
+      localTools: (sdk, chatId) => buildLocalTools(sdk, hands, chatId),
       agentDir: join(context.dataDir, 'pi-agent'),
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
