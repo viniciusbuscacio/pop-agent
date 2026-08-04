@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { run, type ManagerDeps } from './commands.js';
+import { run, systemctlArgv, type ManagerDeps } from './commands.js';
 
 /**
  * popyman's behaviour, without a systemd or a database (popy.spec §17).
@@ -21,6 +21,7 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
       calls.push(verb);
       return 0;
     },
+    unit: 'popy-dev',
     backups: {
       create: () => ({ name: 'popy-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
       list: () => [],
@@ -40,6 +41,20 @@ describe('popyman', () => {
     const h = harness();
     expect(await run(['restart'], h.deps)).toBe(0);
     expect(h.calls).toEqual(['restart']);
+  });
+
+  it('says which unit it is acting on', async () => {
+    // A box can carry popy and popy-dev at once, and "Failed to stop
+    // popy.service" is a true sentence about the wrong service.
+    const h = harness();
+    await run(['stop'], h.deps);
+    expect(h.out.join('\n')).toContain('popy-dev');
+  });
+
+  it('does not announce status, which speaks for itself', async () => {
+    const h = harness();
+    await run(['status'], h.deps);
+    expect(h.out).toEqual([]);
   });
 
   it('prints usage and fails when asked for nothing', async () => {
@@ -121,6 +136,24 @@ describe('popyman', () => {
     const h = harness();
     expect(await run(['access-list', 'clean'], h.deps)).toBe(1);
     expect(h.err.join('\n')).toContain('Not built yet');
+  });
+
+  it('reads status without sudo, and changes the machine with it', async () => {
+    // Asking for a password to READ is a habit worth not teaching; and
+    // without sudo the other three fall to polkit, whose text agent answers
+    // "Authentication failure" on a plain SSH session.
+    expect(systemctlArgv('status', 'popy-dev', false).command).toBe('systemctl');
+    expect(systemctlArgv('stop', 'popy-dev', false)).toEqual({
+      command: 'sudo',
+      args: ['systemctl', 'stop', 'popy-dev'],
+    });
+  });
+
+  it('skips sudo when it is already root', async () => {
+    expect(systemctlArgv('stop', 'popy', true)).toEqual({
+      command: 'systemctl',
+      args: ['stop', 'popy'],
+    });
   });
 
   it('says there are no backups instead of printing nothing', async () => {

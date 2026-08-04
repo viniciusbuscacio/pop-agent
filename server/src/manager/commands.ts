@@ -20,9 +20,13 @@ export interface ManagerIo {
   err(line: string): void;
 }
 
+export type ServiceVerb = 'start' | 'stop' | 'restart' | 'status';
+
 export interface ManagerDeps extends ManagerIo {
   /** Runs a systemctl verb; returns its exit code. */
-  service(verb: 'start' | 'stop' | 'restart' | 'status'): number;
+  service(verb: ServiceVerb): number;
+  /** The unit being acted on, so the output says which one. */
+  unit: string;
   backups: {
     create(): { name: string; size: number };
     list(): { name: string; size: number; createdAt: string }[];
@@ -40,6 +44,7 @@ export const USAGE = [
   'popyman — the Popy service, from the machine it runs on',
   '',
   '  popyman start | stop | restart | status',
+  '                                  (POPY_SERVICE picks the unit)',
   '  popyman backup                  make one now',
   '  popyman backups                 list what is kept',
   '  popyman restore <name>          replace the data with a backup',
@@ -66,6 +71,10 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     case 'stop':
     case 'restart':
     case 'status':
+      // Named out loud. A box can have `popy` and `popy-dev` side by side,
+      // and "Failed to stop popy.service" is a baffling answer to a command
+      // that never said which service it meant.
+      if (command !== 'status') deps.out(`${command} ${deps.unit}`);
       return deps.service(command);
 
     case 'backup': {
@@ -155,4 +164,25 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
 
 function megabytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * How to invoke systemctl for one verb.
+ *
+ * `status` only reads, and asking for a password to read is a habit worth not
+ * teaching. The other three change the machine, and without privilege
+ * systemd hands the request to polkit, whose text agent fails on a plain SSH
+ * session with "Authentication failure" -- an unusable prompt for a command
+ * that only needed `sudo`.
+ */
+export function systemctlArgv(
+  verb: ServiceVerb,
+  unit: string,
+  isRoot: boolean,
+): { command: string; args: string[] } {
+  const base = ['systemctl', verb, unit];
+  if (verb === 'status' || isRoot) {
+    return { command: 'systemctl', args: base.slice(1) };
+  }
+  return { command: 'sudo', args: base };
 }

@@ -15,15 +15,46 @@
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { run, type ManagerDeps } from './commands.js';
+import { run, systemctlArgv, type ManagerDeps, type ServiceVerb } from './commands.js';
 
-/** The unit name. Overridable, because the dev box runs `popy-dev`. */
-const UNIT = process.env['POPY_SERVICE'] ?? 'popy';
+/**
+ * Which unit to act on.
+ *
+ * `POPY_SERVICE` wins. Otherwise the installed units are asked, in
+ * preference order, and the first that exists is used -- because a box that
+ * runs the dev unit and has no `popy.service` would otherwise get "Failed to
+ * stop popy.service", which is a true sentence about the wrong service.
+ * Falls back to `popy` when nothing is installed, so the error names the
+ * thing a production install would have.
+ */
+function resolveUnit(): string {
+  const chosen = process.env['POPY_SERVICE'];
+  if (chosen !== undefined && chosen.length > 0) return chosen;
 
-function service(verb: 'start' | 'stop' | 'restart' | 'status'): number {
-  // Inherited stdio: `status` is worth reading, and systemctl already says
-  // everything worth saying about a failure.
-  const result = spawnSync('systemctl', [verb, UNIT], { stdio: 'inherit' });
+  const listed = spawnSync('systemctl', ['list-unit-files', '--no-legend', 'popy*.service'], {
+    encoding: 'utf8',
+  });
+  const installed = new Set(
+    (listed.stdout ?? '')
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/)[0])
+      .filter((name): name is string => name !== undefined && name.endsWith('.service'))
+      .map((name) => name.replace(/\.service$/, '')),
+  );
+
+  return ['popy', 'popy-dev'].find((name) => installed.has(name)) ?? 'popy';
+}
+
+const UNIT = resolveUnit();
+
+function service(verb: ServiceVerb): number {
+  // `sudo` for the verbs that change something. Without it systemd hands the
+  // request to polkit, whose text agent on a bare SSH session answers
+  // "Authentication failure" -- a dead end for something a plain sudo does.
+  const { command, args } = systemctlArgv(verb, UNIT, process.getuid?.() === 0);
+  // Inherited stdio: `status` is worth reading, sudo needs the tty for its
+  // prompt, and systemctl already says what is worth saying about a failure.
+  const result = spawnSync(command, args, { stdio: 'inherit' });
   return result.status ?? 1;
 }
 
@@ -88,6 +119,7 @@ async function deps(): Promise<ManagerDeps> {
     out: (line) => process.stdout.write(`${line}\n`),
     err: (line) => process.stderr.write(`${line}\n`),
     service,
+    unit: UNIT,
     backups: {
       create: () => backups.create(),
       list: () => backups.list(),
@@ -119,6 +151,7 @@ const resolved: ManagerDeps = light.has(argv[0])
       out: (line) => process.stdout.write(`${line}\n`),
       err: (line) => process.stderr.write(`${line}\n`),
       service,
+      unit: UNIT,
       backups: {
         create: () => {
           throw new Error('unreachable');
