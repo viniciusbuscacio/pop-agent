@@ -219,6 +219,32 @@ async function remove(
   absorb(await providersService.clearKey(provider.id));
 }
 
+/**
+ * The way out of a step, inside the card it belongs to (Vinicius, 04/08).
+ *
+ * The wizard replaces the list rather than floating over it, so without this
+ * the only way back was Cancel at the very bottom -- past every field, and
+ * reading as "discard" rather than "up one level". The arrow is the app's own
+ * (the Settings header and the skills editor use the same one), not a new
+ * glyph to learn. Cancel stays: every Save has one (permanent house veto).
+ */
+function StepHeader({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        data-testid="provider-back"
+        aria-label={t('common.back')}
+        onClick={onBack}
+        className="-ml-2 rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+      >
+        ←
+      </button>
+      <h2 className="min-w-0 truncate text-base font-semibold">{title}</h2>
+    </div>
+  );
+}
+
 /** Step one: which provider. A builtin already set up is not offered twice. */
 function PickProvider({
   configured,
@@ -238,8 +264,8 @@ function PickProvider({
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-base font-semibold">{t('provider.add')}</h2>
+        <div className="flex flex-col gap-1">
+          <StepHeader title={t('provider.add')} onBack={onCancel} />
           <p className="text-sm text-[var(--muted)]">{t('provider.add.intro')}</p>
         </div>
         <div className="flex flex-col gap-2">
@@ -392,7 +418,7 @@ function ConfigureProvider({
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold">{provider.name}</h2>
+        <StepHeader title={provider.name} onBack={onDone} />
 
         {isCustom ? (
           <>
