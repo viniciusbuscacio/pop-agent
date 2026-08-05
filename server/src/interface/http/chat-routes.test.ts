@@ -54,6 +54,28 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
+  it('deletes every archived chat in one call, and only those', async () => {
+    // The bulk route exists because the archive is where a scheduled task
+    // piles up dozens of chats; and it must be registered before
+    // '/chats/:id', which would otherwise read "archived" as an id.
+    const keep = (await (await api('/v1/chats', { method: 'POST' })).json()) as ChatDTO;
+    const one = (await (await api('/v1/chats', { method: 'POST' })).json()) as ChatDTO;
+    const two = (await (await api('/v1/chats', { method: 'POST' })).json()) as ChatDTO;
+    await api(`/v1/chats/${one.id}`, { method: 'PATCH', body: { archived: true } });
+    await api(`/v1/chats/${two.id}`, { method: 'PATCH', body: { archived: true } });
+
+    const response = await api('/v1/chats/archived', { method: 'DELETE' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: 2 });
+
+    const active = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    expect(active.chats.map((chat) => chat.id)).toEqual([keep.id]);
+    const archived = (await (await api('/v1/chats?archived=true')).json()) as {
+      chats: ChatDTO[];
+    };
+    expect(archived.chats).toEqual([]);
+  });
+
   it('separates archived from open chats', async () => {
     const open = await newChat();
     const filed = await newChat();

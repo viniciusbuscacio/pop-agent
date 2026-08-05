@@ -154,6 +154,12 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json(toChatDto(chat));
   });
 
+  // Registered before '/chats/:id', which would otherwise read "archived"
+  // as a chat id and answer 404.
+  routes.delete('/chats/archived', (c) => {
+    return c.json({ deleted: deps.chats.deleteArchived() });
+  });
+
   routes.delete('/chats/:id', (c) => {
     if (!deps.chats.delete(c.req.param('id'))) return chatNotFound(c);
     return c.body(null, 204);

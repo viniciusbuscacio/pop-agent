@@ -109,6 +109,21 @@ export class ChatService {
     return true;
   }
 
+  /**
+   * Deletes every archived conversation, each through {@link delete} so the
+   * order that matters there (abort, delete, purge) holds for all of them.
+   * One endpoint rather than a client loop, because the archive is where a
+   * frequent task quietly piles up dozens of chats, and dozens of round
+   * trips is how a "delete all" ends half done on a flaky connection.
+   */
+  deleteArchived(): number {
+    let deleted = 0;
+    for (const chat of this.deps.chats.list({ archived: true })) {
+      if (this.delete(chat.id)) deleted += 1;
+    }
+    return deleted;
+  }
+
   getMessages(chatId: string, options: { before?: string; limit?: number }): Message[] | undefined {
     if (this.deps.chats.get(chatId) === undefined) return undefined;
 

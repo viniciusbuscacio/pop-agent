@@ -25,6 +25,10 @@ export const chatsService = {
     return apiRequest<ChatDTO>(`/chats/${id}`, { method: 'PATCH', body: patch });
   },
 
+  removeArchived(): Promise<{ deleted: number }> {
+    return apiRequest<{ deleted: number }>('/chats/archived', { method: 'DELETE' });
+  },
+
   remove(id: string): Promise<void> {
     return apiRequest<void>(`/chats/${id}`, { method: 'DELETE' });
   },

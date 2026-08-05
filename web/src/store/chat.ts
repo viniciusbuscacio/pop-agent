@@ -51,6 +51,8 @@ interface ChatState {
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
   setModel: (chatId: string, model: string, provider: string) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
+  /** Deletes every archived conversation in one call. */
+  removeArchived: () => Promise<void>;
   apply: (event: StreamEvent) => void;
   reset: () => void;
 }
@@ -215,6 +217,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // The pair is the identity (popy.spec §15): they always travel together.
     const updated = await chatsService.patch(chatId, { model, provider });
     set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
+  },
+
+  async removeArchived() {
+    await chatsService.removeArchived();
+    set((state) => {
+      // Every archived chat's local leftovers go with it.
+      const gone = new Set(state.archived.map((chat) => chat.id));
+      const strip = <V,>(record: Record<string, V>): Record<string, V> =>
+        Object.fromEntries(Object.entries(record).filter(([id]) => !gone.has(id)));
+      return {
+        archived: [],
+        messages: strip(state.messages),
+        live: strip(state.live),
+      };
+    });
   },
 
   async remove(chatId) {

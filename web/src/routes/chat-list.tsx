@@ -30,6 +30,7 @@ export function ChatList() {
   const archived = useChatStore((state) => state.archived);
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
+  const removeArchived = useChatStore((state) => state.removeArchived);
   const createChat = useChatStore((state) => state.createChat);
   const reloadMcp = useMcpStore((state) => state.reload);
 
@@ -197,6 +198,24 @@ export function ChatList() {
           ) : null}
         </div>
 
+        {segment === 'chats' && viewArchived && !searching && archived.length > 0 ? (
+          <button
+            type="button"
+            data-testid="delete-all-archived"
+            onClick={() => {
+              // Two confirms, like the emergency stop: this is every archived
+              // conversation, permanently, and the archive is where a
+              // scheduled task quietly piles up history.
+              if (!window.confirm(t('shell.deleteArchivedConfirm1', { count: archived.length })))
+                return;
+              if (!window.confirm(t('shell.deleteArchivedConfirm2'))) return;
+              void removeArchived();
+            }}
+            className="rounded-md border border-[var(--danger)] px-3 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--hover-overlay)]"
+          >
+            {t('shell.deleteArchivedAll', { count: archived.length })}
+          </button>
+        ) : null}
         {segment === 'chats' ? (
         <input
           data-testid="chat-filter"
