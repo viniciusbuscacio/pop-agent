@@ -506,7 +506,16 @@ export class SdkPiEngine implements PiEngine {
       // The runtime credential is an in-memory overlay; a key changed in
       // Settings takes effect on the next run without a restart.
       if (key !== this.appliedKeys.get(providerId)) {
-        await runtime.setRuntimeApiKey(providerId, key);
+        // allowNetwork: false, exactly as pi's own CLI calls it. Without it
+        // the refresh this triggers inherits modelNetworkEnabled -- which is
+        // TRUE unless PI_OFFLINE is set, whatever allowModelNetwork said at
+        // create() -- and goes to the network for provider catalogs with no
+        // timeout. The first key applied per process then hangs for as long
+        // as the slowest catalog endpoint feels like: measured live at 60s+,
+        // which ate the run watchdog and failed over through every provider
+        // (Vinicius, 05/08). The catalog is refreshed at create(), under a
+        // 15s cap; applying a key needs no fresher one.
+        await runtime.setRuntimeApiKey(providerId, key, { allowNetwork: false });
         this.appliedKeys.set(providerId, key);
       }
       return runtime;
