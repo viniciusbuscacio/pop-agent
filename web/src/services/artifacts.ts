@@ -62,6 +62,25 @@ export const artifactsService = {
     return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { folderId } });
   },
 
+  /**
+   * Fetches a signed download link as bytes, with the filename the server put
+   * in `Content-Disposition`.
+   *
+   * Here rather than in `lib/download` because the services layer is the only
+   * door to the outside (popy.spec §14) -- a component reaching for `fetch`
+   * fails the gate, and the rule is right: this is an HTTP call, and HTTP
+   * calls live behind a named function whose signature says what it returns.
+   *
+   * The link is already authorised by its HMAC, so no session travels with it.
+   */
+  async blob(url: string): Promise<{ blob: Blob; filename: string }> {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(`Download failed (${String(response.status)})`);
+    const header = response.headers.get('content-disposition') ?? '';
+    const match = /filename="?([^";]+)"?/i.exec(header);
+    return { blob: await response.blob(), filename: match?.[1] ?? 'download' };
+  },
+
   /** Searches folders and files by name or path, across the whole tree. */
   search(query: string): Promise<FilesSearchResponse> {
     return apiRequest<FilesSearchResponse>(`/files/search?q=${encodeURIComponent(query)}`);

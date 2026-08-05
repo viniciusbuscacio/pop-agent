@@ -1,3 +1,5 @@
+import { artifactsService } from '../services/artifacts';
+
 /**
  * Downloads a signed link by clicking an invisible anchor. The link arrives
  * after an await, so window.open would be popup-blocked -- the click's user
@@ -34,11 +36,29 @@ export function viewFromLink(pending: Promise<string>): void {
 }
 
 export function saveFromLink(url: string): void {
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.rel = 'noopener';
-  anchor.download = '';
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
+  // A standalone iOS PWA ignores `download` on an ordinary URL and navigates
+  // its own webview instead -- which is why Download opened the file in the
+  // app and trapped it there, with no way back but killing the app. Fetching
+  // the bytes first turns it into a blob: URL, which the same webview does
+  // save (Popy, 05/08).
+  void artifactsService.blob(url).then(
+    ({ blob, filename }) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.rel = 'noopener';
+      anchor.download = filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      // Revoked late: Safari has been known to read the blob after the click
+      // returns, and a URL revoked too early saves an empty file.
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    },
+    () => {
+      // Whatever went wrong, navigating the signed link still reaches the
+      // file. Worse on iOS, but better than a button that does nothing.
+      window.location.assign(url);
+    },
+  );
 }
