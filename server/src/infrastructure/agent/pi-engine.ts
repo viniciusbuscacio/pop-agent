@@ -168,7 +168,14 @@ export interface SdkPiEngineOptions {
    * lazily on first use and again whenever its data changed -- adding or
    * editing one never needs a restart. Read late, not captured.
    */
-  customProviders?: () => { id: string; name: string; baseURL: string; defaultModel: string }[];
+  customProviders?: () => {
+    id: string;
+    name: string;
+    baseURL: string;
+    defaultModel: string;
+    /** Every model this endpoint serves; absent falls back to defaultModel. */
+    models?: { id: string; context?: number }[];
+  }[];
   /** The agent's notes vault; its tools are registered on every session. */
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
@@ -532,23 +539,31 @@ export class SdkPiEngine implements PiEngine {
         `the custom provider "${instance.name}" needs a URL and a model: set them in Settings`,
       );
     }
-    const stamp = `${instance.name} ${instance.baseURL} ${instance.defaultModel}`;
+    // Every model the endpoint serves, not just the configured one: pi
+    // refuses any id it was not registered with, so a model the picker
+    // offered would fail at open() -- which surfaced as a hung run, since
+    // the session is opened before anything streams (Vinicius, 05/08).
+    const models =
+      instance.models !== undefined && instance.models.length > 0
+        ? instance.models
+        : [{ id: instance.defaultModel }];
+    // The catalog is in the stamp: an endpoint that learns new models has to
+    // be registered again, or the picker offers what pi still refuses.
+    const stamp = `${instance.name} ${instance.baseURL} ${models.map((m) => m.id).join(',')}`;
     if (stamp === this.customRegistered.get(providerId)) return;
     runtime.registerProvider(providerId, {
       name: instance.name,
       baseUrl: instance.baseURL,
       api: 'openai-completions',
-      models: [
-        {
-          id: instance.defaultModel,
-          name: instance.defaultModel,
-          reasoning: false,
-          input: ['text'],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 128_000,
-          maxTokens: 16_384,
-        },
-      ],
+      models: models.map((model) => ({
+        id: model.id,
+        name: model.id,
+        reasoning: false,
+        input: ['text'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: model.context ?? 128_000,
+        maxTokens: 16_384,
+      })),
     });
     this.customRegistered.set(providerId, stamp);
   }

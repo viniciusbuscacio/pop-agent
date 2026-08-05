@@ -532,6 +532,36 @@ export class ProviderService {
   }
 
   /**
+   * Custom instances as the ENGINE needs them: the data the user typed, plus
+   * every model this endpoint is known to serve.
+   *
+   * The engine registers a provider with exactly these models and refuses
+   * anything else, so the list has to travel all the way there. Passing only
+   * `defaultModel` is what made five of Maritaca's six models unusable
+   * (Vinicius, 05/08).
+   */
+  customProvidersForEngine(): {
+    id: string;
+    name: string;
+    baseURL: string;
+    defaultModel: string;
+    models: { id: string; context?: number }[];
+  }[] {
+    return this.listCustom().map((instance) => ({
+      id: instance.id,
+      name: instance.name,
+      baseURL: instance.baseURL,
+      defaultModel: instance.defaultModel,
+      models: customProviderDefinition(instance, this.cachedModels(instance.id)).staticModels.map(
+        (model) => ({
+          id: model.id,
+          ...(model.context === undefined ? {} : { context: model.context }),
+        }),
+      ),
+    }));
+  }
+
+  /**
    * What a custom endpoint last said it serves. Read, never fetched: this is
    * consulted while building definitions, which happens on every request.
    */
