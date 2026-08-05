@@ -410,6 +410,7 @@ export const en = {
   'shell.deleteArchivedAll': 'Delete all archived ({count})',
   'shell.deleteArchivedConfirm1':
     'Delete ALL {count} archived conversations? Their history is gone permanently.',
+  'shell.deleteArchivedBusy': 'Deleting…',
   'shell.deleteArchivedConfirm2': 'Last warning: there is no undo. Delete them all?',
   'shell.filterFiles': 'Search files',
   'update.reloading': 'Updating…',

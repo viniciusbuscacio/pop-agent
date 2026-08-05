@@ -31,6 +31,7 @@ export function ChatList() {
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
   const removeArchived = useChatStore((state) => state.removeArchived);
+  const [purging, setPurging] = useState(false);
   const createChat = useChatStore((state) => state.createChat);
   const reloadMcp = useMcpStore((state) => state.reload);
 
@@ -209,11 +210,15 @@ export function ChatList() {
               if (!window.confirm(t('shell.deleteArchivedConfirm1', { count: archived.length })))
                 return;
               if (!window.confirm(t('shell.deleteArchivedConfirm2'))) return;
-              void removeArchived();
+              setPurging(true);
+              void removeArchived().finally(() => setPurging(false));
             }}
+            disabled={purging}
             className="rounded-md border border-[var(--danger)] px-3 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--hover-overlay)]"
           >
-            {t('shell.deleteArchivedAll', { count: archived.length })}
+            {purging
+              ? t('shell.deleteArchivedBusy')
+              : t('shell.deleteArchivedAll', { count: archived.length })}
           </button>
         ) : null}
         {segment === 'chats' ? (
