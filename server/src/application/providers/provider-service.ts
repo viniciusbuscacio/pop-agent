@@ -531,9 +531,17 @@ export class ProviderService {
     };
   }
 
+  /**
+   * What a custom endpoint last said it serves. Read, never fetched: this is
+   * consulted while building definitions, which happens on every request.
+   */
+  private cachedModels(id: string): readonly { id: string; context?: number }[] {
+    return this.deps.settings.get<CatalogCache>(`models.${id}`)?.models ?? [];
+  }
+
   /** Builtins plus the custom instances, the whole list everything iterates. */
   private definitions(): ProviderDefinition[] {
-    return allProviderDefinitions(this.listCustom());
+    return allProviderDefinitions(this.listCustom(), (id) => this.cachedModels(id));
   }
 
   /** Any provider by id: a builtin, or a registry instance dressed as one. */
@@ -542,7 +550,9 @@ export class ProviderService {
     const builtin = providerDefinition(id);
     if (builtin !== undefined) return builtin;
     const instance = this.listCustom().find((entry) => entry.id === id);
-    return instance === undefined ? undefined : customProviderDefinition(instance);
+    return instance === undefined
+      ? undefined
+      : customProviderDefinition(instance, this.cachedModels(instance.id));
   }
 
   /**

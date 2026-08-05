@@ -162,7 +162,38 @@ export interface CustomProviderInstance {
 }
 
 /** A registry instance dressed as a definition, so nothing downstream cares. */
-export function customProviderDefinition(instance: CustomProviderInstance): ProviderDefinition {
+export function customProviderDefinition(
+  instance: CustomProviderInstance,
+  /**
+   * What this endpoint said it serves, when it has been asked (the cached
+   * catalog). Empty or absent falls back to the configured model alone.
+   */
+  knownModels: readonly { id: string; name?: string; context?: number }[] = [],
+): ProviderDefinition {
+  /**
+   * Every model this endpoint is known to have -- not just the configured
+   * one (Vinicius, 05/08).
+   *
+   * The engine registers a provider with exactly these, and then refuses any
+   * model that is not among them. Registering only `defaultModel` meant the
+   * picker offered six models the endpoint really has, five of which failed
+   * with `model_not_available` -- and, worse, the run hung rather than said
+   * so, because the failure surfaced while the session was being opened.
+   *
+   * The configured model stays in the list even when the catalog does not
+   * mention it: it is what the user typed, and an endpoint that lists
+   * nothing (or lists late) must still answer for it.
+   */
+  const catalog = knownModels.map((model) => ({
+    id: model.id,
+    name: model.name ?? model.id,
+    ...(model.context === undefined ? {} : { context: model.context }),
+  }));
+  const configured =
+    instance.defaultModel.length > 0 && !catalog.some((m) => m.id === instance.defaultModel)
+      ? [{ id: instance.defaultModel, name: instance.defaultModel }]
+      : [];
+
   return {
     id: instance.id,
     name: instance.name,
@@ -171,19 +202,21 @@ export function customProviderDefinition(instance: CustomProviderInstance): Prov
     defaultModel: instance.defaultModel,
     allowCustomModel: true,
     customBaseURL: true,
-    // A custom endpoint's catalog cannot be guessed; the configured model is it.
-    staticModels:
-      instance.defaultModel.length > 0
-        ? [{ id: instance.defaultModel, name: instance.defaultModel }]
-        : [],
+    staticModels: [...configured, ...catalog],
   };
 }
 
 /** The whole provider list: the builtins, then the customs in registry order. */
 export function allProviderDefinitions(
   customs: readonly CustomProviderInstance[],
+  /** The cached catalog per custom id, when the caller has one. */
+  knownModels: (id: string) => readonly { id: string; name?: string; context?: number }[] = () =>
+    [],
 ): ProviderDefinition[] {
-  return [...PROVIDER_DEFINITIONS, ...customs.map(customProviderDefinition)];
+  return [
+    ...PROVIDER_DEFINITIONS,
+    ...customs.map((instance) => customProviderDefinition(instance, knownModels(instance.id))),
+  ];
 }
 
 /**
