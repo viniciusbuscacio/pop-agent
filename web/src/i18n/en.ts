@@ -158,12 +158,22 @@ export const en = {
   'settings.server.restart': 'Restart Popy',
   'settings.server.stop': 'Stop Popy (EMERGENCY)',
   'settings.server.llmStop': 'Stop LLM',
-  'settings.server.llmStart': 'Restart LLM',
+  'settings.server.llmStart': 'Start LLM',
+  'settings.server.llmRestart': 'Restart LLM',
+  'settings.server.dangerService': 'The whole service',
+  'settings.server.dangerLlm': 'Only the model',
+  'settings.server.restartHint': 'Kills the whole process; systemd brings it back in ~10 seconds.',
+  'settings.server.stopHint':
+    'Stops and does NOT come back — this web app dies with it. Only SSH revives it: popyman start.',
+  'settings.server.llmStopHint':
+    'Aborts running answers and refuses new messages. Everything else keeps working: files, settings, history.',
+  'settings.server.llmStartHint': 'Switches the model back on.',
+  'settings.server.llmRestartHint':
+    'Drops the live model sessions; the next message in each chat rebuilds them fresh.',
   'settings.server.restartConfirm': 'Restart the whole Popy service? It comes back on its own in a few seconds.',
   'settings.server.stopConfirm1': 'EMERGENCY STOP: the Popy service will stop and will NOT come back. The web app dies too.',
   'settings.server.stopConfirm2': 'Last warning: after this, only logging into the server over SSH brings Popy back. Really stop?',
   'settings.server.llmStopConfirm': 'Stop only the LLM? Active answers are aborted and new messages are refused; the web app keeps working.',
-  'settings.server.dangerHint': 'Restart and stop act on the systemd service. Stop LLM / Restart LLM only switch the model runtime off and on.',
 
   // Providers, rebuilt around adding one at a time (03/08). The screen says
   // what you have, not everything Popy could talk to.

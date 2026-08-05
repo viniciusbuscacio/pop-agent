@@ -517,7 +517,10 @@ const app = createApp({
   hub,
   clock: systemClock,
   versions: readVersions(),
-  serverInfo: () => readServerInfo({ dataDir: context.dataDir, workspace, versions: readVersions() }),
+  serverInfo: () => ({
+    ...readServerInfo({ dataDir: context.dataDir, workspace, versions: readVersions() }),
+    llmStopped: runs.isLlmStopped(),
+  }),
   serverControl: (() => {
     // The systemd unit this process runs as (LOTE 6); the name is
     // overridable for an install that names it differently. A disposable

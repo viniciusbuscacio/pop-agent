@@ -1493,13 +1493,25 @@ function ServerSection() {
         <Row label={t('settings.server.workspace')} value={info?.workspace ?? '…'} testId="server-workspace-path" />
       </Card>
 
-      <DangerZoneSection />
+      <DangerZoneSection llmStopped={info?.llmStopped === true} />
     </div>
   );
 }
 
-function DangerZoneSection() {
+/**
+ * Four switches on two different machines, which is exactly why each one
+ * carries its own consequence line: "Restart Popy" and "Restart LLM" share a
+ * verb and share nothing else. The LLM button is also labelled by the actual
+ * state -- Start when it is off, Restart when it is on -- because a switch
+ * that reads "Restart" while the model is stopped is the confusion this card
+ * kept causing (Vinicius, 05/08).
+ */
+function DangerZoneSection({ llmStopped: reported }: { llmStopped: boolean }) {
   const [busy, setBusy] = useState<string | undefined>(undefined);
+  // The reported state arrives with the info fetch; a click updates it
+  // locally so the label follows the action without another round trip.
+  const [llmStopped, setLlmStopped] = useState(reported);
+  useEffect(() => setLlmStopped(reported), [reported]);
 
   async function act(action: string, fn: () => Promise<unknown>): Promise<void> {
     setBusy(action);
@@ -1512,56 +1524,87 @@ function DangerZoneSection() {
     }
   }
 
+  const hint = (text: string) => <p className="text-xs text-[var(--muted)]">{text}</p>;
+
   return (
-    <Card className="flex flex-col gap-3 border-[var(--danger)]">
+    <Card className="flex flex-col gap-4 border-[var(--danger)]">
       <h3 className="text-sm font-semibold text-[var(--danger)]">{t('settings.server.dangerZone')}</h3>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="danger"
-          disabled={busy !== undefined}
-          data-testid="server-restart"
-          onClick={() => {
-            if (!window.confirm(t('settings.server.restartConfirm'))) return;
-            void act('restart', () => serverService.restart());
-          }}
-        >
-          {t('settings.server.restart')}
-        </Button>
-        <Button
-          variant="danger"
-          disabled={busy !== undefined}
-          data-testid="server-stop"
-          onClick={() => {
-            if (!window.confirm(t('settings.server.stopConfirm1'))) return;
-            if (!window.confirm(t('settings.server.stopConfirm2'))) return;
-            void act('stop', () => serverService.stop());
-          }}
-        >
-          {t('settings.server.stop')}
-        </Button>
+
+      <div className="flex flex-col gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          {t('settings.server.dangerService')}
+        </h4>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
+            disabled={busy !== undefined}
+            data-testid="server-restart"
+            onClick={() => {
+              if (!window.confirm(t('settings.server.restartConfirm'))) return;
+              void act('restart', () => serverService.restart());
+            }}
+          >
+            {t('settings.server.restart')}
+          </Button>
+          {hint(t('settings.server.restartHint'))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
+            disabled={busy !== undefined}
+            data-testid="server-stop"
+            onClick={() => {
+              if (!window.confirm(t('settings.server.stopConfirm1'))) return;
+              if (!window.confirm(t('settings.server.stopConfirm2'))) return;
+              void act('stop', () => serverService.stop());
+            }}
+          >
+            {t('settings.server.stop')}
+          </Button>
+          {hint(t('settings.server.stopHint'))}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          disabled={busy !== undefined}
-          data-testid="server-llm-stop"
-          onClick={() => {
-            if (!window.confirm(t('settings.server.llmStopConfirm'))) return;
-            void act('llm-stop', () => serverService.llmStop());
-          }}
-        >
-          {t('settings.server.llmStop')}
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy !== undefined}
-          data-testid="server-llm-start"
-          onClick={() => void act('llm-start', () => serverService.llmStart())}
-        >
-          {t('settings.server.llmStart')}
-        </Button>
+
+      <div className="flex flex-col gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          {t('settings.server.dangerLlm')}
+        </h4>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            disabled={busy !== undefined || llmStopped}
+            data-testid="server-llm-stop"
+            onClick={() => {
+              if (!window.confirm(t('settings.server.llmStopConfirm'))) return;
+              void act('llm-stop', async () => {
+                await serverService.llmStop();
+                setLlmStopped(true);
+              });
+            }}
+          >
+            {t('settings.server.llmStop')}
+          </Button>
+          {hint(t('settings.server.llmStopHint'))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            disabled={busy !== undefined}
+            data-testid="server-llm-start"
+            onClick={() =>
+              void act('llm-start', async () => {
+                await serverService.llmStart();
+                setLlmStopped(false);
+              })
+            }
+          >
+            {llmStopped ? t('settings.server.llmStart') : t('settings.server.llmRestart')}
+          </Button>
+          {hint(
+            llmStopped ? t('settings.server.llmStartHint') : t('settings.server.llmRestartHint'),
+          )}
+        </div>
       </div>
-      <p className="text-xs text-[var(--muted)]">{t('settings.server.dangerHint')}</p>
     </Card>
   );
 }

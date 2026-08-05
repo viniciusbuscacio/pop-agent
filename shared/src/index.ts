@@ -383,6 +383,13 @@ export interface AboutResponse {
  * `null`/`'unknown'` means "could not measure", never a failed request.
  */
 export interface ServerInfoResponse {
+  /**
+   * Whether the operator has the LLM switched off (Stop LLM). Carried here so
+   * the danger zone can label its switch truthfully after a reload -- a
+   * button that says "Restart" while the model is off is the confusion the
+   * zone exists to avoid.
+   */
+  llmStopped?: boolean;
   cpu: { model: string; cores: number; load: number[] };
   memory: { total: number; used: number };
   /** Bytes on the partition holding POPY_DATA_DIR. */
