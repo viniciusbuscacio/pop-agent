@@ -24,6 +24,7 @@ import { buildArtifactTools, type FileSearch } from '../artifacts/artifact-tools
 import type { ArtifactExtractor } from '../artifacts/artifact-extractor.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
+import { buildTaskTools } from './task-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
 
@@ -51,6 +52,15 @@ const SYSTEM_PROMPT = [
   'Answer plainly and helpfully, in the language the user writes in.',
   'You have tools to read and write files and to run commands in your',
   'workspace; use them when they genuinely help with the request.',
+  // The product's own vocabulary, spelled out because the agent lives inside
+  // the product: asked about "Files", it once went looking for a directory of
+  // that name (Vinicius, 05/08). Written plainly enough for a weak model --
+  // the deliberate test bench: what works on sabiazinho works on anything.
+  'Vocabulary: the user\'s "Files" tab (Arquivos) is the artifact store, not',
+  'a folder on disk -- use save_artifact, read_artifact and files_search for',
+  'it. "Notes" (notas) are your own vault: notes_list and its siblings.',
+  'Popy also runs scheduled tasks for the user; list_scheduled_tasks shows',
+  'them, including yours.',
 ].join(' ');
 
 export type PiEngineErrorCode = 'provider_not_configured' | 'model_not_available';
@@ -180,6 +190,8 @@ export interface SdkPiEngineOptions {
   notesVault?: NotesVault;
   /** Cross-conversation memory; its tools and the recent-chats catalog. */
   memory?: MemoryRepo;
+  /** The scheduled tasks Popy runs, so the agent can SEE them (task-tools). */
+  scheduledTasks?: () => import('../../domain/tasks/task.js').Task[];
   /**
    * Real numbers for the continuity note (popy.spec §7): how many messages
    * the chat has stored, so a resumed session knows the size of what it
@@ -320,6 +332,9 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.notesVault === undefined
         ? []
         : buildNoteTools(sdk.defineTool, this.options.notesVault)),
+      ...(this.options.scheduledTasks === undefined
+        ? []
+        : buildTaskTools(sdk.defineTool, this.options.scheduledTasks, () => Date.now())),
       ...(this.options.memory === undefined
         ? []
         : buildMemoryTools(
