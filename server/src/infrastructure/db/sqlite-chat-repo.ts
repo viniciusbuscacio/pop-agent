@@ -137,7 +137,19 @@ export class SqliteChatRepo implements ChatRepo {
   }
 
   delete(id: string): void {
-    this.db.prepare('DELETE FROM chats WHERE id = ?').run(id);
+    // One transaction, embeddings first. They key on the implicit rowid of
+    // messages, which a foreign key cannot target, so the cascade that takes
+    // the messages leaves every embedding behind -- and SQLite recycles
+    // rowids, so a new message could inherit a dead one's vector and rank by
+    // text it never contained (found 05/08: 878 orphans after an audit).
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          'DELETE FROM message_embeddings WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_id = ?)',
+        )
+        .run(id);
+      this.db.prepare('DELETE FROM chats WHERE id = ?').run(id);
+    })();
   }
 
   getMessages(chatId: string, options: { before?: string; limit: number }): Message[] {

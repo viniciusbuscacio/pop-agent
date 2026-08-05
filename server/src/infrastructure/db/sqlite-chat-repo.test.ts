@@ -114,6 +114,26 @@ describe('chats', () => {
     expect(repo.countMessages(created.id)).toBe(0);
   });
 
+  it('takes the message embeddings with it too', () => {
+    // They key on the implicit rowid, which no foreign key can reach, so the
+    // cascade misses them by construction -- and a recycled rowid would hand
+    // a new message a dead message's vector (found 05/08).
+    const created = repo.create(chat());
+    const stored = repo.appendMessage(message(created.id));
+    const rowid = (
+      db.prepare('SELECT rowid FROM messages WHERE id = ?').get(stored.id) as { rowid: number }
+    ).rowid;
+    db.prepare('INSERT INTO message_embeddings (message_rowid, vector) VALUES (?, ?)').run(
+      rowid,
+      Buffer.from([1, 2, 3]),
+    );
+
+    repo.delete(created.id);
+
+    const left = db.prepare('SELECT count(*) AS n FROM message_embeddings').get() as { n: number };
+    expect(left.n).toBe(0);
+  });
+
   it('lists titles so a generated one can be de-duplicated', () => {
     repo.create(chat({ title: 'Groceries' }));
     repo.create(chat({ title: 'Taxes' }));
