@@ -563,6 +563,20 @@ export class SdkPiEngine implements PiEngine {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: model.context ?? 128_000,
         maxTokens: 16_384,
+        // The most conservative payload, on purpose. pi auto-detects
+        // compatibility from the URL, and a custom endpoint is by definition
+        // one it has never heard of, so detection lands on "standard OpenAI"
+        // and sends fields like `store: false`. A strict server rejects what
+        // it does not know -- Maritaca answers 422 "extra fields not
+        // permitted" to `store` -- while a lenient one never misses what was
+        // not sent. Plain `max_tokens` and the `system` role are the two
+        // spellings every compatible endpoint understands (Vinicius, 05/08).
+        compat: {
+          supportsStore: false,
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: false,
+          maxTokensField: 'max_tokens',
+        },
       })),
     });
     this.customRegistered.set(providerId, stamp);
