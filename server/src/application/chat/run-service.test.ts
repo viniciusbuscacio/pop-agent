@@ -702,6 +702,23 @@ describe('failing over between providers (popy.spec §15, fase 2)', () => {
     expect(messages[messages.length - 1]?.content).toContain('could not be finished');
   });
 
+  it('gives up on a bridge that ignores the abort entirely', async () => {
+    // Aborting is a REQUEST. pi opening a session against an endpoint that
+    // never answers does not observe the signal, so the deadline fired,
+    // changed nothing, and the run hung anyway -- measured on the live
+    // install (Vinicius, 05/08). This bridge is deliberately deaf.
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = () => new Promise(() => undefined);
+
+    runs.startRun(chatId, 'a question');
+    await runs.whenIdle();
+
+    expect(sink.of('error')[0]?.code).toBe('attempt_timeout');
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.content).toContain('could not be finished');
+  });
+
   it('waits as long as a tool call takes, however quiet it is', async () => {
     // The other half of the same rule. A tool call is not the provider going
     // silent -- it is the provider waiting for US, and a twenty-minute

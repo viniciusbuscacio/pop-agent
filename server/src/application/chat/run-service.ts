@@ -586,6 +586,19 @@ export class RunService {
     const silence = new AbortController();
     let timedOut = false;
     let toolsInFlight = 0;
+    // Set once the attempt has been given up on, so a bridge that keeps
+    // running in the background cannot write into a run that already ended.
+    let abandoned = false;
+    /** Settles when the deadline gives up, so the await below cannot outlive it. */
+    let surrender: () => void = () => undefined;
+    const surrendered = new Promise<void>((resolve) => {
+      surrender = resolve;
+    });
+    // Stop is the same problem wearing the user's face: it aborts the same
+    // way, and a bridge that ignores the abort would leave the run standing
+    // after the person asked it to end. One escape, both callers.
+    if (run.controller.signal.aborted) surrender();
+    else run.controller.signal.addEventListener('abort', () => surrender(), { once: true });
     const timeoutMs = this.deps.attemptTimeoutMs ?? ATTEMPT_SILENCE_TIMEOUT_MS;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     const disarm = (): void => {
@@ -596,7 +609,17 @@ export class RunService {
       disarm();
       deadline = setTimeout(() => {
         timedOut = true;
+        // Asked first: a bridge that honours the signal stops cleanly and
+        // whatever it was doing is torn down.
         silence.abort();
+        // Then taken. Aborting is a REQUEST, and a request is not a
+        // guarantee: pi opening a session against an endpoint that never
+        // answers does not observe the signal, so `await bridge.run(...)`
+        // stayed pending for ever and the run hung anyway -- measured on the
+        // live install, with the deadline firing and changing nothing
+        // (Vinicius, 05/08). Racing is what makes the deadline true.
+        abandoned = true;
+        surrender();
       }, timeoutMs);
       // Never a reason to keep the process alive on its own.
       deadline.unref?.();
@@ -604,7 +627,7 @@ export class RunService {
     arm();
 
     try {
-      result = await bridge.run({
+      const attempt = bridge.run({
         chatId: run.chatId,
         prompt: run.prompt,
         model: pair.modelId,
@@ -616,6 +639,8 @@ export class RunService {
         confirm: (question) => this.askConfirm(run, question),
         signal: AbortSignal.any([run.controller.signal, silence.signal]),
         onEvent: (event) => {
+          // The abandoned attempt may still be talking to itself.
+          if (abandoned) return;
           if (event.kind === 'tool') {
             if (event.status === 'start') toolsInFlight += 1;
             else if (event.status === 'done' || event.status === 'error') {
@@ -675,10 +700,16 @@ export class RunService {
           }
         },
       });
+      // Whichever comes first. A rejected attempt still rejects here; a
+      // surrendered one leaves it running and unheard.
+      attempt.catch(() => undefined);
+      const finished = await Promise.race([attempt.then(() => true), surrendered.then(() => false)]);
+      if (finished) result = await attempt;
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
       disarm();
+      surrender();
     }
 
     // Our own abort, not the bridge's opinion of it: whatever error the abort
