@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { ChatDTO, FolderDTO, SkillDTO } from '@popy/shared';
+import type { ChatDTO, FolderDTO, McpServerDTO, SkillDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useChatStore } from '../store/chat';
@@ -19,7 +19,7 @@ import { PullToRefresh } from '../ui/pull-to-refresh';
 /**
  * What the sidebar is showing. Every main destination is now an explorer: a
  * list here, the selected item in the right-hand pane -- chats, files, tasks,
- * skills, and MCP (a placeholder until its API exists).
+ * skills, and MCP.
  */
 type Segment = 'chats' | 'files' | 'tasks' | 'skills' | 'mcp';
 
@@ -220,7 +220,7 @@ export function ChatList() {
       ) : segment === 'skills' ? (
         <SkillsList filter={filter} />
       ) : segment === 'mcp' ? (
-        <McpSidebar />
+        <McpSidebar filter={filter} />
       ) : (
         <PullToRefresh onRefresh={refreshChats} className="pb-20">
           {viewArchived && !searching ? (
@@ -506,12 +506,34 @@ function SkillsList({ filter }: { filter: string }) {
   );
 }
 
-/** MCP has no server API yet, so the list is a placeholder -- the shell is
- * here (nav, search, the pane) so the detail slots in when it exists. */
-function McpSidebar() {
+function McpSidebar({ filter }: { filter: string }) {
+  const navigate = useNavigate();
+  const servers = useMcpStore((state) => state.servers);
+  const query = filter.trim().toLowerCase();
+  const rows = (servers ?? []).filter((server) =>
+    `${server.name} ${server.description} ${server.endpoint}`.toLowerCase().includes(query),
+  );
+
   return (
     <div className="flex-1 overflow-y-auto pb-20">
-      <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('mcp.none')}</p>
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('mcp.none')}</p>
+      ) : (
+        <ul>
+          {rows.map((server: McpServerDTO) => (
+            <li key={server.id}>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+                onClick={() => navigate(`/mcp/${server.id}`)}
+              >
+                <span className="min-w-0 truncate text-sm">{server.name}</span>
+                <span className="shrink-0 text-xs text-[var(--muted)]">{server.status}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
