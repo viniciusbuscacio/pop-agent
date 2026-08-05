@@ -437,10 +437,19 @@ export class ProviderService {
     if (definition.customBaseURL) {
       // A custom instance's model is registry data, like the rest of it.
       this.updateCustom(definition.id, { defaultModel: model });
-      return;
+    } else {
+      // Empty means "back to the definition's default" (no delete on the repo).
+      this.deps.settings.set(`provider.${providerId}.defaultModel`, model);
     }
-    // Empty means "back to the definition's default" (no delete on the repo).
-    this.deps.settings.set(`provider.${providerId}.defaultModel`, model);
+    // electDefault keeps "#1" and "what a new chat uses" the same statement,
+    // but it returns early when the provider is ALREADY the default -- so
+    // editing the default provider's own model updated the card and nothing
+    // else, and every new run kept asking for the model the card no longer
+    // showed. Maritaca configured sabiazinho-4, runs asking sabia-4
+    // (Vinicius, 05/08). The elected pair follows the card it points at.
+    if (this.deps.defaults().provider === definition.id) {
+      this.deps.setDefaultProvider?.(definition.id, this.ref(definition.id, '').modelId);
+    }
   }
 
   private storedDefaultModel(providerId: string): string | undefined {

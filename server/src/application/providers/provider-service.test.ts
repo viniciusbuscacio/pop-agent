@@ -155,6 +155,48 @@ beforeEach(() => {
   });
 });
 
+describe('the card and the elected pair agree (Vinicius, 05/08)', () => {
+  it('follows the default provider when its own model is edited', () => {
+    // The Maritaca case. electDefault returns early when the provider is
+    // already the default, so editing the card updated the registry and
+    // nothing else: the card said sabiazinho-4 and every new run kept asking
+    // for sabia-4.
+    nextCustomIds = ['aaaaaaaaaa'];
+    const instance = service.createCustom({
+      name: 'Maritaca IA',
+      baseURL: 'https://chat.maritaca.ai/api',
+      defaultModel: 'sabia-4',
+    });
+    if (instance === undefined) throw new Error('createCustom refused');
+    service.setKey(instance.id, 'key-1');
+    service.setOrder([instance.id, OPENROUTER]);
+    expect(defaults).toEqual({ provider: instance.id, model: 'sabia-4' });
+
+    service.setDefaultModel(instance.id, 'sabiazinho-4');
+
+    expect(defaults).toEqual({ provider: instance.id, model: 'sabiazinho-4' });
+  });
+
+  it('leaves the pair alone when the edited provider is not the default', () => {
+    // The other card is that provider's business; the elected pair only
+    // mirrors the card it actually points at.
+    envKey = 'sk-env';
+    nextCustomIds = ['bbbbbbbbbb'];
+    const instance = service.createCustom({
+      name: 'Ollama',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'qwen3:8b',
+    });
+    if (instance === undefined) throw new Error('createCustom refused');
+    service.setKey(instance.id, 'key-2');
+
+    service.setDefaultModel(instance.id, 'qwen3:30b-a3b');
+
+    expect(defaults.provider).toBe(OPENROUTER);
+    expect(defaults.model).toBe('moonshotai/kimi-k3');
+  });
+});
+
 describe('the key', () => {
   it('is not configured until something provides one', () => {
     expect(service.apiKey(OPENROUTER)).toBeUndefined();
