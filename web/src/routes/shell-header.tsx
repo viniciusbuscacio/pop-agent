@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
+import { useChatStore } from '../store/chat';
 import { useDismiss } from '../lib/dismiss';
 
 /**
@@ -59,6 +60,7 @@ export function ShellFooter() {
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">
         <HealthDot />
+        <RefreshButton />
         <button
           type="button"
           data-testid="shell-settings"
@@ -70,6 +72,57 @@ export function ShellFooter() {
         </button>
       </span>
     </footer>
+  );
+}
+
+/**
+ * Reloads the chat lists on demand (Vinicius, 05/08). The foreground refetch
+ * already heals a stale list when the app resumes; this is the manual handle
+ * for every other moment -- another device just deleted or renamed something
+ * and the user does not feel like backgrounding the app to find out. It spins
+ * while it works, so a fast network does not read as a dead button.
+ */
+function RefreshButton() {
+  const loadChats = useChatStore((state) => state.loadChats);
+  const loadArchived = useChatStore((state) => state.loadArchived);
+  const [busy, setBusy] = useState(false);
+
+  async function refresh(): Promise<void> {
+    setBusy(true);
+    try {
+      await Promise.all([loadChats(), loadArchived()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="shell-refresh"
+      aria-label={t('shell.refresh')}
+      disabled={busy}
+      onClick={() => void refresh()}
+      className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+    >
+      <span className={busy ? 'block motion-safe:animate-spin' : 'block'}>
+        <RefreshIcon />
+      </span>
+    </button>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 12a8 8 0 1 1-2.34-5.66"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="M20 3v4h-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

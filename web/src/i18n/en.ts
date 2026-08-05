@@ -79,6 +79,7 @@ export const en = {
     'Delete "{title}"? This is irreversible — the conversation history is gone forever.',
   'shell.empty.title': 'Pick up where you left off',
   'shell.empty.body': 'Choose a conversation on the left, or start a new one.',
+  'shell.refresh': 'Refresh the lists',
   'shell.settings': 'Settings',
   'shell.health.provider': 'LLM provider disconnected',
   'shell.health.db': 'Database disconnected',
