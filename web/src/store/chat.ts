@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AttachmentDTO, ChatDTO, MessageDTO, StreamEvent, ToolCallDTO } from '@popy/shared';
+import { ApiError } from '../services/api';
 import { chatsService } from '../services/chats';
 
 /**
@@ -217,7 +218,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async remove(chatId) {
-    await chatsService.remove(chatId);
+    try {
+      await chatsService.remove(chatId);
+    } catch (error) {
+      // 404 means the goal is already true: the chat is gone on the server
+      // and only this device still shows it. Deleting on the web never
+      // notifies the phone (there is no chat-deleted event on the stream),
+      // so a stale list swipes DELETE at a ghost, gets 404, and -- before
+      // this -- swallowed it, leaving a chat that could never be deleted
+      // (Vinicius, 05/08). Everything else is a real failure and rethrows.
+      if (!(error instanceof ApiError) || error.code !== 'not_found') throw error;
+    }
     set((state) => ({
       chats: state.chats.filter((chat) => chat.id !== chatId),
       archived: state.archived.filter((chat) => chat.id !== chatId),

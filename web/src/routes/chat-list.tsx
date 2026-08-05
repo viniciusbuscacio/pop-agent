@@ -55,6 +55,25 @@ export function ChatList() {
     void loadArchived();
   }, [loadChats, loadArchived]);
 
+  // A resumed PWA shows the list it froze with, and nothing on the stream
+  // says "a chat was deleted elsewhere" -- so a phone could carry ghosts
+  // until a full reload (Vinicius, 05/08). Ask again whenever the app comes
+  // back to the foreground. pageshow rides along because Safari restoring a
+  // frozen page does not always fire visibilitychange (see services/health).
+  useEffect(() => {
+    const refresh = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      void loadChats();
+      void loadArchived();
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pageshow', refresh);
+    };
+  }, [loadChats, loadArchived]);
+
   // Both lists, because the archived one is a click away and a stale count in
   // that heading is the kind of thing a pull is meant to fix.
   const refreshChats = useCallback(async (): Promise<void> => {
