@@ -565,21 +565,43 @@ export class RunService {
     let failure: RunFailure | undefined;
     let result: AgentRunResult = {};
 
-    // The silence deadline. Any event at all proves the provider is alive and
-    // retires it; until then, this is what stops a hung endpoint from holding
-    // the whole run. Its own controller, so the abort is telling apart from
-    // the user's Stop, which must never fail over.
+    // The silence deadline: what stops a hung endpoint from holding the run
+    // forever. Its own controller, so the abort is telling apart from the
+    // user's Stop, which must never fail over.
+    //
+    // It RE-ARMS on every event rather than being cleared by the first one
+    // (Vinicius, 05/08). Clearing it measured time-to-first-word, not
+    // silence -- a provider that said one thing and then stopped was never
+    // caught, and the chat sat there with no answer, no error and no
+    // failover until the app was killed. That is exactly what a custom
+    // OpenAI-compatible endpoint did: it passed Test connection, opened a
+    // stream, and stalled.
+    //
+    // Suspended while one of OUR tools is running, because a tool call is
+    // not the provider being silent -- it is the provider waiting for us. A
+    // twenty-minute `npm install` on an attached terminal is ordinary and
+    // emits nothing between `start` and `done` (docs/cli.md: no timeout
+    // while the hands channel heart-beats). Only `start` and its ending are
+    // counted; `output` is liveness, not a new call.
     const silence = new AbortController();
-    let spoke = false;
     let timedOut = false;
-    const deadline = setTimeout(
-      () => {
-        if (spoke) return;
+    let toolsInFlight = 0;
+    const timeoutMs = this.deps.attemptTimeoutMs ?? ATTEMPT_SILENCE_TIMEOUT_MS;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const disarm = (): void => {
+      if (deadline !== undefined) clearTimeout(deadline);
+      deadline = undefined;
+    };
+    const arm = (): void => {
+      disarm();
+      deadline = setTimeout(() => {
         timedOut = true;
         silence.abort();
-      },
-      this.deps.attemptTimeoutMs ?? ATTEMPT_SILENCE_TIMEOUT_MS,
-    );
+      }, timeoutMs);
+      // Never a reason to keep the process alive on its own.
+      deadline.unref?.();
+    };
+    arm();
 
     try {
       result = await bridge.run({
@@ -594,8 +616,15 @@ export class RunService {
         confirm: (question) => this.askConfirm(run, question),
         signal: AbortSignal.any([run.controller.signal, silence.signal]),
         onEvent: (event) => {
-          spoke = true;
-          clearTimeout(deadline);
+          if (event.kind === 'tool') {
+            if (event.status === 'start') toolsInFlight += 1;
+            else if (event.status === 'done' || event.status === 'error') {
+              toolsInFlight = Math.max(0, toolsInFlight - 1);
+            }
+          }
+          // Waiting on our own tool is not the provider going quiet.
+          if (toolsInFlight > 0) disarm();
+          else arm();
           // Fragments accumulate on the run itself, so a client mounting
           // mid-run can be handed everything that already streamed
           // ({@link liveRun}); seq marks each one so nothing is counted twice.
@@ -649,7 +678,7 @@ export class RunService {
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
-      clearTimeout(deadline);
+      disarm();
     }
 
     // Our own abort, not the bridge's opinion of it: whatever error the abort

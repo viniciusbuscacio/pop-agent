@@ -668,6 +668,66 @@ describe('failing over between providers (popy.spec §15, fase 2)', () => {
     expect(fallbacks.map((entry) => entry.code)).toContain('attempt_timeout');
   });
 
+  it('ends a provider that says one word and then stops', async () => {
+    // The deadline used to be CLEARED by the first event, which measured
+    // time-to-first-word rather than silence: a provider that spoke once and
+    // then stalled was never caught, and the chat sat there with no answer
+    // and no error until the app was killed (Vinicius, 05/08). A custom
+    // OpenAI-compatible endpoint did exactly this -- it passed Test
+    // connection, opened a stream, and stopped.
+    //
+    // It ends in PLACE, not by failing over: a streamed word pins the run
+    // (see the test below), and restarting the answer under the reader is
+    // the thing that rule exists to prevent. Ending is the fix; ending
+    // somewhere else is not.
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'half a sentence' });
+      return new Promise((_resolve, reject) => {
+        request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true,
+        });
+      });
+    };
+
+    runs.startRun(chatId, 'a question');
+    await runs.whenIdle();
+
+    expect(sink.of('error')[0]?.code).toBe('attempt_timeout');
+    // One attempt: the second provider is never asked to redo a visible answer.
+    expect(bridge.seen).toHaveLength(1);
+    expect(fallbacks).toEqual([]);
+    const messages = repo.getMessages(chatId, { limit: 10 });
+    expect(messages[messages.length - 1]?.content).toContain('could not be finished');
+  });
+
+  it('waits as long as a tool call takes, however quiet it is', async () => {
+    // The other half of the same rule. A tool call is not the provider going
+    // silent -- it is the provider waiting for US, and a twenty-minute
+    // install on an attached terminal emits nothing between start and done
+    // (docs/cli.md: no timeout while the hands channel heart-beats). Killing
+    // that at sixty seconds would be a worse bug than the one being fixed.
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = async (request) => {
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'npm install' });
+      // Well past the 120 ms deadline this suite runs with.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'done', detail: 'ok' });
+      request.onEvent({ kind: 'delta', text: 'the build finished' });
+    };
+
+    runs.startRun(chatId, 'run the build');
+    await runs.whenIdle();
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    expect(stored.some((message) => message.content.includes('the build finished'))).toBe(true);
+    // Never abandoned, so never failed over and never blamed.
+    expect(fallbacks).toHaveLength(0);
+    expect(penalized).toHaveLength(0);
+  });
+
   it('retries the next provider when the first refuses with a 402', async () => {
     withChain(TWO);
     const chatId = newChat();
