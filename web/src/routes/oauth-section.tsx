@@ -119,7 +119,11 @@ export function OAuthSection({
   }
 
   async function submit(): Promise<void> {
-    if (answer.length === 0) return;
+    // The same question the button asks, and the one that actually decides:
+    // for a free-text prompt an empty answer is an ANSWER. GitHub Copilot's
+    // "GitHub Enterprise URL/domain (blank for github.com)" is exactly that,
+    // and this line sent it nowhere however the user pressed it.
+    if (answer.length === 0 && flow?.pending?.type !== 'text') return;
     try {
       await providersService.oauthInput(provider.id, answer);
       setAnswer('');
@@ -197,12 +201,29 @@ export function OAuthSection({
                   }
                   value={answer}
                   onChange={(event) => setAnswer(event.target.value)}
+                  // Enter sends it. The input sits outside a <form>, so
+                  // nothing submitted it before: the only way through was the
+                  // mouse, on a screen whose whole content is one question and
+                  // one text field.
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    void submit();
+                  }}
                   className={`w-full rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] ${pastePending ? '' : 'max-w-xs'}`}
                 />
                 <Button
                   type="button"
                   data-testid={`provider-oauth-submit-${provider.id}`}
-                  disabled={answer.length === 0}
+                  // Empty is a real answer to a free-text question: GitHub
+                  // Copilot asks for an Enterprise domain and says "blank for
+                  // github.com", so a guard on length made the one correct
+                  // answer the one you could not give (Vinicius, 05/08).
+                  // Kept for `secret` and `manual_code`, where an empty value
+                  // is never meaningful and an accidental click should not
+                  // spend the prompt. What is valid is the server's call, not
+                  // this component's.
+                  disabled={flow.pending.type === 'text' ? false : answer.length === 0}
                   onClick={() => void submit()}
                 >
                   {t('provider.oauth.submit')}

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@popy/shared';
 import { OAuthSection } from './oauth-section';
@@ -20,12 +21,13 @@ import { OAuthSection } from './oauth-section';
 const oauthState = vi.fn();
 const oauthStart = vi.fn();
 const oauthCancel = vi.fn();
+const oauthInput = vi.fn();
 
 vi.mock('../services/providers', () => ({
   providersService: {
     oauthState: (id: string) => oauthState(id) as Promise<unknown>,
     oauthStart: (id: string) => oauthStart(id) as Promise<unknown>,
-    oauthInput: vi.fn(),
+    oauthInput: (id: string, value: string) => oauthInput(id, value) as Promise<unknown>,
     oauthCancel: (id: string) => oauthCancel(id) as Promise<unknown>,
     oauthLogout: vi.fn(),
     list: vi.fn(),
@@ -73,6 +75,22 @@ const CHOOSING_METHOD = {
   done: false,
 };
 
+/**
+ * What GitHub Copilot asks: the Enterprise domain, where leaving it blank
+ * MEANS github.com. A free-text question whose correct answer is empty.
+ */
+const ASKING_FOR_DOMAIN = {
+  flowId: 'flow-3',
+  providerId: 'openai-codex',
+  events: [],
+  pending: {
+    type: 'text' as const,
+    message: 'GitHub Enterprise URL/domain (blank for github.com)',
+    placeholder: 'company.ghe.com',
+  },
+  done: false,
+};
+
 afterEach(cleanup);
 
 beforeEach(() => {
@@ -80,9 +98,50 @@ beforeEach(() => {
   oauthStart.mockReset();
   oauthCancel.mockReset();
   oauthCancel.mockResolvedValue(undefined);
+  oauthInput.mockReset();
+  oauthInput.mockResolvedValue(undefined);
 });
 
 describe('OAuthSection', () => {
+  it('lets a free-text question be answered with nothing', async () => {
+    // GitHub Copilot's domain prompt says "blank for github.com", and a
+    // length guard made that one correct answer the one you could not give.
+    oauthState.mockResolvedValue(ASKING_FOR_DOMAIN);
+
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+
+    const submit = await screen.findByTestId('provider-oauth-submit-openai-codex');
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('still guards an empty code, where blank means nothing', async () => {
+    // Not a rule about text length -- a rule about which questions have a
+    // meaningful empty answer. A pasted code does not.
+    oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+
+    const submit = await screen.findByTestId('provider-oauth-submit-openai-codex');
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('sends on Enter, so the keyboard finishes what it started', async () => {
+    // The input sits outside a <form>: without this the only way through a
+    // screen made of one question and one field was the mouse.
+    const user = userEvent.setup();
+    oauthState.mockResolvedValue(ASKING_FOR_DOMAIN);
+
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+
+    const box = await screen.findByTestId('provider-oauth-answer-openai-codex');
+    await user.click(box);
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(oauthInput).toHaveBeenCalledWith('openai-codex', '');
+    });
+  });
+
   it('adopts a sign-in already running on the server', async () => {
     oauthState.mockResolvedValue(WAITING_FOR_PASTE);
 
