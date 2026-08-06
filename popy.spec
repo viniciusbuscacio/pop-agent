@@ -108,6 +108,7 @@ domain / application / dto / infrastructure / appcore → interface+main):
 ├── secret.key       # 0600 — encrypts stored provider secrets; NEVER in backups
 ├── sessions/        # pi's JSONL session files (pi-owned, never parsed by Popy)
 ├── attachments/     # uploaded files (metadata in DB)
+├── files/           # the user's Files: a plain folder tree, real names (§14)
 ├── notes/           # Popy's own markdown notes vault (§11)
 ├── skills/          # user-added skills (§8)
 └── backups/         # tar.gz snapshots (§16)
@@ -185,8 +186,7 @@ secrets(key, value_encrypted)                   -- §9, secret.key encrypted
 llm_runs(id, chat_id, provider, model, tokens_in, tokens_out,
          cost, created_at)                      -- cost accounting (§14)
 skills_index(skill_id, name, description, source, embedding)  -- §8
-artifacts(id, chat_id, name, mime, size, version, source,
-          created_at, updated_at)              -- §14, RF-001
+file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
 ```
 
 - **IDs and internal file names** — two shapes, one CSPRNG generator (11 base62
@@ -224,12 +224,12 @@ artifacts(id, chat_id, name, mime, size, version, source,
   afterwards, finds its chat gone, and stores nothing. The live pi session, if
   cached, is disposed first so nothing rewrites the file after it is gone.
   FTS5/embedding rows go by the same cascade once they exist.
-- **Artifacts** are files the agent produced or the user uploaded, tracked per
-  chat and downloadable through a signed link (§14). The bytes live on disk
-  under `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the row is the record. The
-  `file-<11 base62>` id is the only identifier that leaves the server — no
-  filesystem path or storage key is ever exposed. Deleting a chat deletes its
-  artifacts (rows by cascade, bytes by removing `artifacts/<chatId>/`).
+- **Files** live in `POPY_DATA_DIR/files/` as a plain folder tree with real
+  names (§14) — the disk is the record; there is no artifacts table. The only
+  thing the database keeps is `file_provenance`: an append-only log of which
+  chat wrote which path and when. It is history, not state — a later rename
+  does not update it, and nothing breaks when it points at a name that moved.
+  Deleting a chat leaves the user's files alone.
 
 ## 7. Infinite memory (`application/memory/`)
 
@@ -697,56 +697,62 @@ events from stale runs.
   rather than honoured** — a typo in an environment variable must not
   quietly switch every notification off.
 
-### Artifacts and signed downloads (RF-001–019)
+### Files as a plain folder (supersedes RF-001–019)
 
-- **Artifacts** are the agent's outputs and the user's uploads, tracked per
-  chat (§6 `artifacts` table). The agent produces one with the **`save_artifact`
-  tool**: it writes a file in its workspace with the built-in tools, then calls
-  `save_artifact(path)` to promote it into a tracked, downloadable artifact for
-  the conversation (the path is jailed to the workspace). It reads one back with
-  **`read_artifact(ref)`** — by id or by exact name, scoped to the current
-  conversation so one chat can never read another's — which returns text content
-  through the safety envelope (an artifact is external content) and reports
-  binary files without inlining them. Text is extracted best-effort from
-  non-text formats first (RF-011/012): **PDF** via `pdftotext`, **DOCX** via
-  `unzip` of `word/document.xml`, and **images** via `tesseract` OCR (por+eng) —
-  system binaries, not heavy JS deps; a failure just falls back to the binary
-  note. A deploy that wants extraction installs `poppler-utils`, `tesseract-ocr`
-  (+ language packs) and `unzip`. The bytes live under
-  `POPY_DATA_DIR/artifacts/<chatId>/<id>`; the `file-<11 base62>` id is the
-  only handle a client ever sees — no filesystem path or storage key is
-  exposed. Deleting a chat deletes its artifacts (rows by cascade, bytes by
-  removing the folder).
-- **Downloads are HMAC-signed and public.** `GET /artifacts/:id/download?
-  expires=<ms>&sig=<b64url>` carries no session — the signature is the whole
-  authorisation. The signing key is derived from `secret.key` (never a fresh
-  secret), so rotating the key invalidates every outstanding link. The
-  signature covers the id and the expiry together, and verification checks the
-  signature **before** the expiry, so tampering with `expires` fails as a bad
-  signature rather than extending the link. A bad/forged signature → 403, an
-  expired link → 410, an unknown id → 404. Expiry is a property of the LINK,
-  not the artifact: the default life is 30 days, an expired link is refused
-  even though the file still exists, a fresh link can be minted any time, and
-  there is no cleanup cron.
-- **Versioning and history** (RF-018/019): re-saving under the same name in the
-  same chat keeps the previous bytes as a numbered version instead of losing
-  them. The `artifacts` row is always the latest; `artifact_versions` is the
-  trail (version, size, source, timestamp) — the audit RF-019 asks for, on a
-  single-user install where the user is implied. `GET /v1/artifacts/:id/versions`
-  lists the history; a specific version downloads through its own signed link
-  (`/artifacts/:id/versions/:n/download`, the version folded into the signature).
-- **Multimodal input** (RF-014): when the conversation's model accepts image
-  input (`model.input` includes `image`), image attachments go straight to the
-  model as inline content, not just saved to the workspace. Text-only models
-  never receive images — they keep the file + tools path (RF-015 fallback), so
-  the default model is unaffected.
-- The authenticated half (`/v1`) lists a chat's artifacts, uploads a file into
-  a chat (`POST /v1/chats/:chatId/artifacts`, multipart, 25 MB cap), mints a
-  link and deletes one. The **artifacts screen** is a full-screen route
-  (`/chat/:chatId/artifacts`, reached from the chat header) that lists, uploads,
-  downloads (through a freshly minted link) and deletes — never a drawer.
-  OCR, multimodal and versioning land in later blocks
-  (`docs/artifacts-attachments-downloads.md`).
+> Redesigned in 1.58: Files stopped being a catalog over id-named blobs and
+> became a directory. The paragraphs below are the target state; the previous
+> design (`save_artifact`/`read_artifact`, id-addressed downloads, versions,
+> the path index) lives in the changelog if a rollback ever needs it.
+
+- **`POPY_DATA_DIR/files/` is the single source of truth.** Real names, real
+  subfolders. The Files tab renders the tree as it is on disk — a `readdir`
+  walk, no `artifacts` table, no `file-` ids, no path index. What `tree`
+  shows over SSH is exactly what the tab shows. Hidden entries (dotfiles)
+  are reserved for Popy's own metadata and are never listed.
+- **The agent sees Files as a folder.** `Files/` is exposed inside the
+  workspace root, so the built-in `read`/`write`/`bash` tools already cover
+  it: "save something for the user" means writing `Files/relatorio.pdf`.
+  `save_artifact` and `read_artifact` retire. The system prompt teaches one
+  rule — *a file the user asked for is not done until it exists under
+  `Files/`; the rest of the workspace is scratch.*
+- **Overwrite is the feature.** Saving a name that exists replaces it. No
+  versions, no history (`artifact_versions` is gone). What the user wants
+  from "save it again" is the new file (Vinicius, 05/08).
+- **Provenance is a log, not a catalog** (Vinicius, 05/08): the
+  `file_provenance` table (§6) records "chat X wrote `Files/foo.pdf` at T",
+  append-only, written by the server as it serves the tree. It answers
+  "which files did this chat produce" without ever having to be right about
+  where the file is *now* — history cannot desynchronize.
+- **The trash is a folder.** Deleting from the UI moves the entry into
+  `files/Garbage/`; the agent deletes through a **`delete_file(path)` tool
+  whose real effect is that same move** — never `rm` (Vinicius, 05/08: a
+  rule enforced by a tool beats a rule taught in a prompt). A hidden
+  `Garbage/.garbage.json` records `{originalPath, deletedAt}` per entry —
+  the `.trashinfo` idea from the Linux desktop. Restore moves it back; a
+  daily sweep purges what is older than 30 days. Self-healing by design: a
+  file with no entry purges by its own mtime and restores to the Files
+  root; an entry with no file is dropped on the next sweep.
+- **Downloads stay HMAC-signed, now over the path.**
+  `GET /files/download?path=<rel>&expires=<ms>&sig=<b64url>` — the
+  signature covers path+expiry and is checked before the expiry, so
+  tampering with either fails as a bad signature. Path resolution refuses
+  `..`, absolutes and symlink escapes (the same jail the workspace already
+  has). 403 forged, 410 expired, 404 unknown; expiry is a property of the
+  link, and a fresh one can be minted any time.
+- **Search is by name, live.** `files_search(query)` walks the tree at
+  query time and matches names and paths — no index, no watcher, no
+  embeddings (Vinicius, 05/08: names only for now). Content search, if it
+  ever returns, is an index keyed by path+mtime, out of scope here.
+- **Uploads** (`POST /v1/files`, multipart, 25 MB cap) land in the folder
+  open in the tab (the root by default). Multimodal input is unchanged:
+  image attachments still go inline to models that accept image input;
+  text-only models keep the file-on-disk path.
+- **Migration**: one boot-time walk of the old `artifacts` table writes
+  each latest version to `files/<folders>/<name>` (older versions are not
+  carried over), seeds `file_provenance` from the rows' chat ids, then
+  drops `artifacts`, `artifact_versions` and the folders table and removes
+  `POPY_DATA_DIR/artifacts/`. `FilesReindexJob` and the id-based routes go
+  with them.
 
 ## 15. Providers, models, updates
 
@@ -1217,6 +1223,27 @@ is set by hand and moves only when the wire changes.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.58 (2026-08-05): **Files becomes a plain folder (§4, §6, §14).** The
+  catalog design — id-named blobs under `artifacts/<chatId>/`, an
+  `artifacts` table, versions, a path index, trash rows — was carrying
+  features this install does not want: Vinicius wants to `tree` his files
+  over SSH, wants a re-save to overwrite, and wants the trash to be a
+  folder he can open. So `POPY_DATA_DIR/files/` with real names is now the
+  single source of truth; the tab renders the disk, uploads and the agent
+  write straight into it, and `save_artifact`/`read_artifact` retire in
+  favour of the built-in file tools. What survives, survives simpler:
+  signed downloads sign the *path*; "which chat made this" is
+  `file_provenance`, an append-only log that cannot desynchronize because
+  history does not move; the trash is `files/Garbage/` plus a hidden
+  `.garbage.json` (`{originalPath, deletedAt}`, the desktop `.trashinfo`
+  idea) with a daily 30-day sweep; and the agent deletes through
+  `delete_file(path)`, a tool whose real effect is the move to Garbage — a
+  rule enforced by a tool beats a rule taught in a prompt (Vinicius,
+  05/08). `files_search` drops to live name matching, names only for now.
+  Versions, content search and the live file↔chat link are given up on
+  purpose, not forgotten. Design recorded; implementation pending — this
+  entry supersedes the artifact half of 1.47–1.53.
 
 - 1.57 (2026-08-04): **Two CLIs, and a server that hands out its own
   client (§17).** `popy` is the chat client and `popyman` the operator's
