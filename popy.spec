@@ -1224,6 +1224,28 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.59 (2026-08-05): **Files as a plain folder is BUILT (§4, §6, §14 -- lands
+  1.58).** Four commits, gate green throughout: the FilesService core
+  (Garbage/ + `.garbage.json`, path-signed links, `file_provenance`,
+  migration 026); the agent side (Files/ symlinked into the workspace,
+  `save_artifact`/`read_artifact` retired for the built-in tools,
+  `delete_file` that moves instead of removing, `files_search` as a live
+  name walk, the provenance walk on run end); the path-based API and UI
+  (`/v1/files` serves the real tree, uploads land in the open folder,
+  rename and move are one path edit, composer @-mentions carry paths);
+  and the removal (migration 027 drops the five catalog tables after
+  bootstrap exports live rows to `files/<path>`, trashed rows to
+  `Garbage/`, and seeds provenance -- then `artifacts/` is deleted).
+  Verified against the real install: the two catalog rows landed with
+  their names, the agent wrote `Files/resumo-redesign.txt` from a chat
+  and provenance logged it, the tab lists the disk, a ⋯ → Download
+  serves the exact bytes through the signed URL, and delete→trash→
+  restore round-trips from the chat to the Trash screen and back.
+  Caveat found live: the PWA's waiting service worker did not activate
+  from the update toast (the button click left `waiting: true`); the
+  session was fixed by unregistering the SW + clearing caches, and the
+  update flow deserves a look of its own.
+
 - 1.58 (2026-08-05): **Files becomes a plain folder (§4, §6, §14).** The
   catalog design — id-named blobs under `artifacts/<chatId>/`, an
   `artifacts` table, versions, a path index, trash rows — was carrying
