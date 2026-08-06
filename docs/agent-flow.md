@@ -112,7 +112,7 @@ GET /v1/events            EventSink port            pi events → AgentEvent
 | Failure                       | Behavior                                        |
 |-------------------------------|-------------------------------------------------|
 | SSE drops mid-run             | client reconnects + refetches; run unaffected   |
-| server restarts mid-run       | run dies; chat shows last persisted state; user resends |
+| server restarts mid-run       | run dies; the partial answer is persisted, marked interrupted |
 | pi throws inside a run        | `error` event with stable code; user message already persisted |
 | provider auth/limit error     | `error` code surfaces the provider code; no retry loops |
 | Stop pressed                  | abort + child process-group kill; terminal `error/aborted` |

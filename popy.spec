@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.56 — 2026-08-04.
+Version 1.59 — 2026-08-05.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the

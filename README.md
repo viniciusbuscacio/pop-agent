@@ -5,8 +5,20 @@ your personal agent is live — reachable from any browser as a PWA, on
 desktop and mobile.
 
 Popy embeds the [pi agent](https://pi.dev) as its engine and builds the
-product around it: authentication, conversations with streaming, infinite
-memory, its own notes vault, skills, cost tracking and backups.
+product around it:
+
+- **Chat** over HTTP + SSE — streaming, attachments, voice notes, image
+  input, cost tracking per run.
+- **Infinite memory** — search over every past conversation, and a living
+  document the agent keeps about you.
+- **Files** — a plain folder you and the agent share, rendered as a tab in
+  the app, with signed download links and a restorable trash.
+- **Notes**, **skills** picked per turn by a local router, **scheduled
+  tasks**, backups, Web Push, passkeys.
+- **A terminal client** — `popy` chats from any machine and lends the
+  agent local hands there; `popyman` operates the service on the server.
+
+Principles:
 
 - **Single user per installation** — by design, permanently.
 - **Zero telemetry, no phone-home.** The only outbound traffic is the LLM
@@ -16,12 +28,13 @@ memory, its own notes vault, skills, cost tracking and backups.
 
 ## Status
 
-Pre-alpha. The specification is complete (`popy.spec`); implementation is
-starting. Not usable yet.
+In active development, running daily for its maintainer. Pre-1.0: things
+still move without compatibility promises.
 
 ## Documentation
 
-`popy.spec` is the single source of truth for architecture and behavior.
+`popy.spec` is the single source of truth for architecture and behavior;
+`CHANGELOG.md` tracks what shipped. Design deep-dives live in `docs/`.
 
 ## License
 

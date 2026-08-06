@@ -1,5 +1,11 @@
 # Artifacts, attachments and secure downloads — plan (Rodada 3 / v0.3)
 
+> **HISTORICAL — superseded 2026-08-05.** The artifact catalog this plan
+> built — the `artifacts` table, versions, id-named blobs, per-id signed
+> links, `save_artifact`/`read_artifact` — was replaced by Files as a plain
+> folder (popy.spec 1.58/1.59, §4/§6/§14). Nothing below is normative; it
+> stays as the record of what was built and why it could be retired.
+
 > The normative rules land in `popy.spec`; this file is the working plan the
 > maintainer's notes call RF-001–019. It is split into blocks that each end on
 > a green gate and a small commit. No block waits for manual acceptance

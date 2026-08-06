@@ -7,46 +7,44 @@ normative history.
 
 ### Added
 
-- **Nested folders in Files**: a folder can hold folders as well as files.
-  Each folder with subfolders carries a `+`/`−` toggle in the tree -- in the
-  sidebar and the content pane -- that opens it in place, while its name still
-  navigates in. "New folder" inside a folder makes a subfolder. Same name
-  under different parents is allowed (`Projetos/specs` and `Clientes/specs`);
-  a duplicate among siblings is refused. Deleting a folder takes its whole
-  subtree with it -- descendant folders and their files, records and bytes
-  both.
-- **Files search actually finds folders, and searches the whole tree**: search
-  used to filter the loaded file list in the browser, which hid folders and
-  missed anything below the open folder. A materialised path index in the
-  database now backs `GET /v1/files/search`, matching a name or any path
-  segment across the tree and returning folders first, then files, each shown
-  with its full path. The index is rebuilt after every Files change, at boot,
-  and once a day at 01:00 as a safety net.
-
-### Fixed
-
-- **The Files search box was a sliver on a phone**: the toolbar buttons filled
-  the line and left it squeezed. It now drops to its own full-width line below
-  them on a phone, and shares the row from `sm` up.
-- **Push notifications never arrived on iPhone**: everything was in place — the
-  service worker, the Settings opt-in, the subscription, the send when a run
-  finishes — but the notifications were signed with a contact address ending in
-  `@localhost`, which Apple rejects outright (403 BadJwtToken) without telling
-  anyone. Popy now signs with a real URL, and `POPY_PUSH_SUBJECT` lets the
-  operator use their own address.
-- **Every delete from the UI looked dead**: the API layer parsed JSON out of
-  every ok response, but a DELETE answers 204 with no body, so the parse threw
-  after the server had already deleted — the row never left the screen. Chats,
-  artifacts, skills, backups and passkeys were all affected.
-- **Unarchiving a chat made it vanish from both lists** until a reload: the
-  store only removed it from the active list and refreshed the archived one.
-  Both lists refresh now.
-- **The composer showed a scrollbar on a single line**: the auto-grow height
-  missed the 2px of border (border-box) and left the box permanently 2px short
-  of its content. The scrollbar now appears only once the composer hits its
-  one-third-of-the-screen cap, like aw's.
-
-### Added
+- **Files is a plain folder on disk.** `POPY_DATA_DIR/files/` with real
+  names is the single source of truth. The Files tab -- its own sidebar tab
+  next to Chats and Tasks -- renders the disk: nested folders with a `+`/`−`
+  toggle, "New folder", uploads landing in the open folder, rename and move
+  as one path edit, and search (`GET /v1/files/search`, the agent's
+  `files_search`) matching a name or any path segment live across the whole
+  tree. The agent works in the same folder -- `Files/` inside its workspace
+  -- so a file it saves there is immediately visible, downloadable through
+  an HMAC-signed link that signs the path, and @-mentionable in the
+  composer. Deleting moves to `files/Garbage/` (restorable from the Trash
+  screen; a daily sweep empties it after 30 days), and the agent's
+  `delete_file` makes the same move -- never a hard remove. "Which chat made
+  this file" is `file_provenance`, an append-only log. The artifact catalog
+  this replaces -- id-named blobs, the `artifacts` table, versions,
+  `save_artifact`/`read_artifact` -- is gone; re-saving a name overwrites,
+  as a folder should.
+- **`popy` -- the terminal client, with hands.** A chat in the terminal is
+  an ordinary Popy chat (same memory, budget, taint guard, PWA visibility),
+  but a message typed in a terminal hands the agent a second set of tools --
+  `local_bash`, `local_read`, `local_write`, `local_edit` -- running on the
+  machine that typed it, over a dedicated WebSocket hands channel with a
+  heartbeat. Hands belong to the message, not the chat: each message runs on
+  the machine it was typed on; a phone message gets the server's tools only.
+  TUI built on pi-tui, one-shot mode (`popy "…"`), login and per-server
+  profiles. The server serves its own client
+  (`npm i -g https://your-popy/cli-X.Y.Z.tgz`) and the attach compares
+  versions: silent when compatible, one line when merely behind, refused
+  below the server's minimum.
+- **`popyman` -- the operator's tool.** `start | stop | restart | status |
+  backup | backups | restore | reset-password | update`, shipped with the
+  server and running only there; the only thing that touches systemd, SQLite
+  and the backups directory.
+- **Every message remembers where it came from**: `client`
+  (`web | pwa | desktop | cli | api | task`), platform and IP are recorded
+  per message, not per connection.
+- **The agent sees its own scheduled tasks** (`list_scheduled_tasks`).
+- **Delete every archived conversation in one step**, and a refresh button
+  beside Settings.
 
 - **Deleting a chat now stops what it was doing first**: the running answer is
   aborted (which kills the agent's process group) and anything of that chat
@@ -57,15 +55,14 @@ normative history.
   for thirty days, are removed once a day. It never touches a live chat's
   files, a project directory, or anything outside the workspace — conversation
   history is never swept, only files derived from it.
-- **Background tasks**: a third sidebar tab next to Chats and Files. A task is
+- **Background tasks**: a sidebar tab next to Chats and Files. A task is
   a prompt with a schedule — once, or every N minutes/hours. Each run opens its
   own conversation named after the task and goes through the normal chat
   pipeline, so failover, compaction and error messages all apply and the result
   is readable like any other chat. Task runs are serialised: never two at once.
   Run now, an enabled switch, and a full-screen create/edit form.
-- **Home list redesign**: Chats | Artefacts segments on top; search reaches
-  archived chats (badged); archived browsing moved to the ... menu. The
-  Artefacts segment lists every artifact across every chat.
+- **Home list redesign**: search reaches archived chats (badged); archived
+  browsing moved to the ... menu.
 - **Swipe on a chat row** (touch): right = delete (confirmed), left =
   archive/unarchive.
 - **Composer strip**: thinking visibility toggle (per device) and the model
@@ -78,51 +75,11 @@ normative history.
   server card (latest origin tag + the update command, with a push
   notification per new version that deep-links here), and the environment
   versions (pi, Node, ffmpeg, poppler, tesseract, whisper.cpp).
-
 - **Multimodal image input** (RF-014): when the conversation's model accepts
   images, image attachments are sent to the model inline instead of only being
   saved to the workspace. Gated on the model's declared input modalities, so a
   text-only model (the default) is untouched and still reads files with its
   tools.
-- **Artifact versioning and history** (RF-018/019): re-saving a file under the
-  same name in the same chat keeps the previous bytes as a numbered version.
-  `GET /v1/artifacts/:id/versions` lists the history; each version downloads
-  through its own signed link (the version folded into the HMAC). The artifacts
-  screen shows the current version. Validated live: two uploads produced v2+v1,
-  and each version downloaded its own bytes.
-- **Text extraction and OCR for read_artifact** (RF-011/012): non-text
-  artifacts are extracted best-effort before the agent gives up — PDF via
-  `pdftotext`, DOCX via `unzip` of the document XML, images via `tesseract`
-  OCR (por+eng). System binaries, not heavy JS deps. Validated live: the agent
-  read a PDF's text and OCR'd a PNG.
-- **`read_artifact` agent tool** (RF-011/016/017): the agent reads a
-  conversation's artifact by id or exact name (scoped to that chat), getting
-  text content through the safety envelope; binary files are reported, not
-  inlined. Closes the loop with uploads — validated live (uploaded a note, the
-  agent read it back).
-- **`save_artifact` agent tool** (RF-001): the agent writes a file in its
-  workspace and calls `save_artifact(path)` to promote it into a tracked,
-  downloadable artifact for the conversation (path jailed to the workspace).
-  Validated live against the real pi bridge.
-- **Artifacts screen + upload** (RF-002/009): a full-screen artifacts view per
-  conversation (reached from the chat header) that uploads a file, lists what a
-  chat holds, downloads through a freshly minted signed link, and deletes.
-  Upload is `POST /v1/chats/:chatId/artifacts` (multipart, 25 MB cap).
-- **Artifacts — HTTP surface, disk store and signed downloads** (RF-001/002-list/
-  004–008): an on-disk blob store grouped per chat under the data directory, a
-  service that creates/lists/deletes artifacts and mints links, authenticated
-  routes to list a chat's artifacts / mint a signed link / delete one, and a
-  public `GET /artifacts/:id/download` that carries no session — the HMAC in the
-  URL is the whole authorisation (bad signature → 403, expired → 410, unknown
-  → 404). Deleting a chat now also deletes its artifact bytes.
-- **Artifacts foundation** (RF-001/003–008, backend groundwork toward v0.3): an
-  `artifacts` table keyed by an unguessable `file-<base62>` id, a SQLite repo
-  with the same collision-retry discipline as chats/messages, and HMAC-signed
-  download links derived from `secret.key` — the signature covers the id and the
-  expiry together, so a tampered expiry fails as a bad signature; links default
-  to a 30-day life and expiring a link never touches the artifact. HTTP surface,
-  the on-disk store, the artifacts screen, upload, OCR and versioning follow in
-  later blocks (see `docs/artifacts-attachments-downloads.md`).
 
 ### Fixed
 
@@ -134,6 +91,33 @@ normative history.
   "Check now" button. The server marks `sw.js` and the HTML shell
   `no-cache` while keeping hashed assets `immutable`, so a stale worker can
   no longer be pinned by a heuristic cache.
+- **Embeddings die with their messages**: deleting a chat no longer leaves
+  its embedding rows behind.
+- **A ghost chat can be deleted**, and the chat lists follow the foreground
+  app instead of going stale.
+- **Applying an API key no longer waits on provider catalogs**, and the
+  elected provider pair follows the card it points at.
+- **The danger zone says what each switch actually switches.**
+- **The Files search box was a sliver on a phone**: the toolbar buttons filled
+  the line and left it squeezed. It now drops to its own full-width line below
+  them on a phone, and shares the row from `sm` up.
+- **Push notifications never arrived on iPhone**: everything was in place — the
+  service worker, the Settings opt-in, the subscription, the send when a run
+  finishes — but the notifications were signed with a contact address ending in
+  `@localhost`, which Apple rejects outright (403 BadJwtToken) without telling
+  anyone. Popy now signs with a real URL, and `POPY_PUSH_SUBJECT` lets the
+  operator use their own address.
+- **Every delete from the UI looked dead**: the API layer parsed JSON out of
+  every ok response, but a DELETE answers 204 with no body, so the parse threw
+  after the server had already deleted — the row never left the screen. Chats,
+  files, skills, backups and passkeys were all affected.
+- **Unarchiving a chat made it vanish from both lists** until a reload: the
+  store only removed it from the active list and refreshed the archived one.
+  Both lists refresh now.
+- **The composer showed a scrollbar on a single line**: the auto-grow height
+  missed the 2px of border (border-box) and left the box permanently 2px short
+  of its content. The scrollbar now appears only once the composer hits its
+  one-third-of-the-screen cap, like aw's.
 
 ## v0.2.0 — 2026-07-31
 

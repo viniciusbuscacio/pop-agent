@@ -19,8 +19,8 @@ gets the same title treatment. Nothing about it is a side channel.
 The difference is where the agent's hands are. Answering a message that
 came from a terminal she has **two pairs**: the system tools she always
 had, running on the server, and a second set running **on the machine
-that typed it**. Popy's own tools (memory, notes, skills, artifacts,
-`web_fetch`) keep running on the server, as always.
+that typed it**. Popy's own tools (memory, notes, skills, the Files
+folder, `web_fetch`) keep running on the server, as always.
 
 *(Revised 04/08. This first said the system tools MOVE to the terminal's
 machine while one is attached, and that a `popy` on the MacBook therefore
@@ -48,7 +48,7 @@ OS.
    │  transcript, editor       ───┼───────────────▶│   ├ memory, skills     │
    │  thinking, live output    ◀──┼────────────────┤   ├ taint guard        │
    │                              │                │   ├ cost, history      │
-   │  pi's local operations    ◀──┼── hands ch. ──▶│   └ artifacts          │
+   │  pi's local operations    ◀──┼── hands ch. ──▶│   └ Files              │
    │  (bash/read/write/edit)      │                │                        │
    └──────────────────────────────┘                └────────────────────────┘
         the hands                                        the brain
@@ -86,7 +86,7 @@ client holds one secret: a session token.
 | Interactive commands (`vim`, `sudo`, `[y/N]`) | Whatever pi's bash tool already does — inherited, not designed *(decided)* |
 | Machine awareness | Inject hostname, OS, architecture and cwd into the prompt. Start there, refine later if needed *(decided)* |
 | Thinking | Streamed, dimmed, toggleable, remembered per machine *(decided)* |
-| Where files land | The existing tool split already answers it: `write`/`edit` touch the local machine (your Obsidian vault, your repo); `save_artifact` produces a server-side artifact visible in Files. The model already chooses between them *(decided)* |
+| Where files land | The existing tool split already answers it: `local_write`/`local_edit` touch the machine that typed (your Obsidian vault, your repo); the server's own `write` into `Files/` lands in the user's Files tab. The model already chooses between them *(decided; revised 05/08 — `save_artifact` and the artifact catalog are gone, Files is a plain folder)* |
 | Language | **TypeScript** *(decided)* — see Language |
 | Client/server version mismatch | **The server sets a minimum and the attach enforces it**: silent when compatible, one dim line when merely behind, refused with the install command when below the minimum. Never a silent auto-update *(decided)* — see Version compatibility |
 
