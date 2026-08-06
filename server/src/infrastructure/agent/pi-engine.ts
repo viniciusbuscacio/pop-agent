@@ -20,9 +20,8 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import { envelope } from '../../domain/safety/sanitize.js';
 import { buildMemoryTools, type MemorySearcher } from '../memory/memory-tools.js';
 import { buildUserMemoryTools } from '../memory/user-memory-tools.js';
-import { buildArtifactTools, type FileSearch } from '../artifacts/artifact-tools.js';
-import type { ArtifactExtractor } from '../artifacts/artifact-extractor.js';
-import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import { buildFileTools } from '../files/file-tools.js';
+import type { FilesService } from '../../application/files/files-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import { buildTaskTools } from './task-tools.js';
 import type { NotesVault } from '../notes/notes-vault.js';
@@ -53,12 +52,15 @@ const SYSTEM_PROMPT = [
   'You have tools to read and write files and to run commands in your',
   'workspace; use them when they genuinely help with the request.',
   // The product's own vocabulary, spelled out because the agent lives inside
-  // the product: asked about "Files", it once went looking for a directory of
-  // that name (Vinicius, 05/08). Written plainly enough for a weak model --
-  // the deliberate test bench: what works on sabiazinho works on anything.
-  'Vocabulary: the user\'s "Files" tab (Arquivos) is the artifact store, not',
-  'a folder on disk -- use save_artifact, read_artifact and files_search for',
-  'it. "Notes" (notas) are your own vault: notes_list and its siblings.',
+  // the product. Written plainly enough for a weak model -- the deliberate
+  // test bench: what works on sabiazinho works on anything.
+  'Vocabulary: the user\'s "Files" tab (Arquivos) IS the Files/ folder in',
+  'your workspace -- same thing, seen from two sides. A file the user asked',
+  'you to create or save is not done until it exists under Files/; the rest',
+  'of the workspace is your scratch space, invisible to the user. To delete',
+  'inside Files/ always use delete_file (it moves to a trash the user can',
+  'restore from) -- never rm. files_search finds the user\'s files by name.',
+  '"Notes" (notas) are your own vault: notes_list and its siblings.',
   'Popy also runs scheduled tasks for the user; list_scheduled_tasks shows',
   'them, including yours.',
 ].join(' ');
@@ -123,7 +125,7 @@ export interface PiOpenOptions {
   sessionFile: string | undefined;
   /** The user's custom instructions, appended to the system prompt. */
   instructions: string;
-  /** The conversation this session serves, so save_artifact can attribute. */
+  /** The conversation this session serves, for per-chat tools (tasks, MCP). */
   chatId: string;
   /**
    * The terminal that typed the message this run answers, if it was one
@@ -202,12 +204,8 @@ export interface SdkPiEngineOptions {
   memorySearch?: MemorySearcher;
   /** The living document the agent keeps about the user; tools + prompt. */
   userMemory?: UserMemoryRepo;
-  /** Artifacts: powers the save_artifact tool (popy.spec §14). */
-  artifacts?: ArtifactService;
-  /** Extracts text from PDF/DOCX/images for read_artifact (popy.spec §14). */
-  artifactExtractor?: ArtifactExtractor;
-  /** Semantic search over Files, when the embedder exists. */
-  fileSearch?: FileSearch;
+  /** The user's Files folder: powers delete_file and files_search (popy.spec §14). */
+  files?: FilesService;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
   /**
@@ -345,16 +343,7 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.userMemory === undefined
         ? []
         : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),
-      ...(this.options.artifacts === undefined
-        ? []
-        : buildArtifactTools(
-            sdk.defineTool,
-            this.options.artifacts,
-            this.options.workspace,
-            options.chatId,
-            this.options.artifactExtractor,
-            this.options.fileSearch,
-          )),
+      ...(this.options.files === undefined ? [] : buildFileTools(sdk.defineTool, this.options.files)),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
       ...(this.options.localTools?.(sdk, options.handsConnectionId) ?? []),

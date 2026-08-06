@@ -111,6 +111,12 @@ export interface RunDeps {
   /** Told after a run's messages are stored, to embed them (popy.spec §7). */
   indexMessages?: () => void;
   /**
+   * Told when a run's work is over, with when it began (epoch ms). The
+   * provenance walk hangs off this (popy.spec §14): files under Files/
+   * touched during the window are logged as written by this chat.
+   */
+  onRunFinished?: (info: { chatId: string; startedAtMs: number }) => void;
+  /**
    * The ordered failover chain for a run (popy.spec §15, fase 2): every
    * usable (provider, model) pair, the chat's override first. Absent -- the
    * fixture-less tests -- means one attempt with the chat's own pair, which
@@ -139,6 +145,8 @@ interface PendingRun {
   /** The terminal whose hands this run has, if its message named one. */
   handsConnectionId: string | undefined;
   started: boolean;
+  /** Epoch ms when execution began; 0 while still queued. */
+  startedAtMs: number;
   /** Fragments emitted so far -- the sequence number of the last one. */
   seq: number;
   /** What has streamed so far, so a client mounting mid-run can catch up. */
@@ -314,6 +322,7 @@ export class RunService {
       notify: options.notify ?? true,
       handsConnectionId: options.handsConnectionId,
       started: false,
+      startedAtMs: 0,
       seq: 0,
       content: '',
       thinking: '',
@@ -742,6 +751,7 @@ export class RunService {
     this.running += 1;
     run.started = true;
     const { chats, sink, clock } = this.deps;
+    run.startedAtMs = clock.now();
 
     sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
 
@@ -868,6 +878,8 @@ export class RunService {
     });
     // Embed the new messages for semantic memory, off the reply path (§7).
     this.deps.indexMessages?.();
+    // The provenance walk (§14): what this run left under Files/ is history now.
+    this.deps.onRunFinished?.({ chatId: run.chatId, startedAtMs: run.startedAtMs });
 
     // And whoever asked in code rather than over the stream (popy.spec §21).
     this.endRun(

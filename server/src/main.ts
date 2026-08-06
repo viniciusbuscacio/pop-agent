@@ -29,10 +29,11 @@ import { FilesReindexJob } from './infrastructure/agent/files-reindex-job.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
 import { FilesService } from './application/files/files-service.js';
+import { FileProvenanceService } from './application/files/file-provenance.js';
 import { GarbageSweeper } from './application/files/garbage-sweeper.js';
 import { PathIndexService } from './application/artifacts/path-index.js';
 import { FileIndexer } from './application/artifacts/file-indexer.js';
-import { filesCatalogBlock } from './application/artifacts/files-catalog.js';
+import { filesCatalogBlock } from './application/files/files-catalog.js';
 import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
@@ -48,7 +49,7 @@ import { SkillRouterService } from './application/skills/skill-router-service.js
 import { pinnedBodies } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
-import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir, ensureFilesDir } from './infrastructure/config/data-dir.js';
+import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir, ensureFilesDir, ensureWorkspaceFilesLink } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
@@ -104,6 +105,16 @@ const artifactsDir = ensureArtifactsDir(context.dataDir);
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
 const files = new FilesService({ root: filesDir, clock: systemClock });
+// The agent sees the same folder as `Files/` in its workspace -- a symlink,
+// so the tab and the agent can never disagree about what exists.
+const filesLinkWarning = ensureWorkspaceFilesLink(workspace, filesDir);
+if (filesLinkWarning !== undefined) console.warn(`popy files: ${filesLinkWarning}`);
+// The append-only "which chat wrote this" log (§6, §14), fed after each run.
+const fileProvenance = new FileProvenanceService({
+  repo: context.fileProvenance,
+  files,
+  clock: systemClock,
+});
 // Beside the data directory, never inside it: a backup must not end up in the
 // next backup. Named once because the storage report has to count it too --
 // it is usually the heaviest thing on the disk (§16 keeps ten of them).
@@ -284,9 +295,7 @@ function piBridge(): PiAgentBridge {
       chatStats: (chatId) => ({ messages: context.chats.countMessages(chatId) }),
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
-      artifacts,
-      artifactExtractor,
-      ...(fileIndex.current === undefined ? {} : { fileSearch: fileIndex.current }),
+      files,
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: `mcp_${server.id.replace(/[^a-zA-Z0-9]/g, '_')}_${capability.name.replace(/[^a-zA-Z0-9_]/g, '_')}`,
         label: `${server.name}: ${capability.name}`,
@@ -308,7 +317,7 @@ function piBridge(): PiAgentBridge {
       [
         ...pinnedBodies(skillsVault.all()),
         settings.read().customInstructions,
-        filesCatalogBlock(context.artifacts.listAll(), context.folders.list()),
+        filesCatalogBlock(files.tree()),
       ]
         .filter((block) => block.trim().length > 0)
         .join('\n\n'),
@@ -390,6 +399,19 @@ const runs = new RunService({
   // Embed the run's new messages for semantic memory, off the reply path (§7).
   indexMessages: () => {
     void indexer?.backfill();
+  },
+  // The provenance walk (§14): whatever this run left under Files/ is logged
+  // as this chat's writing. Best-effort history -- it must never fail a run.
+  onRunFinished: ({ chatId, startedAtMs }) => {
+    if (startedAtMs === 0) return;
+    try {
+      const recorded = fileProvenance.recordRunWrites(chatId, startedAtMs);
+      if (recorded > 0) console.log(`popy provenance: chat=${chatId} files=${String(recorded)}`);
+    } catch (error) {
+      console.warn(
+        `popy provenance failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
   },
   titles: new TitleService({
     chats: context.chats,

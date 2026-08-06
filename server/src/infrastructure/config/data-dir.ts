@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { lstatSync, mkdirSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -48,6 +48,29 @@ export function ensureFilesDir(dataDir: string): string {
   const dir = resolveFilesDir(dataDir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
+}
+
+/**
+ * Places the user's Files inside the agent's workspace as `Files/` (§14): a
+ * symlink, so the tab and the agent read the same bytes and can never
+ * disagree. Returns a warning instead of acting when something that is not
+ * this link already sits there -- replacing what the user put in their own
+ * workspace is not this function's call.
+ */
+export function ensureWorkspaceFilesLink(workspace: string, filesDir: string): string | undefined {
+  const link = join(workspace, 'Files');
+  try {
+    const stat = lstatSync(link);
+    if (!stat.isSymbolicLink()) {
+      return 'the workspace already has a non-link "Files" entry; leaving it alone';
+    }
+    if (readlinkSync(link) === filesDir) return undefined;
+    unlinkSync(link);
+  } catch {
+    // Nothing there yet -- the normal first boot.
+  }
+  symlinkSync(filesDir, link, 'dir');
+  return undefined;
 }
 
 /**
