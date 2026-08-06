@@ -42,14 +42,14 @@ export const chatsService = {
     id: string,
     text: string,
     attachments: AttachmentDTO[] = [],
-    artifactIds: string[] = [],
+    filePaths: string[] = [],
   ): Promise<SendMessageResponse> {
     return apiRequest<SendMessageResponse>(`/chats/${id}/messages`, {
       method: 'POST',
       body: {
         text,
         ...(attachments.length > 0 ? { attachments } : {}),
-        ...(artifactIds.length > 0 ? { artifactIds } : {}),
+        ...(filePaths.length > 0 ? { filePaths } : {}),
       },
     });
   },

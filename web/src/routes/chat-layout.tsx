@@ -16,8 +16,8 @@ import { ChatList } from './chat-list';
 export function ChatLayout() {
   const apply = useChatStore((state) => state.apply);
   const openChat = useMatch('/chat/:chatId');
-  const filesRoot = useMatch('/files');
-  const filesFolder = useMatch('/files/:folderId');
+  // /files/* covers the root and any folder path, however deep.
+  const filesOpen = useMatch('/files/*');
   // On a phone, Files is its own screen (back returns to the list), exactly
   // like a conversation; on a wide screen the sidebar stays as the tree.
   // Tasks, Skills and MCP are explorers now too: the bare list route stays the
@@ -28,8 +28,7 @@ export function ChatLayout() {
   const mcpDetail = useMatch('/mcp/:id');
   const contentOpen =
     openChat !== null ||
-    filesRoot !== null ||
-    filesFolder !== null ||
+    filesOpen !== null ||
     skillDetail !== null ||
     taskDetail !== null ||
     mcpDetail !== null;

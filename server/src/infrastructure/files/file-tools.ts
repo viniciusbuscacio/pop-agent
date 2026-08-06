@@ -80,20 +80,11 @@ export function buildFileTools(defineTool: DefineTool, files: FilesService): Too
     }),
     execute: (_id, params) => {
       const { query } = params as { query: string };
-      const needle = query.trim().toLowerCase();
-      if (needle.length === 0) return Promise.resolve(text('A search term is required.'));
+      if (query.trim().length === 0) return Promise.resolve(text('A search term is required.'));
 
-      const hits: string[] = [];
-      const visit = (nodes: ReturnType<FilesService['tree']>): void => {
-        for (const node of nodes) {
-          if (hits.length >= MAX_HITS) return;
-          if (node.path.toLowerCase().includes(needle)) {
-            hits.push(node.kind === 'dir' ? `${node.path}/` : node.path);
-          }
-          if (node.children !== undefined) visit(node.children);
-        }
-      };
-      visit(files.tree());
+      const hits = files
+        .searchNames(query, MAX_HITS)
+        .map((hit) => (hit.kind === 'dir' ? `${hit.path}/` : hit.path));
 
       if (hits.length === 0) return Promise.resolve(text('No file name matched.'));
       return Promise.resolve(text(envelope(sanitize(hits.join('\n')).clean, 'files_search')));

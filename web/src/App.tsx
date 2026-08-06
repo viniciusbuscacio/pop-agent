@@ -115,9 +115,10 @@ function Boot() {
         <Route index element={<NoChatSelected />} />
         <Route path="chat/:chatId" element={<ChatPage />} />
         <Route path="files" element={<FilesPage />} />
-        {/* Before files/:folderId, or "trash" would be read as a folder id. */}
+        {/* Before files/*, or "trash" would be read as a folder path. */}
         <Route path="files/trash" element={<TrashPage />} />
-        <Route path="files/:folderId" element={<FilesPage />} />
+        {/* The splat is the open folder's path -- paths are the ids now. */}
+        <Route path="files/*" element={<FilesPage />} />
         <Route path="tasks" element={<TasksIntro />} />
         <Route path="tasks/new" element={<TaskFormPage />} />
         <Route path="tasks/:taskId" element={<TaskFormPage />} />

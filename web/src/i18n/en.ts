@@ -440,9 +440,10 @@ export const en = {
   'trash.emptyConfirm': 'Delete all {count} item(s) for good? This cannot be undone.',
   'trash.nameTaken': 'Something called "{name}" is already there. Rename it, then restore this.',
   'trash.restoreFailed': 'That could not be restored.',
-  'files.deleteSelectedConfirm': 'Delete the {count} selected file(s)? This cannot be undone.',
+  'files.deleteSelectedConfirm':
+    'Delete the {count} selected file(s)? They go to the Trash for 30 days.',
   'files.deleteSelectedMixedConfirm':
-    'Delete {files} file(s) and {folders} folder(s), with everything inside them? This cannot be undone.',
+    'Delete {files} file(s) and {folders} folder(s), with everything inside them? They go to the Trash for 30 days.',
   'files.uploading': 'Uploading {done} of {total}…',
   'files.emptyCta': 'Drag files here or tap Upload.',
   'files.renameFolder': 'Rename folder',
@@ -460,11 +461,12 @@ export const en = {
   'files.newFolder': 'New folder',
   'files.newFolderPrompt': 'Folder name:',
   'files.renamePrompt': 'New name:',
-  'files.deleteConfirm': 'Delete "{name}"? Its download links stop working.',
+  'files.nameTaken': 'Something called "{name}" is already there.',
+  'files.deleteConfirm': 'Delete "{name}"? It goes to the Trash for 30 days.',
   // "Everything inside it" rather than a list: the count is the whole subtree,
-  // subfolders included, because that is what the server actually deletes.
+  // subfolders included, because that is what the server actually moves.
   'files.deleteFolderConfirm':
-    'Delete "{name}" and everything inside it — {count} file(s)? This cannot be undone.',
+    'Delete "{name}" and everything inside it — {count} file(s)? It all goes to the Trash for 30 days.',
   'settings.section.updates': 'Updates',
   'voice.cleanup': 'Improve transcripts with AI',
   'voice.cleanupNote':

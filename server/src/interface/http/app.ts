@@ -3,6 +3,7 @@ import type { AboutResponse, ServerInfoResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { PathIndexService } from '../../application/artifacts/path-index.js';
+import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { TaskService } from '../../application/tasks/task-service.js';
@@ -29,6 +30,8 @@ import { authMiddleware } from './auth-middleware.js';
 import { createArtifactRoutes } from './artifact-routes.js';
 import { createCliDownloadRoutes } from './cli-download-routes.js';
 import { createArtifactDownloadRoutes } from './artifact-download-routes.js';
+import { createFilesRoutes } from './files-routes.js';
+import { createFilesDownloadRoutes } from './files-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
 import { createPushRoutes } from './push-routes.js';
@@ -58,6 +61,10 @@ export interface AppDeps {
   artifacts: ArtifactService;
   /** The Files search index (popy.spec §14): powers GET /files/search. */
   pathIndex: PathIndexService;
+  /** The user's Files as a plain folder (popy.spec §14). */
+  files: FilesService;
+  /** Signs Files download links; derived key, from `secret.key` (§9, §14). */
+  secretKey: Buffer;
   runs: RunService;
   /** Background tasks (popy.spec §21): the rows, and the queue that runs them. */
   tasks: TaskService;
@@ -128,6 +135,10 @@ export function createApp(deps: AppDeps): Hono {
         createArtifactDownloadRoutes(deps),
       ),
       publicSurface(
+        'the HMAC in the Files download URL is the whole authorisation (popy.spec §14, plain-folder design); the signature covers path and expiry together and the path jail gets the last word',
+        createFilesDownloadRoutes(deps),
+      ),
+      publicSurface(
         'npm cannot log in, so the client tarball must answer without a session (docs/cli.md, Distribution); it carries the client code and this server version, no secrets and no user data, and the version in the filename is compared before anything is read from disk',
         createCliDownloadRoutes(deps),
       ),
@@ -149,6 +160,7 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createBackupRoutes(deps)),
       sessionGuarded(createPushRoutes(deps)),
       sessionGuarded(createArtifactRoutes(deps)),
+      sessionGuarded(createFilesRoutes(deps)),
       sessionGuarded(createTaskRoutes(deps)),
       sessionGuarded(createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) })),
     ],

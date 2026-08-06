@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { TrashEntryDTO } from '@popy/shared';
+import type { GarbageEntryDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { trashService } from '../services/artifacts';
@@ -15,7 +15,8 @@ import { ShellFooter } from './shell-header';
 
 /**
  * The Files trash (popy.spec §14): what deleting put aside, and the two things
- * you can do about it.
+ * you can do about it. Each row is one entry of Files/Garbage/, and its name
+ * in there is the handle for restore and purge.
  *
  * Only the top of each deleted subtree is listed -- a folder's own files went
  * in with it and come back with it, so offering to restore one of them alone
@@ -28,7 +29,7 @@ import { ShellFooter } from './shell-header';
  */
 export function TrashPage() {
   const navigate = useNavigate();
-  const [entries, setEntries] = useState<TrashEntryDTO[] | undefined>(undefined);
+  const [entries, setEntries] = useState<GarbageEntryDTO[] | undefined>(undefined);
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const reloadFiles = useFilesStore((state) => state.reload);
   const notify = useNotificationsStore((state) => state.notify);
@@ -41,13 +42,13 @@ export function TrashPage() {
     void load().catch(() => setEntries([]));
   }, []);
 
-  async function restore(entry: TrashEntryDTO): Promise<void> {
-    setBusy(entry.id);
+  async function restore(entry: GarbageEntryDTO): Promise<void> {
+    setBusy(entry.name);
     try {
-      await trashService.restore(entry.kind, entry.id);
+      await trashService.restore(entry.name);
       await Promise.all([load(), reloadFiles()]);
     } catch (error) {
-      // The only refusal worth explaining: something took the name while this
+      // The only refusal worth explaining: something took the path while this
       // sat in the trash, and renaming that is a real next step.
       notify(
         error instanceof ApiError && error.code === 'name_taken'
@@ -59,11 +60,11 @@ export function TrashPage() {
     }
   }
 
-  async function purge(entry: TrashEntryDTO): Promise<void> {
+  async function purge(entry: GarbageEntryDTO): Promise<void> {
     if (!window.confirm(t('trash.purgeConfirm', { name: entry.name }))) return;
-    setBusy(entry.id);
+    setBusy(entry.name);
     try {
-      await trashService.purge(entry.kind, entry.id);
+      await trashService.purge(entry.name);
       await load();
     } finally {
       setBusy(undefined);
@@ -121,19 +122,18 @@ export function TrashPage() {
           <ul>
             {entries.map((entry) => (
               <li
-                key={`${entry.kind}-${entry.id}`}
+                key={entry.name}
                 data-testid="trash-row"
                 className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
               >
                 <div className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                     {/* The drawn icon, never an emoji (permanent house veto). */}
-                    {entry.kind === 'folder' ? <FolderIcon /> : null}
+                    {entry.kind === 'dir' ? <FolderIcon /> : null}
                     <span className="truncate">{entry.name}</span>
                   </span>
                   <span className="block truncate text-xs text-[var(--muted)]">
-                    {entry.path === '' ? t('files.rootCrumb') : entry.path} ·{' '}
-                    {t('trash.daysLeft', { days: daysLeft(entry.purgeAt) })}
+                    {entry.originalPath} · {t('trash.daysLeft', { days: daysLeft(entry.purgeAt) })}
                   </span>
                 </div>
                 <Button
@@ -141,7 +141,7 @@ export function TrashPage() {
                   variant="ghost"
                   size="sm"
                   data-testid="trash-restore"
-                  disabled={busy === entry.id}
+                  disabled={busy === entry.name}
                   onClick={() => void restore(entry)}
                 >
                   {t('trash.restore')}
@@ -151,7 +151,7 @@ export function TrashPage() {
                   variant="ghost"
                   size="sm"
                   data-testid="trash-purge"
-                  disabled={busy === entry.id}
+                  disabled={busy === entry.name}
                   onClick={() => void purge(entry)}
                 >
                   {t('trash.purge')}

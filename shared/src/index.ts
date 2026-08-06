@@ -306,6 +306,57 @@ export interface FilesSearchResponse {
   hits: FilesSearchHitDTO[];
 }
 
+// ---- Files as a plain folder (popy.spec §14, spec 1.58) ----
+
+/**
+ * One entry of the Files tree (`GET /v1/files`): the disk as it is. The path
+ * is relative to the Files root and IS the identifier -- there are no ids.
+ */
+export interface FileNodeDTO {
+  name: string;
+  /** Relative to the Files root, `/`-separated: `reports/pesca.pdf`. */
+  path: string;
+  kind: 'file' | 'dir';
+  /** Bytes for a file; 0 for a folder. */
+  size: number;
+  /** ISO timestamp of the last modification. */
+  mtime: string;
+  /** Present on folders only. */
+  children?: FileNodeDTO[];
+}
+
+export interface FilesTreeResponse {
+  tree: FileNodeDTO[];
+}
+
+/** `GET /v1/files/search?q=`: live name matches, no index behind them. */
+export interface FilesNameSearchResponse {
+  hits: { path: string; kind: 'file' | 'dir' }[];
+}
+
+/** `POST /v1/files/link`: the signed URL the browser downloads through. */
+export interface FileLinkResponse {
+  url: string;
+  expiresAt: number;
+}
+
+/** One entry of `GET /v1/trash`: something in Files/Garbage/. */
+export interface GarbageEntryDTO {
+  /** The entry's name inside Garbage/ -- the handle for restore and purge. */
+  name: string;
+  /** Where it lived; restore puts it back there. */
+  originalPath: string;
+  kind: 'file' | 'dir';
+  size: number;
+  deletedAt: string;
+  /** ISO instant after which the daily sweep may purge it. */
+  purgeAt: string;
+}
+
+export interface GarbageResponse {
+  entries: GarbageEntryDTO[];
+}
+
 export interface ArtifactsResponse {
   artifacts: ArtifactDTO[];
 }
@@ -502,8 +553,8 @@ export interface AttachmentDTO {
 export interface SendMessageRequest {
   text: string;
   attachments?: AttachmentDTO[];
-  /** Files already in Files, referenced by @ in the composer. */
-  artifactIds?: string[];
+  /** Files already in Files, referenced by @ in the composer, by path. */
+  filePaths?: string[];
 }
 
 /** 202 response of `POST /v1/chats/:id/messages`: the run has started. */

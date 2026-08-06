@@ -34,7 +34,7 @@ interface ChatState {
   messages: Record<string, MessageDTO[]>;
   live: Record<string, LiveRun>;
   /** One message per chat may wait for the current run to finish. */
-  queued: Record<string, { text: string; attachments: AttachmentDTO[]; artifactIds?: string[] }>;
+  queued: Record<string, { text: string; attachments: AttachmentDTO[]; filePaths?: string[] }>;
   failures: Record<string, string>;
 
   /** A risky action paused mid-run, waiting for Allow or Deny (popy.spec §10). */
@@ -44,7 +44,7 @@ interface ChatState {
   loadArchived: () => Promise<void>;
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string) => Promise<void>;
-  send: (chatId: string, text: string, attachments?: AttachmentDTO[], artifactIds?: string[]) => Promise<void>;
+  send: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
@@ -125,17 +125,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
-  async send(chatId, text, attachments = [], artifactIds = []) {
+  async send(chatId, text, attachments = [], filePaths = []) {
     const state = get();
     if (state.live[chatId] !== undefined) {
       // A run is already going: hold this one and send it when the chat frees.
       set((current) => ({
-        queued: { ...current.queued, [chatId]: { text, attachments, artifactIds } },
+        queued: { ...current.queued, [chatId]: { text, attachments, filePaths } },
       }));
       return;
     }
 
-    const { runId, userMessageId } = await chatsService.send(chatId, text, attachments, artifactIds);
+    const { runId, userMessageId } = await chatsService.send(chatId, text, attachments, filePaths);
     set((current) => {
       const existing = current.live[chatId];
       return {
@@ -394,7 +394,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const waiting = get().queued[chatId];
         if (waiting !== undefined) {
           set((state) => ({ queued: without(state.queued, chatId) }));
-          void get().send(chatId, waiting.text, waiting.attachments, waiting.artifactIds);
+          void get().send(chatId, waiting.text, waiting.attachments, waiting.filePaths);
         }
         return;
       }

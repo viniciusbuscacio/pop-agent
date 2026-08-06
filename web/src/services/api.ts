@@ -100,9 +100,13 @@ export async function apiRequest<T>(
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
   if (renewed !== null && renewed.length > 0) session.refresh(renewed);
 
-  // A 204 (every DELETE) has no body to parse.
+  // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
+  // (POST /files/folders answers created with nothing to add).
   if (response.status === 204) return undefined as T;
-  if (response.ok) return (await response.json()) as T;
+  if (response.ok) {
+    const text = await response.text();
+    return (text.length === 0 ? undefined : JSON.parse(text)) as T;
+  }
 
   const error = await toApiError(response);
   // Only an expired or forged session sends the user back to the login

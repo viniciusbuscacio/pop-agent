@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { ChatDTO, FolderDTO, McpServerDTO, SkillDTO } from '@popy/shared';
+import type { ChatDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
+import { ApiError } from '../services/api';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
-import { useFilesStore } from '../store/files';
-import { foldersService } from '../services/artifacts';
+import { joinPath, parentDir, useFilesStore } from '../store/files';
+import { useNotificationsStore } from '../store/notifications';
+import { filesService } from '../services/artifacts';
 import { useSkillsStore } from '../store/skills';
 import { useMcpStore } from '../store/mcp';
 import { skillsService } from '../services/skills';
@@ -303,40 +305,52 @@ export function ChatList() {
  */
 function FolderTree() {
   const navigate = useNavigate();
-  const { folderId } = useParams();
-  const files = useFilesStore((state) => state.files);
-  const folders = useFilesStore((state) => state.folders);
+  const location = useLocation();
+  const tree = useFilesStore((state) => state.tree);
   const reload = useFilesStore((state) => state.reload);
+  const notify = useNotificationsStore((state) => state.notify);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
+
+  // The open folder's path, straight off the URL: the sidebar sits outside the
+  // files/* route, so the splat param is not in scope here.
+  const currentPath = location.pathname.startsWith('/files/')
+    ? decodeURIComponent(location.pathname.slice('/files/'.length)).replace(/\/+$/, '')
+    : '';
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   // Same actions as the file pane's folder rows, so a folder is managed from
-  // wherever you see it (Vinicius, 03/08).
-  async function renameFolder(folder: FolderDTO): Promise<void> {
+  // wherever you see it (Vinicius, 03/08). Rename is a path edit now, and the
+  // one refusal worth words is the target's name being taken.
+  async function renameFolder(folder: FileNodeDTO): Promise<void> {
     const name = window.prompt(t('files.renamePrompt'), folder.name);
     if (name === null || name.trim().length === 0 || name === folder.name) return;
-    await foldersService.rename(folder.id, name.trim());
+    try {
+      await filesService.move(folder.path, joinPath(parentDir(folder.path), name.trim()));
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'name_taken') {
+        notify(t('files.nameTaken', { name: name.trim() }));
+        return;
+      }
+      throw error;
+    }
     await reload();
   }
-  async function deleteFolder(folder: FolderDTO): Promise<void> {
-    await foldersService.remove(folder.id);
+  async function deleteFolder(folder: FileNodeDTO): Promise<void> {
+    await filesService.remove(folder.path);
     await reload();
-    if (folder.id === folderId) navigate('/files');
+    if (folder.path === currentPath) navigate('/files');
   }
 
-  function childFolders(parentId: string): FolderDTO[] {
-    return folders.filter((folder) => folder.parentId === parentId);
-  }
-  function toggle(id: string): void {
+  function toggle(path: string): void {
     setExpanded((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   }
@@ -348,19 +362,19 @@ function FolderTree() {
   // 1rem gutter the chat rows use as padding, so the folder icon lands exactly
   // where a chat's title does instead of floating a column further right
   // (Vinicius, 03/08).
-  function renderRow(folder: FolderDTO, depth: number) {
-    const kids = childFolders(folder.id);
-    const isOpen = expanded.has(folder.id);
+  function renderRow(folder: FileNodeDTO, depth: number) {
+    const kids = (folder.children ?? []).filter((child) => child.kind === 'dir');
+    const isOpen = expanded.has(folder.path);
     return (
-      <div key={folder.id} className="relative">
+      <div key={folder.path} className="relative">
         <div
           className={`group flex items-center pr-1 ${
-            folderId === folder.id ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
+            currentPath === folder.path ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
           }`}
           style={{ paddingLeft: `${String(depth * 0.75)}rem` }}
           onContextMenu={(event) => {
             event.preventDefault();
-            setMenuFor(folder.id);
+            setMenuFor(folder.path);
           }}
         >
           {kids.length > 0 ? (
@@ -369,7 +383,7 @@ function FolderTree() {
               data-testid="tree-expand"
               aria-label={isOpen ? t('files.collapse') : t('files.expand')}
               aria-expanded={isOpen}
-              onClick={() => toggle(folder.id)}
+              onClick={() => toggle(folder.path)}
               className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
             >
               {isOpen ? '−' : '+'}
@@ -380,14 +394,14 @@ function FolderTree() {
           <button
             type="button"
             data-testid="tree-folder"
-            onClick={() => navigate(`/files/${folder.id}`)}
+            onClick={() => navigate(`/files/${folder.path}`)}
             className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left"
           >
             <FolderIcon />
             <span className="truncate text-sm">{folder.name}</span>
             <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
               {t('files.count', {
-                count: (files ?? []).filter((file) => file.folderId === folder.id).length,
+                count: (folder.children ?? []).filter((child) => child.kind === 'file').length,
               })}
             </span>
           </button>
@@ -396,13 +410,13 @@ function FolderTree() {
             data-testid="tree-folder-menu"
             aria-label={t('shell.chatMenu')}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
+            onClick={() => setMenuFor((v) => (v === folder.path ? undefined : folder.path))}
             className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
           >
             ⋯
           </button>
         </div>
-        {menuFor === folder.id ? (
+        {menuFor === folder.path ? (
           <div
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
@@ -434,7 +448,9 @@ function FolderTree() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
-      {childFolders('').map((folder) => renderRow(folder, 0))}
+      {(tree ?? [])
+        .filter((node) => node.kind === 'dir')
+        .map((folder) => renderRow(folder, 0))}
     </div>
   );
 }

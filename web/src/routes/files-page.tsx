@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ArtifactDTO, FilesSearchHitDTO, FolderDTO } from '@popy/shared';
+import type { FileNodeDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { saveFromLink, viewFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
-import { artifactsService, foldersService } from '../services/artifacts';
-import { useChatStore } from '../store/chat';
-import { useFilesStore } from '../store/files';
+import { ApiError } from '../services/api';
+import { filesService } from '../services/artifacts';
+import {
+  baseName,
+  childrenOf,
+  findNode,
+  flattenDirs,
+  joinPath,
+  parentDir,
+  useFilesStore,
+} from '../store/files';
+import { useNotificationsStore } from '../store/notifications';
 import { Button, MenuItem, Select } from '../ui/controls';
 import { Breadcrumb } from '../ui/breadcrumb';
 import { PullToRefresh } from '../ui/pull-to-refresh';
@@ -19,29 +28,31 @@ import { ShellFooter } from './shell-header';
  * The content pane of Files: the folders and files of ONE folder, listed at the
  * same indent, with a breadcrumb saying where that is (Vinicius, 03/08). You go
  * down by opening a folder and back up through the breadcrumb; the expandable
- * tree lives in the sidebar, where it does not compete with this list. Search
- * runs against the server's path index and returns folders as well as files,
- * from anywhere in the tree, each shown with its full path. On a phone the
- * search box sits on its own full-width line so the buttons do not crush it.
+ * tree lives in the sidebar, where it does not compete with this list. The
+ * folder's path is the rest of the URL after /files/ -- the path IS the
+ * identifier now, there are no ids. Search asks the server for name matches
+ * and returns folders as well as files, from anywhere in the tree, each shown
+ * with its full path. On a phone the search box sits on its own full-width
+ * line so the buttons do not crush it.
  */
 export function FilesPage() {
-  const { folderId } = useParams();
+  const currentPath = (useParams()['*'] ?? '').replace(/\/+$/, '');
   const navigate = useNavigate();
-  const chats = useChatStore((state) => state.chats);
-  const archived = useChatStore((state) => state.archived);
-  const files = useFilesStore((state) => state.files);
-  const folders = useFilesStore((state) => state.folders);
+  const tree = useFilesStore((state) => state.tree);
   const reload = useFilesStore((state) => state.reload);
+  const notify = useNotificationsStore((state) => state.notify);
 
   const [filter, setFilter] = useState('');
-  const [searchHits, setSearchHits] = useState<FilesSearchHitDTO[] | undefined>(undefined);
+  const [searchHits, setSearchHits] = useState<
+    { path: string; kind: 'file' | 'dir' }[] | undefined
+  >(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Folders are ticked in their own set rather than sharing the file one: the
-  // two obey different rules downstream (a folder cannot be moved, and
-  // deleting one takes its whole subtree), and an id alone would not say which
-  // kind it is.
+  // two obey different rules downstream (Move to… steps aside while a folder
+  // is ticked, and deleting one takes its whole subtree), and a bare path
+  // alone would not say which kind it is.
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -56,21 +67,16 @@ export function FilesPage() {
 
   useEffect(() => {
     setSelected(new Set());
+    setSelectedFolders(new Set());
     setSelecting(false);
     setFilter('');
     setMenuFor(undefined);
-    // Remembered per device, so the Files segment reopens where you were.
-    try {
-      localStorage.setItem('popy.lastFolder', folderId ?? '');
-    } catch {
-      // storage denied; the segment just falls back to the root
-    }
-  }, [folderId]);
+  }, [currentPath]);
 
   const searching = filter.trim().length > 0;
 
-  // Search hits the server's path index (folders + files, whole tree). Debounced
-  // so a fast typist does not fire a request per keystroke; the data is small.
+  // Search asks the server for name matches (folders + files, whole tree).
+  // Debounced so a fast typist does not fire a request per keystroke.
   useEffect(() => {
     const query = filter.trim();
     if (query.length === 0) {
@@ -79,7 +85,7 @@ export function FilesPage() {
     }
     let live = true;
     const handle = setTimeout(() => {
-      void artifactsService
+      void filesService
         .search(query)
         .then((response) => {
           if (live) setSearchHits(response.hits);
@@ -94,63 +100,69 @@ export function FilesPage() {
     };
   }, [filter]);
 
-  const openFolder: FolderDTO | undefined = folders.find((entry) => entry.id === folderId);
+  const openFolder: FileNodeDTO | undefined =
+    currentPath === '' ? undefined : findNode(tree ?? [], currentPath);
 
-  // A dead link (deleted folder) falls back to the root once folders arrived.
+  // A dead link (deleted folder, or a file's path) falls back to the root once
+  // the tree arrived.
   useEffect(() => {
-    if (folderId !== undefined && files !== undefined && openFolder === undefined) {
+    if (currentPath !== '' && tree !== undefined && openFolder?.kind !== 'dir') {
       navigate('/files', { replace: true });
     }
-  }, [folderId, openFolder, files, navigate]);
+  }, [currentPath, openFolder, tree, navigate]);
 
-  const currentParent = openFolder?.id ?? '';
+  const listing = childrenOf(tree ?? [], currentPath);
+  const rootFolders = listing.filter((node) => node.kind === 'dir');
+  const visibleFiles = listing.filter((node) => node.kind === 'file');
 
-  function childFolders(parentId: string): FolderDTO[] {
-    return folders.filter((folder) => folder.parentId === parentId);
-  }
-  function fileCount(id: string): number {
-    return (files ?? []).filter((file) => file.folderId === id).length;
+  function fileCount(node: FileNodeDTO): number {
+    return (node.children ?? []).filter((child) => child.kind === 'file').length;
   }
 
   /**
-   * Every file the server would delete along with this folder -- its own plus
+   * Every file the server would trash along with this folder -- its own plus
    * each descendant's. A confirm that counted only the direct children would
-   * understate the damage exactly where it matters most, and the seen-set is
-   * the same cycle guard the breadcrumb keeps.
+   * understate the reach exactly where it matters most.
    */
-  function subtreeFileCount(id: string): number {
-    const seen = new Set<string>();
-    const queue = [id];
-    let total = 0;
-    while (queue.length > 0) {
-      const current = queue.pop() as string;
-      if (seen.has(current)) continue;
-      seen.add(current);
-      total += fileCount(current);
-      for (const child of childFolders(current)) queue.push(child.id);
-    }
-    return total;
+  function subtreeFileCount(node: FileNodeDTO): number {
+    return (node.children ?? []).reduce(
+      (total, child) => total + (child.kind === 'file' ? 1 : subtreeFileCount(child)),
+      0,
+    );
   }
 
-  // The breadcrumb's steps, root first: Files, then every folder down to the
-  // one that is open. The length guard is for a parent link that somehow
-  // points at an ancestor -- a cycle must not hang the render.
+  // The breadcrumb's steps, root first: Files, then every segment of the open
+  // folder's path, each crumb carrying the cumulative path as its id.
   function trail(): { id: string; name: string }[] {
-    const chain: FolderDTO[] = [];
-    let current = openFolder;
-    while (current !== undefined && chain.length < 64) {
-      chain.unshift(current);
-      const parentId = current.parentId;
-      current = parentId === '' ? undefined : folders.find((entry) => entry.id === parentId);
+    const crumbs = [{ id: '', name: t('files.rootCrumb') }];
+    let walked = '';
+    if (currentPath !== '') {
+      for (const segment of currentPath.split('/')) {
+        walked = joinPath(walked, segment);
+        crumbs.push({ id: walked, name: segment });
+      }
     }
-    return [
-      { id: '', name: t('files.rootCrumb') },
-      ...chain.map((folder) => ({ id: folder.id, name: folder.name })),
-    ];
+    return crumbs;
   }
 
   function openCrumb(id: string): void {
     navigate(id === '' ? '/files' : `/files/${id}`);
+  }
+
+  /**
+   * A move that may be refused: something at the target's path already exists.
+   * The refusal gets its own words -- everything else stays a thrown error.
+   */
+  async function movePath(from: string, to: string): Promise<void> {
+    try {
+      await filesService.move(from, to);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'name_taken') {
+        notify(t('files.nameTaken', { name: baseName(to) }));
+        return;
+      }
+      throw error;
+    }
   }
 
   async function upload(list: FileList | File[] | null): Promise<void> {
@@ -160,7 +172,7 @@ export function FilesPage() {
     try {
       for (const [index, file] of entries.entries()) {
         setUploading({ done: index, total: entries.length });
-        await artifactsService.uploadToFiles(file, currentParent);
+        await filesService.upload(file, currentPath);
       }
     } finally {
       setUploading(undefined);
@@ -170,33 +182,20 @@ export function FilesPage() {
 
   /**
    * A directory upload arrives as a flat list where each file remembers the
-   * path it came from ("Reports/Q3/summary.pdf"), so the tree is rebuilt here:
-   * every directory on the way is created once and the file lands inside its
-   * own folder. Flattening everything into the current folder would lose the
-   * shape the user picked.
+   * path it came from ("Reports/Q3/summary.pdf"), so each file is posted with
+   * that path as its `dir` -- no folder pre-creation, because the server
+   * mkdir -p's every missing parent on write. Flattening everything into the
+   * current folder would lose the shape the user picked.
    */
   async function uploadFolder(list: FileList | null): Promise<void> {
     const entries = list === null ? [] : Array.from(list);
     if (entries.length === 0) return;
     setUploading({ done: 0, total: entries.length });
-    const made = new Map<string, string>();
     try {
       for (const [index, file] of entries.entries()) {
         setUploading({ done: index, total: entries.length });
-        let path = '';
-        let parent = currentParent;
-        for (const segment of file.webkitRelativePath.split('/').slice(0, -1)) {
-          path = path === '' ? segment : `${path}/${segment}`;
-          const known = made.get(path);
-          if (known === undefined) {
-            const folder = await foldersService.create(segment, parent);
-            made.set(path, folder.id);
-            parent = folder.id;
-          } else {
-            parent = known;
-          }
-        }
-        await artifactsService.uploadToFiles(file, parent);
+        const relativeDir = parentDir(file.webkitRelativePath);
+        await filesService.upload(file, joinPath(currentPath, relativeDir));
       }
     } finally {
       setUploading(undefined);
@@ -204,9 +203,8 @@ export function FilesPage() {
     await reload();
   }
 
-  async function download(id: string): Promise<void> {
-    const { url } = await artifactsService.link(id);
-    saveFromLink(url);
+  async function download(path: string): Promise<void> {
+    saveFromLink(await filesService.link(path));
   }
 
   /**
@@ -216,19 +214,19 @@ export function FilesPage() {
    * the OS default program itself, so anything the browser will not display
    * (a .docx, a .zip) downloads instead and the OS takes over from there.
    */
-  function openFile(id: string): void {
-    viewFromLink(artifactsService.viewUrl(id));
+  function openFile(path: string): void {
+    viewFromLink(filesService.viewUrl(path));
   }
 
-  async function renameFile(file: ArtifactDTO): Promise<void> {
+  async function renameFile(file: FileNodeDTO): Promise<void> {
     const name = window.prompt(t('files.renamePrompt'), file.name);
     if (name === null || name.trim().length === 0 || name === file.name) return;
-    await artifactsService.rename(file.id, name.trim());
+    await movePath(file.path, joinPath(parentDir(file.path), name.trim()));
     await reload();
   }
 
-  async function deleteFile(file: ArtifactDTO): Promise<void> {
-    await artifactsService.remove(file.id);
+  async function deleteFile(file: FileNodeDTO): Promise<void> {
+    await filesService.remove(file.path);
     await reload();
   }
 
@@ -238,40 +236,41 @@ export function FilesPage() {
     const inside = openFolder !== undefined;
     const name = window.prompt(inside ? t('files.newSubfolderPrompt') : t('files.newFolderPrompt'));
     if (name === null || name.trim().length === 0) return;
-    await foldersService.create(name.trim(), currentParent);
+    await filesService.mkdir(joinPath(currentPath, name.trim()));
     await reload();
   }
 
-  async function renameFolder(folder: FolderDTO): Promise<void> {
+  async function renameFolder(folder: FileNodeDTO): Promise<void> {
     const name = window.prompt(t('files.renamePrompt'), folder.name);
     if (name === null || name.trim().length === 0 || name === folder.name) return;
-    await foldersService.rename(folder.id, name.trim());
+    await movePath(folder.path, joinPath(parentDir(folder.path), name.trim()));
     await reload();
   }
 
   /**
-   * Deleting a folder takes its whole subtree (server side), so this one asks
-   * first. YOLO (31/07) is about the AGENT not stopping to ask permission in
-   * the middle of a task; it was never about the person's own thumb. A ⋯ menu
-   * on a phone puts Delete folder a few millimetres from Rename, and there is
-   * no undo behind it (Vinicius, 03/08).
+   * Deleting a folder takes its whole subtree, so this one asks first. YOLO
+   * (31/07) is about the AGENT not stopping to ask permission in the middle of
+   * a task; it was never about the person's own thumb. A ⋯ menu on a phone
+   * puts Delete folder a few millimetres from Rename (Vinicius, 03/08) -- the
+   * trash keeps it reversible for thirty days, but the confirm still names
+   * the reach.
    */
-  async function deleteFolder(folder: FolderDTO): Promise<void> {
+  async function deleteFolder(folder: FileNodeDTO): Promise<void> {
     const confirmed = window.confirm(
-      t('files.deleteFolderConfirm', { name: folder.name, count: subtreeFileCount(folder.id) }),
+      t('files.deleteFolderConfirm', { name: folder.name, count: subtreeFileCount(folder) }),
     );
     if (!confirmed) return;
-    await foldersService.remove(folder.id);
+    await filesService.remove(folder.path);
     await reload();
-    if (folder.id === openFolder?.id) navigate('/files');
+    if (folder.path === currentPath) navigate('/files');
   }
 
-  function toggleSelected(id: string): void {
-    setSelected((current) => toggled(current, id));
+  function toggleSelected(path: string): void {
+    setSelected((current) => toggled(current, path));
   }
 
-  function toggleFolderSelected(id: string): void {
-    setSelectedFolders((current) => toggled(current, id));
+  function toggleFolderSelected(path: string): void {
+    setSelectedFolders((current) => toggled(current, path));
   }
 
   /**
@@ -281,10 +280,12 @@ export function FilesPage() {
    * throwing it away -- the menu is still reachable mid-selection, and losing
    * the previous ticks would be the surprise.
    */
-  function startSelection(fileId?: string, folderId?: string): void {
+  function startSelection(filePath?: string, folderPath?: string): void {
     setSelecting(true);
-    if (fileId !== undefined) setSelected((current) => toggled(current, fileId, true));
-    if (folderId !== undefined) setSelectedFolders((current) => toggled(current, folderId, true));
+    if (filePath !== undefined) setSelected((current) => toggled(current, filePath, true));
+    if (folderPath !== undefined) {
+      setSelectedFolders((current) => toggled(current, folderPath, true));
+    }
   }
 
   function clearSelection(): void {
@@ -307,34 +308,30 @@ export function FilesPage() {
             folders: selectedFolders.size,
           });
     if (!window.confirm(message)) return;
-    for (const id of selected) await artifactsService.remove(id);
-    for (const id of selectedFolders) await foldersService.remove(id);
-    const closedTheOpenOne = openFolder !== undefined && selectedFolders.has(openFolder.id);
+    for (const path of selected) await filesService.remove(path);
+    for (const path of selectedFolders) await filesService.remove(path);
+    const closedTheOpenOne = currentPath !== '' && selectedFolders.has(currentPath);
     clearSelection();
     await reload();
     if (closedTheOpenOne) navigate('/files');
   }
 
-  // Files only: a folder's parent is fixed at creation (popy.spec §6), which
-  // is what keeps the tree acyclic, so Move to… is hidden while one is ticked.
-  async function moveSelected(target: string): Promise<void> {
-    for (const id of selected) await artifactsService.move(id, target);
+  // Files only: Move to… is hidden while a folder is ticked, so the batch bar
+  // never offers something it would have to refuse half of.
+  async function moveSelected(targetDir: string): Promise<void> {
+    for (const path of selected) await movePath(path, joinPath(targetDir, baseName(path)));
     clearSelection();
     await reload();
   }
 
-  const titles = new Map([...chats, ...archived].map((chat) => [chat.id, chat.title]));
-  const visibleFiles = (files ?? []).filter((file) => file.folderId === currentParent);
-  const rootFolders = childFolders(currentParent);
-
-  const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'folder');
+  const folderHits = (searchHits ?? []).filter((hit) => hit.kind === 'dir');
   const fileHits = (searchHits ?? []).filter((hit) => hit.kind === 'file');
 
   const selectedCount = selected.size + selectedFolders.size;
   const allSelected =
     visibleFiles.length + rootFolders.length > 0 &&
-    visibleFiles.every((file) => selected.has(file.id)) &&
-    rootFolders.every((folder) => selectedFolders.has(folder.id));
+    visibleFiles.every((file) => selected.has(file.path)) &&
+    rootFolders.every((folder) => selectedFolders.has(folder.path));
 
   // Seven steps on a wide screen, four on a phone (Vinicius, 03/08). Past the
   // limit the ones in front collapse into a … that lists them in order, Files
@@ -346,9 +343,9 @@ export function FilesPage() {
   // A folder row of the open folder's list. No indent and no expander: this
   // pane shows one level, the same way it shows its files, and the sidebar is
   // where a folder opens in place (Vinicius, 03/08).
-  function renderFolder(folder: FolderDTO) {
+  function renderFolder(folder: FileNodeDTO) {
     return (
-      <li key={folder.id} className="relative">
+      <li key={folder.path} className="relative">
         <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
           {selecting ? (
             // Same as a file row: the folder's name is the only label the
@@ -357,20 +354,20 @@ export function FilesPage() {
               type="checkbox"
               data-testid="folder-check"
               aria-label={folder.name}
-              checked={selectedFolders.has(folder.id)}
-              onChange={() => toggleFolderSelected(folder.id)}
+              checked={selectedFolders.has(folder.path)}
+              onChange={() => toggleFolderSelected(folder.path)}
             />
           ) : null}
           <button
             type="button"
             data-testid="folder-row"
-            onClick={() => navigate(`/files/${folder.id}`)}
+            onClick={() => navigate(`/files/${folder.path}`)}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <FolderIcon />
             <span className="truncate text-sm font-medium">{folder.name}</span>
             <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
-              {t('files.count', { count: fileCount(folder.id) })}
+              {t('files.count', { count: fileCount(folder) })}
             </span>
           </button>
           <button
@@ -378,13 +375,13 @@ export function FilesPage() {
             data-testid="folder-row-menu"
             aria-label={t('shell.chatMenu')}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => setMenuFor((v) => (v === folder.id ? undefined : folder.id))}
+            onClick={() => setMenuFor((v) => (v === folder.path ? undefined : folder.path))}
             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
           >
             ⋯
           </button>
         </div>
-        {menuFor === folder.id ? (
+        {menuFor === folder.path ? (
           <div
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
@@ -395,7 +392,7 @@ export function FilesPage() {
               label={t('files.selectFolder')}
               onClick={() => {
                 setMenuFor(undefined);
-                startSelection(undefined, folder.id);
+                startSelection(undefined, folder.path);
               }}
             />
             <MenuItem
@@ -418,6 +415,65 @@ export function FilesPage() {
           </div>
         ) : null}
       </li>
+    );
+  }
+
+  // A file row's menu, shared between the folder listing and the search
+  // results: the actions are the same wherever the file was found.
+  function renderFileMenu(file: FileNodeDTO, inSearch: boolean) {
+    return (
+      <div
+        onPointerDown={(event) => event.stopPropagation()}
+        role="menu"
+        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+      >
+        <MenuItem
+          testId="file-open"
+          label={t('files.openFile')}
+          onClick={() => {
+            setMenuFor(undefined);
+            openFile(file.path);
+          }}
+        />
+        {/* No "Select file" in search: selection is a property of a folder's
+            listing, and the batch bar is hidden while a search is on screen.
+            An entry that did nothing would be worse than its absence. */}
+        {inSearch ? null : (
+          <MenuItem
+            testId="file-select"
+            label={t('files.selectFile')}
+            onClick={() => {
+              setMenuFor(undefined);
+              startSelection(file.path);
+            }}
+          />
+        )}
+        <MenuItem
+          testId="file-download"
+          label={t('files.download')}
+          onClick={() => {
+            setMenuFor(undefined);
+            void download(file.path);
+          }}
+        />
+        <MenuItem
+          testId="file-rename"
+          label={t('shell.rename')}
+          onClick={() => {
+            setMenuFor(undefined);
+            void renameFile(file);
+          }}
+        />
+        <MenuItem
+          testId="file-delete"
+          label={t('shell.delete')}
+          danger
+          onClick={() => {
+            setMenuFor(undefined);
+            void deleteFile(file);
+          }}
+        />
+      </div>
     );
   }
 
@@ -544,9 +600,9 @@ export function FilesPage() {
             size="sm"
             data-testid="files-select-all"
             onClick={() => {
-              setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.id)));
+              setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.path)));
               setSelectedFolders(
-                allSelected ? new Set() : new Set(rootFolders.map((folder) => folder.id)),
+                allSelected ? new Set() : new Set(rootFolders.map((folder) => folder.path)),
               );
             }}
           >
@@ -566,9 +622,8 @@ export function FilesPage() {
           </span>
           {selectedCount === 0 ? null : (
           <>
-          {/* A folder's parent never changes (popy.spec §6), so Move to…
-              steps aside while one is ticked rather than offering something
-              it would have to refuse half of. */}
+          {/* Move to… steps aside while a folder is ticked rather than
+              offering something the batch loop does not do. */}
           {selectedFolders.size > 0 ? null : (
           <Select
             id="files-move-to"
@@ -585,11 +640,11 @@ export function FilesPage() {
           >
             <option value="">{t('files.moveTo')}</option>
             <option value="root">{t('files.rootCrumb')}</option>
-            {folders
-              .filter((folder) => folder.id !== openFolder?.id)
+            {flattenDirs(tree ?? [])
+              .filter((folder) => folder.path !== currentPath)
               .map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
+                <option key={folder.path} value={folder.path}>
+                  {folder.path}
                 </option>
               ))}
           </Select>
@@ -611,48 +666,47 @@ export function FilesPage() {
             </div>
           ) : (
             <ul data-testid="files-search-results">
-              {folderHits.map((hit) =>
-                hit.kind === 'folder' ? (
-                  <li key={`folder-${hit.folder.id}`} className="relative">
+              {folderHits.map((hit) => {
+                const node = findNode(tree ?? [], hit.path);
+                return (
+                  <li key={`folder-${hit.path}`} className="relative">
                     <button
                       type="button"
                       data-testid="search-folder-row"
-                      onClick={() => navigate(`/files/${hit.folder.id}`)}
+                      onClick={() => navigate(`/files/${hit.path}`)}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-[var(--hover-overlay)]"
                     >
                       <FolderIcon />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{hit.folder.name}</span>
+                        <span className="block truncate text-sm font-medium">{baseName(hit.path)}</span>
                         <span className="block truncate text-xs text-[var(--muted)]">{hit.path}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--muted)]">
-                        {t('files.count', { count: fileCount(hit.folder.id) })}
-                      </span>
+                      {node === undefined ? null : (
+                        <span className="shrink-0 text-xs text-[var(--muted)]">
+                          {t('files.count', { count: fileCount(node) })}
+                        </span>
+                      )}
                     </button>
                   </li>
-                ) : null,
-              )}
-              {fileHits.map((hit) =>
-                hit.kind === 'file' ? (
-                  <li key={`file-${hit.file.id}`} className="relative">
+                );
+              })}
+              {fileHits.map((hit) => {
+                const node = findNode(tree ?? [], hit.path);
+                return (
+                  <li key={`file-${hit.path}`} className="relative">
                     <div
                       data-testid="artifact-row"
                       className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm font-medium">
-                            {hit.file.name}
-                            {hit.file.version > 1 ? (
-                              <span className="ml-1 text-xs text-[var(--muted)]">v{hit.file.version}</span>
-                            ) : null}
-                          </span>
+                          <span className="truncate text-sm font-medium">{baseName(hit.path)}</span>
                           <button
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
                             onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => setMenuFor((v) => (v === hit.file.id ? undefined : hit.file.id))}
+                            onClick={() => setMenuFor((v) => (v === hit.path ? undefined : hit.path))}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
@@ -661,54 +715,21 @@ export function FilesPage() {
                         <span className="block truncate text-xs text-[var(--muted)]">{hit.path}</span>
                       </div>
                     </div>
-                    {menuFor === hit.file.id ? (
-                      <div
-                        onPointerDown={(event) => event.stopPropagation()}
-                        role="menu"
-                        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                      >
-                        <MenuItem
-                          testId="file-open"
-                          label={t('files.openFile')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            openFile(hit.file.id);
-                          }}
-                        />
-                        {/* No "Select file" here: selection is a property of
-                            a folder's listing, and the batch bar is hidden
-                            while a search is on screen. An entry that did
-                            nothing would be worse than its absence. */}
-                        <MenuItem
-                          testId="file-download"
-                          label={t('files.download')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void download(hit.file.id);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-rename"
-                          label={t('shell.rename')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void renameFile(hit.file);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-delete"
-                          label={t('shell.delete')}
-                          danger
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void deleteFile(hit.file);
-                          }}
-                        />
-                      </div>
-                    ) : null}
+                    {menuFor === hit.path
+                      ? renderFileMenu(
+                          node ?? {
+                            name: baseName(hit.path),
+                            path: hit.path,
+                            kind: 'file',
+                            size: 0,
+                            mtime: '',
+                          },
+                          true,
+                        )
+                      : null}
                   </li>
-                ) : null,
-              )}
+                );
+              })}
             </ul>
           )
         ) : (
@@ -719,17 +740,17 @@ export function FilesPage() {
               </ul>
             ) : null}
 
-            {files === undefined ? null : visibleFiles.length === 0 && rootFolders.length === 0 ? (
+            {tree === undefined ? null : visibleFiles.length === 0 && rootFolders.length === 0 ? (
               <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
                 <p className="text-sm text-[var(--muted)]">
-                  {openFolder === undefined ? t('files.none') : t('files.emptyFolder')}
+                  {currentPath === '' ? t('files.none') : t('files.emptyFolder')}
                 </p>
                 <p className="text-xs text-[var(--muted)]">{t('files.emptyCta')}</p>
               </div>
             ) : (
               <ul data-testid="all-artifacts">
                 {visibleFiles.map((file) => (
-                  <li key={file.id} className="relative">
+                  <li key={file.path} className="relative">
                     <div
                       data-testid="artifact-row"
                       className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
@@ -741,84 +762,30 @@ export function FilesPage() {
                           type="checkbox"
                           data-testid="file-check"
                           aria-label={file.name}
-                          checked={selected.has(file.id)}
-                          onChange={() => toggleSelected(file.id)}
+                          checked={selected.has(file.path)}
+                          onChange={() => toggleSelected(file.path)}
                         />
                       ) : null}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm font-medium">
-                            {file.name}
-                            {file.version > 1 ? (
-                              <span className="ml-1 text-xs text-[var(--muted)]">v{file.version}</span>
-                            ) : null}
-                          </span>
+                          <span className="truncate text-sm font-medium">{file.name}</span>
                           <button
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
                             onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => setMenuFor((v) => (v === file.id ? undefined : file.id))}
+                            onClick={() => setMenuFor((v) => (v === file.path ? undefined : file.path))}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
                           </button>
                         </div>
                         <span className="block truncate text-xs text-[var(--muted)]">
-                          {file.chatId !== '' ? `${titles.get(file.chatId) ?? file.chatId} · ` : ''}
-                          {formatSize(file.size)} · {relativeTime(file.createdAt)}
+                          {formatSize(file.size)} · {relativeTime(file.mtime)}
                         </span>
                       </div>
                     </div>
-                    {menuFor === file.id ? (
-                      <div
-                        onPointerDown={(event) => event.stopPropagation()}
-                        role="menu"
-                        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
-                      >
-                        <MenuItem
-                          testId="file-open"
-                          label={t('files.openFile')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            openFile(file.id);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-select"
-                          label={t('files.selectFile')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            startSelection(file.id);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-download"
-                          label={t('files.download')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void download(file.id);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-rename"
-                          label={t('shell.rename')}
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void renameFile(file);
-                          }}
-                        />
-                        <MenuItem
-                          testId="file-delete"
-                          label={t('shell.delete')}
-                          danger
-                          onClick={() => {
-                            setMenuFor(undefined);
-                            void deleteFile(file);
-                          }}
-                        />
-                      </div>
-                    ) : null}
+                    {menuFor === file.path ? renderFileMenu(file, false) : null}
                   </li>
                 ))}
               </ul>
@@ -837,7 +804,6 @@ export function FilesPage() {
   );
 }
 
-/** Line-style folder, matching the app's stroked icons. */
 /** The bin, drawn -- never an emoji (permanent house veto). */
 export function TrashIcon() {
   return (
@@ -853,6 +819,7 @@ export function TrashIcon() {
   );
 }
 
+/** Line-style folder, matching the app's stroked icons. */
 export function FolderIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -867,13 +834,13 @@ export function FolderIcon() {
 }
 
 /**
- * A new set with `id` flipped, or forced in when `addOnly`. Files and folders
+ * A new set with `path` flipped, or forced in when `addOnly`. Files and folders
  * keep separate sets and both tick the same way, so the rule lives here once.
  */
-function toggled(current: Set<string>, id: string, addOnly = false): Set<string> {
+function toggled(current: Set<string>, path: string, addOnly = false): Set<string> {
   const next = new Set(current);
-  if (next.has(id) && !addOnly) next.delete(id);
-  else next.add(id);
+  if (next.has(path) && !addOnly) next.delete(path);
+  else next.add(path);
   return next;
 }
 

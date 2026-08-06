@@ -30,6 +30,7 @@ import { HandsRegistry } from '../application/hands/hands-registry.js';
 import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
 import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { ArtifactService } from '../application/artifacts/artifact-service.js';
+import { FilesService } from '../application/files/files-service.js';
 import { PathIndexService } from '../application/artifacts/path-index.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
@@ -169,6 +170,8 @@ export interface TestApp {
   auth: AuthService;
   chats: ChatService;
   artifacts: ArtifactService;
+  /** The user's Files over a throwaway tree (popy.spec §14). */
+  files: FilesService;
   runs: RunService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
@@ -272,6 +275,12 @@ export function createTestApp(
     onFilesChanged: () => pathIndex.reindex(),
   });
   pathIndex.reindex();
+  // Files as a plain folder (popy.spec §14): a real service over a throwaway
+  // tree, exactly as main.ts wires it.
+  const files = new FilesService({
+    root: mkdtempSync(join(tmpdir(), 'popy-test-files-')),
+    clock,
+  });
   // Wired exactly the way main.ts wires it: with no key configured the title
   // job is a silent no-op, which is what the fake-bridge tests need.
   const runs = new RunService({
@@ -324,6 +333,8 @@ export function createTestApp(
     chats,
     artifacts,
     pathIndex,
+    files,
+    secretKey: Buffer.from('test-artifact-signing-key-000000'),
     runs,
     tasks,
     taskScheduler,
@@ -424,6 +435,7 @@ export function createTestApp(
     auth,
     chats,
     artifacts,
+    files,
     runs,
     tasks,
     taskScheduler,

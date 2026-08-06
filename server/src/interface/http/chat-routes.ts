@@ -16,7 +16,8 @@ import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
-import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
+import type { FilesService } from '../../application/files/files-service.js';
+import { mimeOf } from '../../domain/files/mime.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import type { EventTickets } from './event-tickets.js';
@@ -64,13 +65,13 @@ const sendSchema = z
       .max(MAX_ATTACHMENTS)
       .optional(),
     /** Files already in Files, referenced by @ in the composer -- no re-upload. */
-    artifactIds: z.array(z.string().min(1).max(60)).max(MAX_ATTACHMENTS).optional(),
+    filePaths: z.array(z.string().min(1).max(1024)).max(MAX_ATTACHMENTS).optional(),
   })
   .strict();
 
 export interface ChatRoutesDeps {
   chats: ChatService;
-  artifacts: ArtifactService;
+  files: FilesService;
   runs: RunService;
   providers: ProviderService;
   hub: SseHub;
@@ -196,17 +197,24 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     if (!parsed.success) return schemaError(c, parsed.error);
 
     // An @-mentioned file joins the run as a normal attachment, resolved
-    // server-side so the bytes never round-trip through the client.
+    // server-side so the bytes never round-trip through the client. The path
+    // is the identifier now; the jail refuses the pathological ones.
     const referenced: { name: string; type: string; dataUri: string }[] = [];
-    for (const artifactId of parsed.data.artifactIds ?? []) {
-      const opened = deps.artifacts.read(artifactId);
-      if (opened === undefined) {
-        return apiError(c, 404, 'not_found', `No such file: ${artifactId}`);
+    for (const filePath of parsed.data.filePaths ?? []) {
+      let bytes;
+      try {
+        bytes = deps.files.read(filePath);
+      } catch {
+        bytes = undefined;
       }
+      if (bytes === undefined) {
+        return apiError(c, 404, 'not_found', `No such file: ${filePath}`);
+      }
+      const mime = mimeOf(filePath);
       referenced.push({
-        name: opened.artifact.name,
-        type: opened.artifact.mime,
-        dataUri: `data:${opened.artifact.mime};base64,${opened.bytes.toString('base64')}`,
+        name: filePath.split('/').at(-1) ?? filePath,
+        type: mime,
+        dataUri: `data:${mime};base64,${bytes.toString('base64')}`,
       });
     }
 

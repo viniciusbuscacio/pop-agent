@@ -219,6 +219,29 @@ export class FilesService {
     return purged;
   }
 
+  /** The absolute path of a live entry, for streaming a download. Jailed. */
+  absoluteOf(relativePath: string): string {
+    return this.resolveVisible(relativePath);
+  }
+
+  /** Live entries whose path contains the query, case-insensitive, tree order. */
+  searchNames(query: string, limit = 40): { path: string; kind: 'file' | 'dir' }[] {
+    const needle = query.trim().toLowerCase();
+    if (needle.length === 0) return [];
+    const hits: { path: string; kind: 'file' | 'dir' }[] = [];
+    const visit = (nodes: FileNode[]): void => {
+      for (const node of nodes) {
+        if (hits.length >= limit) return;
+        if (node.path.toLowerCase().includes(needle)) {
+          hits.push({ path: node.path, kind: node.kind });
+        }
+        if (node.children !== undefined) visit(node.children);
+      }
+    };
+    visit(this.tree());
+    return hits;
+  }
+
   /** Live files touched at or after `sinceMs` -- the provenance walk. */
   modifiedSince(sinceMs: number): string[] {
     const touched: string[] = [];

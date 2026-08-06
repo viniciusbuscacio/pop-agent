@@ -1,4 +1,4 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { z } from 'zod';
 import type {
   ArtifactDTO,
@@ -7,16 +7,10 @@ import type {
   ArtifactVersionsResponse,
   FolderDTO,
   FoldersResponse,
-  FilesSearchResponse,
-  FilesSearchHitDTO,
-  TrashResponse,
 } from '@popy/shared';
 import type { Artifact } from '../../domain/artifacts/artifact.js';
 import type { Folder } from '../../domain/artifacts/folder.js';
-import type {
-  ArtifactService,
-  RestoreResult,
-} from '../../application/artifacts/artifact-service.js';
+import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
 import type { PathIndexService } from '../../application/artifacts/path-index.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import { apiError } from './errors.js';
@@ -136,21 +130,6 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
     c.json({ folders: deps.artifacts.listFolders().map(toFolderDto) } satisfies FoldersResponse),
   );
 
-  // Search folders and files by name or path, across the whole tree, out of the
-  // materialised index (popy.spec §14). Folders first, then files.
-  routes.get('/files/search', (c) => {
-    const query = c.req.query('q') ?? '';
-    const hits = deps.pathIndex.search(query).flatMap<FilesSearchHitDTO>((hit) => {
-      if (hit.kind === 'folder') {
-        const folder = deps.artifacts.getFolder(hit.refId);
-        return folder === undefined ? [] : [{ kind: 'folder', path: hit.path, folder: toFolderDto(folder) }];
-      }
-      const file = deps.artifacts.get(hit.refId);
-      return file === undefined ? [] : [{ kind: 'file', path: hit.path, file: toDto(file) }];
-    });
-    return c.json({ hits } satisfies FilesSearchResponse);
-  });
-
   routes.post('/folders', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
@@ -217,42 +196,6 @@ export function createArtifactRoutes(deps: ArtifactRoutesDeps): Hono {
       : apiError(c, 404, 'not_found', 'No such artifact.'),
   );
 
-  // ---- The trash (popy.spec §14) ----
-
-  routes.get('/trash', (c) =>
-    c.json({ entries: deps.artifacts.listTrash() } satisfies TrashResponse),
-  );
-
-  /**
-   * Restore takes the kind in the path rather than guessing from the id: a
-   * file and a folder can be restored for different reasons and fail for
-   * different ones, and a route that inspected both tables to find out would
-   * answer 404 for "it is a folder, and its name is taken".
-   */
-  routes.post('/trash/files/:id/restore', (c) => restored(c, deps.artifacts.restore(c.req.param('id'))));
-
-  routes.post('/trash/folders/:id/restore', (c) =>
-    restored(c, deps.artifacts.restoreFolder(c.req.param('id'))),
-  );
-
-  routes.delete('/trash/files/:id', (c) =>
-    deps.artifacts.purge(c.req.param('id'))
-      ? c.body(null, 204)
-      : apiError(c, 404, 'not_found', 'Not in the trash.'),
-  );
-
-  routes.delete('/trash/folders/:id', (c) =>
-    deps.artifacts.purgeFolder(c.req.param('id'))
-      ? c.body(null, 204)
-      : apiError(c, 404, 'not_found', 'Not in the trash.'),
-  );
-
-  /** Empty it now, without waiting out the window. */
-  routes.delete('/trash', (c) => {
-    deps.artifacts.emptyTrash();
-    return c.body(null, 204);
-  });
-
   return routes;
 }
 
@@ -278,16 +221,6 @@ function toFolderDto(folder: Folder): FolderDTO {
  * thing is still in the trash, and renaming what took its place is a real next
  * step -- so it gets a 409 and a code the UI can act on.
  */
-function restored(c: Context, result: RestoreResult): Response {
-  if (result === 'ok') return c.body(null, 204);
-  if (result === 'not-found') return apiError(c, 404, 'not_found', 'Not in the trash.');
-  return apiError(
-    c,
-    409,
-    'name_taken',
-    'Something with that name is already there. Rename it, then restore this.',
-  );
-}
 
 function toDto(artifact: Artifact): ArtifactDTO {
   return {

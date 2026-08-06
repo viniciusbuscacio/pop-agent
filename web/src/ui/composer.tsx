@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AttachmentDTO } from '@popy/shared';
 import { t } from '../i18n';
-import { artifactsService } from '../services/artifacts';
 import { providersService } from '../services/providers';
+import { flattenFiles, useFilesStore } from '../store/files';
 import { useThinkingStore } from '../store/thinking';
 import { useNotificationsStore } from '../store/notifications';
 import {
@@ -44,7 +44,7 @@ export function Composer({
   chatId: string;
   busy: boolean;
   queuedText?: string;
-  onSend: (text: string, attachments: AttachmentDTO[], artifactIds?: string[]) => void;
+  onSend: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => void;
   onStop: () => void;
   onNewChat: () => void;
   models: ModelChoice[];
@@ -60,14 +60,19 @@ export function Composer({
   const toggleThinking = useThinkingStore((state) => state.toggle);
   const notify = useNotificationsStore((state) => state.notify);
   // @-mentions: files already in Files, attached by reference (no re-upload).
-  const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
+  // The path is the identifier the server gets; the name is what the menu and
+  // the chip show.
+  const [mentions, setMentions] = useState<{ path: string; name: string }[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | undefined>(undefined);
   // Slash commands: a "/" as the very first character opens the command menu.
   const [slashQuery, setSlashQuery] = useState<string | undefined>(undefined);
   // Picking /model swaps the command menu for the model list, same spot.
   const [slashMode, setSlashMode] = useState<'commands' | 'models'>('commands');
   const [slashActive, setSlashActive] = useState(0);
-  const [allFiles, setAllFiles] = useState<{ id: string; name: string }[] | undefined>(undefined);
+  // The mention pool is the Files tree the whole app shares, flattened to its
+  // files; the store fetches it once and keeps every pane in step.
+  const filesTree = useFilesStore((state) => state.tree);
+  const reloadFiles = useFilesStore((state) => state.reload);
   const mentionCaret = useRef(0);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -76,7 +81,7 @@ export function Composer({
   // fix): what was typed or attached DURING the recording must survive it.
   const textRef = useRef('');
   const attachmentsRef = useRef<AttachmentDTO[]>([]);
-  const mentionsRef = useRef<{ id: string; name: string }[]>([]);
+  const mentionsRef = useRef<{ path: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
   const storageKey = `popy.draft.${chatId}`;
 
@@ -132,12 +137,7 @@ export function Composer({
     }
     mentionCaret.current = caret;
     setMentionQuery(match[1]);
-    if (allFiles === undefined) {
-      void artifactsService
-        .listAll()
-        .then(({ artifacts }) => setAllFiles(artifacts.map((a) => ({ id: a.id, name: a.name }))))
-        .catch(() => setAllFiles([]));
-    }
+    if (filesTree === undefined) void reloadFiles();
   }
 
   function updateSlash(value: string, caret: number): void {
@@ -187,13 +187,13 @@ export function Composer({
       ? []
       : slashCommands().filter((command) => command.name.startsWith(slashQuery.toLowerCase()));
 
-  function pickMention(file: { id: string; name: string }): void {
+  function pickMention(file: { path: string; name: string }): void {
     const caret = mentionCaret.current;
     const query = mentionQuery ?? '';
     const next = `${text.slice(0, caret - query.length)}${file.name} ${text.slice(caret)}`;
     persist(next);
     setMentions((current) =>
-      current.some((entry) => entry.id === file.id) ? current : [...current, file],
+      current.some((entry) => entry.path === file.path) ? current : [...current, file],
     );
     setMentionQuery(undefined);
     area.current?.focus();
@@ -202,7 +202,8 @@ export function Composer({
   const mentionMatches =
     mentionQuery === undefined
       ? []
-      : (allFiles ?? [])
+      : flattenFiles(filesTree ?? [])
+          .map((node) => ({ path: node.path, name: node.name }))
           .filter((file) => file.name.toLowerCase().includes(mentionQuery.toLowerCase()))
           .slice(0, 6);
 
@@ -248,7 +249,7 @@ export function Composer({
       // A voice note is meant to be sent: the transcript (with any typed draft
       // in front of it) goes to the chat automatically (popy.spec §14).
       autoSendRef.current = false;
-      onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.id));
+      onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.path));
       setMentions([]);
       persist('');
       setAttachments([]);
@@ -329,7 +330,7 @@ export function Composer({
       return;
     }
     if (!canSend) return;
-    onSend(text.trim(), attachments, mentions.map((m) => m.id));
+    onSend(text.trim(), attachments, mentions.map((m) => m.path));
     persist('');
     setAttachments([]);
     setMentions([]);
@@ -433,7 +434,7 @@ export function Composer({
         <div className="mb-2 flex flex-wrap gap-2" data-testid="attachment-tray">
           {mentions.map((mention) => (
             <span
-              key={mention.id}
+              key={mention.path}
               data-testid="mention-chip"
               className="inline-flex max-w-60 items-center gap-1.5 rounded-lg border border-[var(--accent)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
             >
@@ -442,7 +443,7 @@ export function Composer({
                 type="button"
                 aria-label={t('chat.attachRemove', { name: mention.name })}
                 onClick={() =>
-                  setMentions((current) => current.filter((entry) => entry.id !== mention.id))
+                  setMentions((current) => current.filter((entry) => entry.path !== mention.path))
                 }
                 className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
               >
@@ -512,7 +513,7 @@ export function Composer({
             >
               {mentionMatches.map((file) => (
                 <button
-                  key={file.id}
+                  key={file.path}
                   type="button"
                   data-testid="mention-option"
                   onClick={() => pickMention(file)}

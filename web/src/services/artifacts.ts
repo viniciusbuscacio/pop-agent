@@ -2,33 +2,59 @@ import type {
   ArtifactDTO,
   ArtifactsResponse,
   ArtifactLinkResponse,
-  FolderDTO,
-  FoldersResponse,
-  FilesSearchResponse,
-  TrashResponse,
+  FileLinkResponse,
+  FileNodeDTO,
+  FilesNameSearchResponse,
+  FilesTreeResponse,
+  GarbageResponse,
 } from '@popy/shared';
 import { apiRequest, apiUpload } from './api';
 
-/** Artifacts for a conversation (popy.spec §14, RF-002/009). */
-export const artifactsService = {
-  list(chatId: string): Promise<ArtifactsResponse> {
-    return apiRequest<ArtifactsResponse>(`/chats/${chatId}/artifacts`);
+/**
+ * Files as a plain folder (popy.spec §14): the tree is the disk, and a path
+ * relative to the Files root IS the identifier -- there are no ids. Rename and
+ * move are the same operation, a path edit.
+ */
+export const filesService = {
+  tree(): Promise<FilesTreeResponse> {
+    return apiRequest<FilesTreeResponse>('/files');
   },
 
-  /** Every artifact across every chat, newest first. */
-  listAll(): Promise<ArtifactsResponse> {
-    return apiRequest<ArtifactsResponse>('/artifacts');
+  /** Live name matches across the whole tree, folders and files alike. */
+  search(query: string): Promise<FilesNameSearchResponse> {
+    return apiRequest<FilesNameSearchResponse>(`/files/search?q=${encodeURIComponent(query)}`);
   },
 
-  upload(chatId: string, file: File): Promise<ArtifactDTO> {
+  /** Uploads into a folder; empty dir = the root. The server mkdir -p's. */
+  upload(file: File, dir: string): Promise<FileNodeDTO> {
     const form = new FormData();
     form.append('file', file);
-    return apiUpload<ArtifactDTO>(`/chats/${chatId}/artifacts`, form);
+    if (dir.length > 0) form.append('dir', dir);
+    return apiUpload<FileNodeDTO>('/files', form);
+  },
+
+  /** Creates the folder and every missing parent on the way (mkdir -p). */
+  mkdir(path: string): Promise<void> {
+    return apiRequest<void>('/files/folders', { method: 'POST', body: { path } });
+  },
+
+  /** A path edit: rename and move are the same thing. 409 = name_taken. */
+  move(from: string, to: string): Promise<void> {
+    return apiRequest<void>('/files/move', { method: 'POST', body: { from, to } });
+  },
+
+  /** Moves the file or folder into the trash, reversible for thirty days. */
+  remove(path: string): Promise<void> {
+    return apiRequest<void>(`/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
   },
 
   /** Mints a fresh signed download URL (public, no session). */
-  link(id: string): Promise<ArtifactLinkResponse> {
-    return apiRequest<ArtifactLinkResponse>(`/artifacts/${id}/link`, { method: 'POST' });
+  async link(path: string): Promise<string> {
+    const { url } = await apiRequest<FileLinkResponse>('/files/link', {
+      method: 'POST',
+      body: { path },
+    });
+    return url;
   },
 
   /**
@@ -36,30 +62,9 @@ export const artifactsService = {
    * save it. The server has the last word: a type it will not show inline
    * (anything scriptable, anything it does not recognise) downloads as usual.
    */
-  async viewUrl(id: string): Promise<string> {
-    const { url } = await artifactsService.link(id);
+  async viewUrl(path: string): Promise<string> {
+    const url = await filesService.link(path);
     return `${url}&inline=1`;
-  },
-
-  remove(id: string): Promise<void> {
-    return apiRequest<void>(`/artifacts/${id}`, { method: 'DELETE' });
-  },
-
-  /** Upload straight into Files (no chat); empty folderId = the root. */
-  uploadToFiles(file: File, folderId: string): Promise<ArtifactDTO> {
-    const form = new FormData();
-    form.append('file', file);
-    if (folderId.length > 0) form.append('folderId', folderId);
-    return apiUpload<ArtifactDTO>('/artifacts', form);
-  },
-
-  rename(id: string, name: string): Promise<ArtifactDTO> {
-    return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { name } });
-  },
-
-  /** Moves a file to a folder; empty folderId = the root. */
-  move(id: string, folderId: string): Promise<ArtifactDTO> {
-    return apiRequest<ArtifactDTO>(`/artifacts/${id}`, { method: 'PATCH', body: { folderId } });
   },
 
   /**
@@ -80,58 +85,52 @@ export const artifactsService = {
     const match = /filename="?([^";]+)"?/i.exec(header);
     return { blob: await response.blob(), filename: match?.[1] ?? 'download' };
   },
+};
 
-  /** Searches folders and files by name or path, across the whole tree. */
-  search(query: string): Promise<FilesSearchResponse> {
-    return apiRequest<FilesSearchResponse>(`/files/search?q=${encodeURIComponent(query)}`);
+/**
+ * The Files trash (popy.spec §14): Files/Garbage/ over HTTP. The entry's name
+ * inside Garbage/ is the handle for restore and purge.
+ */
+export const trashService = {
+  list(): Promise<GarbageResponse> {
+    return apiRequest<GarbageResponse>('/trash');
+  },
+
+  restore(name: string): Promise<void> {
+    return apiRequest<void>(`/trash/${encodeURIComponent(name)}/restore`, { method: 'POST' });
+  },
+
+  /** Skips the retention window for one thing. */
+  purge(name: string): Promise<void> {
+    return apiRequest<void>(`/trash/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  },
+
+  empty(): Promise<{ purged: number }> {
+    return apiRequest<{ purged: number }>('/trash', { method: 'DELETE' });
   },
 };
 
 /**
- * The Files trash (popy.spec §14). The kind is in the path rather than
- * inferred from the id: a file and a folder fail for different reasons, and a
- * route that had to look in both tables would answer 404 for "it is a folder,
- * and its name is taken".
+ * Artifacts of ONE conversation (popy.spec §14, RF-002) -- legacy, dies with
+ * artifacts-page. These hit the old id-based endpoints, which still exist.
  */
-export const trashService = {
-  list(): Promise<TrashResponse> {
-    return apiRequest<TrashResponse>('/trash');
+export const artifactsService = {
+  list(chatId: string): Promise<ArtifactsResponse> {
+    return apiRequest<ArtifactsResponse>(`/chats/${chatId}/artifacts`);
   },
 
-  restore(kind: 'file' | 'folder', id: string): Promise<void> {
-    return apiRequest<void>(`/trash/${kind}s/${id}/restore`, { method: 'POST' });
+  upload(chatId: string, file: File): Promise<ArtifactDTO> {
+    const form = new FormData();
+    form.append('file', file);
+    return apiUpload<ArtifactDTO>(`/chats/${chatId}/artifacts`, form);
   },
 
-  /** Skips the retention window for one thing. */
-  purge(kind: 'file' | 'folder', id: string): Promise<void> {
-    return apiRequest<void>(`/trash/${kind}s/${id}`, { method: 'DELETE' });
+  /** Mints a fresh signed download URL (public, no session). */
+  link(id: string): Promise<ArtifactLinkResponse> {
+    return apiRequest<ArtifactLinkResponse>(`/artifacts/${id}/link`, { method: 'POST' });
   },
 
-  empty(): Promise<void> {
-    return apiRequest<void>('/trash', { method: 'DELETE' });
-  },
-};
-
-/** Folders of the Files tab: a flat tree the user manages. */
-export const foldersService = {
-  list(): Promise<FoldersResponse> {
-    return apiRequest<FoldersResponse>('/folders');
-  },
-
-  /** Creates a folder; empty parentId = the root of Files. */
-  create(name: string, parentId = ''): Promise<FolderDTO> {
-    return apiRequest<FolderDTO>('/folders', {
-      method: 'POST',
-      body: parentId.length > 0 ? { name, parentId } : { name },
-    });
-  },
-
-  rename(id: string, name: string): Promise<void> {
-    return apiRequest<void>(`/folders/${id}`, { method: 'PATCH', body: { name } });
-  },
-
-  /** Deletes the folder AND every file inside; confirm with the user first. */
   remove(id: string): Promise<void> {
-    return apiRequest<void>(`/folders/${id}`, { method: 'DELETE' });
+    return apiRequest<void>(`/artifacts/${id}`, { method: 'DELETE' });
   },
 };

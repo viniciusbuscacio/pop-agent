@@ -501,6 +501,8 @@ const app = createApp({
   chats,
   artifacts,
   pathIndex,
+  files,
+  secretKey: context.secretKey,
   runs,
   tasks,
   taskScheduler,
