@@ -28,6 +28,8 @@ import { TrashSweeper } from './application/artifacts/trash-sweeper.js';
 import { FilesReindexJob } from './infrastructure/agent/files-reindex-job.js';
 import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
 import { ArtifactService } from './application/artifacts/artifact-service.js';
+import { FilesService } from './application/files/files-service.js';
+import { GarbageSweeper } from './application/files/garbage-sweeper.js';
 import { PathIndexService } from './application/artifacts/path-index.js';
 import { FileIndexer } from './application/artifacts/file-indexer.js';
 import { filesCatalogBlock } from './application/artifacts/files-catalog.js';
@@ -46,7 +48,7 @@ import { SkillRouterService } from './application/skills/skill-router-service.js
 import { pinnedBodies } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
-import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir } from './infrastructure/config/data-dir.js';
+import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir, ensureFilesDir } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
@@ -98,6 +100,10 @@ const workspace = ensureWorkspace(resolveWorkspace());
 // Which terminals are attached and whose hands they are (docs/cli.md step 3).
 const hands = new HandsRegistry((line) => console.log(line));
 const artifactsDir = ensureArtifactsDir(context.dataDir);
+// Files as a plain folder (popy.spec §14): real names under dataDir/files/,
+// the disk itself is the record. This service is the app's one door to it.
+const filesDir = ensureFilesDir(context.dataDir);
+const files = new FilesService({ root: filesDir, clock: systemClock });
 // Beside the data directory, never inside it: a backup must not end up in the
 // next backup. Named once because the storage report has to count it too --
 // it is usually the heaviest thing on the disk (§16 keeps ten of them).
@@ -419,6 +425,8 @@ const taskScheduler = new TaskScheduler({
     // The trash empties itself once a day (popy.spec §14): thirty days is a
     // floor, not a deadline, so a daily check is the right cadence.
     new TrashSweeper({ artifacts, onJournal: (line) => console.log(line) }),
+    // Same promise for the Files Garbage/ folder (§14, plain-folder design).
+    new GarbageSweeper({ files, onJournal: (line) => console.log(line) }),
     new WorkspaceSweeper({
       workspace,
       liveChatIds: () =>

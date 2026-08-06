@@ -15,6 +15,7 @@ import type { TaskRepo } from '../application/ports/task-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
 import type { StorageRepo } from '../application/ports/storage-repo.js';
 import type { UserMemoryRepo } from '../application/ports/user-memory-repo.js';
+import type { FileProvenanceRepo } from '../application/ports/file-provenance-repo.js';
 import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
@@ -36,6 +37,7 @@ import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
+import { SqliteFileProvenanceRepo } from './db/sqlite-file-provenance-repo.js';
 
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
@@ -50,6 +52,8 @@ export interface AppContext {
   folders: FolderRepo;
   /** The Files search index (popy.spec §14). */
   pathIndex: PathIndexRepo;
+  /** Which chat wrote which Files path -- append-only history (§6, §14). */
+  fileProvenance: FileProvenanceRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
@@ -85,6 +89,7 @@ export function bootstrap(): AppContext {
     artifactChunks: new SqliteArtifactChunksRepo(db),
     folders: new SqliteFolderRepo(db),
     pathIndex: new SqlitePathIndexRepo(db),
+    fileProvenance: new SqliteFileProvenanceRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),

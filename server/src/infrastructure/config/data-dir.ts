@@ -36,6 +36,21 @@ export function ensureWorkspace(workspace: string): string {
 }
 
 /**
+ * The user's Files (popy.spec §14 "Files as a plain folder"): a plain
+ * directory tree with real names, inside the data directory so it rides the
+ * backup. What `tree` shows here is exactly what the Files tab shows.
+ */
+export function resolveFilesDir(dataDir: string): string {
+  return join(dataDir, 'files');
+}
+
+export function ensureFilesDir(dataDir: string): string {
+  const dir = resolveFilesDir(dataDir);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}
+
+/**
  * Where artifact bytes live (popy.spec §6, §14): inside the data directory so
  * they ride the backup (they are the user's own content), grouped per chat.
  */
