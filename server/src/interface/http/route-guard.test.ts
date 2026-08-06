@@ -50,16 +50,16 @@ describe('route guard', () => {
     }
   });
 
-  it('artifact downloads without a valid signature answer 4xx, never content', async () => {
+  it('file downloads without a valid signature answer 4xx, never content', async () => {
     // The download surface sits outside the session guard on purpose: the
     // HMAC in the URL is the whole authorisation (popy.spec §14). So the
     // probe here is the complement: without a valid signature, nothing.
     const { app } = createTestApp();
     const paths = [
-      '/artifacts/probe/download',
-      '/artifacts/probe/download?exp=1&sig=bogus',
-      '/artifacts/probe/versions/1/download',
-      '/artifacts/probe/versions/1/download?exp=1&sig=bogus',
+      '/files/download',
+      '/files/download?path=probe.txt',
+      '/files/download?path=probe.txt&expires=1&sig=bogus',
+      '/files/download?path=..%2Fsecret.key&expires=1&sig=bogus',
     ];
 
     for (const path of paths) {

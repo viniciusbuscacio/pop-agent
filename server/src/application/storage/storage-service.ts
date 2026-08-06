@@ -10,17 +10,15 @@ import type { StorageRepo } from '../ports/storage-repo.js';
  * against 224 KB of actual files, most of it a model nobody had selected. A
  * limit picked without looking would have capped the wrong thing.
  *
- * Two rules keep the report honest. Nothing is counted twice: the artifacts
- * directory is measured once and split by what the database says is a live
- * file, so versions are the remainder rather than a second measurement of the
- * same bytes. And backups are shown even though they sit OUTSIDE the data
+ * Two rules keep the report honest. Nothing is counted twice: the Files
+ * folder is measured once, on disk, exactly as the tab shows it. And backups
+ * are shown even though they sit OUTSIDE the data
  * directory -- they are the reason the disk is full, so hiding them because
  * of where they live would defeat the point.
  */
 
 export type StorageKey =
   | 'files'
-  | 'versions'
   | 'index'
   | 'database'
   | 'models'
@@ -47,7 +45,8 @@ export interface StorageServiceDeps {
   repo: StorageRepo;
   disk: DiskUsage;
   dataDir: string;
-  artifactsDir: string;
+  /** The user's Files folder (popy.spec §14): measured as the tab shows it. */
+  filesDir: string;
   workspace: string;
   backupsDir: string;
   /** Downloaded weights (voice models, embeddings), measured on their own. */
@@ -58,10 +57,10 @@ export class StorageService {
   constructor(private readonly deps: StorageServiceDeps) {}
 
   report(): StorageReport {
-    const { repo, disk, dataDir, artifactsDir, workspace, backupsDir, modelDirs } = this.deps;
+    const { repo, disk, dataDir, filesDir, workspace, backupsDir, modelDirs } = this.deps;
     const totals = repo.totals();
 
-    const artifactsOnDisk = disk.directoryBytes(artifactsDir);
+    const filesOnDisk = disk.directoryBytes(filesDir);
     // The database's own three files: the WAL alone can outweigh the db after
     // a busy day, and a report that omitted it would not add up to the folder.
     const databaseBytes = disk.fileBytes(
@@ -90,18 +89,12 @@ export class StorageService {
     // measurements must not produce a nonsense line.
     const dataDirBytes = disk.directoryBytes(dataDir).bytes;
     const other = Math.max(
-      dataDirBytes - artifactsOnDisk.bytes - databaseBytes - modelsSize.bytes,
+      dataDirBytes - filesOnDisk.bytes - databaseBytes - modelsSize.bytes,
       0,
     );
 
-    // Versions come from disk, not from the versions table: the table records
-    // what SHOULD be archived, the directory holds what actually is, and the
-    // gap between them is exactly the kind of thing this screen is for.
-    const versionBytes = Math.max(artifactsOnDisk.bytes - totals.files.bytes, 0);
-
     const entries: StorageEntry[] = [
-      { key: 'files', bytes: totals.files.bytes, count: totals.files.count },
-      { key: 'versions', bytes: versionBytes, count: totals.versions.count },
+      { key: 'files', bytes: filesOnDisk.bytes, count: filesOnDisk.files },
       { key: 'index', bytes: totals.index.bytes, count: totals.index.count },
       { key: 'database', bytes: databaseBytes },
       { key: 'models', bytes: modelsSize.bytes, count: modelsSize.files },
@@ -114,8 +107,8 @@ export class StorageService {
     // twice; the total follows the folders, and index is a slice shown for
     // information.
     const totalBytes = entries
-      .filter((entry) => entry.key !== 'index' && entry.key !== 'files' && entry.key !== 'versions')
-      .reduce((sum, entry) => sum + entry.bytes, artifactsOnDisk.bytes);
+      .filter((entry) => entry.key !== 'index')
+      .reduce((sum, entry) => sum + entry.bytes, 0);
 
     const space = disk.space(dataDir);
     return { totalBytes, entries, ...(space === undefined ? {} : { disk: space }) };

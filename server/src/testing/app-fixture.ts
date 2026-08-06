@@ -24,20 +24,14 @@ import { TaskService } from '../application/tasks/task-service.js';
 import type { Timer } from '../application/ports/timer.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
-import { FsArtifactStore } from '../infrastructure/artifacts/artifact-store.js';
 import { StorageService } from '../application/storage/storage-service.js';
 import { HandsRegistry } from '../application/hands/hands-registry.js';
 import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
 import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
-import { ArtifactService } from '../application/artifacts/artifact-service.js';
 import { FilesService } from '../application/files/files-service.js';
-import { PathIndexService } from '../application/artifacts/path-index.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
-import { SqliteArtifactRepo } from '../infrastructure/db/sqlite-artifact-repo.js';
-import { SqliteFolderRepo } from '../infrastructure/db/sqlite-folder-repo.js';
-import { SqlitePathIndexRepo } from '../infrastructure/db/sqlite-path-index-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
@@ -169,7 +163,6 @@ export interface TestApp {
   controlLog: string[];
   auth: AuthService;
   chats: ChatService;
-  artifacts: ArtifactService;
   /** The user's Files over a throwaway tree (popy.spec §14). */
   files: FilesService;
   runs: RunService;
@@ -259,22 +252,6 @@ export function createTestApp(
   });
 
   const settings = new SettingsService(settingsRepo);
-  const artifactRepo = new SqliteArtifactRepo(db);
-  const folderRepo = new SqliteFolderRepo(db);
-  const pathIndex = new PathIndexService({
-    folders: folderRepo,
-    artifacts: artifactRepo,
-    index: new SqlitePathIndexRepo(db),
-  });
-  const artifacts = new ArtifactService({
-    repo: artifactRepo,
-    folders: folderRepo,
-    store: new FsArtifactStore(mkdtempSync(join(tmpdir(), 'popy-test-artifacts-'))),
-    secretKey: Buffer.from('test-artifact-signing-key-000000'),
-    clock,
-    onFilesChanged: () => pathIndex.reindex(),
-  });
-  pathIndex.reindex();
   // Files as a plain folder (popy.spec §14): a real service over a throwaway
   // tree, exactly as main.ts wires it.
   const files = new FilesService({
@@ -331,8 +308,6 @@ export function createTestApp(
     auth,
     settings,
     chats,
-    artifacts,
-    pathIndex,
     files,
     secretKey: Buffer.from('test-artifact-signing-key-000000'),
     runs,
@@ -365,7 +340,7 @@ export function createTestApp(
       repo: new SqliteStorageRepo(db),
       disk: new NodeDiskUsage(),
       dataDir,
-      artifactsDir: join(dataDir, 'artifacts'),
+      filesDir: join(dataDir, 'files'),
       workspace,
       backupsDir: join(dataDir, 'backups'),
       modelDirs: [join(dataDir, 'voice-models')],
@@ -434,7 +409,6 @@ export function createTestApp(
     app,
     auth,
     chats,
-    artifacts,
     files,
     runs,
     tasks,

@@ -92,7 +92,7 @@ async function api(
 }
 
 /** Seeds enough content that list rows, menus and toolbars exist to click. */
-async function seed(base: string): Promise<{ token: string; chatId: string; folderId: string }> {
+async function seed(base: string): Promise<{ token: string; chatId: string; folderPath: string }> {
   const created = (await api(base, '/v1/setup', {
     method: 'POST',
     body: { password: PASSWORD },
@@ -100,17 +100,14 @@ async function seed(base: string): Promise<{ token: string; chatId: string; fold
   const token = created.token;
 
   const chat = (await api(base, '/v1/chats', { method: 'POST', token })) as { id: string };
-  const folder = (await api(base, '/v1/folders', {
-    method: 'POST',
-    token,
-    body: { name: 'Docs' },
-  })) as { id: string };
+  await api(base, '/v1/files/folders', { method: 'POST', token, body: { path: 'Docs' } });
 
   const form = new FormData();
   form.append('file', new Blob(['hello from the crawler'], { type: 'text/plain' }), 'crawl.txt');
-  await api(base, '/v1/artifacts', { method: 'POST', token, form });
+  form.append('dir', 'Docs');
+  await api(base, '/v1/files', { method: 'POST', token, form });
 
-  return { token, chatId: chat.id, folderId: folder.id };
+  return { token, chatId: chat.id, folderPath: 'Docs' };
 }
 
 
@@ -314,7 +311,7 @@ async function main(): Promise<void> {
   const unreached: string[] = [];
   try {
     await waitForServer(base, child);
-    const { chatId, folderId } = await seed(base);
+    const { chatId, folderPath } = await seed(base);
 
     const browser = await chromium.launch();
     for (const [viewport, size] of [
@@ -358,8 +355,7 @@ async function main(): Promise<void> {
         '/',
         `/chat/${chatId}`,
         '/files',
-        `/files/${folderId}`,
-        `/chat/${chatId}/artifacts`,
+        `/files/${folderPath}`,
         '/settings',
       ];
       for (const screen of screens) {

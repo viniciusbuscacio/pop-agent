@@ -15,7 +15,7 @@ describe('machineOfTool', () => {
 
   it('has no opinion about tools that do not run commands', () => {
     expect(machineOfTool('read')).toBeUndefined();
-    expect(machineOfTool('save_artifact')).toBeUndefined();
+    expect(machineOfTool('delete_file')).toBeUndefined();
   });
 });
 

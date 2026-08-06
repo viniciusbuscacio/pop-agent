@@ -1,7 +1,4 @@
 import type {
-  ArtifactDTO,
-  ArtifactsResponse,
-  ArtifactLinkResponse,
   FileLinkResponse,
   FileNodeDTO,
   FilesNameSearchResponse,
@@ -110,27 +107,3 @@ export const trashService = {
   },
 };
 
-/**
- * Artifacts of ONE conversation (popy.spec §14, RF-002) -- legacy, dies with
- * artifacts-page. These hit the old id-based endpoints, which still exist.
- */
-export const artifactsService = {
-  list(chatId: string): Promise<ArtifactsResponse> {
-    return apiRequest<ArtifactsResponse>(`/chats/${chatId}/artifacts`);
-  },
-
-  upload(chatId: string, file: File): Promise<ArtifactDTO> {
-    const form = new FormData();
-    form.append('file', file);
-    return apiUpload<ArtifactDTO>(`/chats/${chatId}/artifacts`, form);
-  },
-
-  /** Mints a fresh signed download URL (public, no session). */
-  link(id: string): Promise<ArtifactLinkResponse> {
-    return apiRequest<ArtifactLinkResponse>(`/artifacts/${id}/link`, { method: 'POST' });
-  },
-
-  remove(id: string): Promise<void> {
-    return apiRequest<void>(`/artifacts/${id}`, { method: 'DELETE' });
-  },
-};

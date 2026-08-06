@@ -24,17 +24,10 @@ import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { WorkspaceSweeper } from './infrastructure/agent/workspace-sweeper.js';
-import { TrashSweeper } from './application/artifacts/trash-sweeper.js';
-import { FilesReindexJob } from './infrastructure/agent/files-reindex-job.js';
-import { FsArtifactStore } from './infrastructure/artifacts/artifact-store.js';
-import { ArtifactService } from './application/artifacts/artifact-service.js';
 import { FilesService } from './application/files/files-service.js';
 import { FileProvenanceService } from './application/files/file-provenance.js';
 import { GarbageSweeper } from './application/files/garbage-sweeper.js';
-import { PathIndexService } from './application/artifacts/path-index.js';
-import { FileIndexer } from './application/artifacts/file-indexer.js';
 import { filesCatalogBlock } from './application/files/files-catalog.js';
-import { BinaryArtifactExtractor } from './infrastructure/artifacts/artifact-extractor.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { buildLocalTools } from './infrastructure/agent/local-tools.js';
@@ -49,7 +42,7 @@ import { SkillRouterService } from './application/skills/skill-router-service.js
 import { pinnedBodies } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
-import { ensureWorkspace, resolveWorkspace, ensureArtifactsDir, ensureFilesDir, ensureWorkspaceFilesLink } from './infrastructure/config/data-dir.js';
+import { ensureWorkspace, resolveWorkspace, ensureFilesDir, ensureWorkspaceFilesLink } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
 import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
@@ -100,7 +93,6 @@ if (agent !== 'fake' && agent !== 'pi') {
 const workspace = ensureWorkspace(resolveWorkspace());
 // Which terminals are attached and whose hands they are (docs/cli.md step 3).
 const hands = new HandsRegistry((line) => console.log(line));
-const artifactsDir = ensureArtifactsDir(context.dataDir);
 // Files as a plain folder (popy.spec §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
@@ -119,54 +111,6 @@ const fileProvenance = new FileProvenanceService({
 // next backup. Named once because the storage report has to count it too --
 // it is usually the heaviest thing on the disk (§16 keeps ten of them).
 const backupsDir = join(context.dataDir, '..', 'popy-backups');
-// Artifacts: the agent's outputs and the user's uploads, tracked per chat and
-// downloadable only through an HMAC-signed link keyed off secret.key (§14).
-// Built before the bridge so the pi engine can hand the agent save_artifact.
-// A holder, not a let: the service is built before the embedder exists.
-const fileIndex: { current: FileIndexer | undefined } = { current: undefined };
-// The Files search index (popy.spec §14): folders and files, name and full
-// path, in one table the search hits directly. Rebuilt after every Files
-// change (below), at boot (here) and once a day (a maintenance job). It is a
-// cache, so a rebuild failure must never take the boot down.
-const pathIndex = new PathIndexService({
-  folders: context.folders,
-  artifacts: context.artifacts,
-  index: context.pathIndex,
-  onJournal: (line) => console.log(line),
-});
-try {
-  pathIndex.reindex();
-} catch (error) {
-  console.warn(`popy files reindex at boot failed: ${error instanceof Error ? error.message : 'unknown'}`);
-}
-const artifacts = new ArtifactService({
-  repo: context.artifacts,
-  folders: context.folders,
-  store: new FsArtifactStore(artifactsDir),
-  secretKey: context.secretKey,
-  clock: systemClock,
-  // Off the request path: a stored file is indexed for files_search moments later.
-  onStored: (artifactId) => void fileIndex.current?.index(artifactId),
-  // A deleted file must stop being findable at once, not in thirty days:
-  // dropping its chunks is what stops the agent citing it (popy.spec §14).
-  onDeindexed: (artifactId) => context.artifactChunks.replaceFor(artifactId, []),
-  // Keep the Files search index in step with every add/rename/move/delete.
-  onFilesChanged: () => {
-    try {
-      pathIndex.reindex();
-    } catch (error) {
-      console.warn(`popy files reindex failed: ${error instanceof Error ? error.message : 'unknown'}`);
-    }
-  },
-});
-// Best-effort text extraction for read_artifact: PDF/DOCX/OCR via system
-// binaries (popy.spec §14). Paths overridable for an unusual install.
-const artifactExtractor = new BinaryArtifactExtractor({
-  ...(process.env['POPY_PDFTOTEXT'] === undefined ? {} : { pdftotext: process.env['POPY_PDFTOTEXT'] }),
-  ...(process.env['POPY_UNZIP'] === undefined ? {} : { unzip: process.env['POPY_UNZIP'] }),
-  ...(process.env['POPY_TESSERACT'] === undefined ? {} : { tesseract: process.env['POPY_TESSERACT'] }),
-  ...(process.env['POPY_OCR_LANGS'] === undefined ? {} : { ocrLanguages: process.env['POPY_OCR_LANGS'] }),
-});
 const settings = new SettingsService(context.settings);
 const mcp = new McpService({ repo: context.mcp, secrets: context.secrets, dataDir: context.dataDir });
 // The agent's own notes vault (popy.spec §11), inside the data directory.
@@ -203,18 +147,6 @@ const indexer =
         embedder,
         onError: (message) => console.warn(`popy embedding: ${message}`),
       });
-// The semantic index over Files (§14): the agent learns from what the user keeps.
-fileIndex.current =
-  embedder === undefined
-    ? undefined
-    : new FileIndexer({
-        artifacts,
-        chunks: context.artifactChunks,
-        embedder,
-        extractor: artifactExtractor,
-        onError: (message) => console.warn(`popy file index: ${message}`),
-      });
-
 const bridge: AgentBridge & ProviderAuthBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The providers seen by the routes: key precedence (secrets over
@@ -358,7 +290,6 @@ const updates = new NpmUpdateChecker({
 // asks it to forget a chat before deleting the chat's files (popy.spec §6).
 const purger = new FsChatPurger({
   workspace,
-  artifactsDir,
   forgetSession: (chatId) => {
     if (bridge instanceof PiAgentBridge) bridge.forget(chatId);
   },
@@ -444,10 +375,8 @@ const taskScheduler = new TaskScheduler({
   clock: systemClock,
   timer: intervalTimer,
   jobs: [
-    // The trash empties itself once a day (popy.spec §14): thirty days is a
-    // floor, not a deadline, so a daily check is the right cadence.
-    new TrashSweeper({ artifacts, onJournal: (line) => console.log(line) }),
-    // Same promise for the Files Garbage/ folder (§14, plain-folder design).
+    // The Garbage empties itself once a day (popy.spec §14): thirty days is
+    // a floor, not a deadline, so a daily check is the right cadence.
     new GarbageSweeper({ files, onJournal: (line) => console.log(line) }),
     new WorkspaceSweeper({
       workspace,
@@ -456,14 +385,6 @@ const taskScheduler = new TaskScheduler({
           ...context.chats.list({ archived: false }).map((chat) => chat.id),
           ...context.chats.list({ archived: true }).map((chat) => chat.id),
         ]),
-      now: () => systemClock.now(),
-      onJournal: (line) => console.log(line),
-    }),
-    // Files search index safety net: a daily 01:00 rebuild in case a crash or a
-    // hand-edited database left the index adrift (it is kept current on every
-    // change and at boot, so this should never actually be needed).
-    new FilesReindexJob({
-      reindex: () => pathIndex.reindex(),
       now: () => systemClock.now(),
       onJournal: (line) => console.log(line),
     }),
@@ -499,8 +420,6 @@ const app = createApp({
   auth,
   settings,
   chats,
-  artifacts,
-  pathIndex,
   files,
   secretKey: context.secretKey,
   runs,
@@ -521,7 +440,7 @@ const app = createApp({
     repo: context.storage,
     disk: new NodeDiskUsage(),
     dataDir: context.dataDir,
-    artifactsDir,
+    filesDir,
     workspace,
     backupsDir,
     modelDirs: [join(context.dataDir, 'voice-models'), join(context.dataDir, 'models')],
@@ -646,7 +565,5 @@ serve(
     if (pending > 0) console.log(`popy embedding backfill: ${String(pending)} messages`);
     void indexer.backfill();
   }
-  // Catch up the file index the same way (files stored while no embedder ran).
-    void fileIndex.current?.backfill();
   },
 );

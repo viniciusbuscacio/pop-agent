@@ -1,9 +1,5 @@
 import { join } from 'node:path';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
-import type { ArtifactRepo } from '../application/ports/artifact-repo.js';
-import type { ArtifactChunksRepo } from '../application/ports/artifact-chunks-repo.js';
-import type { FolderRepo } from '../application/ports/folder-repo.js';
-import type { PathIndexRepo } from '../application/ports/path-index-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
@@ -17,13 +13,9 @@ import type { StorageRepo } from '../application/ports/storage-repo.js';
 import type { UserMemoryRepo } from '../application/ports/user-memory-repo.js';
 import type { FileProvenanceRepo } from '../application/ports/file-provenance-repo.js';
 import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
-import { ensureDataDir, resolveDataDir } from './config/data-dir.js';
+import { ensureDataDir, ensureFilesDir, resolveDataDir, resolveArtifactsDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
-import { SqliteArtifactChunksRepo } from './db/sqlite-artifact-chunks-repo.js';
-import { SqliteFolderRepo } from './db/sqlite-folder-repo.js';
-import { SqlitePathIndexRepo } from './db/sqlite-path-index-repo.js';
-import { SqliteArtifactRepo } from './db/sqlite-artifact-repo.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
@@ -38,20 +30,16 @@ import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
 import { SqliteFileProvenanceRepo } from './db/sqlite-file-provenance-repo.js';
+import { readLegacyCatalog, writeLegacyFiles } from './db/legacy-files-export.js';
 
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
   dataDir: string;
-  /** The raw key that unlocks secrets and signs artifact links (§9, §14). */
+  /** The raw key that unlocks secrets and signs Files download links (§9, §14). */
   secretKey: Buffer;
   settings: SettingsRepo;
   secrets: SecretsRepo;
   chats: ChatRepo;
-  artifacts: ArtifactRepo;
-  artifactChunks: ArtifactChunksRepo;
-  folders: FolderRepo;
-  /** The Files search index (popy.spec §14). */
-  pathIndex: PathIndexRepo;
   /** Which chat wrote which Files path -- append-only history (§6, §14). */
   fileProvenance: FileProvenanceRepo;
   llmRuns: LlmRunsRepo;
@@ -76,8 +64,17 @@ export interface AppContext {
  */
 export function bootstrap(): AppContext {
   const dataDir = ensureDataDir(resolveDataDir());
+  // Files as a plain folder (spec 1.58): if the pre-migration file still has
+  // the artifact catalog, read it NOW -- migration 027 drops those tables the
+  // moment openDatabase runs -- and land it on disk right after.
+  const legacy = readLegacyCatalog(join(dataDir, 'popy.db'), resolveArtifactsDir(dataDir));
   const db = openDatabase(join(dataDir, 'popy.db'));
   const key = loadOrCreateSecretKey(join(dataDir, 'secret.key'));
+  if (legacy !== undefined) {
+    writeLegacyFiles(legacy, ensureFilesDir(dataDir), new SqliteFileProvenanceRepo(db), (line) =>
+      console.log(line),
+    );
+  }
 
   return {
     dataDir,
@@ -85,10 +82,6 @@ export function bootstrap(): AppContext {
     settings: new SqliteSettingsRepo(db),
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),
-    artifacts: new SqliteArtifactRepo(db),
-    artifactChunks: new SqliteArtifactChunksRepo(db),
-    folders: new SqliteFolderRepo(db),
-    pathIndex: new SqlitePathIndexRepo(db),
     fileProvenance: new SqliteFileProvenanceRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),

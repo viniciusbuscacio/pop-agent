@@ -17,8 +17,6 @@ function service(options: {
   };
   const repo: StorageRepo = {
     totals: () => ({
-      files: { bytes: 0, count: 0 },
-      versions: { bytes: 0, count: 0 },
       index: { bytes: 0, count: 0 },
       ...options.repo,
     }),
@@ -27,7 +25,7 @@ function service(options: {
     repo,
     disk,
     dataDir: '/data',
-    artifactsDir: '/data/artifacts',
+    filesDir: '/data/files',
     workspace: '/work',
     backupsDir: '/backups',
     modelDirs: ['/data/voice-models'],
@@ -39,33 +37,20 @@ function bytesOf(report: ReturnType<StorageService['report']>, key: string): num
 }
 
 describe('StorageService', () => {
-  it('splits the artifacts directory into live files and the copies behind them', () => {
+  it('measures the Files folder on disk, exactly as the tab shows it', () => {
     const report = service({
-      dirs: { '/data/artifacts': { bytes: 1000, files: 7 } },
-      repo: { files: { bytes: 600, count: 3 }, versions: { bytes: 400, count: 4 } },
+      dirs: { '/data/files': { bytes: 600, files: 3 } },
     }).report();
 
     expect(bytesOf(report, 'files')).toBe(600);
-    expect(bytesOf(report, 'versions')).toBe(400);
-  });
-
-  it('never invents a negative line when the disk disagrees with the table', () => {
-    // Bytes deleted between the two measurements would otherwise show as a
-    // negative "versions", which reads as a bug in the screen, not on disk.
-    const report = service({
-      dirs: { '/data/artifacts': { bytes: 100, files: 1 } },
-      repo: { files: { bytes: 900, count: 3 } },
-    }).report();
-
-    expect(bytesOf(report, 'versions')).toBe(0);
-    expect(bytesOf(report, 'other')).toBe(0);
+    expect(report.entries.find((entry) => entry.key === 'files')?.count).toBe(3);
   });
 
   it('counts what is left of the data directory as other, without the parts already named', () => {
     const report = service({
       dirs: {
         '/data': { bytes: 5000, files: 40 },
-        '/data/artifacts': { bytes: 1000, files: 7 },
+        '/data/files': { bytes: 1000, files: 7 },
         '/data/voice-models': { bytes: 2000, files: 2 },
       },
       files: { '/data/popy.db': 500, '/data/popy.db-wal': 200 },
@@ -83,10 +68,9 @@ describe('StorageService', () => {
     const report = service({
       dirs: {
         '/data': { bytes: 1_800_000_000, files: 50 },
-        '/data/artifacts': { bytes: 224_000, files: 1 },
+        '/data/files': { bytes: 224_000, files: 1 },
         '/data/voice-models': { bytes: 1_700_000_000, files: 3 },
       },
-      repo: { files: { bytes: 224_000, count: 1 } },
     }).report();
 
     expect(bytesOf(report, 'models')).toBe(1_700_000_000);

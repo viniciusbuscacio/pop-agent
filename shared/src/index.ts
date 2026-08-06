@@ -215,7 +215,6 @@ export interface BackupsResponse {
  */
 export type StorageKeyDTO =
   | 'files'
-  | 'versions'
   | 'index'
   | 'database'
   | 'models'
@@ -260,50 +259,6 @@ export interface SkillDTO {
 
 export interface SkillsResponse {
   skills: SkillDTO[];
-}
-
-/**
- * An artifact as the artifacts screen lists it (popy.spec §14, RF-002). The
- * `id` is the only handle a client ever sees — no filesystem path or storage
- * key (RF-008).
- */
-export interface ArtifactDTO {
-  id: string;
-  /** Empty when the file was uploaded straight into Files. */
-  chatId: string;
-  /** Empty means the root of Files. */
-  folderId: string;
-  name: string;
-  mime: string;
-  size: number;
-  version: number;
-  source: 'agent' | 'upload';
-  createdAt: string;
-}
-
-/** A folder in Files (a nested tree). */
-export interface FolderDTO {
-  id: string;
-  name: string;
-  /** The containing folder id; '' = the root of Files. */
-  parentId: string;
-  createdAt: string;
-}
-
-export interface FoldersResponse {
-  folders: FolderDTO[];
-}
-
-/**
- * A hit from `GET /v1/files/search` (popy.spec §14): a folder or a file that
- * matches, carried with its full path so the UI can show where it lives.
- */
-export type FilesSearchHitDTO =
-  | { kind: 'folder'; path: string; folder: FolderDTO }
-  | { kind: 'file'; path: string; file: ArtifactDTO };
-
-export interface FilesSearchResponse {
-  hits: FilesSearchHitDTO[];
 }
 
 // ---- Files as a plain folder (popy.spec §14, spec 1.58) ----
@@ -355,51 +310,6 @@ export interface GarbageEntryDTO {
 
 export interface GarbageResponse {
   entries: GarbageEntryDTO[];
-}
-
-export interface ArtifactsResponse {
-  artifacts: ArtifactDTO[];
-}
-
-/** One entry in an artifact's version history (popy.spec §14, RF-018/019). */
-export interface ArtifactVersionDTO {
-  version: number;
-  mime: string;
-  size: number;
-  source: 'agent' | 'upload';
-  createdAt: string;
-}
-
-export interface ArtifactVersionsResponse {
-  versions: ArtifactVersionDTO[];
-}
-
-/**
- * `GET /v1/trash` — what deleting put aside (popy.spec §14). Files and folders
- * together; only the top of each deleted subtree, because that is what the
- * user actually deleted and the only thing a restore can mean on its own.
- */
-export interface TrashEntryDTO {
-  kind: 'file' | 'folder';
-  id: string;
-  name: string;
-  /** Where it lived, as a path. Empty means the root of Files. */
-  path: string;
-  /** Bytes for a file; 0 for a folder. */
-  size: number;
-  deletedAt: string;
-  /** When the sweeper is allowed to take it for good. */
-  purgeAt: string;
-}
-
-export interface TrashResponse {
-  entries: TrashEntryDTO[];
-}
-
-/** `POST /v1/artifacts/:id/link` — a fresh HMAC-signed download URL (RF-004). */
-export interface ArtifactLinkResponse {
-  url: string;
-  expiresAt: number;
 }
 
 /** `POST`/`PUT /v1/skills` — create or replace a skill. */

@@ -4,7 +4,7 @@ import type { FilesService } from '../../application/files/files-service.js';
 import { verifyFileDownload } from '../../application/files/files-download.js';
 import type { Clock } from '../../application/ports/clock.js';
 import { mimeOf } from '../../domain/files/mime.js';
-import { inlineView } from '../../domain/artifacts/inline-view.js';
+import { inlineView } from '../../domain/files/inline-view.js';
 import { apiError } from './errors.js';
 
 /**

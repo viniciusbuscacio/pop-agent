@@ -1,8 +1,6 @@
 import { Hono } from 'hono';
 import type { AboutResponse, ServerInfoResponse } from '@popy/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
-import type { ArtifactService } from '../../application/artifacts/artifact-service.js';
-import type { PathIndexService } from '../../application/artifacts/path-index.js';
 import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
@@ -27,9 +25,7 @@ import type { McpService } from '../../application/mcp/mcp-service.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
-import { createArtifactRoutes } from './artifact-routes.js';
 import { createCliDownloadRoutes } from './cli-download-routes.js';
-import { createArtifactDownloadRoutes } from './artifact-download-routes.js';
 import { createFilesRoutes } from './files-routes.js';
 import { createFilesDownloadRoutes } from './files-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
@@ -58,9 +54,6 @@ export interface AppDeps {
   auth: AuthService;
   settings: SettingsService;
   chats: ChatService;
-  artifacts: ArtifactService;
-  /** The Files search index (popy.spec §14): powers GET /files/search. */
-  pathIndex: PathIndexService;
   /** The user's Files as a plain folder (popy.spec §14). */
   files: FilesService;
   /** Signs Files download links; derived key, from `secret.key` (§9, §14). */
@@ -131,11 +124,7 @@ export function createApp(deps: AppDeps): Hono {
         health,
       ),
       publicSurface(
-        'the HMAC in the artifact download URL is the whole authorisation (popy.spec §14); it must sit before the static site could mistake it for a missing file',
-        createArtifactDownloadRoutes(deps),
-      ),
-      publicSurface(
-        'the HMAC in the Files download URL is the whole authorisation (popy.spec §14, plain-folder design); the signature covers path and expiry together and the path jail gets the last word',
+        'the HMAC in the Files download URL is the whole authorisation (popy.spec §14, plain-folder design); the signature covers path and expiry together, the path jail gets the last word, and it must sit before the static site could mistake it for a missing file',
         createFilesDownloadRoutes(deps),
       ),
       publicSurface(
@@ -159,7 +148,6 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createVoiceRoutes(deps)),
       sessionGuarded(createBackupRoutes(deps)),
       sessionGuarded(createPushRoutes(deps)),
-      sessionGuarded(createArtifactRoutes(deps)),
       sessionGuarded(createFilesRoutes(deps)),
       sessionGuarded(createTaskRoutes(deps)),
       sessionGuarded(createChatRoutes({ ...deps, tickets: new EventTickets(deps.clock) })),

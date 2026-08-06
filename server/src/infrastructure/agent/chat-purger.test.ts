@@ -46,19 +46,18 @@ describe('FsChatPurger', () => {
     const jsonl = join(sessions, 'session.jsonl');
     const sidecar = join(sessions, 'session');
     const attachments = join(workspace, 'attachments', CHAT);
-    const artifactsDir = join(root, 'artifacts');
-    const artifacts = join(artifactsDir, CHAT);
+    // The user's Files must survive a chat deletion (popy.spec §14).
+    const filesDir = join(root, 'files');
     writeFileSync(jsonl, '{}');
     mkdirSync(sidecar, { recursive: true });
     writeFileSync(join(sidecar, 'x'), 'y');
     mkdirSync(attachments, { recursive: true });
     writeFileSync(join(attachments, 'note.txt'), 'hi');
-    mkdirSync(artifacts, { recursive: true });
-    writeFileSync(join(artifacts, 'file-x'), 'bytes');
+    mkdirSync(filesDir, { recursive: true });
+    writeFileSync(join(filesDir, 'keep.txt'), 'bytes');
 
     const purger = new FsChatPurger({
       workspace,
-      artifactsDir,
       forgetSession: (id) => forgotten.push(id),
     });
     purger.purge(chat({ piSessionId: jsonl }));
@@ -66,7 +65,7 @@ describe('FsChatPurger', () => {
     expect(existsSync(jsonl)).toBe(false);
     expect(existsSync(sidecar)).toBe(false);
     expect(existsSync(attachments)).toBe(false);
-    expect(existsSync(artifacts)).toBe(false);
+    expect(existsSync(join(filesDir, 'keep.txt'))).toBe(true);
     expect(forgotten).toEqual([CHAT]);
   });
 
