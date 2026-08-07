@@ -24,6 +24,8 @@ import { buildFileTools } from '../files/file-tools.js';
 import type { FilesService } from '../../application/files/files-service.js';
 import { buildNoteTools } from '../notes/note-tools.js';
 import { buildTaskTools } from './task-tools.js';
+import { buildSkillTools } from '../skills/skill-tools.js';
+import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
 
@@ -206,6 +208,17 @@ export interface SdkPiEngineOptions {
   userMemory?: UserMemoryRepo;
   /** The user's Files folder: powers delete_file and files_search (popy.spec §14). */
   files?: FilesService;
+  /**
+   * The skills vault, so the agent can read its own skills and write a new
+   * one when the user asks (popy.spec §8, auto-skill fase b).
+   */
+  skills?: SkillsRepo;
+  /**
+   * Whether a skill the agent distils goes live immediately (popy.spec §8).
+   * A thunk, so Settings takes effect on the next skill written rather than
+   * on the next restart.
+   */
+  autoApproveSkills?: () => boolean;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
   /**
@@ -344,6 +357,9 @@ export class SdkPiEngine implements PiEngine {
         ? []
         : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),
       ...(this.options.files === undefined ? [] : buildFileTools(sdk.defineTool, this.options.files)),
+      ...(this.options.skills === undefined
+        ? []
+        : buildSkillTools(sdk.defineTool, this.options.skills, this.options.autoApproveSkills)),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
       ...(this.options.localTools?.(sdk, options.handsConnectionId) ?? []),

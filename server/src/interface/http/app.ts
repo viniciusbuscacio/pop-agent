@@ -13,6 +13,7 @@ import type { Clock } from '../../application/ports/clock.js';
 import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
+import type { SkillUsageRepo } from '../../application/ports/skill-usage-repo.js';
 import type { Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import type { VoiceModelStore } from '../../application/ports/voice-models.js';
@@ -71,6 +72,8 @@ export interface AppDeps {
   voiceModels: VoiceModelStore;
   userMemory: UserMemoryRepo;
   skills: SkillsRepo;
+  /** Use counts behind the Skills screen; absent in tests that do not care. */
+  skillUsage?: SkillUsageRepo;
   mcp: McpService;
   usage: UsageRepo;
   storage: StorageService;
@@ -139,7 +142,12 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createServerRoutes(deps)),
       sessionGuarded(createProviderRoutes(deps)),
       sessionGuarded(createMemoryRoutes(deps)),
-      sessionGuarded(createSkillsRoutes(deps)),
+      sessionGuarded(
+        createSkillsRoutes({
+          skills: deps.skills,
+          ...(deps.skillUsage === undefined ? {} : { usage: deps.skillUsage }),
+        }),
+      ),
       sessionGuarded(createMcpRoutes(deps.mcp)),
       sessionGuarded(createUsageRoutes(deps)),
       sessionGuarded(createStorageRoutes(deps)),

@@ -511,9 +511,14 @@ function SkillsList({ filter }: { filter: string }) {
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-sm font-medium">{skill.name}</span>
-                    {skill.builtin ? (
+                    {skill.source === 'builtin' ? (
                       <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
                         {t('skills.builtin')}
+                      </span>
+                    ) : null}
+                    {skill.pending === true ? (
+                      <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px]">
+                        {t('skills.pending')}
                       </span>
                     ) : null}
                   </span>
@@ -544,7 +549,7 @@ function SkillsList({ filter }: { filter: string }) {
                       navigate(`/skills/${skill.slug}`);
                     }}
                   />
-                  {skill.builtin ? null : (
+                  {skill.source === 'builtin' ? null : (
                     <MenuItem
                       testId="skill-row-delete"
                       label={t('skills.delete')}

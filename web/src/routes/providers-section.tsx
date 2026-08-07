@@ -332,6 +332,10 @@ function ConfigureProvider({
   const [name, setName] = useState(provider.name);
   const [baseURL, setBaseURL] = useState(provider.baseURL ?? '');
   const [model, setModel] = useState(provider.defaultModel);
+  // Empty means "follow the chat model" (popy.spec §15). The card shows the
+  // resolved value, so a provider that never chose one still reads sensibly;
+  // choosing the chat model again is what clears it.
+  const [serviceModel, setServiceModel] = useState(provider.serviceModel);
   const [catalogue, setCatalogue] = useState<ModelPickerOption[]>([]);
   const [testing, setTesting] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -412,6 +416,12 @@ function ConfigureProvider({
         });
       } else if (model.trim() !== provider.defaultModel) {
         latest = await providersService.setDefaultModel(provider.id, model.trim());
+      }
+      if (serviceModel.trim() !== provider.serviceModel) {
+        // Back to the chat model is stored as empty, so the two keep following
+        // each other instead of freezing a copy of today's choice.
+        const next = serviceModel.trim() === model.trim() ? '' : serviceModel.trim();
+        latest = await providersService.setServiceModel(provider.id, next);
       }
       if (apiKey.trim().length > 0) {
         latest = await providersService.setKey(provider.id, apiKey.trim());
@@ -533,6 +543,46 @@ function ConfigureProvider({
             hint={t('provider.modelHint')}
             value={model}
             onChange={(event) => setModel(event.target.value)}
+          />
+        )}
+
+        {/* The Service Model, beside the credential (popy.spec §15, corrected
+            07/08). It used to be one global setting, which could not be right:
+            a model id only means something inside one provider's catalogue, so
+            a single stored id was wrong for every provider but one. Shown
+            resolved -- equal to the chat model until the user picks something
+            else -- and picking the chat model again is what clears it. */}
+        {catalogue.length > 0 ? (
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="provider-service-model" className="text-sm font-medium">
+              {t('provider.serviceModel')}
+            </label>
+            <div className="relative">
+              <ModelPicker
+                id="provider-service-model"
+                label={t('provider.serviceModel')}
+                value={serviceModel}
+                options={catalogue}
+                placeholder={t('chat.searchModels')}
+                noResults={t('chat.noModelsFound')}
+                onChange={setServiceModel}
+                layout="field"
+              />
+            </div>
+            <span className="text-xs text-[var(--muted)]">
+              {serviceModel.trim() === model.trim()
+                ? t('provider.serviceModelSame')
+                : t('provider.serviceModelHint')}
+            </span>
+          </div>
+        ) : (
+          <TextField
+            id="provider-service-model"
+            data-testid="provider-service-model"
+            label={t('provider.serviceModel')}
+            hint={t('provider.serviceModelHint')}
+            value={serviceModel}
+            onChange={(event) => setServiceModel(event.target.value)}
           />
         )}
 

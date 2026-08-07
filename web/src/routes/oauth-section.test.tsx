@@ -41,6 +41,7 @@ const PROVIDER: ProviderStatusDTO = {
   source: null,
   authType: 'oauth',
   defaultModel: 'gpt-5.5',
+  serviceModel: 'gpt-5.5',
   allowCustomModel: false,
   order: 1,
   enabled: true,

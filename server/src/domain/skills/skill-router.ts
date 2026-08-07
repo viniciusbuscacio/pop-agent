@@ -1,25 +1,56 @@
+import { dot, fuseRankings } from '../memory/rank-fusion.js';
 import type { SelectedSkill, Skill } from './skill.js';
 
 /**
  * The Skill Router (popy.spec §8): given what the user asked, pick the handful
- * of skills worth putting in front of the model this turn. Deterministic and
- * lexical -- token overlap between the request and each skill's name,
- * description and `whenToUse`, weighted toward rarer words so "the" counts for
- * nothing and "invoice" counts for a lot. No embeddings, no model: a personal
- * server should not pay a round trip to decide which instructions to read.
+ * of skills worth putting in front of the model this turn.
+ *
+ * Two rankings, fused. The lexical one is token overlap between the request and
+ * each skill's name, description and `whenToUse`, weighted toward rarer words
+ * so "the" counts for nothing and "invoice" counts for a lot. The semantic one
+ * is cosine over the embeddings, and it is what reaches a "recipes" skill from
+ * "help me make dinner" -- a request that shares no word with it. Neither
+ * ranking has to know the other's score scale, because they are merged with the
+ * same reciprocal-rank fusion the memory search uses (popy.spec §7). That
+ * replaces the hand-tuned blend this router used to carry, where a cosine was
+ * turned into lexical points by a constant nobody could justify.
+ *
+ * A skill enters a ranking only by clearing that ranking's bar. That is what
+ * keeps an unrelated request selecting nothing at all -- RRF orders candidates,
+ * it does not create them. Either signal alone is enough to qualify a skill; a
+ * skill both agree on rises above one only a single ranking found, which is the
+ * whole point of fusing them.
+ *
+ * Without vectors it is the pure lexical router, and still deterministic: a
+ * personal server should not pay a round trip to decide which instructions to
+ * read. But it is worth knowing what that costs here, because "why not just
+ * match words?" is the obvious question: the skills ship with English metadata
+ * and Vinicius writes to Popy in Portuguese, so the two share almost no tokens
+ * at all. Over ten labelled requests the lexical half alone found two, and both
+ * were requests where the right answer was "nothing"; its single real hit was
+ * `web-browsing` on "procura na internet", and only because "internet" happens
+ * to be spelled the same in both languages. The fused router found seven.
+ *
+ * That is what the semantic half is buying, and no better lexical engine --
+ * FTS5, bm25, a real stemmer -- would buy it instead: they all rank word
+ * matches, and there are no word matches to rank across languages. The lever
+ * that would change this answer is writing the skills' `whenToUse` in the
+ * language the user actually types.
  */
 
 export interface RouteOptions {
   /** At most this many skills are selected. */
   topK?: number;
-  /** A skill below this score is not relevant enough to include. */
+  /** The lexical bar: below this IDF overlap a skill does not enter the ranking. */
   minScore?: number;
+  /** The semantic floor: a sanity check, not the gate. See {@link minZ}. */
+  minSimilarity?: number;
+  /** The semantic gate: standard deviations above this request's own mean. */
+  minZ?: number;
   /**
    * Optional embeddings (popy.spec §8): the message's vector and each skill's,
-   * in the same order as `skills`. When present, a skill's semantic similarity
-   * is blended with its lexical score, so a request phrased differently from
-   * the skill's description still routes -- "help me cook dinner" reaching a
-   * "recipes" skill it shares no words with.
+   * in the same order as `skills`. When present, the semantic ranking joins the
+   * fusion; when absent, routing is lexical and nothing else changes.
    */
   messageVector?: Float32Array;
   skillVectors?: (Float32Array | undefined)[];
@@ -27,8 +58,34 @@ export interface RouteOptions {
 
 const DEFAULT_TOP_K = 3;
 const DEFAULT_MIN_SCORE = 1;
-/** A perfect semantic match is worth this much lexical score in the blend. */
-const SEMANTIC_WEIGHT = 3;
+
+/**
+ * The semantic bars, measured against the real vault (24 skills, e5) rather
+ * than guessed -- which is what popy.spec §8 asks for.
+ *
+ * e5 compresses everything into a narrow band: over 192 query/skill pairs the
+ * cosines ran 0.70 to 0.84, with the 90th percentile at 0.80. An absolute
+ * threshold cannot work in that band, and the one this router used to carry
+ * proved it: "help me make dinner" -- with no cooking skill in the vault at all
+ * -- returned daily-review, shell-safety and math, every one of them at 0.79 to
+ * 0.80. Meanwhile `math` scored 0.745 on "the square root of 1444", *below* that
+ * noise. There is no line to draw.
+ *
+ * What does separate is how far a skill stands out from the pack for this
+ * particular request. Over ten labelled requests, the skill a human would pick
+ * scored z = 0.9 to 2.9 (median 2.5), while the best noise hit on a request no
+ * skill answers reached only z = 1.9 to 2.1. A bar at 2.1 admitted five of the
+ * eight real matches and neither of the two noise hits -- precision first,
+ * because the lexical ranking is already there to catch the rest, and a wrong
+ * skill costs one of three slots on every turn.
+ *
+ * MIN_SIMILARITY stays as a floor beneath the z test: it catches the degenerate
+ * case where every skill is unrelated and one of them is merely least unrelated.
+ */
+const DEFAULT_MIN_SIMILARITY = 0.75;
+const DEFAULT_MIN_Z = 2.1;
+/** Below this many measured skills the spread is too thin to read a z from. */
+const MIN_CANDIDATES_FOR_Z = 5;
 
 const STOP_WORDS = new Set([
   'a', 'an', 'and', 'the', 'to', 'of', 'in', 'on', 'for', 'is', 'are', 'be', 'do', 'does',
@@ -37,6 +94,14 @@ const STOP_WORDS = new Set([
   'o', 'a', 'os', 'as', 'de', 'do', 'da', 'e', 'em', 'um', 'uma', 'para', 'por', 'que',
   'com', 'meu', 'minha', 'quero', 'preciso', 'como', 'usar', 'me', 'te',
 ]);
+
+/** A skill with both signals measured, before either bar is applied. */
+interface Candidate {
+  skill: Skill;
+  lexical: number;
+  /** Absent when there was no vector for the message or for this skill. */
+  similarity?: number;
+}
 
 /**
  * The bodies of the pinned skills, in vault order. They skip routing entirely:
@@ -51,8 +116,7 @@ export function selectSkills(
   skills: readonly Skill[],
   options: RouteOptions = {},
 ): SelectedSkill[] {
-  const query = tokenize(message);
-  if (query.size === 0 || skills.length === 0) return [];
+  if (skills.length === 0) return [];
 
   // Pinned skills are already in the system prompt; selecting one would put it
   // in front of the model twice. Vectors are paired first so the caller's
@@ -62,6 +126,34 @@ export function selectSkills(
     .filter((candidate) => candidate.skill.pinned !== true);
   if (candidates.length === 0) return [];
 
+  const scored = measure(tokenize(message), candidates, options.messageVector);
+
+  const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
+  const lexical = scored
+    .filter((candidate) => candidate.lexical >= minScore)
+    .sort((left, right) => right.lexical - left.lexical);
+  const semantic = semanticRanking(
+    scored,
+    options.minSimilarity ?? DEFAULT_MIN_SIMILARITY,
+    options.minZ ?? DEFAULT_MIN_Z,
+  );
+
+  return fuseRankings([lexical, semantic], (candidate) => candidate.skill.slug, {
+    limit: options.topK ?? DEFAULT_TOP_K,
+  }).map((fused) => ({
+    skill: fused.item.skill,
+    score: fused.score,
+    lexical: fused.item.lexical,
+    ...(fused.item.similarity === undefined ? {} : { similarity: fused.item.similarity }),
+  }));
+}
+
+/** Both signals for every candidate: IDF-weighted overlap, and cosine if we can. */
+function measure(
+  query: Set<string>,
+  candidates: { skill: Skill; vector: Float32Array | undefined }[],
+  messageVector: Float32Array | undefined,
+): Candidate[] {
   // Inverse document frequency, so a word common to every skill barely counts.
   const df = new Map<string, number>();
   const skillTokens = candidates.map(({ skill }) => {
@@ -71,41 +163,54 @@ export function selectSkills(
   });
   const total = candidates.length;
 
-  const scored: SelectedSkill[] = candidates.map(({ skill, vector }, index) => {
-    let score = 0;
+  return candidates.map(({ skill, vector }, index) => {
+    let lexical = 0;
     for (const token of query) {
       if (!(skillTokens[index] as Set<string>).has(token)) continue;
       const seen = df.get(token) ?? total;
-      score += Math.log(1 + total / seen);
+      lexical += Math.log(1 + total / seen);
     }
-    // Blend in semantic similarity when vectors are available. Cosine is in
-    // [-1, 1]; only a positive, meaningful match adds to the lexical score.
-    if (options.messageVector !== undefined && vector !== undefined) {
-      const similarity = cosine(options.messageVector, vector);
-      if (similarity > 0.75) score += (similarity - 0.75) * 4 * SEMANTIC_WEIGHT;
-    }
-    return { skill, score };
+    // The vectors are L2-normalized, so the dot product is the cosine.
+    const similarity =
+      messageVector === undefined || vector === undefined
+        ? undefined
+        : dot(messageVector, vector);
+    return { skill, lexical, ...(similarity === undefined ? {} : { similarity }) };
   });
+}
 
-  const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
-  return scored
-    .filter((entry) => entry.score >= minScore)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, options.topK ?? DEFAULT_TOP_K);
+/**
+ * The skills that stand out semantically for this request, best first. The bar
+ * is relative -- see {@link DEFAULT_MIN_Z} -- so it is read from the spread of
+ * this request's own similarities, and a vault whose skills all look equally
+ * plausible contributes nobody rather than its luckiest member.
+ */
+function semanticRanking(scored: Candidate[], floor: number, minZ: number): Candidate[] {
+  const measured = scored.filter(
+    (candidate): candidate is Candidate & { similarity: number } =>
+      candidate.similarity !== undefined,
+  );
+  if (measured.length === 0) return [];
+
+  let admitted = measured.filter((candidate) => candidate.similarity >= floor);
+  if (measured.length >= MIN_CANDIDATES_FOR_Z) {
+    const mean = measured.reduce((sum, c) => sum + c.similarity, 0) / measured.length;
+    const variance =
+      measured.reduce((sum, c) => sum + (c.similarity - mean) ** 2, 0) / measured.length;
+    const deviation = Math.sqrt(variance);
+    admitted =
+      deviation === 0
+        ? []
+        : admitted.filter((candidate) => (candidate.similarity - mean) / deviation >= minZ);
+  }
+
+  return admitted.sort((left, right) => right.similarity - left.similarity);
 }
 
 function skillTokenSet(skill: Skill): Set<string> {
   // The routing signal is the metadata, not the whole body: a skill about
   // invoices should not match every message that says "the".
   return tokenize(`${skill.name} ${skill.name} ${skill.description} ${skill.whenToUse}`);
-}
-
-/** Cosine of two L2-normalized vectors -- a dot product. */
-function cosine(a: Float32Array, b: Float32Array): number {
-  let sum = 0;
-  const length = Math.min(a.length, b.length);
-  for (let i = 0; i < length; i += 1) sum += (a[i] ?? 0) * (b[i] ?? 0);
-  return sum;
 }
 
 function tokenize(text: string): Set<string> {

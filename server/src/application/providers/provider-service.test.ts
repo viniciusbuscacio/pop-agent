@@ -91,6 +91,7 @@ function status(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
     configured: false,
     source: null,
     defaultModel: 'moonshotai/kimi-k3',
+    serviceModel: 'moonshotai/kimi-k3',
     allowCustomModel: true,
     order: 1,
     enabled: true,
@@ -379,6 +380,7 @@ describe('subscription (oauth) providers', () => {
       configured: false,
       source: null,
       defaultModel: 'gpt-5.5',
+      serviceModel: 'gpt-5.5',
       allowCustomModel: false,
       order: 4,
       enabled: true,
@@ -644,6 +646,7 @@ describe('custom provider instances (popy.spec §15)', () => {
       configured: false,
       source: null,
       defaultModel: 'llama4',
+      serviceModel: 'llama4',
       allowCustomModel: true,
       order: all.length,
       enabled: true,
@@ -764,5 +767,100 @@ describe('migrating the single-slot custom (popy.spec §15)', () => {
     service.migrateLegacyCustom();
 
     expect(service.listCustom()).toHaveLength(1);
+  });
+});
+
+describe('the Service Model, per provider (popy.spec §15, corrected 07/08)', () => {
+  /** Any other builtin that authenticates with a key, so a chain has two entries. */
+  function otherKeyProvider(): string {
+    const other = service
+      .statuses()
+      .find((status) => status.id !== OPENROUTER && status.authType === 'api-key');
+    if (other === undefined) throw new Error('no second api-key provider to test with');
+    return other.id;
+  }
+
+  it('follows the provider chat model until the user picks another', () => {
+    expect(service.serviceModel(OPENROUTER)).toBe(service.status(OPENROUTER)?.defaultModel);
+
+    service.setDefaultModel(OPENROUTER, 'openai/gpt-5');
+    // Following, not copied at setup: changing the chat model moves it too.
+    expect(service.serviceModel(OPENROUTER)).toBe('openai/gpt-5');
+
+    service.setServiceModel(OPENROUTER, 'openai/gpt-5-mini');
+    expect(service.serviceModel(OPENROUTER)).toBe('openai/gpt-5-mini');
+
+    // And now it stops following: the user's choice is the whole point.
+    service.setDefaultModel(OPENROUTER, 'openai/gpt-5.5');
+    expect(service.serviceModel(OPENROUTER)).toBe('openai/gpt-5-mini');
+  });
+
+  it('goes back to following when the choice is cleared', () => {
+    service.setServiceModel(OPENROUTER, 'cheap-model');
+    service.setServiceModel(OPENROUTER, '');
+    expect(service.serviceModel(OPENROUTER)).toBe(service.status(OPENROUTER)?.defaultModel);
+  });
+
+  it('inherits the provider of whatever the task serves', () => {
+    const other = otherKeyProvider();
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey(other, 'sk-other');
+    service.setServiceModel(other, 'a-cheap-one');
+
+    // A title for a chat running elsewhere is written where that chat runs.
+    expect(service.resolveServiceModel({ provider: other })).toEqual({
+      providerId: other,
+      modelId: 'a-cheap-one',
+    });
+  });
+
+  it('falls back to the head of the priority list for a job with no chat', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    expect(service.resolveServiceModel().providerId).toBe(OPENROUTER);
+  });
+
+  it('walks the same failover chain a run would, each with its own model', () => {
+    const other = otherKeyProvider();
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey(other, 'sk-other');
+
+    const chain = service.resolveServiceChain({ provider: other });
+    expect(chain[0]?.providerId).toBe(other);
+    expect(chain.length).toBeGreaterThan(1);
+    // A model id means nothing outside the catalog it came from -- carrying
+    // one down the chain is exactly the bug this correction removes.
+    for (const ref of chain) expect(ref.modelId).toBe(service.serviceModel(ref.providerId));
+  });
+
+  it('moves on when the inherited provider refuses', async () => {
+    // A custom instance, because the fixture only wires an HTTP gateway for
+    // OpenRouter and for customs -- and this test needs two providers that can
+    // both actually be called.
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.setKey(instance.id, 'sk-local');
+    service.setKey(OPENROUTER, 'sk-or');
+
+    // One scripted gateway serves both, so "the first provider refused" is
+    // scripted by failing once and then clearing.
+    gateway.failCompleting = 'rate limited';
+    const original = gateway.complete.bind(gateway);
+    let calls = 0;
+    gateway.complete = (request) => {
+      calls += 1;
+      if (calls > 1) gateway.failCompleting = undefined;
+      return original(request);
+    };
+
+    const answer = await service.completeAsService(
+      { prompt: 'p', maxTokens: 10 },
+      { provider: instance.id },
+    );
+    expect(answer.text).toBe('ok');
+    expect(answer.providerId).toBe(OPENROUTER);
+    expect(calls).toBe(2);
   });
 });

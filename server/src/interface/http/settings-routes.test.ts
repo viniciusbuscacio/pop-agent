@@ -36,11 +36,11 @@ const DEFAULT_DOC = {
   language: 'en',
   defaultProvider: 'openrouter',
   defaultModel: 'moonshotai/kimi-k3',
-  serviceModel: 'moonshotai/kimi-k3',
   customInstructions: '',
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
+  autoApproveSkills: false,
 };
 
 describe('GET /v1/settings', () => {

@@ -208,11 +208,11 @@ async function run(base: string): Promise<void> {
     language: 'en',
     defaultProvider: 'openrouter',
     defaultModel: 'moonshotai/kimi-k3',
-    serviceModel: 'moonshotai/kimi-k3',
     customInstructions: 'Keep answers short.',
     voiceModel: 'base',
     voiceCleanup: false,
     voiceCleanupModel: '',
+    autoApproveSkills: false,
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

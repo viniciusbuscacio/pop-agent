@@ -11,7 +11,7 @@ import { DEFAULT_SKILLS } from './default-skills.js';
  * tokens alone -- no embedder in the loop.
  */
 
-const SKILLS: Skill[] = DEFAULT_SKILLS.map((skill) => ({ ...skill, builtin: true }));
+const SKILLS: Skill[] = DEFAULT_SKILLS.map((skill) => ({ ...skill, source: 'builtin' }));
 
 describe('default skills routing', () => {
   it('routes a Portuguese question about self-programming', () => {
@@ -35,6 +35,16 @@ describe('default skills routing', () => {
   it('routes a Portuguese screenshot request to the browser skill', () => {
     const selected = selectSkills('Tira um screenshot do site pra mim, navega na internet', SKILLS);
     expect(selected[0]?.skill.slug).toBe('web-browsing');
+  });
+
+  it('routes the Portuguese "vira skill" trigger with no embedder in the loop', () => {
+    const selected = selectSkills('isso ai foi otimo, vira skill', SKILLS);
+    expect(selected[0]?.skill.slug).toBe('skill-creator');
+  });
+
+  it('routes the same request in English', () => {
+    const selected = selectSkills('turn this into a skill so you remember it', SKILLS);
+    expect(selected[0]?.skill.slug).toBe('skill-creator');
   });
 
   it('ships know-thyself pinned: identity is not left to the router', () => {

@@ -90,6 +90,17 @@ export const providersService = {
   },
 
   /**
+   * The provider's Service Model -- what Popy uses on it for its own work
+   * (popy.spec §15). '' puts it back to following the chat model.
+   */
+  setServiceModel(providerId: string, model: string): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/${providerId}/service-model`, {
+      method: 'PUT',
+      body: { model },
+    });
+  },
+
+  /**
    * Unlimited custom providers (popy.spec §15): create empty (the id anchors
    * the card and the key), edit in place, delete with everything that was its.
    */

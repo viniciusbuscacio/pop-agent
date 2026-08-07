@@ -23,12 +23,12 @@ describe('settings service', () => {
     const next = {
       language: 'en' as const,
       defaultModel: 'openai/gpt-5',
-      serviceModel: 'moonshotai/kimi-k3',
       customInstructions: 'Answer in Portuguese.',
       defaultProvider: 'openrouter',
       voiceModel: 'small',
       voiceCleanup: true,
       voiceCleanupModel: 'openai/gpt-5-mini',
+      autoApproveSkills: true,
     };
 
     expect(service.write(next)).toEqual(next);

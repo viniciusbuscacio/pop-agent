@@ -260,6 +260,15 @@ export const en = {
 
   'skills.intro': 'Skills are know-how Popy pulls in when a request calls for it.',
   'skills.builtin': 'Built-in',
+  'skills.auto': 'Learned',
+  'skills.pending': 'Waiting for you',
+  'skills.pendingNote': 'Popy distilled this from a conversation. It stays out of the way until you accept it.',
+  'skills.approve': 'Accept',
+  'skills.used': 'used {count}x',
+  'skills.neverUsed': 'never used yet',
+  'skills.autoApprove': 'Accept learned skills automatically',
+  'skills.autoApproveNote':
+    'Off: a skill Popy distils from a conversation waits here for you. On: it goes straight into use. Off is safer — it is what stops something Popy read on the web from writing itself into every future conversation.',
   'skills.new': 'New skill',
   'skills.none': 'No skills yet.',
   'skills.empty.title': 'Select a skill',
@@ -309,8 +318,11 @@ export const en = {
   'provider.removeKey': 'Remove key',
   'provider.removeKeyConfirm': 'Remove the stored API key?',
   'provider.defaultModel': 'Default model',
+  'provider.chatModel': 'Chat model',
   'provider.serviceModel': 'Service model',
-  'provider.serviceModelHint': 'The model Popy uses for background work like titles.',
+  'provider.serviceModelHint':
+    'What Popy uses on THIS provider for its own work — naming conversations, summaries, tidying voice notes. Leave it on the chat model, or pick something cheaper.',
+  'provider.serviceModelSame': 'Same as the chat model',
   'provider.saved': 'Saved',
   'provider.globalDefault': 'Global default',
   'provider.defaultProvider': 'Default provider',

@@ -165,11 +165,6 @@ function GeneralSection() {
     }
   }
 
-  async function saveOne(next: Partial<SettingsDTO>): Promise<void> {
-    if (settings === undefined) return;
-    setSettings(await settingsService.write({ ...settings, ...next }));
-  }
-
   return (
     <div className="flex flex-col gap-4">
     <Card className="flex flex-col gap-4">
@@ -224,7 +219,7 @@ function GeneralSection() {
         used to sit under Model, which is now only about providers (Vinicius,
         03/08). It is a background behaviour, so it lives with the other
         general ones rather than being dropped along with the old screen. */}
-    <ServiceModelCard settings={settings} onSave={saveOne} />
+    <CatalogSourceCard />
     </div>
   );
 }
@@ -669,6 +664,15 @@ export function SkillsSection() {
     }
   }
 
+  async function approve(skill: SkillDTO): Promise<void> {
+    try {
+      await skillsService.approve(skill.slug);
+      await reload();
+    } catch {
+      // Ignore; the list is authoritative on the next load.
+    }
+  }
+
   async function remove(skill: SkillDTO): Promise<void> {
     try {
       await skillsService.remove(skill.slug);
@@ -701,25 +705,54 @@ export function SkillsSection() {
         </div>
       </Card>
 
+      <AutoApproveSkills />
+
       <div className="flex flex-col gap-2">
         {skills.map((skill) => (
           <Card key={skill.slug} className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{skill.name}</span>
-                {skill.builtin ? (
+                {skill.source === 'builtin' ? (
                   <span className="rounded bg-[var(--panel-bg)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
                     {t('skills.builtin')}
                   </span>
                 ) : null}
+                {skill.source === 'auto' ? (
+                  <span className="rounded bg-[var(--panel-bg)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
+                    {t('skills.auto')}
+                  </span>
+                ) : null}
+                {skill.pending === true ? (
+                  <span
+                    data-testid="skill-pending-badge"
+                    className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs"
+                  >
+                    {t('skills.pending')}
+                  </span>
+                ) : null}
               </div>
               <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
+              {skill.pending === true ? (
+                <p className="mt-1 text-xs text-[var(--muted)]">{t('skills.pendingNote')}</p>
+              ) : (
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {skill.useCount === undefined || skill.useCount === 0
+                    ? t('skills.neverUsed')
+                    : t('skills.used', { count: skill.useCount })}
+                </p>
+              )}
             </div>
             <div className="flex flex-none flex-wrap gap-1">
+              {skill.pending === true ? (
+                <Button type="button" data-testid="skill-approve" onClick={() => void approve(skill)}>
+                  {t('skills.approve')}
+                </Button>
+              ) : null}
               <Button type="button" variant="ghost" onClick={() => setEditing(skill)}>
                 {t('skills.edit')}
               </Button>
-              {skill.builtin ? null : (
+              {skill.source === 'builtin' ? null : (
                 <Button type="button" variant="danger" onClick={() => void remove(skill)}>
                   {t('skills.delete')}
                 </Button>
@@ -838,14 +871,13 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
  * its key test and its default model. Provider is data: the list comes from
  * GET /v1/providers, never hardcoded here.
  */
-/** Titles and summaries stay on the default provider's catalog for now. */
-function ServiceModelCard({
-  settings,
-  onSave,
-}: {
-  settings: SettingsDTO | undefined;
-  onSave: (next: Partial<SettingsDTO>) => Promise<void>;
-}) {
+/**
+ * Where the model catalogue came from -- live, cached, or the engine's offline
+ * list. It used to also carry the global Service Model picker; that moved onto
+ * each provider's own card on 07/08 (popy.spec §15), because one model id
+ * cannot be right for every provider at once. What is left is the diagnosis.
+ */
+function CatalogSourceCard() {
   const [models, setModels] = useState<ModelDTO[]>([]);
   const [source, setSource] = useState<ModelCatalogSource | undefined>(undefined);
 
@@ -861,14 +893,6 @@ function ServiceModelCard({
 
   return (
     <Card className="flex flex-col gap-4">
-      <ModelPicker
-        id="settings-service-model"
-        label={t('provider.serviceModel')}
-        hint={t('provider.serviceModelHint')}
-        models={models}
-        value={settings?.serviceModel ?? ''}
-        onChange={(model) => void onSave({ serviceModel: model })}
-      />
       {source !== undefined ? (
         <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
           {t('provider.modelsInfo', {
@@ -900,6 +924,47 @@ function AudioSection() {
  * (decision of 31/07): the raw text lands in the composer in whisper time;
  * turning this on trades ~10s+ per note for punctuation fixes.
  */
+/**
+ * Whether a skill Popy distils from a conversation goes live on its own
+ * (popy.spec §8). It sits on the Skills screen rather than in General because
+ * this is where its consequence is visible: turn it off and skills queue here
+ * for a tap; turn it on and they simply appear, already in use.
+ *
+ * Default off, and the hint says why rather than just what: this flag is the
+ * declared brake on a prompt injection earning a permanent place in future
+ * prompts, which is not something a user can infer from its name.
+ */
+function AutoApproveSkills() {
+  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
+
+  useEffect(() => {
+    void settingsService
+      .read()
+      .then(setSettings)
+      .catch(() => setSettings(undefined));
+  }, []);
+
+  if (settings === undefined) return null;
+
+  return (
+    <Card>
+      <CheckField
+        id="skills-auto-approve"
+        testId="skills-auto-approve"
+        label={t('skills.autoApprove')}
+        hint={t('skills.autoApproveNote')}
+        checked={settings.autoApproveSkills}
+        onChange={(checked) => {
+          void settingsService
+            .write({ ...settings, autoApproveSkills: checked })
+            .then(setSettings)
+            .catch(() => undefined);
+        }}
+      />
+    </Card>
+  );
+}
+
 function VoiceCleanupCard() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
   const [models, setModels] = useState<string[]>([]);
@@ -1014,44 +1079,6 @@ function VoiceModelCard() {
   );
 }
 
-function ModelPicker({
-  id,
-  label,
-  hint,
-  models,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  models: ModelDTO[];
-  value: string;
-  onChange: (model: string) => void;
-}) {
-  // The stored model may not be in the loaded catalog (stale cache, another
-  // provider): it still has to be selectable rather than silently replaced.
-  const known = models.some((model) => model.id === value);
-
-  return (
-    <Select
-      id={id}
-      data-testid={id}
-      label={label}
-      {...(hint === undefined ? {} : { hint })}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="w-full max-w-md"
-    >
-      {known || value.length === 0 ? null : <option value={value}>{value}</option>}
-      {models.map((model) => (
-        <option key={model.id} value={model.id}>
-          {model.name === undefined ? model.id : `${model.name} — ${model.id}`}
-        </option>
-      ))}
-    </Select>
-  );
-}
 
 function AppearanceSection() {
   const choice = useThemeStore((state) => state.choice);

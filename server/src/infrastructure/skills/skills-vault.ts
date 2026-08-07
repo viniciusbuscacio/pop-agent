@@ -7,8 +7,8 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
-import type { Skill } from '../../domain/skills/skill.js';
+import { dirname, join, relative, sep } from 'node:path';
+import type { Skill, SkillSource } from '../../domain/skills/skill.js';
 import { SkillsError, type SkillInput, type SkillsRepo } from '../../application/ports/skills-repo.js';
 import { DEFAULT_SKILLS } from './default-skills.js';
 
@@ -25,9 +25,19 @@ import { DEFAULT_SKILLS } from './default-skills.js';
  * assets). Slug = directory name; `whenToUse` falls back to the description,
  * since the standard's front matter has only name/description. Flat .md
  * skills keep working unchanged and win on a slug collision.
+ *
+ * Auto-skills (07/08) land under `skills/auto/<slug>/SKILL.md` and are found by
+ * that same recursion -- the folder is the standard shape, so nothing new had
+ * to be taught to the scanner. `source` comes from the front matter when it
+ * says so and from the path otherwise, which is what makes promotion cheap:
+ * editing an auto skill stamps `source: user` on the file it already lives in,
+ * and the collector stops looking at it without anything moving on disk.
  */
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
+
+/** The subfolder the distiller writes into; also the path-based `source` hint. */
+export const AUTO_DIR = 'auto';
 
 /** The defaults that ship pinned (popy.spec §8), pinned even where the seeded
  * file predates the flag -- no migration, the code is the source. */
@@ -62,22 +72,70 @@ export class SkillsVault implements SkillsRepo {
     return found === undefined ? undefined : this.readFolderSkill(found.slug, found.path);
   }
 
-  /** Creates or overwrites a user skill. Built-in slugs cannot be shadowed by a bad name. */
+  /**
+   * Creates or overwrites a skill. An existing skill is rewritten where it
+   * already lives, so editing an auto skill promotes it in place rather than
+   * leaving a folder copy behind a new flat file. A new `auto` skill goes to
+   * `auto/<slug>/SKILL.md`; anything else stays a flat file at the root.
+   */
   write(input: SkillInput): Skill {
     if (!SLUG.test(input.slug)) {
       throw new SkillsError('A skill id must be lowercase letters, numbers and dashes.');
     }
-    const content = serialize(input);
-    writeFileSync(join(this.root, `${input.slug}.md`), content);
-    const skill = this.readFile(input.slug);
+    // An edit that says nothing about `source` inherits the skill's own -- a
+    // built-in stays built-in when the user tweaks it (§8: editable, never
+    // deletable) -- except for an auto skill, where the edit IS the promotion:
+    // the user touched it, so the garbage collector stops looking at it.
+    const current = this.get(input.slug);
+    const source: SkillSource =
+      input.source ??
+      (current === undefined ? 'user' : current.source === 'auto' ? 'user' : current.source);
+    const content = serialize({ ...input, source });
+
+    const existingFolder = this.discoverFolderSkills().find((entry) => entry.slug === input.slug);
+    const flatPath = join(this.root, `${input.slug}.md`);
+    if (existsSync(flatPath) || existingFolder === undefined) {
+      if (source === 'auto' && !existsSync(flatPath)) {
+        const dir = join(this.root, AUTO_DIR, input.slug);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'SKILL.md'), content);
+      } else {
+        writeFileSync(flatPath, content);
+      }
+    } else {
+      writeFileSync(existingFolder.path, content);
+    }
+
+    const skill = this.get(input.slug);
     if (skill === undefined) throw new SkillsError('The skill could not be saved.');
     return skill;
+  }
+
+  /**
+   * Accepts a pending skill (popy.spec §8). `source` is passed back explicitly
+   * so the auto -> user promotion in `write` does not fire: the user said yes,
+   * which is not the same as having edited it, and an auto skill that was
+   * merely approved is still the collector's to manage.
+   */
+  approve(slug: string): Skill | undefined {
+    const skill = this.get(slug);
+    if (skill === undefined || skill.pending !== true) return skill;
+    return this.write({
+      slug: skill.slug,
+      name: skill.name,
+      description: skill.description,
+      whenToUse: skill.whenToUse,
+      body: skill.body,
+      source: skill.source,
+      ...(skill.pinned === true ? { pinned: true } : {}),
+      pending: false,
+    });
   }
 
   delete(slug: string): boolean {
     const skill = this.get(slug);
     if (skill === undefined) return false;
-    if (skill.builtin) throw new SkillsError('Built-in skills cannot be deleted.');
+    if (skill.source === 'builtin') throw new SkillsError('Built-in skills cannot be deleted.');
     const found = this.discoverFolderSkills().find((entry) => entry.slug === slug);
     if (found !== undefined) {
       rmSync(dirname(found.path), { recursive: true, force: true });
@@ -116,15 +174,25 @@ export class SkillsVault implements SkillsRepo {
     }
     const parsed = parse(raw);
     if (parsed.description.length === 0) return undefined; // the standard: no description, no skill
+    // The front matter wins; the path only answers for files that never said.
+    // That is what lets a promoted auto skill keep living under auto/.
+    const source = parsed.source ?? (this.isUnderAuto(path) ? 'auto' : 'user');
     return {
       slug,
       name: parsed.name.length > 0 ? parsed.name : slug,
       description: parsed.description,
       whenToUse: parsed.whenToUse.length > 0 ? parsed.whenToUse : parsed.description,
       body: parsed.body,
-      builtin: false,
+      source,
       ...(parsed.pinned ? { pinned: true } : {}),
+      ...(parsed.pending ? { pending: true } : {}),
     };
+  }
+
+  /** True for a path inside `skills/auto/`, the distiller's drop box. */
+  private isUnderAuto(path: string): boolean {
+    const parts = relative(this.root, path).split(sep);
+    return parts[0] === AUTO_DIR;
   }
 
   private readFile(slug: string): Skill | undefined {
@@ -142,8 +210,9 @@ export class SkillsVault implements SkillsRepo {
       description: parsed.description,
       whenToUse: parsed.whenToUse,
       body: parsed.body,
-      builtin: parsed.builtin,
+      source: parsed.source ?? 'user',
       ...(pinned ? { pinned: true } : {}),
+      ...(parsed.pending ? { pending: true } : {}),
     };
   }
 
@@ -158,7 +227,7 @@ export class SkillsVault implements SkillsRepo {
   private seedDefaults(): void {
     for (const skill of DEFAULT_SKILLS) {
       const path = join(this.root, `${skill.slug}.md`);
-      const fresh = serialize({ ...skill, builtin: true, seed: seedHash(skill) });
+      const fresh = serialize({ ...skill, source: 'builtin', seed: seedHash(skill) });
       let existing: Parsed;
       try {
         existing = parse(readFileSync(path, 'utf8'));
@@ -195,17 +264,21 @@ interface Parsed {
   description: string;
   whenToUse: string;
   body: string;
-  builtin: boolean;
+  /** Absent when the file never said; the caller decides from the path. */
+  source?: SkillSource;
   pinned: boolean;
+  pending: boolean;
   /** The seed marker written by seedDefaults; absent on user files and edits. */
   seed?: string;
 }
+
+const SOURCES = new Set<string>(['builtin', 'auto', 'user']);
 
 /** Minimal front-matter parse: `--- key: value ---` then the markdown body. */
 export function parse(raw: string): Parsed {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
   if (match === null) {
-    return { name: '', description: '', whenToUse: '', body: raw.trim(), builtin: false, pinned: false };
+    return { name: '', description: '', whenToUse: '', body: raw.trim(), pinned: false, pending: false };
   }
   const meta = new Map<string, string>();
   for (const line of (match[1] ?? '').split('\n')) {
@@ -213,13 +286,23 @@ export function parse(raw: string): Parsed {
     if (kv?.[1] !== undefined) meta.set(kv[1], (kv[2] ?? '').replace(/^["']|["']$/g, ''));
   }
   const seed = meta.get('seed');
+  // `builtin: true` is what every file written before 07/08 says; reading it as
+  // a source keeps those files working without a migration pass over the vault.
+  const declared = meta.get('source');
+  const source =
+    declared !== undefined && SOURCES.has(declared)
+      ? (declared as SkillSource)
+      : meta.get('builtin') === 'true'
+        ? 'builtin'
+        : undefined;
   return {
     name: meta.get('name') ?? '',
     description: meta.get('description') ?? '',
     whenToUse: meta.get('whenToUse') ?? '',
     body: (match[2] ?? '').trim(),
-    builtin: meta.get('builtin') === 'true',
+    ...(source === undefined ? {} : { source }),
     pinned: meta.get('pinned') === 'true',
+    pending: meta.get('pending') === 'true',
     ...(seed === undefined ? {} : { seed }),
   };
 }
@@ -229,8 +312,9 @@ function serialize(input: {
   description: string;
   whenToUse: string;
   body: string;
-  builtin?: boolean;
+  source?: SkillSource;
   pinned?: boolean;
+  pending?: boolean;
   seed?: string;
 }): string {
   const escape = (value: string): string => value.replace(/\r?\n/g, ' ').trim();
@@ -239,8 +323,15 @@ function serialize(input: {
     `name: ${escape(input.name)}`,
     `description: ${escape(input.description)}`,
     `whenToUse: ${escape(input.whenToUse)}`,
-    ...(input.builtin ? ['builtin: true'] : []),
+    // Written whenever it is known, including `user` -- which looks redundant
+    // until you remember where a promoted auto skill lives. It stays in
+    // `auto/<slug>/`, and `readFolderSkill` falls back to the PATH when the
+    // front matter says nothing. Omitting `source: user` as "the default" meant
+    // the promotion was written and then read straight back as `auto`, so
+    // editing an auto skill never actually took it away from the collector.
+    ...(input.source === undefined ? [] : [`source: ${input.source}`]),
     ...(input.pinned ? ['pinned: true'] : []),
+    ...(input.pending ? ['pending: true'] : []),
     ...(input.seed === undefined ? [] : [`seed: ${input.seed}`]),
     '---',
     '',

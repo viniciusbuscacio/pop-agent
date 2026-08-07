@@ -61,6 +61,12 @@ export interface ProviderStatus {
   configured: boolean;
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
+  /**
+   * The model this provider uses for Popy's own background work -- titles,
+   * summaries, transcript cleanup (popy.spec §15). Equal to `defaultModel`
+   * until the user picks something cheaper.
+   */
+  serviceModel: string;
   allowCustomModel: boolean;
   /** A custom instance's endpoint; never a secret. Absent for builtins. */
   baseURL?: string;
@@ -168,6 +174,7 @@ export class ProviderService {
         configured: connected,
         source: connected ? 'oauth' : null,
         defaultModel: this.storedDefaultModel(definition.id) ?? definition.defaultModel,
+        serviceModel: this.serviceModel(definition.id),
         allowCustomModel: definition.allowCustomModel,
         order: this.positionOf(definition.id),
         enabled: this.isEnabled(definition.id),
@@ -188,6 +195,7 @@ export class ProviderService {
       defaultModel: definition.customBaseURL
         ? definition.defaultModel
         : this.storedDefaultModel(definition.id) ?? definition.defaultModel,
+      serviceModel: this.serviceModel(definition.id),
       allowCustomModel: definition.allowCustomModel,
       order: this.positionOf(definition.id),
       enabled: this.isEnabled(definition.id),
@@ -450,6 +458,133 @@ export class ProviderService {
     if (this.deps.defaults().provider === definition.id) {
       this.deps.setDefaultProvider?.(definition.id, this.ref(definition.id, '').modelId);
     }
+  }
+
+  /**
+   * The Service Model of one provider (popy.spec §15, corrected 07/08).
+   *
+   * Popy runs two kinds of call: the Chat Model, which the user talks to, and
+   * the Service Model, which does Popy's own work -- naming a conversation,
+   * summarizing it, tidying a transcript. They were one global setting, which
+   * was mono-provider thinking: the stored value was a model id, and a model id
+   * only means something inside one provider's catalog. An install whose
+   * service model said `moonshotai/kimi-k3` asked OpenAI for a model OpenAI has
+   * never heard of the moment a chat ran there.
+   *
+   * Empty means "the same as this provider's chat model", and that is a
+   * fallback rather than a value copied when the provider is created. A copy
+   * would be a second thing to keep in sync: change the chat model six months
+   * later and the copy still names the model you left behind -- which, for a
+   * custom endpoint, may no longer be served at all. Following costs nothing
+   * and is never stale, and the moment the user picks a cheaper model here the
+   * following stops.
+   */
+  serviceModel(providerId: string): string {
+    const id = this.canonicalId(providerId);
+    const stored = this.deps.settings.get<string>(`provider.${id}.serviceModel`);
+    if (stored !== undefined && stored.length > 0) return stored;
+    return this.chatModelOf(id);
+  }
+
+  /**
+   * A provider's Chat Model, read straight from the definition and settings.
+   *
+   * It deliberately does not go through `status()` or `ref()`, which look like
+   * the obvious way to ask: `status()` reports the service model, so asking it
+   * from here is a loop that only ends in a stack overflow. The duplication is
+   * three lines and the alternative is a cycle.
+   */
+  private chatModelOf(providerId: string): string {
+    const definition = this.definition(providerId);
+    if (definition === undefined) return '';
+    // A custom instance's model is registry data; a builtin's is in settings.
+    return definition.customBaseURL
+      ? definition.defaultModel
+      : this.storedDefaultModel(definition.id) ?? definition.defaultModel;
+  }
+
+  /** Empty puts the provider back to following its chat model. */
+  setServiceModel(providerId: string, model: string): void {
+    const definition = this.definition(providerId);
+    if (definition === undefined) return;
+    this.deps.settings.set(`provider.${definition.id}.serviceModel`, model);
+  }
+
+  /**
+   * Which pair a service task should run on (the note of 07/08, §7): the
+   * provider is inherited from whatever the task serves -- a title inherits its
+   * chat's -- and a job with no parent chat falls through to the global
+   * default, which is the head of the priority list. The model is that
+   * provider's service model, never a global one.
+   */
+  resolveServiceModel(context: { provider?: string } = {}): ModelRef {
+    const [first] = this.resolveServiceChain(context);
+    return first ?? this.ref(DEFAULT_PROVIDER_ID, '');
+  }
+
+  /** The same chain a chat run would get, each entry wearing its service model. */
+  resolveServiceChain(context: { provider?: string } = {}): ModelRef[] {
+    const override =
+      context.provider === undefined || context.provider.length === 0
+        ? undefined
+        : { provider: context.provider };
+    return this.resolveChain(override).map((ref) => ({
+      providerId: ref.providerId,
+      modelId: this.serviceModel(ref.providerId),
+    }));
+  }
+
+  /**
+   * Runs one of Popy's own completions over that chain (popy.spec §15 fase 2,
+   * confirmed 07/08). A service task is not special: when the provider it
+   * inherited refuses, it moves down the same list a chat run would.
+   *
+   * It tries every remaining provider rather than consulting `shouldFailOver`,
+   * and that is a deliberate difference from a chat run. That predicate reads a
+   * status code, and the HTTP gateway does not carry one -- a
+   * `ProviderGatewayError` is a message and nothing else. Given the choice
+   * between guessing a class from prose and spending one more very small call,
+   * this spends the call: these prompts are a few hundred tokens and the
+   * alternative is a chat that silently keeps its fallback title.
+   */
+  async completeAsService(
+    request: { prompt: string; maxTokens: number },
+    context: { provider?: string; model?: string } = {},
+  ): Promise<{ text: string; providerId: string; modelId: string }> {
+    const resolved = this.resolveServiceChain(context);
+    // A caller-named model (the voice-cleanup override in Settings) replaces
+    // the FIRST entry's model and nothing else. A model id belongs to one
+    // provider's catalog, so carrying it down the chain would ask the fallback
+    // provider for a model it has never heard of -- the exact bug this whole
+    // correction is about.
+    const chain =
+      context.model === undefined || context.model.length === 0
+        ? resolved
+        : resolved.map((ref, index) => (index === 0 ? { ...ref, modelId: context.model! } : ref));
+    let last: Error | undefined;
+
+    for (const ref of chain) {
+      const definition = this.definition(ref.providerId);
+      const gateway = definition === undefined ? undefined : this.gatewayFor(definition);
+      const apiKey = this.apiKey(ref.providerId);
+      if (gateway === undefined || apiKey === undefined) {
+        last = new ProviderGatewayError(`No usable credential for "${ref.providerId}".`);
+        continue;
+      }
+      try {
+        const text = await gateway.complete({
+          apiKey,
+          model: ref.modelId,
+          prompt: request.prompt,
+          maxTokens: request.maxTokens,
+        });
+        return { text, providerId: ref.providerId, modelId: ref.modelId };
+      } catch (error) {
+        last = error instanceof Error ? error : new Error('unknown');
+      }
+    }
+
+    throw last ?? new ProviderGatewayError('No provider is configured for background work.');
   }
 
   private storedDefaultModel(providerId: string): string | undefined {

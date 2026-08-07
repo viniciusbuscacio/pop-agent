@@ -2,7 +2,6 @@ import type { Message } from '../../domain/chat/chat.js';
 import { fallbackTitle, isGenericTitle, uniqueTitle } from '../../domain/chat/title.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { EventSink } from '../ports/event-sink.js';
-import type { ProviderGateway } from '../ports/provider-gateway.js';
 
 /**
  * Titles and summaries written by the service model (popy.spec §14-§15, aw's
@@ -36,10 +35,19 @@ const SECRET_LINE = /password|token|(?:api[_-]?)?key\s*[=:]/i;
 
 export interface TitleServiceDeps {
   chats: ChatRepo;
-  gateway: ProviderGateway;
-  /** No key, no call: the fallback title simply stays. */
-  apiKey: () => string | undefined;
-  serviceModel: () => string;
+  /**
+   * One background completion, on whatever provider serves this chat
+   * (popy.spec §15, corrected 07/08). A title used to be hard-wired to
+   * OpenRouter and a global model id -- so a chat running on Maritaca had its
+   * title written by a model that lived somewhere else entirely, if the id
+   * existed at all. The provider is now inherited from the chat, and the model
+   * is that provider's Service Model. Rejecting is fine: the fallback title
+   * stays, which is what happened before whenever there was no key.
+   */
+  complete: (
+    request: { prompt: string; maxTokens: number },
+    context: { provider?: string },
+  ) => Promise<string>;
   sink: EventSink;
   /** The reason a rewrite was skipped or failed goes to the log, not the user. */
   onFailure?: (message: string) => void;
@@ -66,20 +74,12 @@ export class TitleService {
     const messages = this.deps.chats.getMessages(chatId, { limit: MAX_MESSAGES });
     if (messages.length === 0) return skip('no-messages');
 
-    const apiKey = this.deps.apiKey();
-    if (apiKey === undefined) {
-      this.fallback(chatId, chat.title, messages, 'no-api-key');
-      return;
-    }
-
     let answer: string;
     try {
-      answer = await this.deps.gateway.complete({
-        apiKey,
-        model: this.deps.serviceModel(),
-        prompt: buildTitlePrompt(messages),
-        maxTokens: MAX_ANSWER_TOKENS,
-      });
+      answer = await this.deps.complete(
+        { prompt: buildTitlePrompt(messages), maxTokens: MAX_ANSWER_TOKENS },
+        { provider: chat.provider },
+      );
     } catch (error) {
       this.deps.onFailure?.(
         `auto-title failed for ${chatId}: ${error instanceof Error ? error.message : 'unknown'}`,

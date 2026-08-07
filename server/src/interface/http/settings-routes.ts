@@ -21,11 +21,11 @@ const settingsSchema = z
     language: z.literal('en'),
     defaultProvider: z.string().min(1).max(60),
     defaultModel: z.string().min(1).max(200),
-    serviceModel: z.string().min(1).max(200),
     customInstructions: z.string().max(MAX_INSTRUCTIONS),
     voiceModel: z.string().min(1).max(60),
     voiceCleanup: z.boolean(),
     voiceCleanupModel: z.string().max(200),
+    autoApproveSkills: z.boolean(),
   })
   .strict();
 
@@ -60,10 +60,10 @@ function toDto(settings: AppSettings): SettingsDTO {
     language: settings.language,
     defaultProvider: settings.defaultProvider,
     defaultModel: settings.defaultModel,
-    serviceModel: settings.serviceModel,
     customInstructions: settings.customInstructions,
     voiceModel: settings.voiceModel,
     voiceCleanup: settings.voiceCleanup,
     voiceCleanupModel: settings.voiceCleanupModel,
+    autoApproveSkills: settings.autoApproveSkills,
   };
 }

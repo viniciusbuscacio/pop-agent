@@ -132,12 +132,27 @@ const hybridMemory = new HybridMemory({
 });
 // Selections are logged so router thresholds are tuned from data, not guessed
 // (popy.spec §8). Slugs and scores only -- message content stays out of logs.
-const skillRouter = new SkillRouterService(skillsVault, embedder, (selection) => {
-  const picked =
-    selection.length === 0
-      ? 'none'
-      : selection.map((entry) => `${entry.slug}=${entry.score.toFixed(2)}`).join(' ');
-  console.log(`popy skills: ${picked}`);
+const skillRouter = new SkillRouterService({
+  skills: skillsVault,
+  ...(embedder === undefined ? {} : { embedder }),
+  vectors: context.skillVectors,
+  usage: context.skillUsage,
+  clock: systemClock,
+  onRoute: (selection) => {
+    // Both components, not just the fused score: `minScore` lives on the
+    // lexical scale and `minSimilarity` on the cosine one, so a log of RRF
+    // alone could not tune either.
+    const picked =
+      selection.length === 0
+        ? 'none'
+        : selection
+            .map((entry) => {
+              const cosine = entry.similarity === undefined ? '' : ` cos=${entry.similarity.toFixed(2)}`;
+              return `${entry.slug}(rrf=${entry.score.toFixed(4)} lex=${entry.lexical.toFixed(2)}${cosine})`;
+            })
+            .join(' ');
+    console.log(`popy skills: ${picked}`);
+  },
 });
 const indexer =
   embedder === undefined
@@ -228,6 +243,8 @@ function piBridge(): PiAgentBridge {
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
       files,
+      skills: skillsVault,
+      autoApproveSkills: () => settings.read().autoApproveSkills,
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: `mcp_${server.id.replace(/[^a-zA-Z0-9]/g, '_')}_${capability.name.replace(/[^a-zA-Z0-9_]/g, '_')}`,
         label: `${server.name}: ${capability.name}`,
@@ -346,9 +363,10 @@ const runs = new RunService({
   },
   titles: new TitleService({
     chats: context.chats,
-    gateway,
-    apiKey: () => providers.apiKey('openrouter'),
-    serviceModel: () => settings.read().serviceModel,
+    // The provider comes from the chat, the model from that provider's
+    // Service Model, and a refusal walks the same failover chain a run does
+    // (popy.spec §15, corrected 07/08).
+    complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
     sink: hub,
     onFailure: (message) => console.warn(`popy ${message}`),
   }),
@@ -407,13 +425,11 @@ const transcriber = new WhisperTranscriber({
 });
 // The best-effort LLM pass that cleans a raw transcript (§14).
 const voiceCleanup = new VoiceCleanup({
-  gateway,
-  apiKey: () => providers.apiKey('openrouter'),
+  complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
   enabled: () => settings.read().voiceCleanup,
-  model: () => {
-    const current = settings.read();
-    return current.voiceCleanupModel.length > 0 ? current.voiceCleanupModel : current.serviceModel;
-  },
+  // Empty falls through to the default provider's own Service Model, which is
+  // the point of the correction: there is no global model id any more.
+  model: () => settings.read().voiceCleanupModel,
 });
 
 const app = createApp({
@@ -433,6 +449,7 @@ const app = createApp({
   voiceModels,
   userMemory: context.userMemory,
   skills: skillsVault,
+  skillUsage: context.skillUsage,
   mcp,
   usage: context.usage,
   hands,

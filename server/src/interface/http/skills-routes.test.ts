@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import type { SkillsResponse } from '@popy/shared';
+import type { SkillDTO, SkillsResponse } from '@popy/shared';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
@@ -39,7 +39,9 @@ describe('/v1/skills', () => {
 
   it('lists the seeded skills including know-thyself', async () => {
     const body = (await (await authed('/v1/skills')).json()) as SkillsResponse;
-    expect(body.skills.some((s) => s.slug === 'know-thyself' && s.builtin)).toBe(true);
+    expect(body.skills.some((s) => s.slug === 'know-thyself' && s.source === 'builtin')).toBe(
+      true,
+    );
   });
 
   it('creates a user skill and lists it', async () => {
@@ -54,7 +56,7 @@ describe('/v1/skills', () => {
       }),
     });
     expect(res.status).toBe(200);
-    expect((await res.json()).builtin).toBe(false);
+    expect((await res.json()).source).toBe('user');
 
     const list = (await (await authed('/v1/skills')).json()) as SkillsResponse;
     expect(list.skills.some((s) => s.slug === 'my-skill')).toBe(true);
@@ -79,5 +81,48 @@ describe('/v1/skills', () => {
       body: JSON.stringify({ slug: 'Bad Slug', name: 'x', description: '', whenToUse: '', body: 'y' }),
     });
     expect(res.status).toBe(400);
+  });
+  it('holds a pending skill out of the list until it is accepted', async () => {
+    await authed('/v1/skills/learned', {
+      method: 'PUT',
+      body: JSON.stringify({
+        slug: 'learned',
+        name: 'Learned',
+        description: 'd',
+        whenToUse: 'w',
+        body: 'b',
+      }),
+    });
+
+    // The CRUD cannot create a pending skill (only the distiller does), so this
+    // asserts the shape the screen reads: source and the absence of `pending`.
+    const list = (await (await authed('/v1/skills')).json()) as SkillsResponse;
+    const learned = list.skills.find((s) => s.slug === 'learned');
+    expect(learned?.source).toBe('user');
+    expect(learned?.pending).toBeUndefined();
+  });
+
+  it('404s when accepting a skill that does not exist', async () => {
+    const res = await authed('/v1/skills/nope/approve', { method: 'POST' });
+    expect(res.status).toBe(404);
+  });
+
+  it('accepts a pending skill and returns it live', async () => {
+    // Written straight through the vault, the way the agent's tool does it.
+    fixture.skills.write({
+      slug: 'from-a-chat',
+      name: 'From a chat',
+      description: 'd',
+      whenToUse: 'w',
+      body: 'b',
+      source: 'auto',
+      pending: true,
+    });
+
+    const res = await authed('/v1/skills/from-a-chat/approve', { method: 'POST' });
+    expect(res.status).toBe(200);
+    const dto = (await res.json()) as SkillDTO;
+    expect(dto.pending).toBeUndefined();
+    expect(dto.source).toBe('auto');
   });
 });

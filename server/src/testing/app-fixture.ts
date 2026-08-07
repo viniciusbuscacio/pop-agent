@@ -35,6 +35,7 @@ import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
+import { SqliteSkillUsageRepo } from '../infrastructure/db/sqlite-skill-usage-repo.js';
 import { TarBackupService } from '../infrastructure/backup/tar-backup-service.js';
 import { WebAuthnService } from '../infrastructure/auth/webauthn-service.js';
 import { SqliteWebAuthnRepo } from '../infrastructure/db/sqlite-webauthn-repo.js';
@@ -176,6 +177,10 @@ export interface TestApp {
   secrets: MemorySecrets;
   hub: SseHub;
   clock: FakeClock;
+  /** The throwaway skills vault behind /v1/skills. */
+  skills: SkillsVault;
+  /** Use counts behind the same routes. */
+  skillUsage: SqliteSkillUsageRepo;
 }
 
 export interface TestAppOptions {
@@ -204,6 +209,10 @@ export function createTestApp(
   db.pragma('foreign_keys = ON');
   migrate(db);
   const chatRepo = new SqliteChatRepo(db);
+  // Exposed on the fixture: a route test needs to plant a skill the CRUD
+  // cannot create -- a pending one, which only the agent's tool writes.
+  const skills = new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-')));
+  const skillUsage = new SqliteSkillUsageRepo(db);
 
   const auth = new AuthService({
     settings: settingsRepo,
@@ -270,9 +279,7 @@ export function createTestApp(
     cooldown,
     titles: new TitleService({
       chats: chatRepo,
-      gateway,
-      apiKey: () => providers.apiKey('openrouter'),
-      serviceModel: () => settings.read().serviceModel,
+      complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
       sink: hub,
     }),
   });
@@ -328,7 +335,8 @@ export function createTestApp(
       ensure: () => Promise.resolve('/models/ggml-medium.bin'),
     },
     userMemory: new SqliteUserMemoryRepo(db),
-    skills: new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-'))),
+    skills,
+    skillUsage,
     mcp,
     usage: new SqliteUsageRepo(db),
     // No terminal ever attaches in a fixture; the registry is here so the
@@ -419,5 +427,7 @@ export function createTestApp(
     secrets,
     hub,
     clock,
+    skills,
+    skillUsage,
   };
 }

@@ -32,6 +32,8 @@ import { apiError } from './errors.js';
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
 const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
+/** Empty puts the provider back to following its chat model (popy.spec §15). */
+const serviceModelSchema = z.object({ model: z.string().max(200) }).strict();
 /** The whole priority list at once: partial edits would need a merge rule. */
 const orderSchema = z.object({ ids: z.array(z.string().min(1).max(60)).max(50) }).strict();
 const enabledSchema = z.object({ enabled: z.boolean() }).strict();
@@ -160,6 +162,22 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     if (!parsed.success) return schemaError(c, parsed.error);
 
     deps.providers.setDefaultModel(id, parsed.data.model);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
+  });
+
+  // The provider's Service Model: what Popy uses for its own background work
+  // on this provider (popy.spec §15, corrected 07/08). Beside the credential
+  // rather than in General, because a model id only means something inside one
+  // provider's catalog.
+  routes.put('/providers/:id/service-model', async (c) => {
+    const id = c.req.param('id');
+    if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = serviceModelSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    deps.providers.setServiceModel(id, parsed.data.model);
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
@@ -316,6 +334,7 @@ function toStatusDto(status: import('../../application/providers/provider-servic
     configured: status.configured,
     source: status.source,
     defaultModel: status.defaultModel,
+    serviceModel: status.serviceModel,
     allowCustomModel: status.allowCustomModel,
     order: status.order,
     enabled: status.enabled,

@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.59 — 2026-08-05.
+Version 1.60 — 2026-08-07.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -32,8 +32,15 @@ normative state.
   (fallback candidate: Fastify — decide at skeleton time; nothing else
   depends on it). Validation: Zod at the borders. Logs: pino (JSON in
   prod, pretty in dev; never log message content in prod).
-- **Database**: SQLite via `better-sqlite3`, WAL mode, FTS5 + `sqlite-vec`
-  in the same file. Embeddings computed locally in-process:
+- **Database**: SQLite via `better-sqlite3`, WAL mode, FTS5 in the same
+  file. Vectors are ordinary `BLOB` columns holding a `Float32Array`;
+  similarity is a dot product in JS over the loaded set. **`sqlite-vec` is
+  not a dependency and never was** — earlier versions of this spec promised
+  it, the plan-B authorized on 31/07 is what got built, and this line is the
+  correction (1.60). A single-user server has thousands of rows, not
+  millions, and brute force over them is milliseconds; adopting the
+  extension now would add a native dependency and a *second* vector search
+  beside the working one. Embeddings computed locally in-process:
   `multilingual-e5-small` via transformers.js (ONNX, CPU, PT/EN).
 - **Frontend**: React 19 + TypeScript strict, Vite, Tailwind CSS v4 over
   own CSS-var design tokens, react-router, Zustand (or
@@ -178,14 +185,15 @@ chats(id, title, model, archived, pi_session_id, summary, auto_title,
 messages(id, chat_id, role, content, thinking, tools_json,
          attachments_json, created_at)
 messages_fts      -- FTS5 external-content table over messages.content
-messages_vec      -- sqlite-vec embeddings (message-level)
+message_embeddings(message_rowid, vector)       -- Float32Array BLOB, §7
 chat_titles(chat_id, title, turn, source, created_at)  -- append-only, §14
 user_memory(doc, backup, last_condensed_at)     -- single-row living doc
 settings(key, value)                            -- JSON per key
 secrets(key, value_encrypted)                   -- §9, secret.key encrypted
 llm_runs(id, chat_id, provider, model, tokens_in, tokens_out,
          cost, created_at)                      -- cost accounting (§14)
-skills_index(skill_id, name, description, source, embedding)  -- §8
+skill_embeddings(slug, signature, vector)       -- router vectors, §8
+skill_usage(slug, use_count, last_used_at)      -- what earns its slot, §8
 file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
 ```
 
@@ -233,8 +241,9 @@ file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
 
 ## 7. Infinite memory (`application/memory/`)
 
-Hybrid search from day one: FTS5 (lexical) + sqlite-vec (semantic), fused
-with RRF. Three layers, aw's design rewritten:
+Hybrid search from day one: FTS5 (lexical) + vector similarity (semantic,
+a dot product over `message_embeddings`), fused with RRF (`fuseRankings` in
+`domain/memory/rank-fusion.ts`). Three layers, aw's design rewritten:
 
 1. **History search** — agent tools `memory_search(query)` (hits grouped by
    conversation, ≤3 snippets + context), `memory_open(chatId)`,
@@ -308,6 +317,46 @@ user message — selection is 100% local, no LLM call:
   so Popy adopts it in her own scanner rather than patching/translating
   pi (a patch would break on every pi update). New self-authored skills
   prefer the folder shape; both shapes route identically.
+### Auto-skill: conversations become skills (§8, built 07/08 — fase b)
+
+- **Three sources.** `source: builtin | auto | user` in the front matter.
+  `builtin` ships with the app and cannot be deleted; `auto` was distilled
+  from a conversation and is the collector's to archive; `user` is the
+  user's own and is never touched automatically. **Editing an auto skill
+  promotes it to `user`** — it proved its worth, so the collector stops
+  looking at it. Approving one does not: saying yes is not editing.
+  Compatibility: a file written before 07/08 says `builtin: true`, and the
+  parser still reads that as `source: builtin` — no migration pass.
+- **The trigger is natural language, in any language.** No slash command
+  and no button (decided 07/08). A built-in `skill-creator` skill carries
+  the trigger sentences in its `whenToUse` — Portuguese, English, Spanish —
+  and the router surfaces it; the skill then tells the agent how to distil
+  and which hand to use. Its first step is checking that it was actually
+  asked: the word "skill" pulls it in, so questions merely *about* skills
+  reach it too, and those are questions to answer, not requests to create.
+- **The hand**: `skills_list` (read what exists first) and `skill_write`.
+  `skill_write` refuses three things — a slug that already exists (that is
+  the update path, which owes a reviewable diff and does not exist yet),
+  anything that smells of a credential (same scrub the user-memory document
+  gets: a skill is replayed into future prompts by design), and **any
+  tainted turn**. That last one is enforced in the taint guard and is the
+  only block there keyed on a tool NAME rather than an argument pattern: a
+  skill outlives its turn, so a page that can write one has bought a
+  standing place in every future conversation the router finds relevant.
+  No argument could make that safe.
+- **Approval is a setting**, `autoApproveSkills`, **default off**. Off means
+  a distilled skill is saved complete but held out of the router until the
+  user accepts it on the Skills screen. The router filters `pending` — that
+  filter is the whole promise; without it the screen would say "waiting"
+  about a skill already in use. Named for the ON state so that "off" reads
+  as the cautious one it is: this flag is the declared mitigation against a
+  prompt injection earning a permanent place in future prompts.
+- **Endpoint**: `POST /v1/skills/:slug/approve` — a POST with no body,
+  because the only thing being said is yes.
+- **Not built yet**: the background distiller (fase c) and the archiving
+  collector (a cap on auto-skills, least-used archived to `skills/_archive/`,
+  never deleted). `use_count`/`last_used_at` exist to feed the second.
+
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end
   user uploads may be in any language; the router's semantic leg is
@@ -315,9 +364,38 @@ user message — selection is 100% local, no LLM call:
 - pi's native behavior (progressive disclosure: ALL descriptions in the
   system prompt) does not scale to dozens of skills and models often skip
   reading them. Popy's selector replaces it.
-- Selector: description embeddings (same local model) in sqlite-vec + FTS5
-  hybrid; each user message → similarity → score cutoff + top-k → only the
-  selected skills enter that turn's context.
+- **Selector (built; 1.60 describes what exists).** Two rankings, fused
+  with the same `fuseRankings` (RRF) the memory search uses — one function,
+  not a second mechanism:
+  - **lexical**: IDF-weighted token overlap between the message and each
+    skill's name/description/`whenToUse`, computed in JS over the vault.
+    Not FTS5: skills are markdown files in a folder, not rows, so there is
+    no index to query.
+  - **semantic**: cosine over `skill_embeddings`, one vector per skill.
+  A skill enters a ranking only by clearing that ranking's bar. **RRF orders
+  candidates; it does not create them** — that is what keeps an unrelated
+  message selecting nothing at all. Either signal alone qualifies a skill;
+  one both agree on outranks one only a single ranking found.
+- **The semantic bar is relative, not absolute** (measured 07/08 against
+  the real 24-skill vault). Over 192 query/skill pairs e5 cosines ran
+  0.70–0.84 with p90 at 0.80, and the right skill for "the square root of
+  1444" scored *below* that noise — there is no absolute line to draw. The
+  gate is therefore a z-score over the spread of that one request:
+  `z ≥ 2.1`, with 0.75 kept as a floor beneath it. On ten labelled requests
+  that admitted five of eight real matches and neither of the two noise
+  hits. Precision first: the lexical ranking is there to catch the rest, and
+  a wrong skill costs one of three slots on every turn.
+- **Vectors are persisted** (`skill_embeddings`, migration 028). Keyed by
+  slug and stamped with the routing text they came from, so editing a skill
+  invalidates its vector and nothing else. A vector whose length disagrees
+  with the current embedder is dropped rather than compared. Cold start
+  16.3s, warm 2.0s on the real install.
+- **`use_count` / `last_used_at`** (`skill_usage`, migration 029): the
+  router records every skill it injects. A counter and a stamp, not a
+  boolean — a skill used twice a year must be distinguishable from one used
+  never, which is what a fixed "90 days idle" rule cannot do. This is the
+  evidence the archiving collector will read; the collector itself is not
+  built yet.
 - Verify while coding: whether the SDK can scope which skills pi exposes
   per session/turn; if not, Popy injects the selected skills as its own
   context and disables pi's native listing.
@@ -333,16 +411,27 @@ user message — selection is 100% local, no LLM call:
   know-thyself) — a fat pinned set recreates the scaling problem the
   router exists to solve.
 - **Router observability.** The skill-router service logs, per turn, which
-  skills were selected and with what scores (pino, debug level). Router
-  thresholds — including the semantic-similarity floor — are tuned from
-  these logged distributions, never guessed: e5-family embeddings compress
-  cosine similarity into a narrow band (unrelated pairs often score
-  0.70–0.80), so intuitions like "0.75 is too strict" do not transfer.
-- **PT/EN routing gap.** User messages arrive in Portuguese; skill
-  descriptions are English (repo language rule). `whenToUse` texts must
-  carry translation-stable trigger tokens ("typescript", "stack", "skill",
-  "architecture"…), and real PT dialogues that misrouted become router
-  test cases.
+  skills were selected and with what scores. It logs **both components**,
+  not just the fused one — `slug(rrf=0.0323 lex=3.22 cos=0.775)` — because
+  the bars live on the component scales and a log of RRF alone could not
+  tune either. Thresholds are tuned from these distributions, never
+  guessed: e5-family embeddings compress cosine into a narrow band
+  (unrelated pairs often score 0.70–0.80), so intuitions like "0.75 is too
+  strict" do not transfer.
+- **PT/EN routing gap — and what it actually costs.** User messages arrive
+  in Portuguese; skill descriptions are English (repo language rule).
+  Measured 07/08 on ten labelled requests: the lexical half alone found
+  **two**, and both were requests whose right answer was "nothing" — its
+  single real hit was `web-browsing` on "procura na internet", and only
+  because "internet" is spelled the same in both languages. The fused
+  router found seven. **No better lexical engine would change that** —
+  FTS5, bm25, a real stemmer all rank word matches, and across languages
+  there are no word matches to rank. The semantic leg is what carries
+  recall here, which is the standing answer to "why not just match words?".
+  `whenToUse` texts must still carry translation-stable trigger tokens
+  ("typescript", "stack", "skill", "architecture"…), and a trigger that has
+  to fire on an exact sentence carries that sentence in several languages
+  (see `skill-creator`). Real PT dialogues that misrouted become test cases.
 - **`self-architecture` skill** (routed, not pinned): the deep self-map —
   clean-architecture layers and the dependency rule, the monorepo layout,
   where Popy's own source lives on the server (Popy has bash; it can read
@@ -826,8 +915,36 @@ reimplemented.
   `POST /v1/providers/:id/test` (the validation completion),
   `GET /v1/models?provider=<id>` (3-layer catalog). `/model` accepts
   provider + model.
-- Service model (titles, condensation, summaries): Kimi K3 for
-  everything initially.
+- **Chat Model and Service Model, one pair PER PROVIDER** (corrected
+  07/08, built 1.60). The Chat Model is what the user talks to; the Service
+  Model is what Popy uses for its own work — naming a conversation,
+  summarizing, tidying a voice transcript. It used to be one global setting,
+  which was mono-provider thinking: a stored value is a *model id*, and a
+  model id only means something inside one provider's catalogue. An install
+  whose service model said `moonshotai/kimi-k3` asked OpenAI for a model
+  OpenAI has never heard of the moment a chat ran there.
+  - Stored beside the credential, per provider: `PUT
+    /v1/providers/:id/service-model`, and a picker on the provider's card.
+  - **Empty means "follow this provider's Chat Model"** — a fallback, not a
+    value copied at setup. A copy is a second thing to keep in sync: change
+    the chat model six months later and the copy still names the model you
+    left behind, which for a custom endpoint may no longer be served at all.
+    Picking the chat model again is what clears the override.
+  - **Resolution**: a service task inherits the provider of whatever it
+    serves — a title takes its chat's — and a job with no parent chat takes
+    the head of the priority list. `resolveServiceModel(context)` and
+    `resolveServiceChain(context)` on `ProviderService`; no consumer reads a
+    global setting any more.
+  - **Failover**: a service task walks the same chain a run does (§15 fase
+    2). It tries every remaining provider rather than consulting
+    `shouldFailOver`, and that difference is deliberate: that predicate
+    reads a status code and the HTTP gateway does not carry one. Given the
+    choice between guessing a class from prose and spending one more very
+    small call, it spends the call.
+  - The `voiceCleanupModel` override in Settings still wins where set, and
+    applies to the FIRST chain entry only — carrying a model id down the
+    chain would ask the fallback provider for a model it never heard of,
+    which is the bug this whole correction removes.
 
 ### Subscription OAuth (fase 1.5)
 
@@ -1224,6 +1341,50 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.60 (2026-08-07): **Auto-skill fase (b), the router rebuilt on RRF, and
+  the Service Model corrected to a per-provider pair (§2, §6, §7, §8, §15).**
+  - **`sqlite-vec` removed from the spec.** It was never installed and is not
+    a dependency; what exists everywhere is FTS5 + a `Float32Array` BLOB +
+    a dot product in JS. The spec had been promising an extension the code
+    never had, in four places, since 1.0.
+  - **The Skill Router fuses with RRF**, reusing `fuseRankings` from the
+    memory search rather than introducing a second mechanism. The
+    hand-tuned blend it used to carry (a cosine turned into lexical points
+    by a constant nobody could justify) is gone. Measured against the real
+    24-skill vault: an absolute cosine bar cannot work in e5's compressed
+    band, so the semantic gate is now a **z-score over each request's own
+    spread** (z ≥ 2.1, 0.75 kept as a floor) — 7/10 on ten labelled
+    requests with zero false positives, against 4/10 for the old blend. The
+    same measurement settled "why not just match words?": lexical alone
+    scores 2/10 here, because the user writes Portuguese and the skills are
+    English, and no better lexical engine crosses that.
+  - **Skill vectors persist** (`skill_embeddings`, migration 028), keyed by
+    slug and stamped with the routing text they came from. Cold start 16.3s
+    → warm 2.0s.
+  - **`source: builtin | auto | user`** replaces the `builtin` boolean, with
+    `builtin: true` still read from files written before today. Editing an
+    auto skill promotes it to `user`; approving one does not. (The promotion
+    had a bug found by its own test: `serialize` omitted `source: user` as
+    "the default", and a promoted skill lives under `auto/`, where the path
+    answers when the front matter does not — so the promotion was written
+    and read straight back as `auto`.)
+  - **"Vira skill" works, in any language** (fase b): a built-in
+    `skill-creator` carrying its trigger sentences, and `skills_list` /
+    `skill_write`. A tainted turn cannot write a skill — the only taint
+    block keyed on a tool name, because a skill outlives its turn.
+  - **Approval** (`autoApproveSkills`, default off), honoured by the router
+    filtering `pending`, with `POST /v1/skills/:slug/approve` and a queue on
+    the Skills screen. **`use_count`/`last_used_at`** (migration 029) record
+    what earns its slot, for the collector that is not built yet.
+  - **Service Model is a per-provider pair**, beside the credential, empty
+    meaning "follow the chat model". `resolveServiceModel` /
+    `resolveServiceChain`; titles and voice cleanup stopped reading a global
+    setting, and the global `serviceModel` is gone from Settings. This
+    supersedes 1.55, which had moved it to General — recorded there rather
+    than silently overwritten.
+  - Still open: the background distiller (fase c) and the archiving
+    collector.
+
 - 1.59 (2026-08-05): **Files as a plain folder is BUILT (§4, §6, §14 -- lands
   1.58).** Four commits, gate green throughout: the FilesService core
   (Garbage/ + `.garbage.json`, path-signed links, `file_provenance`,
@@ -1349,7 +1510,12 @@ is set by hand and moves only when the wire changes.
   end. `MAX_CUSTOM_PROVIDERS = 256` caps how many custom instances exist **at
   once**, never how many ever existed: deleting frees its place (Vinicius,
   04/08). The service model (titles, summaries) moved to General; it is a
-  background behaviour, not a provider.
+  background behaviour, not a provider. **Superseded by 1.60**, which moves
+  it back beside the credential as a per-provider pair — the reasoning above
+  was right about it being a background behaviour and wrong about what that
+  implies, because a model id is meaningless outside one provider's
+  catalogue. Recorded rather than silently overwritten, at the owner's
+  request.
 - 1.54 (2026-08-04): **Audio is its own Settings section (§14).** "Voice
   model (whisper)" and "Improve transcripts with AI" were the last two
   cards under Model, where Model means the one that answers you -- so a

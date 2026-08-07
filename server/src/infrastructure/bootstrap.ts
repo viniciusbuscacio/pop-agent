@@ -7,6 +7,8 @@ import type { McpRepo } from '../application/ports/mcp-repo.js';
 import type { PushRepo } from '../application/ports/push-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
+import type { SkillUsageRepo } from '../application/ports/skill-usage-repo.js';
+import type { SkillVectorsRepo } from '../application/ports/skill-vectors-repo.js';
 import type { TaskRepo } from '../application/ports/task-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
 import type { StorageRepo } from '../application/ports/storage-repo.js';
@@ -27,6 +29,8 @@ import { SqliteStorageRepo } from './db/sqlite-storage-repo.js';
 import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
 import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
+import { SqliteSkillUsageRepo } from './db/sqlite-skill-usage-repo.js';
+import { SqliteSkillVectorsRepo } from './db/sqlite-skill-vectors-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
 import { SqliteFileProvenanceRepo } from './db/sqlite-file-provenance-repo.js';
@@ -45,6 +49,10 @@ export interface AppContext {
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
+  /** The skill router's vectors, so a restart does not re-embed the vault (§8). */
+  skillVectors: SkillVectorsRepo;
+  /** How often each skill earns its slot; the collector's evidence (§8). */
+  skillUsage: SkillUsageRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
   /** What the database can say about its own weight (popy.spec §14). */
@@ -86,6 +94,8 @@ export function bootstrap(): AppContext {
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),
+    skillVectors: new SqliteSkillVectorsRepo(db),
+    skillUsage: new SqliteSkillUsageRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
     storage: new SqliteStorageRepo(db),

@@ -178,8 +178,6 @@ export interface SettingsDTO {
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
-  /** Model for background jobs: titles, summaries (popy.spec §15). */
-  serviceModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
   /** whisper.cpp model for voice transcription (popy.spec §14). */
@@ -188,6 +186,8 @@ export interface SettingsDTO {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
+  /** Whether a distilled skill enters the router without being accepted (§8). */
+  autoApproveSkills: boolean;
 }
 
 /** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */
@@ -251,10 +251,20 @@ export interface SkillDTO {
   description: string;
   whenToUse: string;
   body: string;
-  /** Built-in skills can be edited but not deleted. */
-  builtin: boolean;
+  /**
+   * Where the skill came from (popy.spec §8). `builtin` ships with the app and
+   * cannot be deleted; `auto` was distilled from a conversation; `user` is the
+   * user's own. Editing an auto skill promotes it to `user`.
+   */
+  source: "builtin" | "auto" | "user";
   /** A pinned skill sits in the session system prompt; the router skips it. */
   pinned?: boolean;
+  /** Waiting for the user to accept it; not routed until then (§8). */
+  pending?: boolean;
+  /** How many times the router has put this skill in front of the model (§8). */
+  useCount?: number;
+  /** ISO-8601 of the last time it did. Absent means never. */
+  lastUsedAt?: string;
 }
 
 export interface SkillsResponse {
@@ -594,6 +604,8 @@ export interface ProviderStatusDTO {
   configured: boolean;
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
+  /** The model this provider uses for Popy's own background work (§15). */
+  serviceModel: string;
   allowCustomModel: boolean;
   /** A custom instance's endpoint; never a secret (popy.spec §15). */
   baseURL?: string;

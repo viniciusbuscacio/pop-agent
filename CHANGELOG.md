@@ -7,6 +7,41 @@ normative history.
 
 ### Added
 
+- **A conversation can become a skill, by asking.** Say "vira skill" -- or
+  the same thing in English or Spanish, or any way you phrase it -- and Popy
+  distils what just worked into a skill that comes back on its own the next
+  time it is relevant. There is no button and no command to remember: the
+  request is understood as a request. New skills wait for you on the Skills
+  screen by default; a setting there lets them go live on their own if you
+  come to trust them.
+- **The Skills screen shows where each skill came from and what it earns.**
+  A badge for built-in and for learned, a queue for anything waiting on your
+  approval, and a use count per skill -- so a skill nothing ever routes is
+  visible as such.
+- **A Service Model per provider.** The model Popy uses for its own work --
+  naming conversations, summaries, tidying voice notes -- now sits beside
+  each provider's key instead of being one global choice. It follows that
+  provider's chat model until you pick something cheaper. The old single
+  setting could not be right: a model id only means something inside one
+  provider's catalogue, so an install that named a Moonshot model asked
+  OpenAI for it the moment a chat ran there.
+
+### Changed
+
+- **The Skill Router picks better.** It now fuses its word-matching and its
+  meaning-matching with the same reciprocal-rank fusion the memory search
+  uses, and the bar for a semantic match is read from each request rather
+  than being a fixed number -- measured against the real vault, that took
+  routing from 4 correct out of 10 to 7, without adding a single wrong pick.
+  Skill vectors are also kept on disk now, so the first message after a
+  restart no longer waits for the whole vault to be re-read (16s to 2s).
+
+### Fixed
+
+- **Editing a learned skill really does make it yours.** The promotion was
+  written to disk and then read straight back as "learned", so the automatic
+  housekeeping still considered it its own.
+
 - **Files is a plain folder on disk.** `POPY_DATA_DIR/files/` with real
   names is the single source of truth. The Files tab -- its own sidebar tab
   next to Chats and Tasks -- renders the disk: nested folders with a `+`/`−`

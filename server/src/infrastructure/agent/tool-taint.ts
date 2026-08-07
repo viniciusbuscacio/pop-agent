@@ -97,6 +97,16 @@ export function isBlockedUnderTaint(command: string, machine: GuardedMachine = '
   return isDestructiveBash(command) || isExfilOrSecretRead(command, machine);
 }
 
+/**
+ * Tools a tainted turn refuses outright, whatever their arguments (popy.spec
+ * §8, §10). Writing a skill is the one action whose blast radius outlives the
+ * turn: a skill the router likes comes back on its own in every future
+ * conversation it judges relevant, so a page that can write one has bought a
+ * standing place in the system prompt. Nothing in the arguments could make
+ * that safe, which is why this list is by tool name and not by pattern.
+ */
+const REFUSED_UNDER_TAINT = new Set(['skill_write']);
+
 /** Which machine a tool runs on. Local tools carry the prefix; nothing else. */
 export function machineOfTool(tool: string): GuardedMachine | undefined {
   if (tool === 'bash') return 'server';
@@ -116,6 +126,12 @@ const BLOCK_REASON =
   'prompt-injection safeguard (popy.spec §10): a tainted turn cannot send data ' +
   'off the box, read a secret, or destroy files. If the user asked for this ' +
   'themselves, run it in a new turn that has not read outside content.';
+
+const SKILL_BLOCK_REASON =
+  'This turn read untrusted external content, so writing a skill is blocked as a ' +
+  'prompt-injection safeguard (popy.spec §8, §10): a skill written now would come ' +
+  'back on its own in future conversations. If the user asked for this themselves, ' +
+  'write it in a new turn that has not read outside content.';
 
 export class TaintGuard implements ToolGuard {
   private tainted = false;
@@ -140,8 +156,18 @@ export class TaintGuard implements ToolGuard {
     tool: string,
     input: Record<string, unknown>,
   ): Promise<{ block: boolean; reason?: string }> {
+    if (!this.tainted) return Promise.resolve({ block: false });
+
+    if (REFUSED_UNDER_TAINT.has(tool)) {
+      this.deps.onTaint?.({
+        risk: 'high',
+        warnings: [`blocked ${tool} in a tainted turn`],
+      });
+      return Promise.resolve({ block: true, reason: SKILL_BLOCK_REASON });
+    }
+
     const machine = machineOfTool(tool);
-    if (!this.tainted || machine === undefined) return Promise.resolve({ block: false });
+    if (machine === undefined) return Promise.resolve({ block: false });
 
     const command = typeof input['command'] === 'string' ? input['command'] : '';
     if (!isBlockedUnderTaint(command, machine)) return Promise.resolve({ block: false });

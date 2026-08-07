@@ -4,6 +4,16 @@
  * signal -- matched against what the user asked -- and `body` is the markdown
  * that joins the prompt when the skill is selected.
  */
+
+/**
+ * Where a skill came from (popy.spec §8, auto-skill). `builtin` ships with the
+ * app and updates with it; `auto` was distilled from a conversation and is the
+ * garbage collector's to archive; `user` is the user's own and is never touched
+ * automatically. Editing an auto skill promotes it to `user`: it proved its
+ * worth, so the collector stops looking at it.
+ */
+export type SkillSource = 'builtin' | 'auto' | 'user';
+
 export interface Skill {
   /** Stable slug, and the file name without extension. */
   slug: string;
@@ -12,18 +22,32 @@ export interface Skill {
   /** When this skill should fire, in the author's words. Routed on. */
   whenToUse: string;
   body: string;
-  /** True for the skills Popy ships; false for the user's own. */
-  builtin: boolean;
+  /** Where it came from, and therefore what may happen to it. */
+  source: SkillSource;
   /**
    * A pinned skill bypasses the router: its body joins the session's system
    * prompt once instead of competing for a per-turn slot (popy.spec §8).
    * Identity is a prerequisite of every answer, not a situational skill.
    */
   pinned?: boolean;
+  /**
+   * An auto skill waits outside the router until the user accepts it, unless
+   * they turned automatic approval on (popy.spec §8). Absent means approved --
+   * every skill that predates auto-skill is one the user already has.
+   */
+  pending?: boolean;
 }
 
 /** A skill the router picked, with why. */
 export interface SelectedSkill {
   skill: Skill;
+  /** The fused rank score (RRF): what ordered the selection. */
   score: number;
+  /**
+   * The two components behind the fusion, kept because the bars that decide
+   * who is a candidate at all are set on these scales, not on the fused one.
+   * `similarity` is absent when the skill had no vector.
+   */
+  lexical: number;
+  similarity?: number;
 }

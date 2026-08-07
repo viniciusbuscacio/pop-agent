@@ -16,8 +16,6 @@ export interface AppSettings {
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
-  /** Model for background jobs: titles, summaries (popy.spec §15). */
-  serviceModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
   /** whisper.cpp model for voice transcription (popy.spec §14). */
@@ -26,17 +24,26 @@ export interface AppSettings {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
+  /**
+   * Whether a skill Popy distils from a conversation goes straight into the
+   * router (popy.spec §8). Off -- the factory default -- means it is saved but
+   * held until the user accepts it on the Skills screen. Named for the ON
+   * state so that "off" reads as the cautious one it is: this flag is the
+   * declared mitigation against a prompt injection earning a permanent place
+   * in future prompts.
+   */
+  autoApproveSkills: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'en',
   defaultProvider: DEFAULT_PROVIDER_ID,
   defaultModel: DEFAULT_MODEL_ID,
-  serviceModel: DEFAULT_MODEL_ID,
   customInstructions: '',
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
+  autoApproveSkills: false,
 };
 
 const SETTINGS_KEY = 'app';
