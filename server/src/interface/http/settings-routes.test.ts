@@ -41,6 +41,8 @@ const DEFAULT_DOC = {
   voiceCleanup: false,
   voiceCleanupModel: '',
   autoApproveSkills: false,
+  distillSkills: true,
+  distillIntervalMinutes: 10,
 };
 
 describe('GET /v1/settings', () => {

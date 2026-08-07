@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.60 — 2026-08-07.
+Version 1.61 — 2026-08-07.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -353,9 +353,57 @@ user message — selection is 100% local, no LLM call:
   prompt injection earning a permanent place in future prompts.
 - **Endpoint**: `POST /v1/skills/:slug/approve` — a POST with no body,
   because the only thing being said is yes.
-- **Not built yet**: the background distiller (fase c) and the archiving
-  collector (a cap on auto-skills, least-used archived to `skills/_archive/`,
-  never deleted). `use_count`/`last_used_at` exist to feed the second.
+- **The background distiller** (fase c, built 1.61) reads what nobody
+  thought to say "vira skill" about. It is a maintenance job on the task
+  scheduler's tick (§21), so nothing in the process owns a second timer,
+  and its interval is a getter over `distillIntervalMinutes` — changing it
+  in Settings takes effect on the next tick, not the next restart.
+  **One conversation per tick** is the whole cost model: a tick with nothing
+  idle and unread makes no provider call at all, so the bill follows use and
+  disappears with it, and when there is something it is exactly one small
+  completion on that chat's Service Model (§15).
+- **The watermark is a mark, not a flag.** `skill_distillation` records the
+  last message id considered per chat, so a conversation that is read and
+  then continued comes back with only its new messages. It advances on every
+  outcome — tainted, empty, or three skills written — **except a provider
+  failure**, which leaves it behind so the next tick retries for free. A mark
+  that advanced on failure would silently skip conversations whenever a
+  provider had a bad minute.
+- **A tainted window is never distilled.** `sanitize` — the same function
+  the live taint guard uses — runs over the window before the model sees it,
+  and anything above `low` skips the whole conversation, not just the part
+  that read badly. Fase (b) is guarded by the taint guard refusing
+  `skill_write` mid-turn; nothing guarded a turn that had already ended, and
+  a skill is the one artefact that outlives its turn. This is that guard.
+- **A match becomes a revision, never an overwrite.** A candidate whose slug
+  collides, or whose routing text is within `0.90` cosine of an existing
+  skill, is written to `skill_revisions` instead of the vault, and the
+  approved version keeps serving the router until the user accepts the new
+  one (`POST /v1/skills/:slug/revision/approve`, `DELETE .../revision`).
+  `autoApproveSkills` governs this path too: without it the pending flag
+  would guard the front door while the update path stood open, and an
+  injection distilled as "a better version of a skill you already trust"
+  would walk in. The similarity is stored because 0.90 was chosen without
+  data and that column is the data that will retune it.
+- **One conversation may yield several skills**, one per distinct procedure,
+  capped at five. A distiller forced to produce one skill per conversation
+  produces noise per conversation; the empty answer is a first-class
+  outcome.
+- **The archiving collector** (built 1.61) is a cap, not an expiry: at most
+  50 auto-skills, and the least earned are moved to `skills/_archive/`,
+  never deleted. `use_count` orders them and `last_used_at` breaks ties. The
+  obvious alternative — retire anything idle for ninety days — destroys the
+  skill that justifies keeping procedures at all: the annual one, unused for
+  eleven months and then the most valuable thing in the vault. It touches
+  only `auto` skills that are not pending: a `user` skill is the user's, an
+  edited auto skill became `user` by that act, and a skill waiting for
+  approval has had no chance to be used. `POST /v1/skills/:slug/restore`
+  brings one back.
+- **The Skills screen is the inbox**: badges for source, the two queues, and
+  one discreet status line — when Popy last looked, how much waits on the
+  reader. No card and no push (decided 07/08): the distiller runs every ten
+  minutes, so a notification per skill would be noise, and the cost already
+  has a home in Settings → Usage.
 
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end
@@ -1341,6 +1389,27 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.61 (2026-08-07): **Auto-skill fase (c): the background distiller and the
+  archiving collector are BUILT (§8, §13, §21).** The half nobody has to ask
+  for. A maintenance job on the task scheduler's tick reads one idle
+  conversation per tick — no idle conversation, no provider call, so the cost
+  follows use — and distils what is procedural in it. A watermark per chat
+  (`skill_distillation`) means a conversation that continues comes back with
+  only its new messages; it advances on every outcome except a provider
+  failure, so a bad minute at a provider costs a retry rather than a skipped
+  conversation. `sanitize` gates the window before the model sees it: anything
+  above `low` and the conversation is never distilled, which is the guard fase
+  (b) got from the taint guard and a finished turn had from nothing. A
+  candidate matching an existing skill (slug, or 0.90 cosine) lands in
+  `skill_revisions` rather than the vault, so the approved version keeps
+  serving the router until the user accepts the rewrite —
+  `autoApproveSkills` governs the update path too, without which the pending
+  flag would guard the front door and leave the update path open. The
+  collector is a cap (50 auto-skills, least used archived to
+  `skills/_archive/`, never deleted), which keeps the annual procedure that
+  any "idle for 90 days" rule would destroy. Settings gains `distillSkills`
+  (on) and `distillIntervalMinutes` (10); the Skills screen gains the two
+  queues, the archive, and one status line — no card, no push.
 - 1.60 (2026-08-07): **Auto-skill fase (b), the router rebuilt on RRF, and
   the Service Model corrected to a per-provider pair (§2, §6, §7, §8, §15).**
   - **`sqlite-vec` removed from the spec.** It was never installed and is not

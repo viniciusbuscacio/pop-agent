@@ -1,9 +1,18 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { SkillDTO, SkillsResponse } from '@popy/shared';
+import type { DistillerStatusDTO, SkillDTO, SkillsResponse } from '@popy/shared';
 import type { Skill } from '../../domain/skills/skill.js';
-import { SkillsError, type SkillsRepo } from '../../application/ports/skills-repo.js';
+import {
+  SkillsError,
+  type SkillArchiveRepo,
+  type SkillsRepo,
+} from '../../application/ports/skills-repo.js';
 import type { SkillUsage, SkillUsageRepo } from '../../application/ports/skill-usage-repo.js';
+import type {
+  DistillationRepo,
+  SkillRevision,
+  SkillRevisionsRepo,
+} from '../../application/ports/skill-distillation-repo.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
@@ -11,6 +20,12 @@ import { apiError } from './errors.js';
  * The skills CRUD (popy.spec §8): Settings → Skills lists them, lets the user
  * write their own and edit any, and delete their own. The Skill Router reads
  * the same vault to decide which fire per turn.
+ *
+ * Since fase (c) the screen is also the distiller's inbox. Two things wait
+ * here for a yes: a new skill, held out of the router by its `pending` flag,
+ * and a rewrite of a skill that already works, held out by living in its own
+ * table. Both are approved with a POST that carries no body, because the only
+ * thing being said is yes.
  */
 
 const saveSchema = z
@@ -28,17 +43,40 @@ export interface SkillsRoutesDeps {
   skills: SkillsRepo;
   /** Use counts, merged into the list so the screen can show what earns its slot. */
   usage?: SkillUsageRepo;
+  /** Proposed rewrites waiting for a yes (popy.spec §8, fase c). */
+  revisions?: SkillRevisionsRepo;
+  /** The archive the collector fills, and the way back out of it. */
+  archive?: SkillArchiveRepo;
+  /** Where the distiller's watermarks live; only its clock is read here. */
+  distillation?: DistillationRepo;
+  /** Whether the distiller is switched on at all, for the status line. */
+  distillerEnabled?: () => boolean;
 }
 
 export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   const routes = new Hono();
 
-  routes.get('/skills', (c) => {
+  const listing = (): SkillsResponse => {
     const usage = new Map((deps.usage?.all() ?? []).map((entry) => [entry.slug, entry]));
-    return c.json({
-      skills: deps.skills.all().map((skill) => toDto(skill, usage.get(skill.slug))),
-    } satisfies SkillsResponse);
-  });
+    const revisions = new Map((deps.revisions?.all() ?? []).map((entry) => [entry.slug, entry]));
+    const skills = deps.skills
+      .all()
+      .map((skill) => toDto(skill, usage.get(skill.slug), revisions.get(skill.slug)));
+    const lastRunAt = deps.distillation?.lastRunAt();
+    const status: DistillerStatusDTO = {
+      enabled: deps.distillerEnabled?.() ?? false,
+      ...(lastRunAt === undefined ? {} : { lastRunAt }),
+      pending: skills.filter((skill) => skill.pending === true).length,
+      revisions: revisions.size,
+    };
+    return {
+      skills,
+      archived: (deps.archive?.archived() ?? []).map((skill) => toDto(skill)),
+      distiller: status,
+    };
+  };
+
+  routes.get('/skills', (c) => c.json(listing()));
 
   // Accepting a pending skill (popy.spec §8). A POST with no body: the only
   // thing being said is "yes", and there is nothing else to send.
@@ -47,6 +85,50 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
     return skill === undefined
       ? apiError(c, 404, 'not_found', 'No such skill.')
       : c.json(toDto(skill));
+  });
+
+  /**
+   * Accepting a proposed rewrite. `source` is passed back explicitly so this
+   * does not read as a human edit: the vault promotes an auto skill to `user`
+   * when it is edited, and saying yes to the distiller's rewrite is not that.
+   */
+  routes.post('/skills/:slug/revision/approve', (c) => {
+    const slug = c.req.param('slug');
+    const revision = deps.revisions?.get(slug);
+    const current = deps.skills.get(slug);
+    if (revision === undefined || current === undefined) {
+      return apiError(c, 404, 'not_found', 'No revision is waiting for that skill.');
+    }
+    const saved = deps.skills.write({
+      slug,
+      name: revision.name,
+      description: revision.description,
+      whenToUse: revision.whenToUse,
+      body: revision.body,
+      source: current.source,
+      ...(current.pinned === true ? { pinned: true } : {}),
+      pending: false,
+    });
+    deps.revisions?.delete(slug);
+    return c.json(toDto(saved));
+  });
+
+  /** Declining one. The skill keeps the version it had; nothing else changes. */
+  routes.delete('/skills/:slug/revision', (c) => {
+    const slug = c.req.param('slug');
+    if (deps.revisions?.get(slug) === undefined) {
+      return apiError(c, 404, 'not_found', 'No revision is waiting for that skill.');
+    }
+    deps.revisions.delete(slug);
+    return c.body(null, 204);
+  });
+
+  /** Out of the archive and back into the router (popy.spec §8). */
+  routes.post('/skills/:slug/restore', (c) => {
+    const restored = deps.archive?.restore(c.req.param('slug'));
+    return restored === undefined
+      ? apiError(c, 404, 'not_found', 'No such archived skill.')
+      : c.json(toDto(restored));
   });
 
   const save = async (c: Context): Promise<Response> => {
@@ -70,10 +152,13 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   routes.put('/skills/:slug', save);
 
   routes.delete('/skills/:slug', (c) => {
+    const slug = c.req.param('slug');
     try {
-      return deps.skills.delete(c.req.param('slug'))
-        ? c.body(null, 204)
-        : apiError(c, 404, 'not_found', 'No such skill.');
+      if (!deps.skills.delete(slug)) return apiError(c, 404, 'not_found', 'No such skill.');
+      // A skill that is gone has no version to review. Left behind, the
+      // proposal would reappear the day a new skill happened to take the slug.
+      deps.revisions?.delete(slug);
+      return c.body(null, 204);
     } catch (error) {
       if (error instanceof SkillsError) {
         return apiError(c, 409, 'operation_error', error.message);
@@ -85,7 +170,7 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   return routes;
 }
 
-function toDto(skill: Skill, usage?: SkillUsage): SkillDTO {
+function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): SkillDTO {
   return {
     slug: skill.slug,
     name: skill.name,
@@ -96,5 +181,17 @@ function toDto(skill: Skill, usage?: SkillUsage): SkillDTO {
     ...(skill.pinned === true ? { pinned: true } : {}),
     ...(skill.pending === true ? { pending: true } : {}),
     ...(usage === undefined ? {} : { useCount: usage.useCount, lastUsedAt: usage.lastUsedAt }),
+    ...(revision === undefined
+      ? {}
+      : {
+          proposedRevision: {
+            name: revision.name,
+            description: revision.description,
+            whenToUse: revision.whenToUse,
+            body: revision.body,
+            createdAt: revision.createdAt,
+            similarity: revision.similarity,
+          },
+        }),
   };
 }

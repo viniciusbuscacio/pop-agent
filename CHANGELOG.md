@@ -7,6 +7,26 @@ normative history.
 
 ### Added
 
+- **Popy learns from conversations you did not flag.** Every few minutes it
+  reads one conversation that has gone quiet and, if something in it was a
+  procedure worth keeping, writes it down as a skill. Nothing to press and
+  nothing to remember -- and if there is nothing to learn, which is the usual
+  answer, it costs nothing at all: a round with no new conversation makes no
+  request to a model. Anything it writes waits for you on the Skills screen,
+  the same queue as a skill you asked for.
+- **A skill Popy already knows gets a rewrite, not an overwrite.** When what
+  it learned matches a skill you have, the new version waits beside the old
+  one with the text laid out, and the skill you approved keeps working until
+  you say yes. A conversation that read a web page is never learned from at
+  all.
+- **Learned skills have a ceiling.** Past fifty, the ones the router never
+  reaches for are archived -- listed at the bottom of the Skills screen with
+  a button to bring any of them back. Archived, never deleted: a skill used
+  once a year is exactly the one a "delete what is idle" rule would throw
+  away.
+- **A line on the Skills screen says what Popy has been doing**: when it last
+  looked and how much is waiting on you. Settings → Skills can slow it down
+  or switch it off.
 - **A conversation can become a skill, by asking.** Say "vira skill" -- or
   the same thing in English or Spanish, or any way you phrase it -- and Popy
   distils what just worked into a skill that comes back on its own the next

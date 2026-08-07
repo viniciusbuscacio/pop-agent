@@ -12,8 +12,12 @@ import type { WebAuthnGateway } from '../../application/ports/webauthn-repo.js';
 import type { Clock } from '../../application/ports/clock.js';
 import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
-import type { SkillsRepo } from '../../application/ports/skills-repo.js';
+import type { SkillArchiveRepo, SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { SkillUsageRepo } from '../../application/ports/skill-usage-repo.js';
+import type {
+  DistillationRepo,
+  SkillRevisionsRepo,
+} from '../../application/ports/skill-distillation-repo.js';
 import type { Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import type { VoiceModelStore } from '../../application/ports/voice-models.js';
@@ -74,6 +78,13 @@ export interface AppDeps {
   skills: SkillsRepo;
   /** Use counts behind the Skills screen; absent in tests that do not care. */
   skillUsage?: SkillUsageRepo;
+  /** The distiller's proposed rewrites, waiting on the Skills screen (§8). */
+  skillRevisions?: SkillRevisionsRepo;
+  /** The collector's archive, and the way back out of it. */
+  skillArchive?: SkillArchiveRepo;
+  /** Read for the status line's clock: when the distiller last finished one. */
+  distillation?: DistillationRepo;
+  distillerEnabled?: () => boolean;
   mcp: McpService;
   usage: UsageRepo;
   storage: StorageService;
@@ -146,6 +157,10 @@ export function createApp(deps: AppDeps): Hono {
         createSkillsRoutes({
           skills: deps.skills,
           ...(deps.skillUsage === undefined ? {} : { usage: deps.skillUsage }),
+          ...(deps.skillRevisions === undefined ? {} : { revisions: deps.skillRevisions }),
+          ...(deps.skillArchive === undefined ? {} : { archive: deps.skillArchive }),
+          ...(deps.distillation === undefined ? {} : { distillation: deps.distillation }),
+          ...(deps.distillerEnabled === undefined ? {} : { distillerEnabled: deps.distillerEnabled }),
         }),
       ),
       sessionGuarded(createMcpRoutes(deps.mcp)),

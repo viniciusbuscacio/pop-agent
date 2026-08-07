@@ -36,6 +36,10 @@ import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
 import { SkillsVault } from '../infrastructure/skills/skills-vault.js';
 import { SqliteSkillUsageRepo } from '../infrastructure/db/sqlite-skill-usage-repo.js';
+import {
+  SqliteDistillationRepo,
+  SqliteSkillRevisionsRepo,
+} from '../infrastructure/db/sqlite-skill-distillation-repo.js';
 import { TarBackupService } from '../infrastructure/backup/tar-backup-service.js';
 import { WebAuthnService } from '../infrastructure/auth/webauthn-service.js';
 import { SqliteWebAuthnRepo } from '../infrastructure/db/sqlite-webauthn-repo.js';
@@ -181,6 +185,10 @@ export interface TestApp {
   skills: SkillsVault;
   /** Use counts behind the same routes. */
   skillUsage: SqliteSkillUsageRepo;
+  /** The distiller's proposed rewrites, so a route test can plant one. */
+  skillRevisions: SqliteSkillRevisionsRepo;
+  /** Its watermarks, which the status line reads for its clock. */
+  distillation: SqliteDistillationRepo;
 }
 
 export interface TestAppOptions {
@@ -213,6 +221,8 @@ export function createTestApp(
   // cannot create -- a pending one, which only the agent's tool writes.
   const skills = new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-')));
   const skillUsage = new SqliteSkillUsageRepo(db);
+  const skillRevisions = new SqliteSkillRevisionsRepo(db);
+  const distillation = new SqliteDistillationRepo(db);
 
   const auth = new AuthService({
     settings: settingsRepo,
@@ -337,6 +347,10 @@ export function createTestApp(
     userMemory: new SqliteUserMemoryRepo(db),
     skills,
     skillUsage,
+    skillRevisions,
+    skillArchive: skills,
+    distillation,
+    distillerEnabled: () => true,
     mcp,
     usage: new SqliteUsageRepo(db),
     // No terminal ever attaches in a fixture; the registry is here so the
@@ -429,5 +443,7 @@ export function createTestApp(
     clock,
     skills,
     skillUsage,
+    skillRevisions,
+    distillation,
   };
 }

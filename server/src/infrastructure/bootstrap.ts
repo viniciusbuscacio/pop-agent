@@ -8,6 +8,10 @@ import type { PushRepo } from '../application/ports/push-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import type { SkillUsageRepo } from '../application/ports/skill-usage-repo.js';
+import type {
+  DistillationRepo,
+  SkillRevisionsRepo,
+} from '../application/ports/skill-distillation-repo.js';
 import type { SkillVectorsRepo } from '../application/ports/skill-vectors-repo.js';
 import type { TaskRepo } from '../application/ports/task-repo.js';
 import type { UsageRepo } from '../application/ports/usage-repo.js';
@@ -30,6 +34,10 @@ import { SqliteUserMemoryRepo } from './db/sqlite-user-memory-repo.js';
 import { SqliteWebAuthnRepo } from './db/sqlite-webauthn-repo.js';
 import { SqliteSettingsRepo } from './db/sqlite-settings-repo.js';
 import { SqliteSkillUsageRepo } from './db/sqlite-skill-usage-repo.js';
+import {
+  SqliteDistillationRepo,
+  SqliteSkillRevisionsRepo,
+} from './db/sqlite-skill-distillation-repo.js';
 import { SqliteSkillVectorsRepo } from './db/sqlite-skill-vectors-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
@@ -53,6 +61,10 @@ export interface AppContext {
   skillVectors: SkillVectorsRepo;
   /** How often each skill earns its slot; the collector's evidence (§8). */
   skillUsage: SkillUsageRepo;
+  /** How far the background distiller has read each conversation (§8, fase c). */
+  distillation: DistillationRepo;
+  /** Rewrites it proposed for skills that already exist, waiting on the user. */
+  skillRevisions: SkillRevisionsRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
   /** What the database can say about its own weight (popy.spec §14). */
@@ -96,6 +108,8 @@ export function bootstrap(): AppContext {
     embeddings: new SqliteEmbeddingsRepo(db),
     skillVectors: new SqliteSkillVectorsRepo(db),
     skillUsage: new SqliteSkillUsageRepo(db),
+    distillation: new SqliteDistillationRepo(db),
+    skillRevisions: new SqliteSkillRevisionsRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
     storage: new SqliteStorageRepo(db),

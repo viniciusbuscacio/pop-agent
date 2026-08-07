@@ -29,6 +29,8 @@ describe('settings service', () => {
       voiceCleanup: true,
       voiceCleanupModel: 'openai/gpt-5-mini',
       autoApproveSkills: true,
+      distillSkills: false,
+      distillIntervalMinutes: 30,
     };
 
     expect(service.write(next)).toEqual(next);

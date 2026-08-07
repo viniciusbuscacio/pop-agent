@@ -188,6 +188,10 @@ export interface SettingsDTO {
   voiceCleanupModel: string;
   /** Whether a distilled skill enters the router without being accepted (§8). */
   autoApproveSkills: boolean;
+  /** Whether the background distiller reads finished conversations (§8, fase c). */
+  distillSkills: boolean;
+  /** Minutes between its ticks; one conversation per tick is the cost ceiling. */
+  distillIntervalMinutes: number;
 }
 
 /** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */
@@ -265,10 +269,47 @@ export interface SkillDTO {
   useCount?: number;
   /** ISO-8601 of the last time it did. Absent means never. */
   lastUsedAt?: string;
+  /**
+   * A rewrite the background distiller proposed for this skill, waiting on the
+   * user (popy.spec §8, fase c). While it waits, the skill above is what the
+   * router still uses -- that is the point of holding it out here instead of
+   * writing it in.
+   */
+  proposedRevision?: SkillRevisionDTO;
+}
+
+/** The distiller's proposed new version of an existing skill. */
+export interface SkillRevisionDTO {
+  name: string;
+  description: string;
+  whenToUse: string;
+  body: string;
+  createdAt: string;
+  /** The cosine that made the distiller call this an update, not a new skill. */
+  similarity: number;
 }
 
 export interface SkillsResponse {
   skills: SkillDTO[];
+  /** Retired by the collector: out of the router, still on disk (§8). */
+  archived: SkillDTO[];
+  /** One line of diagnostics for the Skills screen; never a card. */
+  distiller: DistillerStatusDTO;
+}
+
+/**
+ * What the Skills screen says about the background distiller. Deliberately
+ * small: the cost of the feature already has a home in Settings → Usage, so
+ * this is only "when did it last look" and "how much is waiting on you".
+ */
+export interface DistillerStatusDTO {
+  enabled: boolean;
+  /** ISO-8601 of the last conversation it finished. Absent means it never has. */
+  lastRunAt?: string;
+  /** New skills waiting for approval. */
+  pending: number;
+  /** Existing skills with a rewrite waiting for approval. */
+  revisions: number;
 }
 
 // ---- Files as a plain folder (popy.spec §14, spec 1.58) ----

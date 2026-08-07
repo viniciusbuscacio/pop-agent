@@ -29,6 +29,24 @@ export interface SkillInput {
   pending?: boolean;
 }
 
+/**
+ * Retiring a skill without destroying one (popy.spec §8). Kept apart from
+ * {@link SkillsRepo} because it has exactly one caller -- the collector -- and
+ * the router, the routes and the agent's tools have no business archiving
+ * anything. A vault implements both; a fake in a test that only routes
+ * implements neither.
+ */
+export interface SkillArchiveRepo {
+  /** Out of the vault, into `skills/_archive/`. Throws on a built-in. */
+  archive(slug: string): boolean;
+
+  /** What is currently retired, so the screen can offer it back. */
+  archived(): Skill[];
+
+  /** Back into the vault, in the shape its source implies. */
+  restore(slug: string): Skill | undefined;
+}
+
 export interface SkillsRepo {
   all(): Skill[];
   get(slug: string): Skill | undefined;

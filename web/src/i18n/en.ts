@@ -269,6 +269,25 @@ export const en = {
   'skills.autoApprove': 'Accept learned skills automatically',
   'skills.autoApproveNote':
     'Off: a skill Popy distils from a conversation waits here for you. On: it goes straight into use. Off is safer — it is what stops something Popy read on the web from writing itself into every future conversation.',
+  'skills.distill': 'Learn skills from conversations on your own',
+  'skills.distillNote':
+    'Popy reads a conversation that has gone quiet and keeps what was a reusable procedure. A round with nothing new to read costs nothing.',
+  'skills.distillInterval': 'How often to look',
+  'skills.distillIntervalNote': 'One conversation each time, so this is what it can cost.',
+  'skills.distillEvery': 'every {minutes} min',
+  'skills.revision': 'Rewrite waiting',
+  'skills.revisionNote':
+    'Popy wants to rewrite this skill from a later conversation. The version above stays in use until you accept.',
+  'skills.revisionApprove': 'Accept rewrite',
+  'skills.revisionDiscard': 'Keep the current one',
+  'skills.archived': 'Archived',
+  'skills.archivedNote':
+    'Retired to make room under the limit on learned skills. They are out of the way, not deleted.',
+  'skills.restore': 'Bring back',
+  'skills.distiller.off': 'Popy is not learning skills from conversations right now.',
+  'skills.distiller.never': 'Popy has not looked at any conversation yet.',
+  'skills.distiller.lastRun': 'Last looked {when}',
+  'skills.distiller.waiting': '{count} waiting for you',
   'skills.new': 'New skill',
   'skills.none': 'No skills yet.',
   'skills.empty.title': 'Select a skill',

@@ -225,3 +225,68 @@ describe('parse', () => {
     expect(parsed).toMatchObject({ name: 'Test', description: 'd', whenToUse: 'w', body: '# body' });
   });
 });
+
+describe('SkillsVault archiving', () => {
+  function auto(slug: string): void {
+    vault.write({
+      slug,
+      name: slug,
+      description: `${slug} description`,
+      whenToUse: slug,
+      body: `${slug} body`,
+      source: 'auto',
+    });
+  }
+
+  it('takes a skill out of the vault without destroying it', () => {
+    auto('retired');
+    expect(vault.archive('retired')).toBe(true);
+
+    expect(vault.get('retired')).toBeUndefined();
+    expect(vault.all().map((skill) => skill.slug)).not.toContain('retired');
+    expect(existsSync(join(root, '_archive', 'retired', 'SKILL.md'))).toBe(true);
+  });
+
+  it('lists what it retired, with the body intact', () => {
+    auto('retired');
+    vault.archive('retired');
+
+    expect(vault.archived().map((skill) => skill.slug)).toEqual(['retired']);
+    expect(vault.archived()[0]?.body).toBe('retired body');
+  });
+
+  it('brings one back into the router', () => {
+    auto('retired');
+    vault.archive('retired');
+
+    expect(vault.restore('retired')?.slug).toBe('retired');
+    expect(vault.get('retired')?.body).toBe('retired body');
+    expect(vault.archived()).toEqual([]);
+    // Back where an auto skill lives, not as a loose file at the root.
+    expect(existsSync(join(root, 'auto', 'retired', 'SKILL.md'))).toBe(true);
+  });
+
+  it('keeps an archived skill out of the scanner, not just out of the list', () => {
+    auto('retired');
+    vault.archive('retired');
+    // A fresh vault over the same folder must reach the same conclusion: the
+    // archive is a reserved name, not a runtime filter.
+    expect(new SkillsVault(root).get('retired')).toBeUndefined();
+  });
+
+  it('archives a flat user skill into the same shape', () => {
+    vault.write({ slug: 'mine', name: 'Mine', description: 'd', whenToUse: 'w', body: 'Body.' });
+    expect(vault.archive('mine')).toBe(true);
+    expect(existsSync(join(root, '_archive', 'mine', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(root, 'mine.md'))).toBe(false);
+  });
+
+  it('refuses a built-in, which the next boot would seed straight back', () => {
+    expect(() => vault.archive('know-thyself')).toThrow(SkillsError);
+  });
+
+  it('answers false for a skill that is not there', () => {
+    expect(vault.archive('ghost')).toBe(false);
+    expect(vault.restore('ghost')).toBeUndefined();
+  });
+});

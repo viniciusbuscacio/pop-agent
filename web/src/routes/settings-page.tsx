@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   AboutResponse,
+  DistillerStatusDTO,
   ModelCatalogSource,
   ModelDTO,
   ServerInfoResponse,
@@ -28,6 +29,7 @@ import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
+import { relativeTime } from '../lib/time';
 
 /**
  * Settings as a full screen with a back button -- never a drawer or a modal
@@ -650,6 +652,8 @@ function Stat({ label, value, testId }: { label: string; value: string; testId?:
  */
 export function SkillsSection() {
   const [skills, setSkills] = useState<SkillDTO[]>([]);
+  const [archived, setArchived] = useState<SkillDTO[]>([]);
+  const [distiller, setDistiller] = useState<DistillerStatusDTO | undefined>(undefined);
   const [editing, setEditing] = useState<SkillDTO | 'new' | undefined>(undefined);
 
   useEffect(() => {
@@ -658,28 +662,31 @@ export function SkillsSection() {
 
   async function reload(): Promise<void> {
     try {
-      setSkills((await skillsService.list()).skills);
+      const response = await skillsService.list();
+      setSkills(response.skills);
+      setArchived(response.archived);
+      setDistiller(response.distiller);
     } catch {
       // Leave what is on screen.
     }
   }
 
-  async function approve(skill: SkillDTO): Promise<void> {
+  /** Every yes and no on this screen ends the same way: ask the server again. */
+  async function act(action: () => Promise<unknown>): Promise<void> {
     try {
-      await skillsService.approve(skill.slug);
+      await action();
       await reload();
     } catch {
       // Ignore; the list is authoritative on the next load.
     }
   }
 
+  async function approve(skill: SkillDTO): Promise<void> {
+    await act(() => skillsService.approve(skill.slug));
+  }
+
   async function remove(skill: SkillDTO): Promise<void> {
-    try {
-      await skillsService.remove(skill.slug);
-      await reload();
-    } catch {
-      // Ignore; the list is authoritative on the next load.
-    }
+    await act(() => skillsService.remove(skill.slug));
   }
 
   if (editing !== undefined) {
@@ -706,6 +713,15 @@ export function SkillsSection() {
       </Card>
 
       <AutoApproveSkills />
+
+      {/* One discreet line, never a card: the money already has a home in
+          Settings → Usage, so all this has to say is when Popy last looked and
+          how much is waiting on the reader. */}
+      {distiller === undefined ? null : (
+        <p data-testid="distiller-status" className="text-xs text-[var(--muted)]">
+          {distillerLine(distiller)}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         {skills.map((skill) => (
@@ -758,11 +774,88 @@ export function SkillsSection() {
                 </Button>
               )}
             </div>
+            {skill.proposedRevision === undefined ? null : (
+              <div
+                data-testid="skill-revision"
+                className="w-full rounded border border-[var(--border)] p-3"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs">
+                    {t('skills.revision')}
+                  </span>
+                  <span className="truncate text-sm">{skill.proposedRevision.description}</span>
+                </div>
+                <p className="mt-1 text-xs text-[var(--muted)]">{t('skills.revisionNote')}</p>
+                {/* The proposal in full, because "accept" is not a decision
+                    anyone can make from a summary. */}
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs text-[var(--muted)]">
+                  {skill.proposedRevision.body}
+                </pre>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Button
+                    type="button"
+                    data-testid="skill-revision-approve"
+                    onClick={() => void act(() => skillsService.approveRevision(skill.slug))}
+                  >
+                    {t('skills.revisionApprove')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void act(() => skillsService.discardRevision(skill.slug))}
+                  >
+                    {t('skills.revisionDiscard')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         ))}
       </div>
+
+      {archived.length === 0 ? null : (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-medium">{t('skills.archived')}</h3>
+          <p className="text-xs text-[var(--muted)]">{t('skills.archivedNote')}</p>
+          {archived.map((skill) => (
+            <Card
+              key={skill.slug}
+              data-testid="skill-archived"
+              className="flex flex-wrap items-start justify-between gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <span className="font-medium">{skill.name}</span>
+                <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void act(() => skillsService.restore(skill.slug))}
+              >
+                {t('skills.restore')}
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * The status line's text. Two facts at most: when Popy last read a
+ * conversation, and how much is waiting on the reader -- joined only when both
+ * are worth saying.
+ */
+function distillerLine(status: DistillerStatusDTO): string {
+  if (!status.enabled) return t('skills.distiller.off');
+
+  const waiting = status.pending + status.revisions;
+  const when =
+    status.lastRunAt === undefined
+      ? t('skills.distiller.never')
+      : t('skills.distiller.lastRun', { when: relativeTime(status.lastRunAt) });
+  return waiting === 0 ? when : `${when} · ${t('skills.distiller.waiting', { count: waiting })}`;
 }
 
 export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
@@ -946,24 +1039,58 @@ function AutoApproveSkills() {
 
   if (settings === undefined) return null;
 
+  /** Every control here writes the whole document; the API replaces, not merges. */
+  function save(patch: Partial<SettingsDTO>): void {
+    if (settings === undefined) return;
+    void settingsService
+      .write({ ...settings, ...patch })
+      .then(setSettings)
+      .catch(() => undefined);
+  }
+
   return (
-    <Card>
+    <Card className="flex flex-col gap-4">
       <CheckField
         id="skills-auto-approve"
         testId="skills-auto-approve"
         label={t('skills.autoApprove')}
         hint={t('skills.autoApproveNote')}
         checked={settings.autoApproveSkills}
-        onChange={(checked) => {
-          void settingsService
-            .write({ ...settings, autoApproveSkills: checked })
-            .then(setSettings)
-            .catch(() => undefined);
-        }}
+        onChange={(checked) => save({ autoApproveSkills: checked })}
       />
+
+      <CheckField
+        id="skills-distill"
+        testId="skills-distill"
+        label={t('skills.distill')}
+        hint={t('skills.distillNote')}
+        checked={settings.distillSkills}
+        onChange={(checked) => save({ distillSkills: checked })}
+      />
+
+      {settings.distillSkills ? (
+        <Select
+          id="skills-distill-interval"
+          data-testid="skills-distill-interval"
+          label={t('skills.distillInterval')}
+          hint={t('skills.distillIntervalNote')}
+          className="w-48"
+          value={String(settings.distillIntervalMinutes)}
+          onChange={(event) => save({ distillIntervalMinutes: Number(event.target.value) })}
+        >
+          {DISTILL_INTERVALS.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {t('skills.distillEvery', { minutes })}
+            </option>
+          ))}
+        </Select>
+      ) : null}
     </Card>
   );
 }
+
+/** How often the distiller may look. One conversation per tick, so this is the bill. */
+const DISTILL_INTERVALS = [10, 30, 60, 360, 1440];
 
 function VoiceCleanupCard() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);

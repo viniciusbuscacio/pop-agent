@@ -213,6 +213,8 @@ async function run(base: string): Promise<void> {
     voiceCleanup: false,
     voiceCleanupModel: '',
     autoApproveSkills: false,
+    distillSkills: true,
+    distillIntervalMinutes: 10,
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

@@ -39,6 +39,8 @@ import { VoiceCleanup } from './application/voice/voice-cleanup.js';
 import { HybridMemory } from './application/memory/hybrid-memory.js';
 import { EmbeddingIndexer } from './application/memory/embedding-indexer.js';
 import { SkillRouterService } from './application/skills/skill-router-service.js';
+import { SkillDistiller } from './application/skills/skill-distiller.js';
+import { SkillCollector } from './application/skills/skill-collector.js';
 import { pinnedBodies } from './domain/skills/skill-router.js';
 import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
@@ -393,6 +395,34 @@ const taskScheduler = new TaskScheduler({
   clock: systemClock,
   timer: intervalTimer,
   jobs: [
+    // The auto-skill pair (popy.spec §8, fase c). They ride this tick rather
+    // than owning timers, so everything periodic in the process is in one
+    // place -- and the distiller's interval is a getter over Settings, which
+    // is why changing it takes effect on the next tick instead of the next
+    // restart.
+    new SkillDistiller({
+      chats: context.chats,
+      marks: context.distillation,
+      revisions: context.skillRevisions,
+      skills: skillsVault,
+      ...(embedder === undefined ? {} : { embedder }),
+      vectors: context.skillVectors,
+      // The provider is inherited from the chat being distilled; a job with no
+      // parent chat would fall through to the default. Same failover chain as
+      // a run (popy.spec §15).
+      complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
+      clock: systemClock,
+      enabled: () => settings.read().distillSkills,
+      autoApprove: () => settings.read().autoApproveSkills,
+      everyMs: () => settings.read().distillIntervalMinutes * 60_000,
+      onJournal: (line) => console.log(line),
+    }),
+    new SkillCollector({
+      skills: skillsVault,
+      archive: skillsVault,
+      usage: context.skillUsage,
+      onJournal: (line) => console.log(line),
+    }),
     // The Garbage empties itself once a day (popy.spec §14): thirty days is
     // a floor, not a deadline, so a daily check is the right cadence.
     new GarbageSweeper({ files, onJournal: (line) => console.log(line) }),
@@ -450,6 +480,10 @@ const app = createApp({
   userMemory: context.userMemory,
   skills: skillsVault,
   skillUsage: context.skillUsage,
+  skillRevisions: context.skillRevisions,
+  skillArchive: skillsVault,
+  distillation: context.distillation,
+  distillerEnabled: () => settings.read().distillSkills,
   mcp,
   usage: context.usage,
   hands,

@@ -26,6 +26,8 @@ const settingsSchema = z
     voiceCleanup: z.boolean(),
     voiceCleanupModel: z.string().max(200),
     autoApproveSkills: z.boolean(),
+    distillSkills: z.boolean(),
+    distillIntervalMinutes: z.number().int().min(1).max(1440),
   })
   .strict();
 
@@ -65,5 +67,7 @@ function toDto(settings: AppSettings): SettingsDTO {
     voiceCleanup: settings.voiceCleanup,
     voiceCleanupModel: settings.voiceCleanupModel,
     autoApproveSkills: settings.autoApproveSkills,
+    distillSkills: settings.distillSkills,
+    distillIntervalMinutes: settings.distillIntervalMinutes,
   };
 }

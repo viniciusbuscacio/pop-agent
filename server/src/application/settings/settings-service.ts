@@ -33,6 +33,18 @@ export interface AppSettings {
    * in future prompts.
    */
   autoApproveSkills: boolean;
+  /**
+   * Whether the background distiller reads finished conversations at all
+   * (popy.spec §8, fase c). On by default: a tick with nothing idle and unread
+   * makes no provider call, so the cost follows use and vanishes with it.
+   */
+  distillSkills: boolean;
+  /**
+   * Minutes between its ticks. One conversation per tick is the cost ceiling,
+   * so this is the dial that sets it. Ten while the feature is new; the
+   * intended factory setting once it has been watched for a while is thirty.
+   */
+  distillIntervalMinutes: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -44,6 +56,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voiceCleanup: false,
   voiceCleanupModel: '',
   autoApproveSkills: false,
+  distillSkills: true,
+  distillIntervalMinutes: 10,
 };
 
 const SETTINGS_KEY = 'app';

@@ -4,12 +4,18 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import type { Skill, SkillSource } from '../../domain/skills/skill.js';
-import { SkillsError, type SkillInput, type SkillsRepo } from '../../application/ports/skills-repo.js';
+import {
+  SkillsError,
+  type SkillArchiveRepo,
+  type SkillInput,
+  type SkillsRepo,
+} from '../../application/ports/skills-repo.js';
 import { DEFAULT_SKILLS } from './default-skills.js';
 
 /**
@@ -39,13 +45,23 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
 /** The subfolder the distiller writes into; also the path-based `source` hint. */
 export const AUTO_DIR = 'auto';
 
+/**
+ * Where the collector puts what it retires (popy.spec §8). A reserved name, so
+ * the scanner walks past it: a skill in here is out of the router but still on
+ * disk, which is the whole point -- the policy is a cap with archiving, never a
+ * delete. A seasonal procedure (the once-a-year tax routine) would be destroyed
+ * by any rule that deletes, and no use counter can tell it apart from a skill
+ * that simply never earned its place.
+ */
+export const ARCHIVE_DIR = '_archive';
+
 /** The defaults that ship pinned (popy.spec §8), pinned even where the seeded
  * file predates the flag -- no migration, the code is the source. */
 const PINNED_DEFAULTS = new Set(
   DEFAULT_SKILLS.filter((skill) => skill.pinned === true).map((skill) => skill.slug),
 );
 
-export class SkillsVault implements SkillsRepo {
+export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   constructor(private readonly root: string) {
     mkdirSync(root, { recursive: true });
     this.seedDefaults();
@@ -146,14 +162,78 @@ export class SkillsVault implements SkillsRepo {
   }
 
   /**
+   * Moves a skill out of the router without destroying it (popy.spec §8): the
+   * collector's only verb. It lands in `_archive/<slug>/SKILL.md` whatever
+   * shape it had, because the archive is a resting place and not a working
+   * layout -- and coming back out is then one rule, not two.
+   *
+   * Built-ins are refused for the same reason they cannot be deleted: they
+   * belong to the app, and the next boot would seed them straight back.
+   */
+  archive(slug: string): boolean {
+    const skill = this.get(slug);
+    if (skill === undefined) return false;
+    if (skill.source === 'builtin') throw new SkillsError('Built-in skills cannot be archived.');
+
+    const target = join(this.root, ARCHIVE_DIR, slug);
+    rmSync(target, { recursive: true, force: true });
+    mkdirSync(dirname(target), { recursive: true });
+
+    const folder = this.discoverFolderSkills().find((entry) => entry.slug === slug);
+    if (folder !== undefined) {
+      renameSync(dirname(folder.path), target);
+      return true;
+    }
+    mkdirSync(target, { recursive: true });
+    renameSync(join(this.root, `${slug}.md`), join(target, 'SKILL.md'));
+    return true;
+  }
+
+  /** What the collector has retired, newest names last; the screen offers these back. */
+  archived(): Skill[] {
+    const root = join(this.root, ARCHIVE_DIR);
+    if (!existsSync(root)) return [];
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && SLUG.test(entry.name))
+      .map((entry) => this.readFolderSkill(entry.name, join(root, entry.name, 'SKILL.md')))
+      .filter((skill): skill is Skill => skill !== undefined)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  /**
+   * Back into the vault, and back into the router. An archived skill returns to
+   * the shape its source implies -- an auto skill to `auto/<slug>/`, anything
+   * else to a flat file -- which is exactly what `write` already decides, so
+   * the restore is a read plus a write rather than a second set of path rules.
+   */
+  restore(slug: string): Skill | undefined {
+    const stored = this.archived().find((skill) => skill.slug === slug);
+    if (stored === undefined) return undefined;
+    const restored = this.write({
+      slug: stored.slug,
+      name: stored.name,
+      description: stored.description,
+      whenToUse: stored.whenToUse,
+      body: stored.body,
+      source: stored.source,
+      ...(stored.pinned === true ? { pinned: true } : {}),
+      ...(stored.pending === true ? { pending: true } : {}),
+    });
+    rmSync(join(this.root, ARCHIVE_DIR, slug), { recursive: true, force: true });
+    return restored;
+  }
+
+  /**
    * Recursive Agent Skills discovery: every directory holding a SKILL.md is
    * one skill; a found skill directory is not descended into. Hidden
-   * directories are skipped.
+   * directories are skipped, and so is the archive: what the collector retired
+   * is on disk but out of the vault, which is the difference between archiving
+   * and doing nothing.
    */
   private discoverFolderSkills(dir: string = this.root): { slug: string; path: string }[] {
     const found: { slug: string; path: string }[] = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === ARCHIVE_DIR) continue;
       const child = join(dir, entry.name);
       const skillFile = join(child, 'SKILL.md');
       if (existsSync(skillFile)) {
