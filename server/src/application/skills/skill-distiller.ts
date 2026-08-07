@@ -120,7 +120,7 @@ export class SkillDistiller implements MaintenanceJob {
     // and the whole conversation is skipped, permanently. The alternative --
     // distilling the clean part -- assumes the injection stayed where it was
     // read, and a prompt injection's whole purpose is not to.
-    const verdict = sanitize(window.map((message) => transcriptOf(message)).join('\n'));
+    const verdict = sanitize(window.map((message) => externalContentOf(message)).join('\n'));
     if (verdict.riskLevel !== 'low') {
       this.advance(chat.id, lastId);
       journal(`chat=${chat.id} skipped (tainted: ${verdict.riskLevel})`);
@@ -304,10 +304,23 @@ function dot(left: Float32Array, right: Float32Array): number {
 }
 
 /**
- * What the taint check reads: the message and what its tools brought back. Tool
- * output is the point -- that is where an injection arrives from, and the
- * assistant's prose about it is only the echo.
+ * What the taint check reads: **only** what the tools brought back from
+ * outside.
+ *
+ * The message text is deliberately not included, and that is a correction of
+ * this file's first version. §10's threat model is INDIRECT injection -- text
+ * the agent read from a page, a file, a repository -- and what the user typed
+ * is not that. Passing their prose through the same check made the detector's
+ * own vocabulary radioactive: measured against this repo's documentation, a
+ * bare "system prompt" flags nine benign paragraphs, so every conversation
+ * about how Popy works would have been skipped, silently and forever, because
+ * the watermark advances on a taint. That is precisely the set of
+ * conversations most worth distilling.
+ *
+ * A user who pastes an injection into the chat themselves is a different
+ * story, and not this guard's: they are the principal, and the skill they get
+ * is the skill they asked for.
  */
-function transcriptOf(message: Message): string {
-  return [message.content, ...message.tools.map((tool) => tool.detail)].join('\n');
+function externalContentOf(message: Message): string {
+  return message.tools.map((tool) => tool.detail).join('\n');
 }

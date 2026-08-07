@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.61 — 2026-08-07.
+Version 1.62 — 2026-08-07.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1389,6 +1389,35 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.62 (2026-08-07): **The safety layer measured, and the distiller's taint
+  check corrected (§8, §10, Backlog #8).** The injection corpus had only ever
+  been tested in the flattering direction — write a payload, watch it match —
+  so `tools/safety-scan.ts` (`npm run safety:scan`) now runs it over the
+  repo's own prose and prints every flag with the text that caused it. The
+  first measurement found three benign documentation lines reading `high`
+  ("send an Authorization header, and a session token", `POST /v1/login {
+  password }`, `POST /v1/auth/change-password`): the exfiltration patterns
+  allowed sixty characters between the verb and the noun, which reference
+  prose crosses constantly. The gap is now short and may not cross a newline,
+  a table pipe, a brace or a slash, and the noun may not be the tail of a
+  hyphenated word. 351 paragraphs, 11 flags, all of them the deliberate bare
+  `system prompt` at `suspicious`.
+  **The correction that mattered more** is in the distiller: it was reading
+  the whole window — the user's messages included — through `sanitize`, which
+  made the detector's own vocabulary radioactive. A bare "system prompt"
+  flags nine paragraphs of this spec, so every conversation about how Popy
+  works would have been skipped, silently and permanently, since the
+  watermark advances on a taint. It now reads **only tool output**, which is
+  what §10's threat model was ever about: indirect injection is text that
+  came from outside, and what the user typed is not that.
+  New coverage the measurement showed was missing: **URL exfiltration** (a
+  markdown image whose query string interpolates a secret — nothing is
+  "sent", so every verb-based pattern was blind to it), four **Portuguese**
+  phrasings ("a partir de agora você deve", "seu novo objetivo é"), and
+  **base64** — encoded runs are decoded once and re-read with the same
+  patterns, reported as `injection:<label>:encoded`. One level only: a
+  decoder that follows its own output is a decompression bomb waiting for a
+  hostile page.
 - 1.61 (2026-08-07): **Auto-skill fase (c): the background distiller and the
   archiving collector are BUILT (§8, §13, §21).** The half nobody has to ask
   for. A maintenance job on the task scheduler's tick reads one idle

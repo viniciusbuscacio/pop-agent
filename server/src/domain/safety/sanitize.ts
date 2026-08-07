@@ -78,6 +78,9 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /esque[cç]a (tudo|todas as instrucoes|o que (foi|lhe foi) (dito|pedido))/i, level: 'high', label: 'override-instructions' },
   { pattern: /nao (siga|obedeca) (as|as) (instrucoes|regras) (anteriores|do sistema)/i, level: 'high', label: 'override-instructions' },
   { pattern: /(as |estas )?novas (instrucoes|regras) (substituem|anulam)/i, level: 'high', label: 'override-instructions' },
+  { pattern: /a partir de agora,? (voce|tu) (deve|passa a|vai|ira)\b/i, level: 'high', label: 'override-instructions' },
+  { pattern: /seu (novo )?(objetivo|proposito|papel|unico objetivo) (agora )?(e|passa a ser)\b/i, level: 'high', label: 'override-instructions' },
+  { pattern: /\bnovas ordens\b|\binstrucoes atualizadas\b/i, level: 'suspicious', label: 'override-instructions' },
   // -- Persona hijack (EN)
   { pattern: /you are (now|no longer) [^.]{0,80}(assistant|ai|model|bot|agent|mode)/i, level: 'high', label: 'persona-hijack' },
   { pattern: /\b(act|behave|respond) as (if you (were|are)|an? )[^.]{0,30}(unrestricted|unfiltered|jailbroken|dan\b)/i, level: 'high', label: 'persona-hijack' },
@@ -96,9 +99,28 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /\b(revele|mostre|imprima|repita|exiba)\b.{0,40}\b(prompt (do|de) sistema|suas instrucoes|instrucoes (ocultas|iniciais))/i, level: 'high', label: 'prompt-exfiltration' },
   { pattern: /qual e o seu prompt (do|de) sistema/i, level: 'suspicious', label: 'prompt-exfiltration' },
   // -- Secret / data exfiltration (EN + PT)
-  { pattern: /\b(send|post|upload|exfiltrate|forward|leak)\b.{0,60}\b(api[ _-]?keys?|secrets?|credentials?|passwords?|tokens?|\.env)\b/i, level: 'high', label: 'secret-exfiltration' },
-  { pattern: /\b(read|cat|print|dump)\b.{0,40}(\.env\b|secret\.key|\bcredentials\b|\bid_rsa\b|\bauthorized_keys\b)/i, level: 'high', label: 'secret-exfiltration' },
-  { pattern: /\b(envie|mande|poste|vaze|copie)\b.{0,60}\b(chaves?|segredos?|senhas?|credenciais|tokens?)\b/i, level: 'high', label: 'secret-exfiltration' },
+  //
+  // The gap is short and may not cross a newline, a table pipe or a brace.
+  // Measured against this repo's own documentation, the original `.{0,60}`
+  // matched three benign lines at level `high` -- "send an Authorization
+  // header, and a session token", "POST /v1/login { password } -> { token",
+  // "POST /v1/auth/recover`, `POST /v1/auth/change-password". API prose names
+  // a verb and a credential in one breath constantly; an actual instruction to
+  // exfiltrate puts them next to each other.
+  // No slash in the gap either, and the noun may not be the tail of a hyphenated
+  // word: `POST /v1/auth/change-password` is a route, not an instruction, and it
+  // was the last benign line in the repo still reading as `high`.
+  { pattern: /\b(send|post|upload|exfiltrate|forward|leak)\b[^\n|{}/]{0,25}(?<![-\w])(api[ _-]?keys?|secrets?|credentials?|passwords?|tokens?|\.env)\b/i, level: 'high', label: 'secret-exfiltration' },
+  { pattern: /\b(read|cat|print|dump)\b[^\n|{}]{0,25}(\.env\b|secret\.key|\bcredentials\b|\bid_rsa\b|\bauthorized_keys\b)/i, level: 'high', label: 'secret-exfiltration' },
+  { pattern: /\b(envie|mande|poste|vaze|copie)\b[^\n|{}]{0,25}\b(chaves?|segredos?|senhas?|credenciais|tokens?)\b/i, level: 'high', label: 'secret-exfiltration' },
+  // -- Indirect exfiltration: the payload leaves inside a URL the model is
+  // asked to fetch or render. The classic channel, and the one the verb-based
+  // patterns above miss entirely, because nothing is "sent" -- an image tag is
+  // enough. A markdown image whose query string interpolates something is the
+  // shape it almost always takes.
+  { pattern: /!\[[^\]]*\]\(\s*https?:\/\/[^)\s]*[?&][^)\s]*(\{\{|\$\{|<|%s\b)/i, level: 'high', label: 'url-exfiltration' },
+  { pattern: /\b(append|add|include|encode|put)\b[^\n]{0,40}\b(to|in|into)\b[^\n]{0,20}\b(the )?(url|link|query string|image (url|src))\b/i, level: 'high', label: 'url-exfiltration' },
+  { pattern: /\b(acrescente|adicione|inclua|codifique|coloque)\b[^\n]{0,40}\b(na|no|a|ao)\b[^\n]{0,20}\b(url|link|endereco|imagem)\b/i, level: 'high', label: 'url-exfiltration' },
   // -- Covert-action bait (EN + PT)
   { pattern: /\bwithout (telling|informing|alerting|asking) (the )?(user|owner|human)\b/i, level: 'high', label: 'covert-action' },
   { pattern: /\bdo (this|it) (silently|secretly|quietly)\b/i, level: 'high', label: 'covert-action' },
@@ -115,6 +137,49 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
 /** Drops combining accents so a PT pattern need not carry fragile literals. */
 function fold(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * Base64 runs worth decoding and reading. The long-block rule above catches a
+ * *payload* -- two hundred characters of nothing -- but says nothing about the
+ * case that actually matters here: a short, perfectly ordinary-looking token
+ * that decodes to "ignore all previous instructions". Twenty-eight characters,
+ * no warning, and every pattern in this file blind to it because it never sees
+ * the plaintext.
+ *
+ * So the encoded text is decoded once and re-read with the same patterns. One
+ * level deep, never recursive: a decoder that follows its own output is a
+ * decompression bomb waiting for a hostile page to feed it.
+ */
+const BASE64_RUN = /[A-Za-z0-9+/]{16,}={0,2}/g;
+/** Enough runs to catch a smuggled sentence, few enough to bound the work. */
+const MAX_DECODES = 20;
+const MAX_DECODED_CHARS = 4_096;
+
+export function decodeBase64Runs(text: string): string[] {
+  const out: string[] = [];
+  for (const match of text.matchAll(BASE64_RUN)) {
+    if (out.length >= MAX_DECODES) break;
+    const run = match[0];
+    if (run.length % 4 !== 0) continue; // real base64 is padded to a multiple of four
+    let decoded: string;
+    try {
+      decoded = Buffer.from(run, 'base64').toString('utf8');
+    } catch {
+      continue;
+    }
+    if (decoded.length === 0 || decoded.length > MAX_DECODED_CHARS) continue;
+    // Only text: a decoded PNG is a decoded PNG, and reading it as prose would
+    // flag hashes and asset ids all day.
+    const printable = [...decoded].filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
+    }).length;
+    if (printable / decoded.length < 0.9) continue;
+    if (!/[a-z]{3}/i.test(decoded)) continue; // no words in it, nothing to read
+    out.push(decoded);
+  }
+  return out;
 }
 
 /**
@@ -147,14 +212,23 @@ export function sanitize(text: string): SanitizedContent {
   // accent-stripped "instrucoes" a hurried user types are caught the same.
   const folded = fold(clean);
   const seen = new Set<string>();
-  for (const entry of INJECTION_PATTERNS) {
-    if (!entry.pattern.test(folded)) continue;
-    raise(entry.level);
-    if (!seen.has(entry.label)) {
-      seen.add(entry.label);
-      warnings.push(`injection:${entry.label}`);
+  const scan = (haystack: string, suffix: string): void => {
+    for (const entry of INJECTION_PATTERNS) {
+      if (!entry.pattern.test(haystack)) continue;
+      raise(entry.level);
+      const label = `injection:${entry.label}${suffix}`;
+      if (!seen.has(label)) {
+        seen.add(label);
+        warnings.push(label);
+      }
     }
-  }
+  };
+
+  scan(folded, '');
+  // The same reading, one layer down. Reported with its own suffix so the log
+  // says where the phrasing was found -- a page that hides its instructions is
+  // a different kind of page from one that states them.
+  for (const decoded of decodeBase64Runs(clean)) scan(fold(decoded), ':encoded');
 
   return { clean, riskLevel, warnings, urls };
 }

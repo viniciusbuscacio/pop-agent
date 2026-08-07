@@ -22,6 +22,7 @@
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",
     "selfmap:check": "tsx tools/generate-self-map.ts --check",
+    "safety:scan": "tsx tools/safety-scan.ts .",
     "smoke": "tsx tools/smoke.ts",
     "pack:cli": "tsx tools/pack-cli.ts"
   },

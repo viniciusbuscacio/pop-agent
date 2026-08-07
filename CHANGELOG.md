@@ -58,6 +58,18 @@ normative history.
 
 ### Fixed
 
+- **Popy no longer refuses to learn from conversations about itself.** The
+  check that keeps it from learning anything out of a page it read was also
+  reading your own messages, and it treats the words "system prompt" as a
+  warning sign -- so the conversations most worth learning from, the ones
+  about how Popy works, were quietly the ones it always skipped. It now looks
+  only at what a tool brought back from outside.
+- **The injection detector stops flagging ordinary API notes.** Text like
+  "send an Authorization header, and a session token" read as an attempt to
+  steal a credential. It now also reads instructions it used to miss
+  altogether: a secret smuggled out inside an image URL, a few more
+  Portuguese phrasings, and an instruction hidden as base64.
+
 - **Editing a learned skill really does make it yours.** The promotion was
   written to disk and then read straight back as "learned", so the automatic
   housekeeping still considered it its own.
