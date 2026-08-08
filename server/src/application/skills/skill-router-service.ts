@@ -58,26 +58,32 @@ export class SkillRouterService {
 
   /** The bodies of the skills relevant to this message, best first. */
   async route(message: string): Promise<string[]> {
-    // Two kinds of skill never compete for a per-turn slot: a pinned one is
-    // already in the session's system prompt, and a pending one is a skill the
-    // user has not accepted yet (popy.spec §8). Pending is the load-bearing
-    // half of the approval promise -- without this line the Skills screen would
-    // show a skill as "waiting" while the router was already using it.
-    const skills = this.deps.skills
-      .all()
-      .filter((skill) => skill.pinned !== true && skill.pending !== true);
-    if (skills.length === 0) return [];
+    // The index covers the whole vault; the filter is applied to the
+    // *selection*, not to the indexing. Two kinds of skill never compete for a
+    // per-turn slot: a pinned one is already in the session's system prompt,
+    // and a pending one is a skill the user has not accepted yet (popy.spec
+    // §8). Pending is the load-bearing half of the approval promise -- without
+    // this filter the Skills screen would show a skill as "waiting" while the
+    // router was already using it. But filtering *before* the vectors meant a
+    // pending skill never got one, and the distiller's dedup reads that same
+    // table: nine copies of one procedure reached the queue because each
+    // candidate was compared against a set its predecessors were missing from.
+    const vault = this.deps.skills.all();
+    if (vault.length === 0) return [];
 
     const embedder = this.deps.embedder;
     let selected: SelectedSkill[];
     if (embedder === undefined) {
-      selected = selectSkills(message, skills);
+      selected = selectSkills(message, vault.filter(routable));
     } else {
-      const skillVectors = await this.skillVectors(skills);
+      const vectors = await this.skillVectors(vault);
+      const candidates = vault
+        .map((skill, index) => ({ skill, vector: vectors[index] }))
+        .filter((entry) => routable(entry.skill));
       const [messageVector] = await embedder.embed([message], 'query').catch(() => []);
-      selected = selectSkills(message, skills, {
+      selected = selectSkills(message, candidates.map((entry) => entry.skill), {
         ...(messageVector === undefined ? {} : { messageVector }),
-        skillVectors,
+        skillVectors: candidates.map((entry) => entry.vector),
       });
     }
 
@@ -97,7 +103,7 @@ export class SkillRouterService {
     return selected.map((entry) => entry.skill.body);
   }
 
-  /** A vector per skill, computed once and reused until the skill's text changes. */
+  /** A vector per skill in the vault, computed once and reused until its text changes. */
   private async skillVectors(skills: Skill[]): Promise<(Float32Array | undefined)[]> {
     const embedder = this.deps.embedder;
     if (embedder === undefined) return skills.map(() => undefined);
@@ -153,6 +159,15 @@ export class SkillRouterService {
     }
     if (dropped) store.keepOnly([...this.cache.keys()]);
   }
+}
+
+/**
+ * Whether a skill may take one of this turn's slots. Not whether it is indexed:
+ * everything in the vault is indexed, because the vector table is also what the
+ * distiller dedups against.
+ */
+function routable(skill: Skill): boolean {
+  return skill.pinned !== true && skill.pending !== true;
 }
 
 function routingText(skill: Skill): string {

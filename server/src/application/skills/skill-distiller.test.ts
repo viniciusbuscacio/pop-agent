@@ -120,8 +120,20 @@ class TwinEmbedder implements Embedder {
   }
 }
 
-function vectors(stored: StoredSkillVector[]): SkillVectorsRepo {
-  return { all: () => stored, save: () => undefined, keepOnly: () => undefined };
+/**
+ * The vector table as the distiller sees it: writable, because what the
+ * distiller stores on one tick is what it dedups against on the next.
+ */
+class MemoryVectors implements SkillVectorsRepo {
+  readonly rows = new Map<string, StoredSkillVector>();
+  constructor(stored: StoredSkillVector[]) {
+    for (const row of stored) this.rows.set(row.slug, row);
+  }
+  all = (): StoredSkillVector[] => [...this.rows.values()];
+  save = (slug: string, signature: string, vector: Float32Array): void => {
+    this.rows.set(slug, { slug, signature, vector });
+  };
+  keepOnly = (): void => undefined;
 }
 
 const ANSWER = [
@@ -138,6 +150,7 @@ const ANSWER = [
 interface Harness {
   marks: MemoryMarks;
   revisions: MemoryRevisions;
+  vectors: MemoryVectors;
   skills: SkillsRepo & { written: SkillInput[] };
   prompts: string[];
   journal: string[];
@@ -156,6 +169,7 @@ function harness(options: {
 } = {}): Harness {
   const marks = new MemoryMarks();
   const revisions = new MemoryRevisions();
+  const store = new MemoryVectors(options.vectors ?? []);
   const skills = skillsRepo(options.skills ?? []);
   const prompts: string[] = [];
   const journal: string[] = [];
@@ -168,7 +182,7 @@ function harness(options: {
     revisions,
     skills,
     ...(options.embedder === undefined ? {} : { embedder: options.embedder }),
-    vectors: vectors(options.vectors ?? []),
+    vectors: store,
     complete: (request) => {
       prompts.push(request.prompt);
       const answer = options.answer ?? ANSWER;
@@ -181,7 +195,7 @@ function harness(options: {
     onJournal: (line) => journal.push(line),
   });
 
-  return { marks, revisions, skills, prompts, journal, distiller };
+  return { marks, revisions, vectors: store, skills, prompts, journal, distiller };
 }
 
 describe('SkillDistiller', () => {
@@ -361,6 +375,45 @@ describe('SkillDistiller', () => {
 
     expect(world.skills.written).toHaveLength(0);
     expect(world.revisions.saved[0]).toMatchObject({ slug: 'publishing', similarity: 1 });
+  });
+
+  it('stores the vector of the skill it just wrote', async () => {
+    // Nothing else will: the router indexes on a user message, and a pending
+    // skill used to be filtered out before it was ever indexed.
+    world = harness({ embedder: new TwinEmbedder() });
+    await world.distiller.run();
+
+    expect(world.vectors.rows.get('deploy-blog')).toMatchObject({
+      signature: 'Deploy the blog. How to publish a post. when the user wants to publish',
+    });
+  });
+
+  it('recognises on the second tick what it wrote on the first', async () => {
+    // The production failure, in miniature: a task that opens a fresh chat every
+    // hour fed the distiller the same procedure over and over, and because no
+    // pending skill ever had a vector, each candidate was compared against a
+    // table its predecessors were missing from. Nine copies of one skill reached
+    // the approval queue under nine invented slugs.
+    let call = 0;
+    world = harness({
+      chats: [chat('c1', LONG_AGO), chat('c2', LONG_AGO)],
+      messages: {
+        c1: [message('m1', 'how do I deploy the blog?')],
+        c2: [message('m2', 'how do I publish the site?')],
+      },
+      embedder: new TwinEmbedder(),
+      answer: () => {
+        call += 1;
+        return Promise.resolve(call === 1 ? ANSWER : ANSWER.replace('deploy-blog', 'ship-the-blog'));
+      },
+    });
+
+    await world.distiller.run();
+    await world.distiller.run();
+
+    expect(call).toBe(2);
+    expect(world.skills.written).toHaveLength(1);
+    expect(world.revisions.saved[0]).toMatchObject({ slug: 'deploy-blog', similarity: 1 });
   });
 
   it('refuses to touch a built-in, whatever the model proposed', async () => {

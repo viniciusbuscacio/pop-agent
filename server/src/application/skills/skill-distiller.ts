@@ -218,7 +218,8 @@ export class SkillDistiller implements MaintenanceJob {
       return this.propose(candidate, existing.slug, 1, `${candidate.slug}=revision(slug)`);
     }
 
-    const match = await this.nearest(candidate);
+    const measured = await this.measure(candidate);
+    const match = measured.best;
     if (match !== undefined && match.score >= DEDUP_THRESHOLD) {
       return this.propose(
         { ...candidate, slug: match.slug },
@@ -242,6 +243,14 @@ export class SkillDistiller implements MaintenanceJob {
     } catch (error) {
       if (error instanceof SkillsError) return `${candidate.slug}=rejected`;
       throw error;
+    }
+    // The vector the dedup just computed is the vector the router would compute
+    // -- `candidateRoutingText` and the router's `routingText` are the same
+    // string -- so it is stored now rather than on some later message. Waiting
+    // is what let a distiller running every ten minutes compare each candidate
+    // against a table its own recent work was missing from.
+    if (measured.vector !== undefined) {
+      this.deps.vectors?.save(candidate.slug, candidateRoutingText(candidate), measured.vector);
     }
     const near = match === undefined ? '' : `,near=${match.score.toFixed(2)}`;
     return `${candidate.slug}=${live ? 'live' : 'pending'}${near}`;
@@ -289,29 +298,39 @@ export class SkillDistiller implements MaintenanceJob {
     return label;
   }
 
-  /** The closest existing skill by cosine, when there is an embedder to ask. */
-  private async nearest(
-    candidate: SkillCandidate,
-  ): Promise<{ slug: string; score: number } | undefined> {
+  /**
+   * The candidate's own vector, and the closest existing skill to it. Both come
+   * back because the vector is worth keeping whether or not it matched anything:
+   * an empty table used to return early, so the first skill of a fresh install
+   * was never stored and the second could not be compared to it.
+   */
+  private async measure(candidate: SkillCandidate): Promise<Measured> {
     const embedder = this.deps.embedder;
-    const stored = this.deps.vectors?.all() ?? [];
-    if (embedder === undefined || stored.length === 0) return undefined;
+    if (embedder === undefined) return {};
 
     const [vector] = await embedder.embed([candidateRoutingText(candidate)], 'passage').catch(() => []);
-    if (vector === undefined) return undefined;
+    if (vector === undefined) return {};
 
     let best: { slug: string; score: number } | undefined;
-    for (const entry of stored) {
+    for (const entry of this.deps.vectors?.all() ?? []) {
       if (entry.vector.length !== vector.length) continue;
       const score = dot(vector, entry.vector);
       if (best === undefined || score > best.score) best = { slug: entry.slug, score };
     }
-    return best;
+    return best === undefined ? { vector } : { vector, best };
   }
 
   private advance(chatId: string, messageId: string): void {
     this.deps.marks.set(chatId, messageId, new Date(this.deps.clock.now()).toISOString());
   }
+}
+
+/** What one dedup pass learned about a candidate. */
+interface Measured {
+  /** The candidate's routing vector, when there was an embedder to compute it. */
+  vector?: Float32Array;
+  /** The closest skill already in the vault, when the table was not empty. */
+  best?: { slug: string; score: number };
 }
 
 /** The vectors are L2-normalized by the embedder, so the dot product is cosine. */

@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.64 — 2026-08-08.
+Version 1.65 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -461,6 +461,28 @@ user message — selection is 100% local, no LLM call:
   invalidates its vector and nothing else. A vector whose length disagrees
   with the current embedder is dropped rather than compared. Cold start
   16.3s, warm 2.0s on the real install.
+- **The index covers the vault; the filter is on the selection** (1.65,
+  found in production). `skill_embeddings` answers two questions, not one:
+  which skills may take a slot this turn, and what the distiller's dedup
+  compares a candidate against. Routing excludes pinned and pending skills;
+  **indexing excludes nothing.** The router filtered before it indexed, so a
+  pending skill never got a vector, and the distiller — whose whole dedup
+  leg reads this table — compared every candidate against a set its own
+  recent work was missing from. A background task opening a fresh chat every
+  hour turned that into **nine copies of one procedure in the approval
+  queue**, each under a slug the model had just invented, none of them
+  visible to the next. Two failure surfaces, one hole: `hydrate` also pruned
+  as dead any stored vector whose skill was not routable.
+- **The distiller stores the vector of the skill it writes** (1.65), rather
+  than leaving it for the next user message: `candidateRoutingText` and the
+  router's `routingText` are the same string, so the vector the dedup just
+  computed is exactly the one the router would compute. Nothing else would
+  store it in time — the router indexes when a message arrives, and the
+  distiller runs on a timer. A tick every ten minutes cannot dedup against
+  work that only gets indexed when somebody happens to chat. It is stored
+  even when the table was empty and nothing was compared: returning early on
+  an empty table is why the first skill of a fresh install was never indexed
+  and the second could not be measured against it.
 - **`use_count` / `last_used_at`** (`skill_usage`, migration 029): the
   router records every skill it injects. A counter and a stamp, not a
   boolean — a skill used twice a year must be distinguishable from one used
@@ -1412,6 +1434,25 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.65 (2026-08-08): **The dedup was comparing against a table the pending
+  skills were missing from (§8).** Found by reading the instance, not the
+  tests: `skills/auto/` held twelve skills and nine were the same procedure
+  under nine invented slugs. The router filtered `pending` before it built
+  the vector index, and the distiller's dedup reads that index — so every
+  candidate was measured against a set its predecessors had never entered,
+  and the 0.90 threshold never got a chance to fire. Only the slug leg ever
+  caught anything, and a model naming its own skill never repeats a slug.
+  The index now covers the whole vault and the filter moved to the
+  selection; the distiller stores a candidate's vector when it writes the
+  skill, because a job on a ten-minute timer cannot wait for a user message
+  to index its own output.
+  The load that exposed it was a scheduled task, hourly since 02/08: 153
+  runs, 49 of the database's 55 chats, and three proposals that were the
+  same observation three times. It stays hourly — it is the only thing
+  generating enough distiller traffic to have found this, and it will be the
+  thing that proves the fix. What it also revealed is that the router's
+  entire observability record is 125 identical log lines, one query repeated:
+  there is not yet real routing data to retune `0.90` or `z ≥ 2.1` from.
 - 1.64 (2026-08-08): **The distillation format stops being JSON (§8).** Two
   more live runs, this time against the instance's real provider chain through
   `completeAsService`. The first version of `tools/live-skills.ts` called
