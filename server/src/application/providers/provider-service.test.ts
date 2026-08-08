@@ -334,6 +334,45 @@ describe('the catalog', () => {
     });
   });
 
+  it('refetches after the endpoint changes, not the stale cache', async () => {, async () => {
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://old/v1',
+      defaultModel: 'old-model',
+    });
+    service.setKey(instance.id, 'sk-local');
+    gateway.catalog = [{ id: 'old/catalog' }];
+    await service.models(instance.id);
+    expect(gateway.listed).toBe(1);
+
+    service.updateCustom(instance.id, { baseURL: 'http://new/v1' });
+    gateway.catalog = [{ id: 'new/catalog' }];
+
+    expect(await service.models(instance.id)).toEqual({
+      models: [{ id: 'new/catalog' }],
+      source: 'live',
+    });
+    expect(gateway.listed).toBe(2);
+  });
+
+  it('refetches after a new key is saved, not the old account s catalog', async () => {, async () => {
+    service.setKey(OPENROUTER, 'sk-old');
+    gateway.catalog = [{ id: 'account-a/model' }];
+    await service.models(OPENROUTER);
+    expect(gateway.listed).toBe(1);
+
+    service.setKey(OPENROUTER, 'sk-new');
+    gateway.catalog = [{ id: 'account-b/model' }];
+
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'account-b/model' }],
+      source: 'live',
+    });
+    expect(gateway.listed).toBe(2);
+  });
+});
+
+describe('resolving the pair', () => {
   it('answers the pinned row when every other source is empty', async () => {
     engineCatalog = [];
 

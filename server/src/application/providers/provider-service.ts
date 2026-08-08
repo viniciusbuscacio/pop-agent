@@ -76,6 +76,8 @@ export interface ProviderStatus {
   order: number;
   /** The user's on/off switch: a disabled provider never serves a run. */
   enabled: boolean;
+  /** When set, the last run failed with an auth-class error (pop-agent.spec §15). */
+  authErrorAt?: string;
 }
 
 /** Where a catalog answer came from, freshest first. */
@@ -172,6 +174,8 @@ export class ProviderService {
   status(providerId: string): ProviderStatus | undefined {
     const definition = this.definition(providerId);
     if (definition === undefined) return undefined;
+    const authErrorAt = this.authErrorAt(definition.id);
+    const authFields = authErrorAt === undefined ? {} : { authErrorAt };
     if (definition.authType === 'oauth') {
       // No key anywhere: configured means the engine holds a subscription
       // credential, obtained through its own login flow.
@@ -187,6 +191,7 @@ export class ProviderService {
         allowCustomModel: definition.allowCustomModel,
         order: this.positionOf(definition.id),
         enabled: this.isEnabled(definition.id),
+        ...authFields,
       };
     }
     const key = this.deps.secrets.get(keySecretName(definition.id));
@@ -209,6 +214,7 @@ export class ProviderService {
       order: this.positionOf(definition.id),
       enabled: this.isEnabled(definition.id),
       ...(definition.customBaseURL ? { baseURL: definition.baseURL, custom: true } : {}),
+      ...authFields,
     };
   }
 
@@ -224,11 +230,32 @@ export class ProviderService {
     this.deps.secrets.set(keySecretName(providerId), apiKey);
     // New evidence: a freshly saved key deserves a first try immediately.
     this.deps.cooldown?.clear(providerId);
+    this.clearAuthError(providerId);
+    // A new key may be a new account with a different catalog.
+    this.invalidateCatalogCache(providerId);
   }
 
   clearKey(providerId: string): void {
     this.deps.secrets.delete(keySecretName(providerId));
     this.electDefault();
+  }
+
+  /**
+   * Records that a run failed with an auth-class error. The chat path calls
+   * this when the provider refuses credentials; status surfaces the marker so
+   * a revoked subscription is not reported as healthy forever.
+   */
+  noteAuthFailure(providerId: string): void {
+    const id = this.canonicalId(providerId);
+    this.deps.settings.set(
+      `provider.${id}.authErrorAt`,
+      new Date(this.deps.clock.now()).toISOString(),
+    );
+  }
+
+  /** New evidence from a fresh sign-in: the auth-error marker is cleared. */
+  noteOAuthSuccess(providerId: string): void {
+    this.clearAuthError(providerId);
   }
 
   /** Drops an oauth provider's subscription credential (pop-agent.spec §15). */
@@ -317,7 +344,7 @@ export class ProviderService {
     if (write === undefined) return;
     for (const id of this.order()) {
       if (!this.usable(id)) continue;
-      if (this.deps.defaults().provider === id) return;
+      if (this.canonicalId(this.deps.defaults().provider) === id) return;
       write(id, this.ref(id, '').modelId);
       return;
     }
@@ -385,6 +412,9 @@ export class ProviderService {
       CUSTOM_REGISTRY_KEY,
       registry.map((instance) => (instance.id === id ? updated : instance)),
     );
+    if (patch.baseURL !== undefined && updated.baseURL !== current.baseURL) {
+      this.invalidateCatalogCache(id);
+    }
     return updated;
   }
 
@@ -466,7 +496,7 @@ export class ProviderService {
     // else, and every new run kept asking for the model the card no longer
     // showed. Maritaca configured sabiazinho-4, runs asking sabia-4
     // (Vinicius, 05/08). The elected pair follows the card it points at.
-    if (this.deps.defaults().provider === definition.id) {
+    if (this.canonicalId(this.deps.defaults().provider) === definition.id) {
       this.deps.setDefaultProvider?.(definition.id, this.ref(definition.id, '').modelId);
     }
   }
@@ -764,6 +794,22 @@ export class ProviderService {
     return this.deps.settings.get<string>(CUSTOM_ALIAS_KEY) ?? providerId;
   }
 
+  private authErrorAt(providerId: string): string | undefined {
+    const stored = this.deps.settings.get<string>(`provider.${providerId}.authErrorAt`);
+    return stored !== undefined && stored.length > 0 ? stored : undefined;
+  }
+
+  /** Clears the auth-failure marker; empty means absent (no delete on the repo). */
+  private clearAuthError(providerId: string): void {
+    this.deps.settings.set(`provider.${this.canonicalId(providerId)}.authErrorAt`, '');
+  }
+
+  /** Drops a cached catalog so the next models() fetch hits the endpoint. */
+  private invalidateCatalogCache(providerId: string): void {
+    const id = this.canonicalId(providerId);
+    this.deps.settings.set(`models.${id}`, { fetchedAt: 0, models: [] });
+  }
+
   /** The gateway for a provider: a builtin's own, or one for a custom URL. */
   private gatewayFor(definition: ProviderDefinition): ProviderGateway | undefined {
     const builtin = this.deps.gateways[definition.id];
@@ -801,6 +847,8 @@ export class ProviderService {
           prompt: TEST_PROMPT,
           maxTokens: TEST_MAX_TOKENS,
         });
+        this.deps.cooldown?.clear(providerId);
+        this.clearAuthError(providerId);
         return { ok: true, latencyMs: this.deps.clock.now() - startedAuth };
       } catch (error) {
         return {
@@ -837,6 +885,8 @@ export class ProviderService {
         maxTokens: TEST_MAX_TOKENS,
       };
       await gateway.complete(request);
+      this.deps.cooldown?.clear(providerId);
+      this.clearAuthError(providerId);
       return { ok: true, latencyMs: this.deps.clock.now() - started };
     } catch (error) {
       const latencyMs = this.deps.clock.now() - started;
@@ -844,6 +894,8 @@ export class ProviderService {
       // that is the whole question a connection test asks. TEST_MAX_TOKENS is
       // five, which a reasoning model spends on thinking alone.
       if (error instanceof ProviderGatewayError && error.reachable) {
+        this.deps.cooldown?.clear(providerId);
+        this.clearAuthError(providerId);
         return { ok: true, latencyMs };
       }
       return {
@@ -870,7 +922,11 @@ export class ProviderService {
     const key = this.apiKey(definition.id);
     if (key !== undefined && gateway !== undefined) {
       const cached = this.deps.settings.get<CatalogCache>(cacheKey);
-      if (cached !== undefined && this.deps.clock.now() - cached.fetchedAt < CATALOG_TTL_MS) {
+      if (
+        cached !== undefined &&
+        cached.models.length > 0 &&
+        this.deps.clock.now() - cached.fetchedAt < CATALOG_TTL_MS
+      ) {
         return { models: cached.models, source: 'cache' };
       }
       try {
@@ -884,7 +940,9 @@ export class ProviderService {
         }
       } catch {
         // A stale cache is better than no catalog at all.
-        if (cached !== undefined) return { models: cached.models, source: 'cache' };
+        if (cached !== undefined && cached.models.length > 0) {
+          return { models: cached.models, source: 'cache' };
+        }
       }
     }
 
