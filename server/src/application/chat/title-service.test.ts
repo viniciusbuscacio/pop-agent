@@ -20,10 +20,10 @@ class ScriptedGateway {
     return Promise.resolve([]);
   }
 
-  complete(request: CompletionRequest): Promise<string> {
+  complete(request: CompletionRequest): Promise<{ text: string }> {
     this.requests.push(request);
     if (this.failure !== undefined) return Promise.reject(new Error(this.failure));
-    return Promise.resolve(this.answer);
+    return Promise.resolve({ text: this.answer });
   }
 }
 
@@ -80,7 +80,7 @@ beforeEach(() => {
     complete: (request) =>
       apiKey === undefined
         ? Promise.reject(new Error('No provider is configured for background work.'))
-        : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }),
+        : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }).then((answer) => answer.text),
     sink: { emit: (event) => events.push(event) },
   });
 });
@@ -151,7 +151,7 @@ describe('when the title job runs', () => {
       complete: (request) =>
         apiKey === undefined
           ? Promise.reject(new Error('No provider is configured for background work.'))
-          : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }),
+          : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }).then((answer) => answer.text),
       sink: { emit: (event) => events.push(event) },
       onFailure: (message) => failures.push(message),
     });
@@ -215,7 +215,7 @@ describe('when the title job runs', () => {
       complete: (request) =>
         apiKey === undefined
           ? Promise.reject(new Error('No provider is configured for background work.'))
-          : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }),
+          : gateway.complete({ apiKey, model: 'moonshotai/kimi-k3', ...request }).then((answer) => answer.text),
       sink: { emit: (event) => events.push(event) },
       onFailure: (message) => failures.push(message),
     });

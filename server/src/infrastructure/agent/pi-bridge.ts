@@ -22,6 +22,7 @@ import {
   type PiSession,
 } from './pi-engine.js';
 import { TaintGuard } from './tool-taint.js';
+import { shouldFailOver } from '../../application/chat/failover.js';
 
 /**
  * pi behind the AgentBridge port (pop-agent.spec §5, docs/agent-flow.md).
@@ -178,6 +179,8 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     };
     signal.addEventListener('abort', onAbort, { once: true });
 
+    const preLeaf = entry.session.getLeafId();
+
     try {
       await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
 
@@ -191,6 +194,9 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
           code: 'context_overflow',
           message: 'provider refused the turn; compacting and retrying once',
         });
+        // The overflowed turn stays on an abandoned branch; the retry replaces
+        // it on the main path instead of following it in the JSONL.
+        entry.session.rewindToLeaf(preLeaf);
         unsubscribe();
         try {
           await entry.session.compact();
@@ -198,7 +204,9 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
           // A failed compaction still deserves the retry: pi's threshold may
           // simply not have fired yet, and the second attempt costs one turn.
         }
+        const firstAttempt = translator;
         translator = new RunTranslator(onEvent);
+        translator.carryUsageFrom(firstAttempt);
         unsubscribe = entry.session.subscribe((event) => {
           translator.handle(event);
         });
@@ -216,13 +224,24 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       entry.session.setGuard(undefined);
       unsubscribe();
       signal.removeEventListener('abort', onAbort);
+
+      const failure = translator.failure;
+      // A failover-class refusal leaves the doomed turn on a side branch so
+      // the next provider (or the next bridge.run for failover) prompts from
+      // a clean main path -- one user message, not two.
+      if (
+        failure !== undefined &&
+        shouldFailOver({ code: failure.code, ...(failure.status === undefined ? {} : { status: failure.status }) })
+      ) {
+        entry.session.rewindToLeaf(preLeaf);
+      }
+
       this.release(entry);
 
       const usage = translator.usage;
       if (usage !== undefined && this.deps.onUsage !== undefined) {
         this.deps.onUsage({ chatId, provider: entry.providerId, model: entry.modelId, ...usage });
       }
-      const failure = translator.failure;
       if (failure !== undefined && this.deps.onFailure !== undefined) {
         this.deps.onFailure({ chatId, ...failure });
       }
@@ -261,6 +280,15 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
    * deleted so nothing rewrites its JSONL after the file is removed.
    */
   forget(chatId: string): void {
+    this.discardSession(chatId);
+  }
+
+  /**
+   * Hard-forgets a session even while a run still holds it: the zombie's JSONL
+   * writes land on an abandoned branch (see rewindToLeaf), and the next
+   * acquire opens fresh from the clean main path.
+   */
+  discardSession(chatId: string): void {
     const entry = this.sessions.get(chatId);
     if (entry === undefined) return;
     entry.session.dispose();
@@ -489,17 +517,29 @@ class RunTranslator {
   /** Output already forwarded, per tool call, so snapshots become deltas. */
   private readonly forwarded = new Map<string, string>();
   private total: TurnUsage | undefined;
-  private reported: { code: string; message: string | undefined } | undefined;
+  private reported: { code: string; message: string | undefined; status?: number } | undefined;
   private lastStopReason = '';
   private lastErrorMessage: string | undefined;
 
-  constructor(private readonly onEvent: (event: AgentEvent) => void) {}
+  constructor(
+    private readonly onEvent: (event: AgentEvent) => void,
+    seed?: TurnUsage,
+  ) {
+    if (seed !== undefined) this.total = { ...seed };
+  }
+
+  /** The billed usage from a prior attempt in the same run (overflow retry). */
+  carryUsageFrom(other: RunTranslator): void {
+    const usage = other.usage;
+    if (usage === undefined) return;
+    this.count(usage);
+  }
 
   get usage(): TurnUsage | undefined {
     return this.total;
   }
 
-  get failure(): { code: string; message: string | undefined } | undefined {
+  get failure(): { code: string; message: string | undefined; status?: number } | undefined {
     return this.reported;
   }
 
@@ -577,7 +617,7 @@ class RunTranslator {
   /** Reports a failed run once; later ones are the same failure echoing. */
   fail(code: string, message: string | undefined, status?: number): void {
     if (this.reported !== undefined) return;
-    this.reported = { code, message };
+    this.reported = { code, message, ...(status === undefined ? {} : { status }) };
     this.onEvent({ kind: 'error', code, ...(status === undefined ? {} : { status }) });
   }
 

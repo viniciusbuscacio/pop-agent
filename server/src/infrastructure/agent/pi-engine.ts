@@ -129,6 +129,15 @@ export interface PiSession {
   dispose(): void;
   /** Path of pi's JSONL file for this session, once it has one. */
   readonly sessionFile: string | undefined;
+  /** The JSONL tree's current leaf; null means before the first entry. */
+  getLeafId(): string | null;
+  /**
+   * Moves the leaf back and resyncs in-memory agent messages from the file.
+   * pi's {@link SessionManager.branch} alone only moves the pointer -- the
+   * agent keeps whatever it already had until something rebuilds context
+   * (see navigateTree in agent-session.js, which assigns buildSessionContext).
+   */
+  rewindToLeaf(leafId: string | null): void;
 }
 
 export interface PiOpenOptions {
@@ -725,5 +734,16 @@ class SdkPiSession implements PiSession {
 
   get sessionFile(): string | undefined {
     return this.session.sessionFile;
+  }
+
+  getLeafId(): string | null {
+    return this.session.sessionManager.getLeafId();
+  }
+
+  rewindToLeaf(leafId: string | null): void {
+    if (leafId === null) this.session.sessionManager.resetLeaf();
+    else this.session.sessionManager.branch(leafId);
+    const sessionContext = this.session.sessionManager.buildSessionContext();
+    this.session.agent.state.messages = sessionContext.messages;
   }
 }

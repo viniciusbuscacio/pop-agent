@@ -47,3 +47,8 @@ export function shouldFailOver(failure: RunFailure): boolean {
   if (status === undefined) return false;
   return FAILOVER_STATUSES.has(status) || (status >= 500 && status <= 599);
 }
+
+/** Auth-class refusals the provider layer should surface to the user. */
+export function isAuthFailure(failure: RunFailure): boolean {
+  return failure.status === 401 || failure.code === 'provider_not_configured';
+}

@@ -12,11 +12,11 @@ class OneKeyGateway implements ProviderGateway {
   listModels(): Promise<{ id: string }[]> {
     return Promise.resolve([{ id: 'live/model' }]);
   }
-  complete(request: CompletionRequest): Promise<string> {
+  complete(request: CompletionRequest): Promise<{ text: string }> {
     if (request.apiKey !== this.accepted) {
       return Promise.reject(new Error('Invalid credentials'));
     }
-    return Promise.resolve('ok');
+    return Promise.resolve({ text: 'ok' });
   }}
 
 let fixture: TestApp;

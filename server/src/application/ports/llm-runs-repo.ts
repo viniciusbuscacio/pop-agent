@@ -10,6 +10,10 @@ export interface LlmRun {
    * attempt that reached the model was still paid for.
    */
   id: string;
+  /**
+   * The conversation this run served. Empty for {@link kind} `service`: background
+   * work belongs to no chat; Usage aggregates by cost/model/period, not by chat.
+   */
   chatId: string;
   provider: string;
   model: string;
@@ -18,6 +22,8 @@ export interface LlmRun {
   /** US dollars, as the provider reported them. */
   cost: number;
   createdAt: string;
+  /** Chat runs default to `chat`; titles/summaries/voice cleanup use `service`. */
+  kind?: 'chat' | 'service';
 }
 
 export interface LlmRunsRepo {

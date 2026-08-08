@@ -63,14 +63,14 @@ class ScriptedGateway implements ProviderGateway {
     return Promise.resolve(this.catalog);
   }
 
-  complete(request: CompletionRequest): Promise<string> {
+  complete(request: CompletionRequest): Promise<{ text: string }> {
     this.completions.push(request);
     if (this.failCompleting !== undefined) {
       return Promise.reject(
         this.failCompleting instanceof Error ? this.failCompleting : new Error(this.failCompleting),
       );
     }
-    return Promise.resolve('ok');
+    return Promise.resolve({ text: 'ok' });
   }
 }
 

@@ -253,12 +253,14 @@ export function createTestApp(
     // reads the same script whichever door the completion came through.
     engineComplete: (request) =>
       providerAuth.authed.has(request.providerId)
-        ? gateway.complete({
-            apiKey: 'engine',
-            model: request.modelId,
-            prompt: request.prompt,
-            maxTokens: request.maxTokens ?? 64,
-          })
+        ? gateway
+            .complete({
+              apiKey: 'engine',
+              model: request.modelId,
+              prompt: request.prompt,
+              maxTokens: request.maxTokens ?? 64,
+            })
+            .then((answer) => answer.text)
         : Promise.reject(new Error('Not signed in.')),
     engineLogout: (providerId) => {
       providerAuth.authed.delete(providerId);

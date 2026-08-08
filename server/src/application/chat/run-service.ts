@@ -8,7 +8,7 @@ import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 import { billsPerToken } from '../providers/provider-definitions.js';
 import { channelNote } from './channel-note.js';
-import { shouldFailOver, type RunFailure } from './failover.js';
+import { shouldFailOver, isAuthFailure, type RunFailure } from './failover.js';
 
 /**
  * Turning a typed message into a run, and a run into a stored answer
@@ -127,9 +127,11 @@ export interface RunDeps {
     model: string;
   }) => { providerId: string; modelId: string }[];
   /** The advisory cooldown a failing provider is penalized into. */
-  cooldown?: { penalize(providerId: string): void };
+  cooldown?: { penalize(providerId: string): void; clear(providerId: string): void };
   /** The journal line when a run fails over; main.ts logs it. */
   onFallback?: (info: { chatId: string; from: string; to: string; code: string }) => void;
+  /** Auth-class refusals, forwarded to the provider layer (pop-agent.spec §15). */
+  onAuthFailure?: (providerId: string) => void;
 }
 
 interface PendingRun {
@@ -713,7 +715,29 @@ export class RunService {
       // surrendered one leaves it running and unheard.
       attempt.catch(() => undefined);
       const finished = await Promise.race([attempt.then(() => true), surrendered.then(() => false)]);
-      if (finished) result = await attempt;
+      if (finished) {
+        result = await attempt;
+      } else {
+        // The bridge may still settle after we gave up. Book its usage once,
+        // under a late id, so spend is not lost when the zombie finishes.
+        void attempt.then((late) => {
+          const usage = late.usage;
+          if (usage === undefined || this.deps.llmRuns === undefined) return;
+          this.deps.llmRuns.record({
+            id:
+              attemptIndex === 0
+                ? `${run.runId}-late`
+                : `${run.runId}-f${String(attemptIndex)}-late`,
+            chatId: run.chatId,
+            provider: usage.provider,
+            model: usage.model,
+            tokensIn: usage.inputTokens,
+            tokensOut: usage.outputTokens,
+            cost: billsPerToken(usage.provider) ? usage.cost : 0,
+            createdAt: new Date(clock.now()).toISOString(),
+          });
+        });
+      }
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
@@ -723,10 +747,15 @@ export class RunService {
 
     // Our own abort, not the bridge's opinion of it: whatever error the abort
     // surfaced, the truth is that this provider never said anything.
-    if (timedOut) failure = { code: 'attempt_timeout' };
+    if (timedOut) {
+      failure = { code: 'attempt_timeout' };
+      // A deaf bridge keeps its cached session alive; drop it so failover
+      // opens fresh and the zombie cannot interleave into the next attempt.
+      bridge.discardSession?.(run.chatId);
+    }
 
     const usage = result.usage;
-    if (usage !== undefined && this.deps.llmRuns !== undefined) {
+    if (usage !== undefined && this.deps.llmRuns !== undefined && !timedOut) {
       this.deps.llmRuns.record({
         // The first attempt keeps the run id; a failover attempt gets its own
         // suffixed row -- both were billed, and llm_runs ids are unique.
@@ -769,7 +798,11 @@ export class RunService {
       if (pair === undefined) break;
 
       failure = await this.attempt(run, pair, index);
-      if (failure === undefined) break; // answered
+      if (failure === undefined) {
+        this.deps.cooldown?.clear(pair.providerId);
+        break; // answered
+      }
+      if (isAuthFailure(failure)) this.deps.onAuthFailure?.(pair.providerId);
       if (failure.code === 'aborted' || run.controller.signal.aborted) break;
 
       // A failover-class refusal penalizes the provider whether or not the
@@ -778,9 +811,18 @@ export class RunService {
       if (failover) this.deps.cooldown?.penalize(pair.providerId);
 
       const next = chain[index + 1];
-      // Tokens already rendered must not be retried under the reader: a run
-      // that streamed any visible answer fails in place, like before.
-      if (!failover || next === undefined || run.content.length > 0) break;
+      // Tokens, thinking, or tools already rendered must not be retried under
+      // the reader: a run that streamed any visible answer fails in place, and
+      // re-executing tools on another provider would double side effects.
+      if (
+        !failover ||
+        next === undefined ||
+        run.content.length > 0 ||
+        run.thinking.length > 0 ||
+        run.tools.length > 0
+      ) {
+        break;
+      }
 
       // Loud, and in the history: the reader of this chat deserves to know
       // the answer came from somewhere else, today and after every reload.

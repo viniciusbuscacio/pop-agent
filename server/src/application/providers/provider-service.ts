@@ -620,12 +620,14 @@ export class ProviderService {
       }
       try {
         const text = viaGateway
-          ? await gateway.complete({
-              apiKey,
-              model: ref.modelId,
-              prompt: request.prompt,
-              maxTokens: request.maxTokens,
-            })
+          ? (
+              await gateway.complete({
+                apiKey,
+                model: ref.modelId,
+                prompt: request.prompt,
+                maxTokens: request.maxTokens,
+              })
+            ).text
           : await this.deps.engineComplete({
               providerId: ref.providerId,
               modelId: ref.modelId,
