@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { formatDollars } from '../lib/money';
+import { loadProviderCredits } from '../lib/provider-credits-cache';
 import { normalizeBaseUrl, providersService } from '../services/providers';
 import { chatsService } from '../services/chats';
 import {
@@ -60,11 +61,12 @@ export function ProvidersSection() {
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [view, setView] = useState<View>({ kind: 'list' });
   const [loaded, setLoaded] = useState(false);
+  const [listVersion, setListVersion] = useState(0);
 
   useEffect(() => {
     void providersService
       .list()
-      .then((response) => setProviders(response.providers))
+      .then((response) => absorb(response))
       .catch(() => undefined)
       .finally(() => setLoaded(true));
   }, []);
@@ -76,6 +78,7 @@ export function ProvidersSection() {
 
   function absorb(response: ProvidersResponse): void {
     setProviders(response.providers);
+    setListVersion((version) => version + 1);
   }
 
   if (!loaded) return <Card>{t('app.loading')}</Card>;
@@ -131,7 +134,7 @@ export function ProvidersSection() {
                 <p className="truncate font-semibold" data-testid="provider-card-name">
                   {provider.name}
                 </p>
-                <Balance providerId={provider.id} />
+                <Balance providerId={provider.id} listVersion={listVersion} />
                 <p className="truncate text-xs text-[var(--muted)]">
                   {t('provider.priorityBadge', { n: index + 1 })}
                   {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
@@ -174,23 +177,28 @@ export function ProvidersSection() {
  * fetched is not news, and guessing at a number here would be worse than
  * saying nothing.
  */
-function Balance({ providerId }: { providerId: string }) {
-  const [credits, setCredits] = useState<{ remaining: number; used: number } | undefined>(undefined);
+function Balance({
+  providerId,
+  listVersion,
+}: {
+  providerId: string;
+  listVersion: number;
+}) {
+  const [credits, setCredits] = useState<{ remaining: number; used: number } | null | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     let live = true;
-    void providersService
-      .credits(providerId)
-      .then((value) => {
-        if (live) setCredits(value);
-      })
-      .catch(() => undefined);
+    void loadProviderCredits(providerId, listVersion, providersService.credits).then((value) => {
+      if (live) setCredits(value);
+    });
     return () => {
       live = false;
     };
-  }, [providerId]);
+  }, [providerId, listVersion]);
 
-  if (credits === undefined) return null;
+  if (credits === undefined || credits === null) return null;
   return (
     <p className="truncate text-xs text-[var(--muted)]" data-testid="provider-credits">
       {t('provider.credits', {
