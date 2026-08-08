@@ -125,7 +125,7 @@ async function main(): Promise<void> {
     // unaffected.
     engineModels: () => Promise.resolve([]),
     engineHasAuth: () => false,
-    engineCheckAuth: () => Promise.resolve({ ok: false }),
+    engineComplete: () => Promise.reject(new Error('no engine in this harness')),
     engineLogout: () => Promise.resolve(),
     defaults: () => {
       const doc = liveSettings.get<{ defaultProvider?: string; defaultModel?: string }>('app');

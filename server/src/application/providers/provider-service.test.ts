@@ -106,7 +106,7 @@ let clock: TickingClock;
 let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
 let oauthAuthed: Set<string>;
-let checkAuthCalls: string[];
+let engineCompletions: { providerId: string; modelId: string; prompt: string }[];
 let cooldown: ProviderCooldown;
 let defaults: { provider: string; model: string };
 let service: ProviderService;
@@ -122,7 +122,7 @@ beforeEach(() => {
   envKey = undefined;
   engineCatalog = [{ id: 'engine/model' }];
   oauthAuthed = new Set();
-  checkAuthCalls = [];
+  engineCompletions = [];
   cooldown = new ProviderCooldown({ clock });
   defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
   nextCustomIds = [];
@@ -138,11 +138,11 @@ beforeEach(() => {
     envKey: () => envKey,
     engineModels: () => Promise.resolve(engineCatalog),
     engineHasAuth: (providerId) => oauthAuthed.has(providerId),
-    engineCheckAuth: (providerId) => {
-      checkAuthCalls.push(providerId);
-      return Promise.resolve(
-        oauthAuthed.has(providerId) ? { ok: true } : { ok: false, message: 'Not signed in.' },
-      );
+    engineComplete: (request) => {
+      engineCompletions.push(request);
+      return oauthAuthed.has(request.providerId)
+        ? Promise.resolve('engine answer')
+        : Promise.reject(new Error('Not signed in.'));
     },
     engineLogout: (providerId) => {
       oauthAuthed.delete(providerId);
@@ -395,21 +395,45 @@ describe('subscription (oauth) providers', () => {
     expect(service.apiKey(CODEX)).toBeUndefined();
   });
 
-  it('tests through the engine check, never the HTTP gateways', async () => {
+  it('tests with the same timed round trip a key provider gets', async () => {
+    // It used to read the stored credential instead and report no latency at
+    // all -- a second way of answering "does this provider work?", and the
+    // reason the card could not say how fast the answer came (Vinicius,
+    // 08/08). One question, one path, one shape of answer.
     oauthAuthed.add(CODEX);
 
     const result = await service.test(CODEX);
 
-    // No latency: the check reads a stored credential and never leaves the
-    // machine, so a millisecond figure would describe a round trip to the
-    // provider that never happened.
-    expect(result).toEqual({ ok: true });
-    expect(checkAuthCalls).toEqual([CODEX]);
+    expect(result).toEqual({ ok: true, latencyMs: 0 });
+    expect(engineCompletions).toEqual([
+      expect.objectContaining({ providerId: CODEX, modelId: 'gpt-5.5' }),
+    ]);
+    // Still never an HTTP gateway: the engine owns the credential.
     expect(gateway.completions).toHaveLength(0);
   });
 
-  it('hands back the check s words when the credential is gone', async () => {
-    expect(await service.test(CODEX)).toEqual({ ok: false, message: 'Not signed in.' });
+  it('hands back the engine s words when the credential is gone', async () => {
+    expect(await service.test(CODEX)).toEqual({
+      ok: false,
+      message: 'Not signed in.',
+      latencyMs: 0,
+    });
+  });
+
+  it('runs background work on a subscription, first in the chain', async () => {
+    // A subscription has no API key to hand a gateway, and the chain used to
+    // require both -- so every title, every distilled skill and every cleaned
+    // transcription fell silently through to whatever paid provider sat
+    // behind it (Vinicius, 08/08).
+    oauthAuthed.add(CODEX);
+    settings.set('provider.order', [CODEX, OPENROUTER]);
+
+    const answer = await service.completeAsService({ prompt: 'name this chat', maxTokens: 16 });
+
+    expect(answer).toEqual(
+      expect.objectContaining({ text: 'engine answer', providerId: CODEX }),
+    );
+    expect(gateway.completions).toHaveLength(0);
   });
 
   it('passes a provider that answered without words, because the key still worked', async () => {

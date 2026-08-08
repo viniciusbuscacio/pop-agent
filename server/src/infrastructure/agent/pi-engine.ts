@@ -152,10 +152,15 @@ export interface PiOpenOptions {
 export interface PiEngine {
   open(options: PiOpenOptions): Promise<PiSession>;
   models(providerId: string): Promise<ModelInfo[]>;
+  /** One completion outside a chat, for every kind of provider alike. */
+  complete(request: {
+    providerId: string;
+    modelId: string;
+    prompt: string;
+    maxTokens?: number;
+  }): Promise<string>;
   /** Whether the runtime holds working auth for the provider (sync snapshot). */
   hasProviderAuth(providerId: string): boolean;
-  /** pi's cheap credential check, in ok/message terms. */
-  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }>;
   /** Runs pi's OAuth login; the credential lands in the runtime's own store. */
   providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void>;
   /** Drops the stored credential (disconnect). */
@@ -474,6 +479,42 @@ export class SdkPiEngine implements PiEngine {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
+  /**
+   * One completion, outside any chat (pop-agent.spec §15). `authenticatedRuntime`
+   * is the whole reason this lives here: it already resolves an API key and a
+   * subscription credential through the same door, so a caller never has to
+   * know which kind of provider it is holding.
+   */
+  async complete(request: {
+    providerId: string;
+    modelId: string;
+    prompt: string;
+    maxTokens?: number;
+  }): Promise<string> {
+    const runtime = await this.authenticatedRuntime(request.providerId);
+    const model = runtime.getModel(request.providerId, request.modelId);
+    if (model === undefined) {
+      throw new PiEngineError(
+        'provider_not_configured',
+        `${request.providerId} has no model "${request.modelId}"`,
+      );
+    }
+    const answer = await runtime.completeSimple(
+      model,
+      { messages: [{ role: 'user', content: request.prompt, timestamp: Date.now() }] },
+      request.maxTokens === undefined ? undefined : { maxTokens: request.maxTokens },
+    );
+    if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
+      throw new Error(answer.errorMessage ?? 'the provider refused the request');
+    }
+    // A budget spent on thinking leaves no words, and that is still a round
+    // trip that worked -- the connection test asks nothing more than that.
+    return answer.content
+      .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+      .map((part) => part.text)
+      .join('');
+  }
+
   /** Whether the runtime already holds auth for a provider (OAuth included). */
   hasProviderAuth(providerId: string): boolean {
     // The question is sync (status endpoints are), the runtime build is not:
@@ -484,16 +525,6 @@ export class SdkPiEngine implements PiEngine {
       return false;
     }
     return this.runtimeNow.hasConfiguredAuth(providerId);
-  }
-
-  /** pi's own credential check, translated to words a card can show. */
-  async checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }> {
-    const runtime = await this.modelRuntime();
-    const check = await runtime.checkAuth(providerId);
-    if (check === undefined) {
-      return { ok: false, message: 'Not signed in.' };
-    }
-    return { ok: true, ...(check.source === undefined ? {} : { message: check.source }) };
   }
 
   /**

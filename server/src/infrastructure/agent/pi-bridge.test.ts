@@ -152,6 +152,10 @@ class ScriptedSession implements PiSession {
 }
 
 class ScriptedEngine implements PiEngine {
+  complete(): Promise<string> {
+    return Promise.resolve('scripted');
+  }
+
   readonly sessions: ScriptedSession[] = [];
   readonly opened: PiOpenOptions[] = [];
   failure: Error | undefined;
@@ -170,10 +174,6 @@ class ScriptedEngine implements PiEngine {
 
   hasProviderAuth(): boolean {
     return false;
-  }
-
-  checkProviderAuth(): Promise<{ ok: boolean; message?: string }> {
-    return Promise.resolve({ ok: false, message: 'not signed in' });
   }
 
   providerLogin(): Promise<void> {

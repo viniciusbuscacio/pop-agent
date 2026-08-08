@@ -46,6 +46,9 @@ class LoggingChatRepo extends SqliteChatRepo {
 
 /** A bridge that hangs until the run is aborted, like a real one mid-answer. */
 class HangingBridge implements AgentBridge {
+  complete(): Promise<string> {
+    return Promise.resolve('scripted');
+  }
   // Declared first: a field initializer that ran after the constructor body
   // would put the no-op back and the test would wait forever.
   private begin: () => void = () => undefined;

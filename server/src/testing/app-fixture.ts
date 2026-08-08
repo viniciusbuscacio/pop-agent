@@ -249,12 +249,17 @@ export function createTestApp(
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),
     engineHasAuth: (providerId) => providerAuth.authed.has(providerId),
-    engineCheckAuth: (providerId) =>
-      Promise.resolve(
-        providerAuth.authed.has(providerId)
-          ? { ok: true }
-          : { ok: false, message: 'Not signed in.' },
-      ),
+    // The engine path answers through the same scripted gateway, so a test
+    // reads the same script whichever door the completion came through.
+    engineComplete: (request) =>
+      providerAuth.authed.has(request.providerId)
+        ? gateway.complete({
+            apiKey: 'engine',
+            model: request.modelId,
+            prompt: request.prompt,
+            maxTokens: request.maxTokens ?? 64,
+          })
+        : Promise.reject(new Error('Not signed in.')),
     engineLogout: (providerId) => {
       providerAuth.authed.delete(providerId);
       return Promise.resolve();

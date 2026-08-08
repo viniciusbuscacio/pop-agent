@@ -72,6 +72,23 @@ export interface AgentBridge {
   /** Resolves when the run is finished, one way or another. */
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(providerId?: string): Promise<ModelInfo[]>;
+  /**
+   * One completion outside a chat: the connection test, a title, a distilled
+   * skill, a cleaned-up transcription. Every provider answers through the
+   * engine here, and that uniformity is the point -- a subscription has no API
+   * key to hand an HTTP gateway, so the gateway-only path quietly skipped it
+   * and every background job silently fell through to the next provider in
+   * the chain (Vinicius, 08/08).
+   */
+  complete(request: EngineCompletionRequest): Promise<string>;
+}
+
+/** One prompt, one provider, one answer. No chat, no tools, no history. */
+export interface EngineCompletionRequest {
+  providerId: string;
+  modelId: string;
+  prompt: string;
+  maxTokens?: number;
 }
 
 /**
@@ -117,8 +134,6 @@ export interface ProviderAuthInteraction {
 export interface ProviderAuthBridge {
   /** Whether the engine holds working auth for the provider (sync snapshot). */
   hasProviderAuth(providerId: string): boolean;
-  /** A cheap credential check, in words the user can act on. */
-  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }>;
   /**
    * Runs the provider's OAuth flow; the credential is persisted by the
    * engine's own store and never crosses this boundary.

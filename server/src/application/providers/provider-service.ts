@@ -127,8 +127,17 @@ export interface ProviderServiceDeps {
    * question the service ever asks about it.
    */
   engineHasAuth: (providerId: string) => boolean;
-  /** The engine's cheap credential check, for the oauth Test button. */
-  engineCheckAuth: (providerId: string) => Promise<{ ok: boolean; message?: string }>;
+  /**
+   * One completion through the engine. The only completion path for a
+   * subscription, and the one every provider without a usable gateway key
+   * takes, so background work is not a feature api-key providers alone get.
+   */
+  engineComplete: (request: {
+    providerId: string;
+    modelId: string;
+    prompt: string;
+    maxTokens?: number;
+  }) => Promise<string>;
   /** Drops the engine's stored OAuth credential (disconnect). */
   engineLogout: (providerId: string) => Promise<void>;
   /**
@@ -567,17 +576,30 @@ export class ProviderService {
       const definition = this.definition(ref.providerId);
       const gateway = definition === undefined ? undefined : this.gatewayFor(definition);
       const apiKey = this.apiKey(ref.providerId);
-      if (gateway === undefined || apiKey === undefined) {
+      const viaGateway = gateway !== undefined && apiKey !== undefined;
+      // A subscription reaches the model through the engine, which holds its
+      // credential. Requiring a gateway AND a key here is what kept titles,
+      // distilled skills and voice cleanup off a provider the user had put
+      // first in the chain, silently, for as long as a paid provider sat
+      // behind it to absorb the fall-through (Vinicius, 08/08).
+      if (!viaGateway && !this.deps.engineHasAuth(ref.providerId)) {
         last = new ProviderGatewayError(`No usable credential for "${ref.providerId}".`);
         continue;
       }
       try {
-        const text = await gateway.complete({
-          apiKey,
-          model: ref.modelId,
-          prompt: request.prompt,
-          maxTokens: request.maxTokens,
-        });
+        const text = viaGateway
+          ? await gateway.complete({
+              apiKey,
+              model: ref.modelId,
+              prompt: request.prompt,
+              maxTokens: request.maxTokens,
+            })
+          : await this.deps.engineComplete({
+              providerId: ref.providerId,
+              modelId: ref.modelId,
+              prompt: request.prompt,
+              maxTokens: request.maxTokens,
+            });
         return { text, providerId: ref.providerId, modelId: ref.modelId };
       } catch (error) {
         last = error instanceof Error ? error : new Error('unknown');
@@ -760,17 +782,27 @@ export class ProviderService {
   ): Promise<{ ok: boolean; message?: string; latencyMs?: number }> {
     const definition = this.definition(providerId);
     if (definition !== undefined && definition.authType === 'oauth') {
-      // No key and no HTTP gateway: the engine owns the credential, so the
-      // engine answers whether it still works. No latency is reported, and
-      // that is the honest part -- this reads a stored credential and never
-      // leaves the machine, so a millisecond figure would describe a round
-      // trip to the provider that did not happen (Vinicius, 04/08).
+      // The same test every other provider gets: one tiny request, timed. It
+      // used to read the stored credential instead and report no latency,
+      // because a figure for a round trip that never happened would be a lie
+      // (Vinicius, 04/08) -- true, so the trip is made rather than the number
+      // invented. Two ways of answering "does this provider work?" was one
+      // too many (Vinicius, 08/08). A subscription is not billed per token,
+      // so it costs nothing but the moment.
+      const startedAuth = this.deps.clock.now();
       try {
-        return await this.deps.engineCheckAuth(providerId);
+        await this.deps.engineComplete({
+          providerId,
+          modelId: this.ref(providerId, '').modelId,
+          prompt: TEST_PROMPT,
+          maxTokens: TEST_MAX_TOKENS,
+        });
+        return { ok: true, latencyMs: this.deps.clock.now() - startedAuth };
       } catch (error) {
         return {
           ok: false,
           message: error instanceof Error ? error.message : 'The check failed.',
+          latencyMs: this.deps.clock.now() - startedAuth,
         };
       }
     }

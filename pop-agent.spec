@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.70 — 2026-08-08.
+Version 1.71 — 2026-08-08.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1495,6 +1495,30 @@ is set by hand and moves only when the wire changes.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.71 (2026-08-08): **One completion path, for every provider (§15).** A
+  subscription has no API key to hand an HTTP gateway, so everything built on
+  `gateway.complete` quietly excluded it: `completeAsService` required a
+  gateway *and* a key, and skipped the provider otherwise. Chat worked, because
+  chat goes through the engine. Nothing else did. With the ChatGPT subscription
+  first in the chain, every title, every distilled skill and every cleaned-up
+  transcription fell through it to the paid provider behind -- silently, and
+  visibly enough that Settings still offered the subscription a Service Model
+  that could never run. It only looked healthy because something paid was
+  always there to absorb the fall-through.
+  So the engine gets a completion of its own: `AgentBridge.complete`, over
+  pi's `completeSimple`, resolved through the same `authenticatedRuntime` that
+  already answers for an API key and a subscription alike. `completeAsService`
+  takes the gateway when there is a usable key and the engine otherwise, and
+  the connection test does the same -- which means a subscription is now tested
+  by a real, timed round trip like everyone else. That reverses 04/08, which
+  refused to print a millisecond figure for a trip that never happened: the
+  objection was to inventing the number, so the trip is made instead. A
+  subscription is not billed per token; it costs a moment.
+  `checkProviderAuth` went with it, from the port down to the fake: once the
+  test makes a real request, a second way to ask "does this provider work?" is
+  one way too many (Vinicius, 08/08: "nao tem sentido ter 2 caminhos pra mesma
+  coisa").
 
 - 1.70 (2026-08-08): **The sign-in card reconciles against the provider's
   status when its poll cannot answer (§15).** The ChatGPT subscription signed

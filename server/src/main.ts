@@ -191,7 +191,7 @@ const providers: ProviderService = new ProviderService({
   // Subscription providers (pop-agent.spec §15, fase 1.5): the engine owns the
   // credential; the service only ever asks yes/no questions about it.
   engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),
-  engineCheckAuth: (providerId) => bridge.checkProviderAuth(providerId),
+  engineComplete: (request) => bridge.complete(request),
   engineLogout: (providerId) => bridge.providerLogout(providerId),
   cooldown,
   setDefaultProvider: (providerId, model) => {

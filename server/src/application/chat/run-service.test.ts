@@ -39,6 +39,9 @@ class RecordingSink implements EventSink {
 
 /** A bridge the test drives by hand. */
 class ScriptedBridge implements AgentBridge {
+  complete(): Promise<string> {
+    return Promise.resolve('scripted');
+  }
   script: (request: AgentRunRequest) => Promise<void> = async (request) => {
     request.onEvent({ kind: 'delta', text: 'hello' });
     await Promise.resolve();

@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   AgentRunRequest,
   AgentRunResult,
+  EngineCompletionRequest,
   ModelInfo,
   ProviderAuthBridge,
 } from '../../application/ports/agent-bridge.js';
@@ -40,10 +41,6 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
   // OAuth surface exists so main.ts wires either bridge the same way.
   hasProviderAuth(): boolean {
     return false;
-  }
-
-  checkProviderAuth(): Promise<{ ok: boolean; message?: string }> {
-    return Promise.resolve({ ok: false, message: 'The fake engine has no subscriptions.' });
   }
 
   providerLogin(): Promise<void> {
@@ -84,6 +81,10 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
 
   listModels(): Promise<ModelInfo[]> {
     return Promise.resolve([{ id: 'fake/model-1' }, { id: 'fake/model-2' }]);
+  }
+
+  complete(request: EngineCompletionRequest): Promise<string> {
+    return Promise.resolve(`fake answer to: ${request.prompt}`);
   }
 
   private async answer(

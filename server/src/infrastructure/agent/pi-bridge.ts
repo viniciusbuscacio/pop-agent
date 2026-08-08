@@ -7,6 +7,7 @@ import type {
   AgentEvent,
   AgentRunRequest,
   AgentRunResult,
+  EngineCompletionRequest,
   ModelInfo,
   ProviderAuthBridge,
   ProviderAuthInteraction,
@@ -237,14 +238,14 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     return this.deps.engine.models(providerId ?? '');
   }
 
+  complete(request: EngineCompletionRequest): Promise<string> {
+    return this.deps.engine.complete(request);
+  }
+
   // Subscription auth (pop-agent.spec §15, fase 1.5): the bridge only forwards --
   // credentials live in the engine's store and never surface here.
   hasProviderAuth(providerId: string): boolean {
     return this.deps.engine.hasProviderAuth(providerId);
-  }
-
-  checkProviderAuth(providerId: string): Promise<{ ok: boolean; message?: string }> {
-    return this.deps.engine.checkProviderAuth(providerId);
   }
 
   providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {

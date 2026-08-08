@@ -386,9 +386,7 @@ function ConfigureProvider({
       if (!result.ok) {
         setNote(result.message ?? t('provider.test.failed'));
       } else if (result.latencyMs === undefined) {
-        // A subscription's check never leaves the machine, so there is no
-        // round trip to report and claiming one would be a small lie.
-        setNote(isOAuth ? t('provider.test.signedIn') : t('provider.test.ok'));
+        setNote(t('provider.test.ok'));
       } else {
         setNote(t('provider.test.okLatency', { ms: Math.round(result.latencyMs) }));
       }
