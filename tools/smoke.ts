@@ -360,7 +360,7 @@ async function main(): Promise<void> {
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
 
-  console.log(`smoke: starting pop on ${base} with data in ${dataDir}`);
+  console.log(`smoke: starting Pop Agent on ${base} with data in ${dataDir}`);
   const child = spawn(process.execPath, [TSX_CLI, SERVER_MAIN], {
     env: {
       ...process.env,

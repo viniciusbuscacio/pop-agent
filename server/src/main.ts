@@ -602,12 +602,12 @@ setInterval(() => hands.beat(), PING_EVERY_MS).unref();
 serve(
   { fetch: app.fetch, port, hostname, websocket: { server: wss as unknown as WebSocketServerLike } },
   (info) => {
-  console.log(`pop server listening on http://${info.address}:${info.port}`);
-  console.log(`pop data dir ${context.dataDir}`);
+  console.log(`Pop Agent server listening on http://${info.address}:${info.port}`);
+  console.log(`Pop Agent data dir ${context.dataDir}`);
   console.log(
     agent === 'pi'
-      ? `pop agent bridge: pi (real models, workspace ${workspace})`
-      : 'pop agent bridge: fake (scripted; no model is contacted)',
+      ? `Pop Agent bridge: pi (real models, workspace ${workspace})`
+      : 'Pop Agent bridge: fake (scripted; no model is contacted)',
   );
   // Catch up the embedding index for anything written before this boot, in the
   // background so nothing waits on the model download (pop-agent.spec §7).
