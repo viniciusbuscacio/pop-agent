@@ -357,24 +357,92 @@ describe('SkillDistiller', () => {
   });
 
   it('treats a near-identical candidate as a revision of the skill it matches', async () => {
+    // The stored signature is the skill's routing text, and it has to read like
+    // one: the dedup now asks whether the two texts share vocabulary as well as
+    // meaning, so a placeholder would fail the second bar for the wrong reason.
     world = harness({
       skills: [
         {
           slug: 'publishing',
-          name: 'Publishing',
-          description: 'How to publish',
-          whenToUse: 'publishing',
+          name: 'Publish the blog',
+          description: 'How to publish a post',
+          whenToUse: 'when the user wants to publish',
           body: 'Old.',
           source: 'auto',
         },
       ],
       embedder: new TwinEmbedder(),
-      vectors: [{ slug: 'publishing', signature: 'x', vector: Float32Array.from([1, 0]) }],
+      vectors: [
+        {
+          slug: 'publishing',
+          signature: 'Publish the blog. How to publish a post. when the user wants to publish',
+          vector: Float32Array.from([1, 0]),
+        },
+      ],
     });
     await world.distiller.run();
 
     expect(world.skills.written).toHaveLength(0);
     expect(world.revisions.saved[0]).toMatchObject({ slug: 'publishing', similarity: 1 });
+  });
+
+  it('does not merge into a skill that only sounds close', async () => {
+    // Measured, not supposed: over the real vault `brainstorm` and `planning`
+    // score 0.936 while two copies of one procedure score 0.895, so cosine
+    // alone cannot separate the two questions. What did happen was a good
+    // "Restart Popy service" skill filed as a revision of `self-change` at
+    // 0.9017 -- accepted it would have replaced an unrelated skill, refused it
+    // hid the new one in a table. `TwinEmbedder` puts this candidate at cosine
+    // 1.0, the worst case, and it must still land as its own skill.
+    world = harness({
+      skills: [
+        {
+          slug: 'self-change',
+          name: 'Self-change',
+          description: "Change Popy's own code and leave the repo clean",
+          whenToUse: 'whenever Popy edits its own source',
+          body: 'Old.',
+          source: 'auto',
+        },
+      ],
+      embedder: new TwinEmbedder(),
+      vectors: [
+        {
+          slug: 'self-change',
+          signature:
+            "Self-change. Change Popy's own code and leave the repo clean. whenever Popy edits its own source",
+          vector: Float32Array.from([1, 0]),
+        },
+      ],
+    });
+    await world.distiller.run();
+
+    expect(world.revisions.saved).toHaveLength(0);
+    expect(world.skills.written[0]).toMatchObject({ slug: 'deploy-blog' });
+  });
+
+  it('will not propose a revision of a skill it did not write', async () => {
+    // A `user` skill is the user's -- or an auto skill they edited, which is
+    // the same statement. A machine proposing its replacement is proposing to
+    // undo a decision a person made, and the wrong target being reachable at
+    // all is the defect, not the score that reached it.
+    world = harness({
+      skills: [
+        {
+          slug: 'deploy-blog',
+          name: 'Deploy the blog',
+          description: 'How to publish a post',
+          whenToUse: 'when the user wants to publish',
+          body: 'Mine.',
+          source: 'user',
+        },
+      ],
+    });
+    await world.distiller.run();
+
+    expect(world.revisions.saved).toHaveLength(0);
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.journal.join(' ')).toContain('user,skipped');
   });
 
   it('stores the vector of the skill it just wrote', async () => {

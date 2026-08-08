@@ -213,6 +213,28 @@ function skillTokenSet(skill: Skill): Set<string> {
   return tokenize(`${skill.name} ${skill.name} ${skill.description} ${skill.whenToUse}`);
 }
 
+/**
+ * How much vocabulary two routing texts share, as Jaccard over content words.
+ * The distiller's dedup reads this; the router does not, because a message and
+ * a skill are not the same kind of text and overlap between them is one-sided.
+ *
+ * It exists because cosine alone cannot answer "is this the same skill". Over
+ * the real vault (378 pairs of distinct skills, 36 pairs of known duplicates)
+ * the two cosine distributions overlap between 0.895 and 0.936: `brainstorm`
+ * and `planning` score 0.936 while two re-distillations of one procedure score
+ * 0.895. Vocabulary does separate them -- distinct skills top out at 0.18
+ * shared, duplicates sit at 0.33 median -- because two skills in one domain
+ * share the domain, and two copies of one skill share the thing itself.
+ */
+export function vocabularyOverlap(left: string, right: string): number {
+  const a = tokenize(left);
+  const b = tokenize(right);
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const token of a) if (b.has(token)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
 function tokenize(text: string): Set<string> {
   const tokens = text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
   return new Set(tokens.filter((token) => !STOP_WORDS.has(token)).map(stem));

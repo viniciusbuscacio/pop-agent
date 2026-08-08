@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.67 — 2026-08-08.
+Version 1.68 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -403,11 +403,44 @@ user message — selection is 100% local, no LLM call:
   that read badly. Fase (b) is guarded by the taint guard refusing
   `skill_write` mid-turn; nothing guarded a turn that had already ended, and
   a skill is the one artefact that outlives its turn. This is that guard.
+- **Two signals decide a duplicate, because one cannot** (1.68, measured).
+  A candidate is the same skill as an existing one when the cosine of their
+  routing texts is at least `0.88` **and** they share at least `0.25` of
+  their content words (`vocabularyOverlap`, Jaccard over the router's own
+  tokenizer). Cosine alone was tried and is not separable: over the real
+  vault — 406 pairs of distinct skills against 36 pairs of known duplicates,
+  the nine re-distillations the broken index let through — the two
+  distributions overlap from 0.895 to 0.936. `brainstorm` and `planning`
+  score 0.936 being different things; two copies of one procedure score
+  0.895 being the same one. The overlap is not academic: at `0.90` a good
+  "Restart Popy service" skill was filed as a revision of `self-change` at
+  0.9017, where accepting it would have replaced an unrelated skill and
+  refusing it left the new one buried in a table.
+  Vocabulary separates them because two skills in one domain share the
+  domain while two copies of one skill share the thing itself. At
+  `0.88 / 0.25` the bars catch 32 of the 36 duplicates and merge **none** of
+  the 406 distinct pairs; `0.90` alone caught 35 and merged 27. `0.92 / 0.20`
+  scores the same 32 but sits 0.003 from its nearest false merge, against
+  0.028 for the chosen point — margin decided it. Precision first: a missed
+  duplicate is one extra card to say no to, a wrong merge hides a good skill
+  behind a diff against something else.
+  `tools/skill-dedup-calibrate.ts` is the measurement, with the nine
+  duplicates carried as a fixture, so the next reading of these bars is a
+  reading and not a guess. **The nearest neighbour is logged whether or not
+  it qualifies** — `near=slug(cos=0.84,voc=0.11)` — because that is the
+  distribution the bars get retuned from.
+- **The distiller may only revise its own work** (1.68). A revision is
+  proposed for an `auto` skill and nothing else: a `builtin` ships with the
+  app, and a `user` skill is the user's — or an auto skill they edited, which
+  is the same statement. A machine proposing to replace either is proposing
+  to undo a decision a person made. The `self-change` collision was that
+  shape, and the defect was not the score that reached the wrong target but
+  that the wrong target was reachable.
 - **A match becomes a revision, never an overwrite.** A candidate whose slug
-  collides, or whose routing text is within `0.90` cosine of an existing
-  skill, is written to `skill_revisions` instead of the vault, and the
-  approved version keeps serving the router until the user accepts the new
-  one (`POST /v1/skills/:slug/revision/approve`, `DELETE .../revision`).
+  collides, or which clears both bars above, is written to `skill_revisions`
+  instead of the vault, and the approved version keeps serving the router
+  until the user accepts the new one
+  (`POST /v1/skills/:slug/revision/approve`, `DELETE .../revision`).
   `autoApproveSkills` governs this path too: without it the pending flag
   would guard the front door while the update path stood open, and an
   injection distilled as "a better version of a skill you already trust"
@@ -1462,6 +1495,23 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.68 (2026-08-08): **The dedup bars are measured, and the distiller may only
+  revise its own work (§8).** Found by testing the 1.66 request path against
+  the live instance: "vira skill" on a restart-the-service procedure produced a
+  good skill, and it was filed as a revision of `self-change` at cosine 0.9017.
+  Accepted it would have replaced an unrelated skill; refused it left the new
+  one in a table with nothing on the Skills screen.
+  So the 0.90 that §10 admitted was a guess got its measurement: 406 pairs of
+  distinct vault skills against the 36 pairs of known duplicates. The cosine
+  distributions **overlap** — 0.895 to 0.936 — so no cosine can separate them,
+  and the answer is a second signal. Shared vocabulary does separate them, and
+  `0.88 / 0.25` catches 32 of 36 duplicates while merging none of the 406.
+  `tools/skill-dedup-calibrate.ts` is that measurement, kept.
+  Verified live three times after the change: each request was picked up within
+  a minute, each produced a pending skill, and each logged the neighbour it
+  correctly declined to merge into — including `renovar-certificado-cloudflare-ssl`
+  against `renovar-certificado-mikrotik-hex`, two certificate-renewal procedures
+  at cosine 0.85 that share 2% of their words.
 - 1.67 (2026-08-08): **`tools/live-skills.ts` loses its replay mode.** The
   `--offline` flag fed the loop a recorded answer so the router half could be
   exercised for free. It had been broken since 1.64 changed the answer format

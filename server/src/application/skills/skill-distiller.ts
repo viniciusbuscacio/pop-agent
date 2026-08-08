@@ -7,6 +7,7 @@ import {
   scrubCandidate,
   type SkillCandidate,
 } from '../../domain/skills/distillation.js';
+import { vocabularyOverlap } from '../../domain/skills/skill-router.js';
 import { asksForSkill } from '../../domain/skills/skill-request.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -68,7 +69,23 @@ const WINDOW = 60;
  * Cosine above which a candidate is judged to be the same skill as one that
  * already exists (§10: start at 0.90, log every comparison, retune with data).
  */
-export const DEDUP_THRESHOLD = 0.9;
+export const DEDUP_THRESHOLD = 0.88;
+
+/**
+ * ...and how much vocabulary they must share as well. Measured 08/08 over the
+ * real vault: 378 pairs of distinct skills against 36 pairs of known
+ * duplicates (the nine re-distillations the broken index let through).
+ *
+ * Cosine alone cannot do it -- the two distributions overlap from 0.895 to
+ * 0.936. That overlap is not academic: it filed a good "Restart Popy service"
+ * skill as a revision of `self-change` at 0.9017, where accepting it would
+ * have replaced an unrelated skill and rejecting it hid the new one in a table.
+ * With the second bar, `0.88 / 0.20` catches 32 of the 36 duplicates and merges
+ * **none** of the 378 distinct pairs; `0.90` alone caught 35 and merged 27.
+ * Precision first: a missed duplicate is one extra card to say no to, while a
+ * wrong merge hides a good skill behind a diff against something else.
+ */
+export const DEDUP_MIN_OVERLAP = 0.25;
 
 export interface SkillDistillerDeps {
   chats: ChatRepo;
@@ -250,8 +267,9 @@ export class SkillDistiller implements MaintenanceJob {
     }
 
     const measured = await this.measure(candidate);
+    // Already filtered on both bars; anything that came back is a match.
     const match = measured.best;
-    if (match !== undefined && match.score >= DEDUP_THRESHOLD) {
+    if (match !== undefined) {
       return this.propose(
         { ...candidate, slug: match.slug },
         match.slug,
@@ -283,7 +301,11 @@ export class SkillDistiller implements MaintenanceJob {
     if (measured.vector !== undefined) {
       this.deps.vectors?.save(candidate.slug, candidateRoutingText(candidate), measured.vector);
     }
-    const near = match === undefined ? '' : `,near=${match.score.toFixed(2)}`;
+    const near =
+      measured.nearest === undefined
+        ? ''
+        : `,near=${measured.nearest.slug}(cos=${measured.nearest.score.toFixed(2)}` +
+          `,voc=${measured.nearest.overlap.toFixed(2)})`;
     return `${candidate.slug}=${live ? 'live' : 'pending'}${near}`;
   }
 
@@ -301,7 +323,14 @@ export class SkillDistiller implements MaintenanceJob {
   ): string {
     const current = this.deps.skills.get(slug);
     if (current === undefined) return `${slug}=gone`;
-    if (current.source === 'builtin') return `${slug}=builtin,skipped`;
+    // The distiller may rewrite its own work and nothing else. A `builtin`
+    // ships with the app; a `user` skill is the user's, or an auto skill they
+    // edited, and either way a machine proposing to replace it is proposing to
+    // undo a decision a person made. The first real collision was exactly this
+    // shape -- a distilled "Restart Popy service" offered as the new text of
+    // `self-change` -- and the damage was not the bad similarity score but that
+    // a wrong target was reachable at all.
+    if (current.source !== 'auto') return `${slug}=${current.source},skipped`;
 
     if (this.deps.autoApprove()) {
       this.deps.skills.write({
@@ -342,13 +371,32 @@ export class SkillDistiller implements MaintenanceJob {
     const [vector] = await embedder.embed([candidateRoutingText(candidate)], 'passage').catch(() => []);
     if (vector === undefined) return {};
 
-    let best: { slug: string; score: number } | undefined;
+    // `signature` is the stored skill's routing text, which is what the
+    // candidate's text has to be compared against -- so the second bar costs
+    // no extra read.
+    const text = candidateRoutingText(candidate);
+    let nearest: Neighbour | undefined;
+    let best: Neighbour | undefined;
     for (const entry of this.deps.vectors?.all() ?? []) {
       if (entry.vector.length !== vector.length) continue;
-      const score = dot(vector, entry.vector);
-      if (best === undefined || score > best.score) best = { slug: entry.slug, score };
+      const neighbour = {
+        slug: entry.slug,
+        score: dot(vector, entry.vector),
+        overlap: vocabularyOverlap(text, entry.signature),
+      };
+      // The closest thing by cosine is measured whether or not it qualifies,
+      // because that number is what a later reading of these logs retunes the
+      // bars from -- the same discipline the router's thresholds follow (§8).
+      if (nearest === undefined || neighbour.score > nearest.score) nearest = neighbour;
+      if (neighbour.score < DEDUP_THRESHOLD) continue;
+      if (neighbour.overlap < DEDUP_MIN_OVERLAP) continue;
+      if (best === undefined || neighbour.score > best.score) best = neighbour;
     }
-    return best === undefined ? { vector } : { vector, best };
+    return {
+      vector,
+      ...(nearest === undefined ? {} : { nearest }),
+      ...(best === undefined ? {} : { best }),
+    };
   }
 
   private advance(chatId: string, messageId: string): void {
@@ -356,12 +404,23 @@ export class SkillDistiller implements MaintenanceJob {
   }
 }
 
+/** An existing skill, measured against the candidate on both signals. */
+interface Neighbour {
+  slug: string;
+  /** Cosine between the two routing texts. */
+  score: number;
+  /** Share of content words the two have in common. */
+  overlap: number;
+}
+
 /** What one dedup pass learned about a candidate. */
 interface Measured {
   /** The candidate's routing vector, when there was an embedder to compute it. */
   vector?: Float32Array;
-  /** The closest skill already in the vault, when the table was not empty. */
-  best?: { slug: string; score: number };
+  /** The closest skill by cosine, qualifying or not. Logged, never acted on. */
+  nearest?: Neighbour;
+  /** The closest skill that cleared BOTH bars: the one to revise, if any. */
+  best?: Neighbour;
 }
 
 /** The vectors are L2-normalized by the embedder, so the dot product is cosine. */
