@@ -200,6 +200,26 @@ describe('scrubCandidate', () => {
   it('leaves an ordinary procedure alone', () => {
     expect(scrubCandidate(candidate()).body).toBe('Push to main.');
   });
+
+  it('redacts the token shapes that carry no label', () => {
+    // A pasted key without "key =" beside it still must not be replayed into
+    // future prompts. The shapes recognizable by form alone are the list.
+    for (const token of [
+      'sk-proj-aBcDeFgHiJkLmNoPqRsT1234',
+      'sk-ant-api03-aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789',
+      'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456',
+      'github_pat_11ABCDEFG0_aBcDeFgHiJkLmNoPqRsTuVwXyZ',
+      'glpat-aBcDeFgHiJkLmNoPqRs',
+      'AKIAIOSFODNN7EXAMPLE',
+    ]) {
+      expect(scrubCandidate(candidate({ body: token })).body).toBe('[redacted secret]');
+    }
+  });
+
+  it('leaves hashes and ids alone -- shape alone is not guilt', () => {
+    const body = 'commit 9f8e7d6a5c4b3a2198765432fedcba0987654321 landed, run 8842 passed';
+    expect(scrubCandidate(candidate({ body })).body).toBe(body);
+  });
 });
 
 /**

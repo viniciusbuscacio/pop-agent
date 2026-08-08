@@ -258,12 +258,31 @@ export function candidateRoutingText(candidate: SkillCandidate): string {
  */
 const SECRET_LINE = /password|token|(?:api[_-]?)?key\s*[=:]/i;
 
+/**
+ * The secrets that carry no label. `SECRET_LINE` has a word to hold on to; a
+ * key pasted bare -- `sk-proj-...`, `ghp_...`, an AWS id -- has none, and a
+ * conversation full of pasted keys is exactly the conversation worth
+ * distilling. The list is the formats recognizable by shape alone, which is
+ * what lets a git hash or a uuid pass: better one clean line stand than a
+ * skill gutted by redactions.
+ */
+const BARE_TOKEN = new RegExp(
+  [
+    '(?:sk|pk|ghp|gho|ghu|ghs|ghr|glpat|xoxb|xoxp|xoxa|xoxr|xoxs)[-_][A-Za-z0-9][A-Za-z0-9-]{15,}',
+    'github_pat_[A-Za-z0-9_]{20,}',
+    'AKIA[0-9A-Z]{16}',
+    'AIza[0-9A-Za-z_-]{35}',
+    'eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}',
+    '-----BEGIN [A-Z ]*PRIVATE KEY-----',
+  ].join('|'),
+);
+
 export function scrubCandidate(candidate: SkillCandidate): SkillCandidate {
   return {
     ...candidate,
     body: candidate.body
       .split('\n')
-      .map((line) => (SECRET_LINE.test(line) ? '[redacted secret]' : line))
+      .map((line) => (SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? '[redacted secret]' : line))
       .join('\n'),
   };
 }
