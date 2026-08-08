@@ -19,6 +19,46 @@ import { PiEngineError, type PiEngine, type PiOpenOptions, type PiSession } from
 
 const CHAT = 'chat-abcdef123456';
 
+/** A minimal JSONL tree so rewind tests can count user prompts on the main path. */
+class SessionTree {
+  private leafId: string | null = null;
+  private nextId = 0;
+  private readonly entries = new Map<
+    string,
+    { id: string; parentId: string | null; role: 'user' | 'assistant'; text: string }
+  >();
+
+  getLeafId(): string | null {
+    return this.leafId;
+  }
+
+  appendUser(text: string): void {
+    const id = `e${String(this.nextId++)}`;
+    this.entries.set(id, { id, parentId: this.leafId, role: 'user', text });
+    this.leafId = id;
+  }
+
+  appendAssistant(text: string): void {
+    const id = `e${String(this.nextId++)}`;
+    this.entries.set(id, { id, parentId: this.leafId, role: 'assistant', text });
+    this.leafId = id;
+  }
+
+  rewindTo(leafId: string | null): void {
+    this.leafId = leafId;
+  }
+
+  userPromptsOnMainPath(): string[] {
+    const prompts: string[] = [];
+    let current = this.leafId === null ? undefined : this.entries.get(this.leafId);
+    while (current !== undefined) {
+      if (current.role === 'user') prompts.unshift(current.text);
+      current = current.parentId === null ? undefined : this.entries.get(current.parentId);
+    }
+    return prompts;
+  }
+}
+
 /** pi's own message type, reached through the event union rather than imported
  * from a package that is only a transitive dependency here. */
 type PiAssistantMessage = Extract<
@@ -101,6 +141,7 @@ class ScriptedSession implements PiSession {
   readonly models: string[] = [];
   disposed = false;
   sessionFile: string | undefined = '/data/sessions/chat.jsonl';
+  readonly tree = new SessionTree();
   private listener: ((event: AgentSessionEvent) => void) | undefined;
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void {
@@ -112,11 +153,19 @@ class ScriptedSession implements PiSession {
 
   emit(event: AgentSessionEvent): void {
     this.listener?.(event);
+    if (event.type === 'message_end' && event.message.role === 'assistant') {
+      const text = event.message.content
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join('');
+      if (text.length > 0) this.tree.appendAssistant(text);
+    }
   }
 
   async prompt(text: string, images?: import('./pi-engine.js').PiImage[]): Promise<void> {
     this.prompts.push(text);
     this.promptImages.push(images);
+    this.tree.appendUser(text);
     if (this.onPrompt !== undefined) {
       await this.onPrompt();
       return;
@@ -148,6 +197,14 @@ class ScriptedSession implements PiSession {
 
   dispose(): void {
     this.disposed = true;
+  }
+
+  getLeafId(): string | null {
+    return this.tree.getLeafId();
+  }
+
+  rewindToLeaf(leafId: string | null): void {
+    this.tree.rewindTo(leafId);
   }
 }
 
@@ -697,5 +754,62 @@ describe('runtime identity', () => {
     await run(collect().onEvent);
 
     expect(engine.sessions[0]?.prompts[0] ?? '').toContain('the configured default');
+  });
+});
+
+describe('session rewind on retry (pop-agent.spec §15)', () => {
+  it('leaves one user prompt on the main path after overflow compact-and-retry', async () => {
+    let calls = 0;
+    engine.next.onPrompt = () => {
+      calls += 1;
+      if (calls === 1) {
+        engine.next.emit(
+          settled('error', { input: 5, output: 0, cost: 0 }, 'maximum context length exceeded'),
+        );
+      } else {
+        engine.next.emit(textDelta('recovered'));
+        engine.next.emit(settled('stop', { input: 5, output: 3, cost: 0 }));
+      }
+      return Promise.resolve();
+    };
+    const { onEvent } = collect();
+
+    await run(onEvent);
+
+    expect(calls).toBe(2);
+    expect(engine.sessions[0]?.tree.userPromptsOnMainPath()).toHaveLength(1);
+  });
+
+  it('rewinds the leaf on a failover-class failure so the main path stays clean', async () => {
+    engine.next.script = [
+      settled('error', { input: 5, output: 0, cost: 0 }, '402 Payment Required'),
+    ];
+    const { onEvent } = collect();
+
+    await run(onEvent);
+
+    // The doomed turn sits on an abandoned branch; the main path is back at
+    // pre-prompt (empty here), ready for the next provider.
+    expect(engine.sessions[0]?.prompts).toHaveLength(1);
+    expect(engine.sessions[0]?.tree.userPromptsOnMainPath()).toHaveLength(0);
+    expect(engine.sessions[0]?.getLeafId()).toBeNull();
+  });
+
+  it('rewinds before a second bridge.run so failover does not duplicate the prompt', async () => {
+    engine.next.onPrompt = () => {
+      if (engine.next.prompts.length === 1) {
+        engine.next.emit(settled('error', { input: 5, output: 0, cost: 0 }, '429 Too Many Requests'));
+      } else {
+        engine.next.emit(textDelta('second provider'));
+        engine.next.emit(settled('stop', { input: 5, output: 3, cost: 0 }));
+      }
+      return Promise.resolve();
+    };
+    const { onEvent } = collect();
+
+    await run(onEvent);
+    await run(onEvent);
+
+    expect(engine.sessions[0]?.tree.userPromptsOnMainPath()).toHaveLength(1);
   });
 });
