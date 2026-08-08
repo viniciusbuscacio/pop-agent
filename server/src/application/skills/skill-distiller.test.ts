@@ -124,15 +124,16 @@ function vectors(stored: StoredSkillVector[]): SkillVectorsRepo {
   return { all: () => stored, save: () => undefined, keepOnly: () => undefined };
 }
 
-const ANSWER = JSON.stringify([
-  {
-    slug: 'deploy-blog',
-    name: 'Deploy the blog',
-    description: 'How to publish a post',
-    whenToUse: 'when the user wants to publish',
-    body: 'Push to main.',
-  },
-]);
+const ANSWER = [
+  '=== SKILL ===',
+  'slug: deploy-blog',
+  'name: Deploy the blog',
+  'description: How to publish a post',
+  'whenToUse: when the user wants to publish',
+  '--- body ---',
+  'Push to main.',
+  '=== END ===',
+].join('\n');
 
 interface Harness {
   marks: MemoryMarks;
@@ -292,7 +293,7 @@ describe('SkillDistiller', () => {
   });
 
   it('records an empty answer as read, so the queue drains', async () => {
-    world = harness({ answer: '[]' });
+    world = harness({ answer: '=== END ===' });
     await world.distiller.run();
 
     expect(world.skills.written).toHaveLength(0);
@@ -384,15 +385,18 @@ describe('SkillDistiller', () => {
 
   it('scrubs a credential out of the body before it is ever stored', async () => {
     world = harness({
-      answer: JSON.stringify([
-        {
-          slug: 'deploy-blog',
-          name: 'Deploy',
-          description: 'How to publish',
-          whenToUse: 'publishing',
-          body: 'Run it.\ntoken = ghp_secret\nDone.',
-        },
-      ]),
+      answer: [
+        '=== SKILL ===',
+        'slug: deploy-blog',
+        'name: Deploy',
+        'description: How to publish',
+        'whenToUse: publishing',
+        '--- body ---',
+        'Run it.',
+        'token = ghp_secret',
+        'Done.',
+        '=== END ===',
+      ].join('\n'),
     });
     await world.distiller.run();
 
@@ -438,7 +442,7 @@ describe('SkillDistiller and what counts as external', () => {
 
 describe('SkillDistiller and a truncated answer', () => {
   it('keeps the watermark and retries when nothing survived the cut', async () => {
-    const world = harness({ answer: '[{"slug":"one","name":"One","descri' });
+    const world = harness({ answer: ['=== SKILL ===', 'slug: one', 'name: On'].join('\n') });
     await world.distiller.run();
 
     expect(world.skills.written).toHaveLength(0);
@@ -448,8 +452,18 @@ describe('SkillDistiller and a truncated answer', () => {
 
   it('keeps what finished and moves on', async () => {
     const world = harness({
-      answer:
-        '[{"slug":"one","name":"One","description":"d","whenToUse":"w","body":"b"},{"slug":"two","name":"Tw',
+      answer: [
+        '=== SKILL ===',
+        'slug: one',
+        'name: One',
+        'description: d',
+        'whenToUse: w',
+        '--- body ---',
+        'b',
+        '=== SKILL ===',
+        'slug: two',
+        'name: Tw',
+      ].join('\n'),
     });
     await world.distiller.run();
 

@@ -20,10 +20,9 @@
  * The key comes from OPENROUTER_API_KEY, or from the repo's .env.
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { SkillDistiller } from '../server/src/application/skills/skill-distiller.js';
 import { SkillRouterService } from '../server/src/application/skills/skill-router-service.js';
@@ -39,9 +38,17 @@ import { SqliteSkillUsageRepo } from '../server/src/infrastructure/db/sqlite-ski
 import { SqliteSkillVectorsRepo } from '../server/src/infrastructure/db/sqlite-skill-vectors-repo.js';
 import { TransformersEmbedder } from '../server/src/infrastructure/embeddings/transformers-embedder.js';
 import { SkillsVault } from '../server/src/infrastructure/skills/skills-vault.js';
-import { DEFAULT_MODEL_ID } from '../server/src/application/providers/openrouter.js';
+import { ProviderService } from '../server/src/application/providers/provider-service.js';
+import { ProviderCooldown } from '../server/src/application/providers/provider-cooldown.js';
+import { SqliteSettingsRepo } from '../server/src/infrastructure/db/sqlite-settings-repo.js';
+import { SqliteSecretsRepo } from '../server/src/infrastructure/db/sqlite-secrets-repo.js';
+import { loadOrCreateSecretKey } from '../server/src/infrastructure/crypto/secret-key-file.js';
+import { AnthropicGateway } from '../server/src/infrastructure/providers/anthropic-gateway.js';
+import {
+  OpenAiCompatibleGateway,
+  createOpenRouterGateway,
+} from '../server/src/infrastructure/providers/openai-compatible-gateway.js';
 
-const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const offline = process.argv.includes('--offline');
 
 /**
@@ -85,19 +92,6 @@ const RECORDED_ANSWER = JSON.stringify([
 const CHAT_ID = 'chat-liveskill01';
 const NOW = Date.parse('2026-08-07T20:00:00.000Z');
 
-function apiKey(): string {
-  const fromEnv = process.env['OPENROUTER_API_KEY'];
-  if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv;
-  const envFile = join(repoRoot, '.env');
-  if (existsSync(envFile)) {
-    for (const line of readFileSync(envFile, 'utf8').split('\n')) {
-      const match = /^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=\s*(.*)$/.exec(line);
-      if (match?.[1] !== undefined) return match[1].trim().replace(/^["']|["']$/g, '');
-    }
-  }
-  console.error('live-skills: no OPENROUTER_API_KEY (env or .env). Nothing was spent.');
-  process.exit(1);
-}
 
 /**
  * A conversation with a real procedure in it, in Portuguese, of the shape the
@@ -135,7 +129,40 @@ const TRANSCRIPT: [Message['role'], string][] = [
 const FUTURE_QUESTION = 'as paginas do site continuam mostrando conteudo velho depois que publiquei';
 
 async function main(): Promise<void> {
-  const key = apiKey();
+  // The real instance's providers, read from the real data directory: which
+  // provider is first, which model each one serves, and the credentials. Read
+  // only -- nothing here writes to the live database, and the distiller under
+  // test writes to the throwaway one below.
+  const liveDir = join(process.env['HOME'] ?? '.', '.popy');
+  const liveDb = new Database(join(liveDir, 'popy.db'), { readonly: true });
+  const liveSettings = new SqliteSettingsRepo(liveDb);
+  const providers = new ProviderService({
+    secrets: new SqliteSecretsRepo(liveDb, loadOrCreateSecretKey(join(liveDir, 'secret.key'))),
+    settings: liveSettings,
+    gateways: {
+      openrouter: createOpenRouterGateway(),
+      openai: new OpenAiCompatibleGateway('https://api.openai.com/v1'),
+      anthropic: new AnthropicGateway(),
+    },
+    customGateway: (baseURL) => new OpenAiCompatibleGateway(baseURL),
+    clock: { now: () => Date.now() },
+    envKey: () => process.env['OPENROUTER_API_KEY'],
+    cooldown: new ProviderCooldown({ clock: { now: () => Date.now() } }),
+    // A check must not rewrite the instance's default provider.
+    setDefaultProvider: () => undefined,
+    // Subscription providers ask the engine whether a credential exists; no
+    // engine is running here, so they answer "no" and drop out of the chain.
+    // The key-based providers -- which is what this instance uses -- are
+    // unaffected.
+    engineModels: () => Promise.resolve([]),
+    engineHasAuth: () => false,
+    engineCheckAuth: () => Promise.resolve({ ok: false }),
+    engineLogout: () => Promise.resolve(),
+    defaults: () => {
+      const doc = liveSettings.get<{ defaultProvider?: string; defaultModel?: string }>('app');
+      return { provider: doc?.defaultProvider ?? '', model: doc?.defaultModel ?? '' };
+    },
+  });
   const dataDir = mkdtempSync(join(tmpdir(), 'popy-live-skills-'));
   const db = new Database(join(dataDir, 'popy.db'));
   migrate(db);
@@ -185,37 +212,25 @@ async function main(): Promise<void> {
     skills: vault,
     embedder,
     vectors,
-    // A direct call rather than the production gateway, for one reason: that
-    // gateway's timeout is twenty seconds, tuned for the short prompts a title
-    // or a voice cleanup sends. A distillation prompt is a whole conversation
-    // and a big model takes longer than that to read it. The request is
-    // otherwise identical to the one `completeAsService` would make.
-    complete: async (request) => {
+    // `completeAsService`, exactly as the server calls it: the provider comes
+    // from the chat, the model is that provider's Service Model, and a refusal
+    // walks the same failover chain a run does.
+    //
+    // The first version of this file called OpenRouter directly with a
+    // hardcoded model id, which was worse than a shortcut: the Service Model
+    // resolution added in 1.60 is one of the things this check exists to
+    // exercise, and bypassing it meant the run proved nothing about the path
+    // production takes. It also produced a wrong conclusion -- an out-of-credit
+    // error on a provider the instance does not even use first, read as a fact
+    // about Popy.
+    complete: async (request, ctx) => {
       if (offline) return RECORDED_ANSWER;
       spent += 1;
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: DEFAULT_MODEL_ID,
-          messages: [{ role: 'user', content: request.prompt }],
-          max_tokens: request.maxTokens,
-        }),
-        signal: AbortSignal.timeout(180_000),
-      });
-      const payload = (await response.json()) as {
-        choices?: { message?: { content?: string } }[];
-        error?: { message?: string };
-      };
-      if (!response.ok || payload.error !== undefined) {
-        throw new Error(payload.error?.message ?? `HTTP ${String(response.status)}`);
-      }
-      const answer = payload.choices?.[0]?.message?.content ?? '';
-      const finish = (payload as { choices?: { finish_reason?: string }[] }).choices?.[0]?.finish_reason;
-      console.log('  --- raw model answer ---');
-      console.log(answer.split(/\r?\n/).map((line) => `  | ${line}`).join('\n'));
-      console.log(`  --- end (${String(answer.length)} chars, finish_reason=${String(finish)}) ---`);
-      return answer;
+      const result = await providers.completeAsService(request, ctx);
+      console.log(`  --- answered by ${result.providerId} / ${result.modelId} ---`);
+      for (const line of result.text.split('\n')) console.log(`  | ${line}`);
+      console.log(`  --- end (${String(result.text.length)} chars) ---`);
+      return result.text;
     },
     clock: { now: () => Date.now() },
     enabled: () => true,

@@ -32,6 +32,20 @@ function candidate(overrides: Partial<SkillCandidate> = {}): SkillCandidate {
   };
 }
 
+/** One well-formed skill block, the shape the prompt asks for. */
+function block(overrides: Partial<SkillCandidate> = {}): string {
+  const skill = candidate(overrides);
+  return [
+    '=== SKILL ===',
+    `slug: ${skill.slug}`,
+    `name: ${skill.name}`,
+    `description: ${skill.description}`,
+    `whenToUse: ${skill.whenToUse}`,
+    '--- body ---',
+    skill.body,
+  ].join('\n');
+}
+
 describe('buildDistillPrompt', () => {
   it('states the boundary the router depends on: facts are not skills', () => {
     const prompt = buildDistillPrompt([message('user', 'how do I deploy?')], []);
@@ -42,7 +56,13 @@ describe('buildDistillPrompt', () => {
 
   it('offers the empty answer as a normal outcome, not a failure', () => {
     const prompt = buildDistillPrompt([message('user', 'hello')], []);
-    expect(prompt).toMatch(/empty array/);
+    expect(prompt).toMatch(/nothing to learn/);
+    expect(prompt).toContain('=== END ===');
+  });
+
+  it('promises the body needs no escaping, which is why the format changed', () => {
+    const prompt = buildDistillPrompt([message('user', 'hello')], []);
+    expect(prompt).toMatch(/Nothing needs escaping/);
   });
 
   it('lists what already exists, so it does not propose a duplicate', () => {
@@ -61,57 +81,99 @@ describe('buildDistillPrompt', () => {
 });
 
 describe('parseDistillAnswer', () => {
-  it('reads the array a model wrapped in prose', () => {
-    const answer =
-      'Sure! Here is what I found:\n```json\n[{"slug":"deploy-blog","name":"Deploy",' +
-      '"description":"How to publish","whenToUse":"publishing a post","body":"Push to main."}]\n```';
-    expect(parseDistillAnswer(answer).candidates).toEqual([
-      {
-        slug: 'deploy-blog',
-        name: 'Deploy',
-        description: 'How to publish',
-        whenToUse: 'publishing a post',
-        body: 'Push to main.',
-      },
-    ]);
+  it('reads one skill', () => {
+    expect(parseDistillAnswer(`${block()}\n=== END ===`).candidates).toEqual([candidate()]);
   });
 
-  it('reads an empty array as nothing to learn', () => {
-    expect(parseDistillAnswer('[]').candidates).toEqual([]);
+  it('reads the block a model wrapped in prose', () => {
+    const answer = `Sure, here is what I found:\n\n${block()}\n=== END ===\n\nHope that helps!`;
+    expect(parseDistillAnswer(answer).candidates).toEqual([candidate()]);
   });
 
-  it('treats an answer with no array at all as nothing to learn', () => {
-    expect(parseDistillAnswer('I could not find anything reusable.').candidates).toEqual([]);
-  });
-
-  it('treats unparseable JSON as nothing rather than throwing', () => {
-    expect(parseDistillAnswer('[{"slug": "broken",]').candidates).toEqual([]);
-  });
-
-  it('drops a candidate missing a field instead of inventing one', () => {
-    const answer = '[{"slug":"a","name":"A","description":"","body":"x"}]';
-    expect(parseDistillAnswer(answer).candidates).toEqual([]);
+  it('reads the end marker alone as nothing to learn', () => {
+    const parsed = parseDistillAnswer('=== END ===');
+    expect(parsed.candidates).toEqual([]);
+    expect(parsed.truncated).toBe(false);
   });
 
   it('keeps several skills from one conversation', () => {
-    const answer = JSON.stringify([
-      { slug: 'one', name: 'One', description: 'd1', whenToUse: 'w1', body: 'b1' },
-      { slug: 'two', name: 'Two', description: 'd2', whenToUse: 'w2', body: 'b2' },
-    ]);
+    const answer = [block({ slug: 'one' }), block({ slug: 'two' }), '=== END ==='].join('\n');
     expect(parseDistillAnswer(answer).candidates.map((entry) => entry.slug)).toEqual(['one', 'two']);
   });
 
-  it('keeps the first of two candidates claiming the same id', () => {
-    const answer = JSON.stringify([
-      { slug: 'same', name: 'First', description: 'd', whenToUse: 'w', body: 'b' },
-      { slug: 'same', name: 'Second', description: 'd', whenToUse: 'w', body: 'b' },
-    ]);
+  it('keeps the first of two blocks claiming the same id', () => {
+    const answer = [
+      block({ slug: 'same', name: 'First' }),
+      block({ slug: 'same', name: 'Second' }),
+      '=== END ===',
+    ].join('\n');
     expect(parseDistillAnswer(answer).candidates.map((entry) => entry.name)).toEqual(['First']);
   });
 
+  it('drops a block missing a field instead of inventing one', () => {
+    const answer = '=== SKILL ===\nslug: a\nname: A\n--- body ---\nbody\n=== END ===';
+    expect(parseDistillAnswer(answer).candidates).toEqual([]);
+  });
+
   it('falls back to the description when whenToUse is missing', () => {
-    const answer = '[{"slug":"a","name":"A","description":"the description","body":"x"}]';
+    const answer =
+      '=== SKILL ===\nslug: a\nname: A\ndescription: the description\n--- body ---\nbody\n=== END ===';
     expect(parseDistillAnswer(answer).candidates[0]?.whenToUse).toBe('the description');
+  });
+
+  /**
+   * The case that made this format necessary: a real answer, from a real
+   * provider, whose body was a curl command. As JSON it was complete,
+   * plausible and invalid -- the unescaped quotes inside `--data` closed the
+   * string early and the whole skill was thrown away.
+   */
+  it('keeps a body full of quotes, braces and backticks', () => {
+    const shell =
+      "Purge it:\n\n```\ncurl -X POST 'https://api.cloudflare.com/client/v4/zones/{id}/purge_cache' \\\n" +
+      '  -H "Authorization: Bearer $CF" --data \'{"purge_all":true}\'\n```\n\nThen check `cf-cache-status`.';
+    const answer = `${block({ body: shell })}\n=== END ===`;
+
+    const parsed = parseDistillAnswer(answer);
+    expect(parsed.candidates).toHaveLength(1);
+    expect(parsed.candidates[0]?.body).toBe(shell);
+    expect(parsed.truncated).toBe(false);
+  });
+
+  it('does not mistake a body line for a field', () => {
+    const answer = `${block({ body: 'name: keep this line in the body' })}\n=== END ===`;
+    expect(parseDistillAnswer(answer).candidates[0]?.name).toBe('Deploy the blog');
+    expect(parseDistillAnswer(answer).candidates[0]?.body).toBe('name: keep this line in the body');
+  });
+});
+
+/**
+ * The truncation cases, written after a live run lost a real skill to a
+ * cut-off answer that the parser read as an empty one.
+ */
+describe('parseDistillAnswer and answers that were cut off', () => {
+  it('keeps the skills that finished when the answer stops mid-sentence', () => {
+    const answer = `${block({ slug: 'one' })}\n=== SKILL ===\nslug: two\nname: Tw`;
+    const parsed = parseDistillAnswer(answer);
+
+    expect(parsed.candidates.map((entry) => entry.slug)).toEqual(['one']);
+    expect(parsed.truncated).toBe(true);
+  });
+
+  it('says so when nothing at all survived the cut', () => {
+    const parsed = parseDistillAnswer('=== SKILL ===\nslug: one\nname: On');
+
+    expect(parsed.candidates).toEqual([]);
+    // The caller keeps the watermark where it is on this, and retries.
+    expect(parsed.truncated).toBe(true);
+  });
+
+  it('treats an answer with no markers at all as truncated, not as empty', () => {
+    // A model that answered in prose never said it was finished, and the
+    // conservative reading is that it did not finish.
+    const parsed = parseDistillAnswer('I could not find anything reusable.');
+
+    expect(parsed.candidates).toEqual([]);
+    expect(parsed.truncated).toBe(true);
   });
 });
 
@@ -141,48 +203,38 @@ describe('scrubCandidate', () => {
 });
 
 /**
- * The truncation cases, all of them written after a live run lost a real skill
- * to a cut-off answer that the parser read as an empty one.
+ * Markers as models actually write them. Every case here cost a live run: the
+ * skill was complete and well-formed, and an exact-match parser threw it away
+ * over the punctuation of a fence.
  */
-describe('parseDistillAnswer and answers that were cut off', () => {
-  const first =
-    '{"slug":"one","name":"One","description":"d1","whenToUse":"w1","body":"b1"}';
+describe('parseDistillAnswer and marker sloppiness', () => {
+  const fields = [
+    'slug: a-skill',
+    'name: A skill',
+    'description: what it does',
+    'whenToUse: when to use it',
+  ];
 
-  it('keeps the skills that finished when the answer stops mid-sentence', () => {
-    const answer = `[${first},{"slug":"two","name":"Two","description":"d2","whenTo`;
+  it('accepts a body fence that lost its closing dashes', () => {
+    // Verbatim from a live run against sabiazinho-4.
+    const answer = ['=== SKILL ===', ...fields, '--- body', 'The procedure.', '=== END ==='].join('\n');
+    expect(parseDistillAnswer(answer).candidates[0]?.body).toBe('The procedure.');
+  });
+
+  it('accepts fences of any length, and mixed case', () => {
+    const answer = ['==== Skill ====', ...fields, '----body----', 'The procedure.', '== end'].join('\n');
     const parsed = parseDistillAnswer(answer);
 
-    expect(parsed.candidates.map((entry) => entry.slug)).toEqual(['one']);
-    expect(parsed.truncated).toBe(true);
-  });
-
-  it('says so when nothing at all survived the cut', () => {
-    const parsed = parseDistillAnswer('[{"slug":"one","name":"One","desc');
-
-    expect(parsed.candidates).toEqual([]);
-    // The caller keeps the watermark where it is on this, and retries.
-    expect(parsed.truncated).toBe(true);
-  });
-
-  it('does not call a complete answer truncated', () => {
-    expect(parseDistillAnswer(`[${first}]`).truncated).toBe(false);
-    expect(parseDistillAnswer('[]').truncated).toBe(false);
-  });
-
-  it('is not fooled by a brace inside a string', () => {
-    const tricky =
-      '[{"slug":"one","name":"One","description":"d","whenToUse":"w","body":"use {} and a quote \\" here"}]';
-    const parsed = parseDistillAnswer(tricky);
-
     expect(parsed.candidates).toHaveLength(1);
-    expect(parsed.candidates[0]?.body).toBe('use {} and a quote " here');
     expect(parsed.truncated).toBe(false);
   });
 
-  it('reads an answer with no array at all as neither', () => {
-    const parsed = parseDistillAnswer('There was nothing procedural here.');
+  it('does not mistake a markdown rule or a heading for a fence', () => {
+    // `---` alone and `=== something else ===` must stay body text: a
+    // procedure is markdown, and markdown is full of both.
+    const body = ['Step one.', '---', '=== not a marker ===', 'Step two.'].join('\n');
+    const answer = ['=== SKILL ===', ...fields, '--- body ---', body, '=== END ==='].join('\n');
 
-    expect(parsed.candidates).toEqual([]);
-    expect(parsed.truncated).toBe(false);
+    expect(parseDistillAnswer(answer).candidates[0]?.body).toBe(body);
   });
 });

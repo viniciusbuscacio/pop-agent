@@ -58,6 +58,11 @@ normative history.
 
 ### Fixed
 
+- **A skill whose steps contain a command no longer gets thrown away.** Popy
+  asked itself for the procedure in a format where every quote and brace had to
+  be escaped, so the moment a skill contained a real `curl` line the whole thing
+  was discarded as unreadable. It now writes the procedure plainly, with nothing
+  to escape.
 - **A skill Popy was writing no longer vanishes when the answer runs long.**
   If the model ran out of room mid-sentence, everything it had written was
   discarded and the conversation was marked as read, so a procedure it had

@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.63 — 2026-08-08.
+Version 1.64 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -385,6 +385,19 @@ user message — selection is 100% local, no LLM call:
   injection distilled as "a better version of a skill you already trust"
   would walk in. The similarity is stored because 0.90 was chosen without
   data and that column is the data that will retune it.
+- **The answer format is markers, not JSON** (1.64, forced by live runs).
+  Each skill is a `=== SKILL ===` block of `key: value` lines, a `--- body ---`
+  fence and then the procedure verbatim; `=== END ===` closes the answer.
+  Nothing is escaped, because asking for a markdown procedure inside a JSON
+  string means every quote, brace and backtick in the payload has to survive an
+  escaping pass, and procedures are made of exactly those characters. A real
+  answer whose body carried a `curl` line with `--data '{"purge_all":true}'`
+  was complete, plausible and invalid, and the skill was thrown away for it.
+  The markers are read loosely -- `--- body` with no closing dashes is a body
+  fence, and so is `== end` -- because an exact-match parser threw away a
+  well-formed skill over the punctuation of a fence. The rule that matters is
+  that the line is fence characters plus the keyword and nothing else, so it
+  cannot collide with prose.
 - **A cut-off answer is not an empty one** (1.63, found by the first live
   run). The parser scans complete `{...}` objects out of the array instead of
   `JSON.parse`-ing the whole thing, so a reply that stopped mid-field keeps
@@ -1399,6 +1412,23 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.64 (2026-08-08): **The distillation format stops being JSON (§8).** Two
+  more live runs, this time against the instance's real provider chain through
+  `completeAsService`. The first version of `tools/live-skills.ts` called
+  OpenRouter directly with a hardcoded model id, which bypassed the very
+  Service Model resolution it existed to exercise -- and produced a wrong
+  conclusion from an out-of-credit error on a provider this instance does not
+  even reach first.
+  Through the real chain the model answered well and the skill was still lost,
+  twice. Once because the body held a `curl` line with
+  `--data '{"purge_all":true}'`, whose unescaped quotes made a complete and
+  plausible document invalid. Once because the model wrote `--- body` without
+  the closing dashes, and an exact-match parser dropped a well-formed skill
+  over it. Hence markers and lines, nothing escaped, markers matched loosely.
+  The loop then ran end to end on `custom-8e4e682bfd / sabiazinho-4`: the skill
+  was distilled and held pending, was **not** routed until approved, was
+  selected first afterwards (`cos=0.81`) for a Portuguese question sharing none
+  of its English words, and was archived by the collector.
 - 1.63 (2026-08-08): **The auto-skill loop verified against a real model, and
   the bug that verification found (§8).** `tools/live-skills.ts` runs the whole
   loop on a throwaway database and vault — plant a conversation, distil it,
