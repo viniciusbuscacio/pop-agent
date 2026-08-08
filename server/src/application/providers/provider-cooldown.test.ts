@@ -17,7 +17,7 @@ function build(durationMs?: number): { cooldown: ProviderCooldown; clock: Tickin
 }
 
 describe('ProviderCooldown', () => {
-  it('penalizes for the default five minutes, then forgives by itself', () => {
+  it('penalizes for one minute on the first strike, then forgives by itself', () => {
     const { cooldown, clock } = build();
 
     cooldown.penalize('openrouter');
@@ -30,13 +30,65 @@ describe('ProviderCooldown', () => {
     expect(cooldown.isPenalized('openrouter')).toBe(false);
   });
 
-  it('is cleared on new evidence: a fresh key or sign-in', () => {
+  it('lengthens the wait on each strike: one, five, fifteen, sixty minutes', () => {
+    const { cooldown, clock } = build();
+    const ONE = 1 * 60 * 1000;
+    const FIVE = 5 * 60 * 1000;
+    const FIFTEEN = 15 * 60 * 1000;
+    const SIXTY = 60 * 60 * 1000;
+
+    cooldown.penalize('openrouter');
+    clock.value += ONE - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+    clock.value += 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(false);
+
+    cooldown.penalize('openrouter');
+    clock.value += FIVE - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+    clock.value += 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(false);
+
+    cooldown.penalize('openrouter');
+    clock.value += FIFTEEN - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+    clock.value += 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(false);
+
+    cooldown.penalize('openrouter');
+    clock.value += SIXTY - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+    clock.value += 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(false);
+
+    // Fifth strike stays at the cap.
+    cooldown.penalize('openrouter');
+    clock.value += SIXTY - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+  });
+
+  it('uses a flat duration when durationMs is overridden', () => {
+    const flat = 42_000;
+    const { cooldown, clock } = build(flat);
+
+    cooldown.penalize('openrouter');
+    clock.value += flat - 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(true);
+    clock.value += 1;
+    expect(cooldown.isPenalized('openrouter')).toBe(false);
+  });
+
+  it('is cleared on new evidence: a fresh key or sign-in resets the ladder', () => {
     const { cooldown } = build();
+    cooldown.penalize('anthropic');
     cooldown.penalize('anthropic');
 
     cooldown.clear('anthropic');
 
     expect(cooldown.isPenalized('anthropic')).toBe(false);
+    // After clear the next strike starts at one minute again.
+    cooldown.penalize('anthropic');
+    expect(cooldown.isPenalized('anthropic')).toBe(true);
   });
 
   it('filters the penalized out of a chain', () => {
