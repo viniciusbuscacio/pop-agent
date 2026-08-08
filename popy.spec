@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.66 — 2026-08-08.
+Version 1.67 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1462,6 +1462,15 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.67 (2026-08-08): **`tools/live-skills.ts` loses its replay mode.** The
+  `--offline` flag fed the loop a recorded answer so the router half could be
+  exercised for free. It had been broken since 1.64 changed the answer format
+  and the fixture was not changed with it: every offline run printed "nothing
+  learned" and read as a finding about the distiller. Deleted rather than
+  repaired (Vinicius, 08/08). The file exists because a fixture can agree with
+  the code that wrote it and disagree with the code that reads it — which is
+  exactly what the stale replay did — so a mode that passes without calling a
+  model defeats the only thing it is for. The gate is where fixtures belong.
 - 1.66 (2026-08-08): **Skills leave the conversation (§8).** Vinicius read a
   transcript where he was choosing a name for Popy and got, turn after turn, a
   paragraph explaining why no skill was being created. The log says why:

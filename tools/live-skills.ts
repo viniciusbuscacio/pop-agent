@@ -15,6 +15,15 @@
  * Deliberately not in the gate: it spends money, like `live-check.ts`. Run it
  * by hand, read what it prints, close the terminal.
  *
+ * There is no replay mode. There was one -- `--offline`, which fed the loop a
+ * recorded answer -- and it was deleted (Vinicius, 08/08) because it defeats
+ * the only reason this file exists. A recorded answer is a fixture, and the
+ * gate is already full of fixtures; what cannot be faked is what a real model
+ * really emits. The replay had in fact been broken since the answer format
+ * changed in 1.64, printing "nothing learned" on every run and looking like a
+ * finding about the distiller. A check that can pass without the thing it
+ * checks is worse than no check.
+ *
  *   npx tsx tools/live-skills.ts
  *
  * The key comes from OPENROUTER_API_KEY, or from the repo's .env.
@@ -49,46 +58,6 @@ import {
   createOpenRouterGateway,
 } from '../server/src/infrastructure/providers/openai-compatible-gateway.js';
 
-const offline = process.argv.includes('--offline');
-
-/**
- * What the model actually answered on 08/08, replayed.
- *
- * The slug, name, description and whenToUse are verbatim from the live run --
- * the raw answer is in that run's output. The body is the model's opening
- * paragraph plus the four steps of the transcript, written out by hand,
- * because the live answer was cut off by the token ceiling. (Which is the bug
- * that run found: the parser read the cut-off array as an empty one and the
- * watermark moved past a conversation that had a good skill in it.)
- *
- * Replaying it makes the second half of this check -- does the router bring a
- * learned skill back? -- runnable for nothing, with the real embedder, on text
- * a model really produced rather than text written to be easy to retrieve.
- */
-const RECORDED_BODY = `# Fix stale 404s after a Cloudflare Pages deploy
-
-Symptom: the build passed (e.g. GitHub Actions green), the push went out, but the site serves 404s or the old build.
-
-1. Confirm the push actually landed on \`main\` -- Cloudflare Pages only publishes production deployments from that branch.
-2. In the Cloudflare Pages dashboard, check the latest deployment reads "Success" and not "Building".
-3. Purge the cache through the API with the zone id, not the dashboard button -- the button only clears HTML.
-4. Wait ~30s and test with \`curl -I\`, checking \`cf-cache-status\` comes back MISS on the first call.
-5. Only then open a browser. Testing in the browser first caches the 404 locally, which looks like the purge failed and leads to a pointless redeploy.
-`;
-
-const RECORDED_ANSWER = JSON.stringify([
-  {
-    slug: 'cloudflare-pages-stale-cache',
-    name: 'Fix stale 404s after Cloudflare Pages deploy',
-    description:
-      'Clear Cloudflare edge cache correctly when a successful deploy still serves 404s or the old build.',
-    whenToUse:
-      'Deploy passed but the site still returns 404 on all pages or serves the old version after a push; ' +
-      'Cloudflare Pages (or any Cloudflare-fronted site) serving stale content; need to purge Cloudflare ' +
-      'cache and verify it actually cleared.',
-    body: RECORDED_BODY,
-  },
-]);
 const CHAT_ID = 'chat-liveskill01';
 const NOW = Date.parse('2026-08-07T20:00:00.000Z');
 
@@ -224,7 +193,6 @@ async function main(): Promise<void> {
     // error on a provider the instance does not even use first, read as a fact
     // about Popy.
     complete: async (request, ctx) => {
-      if (offline) return RECORDED_ANSWER;
       spent += 1;
       const result = await providers.completeAsService(request, ctx);
       console.log(`  --- answered by ${result.providerId} / ${result.modelId} ---`);
