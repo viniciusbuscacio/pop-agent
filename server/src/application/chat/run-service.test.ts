@@ -48,6 +48,7 @@ class ScriptedBridge implements AgentBridge {
   };
   usage: AgentRunResult['usage'];
   readonly seen: AgentRunRequest[] = [];
+  readonly discarded: string[] = [];
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     this.seen.push(request);
@@ -57,6 +58,10 @@ class ScriptedBridge implements AgentBridge {
 
   listModels(): Promise<{ id: string }[]> {
     return Promise.resolve([{ id: 'fake/model-1' }]);
+  }
+
+  discardSession(chatId: string): void {
+    this.discarded.push(chatId);
   }
 }
 
@@ -637,6 +642,60 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     { providerId: 'p1', modelId: 'p1/model' },
     { providerId: 'p2', modelId: 'p2/model' },
   ];
+
+  it('discards the cached session when a silence timeout abandons the attempt', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      if (request.provider === 'p1') {
+        return new Promise((_resolve, reject) => {
+          request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        });
+      }
+      request.onEvent({ kind: 'delta', text: 'p2 answered' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'a question');
+    const deadline = Date.now() + 4000;
+    for (;;) {
+      if (bridge.discarded.includes(chatId)) break;
+      if (Date.now() > deadline) throw new Error('discardSession was never called');
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(bridge.discarded).toEqual([chatId]);
+  });
+
+  it('books late usage when the bridge settles after a silence timeout', async () => {
+    withChain([{ providerId: 'p1', modelId: 'p1/model' }]);
+    const chatId = newChat();
+    bridge.usage = { provider: 'p1', model: 'p1/model', inputTokens: 50, outputTokens: 5, cost: 0.02 };
+    bridge.script = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    const deadline = Date.now() + 2000;
+    let rows: { id: string; tokens_in: number }[] = [];
+    for (;;) {
+      rows = db.prepare('SELECT id, tokens_in FROM llm_runs ORDER BY id').all() as {
+        id: string;
+        tokens_in: number;
+      }[];
+      if (rows.length > 0) break;
+      if (Date.now() > deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id.endsWith('-late')).toBe(true);
+    expect(rows[0]?.tokens_in).toBe(50);
+  });
 
   it('moves on from a provider that accepts the run and then says nothing', async () => {
     // The dead-endpoint case: the socket is open, nothing ever comes back.

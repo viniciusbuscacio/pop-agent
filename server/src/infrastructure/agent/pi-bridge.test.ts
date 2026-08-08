@@ -600,6 +600,19 @@ describe('sessions', () => {
     expect(engine.sessions[0]?.models).toEqual(['openai/gpt-5']);
   });
 
+  it('hard-forgets a session even while busy', async () => {
+    const { onEvent } = collect();
+    await run(onEvent);
+
+    bridge.discardSession(CHAT);
+
+    expect(engine.sessions[0]?.disposed).toBe(true);
+    expect(engine.opened).toHaveLength(1);
+    engine.next = new ScriptedSession();
+    await run(onEvent);
+    expect(engine.opened).toHaveLength(2);
+  });
+
   it('disposes what it cached when it is closed', async () => {
     const { onEvent } = collect();
     await run(onEvent);

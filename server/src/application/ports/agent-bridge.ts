@@ -81,6 +81,11 @@ export interface AgentBridge {
    * the chain (Vinicius, 08/08).
    */
   complete(request: EngineCompletionRequest): Promise<string>;
+  /**
+   * Hard-forgets a cached chat session so a zombie attempt cannot reuse it.
+   * Only pi implements this; the run service calls it after a silence timeout.
+   */
+  discardSession?(chatId: string): void;
 }
 
 /** One prompt, one provider, one answer. No chat, no tools, no history. */

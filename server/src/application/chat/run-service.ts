@@ -713,7 +713,29 @@ export class RunService {
       // surrendered one leaves it running and unheard.
       attempt.catch(() => undefined);
       const finished = await Promise.race([attempt.then(() => true), surrendered.then(() => false)]);
-      if (finished) result = await attempt;
+      if (finished) {
+        result = await attempt;
+      } else {
+        // The bridge may still settle after we gave up. Book its usage once,
+        // under a late id, so spend is not lost when the zombie finishes.
+        void attempt.then((late) => {
+          const usage = late.usage;
+          if (usage === undefined || this.deps.llmRuns === undefined) return;
+          this.deps.llmRuns.record({
+            id:
+              attemptIndex === 0
+                ? `${run.runId}-late`
+                : `${run.runId}-f${String(attemptIndex)}-late`,
+            chatId: run.chatId,
+            provider: usage.provider,
+            model: usage.model,
+            tokensIn: usage.inputTokens,
+            tokensOut: usage.outputTokens,
+            cost: billsPerToken(usage.provider) ? usage.cost : 0,
+            createdAt: new Date(clock.now()).toISOString(),
+          });
+        });
+      }
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
@@ -723,10 +745,15 @@ export class RunService {
 
     // Our own abort, not the bridge's opinion of it: whatever error the abort
     // surfaced, the truth is that this provider never said anything.
-    if (timedOut) failure = { code: 'attempt_timeout' };
+    if (timedOut) {
+      failure = { code: 'attempt_timeout' };
+      // A deaf bridge keeps its cached session alive; drop it so failover
+      // opens fresh and the zombie cannot interleave into the next attempt.
+      bridge.discardSession?.(run.chatId);
+    }
 
     const usage = result.usage;
-    if (usage !== undefined && this.deps.llmRuns !== undefined) {
+    if (usage !== undefined && this.deps.llmRuns !== undefined && !timedOut) {
       this.deps.llmRuns.record({
         // The first attempt keeps the run id; a failover attempt gets its own
         // suffixed row -- both were billed, and llm_runs ids are unique.

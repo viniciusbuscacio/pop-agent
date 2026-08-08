@@ -280,6 +280,15 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
    * deleted so nothing rewrites its JSONL after the file is removed.
    */
   forget(chatId: string): void {
+    this.discardSession(chatId);
+  }
+
+  /**
+   * Hard-forgets a session even while a run still holds it: the zombie's JSONL
+   * writes land on an abandoned branch (see rewindToLeaf), and the next
+   * acquire opens fresh from the clean main path.
+   */
+  discardSession(chatId: string): void {
     const entry = this.sessions.get(chatId);
     if (entry === undefined) return;
     entry.session.dispose();
