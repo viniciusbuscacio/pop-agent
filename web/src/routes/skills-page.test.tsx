@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillsResponse } from '@popy/shared';
 import { SkillsPage } from './skills-page';
+import { useSkillsStore } from '../store/skills';
 
 /** No jest-dom in this suite: values are read off the element, as elsewhere. */
 function valueOf(testId: string): string {
@@ -55,6 +56,9 @@ function Harness() {
       <button type="button" onClick={() => navigate('/skills/beta')}>
         go to beta
       </button>
+      <button type="button" onClick={() => void useSkillsStore.getState().reload()}>
+        reload the list
+      </button>
       <Routes>
         <Route path="/skills" element={<SkillsPage />} />
         <Route path="/skills/:slug" element={<SkillsPage />} />
@@ -65,7 +69,9 @@ function Harness() {
 
 beforeEach(() => {
   list.mockReset();
-  list.mockResolvedValue(SKILLS);
+  // A fresh array each time, like the real service: a reload genuinely changes
+  // the identity of every skill object, which is the hazard the last test guards.
+  list.mockImplementation(() => Promise.resolve({ ...SKILLS, skills: SKILLS.skills.map((s) => ({ ...s })) }));
 });
 
 afterEach(cleanup);
@@ -122,5 +128,31 @@ describe('the skills pane', () => {
     await waitFor(() => {
       expect(valueOf('skill-name')).toBe('Beta');
     });
+  });
+});
+
+describe('the skills editor and a list refresh', () => {
+  it('does not wipe what is being typed when the list reloads', async () => {
+    // The hazard of following the route with an effect rather than a key: the
+    // store hands out new objects on every reload, so an effect that depended
+    // on the skill object -- instead of on its slug -- would clear the form
+    // under the user for a refresh that changed nothing.
+    render(
+      <MemoryRouter initialEntries={['/skills/alpha']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(valueOf('skill-name')).toBe('Alpha');
+    });
+
+    await userEvent.clear(screen.getByTestId('skill-name'));
+    await userEvent.type(screen.getByTestId('skill-name'), 'Renamed but not saved');
+    await userEvent.click(screen.getByRole('button', { name: 'reload the list' }));
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+    expect(valueOf('skill-name')).toBe('Renamed but not saved');
   });
 });

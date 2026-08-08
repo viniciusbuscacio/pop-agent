@@ -691,11 +691,8 @@ export function SkillsSection() {
   }
 
   if (editing !== undefined) {
-    // Keyed for the same reason as the Skills pane: the editor's fields are
-    // seeded on mount, so the thing being edited has to be its identity.
     return (
       <SkillEditor
-        key={editing === 'new' ? 'new' : editing.slug}
         skill={editing === 'new' ? undefined : editing}
         onDone={() => {
           setEditing(undefined);

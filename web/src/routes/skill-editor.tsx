@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SkillDTO } from '@popy/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
@@ -14,18 +14,46 @@ import { Button, Card, TextArea, TextField } from '../ui/controls';
  * exists when vite-plugin-pwa is loaded. A test of the Skills pane failed on a
  * dependency the Skills pane does not have.
  *
- * The fields are seeded on mount, so callers must key it on whatever it is
- * editing. Nothing in here can enforce that, which is why both call sites say
- * so out loud.
+ * It follows the route the way the chat and the task form do: one effect on the
+ * identity of the thing being edited, which fills the fields and clears the
+ * ones that belong to the previous edit. `chat-page` runs `openChat(chatId)`
+ * on `[chatId]` and resets its own scroll state; `task-form-page` loads the
+ * task on `[taskId]` and fills the form. Same shape here, on `[identity]`.
+ *
+ * That identity is the slug, and the slug is the only id a skill has or needs:
+ * it names the folder in the vault and keys `skill_usage`, `skill_embeddings`
+ * and `skill_revisions`. It cannot change after creation either -- the field is
+ * disabled outside "new" -- which is exactly what makes it usable here.
+ *
+ * The effect depends on the identity and NOT on the `skill` object, and that is
+ * deliberate: the store hands out a new array on every reload, so depending on
+ * the object would wipe half-typed text the moment anything refreshed the list.
  */
 export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
-  const [slug, setSlug] = useState(skill?.slug ?? '');
-  const [name, setName] = useState(skill?.name ?? '');
-  const [description, setDescription] = useState(skill?.description ?? '');
-  const [whenToUse, setWhenToUse] = useState(skill?.whenToUse ?? '');
-  const [body, setBody] = useState(skill?.body ?? '');
+  const [slug, setSlug] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [whenToUse, setWhenToUse] = useState('');
+  const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  // `new` and "nothing yet" are different states, and an empty string would
+  // conflate them: a pane still waiting for the store must not look like the
+  // blank form for a new skill.
+  const identity = skill === undefined ? 'new' : skill.slug;
+
+  useEffect(() => {
+    setSlug(skill?.slug ?? '');
+    setName(skill?.name ?? '');
+    setDescription(skill?.description ?? '');
+    setWhenToUse(skill?.whenToUse ?? '');
+    setBody(skill?.body ?? '');
+    // Everything that belonged to the previous skill goes too. A failure
+    // message from the one before, left on screen, would read as this one's.
+    setError(undefined);
+    setBusy(false);
+  }, [identity]);
 
   const isNew = skill === undefined;
   const canSave = slug.trim().length > 0 && name.trim().length > 0 && !busy;
