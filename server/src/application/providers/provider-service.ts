@@ -602,8 +602,10 @@ export class ProviderService {
               prompt: request.prompt,
               maxTokens: request.maxTokens,
             });
+        this.deps.cooldown?.clear(ref.providerId);
         return { text, providerId: ref.providerId, modelId: ref.modelId };
       } catch (error) {
+        this.deps.cooldown?.penalize(ref.providerId);
         last = error instanceof Error ? error : new Error('unknown');
       }
     }

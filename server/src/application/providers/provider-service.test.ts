@@ -912,4 +912,101 @@ describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)
     expect(answer.providerId).toBe(OPENROUTER);
     expect(calls).toBe(2);
   });
+
+  it('skips a penalized head on the next background call', async () => {
+    cooldown = new ProviderCooldown({ clock, durationMs: 60_000 });
+    service = new ProviderService({
+      secrets,
+      settings,
+      gateways: { [OPENROUTER]: gateway },
+      customGateway: () => gateway,
+      customIdSource: () =>
+        nextCustomIds.shift() ?? (customIdFallback++).toString(16).padStart(10, '0'),
+      clock,
+      envKey: () => envKey,
+      engineModels: () => Promise.resolve(engineCatalog),
+      engineHasAuth: (providerId) => oauthAuthed.has(providerId),
+      engineComplete: (request) => {
+        engineCompletions.push(request);
+        return oauthAuthed.has(request.providerId)
+          ? Promise.resolve('engine answer')
+          : Promise.reject(new Error('Not signed in.'));
+      },
+      engineLogout: (providerId) => {
+        oauthAuthed.delete(providerId);
+        return Promise.resolve();
+      },
+      cooldown,
+      defaults: () => defaults,
+      setDefaultProvider: (provider, model) => {
+        defaults = { provider, model };
+      },
+    });
+
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.setKey(instance.id, 'sk-local');
+
+    gateway.failCompleting = 'rate limited';
+    await expect(
+      service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id }),
+    ).rejects.toThrow('rate limited');
+
+    service.setKey(OPENROUTER, 'sk-or');
+    expect(service.resolveServiceChain({ provider: instance.id })[0]?.providerId).toBe(OPENROUTER);
+  });
+
+  it('uses a recovered provider again after a success clears its penalty', async () => {
+    cooldown = new ProviderCooldown({ clock, durationMs: 60_000 });
+    service = new ProviderService({
+      secrets,
+      settings,
+      gateways: { [OPENROUTER]: gateway },
+      customGateway: () => gateway,
+      customIdSource: () =>
+        nextCustomIds.shift() ?? (customIdFallback++).toString(16).padStart(10, '0'),
+      clock,
+      envKey: () => envKey,
+      engineModels: () => Promise.resolve(engineCatalog),
+      engineHasAuth: (providerId) => oauthAuthed.has(providerId),
+      engineComplete: (request) => {
+        engineCompletions.push(request);
+        return oauthAuthed.has(request.providerId)
+          ? Promise.resolve('engine answer')
+          : Promise.reject(new Error('Not signed in.'));
+      },
+      engineLogout: (providerId) => {
+        oauthAuthed.delete(providerId);
+        return Promise.resolve();
+      },
+      cooldown,
+      defaults: () => defaults,
+      setDefaultProvider: (provider, model) => {
+        defaults = { provider, model };
+      },
+    });
+
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.setKey(instance.id, 'sk-local');
+
+    gateway.failCompleting = 'rate limited';
+    await expect(
+      service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id }),
+    ).rejects.toThrow('rate limited');
+
+    gateway.failCompleting = undefined;
+    await service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id });
+
+    service.setKey(OPENROUTER, 'sk-or');
+    expect(service.resolveServiceChain({ provider: instance.id })[0]?.providerId).toBe(instance.id);
+  });
 });
+
+
