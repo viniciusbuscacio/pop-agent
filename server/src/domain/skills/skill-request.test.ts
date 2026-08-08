@@ -33,4 +33,25 @@ describe('asksForSkill', () => {
     expect(asksForSkill('VIRA SKILL')).toBe(true);
     expect(asksForSkill('transformar isso numa skill')).toBe(true);
   });
+
+  it('does not hear a negated phrase as a request', () => {
+    // Substring matching hears the order inside the refusal; the negation in
+    // the run-up is what tells them apart.
+    for (const message of [
+      'não cria uma skill',
+      'por favor NÃO transforma isso numa skill',
+      'não salva como skill ainda',
+      'do not turn this into a skill',
+      "don't make this a skill",
+      'never write a skill unless I ask again',
+    ]) {
+      expect(asksForSkill(message)).toBe(false);
+    }
+  });
+
+  it('only looks backwards for the negation', () => {
+    // A negation that comes after the phrase is another thought entirely.
+    expect(asksForSkill('cria uma skill, não esquece')).toBe(true);
+    expect(asksForSkill('agora sim: cria uma skill')).toBe(true);
+  });
 });
