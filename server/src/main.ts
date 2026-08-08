@@ -329,6 +329,9 @@ const runs = new RunService({
       `pop fallback: chat=${info.chatId} from=${info.from} to=${info.to} code=${info.code}`,
     );
   },
+  onAuthFailure: (providerId) => {
+    providers.noteAuthFailure?.(providerId);
+  },
   // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that

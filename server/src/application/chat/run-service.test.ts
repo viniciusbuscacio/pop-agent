@@ -618,11 +618,15 @@ describe('a process shutdown mid-run', () => {
 
 describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
   let penalized: string[];
+  let cleared: string[];
+  let authFailures: string[];
   let fallbacks: { chatId: string; from: string; to: string; code: string }[];
 
   /** The service under a fixed two-provider chain, everything recorded. */
   function withChain(chain: { providerId: string; modelId: string }[]): void {
     penalized = [];
+    cleared = [];
+    authFailures = [];
     fallbacks = [];
     runs = new RunService({
       chats: repo,
@@ -631,7 +635,11 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
       clock,
       llmRuns: new SqliteLlmRunsRepo(db),
       resolveChain: () => chain,
-      cooldown: { penalize: (providerId) => penalized.push(providerId) },
+      cooldown: {
+        penalize: (providerId) => penalized.push(providerId),
+        clear: (providerId) => cleared.push(providerId),
+      },
+      onAuthFailure: (providerId) => authFailures.push(providerId),
       onFallback: (info) => fallbacks.push(info),
       // Short enough that the suite does not wait a real minute.
       attemptTimeoutMs: 120,
@@ -642,6 +650,38 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     { providerId: 'p1', modelId: 'p1/model' },
     { providerId: 'p2', modelId: 'p2/model' },
   ];
+
+  it('forgives a provider on the cooldown ladder after a successful answer', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'delta', text: 'answered' });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(cleared).toEqual(['p1']);
+  });
+
+  it('surfaces an auth-class refusal to the provider layer', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      if (request.provider === 'p1') {
+        request.onEvent({ kind: 'error', code: 'provider_error', status: 401 });
+      } else {
+        request.onEvent({ kind: 'delta', text: 'saved' });
+      }
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(authFailures).toEqual(['p1']);
+  });
 
   it('discards the cached session when a silence timeout abandons the attempt', async () => {
     withChain(TWO);

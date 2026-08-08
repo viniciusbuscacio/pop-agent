@@ -8,7 +8,7 @@ import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 import { billsPerToken } from '../providers/provider-definitions.js';
 import { channelNote } from './channel-note.js';
-import { shouldFailOver, type RunFailure } from './failover.js';
+import { shouldFailOver, isAuthFailure, type RunFailure } from './failover.js';
 
 /**
  * Turning a typed message into a run, and a run into a stored answer
@@ -127,9 +127,11 @@ export interface RunDeps {
     model: string;
   }) => { providerId: string; modelId: string }[];
   /** The advisory cooldown a failing provider is penalized into. */
-  cooldown?: { penalize(providerId: string): void };
+  cooldown?: { penalize(providerId: string): void; clear(providerId: string): void };
   /** The journal line when a run fails over; main.ts logs it. */
   onFallback?: (info: { chatId: string; from: string; to: string; code: string }) => void;
+  /** Auth-class refusals, forwarded to the provider layer (pop-agent.spec §15). */
+  onAuthFailure?: (providerId: string) => void;
 }
 
 interface PendingRun {
@@ -796,7 +798,11 @@ export class RunService {
       if (pair === undefined) break;
 
       failure = await this.attempt(run, pair, index);
-      if (failure === undefined) break; // answered
+      if (failure === undefined) {
+        this.deps.cooldown?.clear(pair.providerId);
+        break; // answered
+      }
+      if (isAuthFailure(failure)) this.deps.onAuthFailure?.(pair.providerId);
       if (failure.code === 'aborted' || run.controller.signal.aborted) break;
 
       // A failover-class refusal penalizes the provider whether or not the
