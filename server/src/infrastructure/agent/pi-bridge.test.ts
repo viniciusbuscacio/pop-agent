@@ -413,6 +413,30 @@ describe('how a run ends', () => {
     expect(failures).toEqual([{ code: 'provider_error', message: 'insufficient credit' }]);
   });
 
+  it('books the sum of both attempts after overflow compact-and-retry', async () => {
+    let calls = 0;
+    engine.next.onPrompt = () => {
+      calls += 1;
+      if (calls === 1) {
+        engine.next.emit(
+          settled('error', { input: 100, output: 10, cost: 0.01 }, 'maximum context length exceeded'),
+        );
+      } else {
+        engine.next.emit(textDelta('recovered'));
+        engine.next.emit(settled('stop', { input: 50, output: 5, cost: 0.005 }));
+      }
+      return Promise.resolve();
+    };
+    const { onEvent } = collect();
+
+    const result = await run(onEvent);
+
+    expect(result.usage?.inputTokens).toBe(150);
+    expect(result.usage?.outputTokens).toBe(15);
+    expect(result.usage?.cost).toBeCloseTo(0.015, 10);
+    expect(usages[0]?.inputTokens).toBe(150);
+  });
+
   it('compacts and retries the turn once when the provider reports overflow', async () => {
     const failures: { code: string }[] = [];
     bridge = new PiAgentBridge({

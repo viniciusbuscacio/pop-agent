@@ -204,7 +204,9 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
           // A failed compaction still deserves the retry: pi's threshold may
           // simply not have fired yet, and the second attempt costs one turn.
         }
+        const firstAttempt = translator;
         translator = new RunTranslator(onEvent);
+        translator.carryUsageFrom(firstAttempt);
         unsubscribe = entry.session.subscribe((event) => {
           translator.handle(event);
         });
@@ -510,7 +512,19 @@ class RunTranslator {
   private lastStopReason = '';
   private lastErrorMessage: string | undefined;
 
-  constructor(private readonly onEvent: (event: AgentEvent) => void) {}
+  constructor(
+    private readonly onEvent: (event: AgentEvent) => void,
+    seed?: TurnUsage,
+  ) {
+    if (seed !== undefined) this.total = { ...seed };
+  }
+
+  /** The billed usage from a prior attempt in the same run (overflow retry). */
+  carryUsageFrom(other: RunTranslator): void {
+    const usage = other.usage;
+    if (usage === undefined) return;
+    this.count(usage);
+  }
 
   get usage(): TurnUsage | undefined {
     return this.total;
