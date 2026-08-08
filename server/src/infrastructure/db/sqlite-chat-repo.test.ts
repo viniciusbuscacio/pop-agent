@@ -172,6 +172,22 @@ describe('messages', () => {
     ]);
   });
 
+  it('names the newest message of every chat in one query', () => {
+    // The distiller's tick reads this against its watermarks instead of
+    // opening every tail (pop-agent.spec §8, fase c).
+    const empty = repo.create(chat());
+    const busy = repo.create(chat());
+    repo.appendMessage(message(busy.id, { content: 'one', createdAt: '2026-07-30T20:00:00.000Z' }));
+    const two = repo.appendMessage(
+      message(busy.id, { content: 'two', createdAt: '2026-07-30T20:01:00.000Z' }),
+    );
+
+    const ids = repo.lastMessageIds();
+
+    expect(ids.find((row) => row.chatId === busy.id)?.lastMessageId).toBe(two.id);
+    expect(ids.find((row) => row.chatId === empty.id)?.lastMessageId).toBeUndefined();
+  });
+
   it('opens a long chat at its tail, not at its beginning', () => {
     const created = repo.create(chat());
     for (let i = 0; i < 10; i += 1) {

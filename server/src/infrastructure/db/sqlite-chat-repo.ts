@@ -181,6 +181,26 @@ export class SqliteChatRepo implements ChatRepo {
     return rows.reverse().map(toMessage);
   }
 
+  lastMessageIds(): { chatId: string; lastMessageId?: string }[] {
+    // Same ordering getMessages uses for its tail page, so the id compared
+    // against the distiller's watermark is exactly the message a tail read
+    // would have returned last.
+    const rows = this.db
+      .prepare(
+        `SELECT c.id AS chatId,
+                (SELECT m.id FROM messages m
+                  WHERE m.chat_id = c.id
+               ORDER BY m.created_at DESC, m.rowid DESC
+                  LIMIT 1) AS lastMessageId
+           FROM chats c`,
+      )
+      .all() as { chatId: string; lastMessageId: string | null }[];
+    return rows.map((row) => ({
+      chatId: row.chatId,
+      ...(row.lastMessageId === null ? {} : { lastMessageId: row.lastMessageId }),
+    }));
+  }
+
   appendMessage(message: Message): Message {
     const insert = this.db.prepare(
       `INSERT INTO messages

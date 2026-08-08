@@ -40,6 +40,14 @@ export interface ChatRepo {
    */
   getMessages(chatId: string, options: { before?: string; limit: number }): Message[];
 
+  /**
+   * The newest message id of every chat, in one query (pop-agent.spec §8, fase
+   * c). The distiller's tick compares these against its watermarks to find the
+   * chats worth opening at all -- the idle answer is almost always "nothing
+   * new anywhere", and learning that used to cost one tail-read per chat.
+   */
+  lastMessageIds(): { chatId: string; lastMessageId?: string }[];
+
   appendMessage(message: Message): Message;
 
   /** Marks activity so the list ordering follows the last thing that happened. */
