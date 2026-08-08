@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
+import { formatDollars } from '../lib/money';
 import { normalizeBaseUrl, providersService } from '../services/providers';
 import { chatsService } from '../services/chats';
 import {
@@ -190,12 +191,11 @@ function Balance({ providerId }: { providerId: string }) {
   }, [providerId]);
 
   if (credits === undefined) return null;
-  const dollars = (value: number): string => `$${value.toFixed(2)}`;
   return (
     <p className="truncate text-xs text-[var(--muted)]" data-testid="provider-credits">
       {t('provider.credits', {
-        remaining: dollars(credits.remaining),
-        used: dollars(credits.used),
+        remaining: formatDollars(credits.remaining),
+        used: formatDollars(credits.used),
       })}
     </p>
   );
