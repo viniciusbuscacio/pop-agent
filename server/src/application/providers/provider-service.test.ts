@@ -1054,4 +1054,40 @@ describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)
   });
 });
 
+describe('auth failure marker (pop-agent.spec §15)', () => {
+  it('surfaces authErrorAt after noteAuthFailure', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.noteAuthFailure(OPENROUTER);
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBe(
+      new Date(clock.now()).toISOString(),
+    );
+  });
+
+  it('clears authErrorAt when a fresh key is saved', () => {
+    service.setKey(OPENROUTER, 'sk-old');
+    service.noteAuthFailure(OPENROUTER);
+
+    service.setKey(OPENROUTER, 'sk-new');
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBeUndefined();
+  });
+
+  it('clears authErrorAt after a successful connection test', async () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.noteAuthFailure(OPENROUTER);
+
+    await service.test(OPENROUTER);
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBeUndefined();
+  });
+
+  it('clears authErrorAt after a fresh sign-in', () => {
+    service.noteAuthFailure('openai-codex');
+
+    service.noteOAuthSuccess('openai-codex');
+
+    expect(service.status('openai-codex')?.authErrorAt).toBeUndefined();
+  });
+});
 

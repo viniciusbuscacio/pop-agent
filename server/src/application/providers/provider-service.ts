@@ -344,7 +344,7 @@ export class ProviderService {
     if (write === undefined) return;
     for (const id of this.order()) {
       if (!this.usable(id)) continue;
-      if (this.canonicalId(this.deps.defaults().provider) === id) return;
+      if (this.deps.defaults().provider === id) return;
       write(id, this.ref(id, '').modelId);
       return;
     }
@@ -496,7 +496,7 @@ export class ProviderService {
     // else, and every new run kept asking for the model the card no longer
     // showed. Maritaca configured sabiazinho-4, runs asking sabia-4
     // (Vinicius, 05/08). The elected pair follows the card it points at.
-    if (this.canonicalId(this.deps.defaults().provider) === definition.id) {
+    if (this.deps.defaults().provider === definition.id) {
       this.deps.setDefaultProvider?.(definition.id, this.ref(definition.id, '').modelId);
     }
   }
@@ -849,7 +849,6 @@ export class ProviderService {
         });
         this.deps.cooldown?.clear(providerId);
         this.clearAuthError(providerId);
-        this.deps.cooldown?.clear(providerId);
         return { ok: true, latencyMs: this.deps.clock.now() - startedAuth };
       } catch (error) {
         return {
