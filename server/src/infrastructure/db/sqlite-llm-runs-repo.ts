@@ -8,8 +8,8 @@ export class SqliteLlmRunsRepo implements LlmRunsRepo {
   record(run: LlmRun): void {
     this.db
       .prepare(
-        `INSERT INTO llm_runs (id, chat_id, provider, model, tokens_in, tokens_out, cost, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO llm_runs (id, chat_id, provider, model, tokens_in, tokens_out, cost, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         run.id,
@@ -20,6 +20,7 @@ export class SqliteLlmRunsRepo implements LlmRunsRepo {
         run.tokensOut,
         run.cost,
         run.createdAt,
+        run.kind ?? 'chat',
       );
   }
 }

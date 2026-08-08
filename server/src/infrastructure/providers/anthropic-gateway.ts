@@ -2,6 +2,7 @@ import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import {
   ProviderGatewayError,
   type CompletionRequest,
+  type CompletionResponse,
   type ProviderGateway,
 } from '../../application/ports/provider-gateway.js';
 
@@ -46,7 +47,7 @@ export class AnthropicGateway implements ProviderGateway {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
-  async complete(request: CompletionRequest): Promise<string> {
+  async complete(request: CompletionRequest): Promise<CompletionResponse> {
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -67,6 +68,7 @@ export class AnthropicGateway implements ProviderGateway {
 
     const body = (await response.json()) as {
       content?: { type?: string; text?: string }[];
+      usage?: { input_tokens?: number; output_tokens?: number };
     };
     const text = body.content?.find((part) => part.type === 'text')?.text;
     if (typeof text !== 'string') {
@@ -74,7 +76,22 @@ export class AnthropicGateway implements ProviderGateway {
         reachable: true,
       });
     }
-    return text;
+    const inputTokens = body.usage?.input_tokens;
+    const outputTokens = body.usage?.output_tokens;
+    return {
+      text,
+      ...(inputTokens === undefined || outputTokens === undefined
+        ? {}
+        : {
+            usage: {
+              provider: 'anthropic',
+              model: request.model,
+              inputTokens,
+              outputTokens,
+              cost: 0,
+            },
+          }),
+    };
   }
 }
 

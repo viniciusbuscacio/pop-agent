@@ -330,7 +330,7 @@ const runs = new RunService({
     );
   },
   onAuthFailure: (providerId) => {
-    providers.noteAuthFailure?.(providerId);
+    (providers as { noteAuthFailure?: (id: string) => void }).noteAuthFailure?.(providerId);
   },
   // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {

@@ -1,4 +1,4 @@
-import type { ModelInfo } from './agent-bridge.js';
+import type { ModelInfo, RunUsage } from './agent-bridge.js';
 
 /**
  * The provider's plain HTTP face (pop-agent.spec §15): the model catalog and the
@@ -32,10 +32,15 @@ export interface CompletionRequest {
   maxTokens: number;
 }
 
+export interface CompletionResponse {
+  text: string;
+  usage?: RunUsage;
+}
+
 export interface ProviderGateway {
   /** The provider's live catalog. The key is optional where the catalog is public. */
   listModels(apiKey: string | undefined): Promise<ModelInfo[]>;
 
   /** One prompt, one short answer, outside any session. */
-  complete(request: CompletionRequest): Promise<string>;
+  complete(request: CompletionRequest): Promise<CompletionResponse>;
 }

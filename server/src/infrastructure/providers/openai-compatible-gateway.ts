@@ -2,6 +2,7 @@ import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import {
   ProviderGatewayError,
   type CompletionRequest,
+  type CompletionResponse,
   type ProviderGateway,
 } from '../../application/ports/provider-gateway.js';
 
@@ -61,7 +62,7 @@ export class OpenAiCompatibleGateway implements ProviderGateway {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
-  async complete(request: CompletionRequest): Promise<string> {
+  async complete(request: CompletionRequest): Promise<CompletionResponse> {
     const response = await fetch(`${this.url()}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -82,6 +83,7 @@ export class OpenAiCompatibleGateway implements ProviderGateway {
 
     const body = (await response.json()) as {
       choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_cost?: number; cost?: number };
     };
     const content = body.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
@@ -89,7 +91,23 @@ export class OpenAiCompatibleGateway implements ProviderGateway {
         reachable: true,
       });
     }
-    return content;
+    const inputTokens = body.usage?.prompt_tokens;
+    const outputTokens = body.usage?.completion_tokens;
+    const reportedCost = body.usage?.total_cost ?? body.usage?.cost;
+    return {
+      text: content,
+      ...(inputTokens === undefined || outputTokens === undefined
+        ? {}
+        : {
+            usage: {
+              provider: 'openai-compatible',
+              model: request.model,
+              inputTokens,
+              outputTokens,
+              cost: typeof reportedCost === 'number' ? reportedCost : 0,
+            },
+          }),
+    };
   }
 
   private url(): string {
