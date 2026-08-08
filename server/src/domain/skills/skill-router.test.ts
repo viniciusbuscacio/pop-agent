@@ -140,6 +140,30 @@ describe('the semantic bar is relative to the request', () => {
   });
 });
 
+describe('the semantic floor with too few skills for a z-score', () => {
+  // Three measured skills: below MIN_CANDIDATES_FOR_Z the spread is too thin
+  // for a z, and the bare 0.75 floor sits INSIDE the e5 noise band
+  // (0.70-0.84) -- it would admit the luckiest member of a small vault.
+  const vector = (similarity: number): Float32Array =>
+    Float32Array.from([similarity, Math.sqrt(1 - similarity * similarity)]);
+
+  it('admits nobody when everyone sits inside the noise band', () => {
+    const selected = selectSkills('zzz qqq', SKILLS, {
+      messageVector: MESSAGE_VECTOR,
+      skillVectors: [0.79, 0.78, 0.77].map(vector),
+    });
+    expect(selected).toEqual([]);
+  });
+
+  it('still admits the one skill genuinely above the band', () => {
+    const selected = selectSkills('zzz qqq', SKILLS, {
+      messageVector: MESSAGE_VECTOR,
+      skillVectors: [0.83, 0.78, 0.77].map(vector),
+    });
+    expect(selected.map((entry) => entry.skill.slug)).toEqual(['invoices']);
+  });
+});
+
 describe('pinnedBodies', () => {
   it('returns only the pinned bodies, in order', () => {
     const identity: Skill = { ...skill('identity', 'Identity', 'w', 'w'), pinned: true };

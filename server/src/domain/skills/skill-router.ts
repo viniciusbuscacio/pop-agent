@@ -87,6 +87,18 @@ const DEFAULT_MIN_Z = 2.1;
 /** Below this many measured skills the spread is too thin to read a z from. */
 const MIN_CANDIDATES_FOR_Z = 5;
 
+/**
+ * The stand-in gate for a sample too small for a z. The bare floor cannot
+ * serve there: 0.75 sits INSIDE the measured noise band (0.70–0.84, p90
+ * 0.80), so a small vault would admit its luckiest member on the semantic leg
+ * alone -- exactly what the z test exists to prevent. The small sample gets
+ * the band's own p90 as its floor: above nine tenths of the noise ever
+ * measured, below where a genuinely relevant skill lands when it is the only
+ * one standing out. Precision first, as everywhere else in this router; the
+ * lexical leg and the fused ranking catch what this lets go.
+ */
+const SMALL_SAMPLE_FLOOR = 0.8;
+
 const STOP_WORDS = new Set([
   'a', 'an', 'and', 'the', 'to', 'of', 'in', 'on', 'for', 'is', 'are', 'be', 'do', 'does',
   'i', 'you', 'it', 'my', 'me', 'we', 'this', 'that', 'with', 'can', 'could', 'would', 'how',
@@ -192,8 +204,9 @@ function semanticRanking(scored: Candidate[], floor: number, minZ: number): Cand
   );
   if (measured.length === 0) return [];
 
-  let admitted = measured.filter((candidate) => candidate.similarity >= floor);
+  let admitted: (Candidate & { similarity: number })[];
   if (measured.length >= MIN_CANDIDATES_FOR_Z) {
+    admitted = measured.filter((candidate) => candidate.similarity >= floor);
     const mean = measured.reduce((sum, c) => sum + c.similarity, 0) / measured.length;
     const variance =
       measured.reduce((sum, c) => sum + (c.similarity - mean) ** 2, 0) / measured.length;
@@ -202,6 +215,10 @@ function semanticRanking(scored: Candidate[], floor: number, minZ: number): Cand
       deviation === 0
         ? []
         : admitted.filter((candidate) => (candidate.similarity - mean) / deviation >= minZ);
+  } else {
+    admitted = measured.filter(
+      (candidate) => candidate.similarity >= Math.max(floor, SMALL_SAMPLE_FLOOR),
+    );
   }
 
   return admitted.sort((left, right) => right.similarity - left.similarity);
