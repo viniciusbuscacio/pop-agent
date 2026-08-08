@@ -41,8 +41,12 @@ class SilentSink implements EventSink {
 
 /** Records every prompt it is handed, and answers however the test says. */
 class ScriptedBridge implements AgentBridge {
-  complete(): Promise<string> {
-    return Promise.resolve('scripted');
+  complete(): Promise<{ text: string }> {
+    return Promise.resolve({ text: 'scripted' });
+  }
+
+  discardSession(): void {
+    // The script keeps no sessions to forget.
   }
   readonly prompts: string[] = [];
   /** Runs in flight, so a test can hold one open and let another queue up. */

@@ -83,8 +83,12 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
     return Promise.resolve([{ id: 'fake/model-1' }, { id: 'fake/model-2' }]);
   }
 
-  complete(request: EngineCompletionRequest): Promise<string> {
-    return Promise.resolve(`fake answer to: ${request.prompt}`);
+  complete(request: EngineCompletionRequest): Promise<{ text: string }> {
+    return Promise.resolve({ text: `fake answer to: ${request.prompt}` });
+  }
+
+  discardSession(): void {
+    // The fake keeps no sessions to forget.
   }
 
   private async answer(

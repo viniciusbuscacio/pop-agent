@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import type { ModelInfo } from '../ports/agent-bridge.js';
+import type { ModelInfo, RunUsage } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
+import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
 import { ProviderGatewayError } from '../ports/provider-gateway.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
@@ -8,6 +9,7 @@ import type { SettingsRepo } from '../ports/settings-repo.js';
 import {
   DEFAULT_PROVIDER_ID,
   allProviderDefinitions,
+  billsPerToken,
   customProviderDefinition,
   keySecretName,
   normalizeCustomBaseUrl,
@@ -139,7 +141,7 @@ export interface ProviderServiceDeps {
     modelId: string;
     prompt: string;
     maxTokens?: number;
-  }) => Promise<string>;
+  }) => Promise<{ text: string; usage?: RunUsage }>;
   /** Drops the engine's stored OAuth credential (disconnect). */
   engineLogout: (providerId: string) => Promise<void>;
   /**
@@ -147,6 +149,11 @@ export interface ProviderServiceDeps {
    * penalized providers, and saving a key forgives its provider.
    */
   cooldown?: ProviderCooldown;
+  /**
+   * Where background completions book their spend (pop-agent.spec §14). Rows
+   * are flagged `service` so the Usage screen can tell them from chat runs.
+   */
+  llmRuns?: LlmRunsRepo;
   /** The global default pair from Settings. Read late; it is a setting. */
   defaults: () => { provider: string; model: string };
   /**
@@ -619,15 +626,13 @@ export class ProviderService {
         continue;
       }
       try {
-        const text = viaGateway
-          ? (
-              await gateway.complete({
-                apiKey,
-                model: ref.modelId,
-                prompt: request.prompt,
-                maxTokens: request.maxTokens,
-              })
-            ).text
+        const answer = viaGateway
+          ? await gateway.complete({
+              apiKey,
+              model: ref.modelId,
+              prompt: request.prompt,
+              maxTokens: request.maxTokens,
+            })
           : await this.deps.engineComplete({
               providerId: ref.providerId,
               modelId: ref.modelId,
@@ -635,7 +640,8 @@ export class ProviderService {
               maxTokens: request.maxTokens,
             });
         this.deps.cooldown?.clear(ref.providerId);
-        return { text, providerId: ref.providerId, modelId: ref.modelId };
+        this.book(answer, ref);
+        return { text: answer.text, providerId: ref.providerId, modelId: ref.modelId };
       } catch (error) {
         this.deps.cooldown?.penalize(ref.providerId);
         last = error instanceof Error ? error : new Error('unknown');
@@ -643,6 +649,32 @@ export class ProviderService {
     }
 
     throw last ?? new ProviderGatewayError('No provider is configured for background work.');
+  }
+
+  /**
+   * Background work bills like chat work, so it lands in the same book
+   * (pop-agent.spec §14): titles, summaries and voice cleanup used to spend
+   * without a row, and the Usage screen read low by exactly what they cost.
+   * `chatId` is empty by convention -- a service run belongs to no
+   * conversation, and the report never groups by chat.
+   */
+  private book(
+    answer: { usage?: RunUsage },
+    ref: { providerId: string; modelId: string },
+  ): void {
+    if (answer.usage === undefined || this.deps.llmRuns === undefined) return;
+    this.deps.llmRuns.record({
+      id: `svc-${randomBytes(8).toString('hex')}`,
+      chatId: '',
+      provider: ref.providerId,
+      model: ref.modelId,
+      tokensIn: answer.usage.inputTokens,
+      tokensOut: answer.usage.outputTokens,
+      // A subscription bills nothing per token; the token counts stay true.
+      cost: billsPerToken(ref.providerId) ? answer.usage.cost : 0,
+      createdAt: new Date(this.deps.clock.now()).toISOString(),
+      kind: 'service',
+    });
   }
 
   private storedDefaultModel(providerId: string): string | undefined {

@@ -260,7 +260,10 @@ export function createTestApp(
               prompt: request.prompt,
               maxTokens: request.maxTokens ?? 64,
             })
-            .then((answer) => answer.text)
+            .then((answer) => ({
+              text: answer.text,
+              ...(answer.usage === undefined ? {} : { usage: answer.usage }),
+            }))
         : Promise.reject(new Error('Not signed in.')),
     engineLogout: (providerId) => {
       providerAuth.authed.delete(providerId);

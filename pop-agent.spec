@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.72 — 2026-08-08.
+Version 1.73 — 2026-08-08.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1221,17 +1221,39 @@ reimplemented.
 - **Mid-stream failure does NOT fail over** (tokens already rendered)
   but still penalizes the provider; the run fails in place with the
   persisted system mark.
-- **Advisory cooldown** (`ProviderCooldown`, in-memory, 5 min): a
-  penalized provider is skipped by the next chains — unless every
-  candidate is penalized, in which case the full chain is used anyway.
-  Saving a key or completing a sign-in forgives the provider; a
-  restart forgives everyone.
+- **Advisory cooldown** (`ProviderCooldown`, in-memory, escalating —
+  1.73): a penalized provider is skipped by the next chains — unless
+  every candidate is penalized, in which case the full chain is used
+  anyway. The wait lengthens with each consecutive strike (1 min →
+  5 → 15 → 60); a flat 5 minutes both forgave a provider that was
+  down for an hour too early and kept punishing a hiccup too long.
+  Saving a key, completing a sign-in, a green connection test or a
+  successful run forgives the provider; a restart forgives everyone.
 - **Failover is LOUD**: a persisted system message in the chat
   ("Answer retried via X after Y failed (code).") plus one journal
   line (`pop fallback: chat=… from=… to=… code=…`). Every billed
   attempt books its own `llm_runs` row (failover attempts under
   `<runId>-f<n>`), so the accounting shows what each provider really
   charged.
+- **A retry never replays the user's prompt** (1.73): before a
+  failover hop or an overflow retry, the bridge rewinds the pi session
+  to before the user message (`SessionManager.branch` on the entry
+  id) and resyncs the agent's history — the next provider answers the
+  message once, not twice in the saved context.
+- **Thinking and tool calls gate the failover** (1.73): a run that
+  already streamed either never retries on the next provider —
+  re-executing side effects is worse than failing in place. An
+  abandoned attempt still books whatever usage settles late, and its
+  session is hard-forgotten (`discardSession`) so it is never
+  re-prompted into a shared context.
+- **Auth-class failures surface** (1.73): a refusal the cooldown
+  classifies as auth stamps `authErrorAt` on the provider (DTO +
+  "sign in again" badge in Settings), cleared by a fresh key, a fresh
+  sign-in or a green connection test.
+- **Background work bills like chat work** (1.73): `completeAsService`
+  records a `llm_runs` row per completion (`kind: 'service'`,
+  migration 032; `chatId` empty by convention), with the provider's
+  reported usage and zero cost for a subscription.
 - Still future: a user-editable priority order (today the order is the
   definition list with the default first).
 
@@ -1514,6 +1536,25 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.73 (2026-08-08): **The provider review fixes (§15).** Nineteen findings
+  from a full read of the provider surface, closed in three lanes.
+  Provider core: deleting or clearing the active default's key re-elects the
+  head; `completeAsService` now penalizes a refused provider and forgives a
+  recovered one (it silently bypassed the cooldown before); the model catalog
+  cache invalidates when the account or endpoint changes instead of serving
+  a stale list; a green connection test forgives the cooldown; auth failures
+  surface as `authErrorAt` on the status DTO; the cooldown escalates
+  (1 → 5 → 15 → 60 min) instead of a flat 5; the order route validates with
+  `schemaError` like its siblings and caps at registry size; the legacy
+  `custom` alias follows the canonical default. Completion path: retries
+  rewind the pi session instead of replaying the user prompt; thinking or
+  tool output gates the failover; an abandoned attempt's late usage is
+  booked and its session discarded; a success clears the cooldown; gateway
+  `complete` returns usage so background work lands in `llm_runs`
+  (`kind: 'service'`, migration 032). Interface: negative OpenRouter
+  balances render as `-$0.10`; credit lookups are cached per provider list
+  load; the enable/disable switch is back on the provider card; an
+  auth-error badge offers the sign-in again.
 - 1.72 (2026-08-08): **The auto-skill review fixes (§8).** Five findings from
   a read of the router + auto-skill code, all closed: (1) the candidate
   scrubber now catches unlabeled tokens by shape (`sk-…`, `ghp_…`, `AKIA…`,

@@ -73,19 +73,23 @@ export interface AgentBridge {
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(providerId?: string): Promise<ModelInfo[]>;
   /**
+   * Hard-forgets a chat's session (pop-agent.spec §15, fase 2): the run
+   * service calls this when it gives up on an attempt, so a bridge that keeps
+   * running in the background can never be re-prompted into a shared context.
+   */
+  discardSession(chatId: string): void;
+  /**
    * One completion outside a chat: the connection test, a title, a distilled
    * skill, a cleaned-up transcription. Every provider answers through the
    * engine here, and that uniformity is the point -- a subscription has no API
    * key to hand an HTTP gateway, so the gateway-only path quietly skipped it
    * and every background job silently fell through to the next provider in
    * the chain (Vinicius, 08/08).
+   *
+   * Usage comes back when the provider reports it: background work bills like
+   * chat work, and llm_runs is the book everything lands in (§14).
    */
-  complete(request: EngineCompletionRequest): Promise<string>;
-  /**
-   * Hard-forgets a cached chat session so a zombie attempt cannot reuse it.
-   * Only pi implements this; the run service calls it after a silence timeout.
-   */
-  discardSession?(chatId: string): void;
+  complete(request: EngineCompletionRequest): Promise<{ text: string; usage?: RunUsage }>;
 }
 
 /** One prompt, one provider, one answer. No chat, no tools, no history. */

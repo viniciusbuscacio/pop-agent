@@ -12,6 +12,7 @@ import type {
 import type {
   ModelInfo,
   ProviderAuthInteraction,
+  RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 import { providerDefinition } from '../../application/providers/provider-definitions.js';
@@ -167,7 +168,7 @@ export interface PiEngine {
     modelId: string;
     prompt: string;
     maxTokens?: number;
-  }): Promise<string>;
+  }): Promise<{ text: string; usage?: RunUsage }>;
   /** Whether the runtime holds working auth for the provider (sync snapshot). */
   hasProviderAuth(providerId: string): boolean;
   /** Runs pi's OAuth login; the credential lands in the runtime's own store. */
@@ -499,7 +500,7 @@ export class SdkPiEngine implements PiEngine {
     modelId: string;
     prompt: string;
     maxTokens?: number;
-  }): Promise<string> {
+  }): Promise<{ text: string; usage?: RunUsage }> {
     const runtime = await this.authenticatedRuntime(request.providerId);
     const model = runtime.getModel(request.providerId, request.modelId);
     if (model === undefined) {
@@ -518,10 +519,27 @@ export class SdkPiEngine implements PiEngine {
     }
     // A budget spent on thinking leaves no words, and that is still a round
     // trip that worked -- the connection test asks nothing more than that.
-    return answer.content
+    const text = answer.content
       .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
       .map((part) => part.text)
       .join('');
+    // The provider's own numbers, when it reports them: background work bills
+    // like chat work, and the book it lands in is llm_runs (§14).
+    const reported = answer.usage;
+    return {
+      text,
+      ...(reported === undefined
+        ? {}
+        : {
+            usage: {
+              provider: request.providerId,
+              model: request.modelId,
+              inputTokens: reported.input,
+              outputTokens: reported.output,
+              cost: reported.cost.total,
+            },
+          }),
+    };
   }
 
   /** Whether the runtime already holds auth for a provider (OAuth included). */

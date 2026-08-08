@@ -11,6 +11,7 @@ import type {
   ModelInfo,
   ProviderAuthBridge,
   ProviderAuthInteraction,
+  RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
 import {
@@ -257,7 +258,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     return this.deps.engine.models(providerId ?? '');
   }
 
-  complete(request: EngineCompletionRequest): Promise<string> {
+  complete(request: EngineCompletionRequest): Promise<{ text: string; usage?: RunUsage }> {
     return this.deps.engine.complete(request);
   }
 

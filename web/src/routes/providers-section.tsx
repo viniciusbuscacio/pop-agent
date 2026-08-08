@@ -57,9 +57,9 @@ type View =
   | { kind: 'configure'; providerId: string; adding: true }
   | { kind: 'configure'; providerId: string; adding: false };
 
-/** Optional until the server branch lands; read defensively. */
+/** Set when a run failed with an auth-class error; cleared on new evidence. */
 function providerAuthErrorAt(provider: ProviderStatusDTO): string | undefined {
-  return (provider as ProviderStatusDTO & { authErrorAt?: string }).authErrorAt;
+  return provider.authErrorAt;
 }
 
 export function ProvidersSection() {

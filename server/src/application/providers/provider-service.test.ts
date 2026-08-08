@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ModelInfo } from '../ports/agent-bridge.js';
+import type { ModelInfo, RunUsage } from '../ports/agent-bridge.js';
+import type { LlmRun } from '../ports/llm-runs-repo.js';
 import { ProviderGatewayError } from '../ports/provider-gateway.js';
 import type { CompletionRequest, ProviderGateway } from '../ports/provider-gateway.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
@@ -56,6 +57,8 @@ class ScriptedGateway implements ProviderGateway {
   failCompleting: string | Error | undefined;
   listed = 0;
   completions: CompletionRequest[] = [];
+  /** Set when the test wants the provider's own usage numbers reported. */
+  usage: RunUsage | undefined;
 
   listModels(): Promise<ModelInfo[]> {
     this.listed += 1;
@@ -63,14 +66,14 @@ class ScriptedGateway implements ProviderGateway {
     return Promise.resolve(this.catalog);
   }
 
-  complete(request: CompletionRequest): Promise<{ text: string }> {
+  complete(request: CompletionRequest): Promise<{ text: string; usage?: RunUsage }> {
     this.completions.push(request);
     if (this.failCompleting !== undefined) {
       return Promise.reject(
         this.failCompleting instanceof Error ? this.failCompleting : new Error(this.failCompleting),
       );
     }
-    return Promise.resolve({ text: 'ok' });
+    return Promise.resolve({ text: 'ok', ...(this.usage === undefined ? {} : { usage: this.usage }) });
   }
 }
 
@@ -107,6 +110,8 @@ let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
 let oauthAuthed: Set<string>;
 let engineCompletions: { providerId: string; modelId: string; prompt: string }[];
+let engineUsage: RunUsage | undefined;
+let llmRows: LlmRun[];
 let cooldown: ProviderCooldown;
 let defaults: { provider: string; model: string };
 let service: ProviderService;
@@ -123,6 +128,8 @@ beforeEach(() => {
   engineCatalog = [{ id: 'engine/model' }];
   oauthAuthed = new Set();
   engineCompletions = [];
+  engineUsage = undefined;
+  llmRows = [];
   cooldown = new ProviderCooldown({ clock });
   defaults = { provider: OPENROUTER, model: 'moonshotai/kimi-k3' };
   nextCustomIds = [];
@@ -141,7 +148,10 @@ beforeEach(() => {
     engineComplete: (request) => {
       engineCompletions.push(request);
       return oauthAuthed.has(request.providerId)
-        ? Promise.resolve('engine answer')
+        ? Promise.resolve({
+            text: 'engine answer',
+            ...(engineUsage === undefined ? {} : { usage: engineUsage }),
+          })
         : Promise.reject(new Error('Not signed in.'));
     },
     engineLogout: (providerId) => {
@@ -149,6 +159,7 @@ beforeEach(() => {
       return Promise.resolve();
     },
     cooldown,
+    llmRuns: { record: (row) => llmRows.push(row) },
     defaults: () => defaults,
     setDefaultProvider: (provider, model) => {
       defaults = { provider, model };
@@ -492,6 +503,35 @@ describe('subscription (oauth) providers', () => {
       expect.objectContaining({ text: 'engine answer', providerId: CODEX }),
     );
     expect(gateway.completions).toHaveLength(0);
+  });
+
+  it('books background spend in the same ledger as chat runs', async () => {
+    // Titles and cleanups used to spend without a row, and the Usage screen
+    // read low by exactly what they cost. A subscription bills nothing per
+    // token; a paid provider books its reported cost.
+    engineUsage = { provider: CODEX, model: 'engine/model', inputTokens: 120, outputTokens: 12, cost: 0 };
+    oauthAuthed.add(CODEX);
+
+    await service.completeAsService({ prompt: 'name this chat', maxTokens: 16 });
+
+    expect(llmRows).toHaveLength(1);
+    expect(llmRows[0]).toMatchObject({
+      chatId: '',
+      provider: CODEX,
+      tokensIn: 120,
+      tokensOut: 12,
+      cost: 0,
+      kind: 'service',
+    });
+  });
+
+  it('books the reported cost when a paid provider does the background work', async () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    gateway.usage = { provider: OPENROUTER, model: 'moonshotai/kimi-k3', inputTokens: 60, outputTokens: 8, cost: 0.0007 };
+
+    await service.completeAsService({ prompt: 'name this chat', maxTokens: 16 });
+
+    expect(llmRows[0]).toMatchObject({ provider: OPENROUTER, cost: 0.0007, kind: 'service' });
   });
 
   it('passes a provider that answered without words, because the key still worked', async () => {
@@ -974,7 +1014,7 @@ describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)
       engineComplete: (request) => {
         engineCompletions.push(request);
         return oauthAuthed.has(request.providerId)
-          ? Promise.resolve('engine answer')
+          ? Promise.resolve({ text: 'engine answer' })
           : Promise.reject(new Error('Not signed in.'));
       },
       engineLogout: (providerId) => {
@@ -1020,7 +1060,7 @@ describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)
       engineComplete: (request) => {
         engineCompletions.push(request);
         return oauthAuthed.has(request.providerId)
-          ? Promise.resolve('engine answer')
+          ? Promise.resolve({ text: 'engine answer' })
           : Promise.reject(new Error('Not signed in.'));
       },
       engineLogout: (providerId) => {

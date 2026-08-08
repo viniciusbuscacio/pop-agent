@@ -5,6 +5,32 @@ normative history.
 
 ## Unreleased
 
+### Fixed
+
+- **The provider surface, end to end** (a review pass, nineteen findings):
+  - Removing the provider that was answering no longer leaves the app pointed
+    at nothing -- the head of the list is re-elected as the default the moment
+    its key is cleared or the provider is deleted.
+  - A provider that keeps failing now waits longer each time before being
+    tried again (1, then 5, then 15, then 60 minutes) instead of a flat five
+    -- and a connection test that passes, a saved key or one successful run
+    forgives it at once.
+  - Titles, summaries and voice cleanup now respect the same failover order
+    as chat, skip a provider that is sitting out, and count what they spent:
+    background work lands in the Usage ledger as `service` rows, with a
+    subscription's token counts kept but its cost zero.
+  - Retrying an answer on another provider no longer asks the model the same
+    question twice -- the conversation is rewound before the retry, and a run
+    that had already started thinking or calling tools is never silently
+    re-executed somewhere else.
+  - A provider whose sign-in expired shows it: a "sign in again" badge on the
+    card instead of a run that only fails when you send it.
+  - The model list for a provider is refetched when you change its key or
+    endpoint, instead of showing yesterday's catalog.
+  - A negative OpenRouter balance renders as `-$0.10`, the balance is fetched
+    once per visit instead of once per redraw, and the enable/disable switch
+    is back on each provider card.
+
 ### Added
 
 - **Pop Agent learns from conversations you did not flag.** Every few minutes it

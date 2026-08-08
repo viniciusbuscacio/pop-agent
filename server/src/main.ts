@@ -194,6 +194,8 @@ const providers: ProviderService = new ProviderService({
   engineComplete: (request) => bridge.complete(request),
   engineLogout: (providerId) => bridge.providerLogout(providerId),
   cooldown,
+  // Background work books its spend in the same ledger as chat runs (§14).
+  llmRuns: context.llmRuns,
   setDefaultProvider: (providerId, model) => {
     // The list's head IS the default (pop-agent.spec §15): written back here so
     // Settings, /model and every new chat report the same provider.
@@ -332,9 +334,7 @@ const runs = new RunService({
       `pop fallback: chat=${info.chatId} from=${info.from} to=${info.to} code=${info.code}`,
     );
   },
-  onAuthFailure: (providerId) => {
-    (providers as { noteAuthFailure?: (id: string) => void }).noteAuthFailure?.(providerId);
-  },
+  onAuthFailure: (providerId) => providers.noteAuthFailure(providerId),
   // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that

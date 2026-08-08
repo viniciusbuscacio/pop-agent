@@ -209,8 +209,8 @@ class ScriptedSession implements PiSession {
 }
 
 class ScriptedEngine implements PiEngine {
-  complete(): Promise<string> {
-    return Promise.resolve('scripted');
+  complete(): Promise<{ text: string }> {
+    return Promise.resolve({ text: 'scripted' });
   }
 
   readonly sessions: ScriptedSession[] = [];
