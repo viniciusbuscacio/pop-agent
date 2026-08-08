@@ -37,14 +37,17 @@ describe('default skills routing', () => {
     expect(selected[0]?.skill.slug).toBe('web-browsing');
   });
 
-  it('routes the Portuguese "vira skill" trigger with no embedder in the loop', () => {
-    const selected = selectSkills('isso ai foi otimo, vira skill', SKILLS);
-    expect(selected[0]?.skill.slug).toBe('skill-creator');
-  });
-
-  it('routes the same request in English', () => {
-    const selected = selectSkills('turn this into a skill so you remember it', SKILLS);
-    expect(selected[0]?.skill.slug).toBe('skill-creator');
+  it('has no skill that routes on the word "skill"', () => {
+    // The inverse of the test that used to be here. `skill-creator` was routed
+    // into nine of sixteen turns of a conversation about baby names, every one
+    // of them on the semantic leg alone with `lex=0.00`, and its body told the
+    // model to announce what it had decided about writing a skill. Skills left
+    // the conversation entirely: the distiller writes them in the background.
+    for (const message of ['isso ai foi otimo, vira skill', 'turn this into a skill']) {
+      expect(selectSkills(message, SKILLS).map((entry) => entry.skill.slug)).not.toContain(
+        'skill-creator',
+      );
+    }
   });
 
   it('ships know-thyself pinned: identity is not left to the router', () => {

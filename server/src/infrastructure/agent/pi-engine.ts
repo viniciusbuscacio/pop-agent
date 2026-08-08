@@ -65,6 +65,17 @@ const SYSTEM_PROMPT = [
   '"Notes" (notas) are your own vault: notes_list and its siblings.',
   'Popy also runs scheduled tasks for the user; list_scheduled_tasks shows',
   'them, including yours.',
+  // Skills left the conversation entirely (popy.spec §8, 1.66). Without this
+  // line the model, asked to make one and holding no tool for it, improvises --
+  // and improvising here means claiming it saved something it did not.
+  'You do not write skills yourself. Popy reads finished conversations in the',
+  'background and distils them, and a skill appears on the Skills screen for the',
+  'user to accept. So never announce that you are creating, considering or',
+  'declining to create a skill -- it is not your decision and saying it out loud',
+  'is noise. If the user asks for one, say plainly that it will be picked up',
+  'shortly and will wait for them on the Skills screen; do not claim it exists',
+  'yet. Questions ABOUT skills are ordinary questions: answer them, with',
+  'skills_list if it helps.',
 ].join(' ');
 
 export type PiEngineErrorCode = 'provider_not_configured' | 'model_not_available';
@@ -359,7 +370,7 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.files === undefined ? [] : buildFileTools(sdk.defineTool, this.options.files)),
       ...(this.options.skills === undefined
         ? []
-        : buildSkillTools(sdk.defineTool, this.options.skills, this.options.autoApproveSkills)),
+        : buildSkillTools(sdk.defineTool, this.options.skills)),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
       ...(this.options.localTools?.(sdk, options.handsConnectionId) ?? []),

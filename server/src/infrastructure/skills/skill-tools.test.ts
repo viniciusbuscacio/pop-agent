@@ -65,72 +65,19 @@ const GOOD = {
   body: '# Steps\n- npm run build\n- wrangler deploy',
 };
 
-describe('skill_write', () => {
-  it('saves what the conversation taught, as an auto skill', async () => {
-    const skills = repo();
-    const answer = await call(buildSkillTools(identity as never, skills), 'skill_write', GOOD);
-
-    expect(skills.written).toHaveLength(1);
-    expect(skills.written[0]?.source).toBe('auto');
-    expect(skills.written[0]?.slug).toBe('deploy-blog');
-    expect(answer).toContain('Deploy the blog');
-  });
-
-  it('holds the skill for approval by default', async () => {
-    const skills = repo();
-    const answer = await call(buildSkillTools(identity as never, skills), 'skill_write', GOOD);
-
-    expect(skills.written[0]?.pending).toBe(true);
-    // The model must not promise to use something the router will not give it.
-    expect(answer).toContain('NOT active yet');
-  });
-
-  it('writes it live when the user turned automatic approval on', async () => {
-    const skills = repo();
-    const answer = await call(
-      buildSkillTools(identity as never, skills, () => true),
-      'skill_write',
-      GOOD,
+describe('the agent has no hand to write a skill', () => {
+  it('exposes skills_list and nothing else', () => {
+    // The tool is gone, not guarded (popy.spec §8, 1.66). Writing a skill mid
+    // conversation was the whole of fase (b), and it is what put skill talk in
+    // front of the user on turns that had nothing to do with skills. Reading
+    // stays: "which skills do you have?" is an ordinary question.
+    const names = buildSkillTools(identity as never, repo()).map(
+      (tool) => (tool as unknown as { name: string }).name,
     );
-
-    expect(skills.written[0]?.pending).toBe(false);
-    expect(answer).toContain('it is live');
-  });
-
-  it('refuses to overwrite a skill that already works', async () => {
-    const existing: Skill = { ...GOOD, source: 'user' };
-    const skills = repo([existing]);
-    const answer = await call(buildSkillTools(identity as never, skills), 'skill_write', {
-      ...GOOD,
-      body: 'something else entirely',
-    });
-
-    expect(skills.written).toHaveLength(0);
-    expect(answer).toContain('already exists');
-  });
-
-  it('scrubs a credential out of the body before it can be replayed', async () => {
-    const skills = repo();
-    await call(buildSkillTools(identity as never, skills), 'skill_write', {
-      ...GOOD,
-      body: '# Steps\napi_key: sk-live-abcdef123456\n- deploy',
-    });
-
-    expect(skills.written[0]?.body).not.toContain('sk-live-abcdef123456');
-    expect(skills.written[0]?.body).toContain('[redacted secret]');
-  });
-
-  it('hands the vault error back in words the model can act on', async () => {
-    const skills = repo();
-    const answer = await call(buildSkillTools(identity as never, skills), 'skill_write', {
-      ...GOOD,
-      slug: 'Not A Slug!',
-    });
-
-    expect(answer).toContain('Could not save');
-    expect(answer).toContain('lowercase');
+    expect(names).toEqual(['skills_list']);
   });
 });
+
 
 describe('skills_list', () => {
   it('shows each skill with where it came from and when it fires', async () => {

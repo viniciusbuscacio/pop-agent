@@ -7,6 +7,7 @@ import {
   scrubCandidate,
   type SkillCandidate,
 } from '../../domain/skills/distillation.js';
+import { asksForSkill } from '../../domain/skills/skill-request.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { Embedder } from '../ports/embedder.js';
@@ -48,6 +49,14 @@ import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
  * the router (§8). Without that, the pending flag on new skills would guard the
  * front door while the update path stood open.
  */
+
+/** A conversation the distiller has decided to read, and why. */
+interface Target {
+  chat: Chat;
+  window: Message[];
+  /** The user asked for a skill here, in so many words. */
+  requested: boolean;
+}
 
 /** How long a conversation must sit still before it is fair game. */
 const DEFAULT_IDLE_MS = 5 * 60_000;
@@ -120,7 +129,7 @@ export class SkillDistiller implements MaintenanceJob {
     const target = this.pick(chats);
     if (target === undefined) return;
 
-    const { chat, window } = target;
+    const { chat, window, requested } = target;
     const lastId = window[window.length - 1]!.id;
     const journal = (line: string): void => this.deps.onJournal?.(`popy distiller: ${line}`);
 
@@ -142,6 +151,7 @@ export class SkillDistiller implements MaintenanceJob {
           prompt: buildDistillPrompt(
             window,
             this.deps.skills.all().map((skill) => ({ slug: skill.slug, description: skill.description })),
+            requested,
           ),
           maxTokens: MAX_ANSWER_TOKENS,
         },
@@ -166,7 +176,10 @@ export class SkillDistiller implements MaintenanceJob {
         return;
       }
       this.advance(chat.id, lastId);
-      journal(`chat=${chat.id} nothing to learn`);
+      // Worth its own line: the user asked and got nothing. There is no screen
+      // that shows a request the model talked itself out of, so the log is the
+      // only place it exists.
+      journal(`chat=${chat.id} nothing to learn${requested ? ' (asked for one)' : ''}`);
       return;
     }
 
@@ -179,32 +192,50 @@ export class SkillDistiller implements MaintenanceJob {
   }
 
   /**
-   * The oldest conversation with something new in it that has stopped moving.
-   * Oldest first so the queue is a queue: a chat that has been waiting since
-   * yesterday is not overtaken forever by today's.
+   * The oldest conversation with something new in it that has stopped moving --
+   * unless somebody asked, and then that one, now.
+   *
+   * A chat where the user said "vira skill" jumps the queue and skips the idle
+   * wait, because those two rules exist to keep the distiller off conversations
+   * nobody invited it into, and an explicit request is an invitation. It is
+   * matched on the user's own messages in the unread window: the request is
+   * already in the text the distiller was going to read, so knowing about it
+   * costs no table, no column and no hook on the chat path.
    */
-  private pick(chats: readonly Chat[]): { chat: Chat; window: Message[] } | undefined {
+  private pick(chats: readonly Chat[]): Target | undefined {
     const idleBefore = this.deps.clock.now() - (this.deps.idleMs ?? DEFAULT_IDLE_MS);
     const ordered = [...chats].sort(
       (left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt),
     );
 
+    let idle: Target | undefined;
     for (const chat of ordered) {
-      if (Date.parse(chat.updatedAt) > idleBefore) continue;
-      const mark = this.deps.marks.get(chat.id);
-      const tail = this.deps.chats.getMessages(chat.id, { limit: WINDOW });
-      if (tail.length === 0) continue;
-      if (mark !== undefined && tail[tail.length - 1]!.id === mark.messageId) continue;
+      const window = this.unreadWindow(chat);
+      if (window === undefined) continue;
 
-      // Everything after the mark. A mark that has scrolled out of the window
-      // (a very long conversation continued a lot) leaves the whole window,
-      // which is the right window to read anyway.
-      const seen = mark === undefined ? -1 : tail.findIndex((message) => message.id === mark.messageId);
-      const window = tail.slice(seen + 1);
-      if (window.length === 0) continue;
-      return { chat, window };
+      if (window.some((message) => message.role === 'user' && asksForSkill(message.content))) {
+        return { chat, window, requested: true };
+      }
+      if (idle === undefined && Date.parse(chat.updatedAt) <= idleBefore) {
+        idle = { chat, window, requested: false };
+      }
     }
-    return undefined;
+    return idle;
+  }
+
+  /** Everything in this chat the distiller has not considered yet. */
+  private unreadWindow(chat: Chat): Message[] | undefined {
+    const mark = this.deps.marks.get(chat.id);
+    const tail = this.deps.chats.getMessages(chat.id, { limit: WINDOW });
+    if (tail.length === 0) return undefined;
+    if (mark !== undefined && tail[tail.length - 1]!.id === mark.messageId) return undefined;
+
+    // Everything after the mark. A mark that has scrolled out of the window
+    // (a very long conversation continued a lot) leaves the whole window,
+    // which is the right window to read anyway.
+    const seen = mark === undefined ? -1 : tail.findIndex((message) => message.id === mark.messageId);
+    const window = tail.slice(seen + 1);
+    return window.length === 0 ? undefined : window;
   }
 
   /**

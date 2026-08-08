@@ -67,6 +67,13 @@ const END_LINE = /^=+\s*end\s*=*$/i;
 export function buildDistillPrompt(
   messages: readonly Message[],
   existing: readonly { slug: string; description: string }[],
+  /**
+   * The user asked for a skill in so many words. Then the empty answer -- the
+   * normal, encouraged outcome below -- stops being available: a request that
+   * the distiller quietly decided against is a request the user never finds
+   * out was dropped, and there is no screen that could show it.
+   */
+  requested = false,
 ): string {
   const transcript = messages
     .slice(-MAX_MESSAGES)
@@ -79,9 +86,21 @@ export function buildDistillPrompt(
       ? '(none yet)'
       : existing.map((skill) => `- ${skill.slug}: ${skill.description}`).join('\n');
 
+  const mandate = requested
+    ? [
+        'IMPORTANT: in this conversation the user explicitly asked for a skill to be written.',
+        'That is an instruction, not a hint. Write at least one skill. The "nothing to learn"',
+        'answer is not available here -- if the procedure looks thin, write the best skill the',
+        'conversation supports rather than none.',
+        '',
+      ]
+    : [];
+
   return [
     'You are reading a finished conversation between a user and an assistant, looking for',
     'knowledge worth keeping as a reusable skill.',
+    '',
+    ...mandate,
     '',
     'A skill is PROCEDURAL: how to do something, a workflow that worked, a correction the user',
     'made that should change how the task is done next time. A fact about the user or their',

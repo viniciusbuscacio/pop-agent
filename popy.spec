@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.65 — 2026-08-08.
+Version 1.66 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -327,22 +327,50 @@ user message — selection is 100% local, no LLM call:
   looking at it. Approving one does not: saying yes is not editing.
   Compatibility: a file written before 07/08 says `builtin: true`, and the
   parser still reads that as `source: builtin` — no migration pass.
-- **The trigger is natural language, in any language.** No slash command
-  and no button (decided 07/08). A built-in `skill-creator` skill carries
-  the trigger sentences in its `whenToUse` — Portuguese, English, Spanish —
-  and the router surfaces it; the skill then tells the agent how to distil
-  and which hand to use. Its first step is checking that it was actually
-  asked: the word "skill" pulls it in, so questions merely *about* skills
-  reach it too, and those are questions to answer, not requests to create.
-- **The hand**: `skills_list` (read what exists first) and `skill_write`.
-  `skill_write` refuses three things — a slug that already exists (that is
-  the update path, which owes a reviewable diff and does not exist yet),
-  anything that smells of a credential (same scrub the user-memory document
-  gets: a skill is replayed into future prompts by design), and **any
-  tainted turn**. That last one is enforced in the taint guard and is the
-  only block there keyed on a tool NAME rather than an argument pattern: a
-  skill outlives its turn, so a page that can write one has bought a
-  standing place in every future conversation the router finds relevant.
+- **Skills are invisible in the conversation** (1.66, decided by Vinicius
+  after reading a transcript). Popy never mentions a skill unless asked a
+  question about skills. It does not announce that it is writing one,
+  considering one, or declining to write one. Creation belongs entirely to
+  the background distiller.
+  This replaces fase (b), which put the decision in the turn. What that cost,
+  measured on a real conversation about choosing a name for Popy: the
+  `skill-creator` skill was routed into **nine of sixteen turns**, every one
+  of them with `lex=0.00` — no lexical evidence at all, because the user
+  never wrote the word "skill" — on cosines of 0.79–0.84, which is inside the
+  documented e5 noise band (0.70–0.84, p90 0.80). And once in the prompt, its
+  procedure said to *say so* when there was nothing to write, so the user got
+  a paragraph about skills on turn after turn of a conversation about names.
+  Two defects, one visible symptom: a skill that routes on meaning when its
+  real trigger is a sentence, and a procedure that narrates an internal
+  decision.
+- **An explicit request is a separate path, not a score** (decided 08/08).
+  A ranking can lose narrowly; an instruction must not lose at all. So
+  "vira skill" is matched by phrase — `asksForSkill`, a fixed list in
+  Portuguese, English, Spanish and French, folded for case and accents — and
+  the answer is yes or no. The list is phrases, never the bare word "skill",
+  because asking *about* skills is a question to answer and the word alone
+  cannot tell the two apart; every phrase carries the verb that makes it an
+  order. It is matched **on the user's own messages only**, never on tool
+  output, which is where an injection would put the sentence.
+- **What the request buys** is priority, not a live write. The distiller
+  matches the phrase in the window it was already going to read — so this
+  costs no table, no column and no hook on the chat path — and the chat that
+  contains it **jumps the queue and skips the idle wait**. Oldest-first and
+  wait-for-quiet both exist to keep the distiller out of conversations nobody
+  invited it into, and asking is an invitation. The prompt then says the
+  empty answer is not available for that conversation: a request the
+  distiller talked itself out of would be a request the user never learns was
+  dropped, and no screen could show it. The delay is bounded by the tick, so
+  the honest thing to say in chat is "it will be on the Skills screen
+  shortly" — which the system prompt instructs, because a model asked for a
+  skill and holding no tool for it will otherwise claim it saved one.
+- **The hand is `skills_list`, and only that.** `skill_write` is gone (1.66):
+  the agent cannot write a skill during a turn, so there is no argument to
+  validate and no turn to guard. The taint guard's block on the name stays —
+  it is the only rule there keyed on a tool NAME rather than an argument
+  pattern, and it costs nothing to keep pointing at a door that is now
+  bricked up. Reading is not a consolation prize: "which skills do you have?"
+  is an ordinary question, and answering it changes nothing.
   No argument could make that safe.
 - **Approval is a setting**, `autoApproveSkills`, **default off**. Off means
   a distilled skill is saved complete but held out of the router until the
@@ -1434,6 +1462,21 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.66 (2026-08-08): **Skills leave the conversation (§8).** Vinicius read a
+  transcript where he was choosing a name for Popy and got, turn after turn, a
+  paragraph explaining why no skill was being created. The log says why:
+  `skill-creator` was routed into nine of sixteen turns, every one at
+  `lex=0.00` and cosine 0.79–0.84 — inside the e5 noise band this spec already
+  documents — and its own procedure told the model to announce the decision.
+  A skill whose trigger is a sentence should never have been reachable by
+  meaning, and an internal check should never have had a voice.
+  So fase (b) is withdrawn. `skill_write` is off the agent's hand, the
+  `skill-creator` skill is out of the built-ins, and the system prompt says
+  plainly that Popy does not write skills and must not narrate the subject.
+  The distiller is the only writer. An explicit "vira skill" survives as a
+  **separate path**: matched by phrase list on the user's own messages, it
+  makes that chat jump the queue, skip the idle wait, and forbids the empty
+  answer — a request must not be able to lose, which a score always can.
 - 1.65 (2026-08-08): **The dedup was comparing against a table the pending
   skills were missing from (§8).** Found by reading the instance, not the
   tests: `skills/auto/` held twelve skills and nine were the same procedure

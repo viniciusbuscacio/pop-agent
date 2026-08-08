@@ -416,6 +416,51 @@ describe('SkillDistiller', () => {
     expect(world.revisions.saved[0]).toMatchObject({ slug: 'deploy-blog', similarity: 1 });
   });
 
+  it('reads the chat where the user asked first, and without waiting for it to go quiet', async () => {
+    // The separate path (Vinicius, 08/08): a request is not a score that can
+    // lose narrowly, it is a yes. Both rules pick() normally applies -- oldest
+    // first, and only once a conversation has stopped moving -- exist to keep
+    // the distiller out of conversations nobody invited it into, and asking is
+    // an invitation.
+    world = harness({
+      chats: [chat('c1', LONG_AGO), chat('c2', new Date(NOW).toISOString())],
+      messages: {
+        c1: [message('m1', 'how do I deploy the blog?')],
+        c2: [message('m2', 'isso ai foi otimo, vira skill')],
+      },
+    });
+
+    await world.distiller.run();
+
+    expect(world.marks.marks.has('c2')).toBe(true);
+    expect(world.marks.marks.has('c1')).toBe(false);
+  });
+
+  it('tells the model the empty answer is not available when the user asked', async () => {
+    // Without this the request can be dropped in silence: the distiller decides
+    // there is nothing to learn -- which it answered twice in production the day
+    // this was written -- and no screen exists that would show what went missing.
+    world = harness({
+      chats: [chat('c1', LONG_AGO)],
+      messages: { c1: [message('m1', 'transforma isso numa skill')] },
+    });
+
+    await world.distiller.run();
+
+    expect(world.prompts[0]).toMatch(/explicitly asked/i);
+  });
+
+  it('does not claim a request when the user only talked about skills', async () => {
+    world = harness({
+      chats: [chat('c1', LONG_AGO)],
+      messages: { c1: [message('m1', 'quantas skills voce tem?')] },
+    });
+
+    await world.distiller.run();
+
+    expect(world.prompts[0]).not.toMatch(/explicitly asked/i);
+  });
+
   it('refuses to touch a built-in, whatever the model proposed', async () => {
     world = harness({
       skills: [
