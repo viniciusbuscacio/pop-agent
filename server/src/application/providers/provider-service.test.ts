@@ -1091,3 +1091,38 @@ describe('auth failure marker (pop-agent.spec §15)', () => {
   });
 });
 
+describe('the legacy custom alias (pop-agent.spec §15)', () => {
+  it('follows the default model when the stored default is still "custom"', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    secrets.set('provider.custom.apiKey', 'sk-legacy');
+    service.migrateLegacyCustom();
+    const [instance] = service.listCustom();
+    if (instance === undefined) throw new Error('migration failed');
+
+    defaults = { provider: 'custom', model: 'llama4' };
+    service.setDefaultModel(instance.id, 'llama4-updated');
+
+    expect(defaults).toEqual({ provider: instance.id, model: 'llama4-updated' });
+  });
+
+  it('re-elects when the stored default is still "custom" and the head is unusable', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.migrateLegacyCustom();
+    const [instance] = service.listCustom();
+    if (instance === undefined) throw new Error('migration failed');
+
+    defaults = { provider: 'custom', model: 'llama4' };
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([instance.id, 'anthropic', OPENROUTER]);
+
+    service.setEnabled(instance.id, false);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+});
