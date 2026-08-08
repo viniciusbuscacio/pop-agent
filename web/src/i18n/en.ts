@@ -390,6 +390,8 @@ export const en = {
   'provider.oauth.answerPlaceholder': 'Answer',
   'provider.oauth.submit': 'Submit',
   'provider.oauth.waiting': 'Waiting for the provider…',
+  'provider.oauth.lost':
+    'The sign-in is no longer running on the server. Check the status above, or start it again.',
   'provider.oauth.done': 'Signed in.',
   'provider.oauth.failed': 'Sign-in failed: {message}',
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
@@ -22,6 +22,7 @@ const oauthState = vi.fn();
 const oauthStart = vi.fn();
 const oauthCancel = vi.fn();
 const oauthInput = vi.fn();
+const list = vi.fn();
 
 vi.mock('../services/providers', () => ({
   providersService: {
@@ -30,7 +31,7 @@ vi.mock('../services/providers', () => ({
     oauthInput: (id: string, value: string) => oauthInput(id, value) as Promise<unknown>,
     oauthCancel: (id: string) => oauthCancel(id) as Promise<unknown>,
     oauthLogout: vi.fn(),
-    list: vi.fn(),
+    list: () => list() as Promise<unknown>,
   },
 }));
 
@@ -101,6 +102,8 @@ beforeEach(() => {
   oauthCancel.mockResolvedValue(undefined);
   oauthInput.mockReset();
   oauthInput.mockResolvedValue(undefined);
+  list.mockReset();
+  list.mockResolvedValue({ providers: [PROVIDER] });
 });
 
 describe('OAuthSection', () => {
@@ -208,5 +211,73 @@ describe('OAuthSection', () => {
       expect(oauthCancel).toHaveBeenCalledWith('openai-codex');
     });
     expect(screen.queryByTestId('provider-oauth-answer-openai-codex')).toBeNull();
+  });
+  /**
+   * The sign-in landing and the card saying so are two different events, and
+   * only the first one was ever tested. On 08/08 the ChatGPT subscription
+   * signed in -- the credential was on disk, timestamped -- and the card sat
+   * on "Waiting for the provider…" until it was reloaded. These three cover
+   * the ways the news gets here.
+   */
+  it('says so when the flow finishes, and refreshes the card', async () => {
+    vi.useFakeTimers();
+    try {
+      const onChanged = vi.fn();
+      oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+      render(<OAuthSection provider={PROVIDER} onChanged={onChanged} />);
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+
+      oauthState.mockResolvedValue({
+        flowId: 'flow-1',
+        providerId: 'openai-codex',
+        events: WAITING_FOR_PASTE.events,
+        done: true,
+        ok: true,
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(2100));
+
+      expect(screen.getByRole('status').textContent).toContain('Signed in');
+      expect(list).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still reports success when the poll dies before the flow finishes', async () => {
+    // The service restarting takes the in-memory flow with it, and a
+    // backgrounded PWA can miss the one tick that carried the news. Neither
+    // may leave the card waiting on a sign-in that already worked.
+    vi.useFakeTimers();
+    try {
+      oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+      render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+
+      oauthState.mockRejectedValue(new Error('not_found'));
+      list.mockResolvedValue({ providers: [{ ...PROVIDER, configured: true, source: 'oauth' }] });
+      await act(async () => vi.advanceTimersByTimeAsync(4200));
+
+      expect(screen.getByRole('status').textContent).toContain('Signed in');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops waiting when the flow is gone and nothing was signed in', async () => {
+    vi.useFakeTimers();
+    try {
+      oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+      render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+
+      oauthState.mockRejectedValue(new Error('not_found'));
+      await act(async () => vi.advanceTimersByTimeAsync(4200));
+
+      expect(screen.getByTestId('provider-oauth-error-openai-codex').textContent).toContain(
+        'no longer running',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

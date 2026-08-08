@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.69 — 2026-08-08.
+Version 1.70 — 2026-08-08.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1495,6 +1495,22 @@ is set by hand and moves only when the wire changes.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.70 (2026-08-08): **The sign-in card reconciles against the provider's
+  status when its poll cannot answer (§15).** The ChatGPT subscription signed
+  in -- the credential was on disk at 16:02:33, complete -- and the card sat on
+  "Waiting for the provider…" until it was reloaded. The transcript poll
+  swallowed every failure (`.catch(() => undefined)`), so one refused request
+  left the card waiting forever on a sign-in that had already landed: no error,
+  no retry limit, no way out. Three unrelated faults end in that same wrong
+  answer -- the service restarting takes the in-memory flow with it, a
+  backgrounded PWA freezes its timer, one fetch loses the network.
+  So the poll no longer owns the truth alone. After two consecutive misses the
+  card asks the provider's own status instead (configured means the sign-in
+  landed, the same news by another route), and it polls immediately on
+  `visibilitychange` rather than waiting out another interval. The happy path
+  was never broken and is now pinned by a test that had never existed: of the
+  three added, it is the only one that passes against the old code.
 
 - 1.69 (2026-08-08): **Popy is renamed Pop Agent, as a clean break.** The
   display name is `Pop Agent` — UI strings, PWA manifest, WebAuthn RP name,

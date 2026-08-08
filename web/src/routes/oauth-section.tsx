@@ -93,15 +93,73 @@ export function OAuthSection({
     };
   }, [provider.id, provider.configured]);
 
+  // The poll is what moves this card, and it used to swallow its own
+  // failures: one refused request and the card sat on "waiting" forever while
+  // the sign-in had long since landed on the server (Vinicius, 08/08, on the
+  // ChatGPT subscription). Every way this goes wrong ends in that same wrong
+  // answer -- the service restarted and took the in-memory flow with it, the
+  // PWA was backgrounded on the way to the provider and its timer froze, one
+  // fetch lost the network. So the poll no longer owns the truth alone: when
+  // it cannot answer, the provider's own status is asked instead. A sign-in
+  // that landed leaves the provider configured, which is the same news
+  // arriving by another route.
   useEffect(() => {
     if (!active) return;
-    const timer = setInterval(() => {
+    let stopped = false;
+    let misses = 0;
+
+    async function settleFromStatus(): Promise<void> {
+      try {
+        const response = await providersService.list();
+        if (stopped) return;
+        onChanged(response);
+        const landed =
+          response.providers.find((entry) => entry.id === provider.id)?.configured === true;
+        setFlow((current) => {
+          if (current === undefined) return current;
+          const settled: OAuthStateResponse = { ...current, done: true, ok: landed };
+          // The question it was asking died with the flow.
+          delete settled.pending;
+          if (!landed) settled.error = t('provider.oauth.lost');
+          return settled;
+        });
+      } catch {
+        // Nothing left to ask. A card offering "Sign in" again beats one
+        // waiting on a flow nobody can find.
+        if (!stopped) setFlow(undefined);
+      }
+    }
+
+    function tick(): void {
       providersService
         .oauthState(provider.id)
-        .then(absorb)
-        .catch(() => undefined);
-    }, 2000);
-    return () => clearInterval(timer);
+        .then((next) => {
+          if (stopped) return;
+          misses = 0;
+          absorb(next);
+        })
+        .catch(() => {
+          if (stopped) return;
+          misses += 1;
+          // Two in a row, not one: a single blip mid-sign-in is not news, and
+          // the flow is still there on the next tick.
+          if (misses >= 2) void settleFromStatus();
+        });
+    }
+
+    const timer = setInterval(tick, 2000);
+    // A backgrounded PWA freezes its timers, and coming back is exactly when
+    // the answer has usually already arrived. Ask then, rather than waiting
+    // out another interval.
+    function onVisible(): void {
+      if (document.visibilityState === 'visible') tick();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // absorb is recreated per render but only reads props/state it is given.
   }, [active, provider.id]);
 
