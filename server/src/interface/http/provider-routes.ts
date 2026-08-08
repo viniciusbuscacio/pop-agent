@@ -135,7 +135,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
     const parsed = orderSchema.safeParse(body);
-    if (!parsed.success) return badBody(c);
+    if (!parsed.success) return schemaError(c, parsed.error);
     deps.providers.setOrder(parsed.data.ids);
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
@@ -146,7 +146,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
     const parsed = enabledSchema.safeParse(body);
-    if (!parsed.success) return badBody(c);
+    if (!parsed.success) return schemaError(c, parsed.error);
     deps.providers.setEnabled(id, parsed.data.enabled);
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
