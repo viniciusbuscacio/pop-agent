@@ -229,7 +229,6 @@ describe('the key', () => {
     expect(service.apiKey(OPENROUTER)).toBe('sk-env');
   });
 
-
   it('re-elects the default when the head loses its stored key', () => {
     service.setKey(OPENROUTER, 'sk-or');
     service.setKey('anthropic', 'sk-ant');
@@ -281,6 +280,16 @@ describe('testing the key', () => {
 
     expect(result.ok).toBe(false);
     expect(gateway.completions).toHaveLength(0);
+  });
+
+  it('forgives a penalty when the connection test succeeds', async () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    cooldown.penalize(OPENROUTER);
+
+    await service.test(OPENROUTER);
+
+    expect(service.resolveChain()[0]?.providerId).toBe(OPENROUTER);
   });
 });
 
@@ -334,7 +343,13 @@ describe('the catalog', () => {
     });
   });
 
-  it('refetches after the endpoint changes, not the stale cache', async () => {, async () => {
+  it('answers the pinned row when every other source is empty', async () => {
+    engineCatalog = [];
+
+    expect(await service.models(OPENROUTER)).toEqual({ models: FALLBACK_MODELS, source: 'static' });
+  });
+
+  it('refetches after the endpoint changes, not the stale cache', async () => {
     const instance = mustCreate(service, {
       name: 'Local',
       baseURL: 'http://old/v1',
@@ -355,7 +370,7 @@ describe('the catalog', () => {
     expect(gateway.listed).toBe(2);
   });
 
-  it('refetches after a new key is saved, not the old account s catalog', async () => {, async () => {
+  it('refetches after a new key is saved, not the old account s catalog', async () => {
     service.setKey(OPENROUTER, 'sk-old');
     gateway.catalog = [{ id: 'account-a/model' }];
     await service.models(OPENROUTER);
@@ -369,14 +384,6 @@ describe('the catalog', () => {
       source: 'live',
     });
     expect(gateway.listed).toBe(2);
-  });
-});
-
-describe('resolving the pair', () => {
-  it('answers the pinned row when every other source is empty', async () => {
-    engineCatalog = [];
-
-    expect(await service.models(OPENROUTER)).toEqual({ models: FALLBACK_MODELS, source: 'static' });
   });
 });
 
@@ -623,7 +630,6 @@ describe('the priority list', () => {
 
     expect(defaults.provider).toBe('anthropic');
   });
-
 });
 
 describe('the failover chain (pop-agent.spec §15, fase 2)', () => {

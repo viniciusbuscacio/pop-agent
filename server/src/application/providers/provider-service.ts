@@ -849,6 +849,7 @@ export class ProviderService {
         });
         this.deps.cooldown?.clear(providerId);
         this.clearAuthError(providerId);
+        this.deps.cooldown?.clear(providerId);
         return { ok: true, latencyMs: this.deps.clock.now() - startedAuth };
       } catch (error) {
         return {
