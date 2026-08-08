@@ -285,8 +285,11 @@ export interface SkillRevisionDTO {
   whenToUse: string;
   body: string;
   createdAt: string;
-  /** The cosine that made the distiller call this an update, not a new skill. */
-  similarity: number;
+  /**
+   * The measured cosine against the skill it would replace. Absent when nothing
+   * was measured (a slug collision with no embedder): never a placeholder.
+   */
+  similarity?: number;
 }
 
 export interface SkillsResponse {

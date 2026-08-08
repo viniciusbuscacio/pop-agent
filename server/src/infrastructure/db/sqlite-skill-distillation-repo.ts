@@ -58,11 +58,14 @@ export class SqliteSkillRevisionsRepo implements SkillRevisionsRepo {
   constructor(private readonly db: Db) {}
 
   all(): SkillRevision[] {
-    return this.db.prepare(`${SELECT} ORDER BY created_at`).all() as SkillRevision[];
+    return (this.db.prepare(`${SELECT} ORDER BY created_at`).all() as RevisionRow[]).map(
+      toRevision,
+    );
   }
 
   get(slug: string): SkillRevision | undefined {
-    return this.db.prepare(`${SELECT} WHERE slug = ?`).get(slug) as SkillRevision | undefined;
+    const row = this.db.prepare(`${SELECT} WHERE slug = ?`).get(slug) as RevisionRow | undefined;
+    return row === undefined ? undefined : toRevision(row);
   }
 
   save(revision: SkillRevision): void {
@@ -85,7 +88,7 @@ export class SqliteSkillRevisionsRepo implements SkillRevisionsRepo {
         revision.whenToUse,
         revision.body,
         revision.createdAt,
-        revision.similarity,
+        revision.similarity ?? null,
       );
   }
 
@@ -94,5 +97,14 @@ export class SqliteSkillRevisionsRepo implements SkillRevisionsRepo {
   }
 }
 
+// similarity comes back nullable (migration 031): a slug-collision revision
+// may carry no measurement, and SQLite reads that as null.
 const SELECT =
   'SELECT slug, name, description, when_to_use AS whenToUse, body, created_at AS createdAt, similarity FROM skill_revisions';
+
+type RevisionRow = Omit<SkillRevision, 'similarity'> & { similarity: number | null };
+
+function toRevision(row: RevisionRow): SkillRevision {
+  const { similarity, ...rest } = row;
+  return { ...rest, ...(similarity === null ? {} : { similarity }) };
+}

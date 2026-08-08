@@ -91,4 +91,21 @@ describe('SqliteSkillRevisionsRepo', () => {
 
     expect(revisions.get('deploy')).toBeUndefined();
   });
+
+  it('holds a proposal with no measurement behind it', () => {
+    // A slug-collision revision may carry no cosine at all (migration 031) --
+    // never a placeholder number in the column the dedup bars retune from.
+    const unmeasured: Parameters<SqliteSkillRevisionsRepo['save']>[0] = {
+      slug: revision.slug,
+      name: revision.name,
+      description: revision.description,
+      whenToUse: revision.whenToUse,
+      body: revision.body,
+      createdAt: revision.createdAt,
+    };
+    revisions.save(unmeasured);
+
+    expect(revisions.get('deploy')).toEqual(unmeasured);
+    expect(revisions.get('deploy')?.similarity).toBeUndefined();
+  });
 });

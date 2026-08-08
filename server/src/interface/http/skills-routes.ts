@@ -190,7 +190,7 @@ function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): Skil
             whenToUse: revision.whenToUse,
             body: revision.body,
             createdAt: revision.createdAt,
-            similarity: revision.similarity,
+            ...(revision.similarity === undefined ? {} : { similarity: revision.similarity }),
           },
         }),
   };

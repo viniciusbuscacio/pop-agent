@@ -50,8 +50,13 @@ export interface SkillRevision {
   whenToUse: string;
   body: string;
   createdAt: string;
-  /** How close the distiller judged it to the skill it would replace (§10: 0.90). */
-  similarity: number;
+  /**
+   * The measured cosine between the candidate's routing text and the skill it
+   * would replace -- the column exists to retune the dedup bars, so only a
+   * real measurement is written. Absent when nothing was measured: a revision
+   * proposed on a slug collision without an embedder has no cosine to record.
+   */
+  similarity?: number;
 }
 
 export interface SkillRevisionsRepo {

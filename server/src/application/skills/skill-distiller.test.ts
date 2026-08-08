@@ -45,11 +45,23 @@ function chat(id: string, updatedAt: string, provider = 'openrouter'): ChatSumma
   };
 }
 
-/** A ChatRepo with only the three methods the distiller actually reaches for. */
-function chats(list: ChatSummary[], messages: Record<string, Message[]>): ChatRepo {
+/** A ChatRepo with only the four methods the distiller actually reaches for. */
+function chats(
+  list: ChatSummary[],
+  messages: Record<string, Message[]>,
+  tailReads?: { count: number },
+): ChatRepo {
   return {
     list: () => list,
-    getMessages: (chatId: string) => messages[chatId] ?? [],
+    getMessages: (chatId: string) => {
+      if (tailReads !== undefined) tailReads.count += 1;
+      return messages[chatId] ?? [];
+    },
+    lastMessageIds: () =>
+      Object.entries(messages).map(([chatId, msgs]) => ({
+        chatId,
+        ...(msgs.length === 0 ? {} : { lastMessageId: msgs[msgs.length - 1]!.id }),
+      })),
     get: (id: string) => list.find((entry) => entry.id === id) as Chat | undefined,
   } as unknown as ChatRepo;
 }
@@ -166,6 +178,7 @@ function harness(options: {
   enabled?: boolean;
   embedder?: Embedder;
   vectors?: StoredSkillVector[];
+  tailReads?: { count: number };
 } = {}): Harness {
   const marks = new MemoryMarks();
   const revisions = new MemoryRevisions();
@@ -175,9 +188,13 @@ function harness(options: {
   const journal: string[] = [];
 
   const distiller = new SkillDistiller({
-    chats: chats(options.chats ?? [chat('c1', LONG_AGO)], options.messages ?? {
-      c1: [message('m1', 'how do I deploy the blog?')],
-    }),
+    chats: chats(
+      options.chats ?? [chat('c1', LONG_AGO)],
+      options.messages ?? {
+        c1: [message('m1', 'how do I deploy the blog?')],
+      },
+      options.tailReads,
+    ),
     marks,
     revisions,
     skills,
@@ -234,6 +251,19 @@ describe('SkillDistiller', () => {
     await world.distiller.run();
 
     expect(world.prompts).toHaveLength(before);
+  });
+
+  it('opens no history at all on an idle tick', async () => {
+    // The "anything new anywhere?" question is one query against the last
+    // message ids, not one tail-read per chat. The second tick proves it.
+    const tailReads = { count: 0 };
+    world = harness({ tailReads });
+    await world.distiller.run();
+    const opened = tailReads.count;
+    expect(opened).toBeGreaterThan(0);
+
+    await world.distiller.run();
+    expect(tailReads.count).toBe(opened);
   });
 
   it('comes back for messages written after it last looked', async () => {
@@ -332,6 +362,51 @@ describe('SkillDistiller', () => {
     expect(world.skills.written).toHaveLength(0);
     expect(world.revisions.saved).toHaveLength(1);
     expect(world.revisions.saved[0]).toMatchObject({ slug: 'deploy-blog', body: 'Push to main.' });
+  });
+
+  it('records no synthetic similarity on a slug collision', async () => {
+    // The revision table is the dataset the dedup bars get retuned from, so
+    // the only numbers allowed in it are measured ones. A collision with no
+    // embedder to measure writes nothing -- never the hardcoded 1 it used to.
+    world = harness({
+      skills: [
+        {
+          slug: 'deploy-blog',
+          name: 'Old name',
+          description: 'old',
+          whenToUse: 'old',
+          body: 'The old procedure.',
+          source: 'auto',
+        },
+      ],
+    });
+    await world.distiller.run();
+
+    expect(world.revisions.saved[0]?.similarity).toBeUndefined();
+  });
+
+  it('records the measured cosine on a slug collision when there is one', async () => {
+    // TwinEmbedder puts every text at the same vector, so the measured cosine
+    // is a REAL 1 -- which is exactly what the column may legitimately say.
+    world = harness({
+      skills: [
+        {
+          slug: 'deploy-blog',
+          name: 'Old name',
+          description: 'old',
+          whenToUse: 'old',
+          body: 'The old procedure.',
+          source: 'auto',
+        },
+      ],
+      embedder: new TwinEmbedder(),
+      vectors: [
+        { slug: 'deploy-blog', signature: 'Old name. old. old', vector: Float32Array.from([1, 0]) },
+      ],
+    });
+    await world.distiller.run();
+
+    expect(world.revisions.saved[0]?.similarity).toBeCloseTo(1);
   });
 
   it('applies the rewrite directly when approval is off', async () => {

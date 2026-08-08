@@ -225,8 +225,20 @@ export class SkillDistiller implements MaintenanceJob {
       (left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt),
     );
 
+    // The cheap pass first: one query says which chats have anything the
+    // distiller has not seen, and only those get their tail read. A tick in an
+    // idle install answers "nobody, nowhere" without opening a single history.
+    const lastByChat = new Map(
+      this.deps.chats.lastMessageIds().map((entry) => [entry.chatId, entry.lastMessageId]),
+    );
+
     let idle: Target | undefined;
     for (const chat of ordered) {
+      const lastId = lastByChat.get(chat.id);
+      if (lastId === undefined) continue; // no messages at all
+      const mark = this.deps.marks.get(chat.id);
+      if (mark !== undefined && mark.messageId === lastId) continue; // nothing new
+
       const window = this.unreadWindow(chat);
       if (window === undefined) continue;
 
@@ -257,16 +269,21 @@ export class SkillDistiller implements MaintenanceJob {
 
   /**
    * Where one candidate ends up: a new skill held for approval, a revision of
-   * one that already exists, or nothing. The slug is checked before the
-   * vectors, because two skills sharing an id is not a similarity question.
+   * one that already exists, or nothing. The slug decides before the vectors,
+   * because two skills sharing an id is not a similarity question -- but the
+   * candidate is measured FIRST anyway: the revision table is the dataset the
+   * dedup bars get retuned from, and the cosine is real or it is not written.
+   * What a slug collision used to record there was a hardcoded 1, a perfect
+   * score no measurement ever produced, in exactly the column that must stay
+   * honest.
    */
   private async land(candidate: SkillCandidate): Promise<string> {
     const existing = this.deps.skills.get(candidate.slug);
+    const measured = await this.measure(candidate, existing?.slug);
     if (existing !== undefined) {
-      return this.propose(candidate, existing.slug, 1, `${candidate.slug}=revision(slug)`);
+      return this.propose(candidate, existing.slug, measured.against, `${candidate.slug}=revision(slug)`);
     }
 
-    const measured = await this.measure(candidate);
     // Already filtered on both bars; anything that came back is a match.
     const match = measured.best;
     if (match !== undefined) {
@@ -314,11 +331,12 @@ export class SkillDistiller implements MaintenanceJob {
    * itself. `source` is passed through explicitly so applying a revision does
    * not read as a human edit: the vault promotes an auto skill to `user` when
    * it is edited, and the distiller rewriting its own work is not that.
+   * `similarity` is written only when actually measured (never a constant).
    */
   private propose(
     candidate: SkillCandidate,
     slug: string,
-    similarity: number,
+    similarity: number | undefined,
     label: string,
   ): string {
     const current = this.deps.skills.get(slug);
@@ -353,7 +371,7 @@ export class SkillDistiller implements MaintenanceJob {
       whenToUse: candidate.whenToUse,
       body: candidate.body,
       createdAt: new Date(this.deps.clock.now()).toISOString(),
-      similarity,
+      ...(similarity === undefined ? {} : { similarity }),
     });
     return label;
   }
@@ -362,9 +380,11 @@ export class SkillDistiller implements MaintenanceJob {
    * The candidate's own vector, and the closest existing skill to it. Both come
    * back because the vector is worth keeping whether or not it matched anything:
    * an empty table used to return early, so the first skill of a fresh install
-   * was never stored and the second could not be compared to it.
+   * was never stored and the second could not be compared to it. `alsoAgainst`
+   * asks for the cosine against one specific slug -- the skill whose id the
+   * candidate collided with -- so that path records a real number too.
    */
-  private async measure(candidate: SkillCandidate): Promise<Measured> {
+  private async measure(candidate: SkillCandidate, alsoAgainst?: string): Promise<Measured> {
     const embedder = this.deps.embedder;
     if (embedder === undefined) return {};
 
@@ -377,11 +397,14 @@ export class SkillDistiller implements MaintenanceJob {
     const text = candidateRoutingText(candidate);
     let nearest: Neighbour | undefined;
     let best: Neighbour | undefined;
+    let against: number | undefined;
     for (const entry of this.deps.vectors?.all() ?? []) {
       if (entry.vector.length !== vector.length) continue;
+      const score = dot(vector, entry.vector);
+      if (entry.slug === alsoAgainst) against = score;
       const neighbour = {
         slug: entry.slug,
-        score: dot(vector, entry.vector),
+        score,
         overlap: vocabularyOverlap(text, entry.signature),
       };
       // The closest thing by cosine is measured whether or not it qualifies,
@@ -396,6 +419,7 @@ export class SkillDistiller implements MaintenanceJob {
       vector,
       ...(nearest === undefined ? {} : { nearest }),
       ...(best === undefined ? {} : { best }),
+      ...(against === undefined ? {} : { against }),
     };
   }
 
@@ -421,6 +445,8 @@ interface Measured {
   nearest?: Neighbour;
   /** The closest skill that cleared BOTH bars: the one to revise, if any. */
   best?: Neighbour;
+  /** The cosine against the slug the candidate collided with, when asked. */
+  against?: number;
 }
 
 /** The vectors are L2-normalized by the embedder, so the dot product is cosine. */
