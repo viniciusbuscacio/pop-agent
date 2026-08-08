@@ -778,9 +778,18 @@ export class RunService {
       if (failover) this.deps.cooldown?.penalize(pair.providerId);
 
       const next = chain[index + 1];
-      // Tokens already rendered must not be retried under the reader: a run
-      // that streamed any visible answer fails in place, like before.
-      if (!failover || next === undefined || run.content.length > 0) break;
+      // Tokens, thinking, or tools already rendered must not be retried under
+      // the reader: a run that streamed any visible answer fails in place, and
+      // re-executing tools on another provider would double side effects.
+      if (
+        !failover ||
+        next === undefined ||
+        run.content.length > 0 ||
+        run.thinking.length > 0 ||
+        run.tools.length > 0
+      ) {
+        break;
+      }
 
       // Loud, and in the history: the reader of this chat deserves to know
       // the answer came from somewhere else, today and after every reload.

@@ -803,6 +803,38 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     expect(rows[1]?.id).toBe(`${rows[0]?.id ?? ''}-f1`);
   });
 
+  it('does not fail over after thinking was streamed', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'thinking', text: 'weighing options' });
+      request.onEvent({ kind: 'error', code: 'provider_error', status: 402 });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen).toHaveLength(1);
+    expect(fallbacks).toEqual([]);
+  });
+
+  it('does not fail over after a tool call was recorded', async () => {
+    withChain(TWO);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'tool', name: 'bash', status: 'start', detail: 'echo hi\n' });
+      request.onEvent({ kind: 'error', code: 'provider_error', status: 402 });
+      return Promise.resolve();
+    };
+
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen).toHaveLength(1);
+    expect(fallbacks).toEqual([]);
+  });
+
   it('does not retry under the reader: a streamed word pins the run', async () => {
     withChain(TWO);
     const chatId = newChat();
