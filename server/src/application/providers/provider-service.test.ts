@@ -9,7 +9,7 @@ import { ProviderCooldown } from './provider-cooldown.js';
 import { ProviderService, type ProviderStatus } from './provider-service.js';
 
 /**
- * createCustom can refuse now: the registry has a 265 ceiling. No test here is
+ * createCustom can refuse now: the registry has a 256 ceiling. No test here is
  * anywhere near it, so a refusal means the test itself is wrong -- which is
  * worth a thrown error rather than fifteen non-null assertions.
  */

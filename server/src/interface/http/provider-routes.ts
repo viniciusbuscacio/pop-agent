@@ -15,6 +15,7 @@ import {
   MAX_CUSTOM_PROVIDERS,
   type ProviderService,
 } from '../../application/providers/provider-service.js';
+import { PROVIDER_DEFINITIONS } from '../../application/providers/provider-definitions.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import { badBody, readJson, schemaError } from './body.js';
@@ -35,7 +36,13 @@ const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
 /** Empty puts the provider back to following its chat model (pop-agent.spec §15). */
 const serviceModelSchema = z.object({ model: z.string().max(200) }).strict();
 /** The whole priority list at once: partial edits would need a merge rule. */
-const orderSchema = z.object({ ids: z.array(z.string().min(1).max(60)).max(50) }).strict();
+const orderSchema = z
+  .object({
+    ids: z
+      .array(z.string().min(1).max(60))
+      .max(MAX_CUSTOM_PROVIDERS + PROVIDER_DEFINITIONS.length),
+  })
+  .strict();
 const enabledSchema = z.object({ enabled: z.boolean() }).strict();
 const createCustomSchema = z.object({ name: z.string().min(1).max(100).optional() }).strict();
 const patchCustomSchema = z
@@ -340,5 +347,6 @@ function toStatusDto(status: import('../../application/providers/provider-servic
     enabled: status.enabled,
     ...(status.baseURL === undefined ? {} : { baseURL: status.baseURL }),
     ...(status.custom === undefined ? {} : { custom: status.custom }),
+    ...(status.authErrorAt === undefined ? {} : { authErrorAt: status.authErrorAt }),
   };
 }
