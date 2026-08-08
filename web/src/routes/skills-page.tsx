@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
-import { SkillEditor } from './settings-page';
+import { SkillEditor } from './skill-editor';
 import { SidebarNav } from './sidebar-nav';
 import { useSkillsStore } from '../store/skills';
 
@@ -48,7 +48,18 @@ export function SkillsPage() {
         </div>
       ) : isNew || skill !== undefined ? (
         <div className="mx-auto w-full max-w-3xl p-4">
+          {/*
+            `key` is the fix for a frozen pane, not a lint appeasement. The
+            editor seeds each field with `useState(skill?.x)`, which React only
+            reads on mount -- and going from /skills/a to /skills/b is not a
+            mount: same component, same position, same instance. Without a key
+            the second skill clicked left the first one's text on screen, and
+            saving would have written it back under the new slug. Keyed on the
+            route param, so picking a different skill really is a different
+            editor.
+          */}
           <SkillEditor
+            key={slug}
             skill={skill}
             onDone={() => {
               void reload();

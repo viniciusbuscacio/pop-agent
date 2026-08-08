@@ -23,6 +23,7 @@ import { voiceService, type VoiceModelStatus } from '../services/voice';
 import { serverService } from '../services/server';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
+import { SkillEditor } from './skill-editor';
 import { checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
@@ -690,8 +691,11 @@ export function SkillsSection() {
   }
 
   if (editing !== undefined) {
+    // Keyed for the same reason as the Skills pane: the editor's fields are
+    // seeded on mount, so the thing being edited has to be its identity.
     return (
       <SkillEditor
+        key={editing === 'new' ? 'new' : editing.slug}
         skill={editing === 'new' ? undefined : editing}
         onDone={() => {
           setEditing(undefined);
@@ -856,98 +860,6 @@ function distillerLine(status: DistillerStatusDTO): string {
       ? t('skills.distiller.never')
       : t('skills.distiller.lastRun', { when: relativeTime(status.lastRunAt) });
   return waiting === 0 ? when : `${when} · ${t('skills.distiller.waiting', { count: waiting })}`;
-}
-
-export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; onDone: () => void }) {
-  const [slug, setSlug] = useState(skill?.slug ?? '');
-  const [name, setName] = useState(skill?.name ?? '');
-  const [description, setDescription] = useState(skill?.description ?? '');
-  const [whenToUse, setWhenToUse] = useState(skill?.whenToUse ?? '');
-  const [body, setBody] = useState(skill?.body ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  const isNew = skill === undefined;
-  const canSave = slug.trim().length > 0 && name.trim().length > 0 && !busy;
-
-  async function save(): Promise<void> {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await skillsService.save({ slug, name, description, whenToUse, body });
-      onDone();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : t('error.generic'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="flex flex-col gap-4">
-      <button
-        type="button"
-        data-testid="skill-back"
-        onClick={onDone}
-        className="self-start text-sm text-[var(--accent)]"
-      >
-        ← {t('skills.back')}
-      </button>
-
-      <TextField
-        id="skill-slug"
-        data-testid="skill-slug"
-        label={t('skills.field.slug')}
-        value={slug}
-        disabled={!isNew}
-        onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-      />
-      <TextField
-        id="skill-name"
-        data-testid="skill-name"
-        label={t('skills.field.name')}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <TextField
-        id="skill-description"
-        label={t('skills.field.description')}
-        value={description}
-        onChange={(event) => setDescription(event.target.value)}
-      />
-      <TextField
-        id="skill-when"
-        label={t('skills.field.whenToUse')}
-        hint={t('skills.field.whenToUseHint')}
-        value={whenToUse}
-        onChange={(event) => setWhenToUse(event.target.value)}
-      />
-      <TextArea
-        id="skill-body"
-        data-testid="skill-body"
-        label={t('skills.field.body')}
-        rows={10}
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        className="font-mono text-sm"
-      />
-
-      {error !== undefined ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="flex gap-2">
-        <Button type="button" data-testid="skill-save" disabled={!canSave} onClick={() => void save()}>
-          {t('common.save')}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          {t('common.cancel')}
-        </Button>
-      </div>
-    </Card>
-  );
 }
 
 /** How fresh the catalog is, said plainly (aw's source label). */
