@@ -229,6 +229,18 @@ describe('the key', () => {
     expect(service.apiKey(OPENROUTER)).toBe('sk-env');
   });
 
+
+  it('re-elects the default when the head loses its stored key', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([OPENROUTER, 'anthropic']);
+    expect(defaults.provider).toBe(OPENROUTER);
+
+    service.clearKey(OPENROUTER);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+
   it('only seeds OpenRouter from the environment', () => {
     envKey = 'sk-env';
 
@@ -560,6 +572,19 @@ describe('the priority list', () => {
 
     expect(service.order()).not.toContain(instance.id);
   });
+
+  it('re-elects the default when the head custom instance is deleted', () => {
+    const instance = mustCreate(service, { name: 'Head', baseURL: 'http://x/v1', defaultModel: 'm' });
+    service.setKey(instance.id, 'sk-head');
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([instance.id, 'anthropic', OPENROUTER]);
+    expect(defaults.provider).toBe(instance.id);
+
+    service.deleteCustom(instance.id);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+
 });
 
 describe('the failover chain (pop-agent.spec §15, fase 2)', () => {

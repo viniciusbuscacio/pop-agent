@@ -228,6 +228,7 @@ export class ProviderService {
 
   clearKey(providerId: string): void {
     this.deps.secrets.delete(keySecretName(providerId));
+    this.electDefault();
   }
 
   /** Drops an oauth provider's subscription credential (pop-agent.spec §15). */
@@ -415,6 +416,7 @@ export class ProviderService {
     this.deps.settings.set(`provider.${id}.defaultModel`, '');
     this.deps.settings.set(`models.${id}`, { fetchedAt: 0, models: [] });
     this.deps.cooldown?.clear(id);
+    this.electDefault();
     return true;
   }
 
