@@ -128,46 +128,120 @@ export function ProvidersSection() {
         </Card>
       ) : (
         configured.map((provider, index) => (
-          <Card key={provider.id} className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-semibold" data-testid="provider-card-name">
-                  {provider.name}
-                </p>
-                <Balance providerId={provider.id} listVersion={listVersion} />
-                <p className="truncate text-xs text-[var(--muted)]">
-                  {t('provider.priorityBadge', { n: index + 1 })}
-                  {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
-                  {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
-                </p>
-              </div>
-              <span className="flex shrink-0 gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-testid="provider-edit"
-                  onClick={() =>
-                    setView({ kind: 'configure', providerId: provider.id, adding: false })
-                  }
-                >
-                  {t('common.edit')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  data-testid="provider-delete"
-                  onClick={() => void remove(provider, absorb)}
-                >
-                  {t('shell.delete')}
-                </Button>
-              </span>
-            </div>
-          </Card>
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            index={index}
+            listVersion={listVersion}
+            onChanged={absorb}
+            onEdit={() => setView({ kind: 'configure', providerId: provider.id, adding: false })}
+            onDelete={() => void remove(provider, absorb)}
+          />
         ))
       )}
     </div>
+  );
+}
+
+function ProviderCard({
+  provider,
+  index,
+  listVersion,
+  onChanged,
+  onEdit,
+  onDelete,
+}: {
+  provider: ProviderStatusDTO;
+  index: number;
+  listVersion: number;
+  onChanged: (response: ProvidersResponse) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [toggling, setToggling] = useState(false);
+  const [toggleError, setToggleError] = useState<string | undefined>(undefined);
+  async function toggleEnabled(): Promise<void> {
+    setToggling(true);
+    setToggleError(undefined);
+    try {
+      onChanged(await providersService.setEnabled(provider.id, !provider.enabled));
+    } catch {
+      setToggleError(t('provider.enableFailed'));
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <Card
+      className={`flex flex-col gap-2 ${provider.enabled ? '' : 'opacity-70'}`}
+      data-testid={`provider-card-${provider.id}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <button
+            type="button"
+            data-testid="provider-toggle"
+            aria-pressed={provider.enabled}
+            aria-label={provider.enabled ? t('provider.disable') : t('provider.enable')}
+            title={provider.enabled ? t('provider.disable') : t('provider.enable')}
+            disabled={toggling}
+            onClick={() => void toggleEnabled()}
+            className={`mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+              provider.enabled
+                ? 'border-transparent bg-[var(--accent)]'
+                : 'border-[var(--border)] bg-transparent'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={
+                provider.enabled
+                  ? 'block h-3.5 w-3.5 translate-x-4 rounded-full bg-[var(--accent-fg)] transition-transform'
+                  : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
+              }
+            />
+          </button>
+          <div className="min-w-0">
+            <p className="truncate font-semibold" data-testid="provider-card-name">
+              {provider.name}
+            </p>
+            <Balance providerId={provider.id} listVersion={listVersion} />
+            <p className="truncate text-xs text-[var(--muted)]">
+              {t('provider.priorityBadge', { n: index + 1 })}
+              {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
+              {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
+              {!provider.enabled ? ` · ${t('provider.priority.off')}` : ''}
+            </p>
+          </div>
+        </div>
+        <span className="flex shrink-0 gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="provider-edit"
+            onClick={onEdit}
+          >
+            {t('common.edit')}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            data-testid="provider-delete"
+            onClick={onDelete}
+          >
+            {t('shell.delete')}
+          </Button>
+        </span>
+      </div>
+      {toggleError === undefined ? null : (
+        <p className="text-sm text-[var(--danger)]" data-testid="provider-toggle-error">
+          {toggleError}
+        </p>
+      )}
+    </Card>
   );
 }
 
