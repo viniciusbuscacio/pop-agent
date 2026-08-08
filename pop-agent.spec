@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.71 — 2026-08-08.
+Version 1.72 — 2026-08-08.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -352,7 +352,10 @@ user message — selection is 100% local, no LLM call:
   because asking *about* skills is a question to answer and the word alone
   cannot tell the two apart; every phrase carries the verb that makes it an
   order. It is matched **on the user's own messages only**, never on tool
-  output, which is where an injection would put the sentence.
+  output, which is where an injection would put the sentence. A phrase
+  preceded by a negation word ("não", "don't", "never"…) does not count
+  (1.72): substring matching hears the order inside "não cria uma skill",
+  and a refusal must not read as a request.
 - **What the request buys** is priority, not a live write. The distiller
   matches the phrase in the window it was already going to read — so this
   costs no table, no column and no hook on the chat path — and the chat that
@@ -397,7 +400,10 @@ user message — selection is 100% local, no LLM call:
   outcome — tainted, empty, or three skills written — **except a provider
   failure**, which leaves it behind so the next tick retries for free. A mark
   that advanced on failure would silently skip conversations whenever a
-  provider had a bad minute.
+  provider had a bad minute. The tick's "anything new anywhere?" is **one
+  query** — `ChatRepo.lastMessageIds` against the watermarks (1.72) — not
+  one tail-read per chat, which is what the idle install would otherwise
+  pay every interval forever.
 - **A tainted window is never distilled.** `sanitize` — the same function
   the live taint guard uses — runs over the window before the model sees it,
   and anything above `low` skips the whole conversation, not just the part
@@ -446,7 +452,15 @@ user message — selection is 100% local, no LLM call:
   would guard the front door while the update path stood open, and an
   injection distilled as "a better version of a skill you already trust"
   would walk in. The similarity is stored because 0.90 was chosen without
-  data and that column is the data that will retune it.
+  data and that column is the data that will retune it. The number written
+  is **measured or absent** (1.72): a slug collision used to record a
+  hardcoded 1 — a perfect score no measurement produced, in exactly the
+  column that must stay honest. The distiller now embeds the candidate
+  against that slug and stores the real cosine, or NULL when there is
+  nothing to measure with (migration 031 makes the column nullable).
+  Scrubbing covers **bare tokens** too (1.72): a pasted `sk-…`, `ghp_…`,
+  `AKIA…` carries no "key =" for the labelled rule, so the shapes
+  recognizable by form alone are redacted whole-line as well.
 - **The answer format is markers, not JSON** (1.64, forced by live runs).
   Each skill is a `=== SKILL ===` block of `key: value` lines, a `--- body ---`
   fence and then the procedure verbatim; `=== END ===` closes the answer.
@@ -518,6 +532,10 @@ user message — selection is 100% local, no LLM call:
   that admitted five of eight real matches and neither of the two noise
   hits. Precision first: the lexical ranking is there to catch the rest, and
   a wrong skill costs one of three slots on every turn.
+  **Too few measured skills for a z (< 5) does not mean the bare floor**
+  (1.72): 0.75 sits inside the noise band, so a small vault would admit its
+  luckiest member. The small sample gets the band's own p90 instead —
+  `max(floor, 0.80)`.
 - **Vectors are persisted** (`skill_embeddings`, migration 028). Keyed by
   slug and stamped with the routing text they came from, so editing a skill
   invalidates its vector and nothing else. A vector whose length disagrees
@@ -1496,6 +1514,19 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.72 (2026-08-08): **The auto-skill review fixes (§8).** Five findings from
+  a read of the router + auto-skill code, all closed: (1) the candidate
+  scrubber now catches unlabeled tokens by shape (`sk-…`, `ghp_…`, `AKIA…`,
+  JWTs, private-key blocks) — a bare pasted key no longer survives into a
+  skill body that gets replayed into future prompts; (2) `asksForSkill`
+  ignores a phrase preceded by a negation word — "não cria uma skill" is not
+  a request; (3) with fewer than five measured skills the semantic leg uses
+  `max(floor, 0.80)` (the noise band's p90) instead of the bare 0.75 floor
+  that sits inside the band; (4) a revision proposed on a slug collision
+  records the measured cosine or none at all — never a hardcoded 1 — and
+  `skill_revisions.similarity` is nullable (migration 031); (5) the
+  distiller's tick finds chats with new messages in one query
+  (`lastMessageIds`) instead of reading every conversation's tail.
 - 1.71 (2026-08-08): **One completion path, for every provider (§15).** A
   subscription has no API key to hand an HTTP gateway, so everything built on
   `gateway.complete` quietly excluded it: `completeAsService` required a

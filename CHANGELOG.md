@@ -58,6 +58,24 @@ normative history.
 
 ### Fixed
 
+- **A key pasted into a conversation can no longer leak into a skill.** The
+  scrubber only caught secrets carrying a label ("api_key = …"); a bare
+  `sk-…`, `ghp_…` or AWS id pasted on its own line sailed through into a
+  skill body that future prompts would replay. The shapes recognizable by
+  form alone are now redacted whole-line too.
+- **"Don't create a skill" no longer creates a skill.** The explicit-request
+  matcher heard the order inside the refusal ("não cria uma skill" contains
+  "cria uma skill"). A negation word before the phrase now cancels it.
+- **A small skills vault no longer admits its luckiest member.** With fewer
+  than five skills to measure there is no spread to read, and the fallback
+  floor sat inside the embedding model's noise band. The floor rises to the
+  band's measured p90 there instead.
+- **A revision proposed on a name collision no longer records a perfect fake
+  score.** The similarity column exists to retune the dedup bars with real
+  measurements; it now gets the measured cosine or nothing at all.
+- **The learning tick no longer reads every conversation to learn nothing
+  changed.** One query answers "anything new anywhere?" against the
+  watermarks; histories open only when something actually moved.
 - **A skill whose steps contain a command no longer gets thrown away.** Pop Agent
   asked itself for the procedure in a format where every quote and brace had to
   be escaped, so the moment a skill contained a real `curl` line the whole thing
