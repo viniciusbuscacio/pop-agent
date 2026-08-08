@@ -58,6 +58,11 @@ normative history.
 
 ### Fixed
 
+- **A skill Popy was writing no longer vanishes when the answer runs long.**
+  If the model ran out of room mid-sentence, everything it had written was
+  discarded and the conversation was marked as read, so a procedure it had
+  just worked out was lost without a trace. It now keeps whatever finished and
+  comes back for the rest.
 - **Popy no longer refuses to learn from conversations about itself.** The
   check that keeps it from learning anything out of a page it read was also
   reading your own messages, and it treats the words "system prompt" as a

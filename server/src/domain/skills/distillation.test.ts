@@ -65,7 +65,7 @@ describe('parseDistillAnswer', () => {
     const answer =
       'Sure! Here is what I found:\n```json\n[{"slug":"deploy-blog","name":"Deploy",' +
       '"description":"How to publish","whenToUse":"publishing a post","body":"Push to main."}]\n```';
-    expect(parseDistillAnswer(answer)).toEqual([
+    expect(parseDistillAnswer(answer).candidates).toEqual([
       {
         slug: 'deploy-blog',
         name: 'Deploy',
@@ -77,20 +77,20 @@ describe('parseDistillAnswer', () => {
   });
 
   it('reads an empty array as nothing to learn', () => {
-    expect(parseDistillAnswer('[]')).toEqual([]);
+    expect(parseDistillAnswer('[]').candidates).toEqual([]);
   });
 
   it('treats an answer with no array at all as nothing to learn', () => {
-    expect(parseDistillAnswer('I could not find anything reusable.')).toEqual([]);
+    expect(parseDistillAnswer('I could not find anything reusable.').candidates).toEqual([]);
   });
 
   it('treats unparseable JSON as nothing rather than throwing', () => {
-    expect(parseDistillAnswer('[{"slug": "broken",]')).toEqual([]);
+    expect(parseDistillAnswer('[{"slug": "broken",]').candidates).toEqual([]);
   });
 
   it('drops a candidate missing a field instead of inventing one', () => {
     const answer = '[{"slug":"a","name":"A","description":"","body":"x"}]';
-    expect(parseDistillAnswer(answer)).toEqual([]);
+    expect(parseDistillAnswer(answer).candidates).toEqual([]);
   });
 
   it('keeps several skills from one conversation', () => {
@@ -98,7 +98,7 @@ describe('parseDistillAnswer', () => {
       { slug: 'one', name: 'One', description: 'd1', whenToUse: 'w1', body: 'b1' },
       { slug: 'two', name: 'Two', description: 'd2', whenToUse: 'w2', body: 'b2' },
     ]);
-    expect(parseDistillAnswer(answer).map((entry) => entry.slug)).toEqual(['one', 'two']);
+    expect(parseDistillAnswer(answer).candidates.map((entry) => entry.slug)).toEqual(['one', 'two']);
   });
 
   it('keeps the first of two candidates claiming the same id', () => {
@@ -106,12 +106,12 @@ describe('parseDistillAnswer', () => {
       { slug: 'same', name: 'First', description: 'd', whenToUse: 'w', body: 'b' },
       { slug: 'same', name: 'Second', description: 'd', whenToUse: 'w', body: 'b' },
     ]);
-    expect(parseDistillAnswer(answer).map((entry) => entry.name)).toEqual(['First']);
+    expect(parseDistillAnswer(answer).candidates.map((entry) => entry.name)).toEqual(['First']);
   });
 
   it('falls back to the description when whenToUse is missing', () => {
     const answer = '[{"slug":"a","name":"A","description":"the description","body":"x"}]';
-    expect(parseDistillAnswer(answer)[0]?.whenToUse).toBe('the description');
+    expect(parseDistillAnswer(answer).candidates[0]?.whenToUse).toBe('the description');
   });
 });
 
@@ -137,5 +137,52 @@ describe('scrubCandidate', () => {
 
   it('leaves an ordinary procedure alone', () => {
     expect(scrubCandidate(candidate()).body).toBe('Push to main.');
+  });
+});
+
+/**
+ * The truncation cases, all of them written after a live run lost a real skill
+ * to a cut-off answer that the parser read as an empty one.
+ */
+describe('parseDistillAnswer and answers that were cut off', () => {
+  const first =
+    '{"slug":"one","name":"One","description":"d1","whenToUse":"w1","body":"b1"}';
+
+  it('keeps the skills that finished when the answer stops mid-sentence', () => {
+    const answer = `[${first},{"slug":"two","name":"Two","description":"d2","whenTo`;
+    const parsed = parseDistillAnswer(answer);
+
+    expect(parsed.candidates.map((entry) => entry.slug)).toEqual(['one']);
+    expect(parsed.truncated).toBe(true);
+  });
+
+  it('says so when nothing at all survived the cut', () => {
+    const parsed = parseDistillAnswer('[{"slug":"one","name":"One","desc');
+
+    expect(parsed.candidates).toEqual([]);
+    // The caller keeps the watermark where it is on this, and retries.
+    expect(parsed.truncated).toBe(true);
+  });
+
+  it('does not call a complete answer truncated', () => {
+    expect(parseDistillAnswer(`[${first}]`).truncated).toBe(false);
+    expect(parseDistillAnswer('[]').truncated).toBe(false);
+  });
+
+  it('is not fooled by a brace inside a string', () => {
+    const tricky =
+      '[{"slug":"one","name":"One","description":"d","whenToUse":"w","body":"use {} and a quote \\" here"}]';
+    const parsed = parseDistillAnswer(tricky);
+
+    expect(parsed.candidates).toHaveLength(1);
+    expect(parsed.candidates[0]?.body).toBe('use {} and a quote " here');
+    expect(parsed.truncated).toBe(false);
+  });
+
+  it('reads an answer with no array at all as neither', () => {
+    const parsed = parseDistillAnswer('There was nothing procedural here.');
+
+    expect(parsed.candidates).toEqual([]);
+    expect(parsed.truncated).toBe(false);
   });
 });

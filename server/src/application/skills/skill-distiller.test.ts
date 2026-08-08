@@ -435,3 +435,25 @@ describe('SkillDistiller and what counts as external', () => {
     expect(world.journal.join(' ')).toMatch(/tainted/);
   });
 });
+
+describe('SkillDistiller and a truncated answer', () => {
+  it('keeps the watermark and retries when nothing survived the cut', async () => {
+    const world = harness({ answer: '[{"slug":"one","name":"One","descri' });
+    await world.distiller.run();
+
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.get('c1')).toBeUndefined();
+    expect(world.journal.join(' ')).toMatch(/truncated/);
+  });
+
+  it('keeps what finished and moves on', async () => {
+    const world = harness({
+      answer:
+        '[{"slug":"one","name":"One","description":"d","whenToUse":"w","body":"b"},{"slug":"two","name":"Tw',
+    });
+    await world.distiller.run();
+
+    expect(world.skills.written.map((input) => input.slug)).toEqual(['one']);
+    expect(world.marks.get('c1')?.messageId).toBe('m1');
+  });
+});

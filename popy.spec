@@ -1,6 +1,6 @@
 # popy.spec — the project specification
 
-Version 1.62 — 2026-08-07.
+Version 1.63 — 2026-08-08.
 This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -385,6 +385,16 @@ user message — selection is 100% local, no LLM call:
   injection distilled as "a better version of a skill you already trust"
   would walk in. The similarity is stored because 0.90 was chosen without
   data and that column is the data that will retune it.
+- **A cut-off answer is not an empty one** (1.63, found by the first live
+  run). The parser scans complete `{...}` objects out of the array instead of
+  `JSON.parse`-ing the whole thing, so a reply that stopped mid-field keeps
+  the skills that finished; `truncated` says whether the rest is worth coming
+  back for. When it is truncated and nothing survived, the watermark **stays**
+  and the next tick asks again — the same treatment a provider failure gets.
+  Reading truncation as "nothing to learn" is how the first live run wrote a
+  genuinely useful procedure and then threw it away in silence. The answer
+  ceiling is 6000 tokens for the same reason: it has to cover a reasoning
+  model's thinking as well as its answer.
 - **One conversation may yield several skills**, one per distinct procedure,
   capped at five. A distiller forced to produce one skill per conversation
   produces noise per conversation; the empty answer is a first-class
@@ -1389,6 +1399,25 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.63 (2026-08-08): **The auto-skill loop verified against a real model, and
+  the bug that verification found (§8).** `tools/live-skills.ts` runs the whole
+  loop on a throwaway database and vault — plant a conversation, distil it,
+  approve what comes out, ask the router a question the skill should answer —
+  and it is out of the gate because it spends money, like `live-check.ts`.
+  The first run found that the distiller was silently discarding good skills.
+  A reasoning model spends most of its token budget thinking and the JSON
+  stopped mid-field; `JSON.parse` rejected the lot; the empty result read as
+  "nothing to learn"; the watermark advanced. The conversation was gone for
+  good and the skill with it. The parser now scans complete objects out of the
+  array and reports `truncated`, the distiller treats truncated-with-nothing
+  like a provider failure, and the ceiling went to 6000 tokens.
+  What the run then proved, with the real embedder: a pending skill is **not**
+  routed before approval, and after it, a question sharing none of the skill's
+  words — "as paginas do site continuam mostrando conteudo velho depois que
+  publiquei" against a skill written in English about Cloudflare 404s — brings
+  it back first, `cos=0.83`, ahead of the built-in it was competing with. The
+  router's semantic leg works across languages, which the fixtures in the gate
+  could not have shown.
 - 1.62 (2026-08-07): **The safety layer measured, and the distiller's taint
   check corrected (§8, §10, Backlog #8).** The injection corpus had only ever
   been tested in the flattering direction — write a payload, watch it match —

@@ -83,8 +83,16 @@ export interface SkillDistillerDeps {
   onJournal?: (line: string) => void;
 }
 
-/** How many tokens one distillation may answer with. Five skills of prose. */
-const MAX_ANSWER_TOKENS = 2_000;
+/**
+ * How many tokens one distillation may answer with.
+ *
+ * Raised from 2000 after the first live run: the ceiling has to cover the
+ * model's reasoning as well as its answer, and a thinking model can spend most
+ * of it before writing a character of JSON. Two thousand truncated a single
+ * skill. This is still one small call -- the prompt is the expensive half, and
+ * the cap only binds when there is genuinely a lot to say.
+ */
+const MAX_ANSWER_TOKENS = 6_000;
 
 export class SkillDistiller implements MaintenanceJob {
   readonly name = 'skill-distiller';
@@ -145,8 +153,18 @@ export class SkillDistiller implements MaintenanceJob {
       return;
     }
 
-    const candidates = parseDistillAnswer(answer);
+    const { candidates, truncated } = parseDistillAnswer(answer);
     if (candidates.length === 0) {
+      // A cut-off answer is not an empty one. The first live run against a real
+      // model produced a genuinely useful procedure and lost it here: a
+      // reasoning model spent its budget thinking, the JSON stopped mid-field,
+      // and "nothing to learn" moved the watermark past a conversation that had
+      // plenty. Truncation is treated like a provider failure instead -- the
+      // mark stays, and the next tick asks again.
+      if (truncated) {
+        journal(`chat=${chat.id} answer truncated, nothing salvaged; will retry`);
+        return;
+      }
       this.advance(chat.id, lastId);
       journal(`chat=${chat.id} nothing to learn`);
       return;

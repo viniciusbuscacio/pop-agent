@@ -96,39 +96,94 @@ export function buildDistillPrompt(
   ].join('\n');
 }
 
-/**
- * Reads the answer back. Tolerant in the one way that matters -- the array is
- * located inside whatever the model wrapped it in -- and strict about
- * everything after: a candidate missing any field is dropped rather than
- * repaired, because a skill with an invented name is worse than one fewer
- * skill. A malformed answer yields an empty list, which the caller treats as
- * "nothing here", not as an error: a model that cannot produce JSON will not
- * produce it on retry either, and the watermark should move past that
- * conversation.
- */
-export function parseDistillAnswer(answer: string): SkillCandidate[] {
-  const start = answer.indexOf('[');
-  const end = answer.lastIndexOf(']');
-  if (start === -1 || end <= start) return [];
+/** What the parse found, and whether the answer was cut off mid-sentence. */
+export interface DistillAnswer {
+  candidates: SkillCandidate[];
+  /**
+   * The array was opened and never closed: the model ran out of budget while
+   * writing. Load-bearing, and learned the hard way -- see the note below.
+   */
+  truncated: boolean;
+}
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(answer.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+/**
+ * Reads the answer back, one object at a time.
+ *
+ * The obvious implementation is `JSON.parse` over the whole array, and it was
+ * the first one. It is wrong for the case that turns out to be common: a
+ * reasoning model spends most of its token budget thinking, hits the ceiling
+ * halfway through the second field of the first skill, and returns an array
+ * that never closes. `JSON.parse` rejects the lot, the caller reads the empty
+ * result as "nothing to learn", the watermark advances, and a good skill is
+ * dropped on the floor in silence. That is exactly what the first live run
+ * did -- the model wrote a genuinely useful procedure and Popy threw it away.
+ *
+ * So objects are scanned out with a brace counter that knows about strings and
+ * escapes, and each is parsed on its own. A truncated answer keeps whatever
+ * finished, and `truncated` tells the caller that what did NOT finish is worth
+ * coming back for. A malformed answer -- as opposed to a cut-off one -- still
+ * yields nothing and is still "nothing to learn": a model that cannot produce
+ * JSON will not produce it on retry either.
+ *
+ * Strict about fields, as before: a candidate missing one is dropped rather
+ * than repaired, because a skill with an invented name is worse than one fewer.
+ */
+export function parseDistillAnswer(answer: string): DistillAnswer {
+  const start = answer.indexOf('[');
+  if (start === -1) return { candidates: [], truncated: false };
 
   const candidates: SkillCandidate[] = [];
   const taken = new Set<string>();
-  for (const entry of parsed) {
-    const candidate = toCandidate(entry);
-    if (candidate === undefined || taken.has(candidate.slug)) continue;
-    taken.add(candidate.slug);
-    candidates.push(candidate);
-    if (candidates.length === MAX_CANDIDATES) break;
+  let closed = false;
+  let depth = 0;
+  let objectStart = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start + 1; index < answer.length; index += 1) {
+    const char = answer[index]!;
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      if (depth === 0) objectStart = index;
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0 && objectStart !== -1) {
+        const candidate = readObject(answer.slice(objectStart, index + 1));
+        if (candidate !== undefined && !taken.has(candidate.slug)) {
+          taken.add(candidate.slug);
+          candidates.push(candidate);
+        }
+        objectStart = -1;
+        if (candidates.length === MAX_CANDIDATES) {
+          closed = true;
+          break;
+        }
+      }
+    } else if (char === ']' && depth === 0) {
+      closed = true;
+      break;
+    }
   }
-  return candidates;
+
+  return { candidates, truncated: !closed };
+}
+
+function readObject(raw: string): SkillCandidate | undefined {
+  try {
+    return toCandidate(JSON.parse(raw));
+  } catch {
+    return undefined;
+  }
 }
 
 /** The text a candidate is routed on; the same shape the router embeds. */
