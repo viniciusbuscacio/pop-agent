@@ -213,6 +213,7 @@ export const en = {
   'provider.enable': 'Turn this provider on',
   'provider.disable': 'Turn this provider off',
   'provider.enableFailed': 'That could not be switched.',
+  'provider.signInAgain': 'Sign in again',
   'settings.section.model': 'Model',
   'settings.section.audio': 'Audio',
   'settings.section.memory': 'Memory',

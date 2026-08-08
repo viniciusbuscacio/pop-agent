@@ -57,6 +57,11 @@ type View =
   | { kind: 'configure'; providerId: string; adding: true }
   | { kind: 'configure'; providerId: string; adding: false };
 
+/** Optional until the server branch lands; read defensively. */
+function providerAuthErrorAt(provider: ProviderStatusDTO): string | undefined {
+  return (provider as ProviderStatusDTO & { authErrorAt?: string }).authErrorAt;
+}
+
 export function ProvidersSection() {
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [view, setView] = useState<View>({ kind: 'list' });
@@ -160,6 +165,8 @@ function ProviderCard({
 }) {
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState<string | undefined>(undefined);
+  const authErrorAt = providerAuthErrorAt(provider);
+
   async function toggleEnabled(): Promise<void> {
     setToggling(true);
     setToggleError(undefined);
@@ -236,6 +243,16 @@ function ProviderCard({
           </Button>
         </span>
       </div>
+      {authErrorAt === undefined ? null : (
+        <button
+          type="button"
+          data-testid="provider-sign-in-again"
+          onClick={onEdit}
+          className="self-start rounded-md border border-[var(--danger)] bg-[var(--danger)]/10 px-2 py-0.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/20"
+        >
+          {t('provider.signInAgain')}
+        </button>
+      )}
       {toggleError === undefined ? null : (
         <p className="text-sm text-[var(--danger)]" data-testid="provider-toggle-error">
           {toggleError}
