@@ -1,5 +1,5 @@
 /**
- * Housekeeping the server does to itself (popy.spec §21). Not a background
+ * Housekeeping the server does to itself (pop-agent.spec §21). Not a background
  * task: a task is the user's, has a row, a chat and a history, and the agent
  * can be asked about it. These are internal, invisible, and never touch
  * anything the user wrote -- the orphan workspace sweep is the first one.

@@ -37,7 +37,7 @@ export interface HandsMachine {
   hostname: string;
   platform: string;
   arch: string;
-  /** Where `popy` was launched; the directory `bash` starts in. */
+  /** Where `pop` was launched; the directory `bash` starts in. */
   cwd: string;
   clientVersion: string;
 }
@@ -90,7 +90,7 @@ export class HandsRegistry {
   attach(connection: HandsConnection): void {
     this.entries.set(connection.id, { connection, unanswered: 0 });
     this.onJournal?.(
-      `popy hands: attached ${connection.machine.hostname} (${connection.machine.platform}/${connection.machine.arch})`,
+      `pop hands: attached ${connection.machine.hostname} (${connection.machine.platform}/${connection.machine.arch})`,
     );
   }
 
@@ -99,7 +99,7 @@ export class HandsRegistry {
     if (entry === undefined) return;
     this.entries.delete(connectionId);
     this.releaseCalls(connectionId);
-    this.onJournal?.(`popy hands: detached ${entry.connection.machine.hostname}`);
+    this.onJournal?.(`pop hands: detached ${entry.connection.machine.hostname}`);
   }
 
   /** Anything heard from a terminal proves it is alive, not just a pong. */
@@ -186,7 +186,7 @@ export class HandsRegistry {
     for (const [id, entry] of [...this.entries]) {
       if (entry.unanswered >= MISSED_PINGS_BEFORE_GONE) {
         this.onJournal?.(
-          `popy hands: ${entry.connection.machine.hostname} stopped answering; hands released`,
+          `pop hands: ${entry.connection.machine.hostname} stopped answering; hands released`,
         );
         // Detach first: closing may re-enter through the transport's own
         // close handler, and a second detach must find nothing to do.

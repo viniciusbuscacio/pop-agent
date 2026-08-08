@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { GarbageEntryDTO } from '@popy/shared';
+import type { GarbageEntryDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { trashService } from '../services/artifacts';
@@ -14,7 +14,7 @@ import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
 
 /**
- * The Files trash (popy.spec §14): what deleting put aside, and the two things
+ * The Files trash (pop-agent.spec §14): what deleting put aside, and the two things
  * you can do about it. Each row is one entry of Files/Garbage/, and its name
  * in there is the handle for restore and purge.
  *

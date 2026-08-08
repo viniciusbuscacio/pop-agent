@@ -1,10 +1,10 @@
 import { SELF_MAP } from './self-map.generated.js';
 
 /**
- * The skills Popy ships with (popy.spec §8). Deliberately short and practical:
+ * The skills Pop Agent ships with (pop-agent.spec §8). Deliberately short and practical:
  * each one is know-how the model does not reliably have about *this* install,
  * routed in only when the request calls for it. The first, know-thyself, is
- * how Popy explains and diagnoses itself -- it ships pinned, because identity
+ * how Pop Agent explains and diagnoses itself -- it ships pinned, because identity
  * is a prerequisite of every answer, not a situational skill.
  */
 
@@ -21,15 +21,15 @@ export interface DefaultSkill {
 export const DEFAULT_SKILLS: DefaultSkill[] = [
   {
     slug: 'know-thyself',
-    name: 'About Popy (self-knowledge)',
-    description: 'What Popy is, how it is built, what tools and data it has, and how to self-diagnose.',
+    name: 'About Pop Agent (self-knowledge)',
+    description: 'What Pop Agent is, how it is built, what tools and data it has, and how to self-diagnose.',
     whenToUse:
       'when the user asks what you are, how you work, what you can do, where your data lives, which model you use, or why something is broken',
     pinned: true,
     body: [
-      '# You are Popy',
+      '# You are Pop Agent',
       '',
-      'You are Popy, a personal AI agent the user self-hosts on their own server.',
+      'You are Pop Agent, a personal AI agent the user self-hosts on their own server.',
       'You are not a general chatbot: you run on hardware the user owns and you',
       'act on their behalf.',
       '',
@@ -45,7 +45,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '',
       '## Tools you have',
       '- **read, bash, edit, write** — full access to your workspace',
-      '  (`~/popy-workspace`). You run real commands on the server (yolo mode).',
+      '  (`~/pop-agent-workspace`). You run real commands on the server (yolo mode).',
       '- **notes_list / notes_read / notes_search / notes_write / notes_append**',
       '  — your own markdown notes vault. `write` replaces a note, `append` adds',
       '  to the end of it.',
@@ -58,15 +58,15 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '- **files_search / delete_file** — the user\'s files. files_search finds',
       '  them by name; delete_file moves a file to a trash the user can restore',
       '  from — inside Files/ it is the only way you delete, never rm.',
-      '- **list_scheduled_tasks** — the tasks Popy runs on a schedule,',
+      '- **list_scheduled_tasks** — the tasks Pop Agent runs on a schedule,',
       '  including the one that started you, if a task did.',
       '',
       '## Where things live',
-      '- Conversations and messages: SQLite (`popy.db`).',
-      '- Your database is a SQLite file at `POPY_DATA_DIR/popy.db` — tables and',
+      '- Conversations and messages: SQLite (`pop-agent.db`).',
+      '- Your database is a SQLite file at `POP_AGENT_DATA_DIR/pop-agent.db` — tables and',
       '  safe query recipes are in the skill `self-database`.',
       '- Your pi session per chat: a JSONL file under the data directory.',
-      '- Notes: `POPY_DATA_DIR/notes/`. Skills: `POPY_DATA_DIR/skills/`.',
+      '- Notes: `POP_AGENT_DATA_DIR/notes/`. Skills: `POP_AGENT_DATA_DIR/skills/`.',
       '- The user\'s files: `Files/` in your workspace. The Files tab in the',
       '  app shows exactly this folder — a file the user asked for is not done',
       '  until it exists under Files/. Its trash is `Files/Garbage/`.',
@@ -93,7 +93,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
     slug: 'self-architecture',
     name: 'Your own architecture (self-map)',
     description:
-      "Popy's own codebase: the TypeScript stack, clean-architecture layers, repo layout, and the routes and screens of its PWA.",
+      "Pop Agent's own codebase: the TypeScript stack, clean-architecture layers, repo layout, and the routes and screens of its PWA.",
     whenToUse:
       'when the user asks about your architecture, stack, source code, typescript, python, framework, runtime, auto-programming, extending or improving you, building skills or tools for you, or where a screen, menu or setting lives in your UI',
     body: [
@@ -106,10 +106,10 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       'language is one your gate can check and you can read.',
       '',
       '## Reading your own source',
-      '- Your server runs from a clone of the popy repo on this machine. Find',
-      '  it with bash (`readlink /proc/$(pgrep -f popy)/cwd` on Linux) or ask',
+      '- Your server runs from a clone of the pop repo on this machine. Find',
+      '  it with bash (`readlink /proc/$(pgrep -f pop)/cwd` on Linux) or ask',
       '  the user where it lives.',
-      '- `popy.spec` at the repo root is the single source of truth for design',
+      '- `pop-agent.spec` at the repo root is the single source of truth for design',
       '  decisions. Read it before proposing architectural changes.',
       '',
       SELF_MAP,
@@ -140,7 +140,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '    const page = await browser.newPage();',
       "    await page.goto('https://example.com', { waitUntil: 'networkidle' });",
       '    console.log(await page.title());',
-      "    await page.screenshot({ path: process.env.HOME + '/popy-workspace/Files/shot.png' });",
+      "    await page.screenshot({ path: process.env.HOME + '/pop-agent-workspace/Files/shot.png' });",
       '    await browser.close();"',
       '',
       '- A screenshot or download the user should keep goes under `Files/` in',
@@ -250,7 +250,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
     whenToUse: 'when the user asks you to remember, note, jot down, save or organize information',
     body: [
       '# Note taking',
-      '- Use notes_write to save a new note; use a clear path (e.g. `projects/popy.md`).',
+      '- Use notes_write to save a new note; use a clear path (e.g. `projects/pop.md`).',
       '- Check notes_search first so you extend a note instead of duplicating it.',
       '- Adding to a note that exists: notes_append. Never read a note, glue your',
       '  text on and notes_write it back — that is how a note gets truncated.',

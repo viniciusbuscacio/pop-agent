@@ -2,7 +2,7 @@ import { sanitize, type RiskLevel } from '../../domain/safety/sanitize.js';
 import type { ToolGuard } from './pi-engine.js';
 
 /**
- * The per-turn taint (popy.spec §10). A run that reads something suspicious
+ * The per-turn taint (pop-agent.spec §10). A run that reads something suspicious
  * from the outside world becomes tainted. YOLO mode (the owner's call, 31/07)
  * removed the confirmation card, but "no dialog" is not "no brake": in a
  * tainted turn a small set of genuinely dangerous commands -- ones that send
@@ -11,7 +11,7 @@ import type { ToolGuard } from './pi-engine.js';
  * them. A clean turn is never in anyone's way, so ordinary YOLO is untouched.
  *
  * This is the deterministic floor against indirect prompt injection (a web
- * page telling Popy to leak `secret.key` or wipe a directory): the human is
+ * page telling Pop Agent to leak `secret.key` or wipe a directory): the human is
  * never asked, but the page cannot make the leak happen either.
  */
 
@@ -30,7 +30,7 @@ const DESTRUCTIVE = [
 ];
 
 /**
- * Commands that send data off the box or read one of Popy's secrets. This is
+ * Commands that send data off the box or read one of Pop Agent's secrets. This is
  * the exfiltration surface, kept apart from DESTRUCTIVE because it is the half
  * an injected web page reaches for first (labs 1, 6, 7 of the Microsoft
  * AI-Red-Teaming playground: "make the model reveal passwords.txt").
@@ -98,7 +98,7 @@ export function isBlockedUnderTaint(command: string, machine: GuardedMachine = '
 }
 
 /**
- * Tools a tainted turn refuses outright, whatever their arguments (popy.spec
+ * Tools a tainted turn refuses outright, whatever their arguments (pop-agent.spec
  * §8, §10). Writing a skill is the one action whose blast radius outlives the
  * turn: a skill the router likes comes back on its own in every future
  * conversation it judges relevant, so a page that can write one has bought a
@@ -123,13 +123,13 @@ export interface TaintGuardDeps {
 
 const BLOCK_REASON =
   'This turn read untrusted external content, so this command is blocked as a ' +
-  'prompt-injection safeguard (popy.spec §10): a tainted turn cannot send data ' +
+  'prompt-injection safeguard (pop-agent.spec §10): a tainted turn cannot send data ' +
   'off the box, read a secret, or destroy files. If the user asked for this ' +
   'themselves, run it in a new turn that has not read outside content.';
 
 const SKILL_BLOCK_REASON =
   'This turn read untrusted external content, so writing a skill is blocked as a ' +
-  'prompt-injection safeguard (popy.spec §8, §10): a skill written now would come ' +
+  'prompt-injection safeguard (pop-agent.spec §8, §10): a skill written now would come ' +
   'back on its own in future conversations. If the user asked for this themselves, ' +
   'write it in a new turn that has not read outside content.';
 
@@ -148,7 +148,7 @@ export class TaintGuard implements ToolGuard {
   }
 
   /**
-   * YOLO mode without the dialog (popy.spec §10): a clean turn runs anything,
+   * YOLO mode without the dialog (pop-agent.spec §10): a clean turn runs anything,
    * a tainted turn refuses the exfil/secret/destruction set and says so. The
    * refusal is logged either way, so the trail survives.
    */

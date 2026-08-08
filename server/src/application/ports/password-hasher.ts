@@ -1,5 +1,5 @@
 /**
- * Password hashing port (popy.spec §9). The algorithm and its cost parameters
+ * Password hashing port (pop-agent.spec §9). The algorithm and its cost parameters
  * are an infrastructure concern -- deliberately slow, and slow in a way that
  * would make the service tests crawl, which is why they use a cheap fake.
  */

@@ -1,12 +1,12 @@
 /**
  * A skill: a named piece of know-how the agent pulls in when it is relevant
- * (popy.spec §8, the Skill Router). Description and `whenToUse` are the routing
+ * (pop-agent.spec §8, the Skill Router). Description and `whenToUse` are the routing
  * signal -- matched against what the user asked -- and `body` is the markdown
  * that joins the prompt when the skill is selected.
  */
 
 /**
- * Where a skill came from (popy.spec §8, auto-skill). `builtin` ships with the
+ * Where a skill came from (pop-agent.spec §8, auto-skill). `builtin` ships with the
  * app and updates with it; `auto` was distilled from a conversation and is the
  * garbage collector's to archive; `user` is the user's own and is never touched
  * automatically. Editing an auto skill promotes it to `user`: it proved its
@@ -26,13 +26,13 @@ export interface Skill {
   source: SkillSource;
   /**
    * A pinned skill bypasses the router: its body joins the session's system
-   * prompt once instead of competing for a per-turn slot (popy.spec §8).
+   * prompt once instead of competing for a per-turn slot (pop-agent.spec §8).
    * Identity is a prerequisite of every answer, not a situational skill.
    */
   pinned?: boolean;
   /**
    * An auto skill waits outside the router until the user accepts it, unless
-   * they turned automatic approval on (popy.spec §8). Absent means approved --
+   * they turned automatic approval on (pop-agent.spec §8). Absent means approved --
    * every skill that predates auto-skill is one the user already has.
    */
   pending?: boolean;

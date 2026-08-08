@@ -3,7 +3,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 
 /**
- * The living user-memory tools (popy.spec §7): the agent reads and rewrites a
+ * The living user-memory tools (pop-agent.spec §7): the agent reads and rewrites a
  * single document it keeps about the user -- preferences, ongoing projects,
  * how they like to be answered. Write is a full replace, so the model is told
  * to read first and hand back the whole document.

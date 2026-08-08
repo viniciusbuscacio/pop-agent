@@ -1,7 +1,7 @@
 import type { Message } from '../chat/chat.js';
 
 /**
- * What the background distiller asks and how it reads the answer (popy.spec §8,
+ * What the background distiller asks and how it reads the answer (pop-agent.spec §8,
  * auto-skill fase c). Pure on purpose: the prompt and the parse are the two
  * places this feature is most likely to be wrong, and both are cheap to test
  * when they do not need a provider, a clock or a disk.
@@ -19,7 +19,7 @@ import type { Message } from '../chat/chat.js';
  *   the user would type. The self-check is folded into the prompt rather than
  *   spent as a second call: the model can compare its own description against
  *   the question that opened the conversation in the same pass.
- * - **English**, matching every skill Popy writes for itself. The conversation
+ * - **English**, matching every skill Pop Agent writes for itself. The conversation
  *   it was distilled from can be in any language, and the router's semantic leg
  *   is multilingual, so this costs no recall.
  */

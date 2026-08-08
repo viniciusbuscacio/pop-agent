@@ -1,4 +1,4 @@
--- Which chat wrote which Files path (popy.spec §6, §14 "Files as a plain
+-- Which chat wrote which Files path (pop-agent.spec §6, §14 "Files as a plain
 -- folder"): an append-only log, not a catalog. It records history -- "chat X
 -- wrote Files/foo.pdf at T" -- so it never has to be right about where a file
 -- is NOW, and a rename cannot desynchronize it.

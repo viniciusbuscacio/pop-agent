@@ -21,7 +21,7 @@ describe('machineOfTool', () => {
 
 describe('the two lists', () => {
   it('protects the server files on the server', () => {
-    expect(isBlockedUnderTaint('cat ~/.popy/secret.key', 'server')).toBe(true);
+    expect(isBlockedUnderTaint('cat ~/.pop-agent/secret.key', 'server')).toBe(true);
     expect(isBlockedUnderTaint('base64 pi-auth.json', 'server')).toBe(true);
   });
 

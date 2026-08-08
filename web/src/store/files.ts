@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FileNodeDTO } from '@popy/shared';
+import type { FileNodeDTO } from '@pop-agent/shared';
 import { filesService } from '../services/artifacts';
 
 /**

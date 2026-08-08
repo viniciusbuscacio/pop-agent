@@ -25,7 +25,7 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
       headers: {
         'content-type': 'application/json',
         Authorization: `Bearer ${token}`,
-        host: 'popy.example',
+        host: 'pop-agent.example',
         ...(init.headers ?? {}),
       },
     }),
@@ -43,7 +43,7 @@ describe('/v1/auth/webauthn', () => {
     const res = await authed('/v1/auth/webauthn/register/options', { method: 'POST' });
     const body = (await res.json()) as { challenge: string; rp: { id: string } };
     expect(body.challenge.length).toBeGreaterThan(0);
-    expect(body.rp.id).toBe('popy.example');
+    expect(body.rp.id).toBe('pop-agent.example');
   });
 
   it('lists no credentials before any are registered', async () => {
@@ -56,7 +56,7 @@ describe('/v1/auth/webauthn', () => {
   it('says there is no passkey to log in with, publicly', async () => {
     const res = await app.request('/v1/auth/webauthn/login/options', {
       method: 'POST',
-      headers: { host: 'popy.example' },
+      headers: { host: 'pop-agent.example' },
     });
     expect(res.status).toBe(404);
   });

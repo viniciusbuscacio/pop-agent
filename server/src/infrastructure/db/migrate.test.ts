@@ -8,7 +8,7 @@ import { migrate } from './migrate.js';
 const dirs: string[] = [];
 
 function migrationsDir(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'popy-migrations-'));
+  const dir = mkdtempSync(join(tmpdir(), 'pop-migrations-'));
   dirs.push(dir);
   for (const [name, sql] of Object.entries(files)) writeFileSync(join(dir, name), sql);
   return dir;

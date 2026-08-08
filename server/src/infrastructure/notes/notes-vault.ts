@@ -14,8 +14,8 @@ import { dirname, join, relative } from 'node:path';
 import { NoteJail } from './note-jail.js';
 
 /**
- * The agent's own notes vault (popy.spec §11): plain markdown under
- * `POPY_DATA_DIR/notes/`, Obsidian-compatible by being nothing but `.md`
+ * The agent's own notes vault (pop-agent.spec §11): plain markdown under
+ * `POP_AGENT_DATA_DIR/notes/`, Obsidian-compatible by being nothing but `.md`
  * files. Every path goes through the {@link NoteJail}, so a tool can never
  * read or write outside the vault. Reads are capped; content the tools return
  * is the caller's to sanitize (a note can hold text copied from anywhere).

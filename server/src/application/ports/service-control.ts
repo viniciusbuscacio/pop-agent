@@ -1,5 +1,5 @@
 /**
- * The danger-zone switch for the service Popy runs as (LOTE 6).
+ * The danger-zone switch for the service Pop Agent runs as (LOTE 6).
  *
  * A port, not a direct `child_process` call, because the blast radius of a
  * wrong implementation is the production service itself: tests and

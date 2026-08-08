@@ -6,7 +6,7 @@ import { create } from 'zustand';
  * reasoning the desktop shows. Default on -- hiding is the opt-in.
  */
 
-const STORAGE_KEY = 'popy.showThinking';
+const STORAGE_KEY = 'pop-agent.showThinking';
 
 function storedShow(): boolean {
   try {

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatDTO, MessageDTO, StreamEvent } from '@popy/shared';
+import type { ChatDTO, MessageDTO, StreamEvent } from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
 
@@ -120,7 +120,7 @@ describe('chat collection', () => {
     expect((await api(`/v1/chats/${chat.id}/messages`)).status).toBe(404);
   });
 
-  it('takes the chat\'s workspace attachments with it (popy.spec §6)', async () => {
+  it('takes the chat\'s workspace attachments with it (pop-agent.spec §6)', async () => {
     const chat = await newChat();
     const attachments = join(fixture.workspace, 'attachments', chat.id);
     mkdirSync(attachments, { recursive: true });

@@ -3,11 +3,11 @@
  *
  * "Keep me signed in" is the whole difference: checked, the token goes to
  * localStorage and survives closing the tab; unchecked, sessionStorage drops
- * it with the tab. The rest of the app just asks for `token` (popy.spec §9).
+ * it with the tab. The rest of the app just asks for `token` (pop-agent.spec §9).
  */
 
-const TOKEN_KEY = 'popy.token';
-const PERSIST_KEY = 'popy.persist';
+const TOKEN_KEY = 'pop-agent.token';
+const PERSIST_KEY = 'pop-agent.persist';
 
 function persistent(): boolean {
   try {
@@ -44,7 +44,7 @@ export const session = {
     store()?.setItem(TOKEN_KEY, token);
   },
 
-  /** A renewed token from `x-popy-token`: same storage, new value. */
+  /** A renewed token from `x-pop-agent-token`: same storage, new value. */
   refresh(token: string): void {
     store()?.setItem(TOKEN_KEY, token);
   },

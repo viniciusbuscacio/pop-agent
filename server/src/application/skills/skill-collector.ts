@@ -3,7 +3,7 @@ import type { SkillUsageRepo } from '../ports/skill-usage-repo.js';
 import type { SkillArchiveRepo, SkillsRepo } from '../ports/skills-repo.js';
 
 /**
- * The archiving collector (popy.spec §8, auto-skill fase c). The distiller
+ * The archiving collector (pop-agent.spec §8, auto-skill fase c). The distiller
  * writes; this is the only thing that takes away, and it does not delete.
  *
  * **A cap, not an expiry.** The rule is "at most N auto-skills", and when there
@@ -22,7 +22,7 @@ import type { SkillArchiveRepo, SkillsRepo } from '../ports/skills-repo.js';
  * **Only `auto` skills.** A `user` skill is the user's, and an auto skill that
  * was edited became `user` by that act (§8): the promotion is what takes it out
  * of this job's reach forever. Built-ins are the app's. So the collector can
- * only ever retire something Popy itself wrote and the user never touched.
+ * only ever retire something Pop Agent itself wrote and the user never touched.
  *
  * **Pending skills are left alone.** One waiting for approval has had no chance
  * to be used, so by this job's own metric it always looks like the worst skill
@@ -75,7 +75,7 @@ export class SkillCollector implements MaintenanceJob {
         // Housekeeping never takes the scheduler with it, and one skill that
         // will not move is not a reason to leave the rest over the cap.
         this.deps.onJournal?.(
-          `popy collector: ${skill.slug} could not be archived (${
+          `pop collector: ${skill.slug} could not be archived (${
             error instanceof Error ? error.message : 'unknown'
           })`,
         );
@@ -84,7 +84,7 @@ export class SkillCollector implements MaintenanceJob {
 
     if (retired.length > 0) {
       this.deps.onJournal?.(
-        `popy collector: archived ${String(retired.length)} of ${String(managed.length)} auto-skills (cap ${String(cap)}): ${retired.join(' ')}`,
+        `pop collector: archived ${String(retired.length)} of ${String(managed.length)} auto-skills (cap ${String(cap)}): ${retired.join(' ')}`,
       );
     }
   }

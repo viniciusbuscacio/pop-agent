@@ -9,7 +9,7 @@ import type { Clock } from '../ports/clock.js';
 import type { TaskRepo } from '../ports/task-repo.js';
 
 /**
- * Everything about a background task that is not running it (popy.spec §21):
+ * Everything about a background task that is not running it (pop-agent.spec §21):
  * creating, editing, switching on and off, deleting. The one rule it owns is
  * that a schedule and a `next_run_at` are never allowed to disagree -- any
  * change to the schedule, and any switch back on, recomputes when the task is

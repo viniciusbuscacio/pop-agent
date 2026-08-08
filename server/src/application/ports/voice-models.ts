@@ -1,5 +1,5 @@
 /**
- * The whisper models as the routes see them (popy.spec §14). The store on disk
+ * The whisper models as the routes see them (pop-agent.spec §14). The store on disk
  * is one adapter; the interface layer just lists and installs.
  */
 export interface VoiceModelStatus {

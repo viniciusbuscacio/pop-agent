@@ -18,7 +18,7 @@ import {
 import type { ProviderCooldown } from './provider-cooldown.js';
 
 /**
- * The providers as the rest of the app sees them (popy.spec §15): where the
+ * The providers as the rest of the app sees them (pop-agent.spec §15): where the
  * keys live, whether they work, and what models they offer. Provider is data,
  * not a class -- everything here is driven by PROVIDER_DEFINITIONS.
  *
@@ -30,7 +30,7 @@ import type { ProviderCooldown } from './provider-cooldown.js';
 
 const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** The unlimited-customs registry (popy.spec §15): pure data, never a key. */
+/** The unlimited-customs registry (pop-agent.spec §15): pure data, never a key. */
 const CUSTOM_REGISTRY_KEY = 'provider.custom.registry';
 /** The single-slot era's config and id; read only by the boot migration. */
 const LEGACY_CUSTOM_CONFIG_KEY = 'provider.custom.config';
@@ -39,7 +39,7 @@ const LEGACY_CUSTOM_ID = 'custom';
 const CUSTOM_ALIAS_KEY = 'provider.custom.alias';
 
 /**
- * The priority list, #1 first (popy.spec §15, fase 2). The list IS the
+ * The priority list, #1 first (pop-agent.spec §15, fase 2). The list IS the
  * failover chain and its head IS the global default: one lever, so the
  * numbered list can never disagree with what a new chat actually uses.
  */
@@ -62,8 +62,8 @@ export interface ProviderStatus {
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
   /**
-   * The model this provider uses for Popy's own background work -- titles,
-   * summaries, transcript cleanup (popy.spec §15). Equal to `defaultModel`
+   * The model this provider uses for Pop Agent's own background work -- titles,
+   * summaries, transcript cleanup (pop-agent.spec §15). Equal to `defaultModel`
    * until the user picks something cheaper.
    */
   serviceModel: string;
@@ -86,7 +86,7 @@ interface CatalogCache {
   models: ModelInfo[];
 }
 
-/** The pair that identifies a model (popy.spec §15). */
+/** The pair that identifies a model (pop-agent.spec §15). */
 export interface ModelRef {
   providerId: string;
   modelId: string;
@@ -104,7 +104,7 @@ export interface ProviderServiceDeps {
   /** The plain-HTTP face of each BUILTIN provider, by id. */
   gateways: Record<string, ProviderGateway>;
   /**
-   * Builds the gateway for a custom instance's endpoint (popy.spec §15).
+   * Builds the gateway for a custom instance's endpoint (pop-agent.spec §15).
    * Called per use with the instance's normalized base URL.
    */
   customGateway?: (baseURL: string) => ProviderGateway;
@@ -122,7 +122,7 @@ export interface ProviderServiceDeps {
    */
   engineModels: (providerId: string) => Promise<ModelInfo[]>;
   /**
-   * Whether the engine holds an OAuth credential for a provider (popy.spec
+   * Whether the engine holds an OAuth credential for a provider (pop-agent.spec
    * §15, fase 1.5). The credential lives in pi's own store; this is the only
    * question the service ever asks about it.
    */
@@ -132,7 +132,7 @@ export interface ProviderServiceDeps {
   /** Drops the engine's stored OAuth credential (disconnect). */
   engineLogout: (providerId: string) => Promise<void>;
   /**
-   * The advisory failover cooldown (popy.spec §15, fase 2): the chain skips
+   * The advisory failover cooldown (pop-agent.spec §15, fase 2): the chain skips
    * penalized providers, and saving a key forgives its provider.
    */
   cooldown?: ProviderCooldown;
@@ -221,7 +221,7 @@ export class ProviderService {
     this.deps.secrets.delete(keySecretName(providerId));
   }
 
-  /** Drops an oauth provider's subscription credential (popy.spec §15). */
+  /** Drops an oauth provider's subscription credential (pop-agent.spec §15). */
   async disconnect(providerId: string): Promise<void> {
     if (providerDefinition(providerId)?.authType !== 'oauth') return;
     await this.deps.engineLogout(providerId);
@@ -324,7 +324,7 @@ export class ProviderService {
   }
 
   /**
-   * Creates a custom instance (popy.spec §15): an id nothing else carries --
+   * Creates a custom instance (pop-agent.spec §15): an id nothing else carries --
    * `custom-` + 5 random hex bytes, re-rolled on the unlikely collision --
    * and pure data beside it. The key arrives later through the ordinary
    * per-provider key route, sealed under this id.
@@ -410,7 +410,7 @@ export class ProviderService {
   }
 
   /**
-   * One-time boot migration from the single-slot era (popy.spec §15): a
+   * One-time boot migration from the single-slot era (pop-agent.spec §15): a
    * legacy `provider.custom.config` and/or `provider.custom.apiKey` becomes
    * one registry instance, key and all, and the legacy entries are removed.
    * The instance's id is remembered as an alias, so a chat override still
@@ -461,10 +461,10 @@ export class ProviderService {
   }
 
   /**
-   * The Service Model of one provider (popy.spec §15, corrected 07/08).
+   * The Service Model of one provider (pop-agent.spec §15, corrected 07/08).
    *
-   * Popy runs two kinds of call: the Chat Model, which the user talks to, and
-   * the Service Model, which does Popy's own work -- naming a conversation,
+   * Pop Agent runs two kinds of call: the Chat Model, which the user talks to, and
+   * the Service Model, which does Pop Agent's own work -- naming a conversation,
    * summarizing it, tidying a transcript. They were one global setting, which
    * was mono-provider thinking: the stored value was a model id, and a model id
    * only means something inside one provider's catalog. An install whose
@@ -535,7 +535,7 @@ export class ProviderService {
   }
 
   /**
-   * Runs one of Popy's own completions over that chain (popy.spec §15 fase 2,
+   * Runs one of Pop Agent's own completions over that chain (pop-agent.spec §15 fase 2,
    * confirmed 07/08). A service task is not special: when the provider it
    * inherited refuses, it moves down the same list a chat run would.
    *
@@ -593,7 +593,7 @@ export class ProviderService {
   }
 
   /**
-   * Which pair should actually run (popy.spec §15): a chat override wins when
+   * Which pair should actually run (pop-agent.spec §15): a chat override wins when
    * it is usable; otherwise the global default; when the default's key is
    * gone the next configured provider is elected -- the slot is never empty.
    * With nothing configured at all the default pair is answered anyway, and
@@ -610,7 +610,7 @@ export class ProviderService {
   }
 
   /**
-   * The failover chain for a run (popy.spec §15, fase 2): every usable pair
+   * The failover chain for a run (pop-agent.spec §15, fase 2): every usable pair
    * in resolution order -- override first, then the global default, then the
    * remaining definitions -- one entry per provider. Penalized providers are
    * filtered out, unless that would empty the chain (the cooldown is

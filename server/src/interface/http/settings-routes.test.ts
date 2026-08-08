@@ -128,7 +128,7 @@ describe('GET /v1/about', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      popyVersion: expect.any(String),
+      popAgentVersion: expect.any(String),
       nodeVersion: expect.any(String),
       piVersion: expect.any(String),
     });

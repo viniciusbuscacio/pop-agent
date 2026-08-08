@@ -2,11 +2,11 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProviderStatusDTO } from '@popy/shared';
+import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { OAuthSection } from './oauth-section';
 
 /**
- * The sign-in card outlives the page (popy.spec §15, fase 1.5). Signing in
+ * The sign-in card outlives the page (pop-agent.spec §15, fase 1.5). Signing in
  * means leaving for the provider and coming back, and on the way back the
  * page is frequently a fresh mount: a new tab, a reload, or the PWA resumed
  * from the background. If the card only knew about flows it had started
@@ -168,7 +168,7 @@ describe('OAuthSection', () => {
     expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
-  it('offers the code method first, in Popy words, not pi defaults', async () => {
+  it('offers the code method first, in Pop Agent words, not pi defaults', async () => {
     oauthState.mockResolvedValue(CHOOSING_METHOD);
 
     render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);

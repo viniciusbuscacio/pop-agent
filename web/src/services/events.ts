@@ -1,8 +1,8 @@
-import type { EventTicketResponse, StreamEvent } from '@popy/shared';
+import type { EventTicketResponse, StreamEvent } from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 /**
- * The single EventSource (popy.spec §14). Components never see it: they read
+ * The single EventSource (pop-agent.spec §14). Components never see it: they read
  * the store, which this file feeds.
  *
  * Connecting takes two steps because EventSource cannot send a header — ask

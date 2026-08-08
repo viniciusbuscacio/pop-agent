@@ -51,7 +51,7 @@ export function buildLocalTools(
     label: `${definition.label} (${machine.hostname})`,
     // The description carries the whole weight of the choice: it is the only
     // thing telling the model which machine this touches.
-    description: `${what} on ${where} -- the machine the user is typing on, NOT the Popy server. Use this for files and commands that live there. The unprefixed tools stay on the server.`,
+    description: `${what} on ${where} -- the machine the user is typing on, NOT the Pop Agent server. Use this for files and commands that live there. The unprefixed tools stay on the server.`,
   });
 
   return [

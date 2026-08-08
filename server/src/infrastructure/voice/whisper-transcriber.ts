@@ -15,8 +15,8 @@ import { randomBase62, randomFileName } from '../../domain/ids.js';
  * words. Everything runs on the server's own CPU -- no tokens, no network.
  *
  * Both binaries and the GGML model are found by configuration, not bundled:
- * `POPY_WHISPER_CLI`, `POPY_FFMPEG` (default: the names, resolved by PATH)
- * and `POPY_WHISPER_MODEL` (path to a ggml-*.bin). A missing piece fails with
+ * `POP_AGENT_WHISPER_CLI`, `POP_AGENT_FFMPEG` (default: the names, resolved by PATH)
+ * and `POP_AGENT_WHISPER_MODEL` (path to a ggml-*.bin). A missing piece fails with
  * the words to fix it.
  */
 
@@ -31,7 +31,7 @@ export interface WhisperOptions {
   ffmpeg: string;
   /**
    * Resolves the GGML model to use, downloading it if needed. Async because a
-   * model may not be on disk yet (popy.spec §14).
+   * model may not be on disk yet (pop-agent.spec §14).
    */
   resolveModel: () => Promise<string>;
 }
@@ -51,9 +51,9 @@ export class WhisperTranscriber implements Transcriber {
       throw new TranscriberError('No whisper model is available.');
     }
 
-    const dir = mkdtempSync(join(tmpdir(), 'popy-voice-'));
+    const dir = mkdtempSync(join(tmpdir(), 'pop-voice-'));
     try {
-      // Internal files get the id convention (popy.spec §6): audio_<11>.wav.
+      // Internal files get the id convention (pop-agent.spec §6): audio_<11>.wav.
       // Distinct basenames, so a recording that is already .wav does not
       // collide with ffmpeg's output.
       const input = join(dir, randomFileName('audio', safeExtension(job.format)));
@@ -65,14 +65,14 @@ export class WhisperTranscriber implements Transcriber {
       await run(
         this.options.ffmpeg,
         ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav],
-        'ffmpeg is required for voice transcription: install it (apt install ffmpeg) or set POPY_FFMPEG.',
+        'ffmpeg is required for voice transcription: install it (apt install ffmpeg) or set POP_AGENT_FFMPEG.',
       );
 
       // -l auto: the language is whatever was spoken. -nt: no timestamps.
       await run(
         this.options.whisperCli,
         ['-m', model, '-f', wav, '-l', 'auto', '-otxt', '-of', transcriptBase, '-nt'],
-        'whisper-cli is not installed: build whisper.cpp or set POPY_WHISPER_CLI.',
+        'whisper-cli is not installed: build whisper.cpp or set POP_AGENT_WHISPER_CLI.',
       );
 
       return normalize(readFileSync(`${transcriptBase}.txt`, 'utf8'));

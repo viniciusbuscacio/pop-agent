@@ -390,7 +390,7 @@ describe('SkillDistiller', () => {
     // Measured, not supposed: over the real vault `brainstorm` and `planning`
     // score 0.936 while two copies of one procedure score 0.895, so cosine
     // alone cannot separate the two questions. What did happen was a good
-    // "Restart Popy service" skill filed as a revision of `self-change` at
+    // "Restart Pop Agent service" skill filed as a revision of `self-change` at
     // 0.9017 -- accepted it would have replaced an unrelated skill, refused it
     // hid the new one in a table. `TwinEmbedder` puts this candidate at cosine
     // 1.0, the worst case, and it must still land as its own skill.
@@ -399,8 +399,8 @@ describe('SkillDistiller', () => {
         {
           slug: 'self-change',
           name: 'Self-change',
-          description: "Change Popy's own code and leave the repo clean",
-          whenToUse: 'whenever Popy edits its own source',
+          description: "Change Pop Agent's own code and leave the repo clean",
+          whenToUse: 'whenever Pop Agent edits its own source',
           body: 'Old.',
           source: 'auto',
         },
@@ -410,7 +410,7 @@ describe('SkillDistiller', () => {
         {
           slug: 'self-change',
           signature:
-            "Self-change. Change Popy's own code and leave the repo clean. whenever Popy edits its own source",
+            "Self-change. Change Pop Agent's own code and leave the repo clean. whenever Pop Agent edits its own source",
           vector: Float32Array.from([1, 0]),
         },
       ],
@@ -574,7 +574,7 @@ describe('SkillDistiller', () => {
 describe('SkillDistiller and what counts as external', () => {
   it('does not treat the user talking about prompts as an attack', () => {
     // The 1.62 correction. `sanitize` flags a bare "system prompt", which is
-    // the vocabulary of every conversation about how Popy works -- so reading
+    // the vocabulary of every conversation about how Pop Agent works -- so reading
     // the user's own messages through it silently excluded exactly the
     // conversations most worth distilling, and the watermark hid the loss.
     const world = harness({

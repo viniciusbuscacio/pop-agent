@@ -1,4 +1,4 @@
--- The background distiller's memory (popy.spec §8, auto-skill fase c).
+-- The background distiller's memory (pop-agent.spec §8, auto-skill fase c).
 --
 -- `skill_distillation` is a watermark per conversation, not a "done" flag. A
 -- conversation the distiller has read and that the user then continues has to

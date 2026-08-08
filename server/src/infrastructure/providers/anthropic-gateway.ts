@@ -6,7 +6,7 @@ import {
 } from '../../application/ports/provider-gateway.js';
 
 /**
- * Anthropic over plain HTTP (popy.spec §15). The one vendor quirk phase 1
+ * Anthropic over plain HTTP (pop-agent.spec §15). The one vendor quirk phase 1
  * carries: a different auth header, a version header, and a different
  * catalog/completion shape. A point `if` in the wiring picks this gateway;
  * nothing else in the app knows the difference.

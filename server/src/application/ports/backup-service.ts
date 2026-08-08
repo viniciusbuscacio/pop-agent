@@ -1,6 +1,6 @@
 /**
- * Snapshots of the data directory (popy.spec §16). A backup is a single
- * tar.gz of everything under POPY_DATA_DIR except the secret key file -- so a
+ * Snapshots of the data directory (pop-agent.spec §16). A backup is a single
+ * tar.gz of everything under POP_AGENT_DATA_DIR except the secret key file -- so a
  * leaked backup leaks no keys, and restoring on a new machine means re-entering
  * the provider key. Restore replaces the live data and needs a restart to take.
  */

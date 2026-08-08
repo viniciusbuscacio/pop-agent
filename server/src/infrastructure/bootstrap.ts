@@ -67,14 +67,14 @@ export interface AppContext {
   skillRevisions: SkillRevisionsRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
-  /** What the database can say about its own weight (popy.spec §14). */
+  /** What the database can say about its own weight (pop-agent.spec §14). */
   storage: StorageRepo;
-  /** Background tasks (popy.spec §21). */
+  /** Background tasks (pop-agent.spec §21). */
   tasks: TaskRepo;
   mcp: McpRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
-  /** The health endpoint's cheap liveness query (popy.spec §13). */
+  /** The health endpoint's cheap liveness query (pop-agent.spec §13). */
   pingDb: () => void;
 }
 
@@ -87,8 +87,8 @@ export function bootstrap(): AppContext {
   // Files as a plain folder (spec 1.58): if the pre-migration file still has
   // the artifact catalog, read it NOW -- migration 027 drops those tables the
   // moment openDatabase runs -- and land it on disk right after.
-  const legacy = readLegacyCatalog(join(dataDir, 'popy.db'), resolveArtifactsDir(dataDir));
-  const db = openDatabase(join(dataDir, 'popy.db'));
+  const legacy = readLegacyCatalog(join(dataDir, 'pop-agent.db'), resolveArtifactsDir(dataDir));
+  const db = openDatabase(join(dataDir, 'pop-agent.db'));
   const key = loadOrCreateSecretKey(join(dataDir, 'secret.key'));
   if (legacy !== undefined) {
     writeLegacyFiles(legacy, ensureFilesDir(dataDir), new SqliteFileProvenanceRepo(db), (line) =>

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WorkspaceSweeper } from './workspace-sweeper.js';
 
 /**
- * The orphan sweep (popy.spec §21). Most of what this asserts is what the
+ * The orphan sweep (pop-agent.spec §21). Most of what this asserts is what the
  * sweep must NOT touch: a conservative job that deleted one file too many
  * would be worse than no job at all.
  */
@@ -42,7 +42,7 @@ function sweeper(live: string[], scratchMaxAgeMs = 30 * DAY_MS): WorkspaceSweepe
 }
 
 beforeEach(() => {
-  workspace = mkdtempSync(join(tmpdir(), 'popy-sweep-'));
+  workspace = mkdtempSync(join(tmpdir(), 'pop-sweep-'));
   journal = [];
 });
 
@@ -130,12 +130,12 @@ describe('the job', () => {
     job.run();
 
     expect(journal).toHaveLength(1);
-    expect(journal[0]).toBe('popy sweep: orphan attachment folders=1 scratch files=1');
+    expect(journal[0]).toBe('pop sweep: orphan attachment folders=1 scratch files=1');
   });
 
   it('sweeps nothing, loudly, when there is nothing to sweep', () => {
     sweeper([]).run();
 
-    expect(journal).toEqual(['popy sweep: orphan attachment folders=0 scratch files=0']);
+    expect(journal).toEqual(['pop sweep: orphan attachment folders=0 scratch files=0']);
   });
 });

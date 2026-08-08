@@ -4,9 +4,9 @@ import os from 'node:os';
 import type { Versions } from './versions.js';
 
 /**
- * Settings → Server (LOTE 6): a read-only snapshot of the machine Popy lives
+ * Settings → Server (LOTE 6): a read-only snapshot of the machine Pop Agent lives
  * on. Sources are the `os` module, `statfs` on the data directory's
- * partition, and two sizes measured on disk (popy.db, workspace).
+ * partition, and two sizes measured on disk (pop-agent.db, workspace).
  *
  * Everything is best-effort: a field that fails to resolve degrades to
  * `null`/`'unknown'` rather than failing the whole screen, because the
@@ -46,9 +46,9 @@ export function readServerInfo(deps: ServerInfoDeps) {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     serverTime: new Date().toISOString(),
     nodeVersion: process.version,
-    popyVersion: deps.versions.popyVersion,
+    popAgentVersion: deps.versions.popAgentVersion,
     commit: gitCommit(),
-    dbBytes: fileSize(`${deps.dataDir}/popy.db`),
+    dbBytes: fileSize(`${deps.dataDir}/pop-agent.db`),
     workspaceBytes: dirSize(deps.workspace),
     dataDir: deps.dataDir,
     workspace: deps.workspace,

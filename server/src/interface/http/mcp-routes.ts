@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { McpServerDTO, McpCapabilityDTO } from '@popy/shared';
+import type { McpServerDTO, McpCapabilityDTO } from '@pop-agent/shared';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import { McpService } from '../../application/mcp/mcp-service.js';

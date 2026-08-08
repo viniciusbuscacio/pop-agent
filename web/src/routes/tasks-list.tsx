@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { TaskDTO } from '@popy/shared';
+import type { TaskDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { shortDateTime } from '../lib/time';
@@ -8,7 +8,7 @@ import { useTasksStore } from '../store/tasks';
 import { Button } from '../ui/controls';
 
 /**
- * The background-task list (popy.spec §21). It lives in the sidebar for the
+ * The background-task list (pop-agent.spec §21). It lives in the sidebar for the
  * same reason the conversation list does: on a phone the list *is* the screen,
  * and creating or editing one is a route change to a full-screen form -- never
  * a drawer (§14).

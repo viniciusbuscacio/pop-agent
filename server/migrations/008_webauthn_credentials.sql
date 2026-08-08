@@ -1,4 +1,4 @@
--- Passkeys / WebAuthn credentials (popy.spec §9).
+-- Passkeys / WebAuthn credentials (pop-agent.spec §9).
 --
 -- One row per registered authenticator (a phone's Face ID, a security key).
 -- The public key verifies each assertion; the counter guards against a cloned

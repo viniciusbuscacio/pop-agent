@@ -4,7 +4,7 @@ import type { Task } from '../../domain/tasks/task.js';
 import { envelope, sanitize } from '../../domain/safety/sanitize.js';
 
 /**
- * Lets the agent see the scheduled tasks Popy runs on its behalf.
+ * Lets the agent see the scheduled tasks Pop Agent runs on its behalf.
  *
  * Born from a real exchange (Vinicius, 05/08): asked "e a sua task de
  * melhorias?", the agent answered that it had no access to any task list --
@@ -52,10 +52,10 @@ export function buildTaskTools(
     name: 'list_scheduled_tasks',
     label: 'List scheduled tasks',
     description:
-      'Lists the scheduled tasks Popy runs automatically for the user: title, schedule, whether ' +
+      'Lists the scheduled tasks Pop Agent runs automatically for the user: title, schedule, whether ' +
       'enabled, when the next run is due, and the prompt each run receives. Use this whenever the ' +
       'user mentions "your task", "a tarefa agendada", or asks what runs automatically.',
-    promptSnippet: 'list_scheduled_tasks() — the tasks Popy runs for the user on a schedule',
+    promptSnippet: 'list_scheduled_tasks() — the tasks Pop Agent runs for the user on a schedule',
     parameters: Type.Object({}),
     execute: () => {
       const all = tasks();

@@ -1,8 +1,8 @@
 /**
  * What cosine and vocabulary actually separate "the same skill again" from
- * "a different skill" (popy.spec §8). The distiller's dedup bars come from this
+ * "a different skill" (pop-agent.spec §8). The distiller's dedup bars come from this
  * measurement; before it they were guessed, and the guess filed a good
- * "Restart Popy service" skill as a revision of `self-change` at 0.9017.
+ * "Restart Pop Agent service" skill as a revision of `self-change` at 0.9017.
  *
  * Two labelled sets, both real:
  *
@@ -30,7 +30,7 @@ import { vocabularyOverlap } from '../server/src/domain/skills/skill-router.js';
 import { TransformersEmbedder } from '../server/src/infrastructure/embeddings/transformers-embedder.js';
 
 const HOME = process.env['HOME'] ?? '.';
-const DATA_DIR = process.env['POPY_DATA_DIR'] ?? join(HOME, '.popy');
+const DATA_DIR = process.env['POP_AGENT_DATA_DIR'] ?? join(HOME, '.pop-agent');
 
 /** Nine re-distillations of one procedure, verbatim from the vault they filled. */
 const SAME_SKILL: string[] = [

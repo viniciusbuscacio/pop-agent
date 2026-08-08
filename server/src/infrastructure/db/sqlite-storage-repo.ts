@@ -6,7 +6,7 @@ import type {
 import type { Db } from './types.js';
 
 /**
- * SQLite adapter for {@link StorageRepo} (popy.spec §14).
+ * SQLite adapter for {@link StorageRepo} (pop-agent.spec §14).
  *
  * The index line is measured with `length()` over the blobs rather than
  * guessed from a row count: `length()` on a BLOB is the byte count, which is

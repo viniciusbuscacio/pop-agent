@@ -19,9 +19,9 @@ import {
 import { DEFAULT_SKILLS } from './default-skills.js';
 
 /**
- * Where skills live on disk (popy.spec §8): one markdown file per skill under
- * `POPY_DATA_DIR/skills/`, each with a small YAML-ish front matter (name,
- * description, whenToUse) and the body below. Popy's own skills are seeded on
+ * Where skills live on disk (pop-agent.spec §8): one markdown file per skill under
+ * `POP_AGENT_DATA_DIR/skills/`, each with a small YAML-ish front matter (name,
+ * description, whenToUse) and the body below. Pop Agent's own skills are seeded on
  * first boot and marked built-in; the user's are just more files. The Skill
  * Router reads `all()` and picks the relevant few per turn.
  *
@@ -46,7 +46,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
 export const AUTO_DIR = 'auto';
 
 /**
- * Where the collector puts what it retires (popy.spec §8). A reserved name, so
+ * Where the collector puts what it retires (pop-agent.spec §8). A reserved name, so
  * the scanner walks past it: a skill in here is out of the router but still on
  * disk, which is the whole point -- the policy is a cap with archiving, never a
  * delete. A seasonal procedure (the once-a-year tax routine) would be destroyed
@@ -55,7 +55,7 @@ export const AUTO_DIR = 'auto';
  */
 export const ARCHIVE_DIR = '_archive';
 
-/** The defaults that ship pinned (popy.spec §8), pinned even where the seeded
+/** The defaults that ship pinned (pop-agent.spec §8), pinned even where the seeded
  * file predates the flag -- no migration, the code is the source. */
 const PINNED_DEFAULTS = new Set(
   DEFAULT_SKILLS.filter((skill) => skill.pinned === true).map((skill) => skill.slug),
@@ -128,7 +128,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   }
 
   /**
-   * Accepts a pending skill (popy.spec §8). `source` is passed back explicitly
+   * Accepts a pending skill (pop-agent.spec §8). `source` is passed back explicitly
    * so the auto -> user promotion in `write` does not fire: the user said yes,
    * which is not the same as having edited it, and an auto skill that was
    * merely approved is still the collector's to manage.
@@ -162,7 +162,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   }
 
   /**
-   * Moves a skill out of the router without destroying it (popy.spec §8): the
+   * Moves a skill out of the router without destroying it (pop-agent.spec §8): the
    * collector's only verb. It lands in `_archive/<slug>/SKILL.md` whatever
    * shape it had, because the archive is a resting place and not a working
    * layout -- and coming back out is then one rule, not two.

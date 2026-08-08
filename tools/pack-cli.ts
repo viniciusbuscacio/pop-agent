@@ -3,11 +3,11 @@
  * (docs/cli.md, Distribution).
  *
  * The rule, stated generally so it survives the CLI growing into `shared`:
- * **every `@popy/*` import is bundled into `dist/`, and the public
+ * **every `@pop-agent/*` import is bundled into `dist/`, and the public
  * dependencies stay external.** `npm pack` alone cannot produce an
  * installable tarball, and the failure is not subtle:
  *
- *     npm error 404 '@popy/shared@*' is not in this registry
+ *     npm error 404 '@pop-agent/shared@*' is not in this registry
  *
  * A workspace dependency has no meaning outside the monorepo. Inlining the
  * three string constants the CLI uses today would also work, and would have
@@ -79,8 +79,8 @@ async function main(): Promise<void> {
     external,
     banner: {
       js: [
-        "import { createRequire as __popyRequire } from 'node:module';",
-        'const require = __popyRequire(import.meta.url);',
+        "import { createRequire as __popAgentRequire } from 'node:module';",
+        'const require = __popAgentRequire(import.meta.url);',
       ].join('\n'),
     },
     metafile: true,
@@ -91,9 +91,9 @@ async function main(): Promise<void> {
   // the exact failure this script exists to prevent, and it would only show
   // up on someone else's machine at install time.
   const leaked = Object.keys(result.metafile.inputs).filter((input) =>
-    input.includes('node_modules/@popy/'),
+    input.includes('node_modules/@pop-agent/'),
   );
-  if (leaked.length > 0) throw new Error(`@popy/* left unbundled: ${leaked.join(', ')}`);
+  if (leaked.length > 0) throw new Error(`@pop-agent/* left unbundled: ${leaked.join(', ')}`);
 
   // Exactly one shebang, on the first line, whatever esbuild left behind.
   const bundlePath = join(out, 'dist', 'main.js');
@@ -104,13 +104,13 @@ async function main(): Promise<void> {
     join(out, 'package.json'),
     `${JSON.stringify(
       {
-        name: 'popy',
+        name: 'pop-agent',
         version,
-        description: 'The Popy terminal client',
+        description: 'The Pop Agent terminal client',
         license: 'MIT',
         type: 'module',
         engines: { node: '>=22.19.0' },
-        bin: { popy: './dist/main.js' },
+        bin: { pop: './dist/main.js' },
         files: ['dist'],
         dependencies,
       },
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
 
   execFileSync('npm', ['pack', '--pack-destination', out], { cwd: out, stdio: 'inherit' });
 
-  // npm names it popy-X.Y.Z.tgz; the served name is cli-X.Y.Z.tgz, because
+  // npm names it pop-agent-X.Y.Z.tgz; the served name is cli-X.Y.Z.tgz, because
   // npm caches by URL and the version has to be in the path.
   const packed = readdirSync(out).find((name) => name.endsWith('.tgz'));
   if (packed === undefined) throw new Error('npm pack produced no tarball');

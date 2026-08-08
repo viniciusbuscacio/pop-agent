@@ -13,7 +13,7 @@ import { PiEngineError, type PiEngine, type PiOpenOptions, type PiSession } from
  * The events below are shaped exactly as the SDK emits them -- typed as
  * `AgentSessionEvent`, so a pi release that changes the shape fails to compile
  * here instead of failing quietly in production. What is being tested is
- * everything Popy adds on top: the mapping, the snapshot-to-delta diffing of
+ * everything Pop Agent adds on top: the mapping, the snapshot-to-delta diffing of
  * tool output, the verdict on a run that pi retried, the session cache.
  */
 
@@ -568,7 +568,7 @@ describe('attachments', () => {
     const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const workspace = mkdtempSync(join(tmpdir(), 'popy-bridge-test-'));
+    const workspace = mkdtempSync(join(tmpdir(), 'pop-bridge-test-'));
 
     try {
       bridge = new PiAgentBridge({ chats, engine, workspace });
@@ -658,7 +658,7 @@ describe('attachments', () => {
   });
 });
 
-describe('typing provider failures for failover (popy.spec §15, fase 2)', () => {
+describe('typing provider failures for failover (pop-agent.spec §15, fase 2)', () => {
   it('reads the status from the code-shaped places providers put it', () => {
     expect(extractHttpStatus('402 {"error":{"message":"Insufficient credits"}}')).toBe(402);
     expect(extractHttpStatus('Provider returned error, status code: 429')).toBe(429);

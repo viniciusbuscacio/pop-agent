@@ -3,7 +3,7 @@ import type { ServiceControl } from '../../application/ports/service-control.js'
 
 /**
  * Settings → Server danger zone (LOTE 6): restart/stop of the systemd unit
- * Popy runs as.
+ * Pop Agent runs as.
  *
  * The command is scheduled, not run inline: the HTTP answer must leave the
  * process before systemd kills it, or the client sees a dropped connection
@@ -42,13 +42,13 @@ export function createSystemdControl(
 }
 
 /**
- * The control a disposable instance wires (POPY_SERVICE_CONTROL=fake): the
+ * The control a disposable instance wires (POP_AGENT_SERVICE_CONTROL=fake): the
  * danger zone can be clicked end-to-end and nothing on the host is touched.
  * A validation run must never be able to restart the real service.
  */
 export function createFakeServiceControl(log: (line: string) => void = console.warn): ServiceControl {
   return {
-    restart: () => log('popy service-control(fake): restart requested'),
-    stop: () => log('popy service-control(fake): stop requested'),
+    restart: () => log('pop service-control(fake): restart requested'),
+    stop: () => log('pop service-control(fake): stop requested'),
   };
 }

@@ -6,7 +6,7 @@ import type { FileProvenanceRepo } from '../../application/ports/file-provenance
 
 /**
  * The one-time walk from the artifact catalog to the plain Files folder
- * (popy.spec §14, spec 1.58 migration note).
+ * (pop-agent.spec §14, spec 1.58 migration note).
  *
  * Reading happens BEFORE the migrations run -- migration 027 drops the very
  * tables this reads -- so bootstrap calls {@link readLegacyCatalog} on the
@@ -142,7 +142,7 @@ export function writeLegacyFiles(
   // The old store's job is done; leaving it would double every byte in the
   // next backup for no reader.
   rmSync(catalog.artifactsDir, { recursive: true, force: true });
-  onJournal?.(`popy files migration: ${String(landed)} files moved out of the artifact catalog`);
+  onJournal?.(`pop files migration: ${String(landed)} files moved out of the artifact catalog`);
   return landed;
 }
 

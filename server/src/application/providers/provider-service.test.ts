@@ -450,7 +450,7 @@ describe('subscription (oauth) providers', () => {
 });
 
 /**
- * The priority list (popy.spec §15, fase 2). The list the user edits IS the
+ * The priority list (pop-agent.spec §15, fase 2). The list the user edits IS the
  * failover order and its head IS the global default -- aw's lesson, ported:
  * two levers for one decision let the numbered list say one thing while new
  * chats did another.
@@ -538,7 +538,7 @@ describe('the priority list', () => {
   });
 });
 
-describe('the failover chain (popy.spec §15, fase 2)', () => {
+describe('the failover chain (pop-agent.spec §15, fase 2)', () => {
   it('lists every usable provider once, default first', () => {
     service.setKey(OPENROUTER, 'sk-or');
     service.setKey('anthropic', 'sk-ant');
@@ -610,7 +610,7 @@ describe('the failover chain (popy.spec §15, fase 2)', () => {
   });
 });
 
-describe('custom provider instances (popy.spec §15)', () => {
+describe('custom provider instances (pop-agent.spec §15)', () => {
   it('creates instances with fresh custom- ids, retrying a collision', () => {
     nextCustomIds = ['aaaaaaaaaa', 'aaaaaaaaaa', 'bbbbbbbbbb'];
 
@@ -721,7 +721,7 @@ describe('custom provider instances (popy.spec §15)', () => {
   });
 });
 
-describe('migrating the single-slot custom (popy.spec §15)', () => {
+describe('migrating the single-slot custom (pop-agent.spec §15)', () => {
   it('turns the legacy config and key into one working instance', () => {
     settings.set('provider.custom.config', {
       baseURL: 'http://localhost:11434/v1',
@@ -770,7 +770,7 @@ describe('migrating the single-slot custom (popy.spec §15)', () => {
   });
 });
 
-describe('the Service Model, per provider (popy.spec §15, corrected 07/08)', () => {
+describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)', () => {
   /** Any other builtin that authenticates with a key, so a chain has two entries. */
   function otherKeyProvider(): string {
     const other = service

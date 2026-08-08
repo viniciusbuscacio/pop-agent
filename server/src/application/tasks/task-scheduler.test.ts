@@ -394,6 +394,6 @@ describe('maintenance jobs', () => {
     ]);
 
     await expect(scheduler.tick()).resolves.toBeUndefined();
-    expect(journal[0]).toContain('popy job sweep failed: disk on fire');
+    expect(journal[0]).toContain('pop job sweep failed: disk on fire');
   });
 });

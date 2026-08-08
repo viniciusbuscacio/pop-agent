@@ -2,7 +2,7 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
-import { PopyApi } from './infrastructure/api.js';
+import { PopAgentApi } from './infrastructure/api.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
 import { ask, chats, login, logout, servers, type Context, type Terminal } from './interface/commands.js';
 import { chat } from './interface/chat.js';
@@ -13,15 +13,15 @@ import { chat } from './interface/chat.js';
  * handed what it needs and is testable without any of the three.
  */
 
-const USAGE = `popy — a terminal client for your Popy
+const USAGE = `pop — a terminal client for your Pop Agent
 
-  popy                       open the interactive screen
-  popy "question"            ask, print the answer, exit
-  popy -p "question"         the same, spelled out for scripts
-  popy login <url>           sign in and remember the server
-  popy logout                forget this server's token
-  popy servers               list the servers you have signed in to
-  popy chats                 list conversations
+  pop                       open the interactive screen
+  pop "question"            ask, print the answer, exit
+  pop -p "question"         the same, spelled out for scripts
+  pop login <url>           sign in and remember the server
+  pop logout                forget this server's token
+  pop servers               list the servers you have signed in to
+  pop chats                 list conversations
 
   --server <name>            use a saved server other than "${DEFAULT_PROFILE}"
   --chat <id>                continue an existing conversation
@@ -43,7 +43,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     // Every call can hand back a fresher token; storing it here is what keeps
     // a client that runs once a week from being signed out (spec §9).
     api: (options) =>
-      new PopyApi({ ...options, onToken: (token) => profiles.refresh(profile, token) }),
+      new PopAgentApi({ ...options, onToken: (token) => profiles.refresh(profile, token) }),
   };
 
   const command = args[0];
@@ -54,7 +54,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
 
   switch (command) {
     case undefined:
-      // A bare `popy` opens the screen; `--help` is how you ask for the list.
+      // A bare `pop` opens the screen; `--help` is how you ask for the list.
       return chat(context, chatId === undefined ? {} : { chatId });
     case '--help':
     case '-h':
@@ -63,7 +63,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     case 'login': {
       const url = args[1];
       if (url === undefined) {
-        terminal.line('Which server? Run: popy login <url>');
+        terminal.line('Which server? Run: pop login <url>');
         return 1;
       }
       return login(context, { url });

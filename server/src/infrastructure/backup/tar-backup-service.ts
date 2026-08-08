@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { BackupInfo, BackupService } from '../../application/ports/backup-service.js';
 
 /**
- * Backups as tar.gz files (popy.spec §16), made and restored with the system
+ * Backups as tar.gz files (pop-agent.spec §16), made and restored with the system
  * tar. The secret key file is excluded on the way in, so a backup carries data
  * but no keys. The newest few are kept; older ones are pruned.
  *
@@ -15,7 +15,7 @@ import type { BackupInfo, BackupService } from '../../application/ports/backup-s
 
 const KEEP = 10;
 const SECRET_KEY_FILE = 'secret.key';
-const PREFIX = 'popy-backup-';
+const PREFIX = 'pop-backup-';
 
 export interface TarBackupDeps {
   dataDir: string;

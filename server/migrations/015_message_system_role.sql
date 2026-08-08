@@ -1,4 +1,4 @@
--- A failed run must leave a mark in the history (popy.spec §6): every run
+-- A failed run must leave a mark in the history (pop-agent.spec §6): every run
 -- error is persisted as a `system` message, so it survives a reload and is
 -- never erased by later turns. The original CHECK only allowed
 -- user/assistant, and SQLite cannot alter a CHECK in place -- the table is

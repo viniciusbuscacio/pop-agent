@@ -1,7 +1,7 @@
 import { apiRequest } from './api';
 
 /**
- * Web Push subscription from the browser side (popy.spec §14). Asks for
+ * Web Push subscription from the browser side (pop-agent.spec §14). Asks for
  * permission, subscribes with the push service using the server's VAPID key,
  * and registers the result. All of it needs a service worker and a secure
  * context; on iOS it needs the PWA to be installed to the home screen first.

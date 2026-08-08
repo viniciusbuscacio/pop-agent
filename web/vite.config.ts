@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 /**
  * The build writes to web/dist, which the Hono server serves directly. There
- * is no Vite dev server: Popy runs on one port (8787, fronted by HTTPS), and
+ * is no Vite dev server: Pop Agent runs on one port (8787, fronted by HTTPS), and
  * `vite build --watch` keeps that true while developing -- what gets tested is
  * exactly what production serves.
  */
@@ -20,8 +20,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'Popy',
-        short_name: 'Popy',
+        name: 'Pop Agent',
+        short_name: 'Pop Agent',
         description: 'Your own agent, on your own server.',
         display: 'standalone',
         start_url: '/',
@@ -44,7 +44,7 @@ export default defineConfig({
         // reload races activation (the press-Reload-twice bug). Safe under
         // 'prompt': activation itself still waits for the user's consent.
         clientsClaim: true,
-        // Adds the Web Push handlers (popy.spec §14) to the generated worker.
+        // Adds the Web Push handlers (pop-agent.spec §14) to the generated worker.
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
         // The API and the SSE stream are never served from the cache, and a

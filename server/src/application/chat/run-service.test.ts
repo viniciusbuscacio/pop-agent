@@ -608,7 +608,7 @@ describe('a process shutdown mid-run', () => {
   });
 });
 
-describe('failing over between providers (popy.spec §15, fase 2)', () => {
+describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
   let penalized: string[];
   let fallbacks: { chatId: string; from: string; to: string; code: string }[];
 

@@ -1,13 +1,13 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { SESSION_TOKEN_HEADER } from '@popy/shared';
+import { SESSION_TOKEN_HEADER } from '@pop-agent/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { WebAuthnGateway } from '../../application/ports/webauthn-repo.js';
 import { badBody, readJson } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Passkey registration and login (popy.spec §9). Registration needs a session
+ * Passkey registration and login (pop-agent.spec §9). Registration needs a session
  * -- only the signed-in user adds an authenticator. Login is public: proving a
  * passkey IS the authentication, and it hands back a session token like the
  * password login does. The relying-party id and origin come from the request

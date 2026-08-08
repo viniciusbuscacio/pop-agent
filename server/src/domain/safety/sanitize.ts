@@ -1,5 +1,5 @@
 /**
- * External-content safety, deterministic and pure (popy.spec §10). No LLM
+ * External-content safety, deterministic and pure (pop-agent.spec §10). No LLM
  * judges anything here: invisible characters are stripped, known injection
  * phrasings raise the risk level, and everything external is wrapped in an
  * envelope that names it as data. The per-turn taint (application layer)
@@ -184,7 +184,7 @@ export function decodeBase64Runs(text: string): string[] {
 
 /**
  * Cleans external text and says how much to trust it. Pure: same input, same
- * verdict, no model involved (popy.spec §10).
+ * verdict, no model involved (pop-agent.spec §10).
  */
 export function sanitize(text: string): SanitizedContent {
   const warnings: string[] = [];
@@ -235,7 +235,7 @@ export function sanitize(text: string): SanitizedContent {
 
 /**
  * Wraps cleaned external content so the model reads it as material, not as
- * marching orders. The wording is part of the contract (popy.spec §10).
+ * marching orders. The wording is part of the contract (pop-agent.spec §10).
  */
 export function envelope(clean: string, sourceLabel: string): string {
   return [

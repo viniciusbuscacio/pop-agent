@@ -4,11 +4,11 @@ import type {
   FilesNameSearchResponse,
   FilesTreeResponse,
   GarbageResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import { apiRequest, apiUpload } from './api';
 
 /**
- * Files as a plain folder (popy.spec §14): the tree is the disk, and a path
+ * Files as a plain folder (pop-agent.spec §14): the tree is the disk, and a path
  * relative to the Files root IS the identifier -- there are no ids. Rename and
  * move are the same operation, a path edit.
  */
@@ -69,7 +69,7 @@ export const filesService = {
    * in `Content-Disposition`.
    *
    * Here rather than in `lib/download` because the services layer is the only
-   * door to the outside (popy.spec §14) -- a component reaching for `fetch`
+   * door to the outside (pop-agent.spec §14) -- a component reaching for `fetch`
    * fails the gate, and the rule is right: this is an HTTP call, and HTTP
    * calls live behind a named function whose signature says what it returns.
    *
@@ -85,7 +85,7 @@ export const filesService = {
 };
 
 /**
- * The Files trash (popy.spec §14): Files/Garbage/ over HTTP. The entry's name
+ * The Files trash (pop-agent.spec §14): Files/Garbage/ over HTTP. The entry's name
  * inside Garbage/ is the handle for restore and purge.
  */
 export const trashService = {

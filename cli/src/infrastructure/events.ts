@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 
 /**
  * Reading `text/event-stream` off a `fetch` body (docs/cli.md, step 2).
@@ -6,7 +6,7 @@ import type { StreamEvent } from '@popy/shared';
  * Node has no `EventSource`, and the browser one could not carry a bearer
  * token anyway -- which is why the server issues a one-time ticket. So the
  * parsing is here, and it is small: SSE frames are separated by a blank line
- * and Popy only ever sends `data:`.
+ * and Pop Agent only ever sends `data:`.
  *
  * The buffer is split on the frame boundary rather than on newlines, because
  * a chunk arrives where TCP decides, not where a message ends: a `delta`

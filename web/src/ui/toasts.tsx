@@ -2,7 +2,7 @@ import { useNotificationsStore } from '../store/notifications';
 
 /**
  * In-app notifications, in the same corner and skin as the update prompt
- * (popy.spec §14): the default way the app tells you something small happened
+ * (pop-agent.spec §14): the default way the app tells you something small happened
  * -- the thinking toggle is the first. Tap to dismiss; it clears on its own
  * either way. Not the operating system's notifications, which are Web Push.
  *

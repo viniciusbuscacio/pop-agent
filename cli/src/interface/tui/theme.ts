@@ -5,11 +5,11 @@ import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@earendil-work
  *
  * pi-tui ships no default theme -- its own README imports one from its test
  * folder -- so every component that takes a theme needs one written here.
- * That is the seam where "Popy's head in pi's shape" actually happens: the
+ * That is the seam where "Pop Agent's head in pi's shape" actually happens: the
  * widgets and the rendering come from the library, the colours are ours.
  *
  * Hand-rolled escapes rather than a colour library: the whole need is eight
- * SGR codes, and `@popy/cli` is meant to install anywhere without dragging a
+ * SGR codes, and `@pop-agent/cli` is meant to install anywhere without dragging a
  * dependency tree behind it.
  */
 

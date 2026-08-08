@@ -5,7 +5,7 @@ import { NoteJailError } from './note-jail.js';
 import type { NotesVault } from './notes-vault.js';
 
 /**
- * The agent's notes tools (popy.spec §11). Read paths through the vault's jail
+ * The agent's notes tools (pop-agent.spec §11). Read paths through the vault's jail
  * and hand the model what it asked for; write is on by default because the
  * vault is the agent's own. Everything a tool returns from a note goes through
  * sanitize + envelope first: a note can hold text pasted from anywhere, and

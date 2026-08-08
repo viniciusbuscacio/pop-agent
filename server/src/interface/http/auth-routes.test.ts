@@ -120,13 +120,13 @@ describe('authentication middleware', () => {
     const { token } = await setup();
 
     const fresh = await post('/v1/auth/sign-out-others', undefined, token);
-    expect(fresh.headers.get('x-popy-token')).toBeNull();
+    expect(fresh.headers.get('x-pop-agent-token')).toBeNull();
 
     const { token: current } = (await fresh.json()) as { token: string };
     clock.advance(DAY + 1);
 
     const renewed = await post('/v1/auth/sign-out-others', undefined, current);
-    expect(renewed.headers.get('x-popy-token')).toBeTruthy();
+    expect(renewed.headers.get('x-pop-agent-token')).toBeTruthy();
   });
 
   it('leaves the public routes open', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { MessageDTO, ToolCallDTO } from '@popy/shared';
+import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
 import { Markdown } from './markdown';
@@ -19,7 +19,7 @@ export function ChatMessage({
   const showThinking = useThinkingStore((state) => state.show);
 
   // A run that failed or was stopped leaves this mark in the history
-  // forever (popy.spec §6): quiet, centered, unmistakably not a reply.
+  // forever (pop-agent.spec §6): quiet, centered, unmistakably not a reply.
   if (message.role === 'system') {
     return (
       <p data-testid="message-system" className="text-center text-xs text-[var(--danger)]">

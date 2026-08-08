@@ -3,7 +3,7 @@ import { migrate } from './migrate.js';
 import type { Db } from './types.js';
 
 /**
- * Opens popy.db and brings the schema up to date. WAL is on because the server
+ * Opens pop-agent.db and brings the schema up to date. WAL is on because the server
  * reads while it writes; foreign keys are on because SQLite otherwise ignores
  * them silently.
  */

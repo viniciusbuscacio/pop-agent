@@ -40,7 +40,7 @@ export function saveFromLink(url: string): void {
   // its own webview instead -- which is why Download opened the file in the
   // app and trapped it there, with no way back but killing the app. Fetching
   // the bytes first turns it into a blob: URL, which the same webview does
-  // save (Popy, 05/08).
+  // save (Pop Agent, 05/08).
   void filesService.blob(url).then(
     ({ blob, filename }) => {
       const objectUrl = URL.createObjectURL(blob);

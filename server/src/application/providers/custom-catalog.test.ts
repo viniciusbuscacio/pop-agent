@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { customProviderDefinition } from './provider-definitions.js';
 
 /**
- * Which models a custom endpoint is known to serve (popy.spec §15).
+ * Which models a custom endpoint is known to serve (pop-agent.spec §15).
  *
  * The engine registers a provider with exactly these and then refuses
  * anything else. Registering only the configured model meant the picker

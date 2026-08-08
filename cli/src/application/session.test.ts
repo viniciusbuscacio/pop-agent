@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import { ChatSession, type SessionListener, type SessionPorts } from './session.js';
 import type { RunState } from './transcript.js';
 

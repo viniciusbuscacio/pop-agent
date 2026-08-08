@@ -5,7 +5,7 @@ import type {
   RecoverResponse,
   SetupResponse,
   SignOutOthersResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import { apiRequest } from './api';
 import { session } from './session';
 

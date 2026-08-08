@@ -7,7 +7,7 @@ import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
 import type { SkillsRepo } from '../ports/skills-repo.js';
 
 /**
- * The Skill Router with its embedding cache (popy.spec §8). It keeps a vector
+ * The Skill Router with its embedding cache (pop-agent.spec §8). It keeps a vector
  * per skill (of its name + description + whenToUse), so routing costs one
  * embedding of the message rather than one per skill per turn.
  *
@@ -36,7 +36,7 @@ export interface SkillRouterDeps {
   /** Where vectors survive a restart. Without it the cache is per-process. */
   vectors?: SkillVectorsRepo;
   /**
-   * Where a use is counted (popy.spec §8). The router is the only honest place
+   * Where a use is counted (pop-agent.spec §8). The router is the only honest place
    * to record it: a skill is "used" when it goes in front of the model, which
    * nothing downstream can observe.
    */
@@ -44,7 +44,7 @@ export interface SkillRouterDeps {
   clock?: Clock;
   /**
    * Every selection goes here so thresholds are tuned from logged
-   * distributions, not guessed (popy.spec §8). Both components are reported,
+   * distributions, not guessed (pop-agent.spec §8). Both components are reported,
    * not just the fused score: the bars are set on the components.
    */
   onRoute?: (selection: RoutedSkill[]) => void;
@@ -61,7 +61,7 @@ export class SkillRouterService {
     // The index covers the whole vault; the filter is applied to the
     // *selection*, not to the indexing. Two kinds of skill never compete for a
     // per-turn slot: a pinned one is already in the session's system prompt,
-    // and a pending one is a skill the user has not accepted yet (popy.spec
+    // and a pending one is a skill the user has not accepted yet (pop-agent.spec
     // §8). Pending is the load-bearing half of the approval promise -- without
     // this filter the Skills screen would show a skill as "waiting" while the
     // router was already using it. But filtering *before* the vectors meant a

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { ChatDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@popy/shared';
+import type { ChatDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { ApiError } from '../services/api';
@@ -456,7 +456,7 @@ function FolderTree() {
 }
 
 /**
- * The skills list in the sidebar (popy.spec §8), the explorer twin of the
+ * The skills list in the sidebar (pop-agent.spec §8), the explorer twin of the
  * folder tree: the shared store keeps it in step with the editor pane, and a
  * row opens that skill on the right. Filtered by the sidebar search.
  */
@@ -776,7 +776,7 @@ function ChatRow({
             <span
               className="truncate text-sm font-medium"
               onDoubleClick={(event) => {
-                // Inline rename (popy.spec §14): double-click does what
+                // Inline rename (pop-agent.spec §14): double-click does what
                 // the menu's Rename does, one gesture less.
                 event.preventDefault();
                 event.stopPropagation();

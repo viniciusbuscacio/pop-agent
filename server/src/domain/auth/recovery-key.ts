@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
  * Recovery key: the one credential that survives a forgotten password
- * (popy.spec §9). It is shown exactly once, so it has to be readable off a
+ * (pop-agent.spec §9). It is shown exactly once, so it has to be readable off a
  * screen and typeable on a phone keyboard.
  *
  * Alphabet excludes the pairs people misread -- 0/O and 1/I/L -- leaving 31

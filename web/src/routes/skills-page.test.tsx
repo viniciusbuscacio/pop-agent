@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SkillsResponse } from '@popy/shared';
+import type { SkillsResponse } from '@pop-agent/shared';
 import { SkillsPage } from './skills-page';
 import { useSkillsStore } from '../store/skills';
 

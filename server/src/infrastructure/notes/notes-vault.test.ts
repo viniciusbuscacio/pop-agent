@@ -8,7 +8,7 @@ let root: string;
 let vault: NotesVault;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-vault-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-vault-'));
   vault = new NotesVault(join(root, 'notes'));
 });
 

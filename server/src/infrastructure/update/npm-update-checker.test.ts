@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isNewerVersion, latestSemverTag, NpmUpdateChecker } from './npm-update-checker.js';
 
-const versions = { popyVersion: '0.2.0', nodeVersion: 'v22.0.0', piVersion: '0.83.0' };
+const versions = { popAgentVersion: '0.2.0', nodeVersion: 'v22.0.0', piVersion: '0.83.0' };
 
 /** No test may reach the network or a git remote. */
 function deps(overrides: Partial<ConstructorParameters<typeof NpmUpdateChecker>[0]> = {}) {
@@ -20,14 +20,14 @@ describe('NpmUpdateChecker', () => {
 
     const status = await checker.status();
     expect(status.pi).toEqual({ current: '0.83.0', latest: '0.84.0' });
-    expect(status.popy.current).toBe('0.2.0');
+    expect(status.popAgent.current).toBe('0.2.0');
     expect(status.updateCommand).toContain('npm run gate');
   });
 
-  it('reports the latest Popy tag from the origin', async () => {
+  it('reports the latest Pop Agent tag from the origin', async () => {
     const checker = new NpmUpdateChecker(deps({ fetchLatestTag: vi.fn().mockResolvedValue('0.3.0') }));
 
-    expect((await checker.status()).popy).toEqual({ current: '0.2.0', latest: '0.3.0' });
+    expect((await checker.status()).popAgent).toEqual({ current: '0.2.0', latest: '0.3.0' });
   });
 
   it('leaves latest undefined when the checks fail', async () => {
@@ -40,7 +40,7 @@ describe('NpmUpdateChecker', () => {
 
     const status = await checker.status();
     expect(status.pi.latest).toBeUndefined();
-    expect(status.popy.latest).toBeUndefined();
+    expect(status.popAgent.latest).toBeUndefined();
   });
 
   it('caches the latest for an hour', async () => {

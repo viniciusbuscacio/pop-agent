@@ -1,9 +1,9 @@
 /**
  * Which uploads may be shown in the browser instead of saved to disk
- * (popy.spec §14, RF-004–008).
+ * (pop-agent.spec §14, RF-004–008).
  *
  * "Open file" is worth having, but serving arbitrary uploaded bytes inline
- * from Popy's own origin is how a file steals a session: an uploaded .html or
+ * from Pop Agent's own origin is how a file steals a session: an uploaded .html or
  * .svg rendered inline runs its own script with access to this origin's
  * storage, which is where the session token lives. So the answer is an
  * allowlist of things that cannot execute -- never a denylist, because the

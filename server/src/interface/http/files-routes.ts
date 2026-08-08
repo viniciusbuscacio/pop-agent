@@ -7,19 +7,19 @@ import type {
   FilesNameSearchResponse,
   GarbageEntryDTO,
   GarbageResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import type { FileNode, FilesService } from '../../application/files/files-service.js';
 import { buildFileLink } from '../../application/files/files-download.js';
 import type { Clock } from '../../application/ports/clock.js';
 import { apiError } from './errors.js';
 import { badBody, readJson, schemaError } from './body.js';
 
-/** An upload is capped so one request cannot fill the disk (popy.spec §14). */
+/** An upload is capped so one request cannot fill the disk (pop-agent.spec §14). */
 const MAX_FILE_MB = 25;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 /**
- * Files over HTTP, the authenticated half (popy.spec §14, "Files as a plain
+ * Files over HTTP, the authenticated half (pop-agent.spec §14, "Files as a plain
  * folder"). The tree is the disk; every operation takes real relative paths.
  * The pathological paths (`..`, absolutes, dotfiles, reaching into Garbage)
  * are refused by the service's jail and surface here as 400s.
@@ -100,7 +100,7 @@ export function createFilesRoutes(deps: FilesRoutesDeps): Hono {
     });
   });
 
-  // Mints the signed URL the PWA downloads through (popy.spec §14).
+  // Mints the signed URL the PWA downloads through (pop-agent.spec §14).
   routes.post('/files/link', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
@@ -116,7 +116,7 @@ export function createFilesRoutes(deps: FilesRoutesDeps): Hono {
     });
   });
 
-  // Delete = move into Garbage/ (popy.spec §14): reversible for thirty days.
+  // Delete = move into Garbage/ (pop-agent.spec §14): reversible for thirty days.
   routes.delete('/files', (c) => {
     const path = c.req.query('path') ?? '';
     if (path.length === 0) return apiError(c, 400, 'bad_request', 'A path is required.');

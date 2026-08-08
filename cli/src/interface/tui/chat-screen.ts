@@ -16,13 +16,13 @@ import type { RunState } from '../../application/transcript.js';
 import { editorTheme, markdownTheme, paint } from './theme.js';
 
 /**
- * The interactive screen (docs/cli.md, step 4): pi's shape, Popy's head.
+ * The interactive screen (docs/cli.md, step 4): pi's shape, Pop Agent's head.
  *
  * Everything hard about a terminal -- differential rendering, the multi-line
  * editor with IME, key parsing across terminals, markdown to ANSI, bracketed
  * paste -- comes from `@earendil-works/pi-tui`, published in lockstep with pi
  * itself. What is written here is only the composition: what goes on the
- * screen, in what order, and what the keys mean for Popy. That split is the
+ * screen, in what order, and what the keys mean for Pop Agent. That split is the
  * point. Copying pi's own screen would buy today's look and cost every future
  * pi release; depending on the library buys the releases too.
  *
@@ -218,7 +218,7 @@ export class ChatScreen {
   }
 
   onStreamEnd(): void {
-    this.say(paint.red('The connection to the server dropped. Restart popy to reconnect.'));
+    this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
   }
 
   private async submit(raw: string): Promise<void> {

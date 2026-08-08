@@ -1,4 +1,4 @@
--- Semantic memory: one embedding per message (popy.spec §7).
+-- Semantic memory: one embedding per message (pop-agent.spec §7).
 --
 -- The vector is a Float32Array stored as a BLOB, keyed by the message's rowid
 -- so the FTS join and the vector search line up. Search is a brute-force cosine

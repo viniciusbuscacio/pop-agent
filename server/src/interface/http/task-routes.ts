@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { TaskDTO } from '@popy/shared';
+import type { TaskDTO } from '@pop-agent/shared';
 import type { Task } from '../../domain/tasks/task.js';
 import { MAX_INTERVAL_MINUTES } from '../../domain/tasks/task.js';
 import type { TaskService } from '../../application/tasks/task-service.js';
@@ -8,7 +8,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Background tasks over HTTP (popy.spec §21). CRUD, the enabled switch, and
+ * Background tasks over HTTP (pop-agent.spec §21). CRUD, the enabled switch, and
  * "run now" -- which queues rather than runs inline, so the request answers
  * at once and the run itself takes as long as it takes.
  */

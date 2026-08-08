@@ -5,7 +5,7 @@ import type { VoiceModelStore } from '../../application/ports/voice-models.js';
 import { apiError } from './errors.js';
 
 /**
- * Voice model management (popy.spec §14): Settings → Voice lists the whisper
+ * Voice model management (pop-agent.spec §14): Settings → Voice lists the whisper
  * models, which are installed, and the one in use; selecting one downloads it
  * if needed (SHA verified) and makes it the default. The `.env` override still
  * wins for an operator who pins a path.

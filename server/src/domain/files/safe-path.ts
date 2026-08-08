@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path';
 
 /**
- * Path safety for the Files folder (popy.spec §14, "Files as a plain folder").
+ * Path safety for the Files folder (pop-agent.spec §14, "Files as a plain folder").
  *
  * Files are addressed by real relative paths now, so the path itself is user
  * input everywhere -- the download URL, the upload form, the agent's tools.
@@ -50,7 +50,7 @@ export function cleanRelative(relativePath: string): string {
 
 /**
  * True when any segment is hidden (starts with a dot). Dotfiles are reserved
- * for Popy's own metadata (`.garbage.json`) and never listed, written or
+ * for Pop Agent's own metadata (`.garbage.json`) and never listed, written or
  * served -- the tab shows exactly what a `tree` would.
  */
 export function isHiddenPath(relativePath: string): boolean {

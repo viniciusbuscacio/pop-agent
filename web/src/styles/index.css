@@ -82,7 +82,7 @@ body {
   vertical-align: baseline;
 }
 
-/* The health dot's gentle pulse (popy.spec §14): opacity only, never
+/* The health dot's gentle pulse (pop-agent.spec §14): opacity only, never
    stroboscopic. */
 @keyframes health-pulse {
   0%,

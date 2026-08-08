@@ -1,6 +1,6 @@
 /**
  * Persistence port for provider credentials and anything else that must not
- * sit in the database as plaintext (popy.spec §9). Values cross this interface
+ * sit in the database as plaintext (pop-agent.spec §9). Values cross this interface
  * already decrypted; sealing them is the adapter's job.
  */
 export interface SecretsRepo {

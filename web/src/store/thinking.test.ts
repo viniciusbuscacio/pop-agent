@@ -16,10 +16,10 @@ describe('thinking visibility', () => {
     useThinkingStore.getState().toggle();
 
     expect(useThinkingStore.getState().show).toBe(false);
-    expect(localStorage.getItem('popy.showThinking')).toBe('false');
+    expect(localStorage.getItem('pop-agent.showThinking')).toBe('false');
 
     useThinkingStore.getState().toggle();
     expect(useThinkingStore.getState().show).toBe(true);
-    expect(localStorage.getItem('popy.showThinking')).toBe('true');
+    expect(localStorage.getItem('pop-agent.showThinking')).toBe('true');
   });
 });

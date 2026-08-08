@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import { readEvents } from './events.js';
 
 /** A body that hands out exactly the chunks given, in that order. */

@@ -54,8 +54,8 @@ function seedLegacyDb(): void {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-legacy-'));
-  dbPath = join(root, 'popy.db');
+  root = mkdtempSync(join(tmpdir(), 'pop-legacy-'));
+  dbPath = join(root, 'pop-agent.db');
   artifactsDir = join(root, 'artifacts');
   filesDir = join(root, 'files');
 });

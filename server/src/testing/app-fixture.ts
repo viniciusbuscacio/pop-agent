@@ -127,7 +127,7 @@ export class RefusingGateway implements ProviderGateway {
 }
 
 /**
- * The engine's subscription-auth surface, scripted (popy.spec §15). The
+ * The engine's subscription-auth surface, scripted (pop-agent.spec §15). The
  * default login shows one URL, asks for one code and accepts only
  * "good-code" -- enough to walk the whole wire without pi or a browser.
  */
@@ -168,12 +168,12 @@ export interface TestApp {
   controlLog: string[];
   auth: AuthService;
   chats: ChatService;
-  /** The user's Files over a throwaway tree (popy.spec §14). */
+  /** The user's Files over a throwaway tree (pop-agent.spec §14). */
   files: FilesService;
   runs: RunService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
-  /** The throwaway POPY_WORKSPACE this app's purger and sweeps act on. */
+  /** The throwaway POP_AGENT_WORKSPACE this app's purger and sweeps act on. */
   workspace: string;
   providers: ProviderService;
   /** The scripted subscription auth behind the oauth routes. */
@@ -203,7 +203,7 @@ export interface TestAppOptions {
   transcriber?: FakeTranscriber;
   /** Swap in a pre-seeded subscription-auth fake to test the oauth routes. */
   providerAuth?: FakeProviderAuth;
-  /** Drive the task scheduler's tick by hand (popy.spec §21). */
+  /** Drive the task scheduler's tick by hand (pop-agent.spec §21). */
   timer?: Timer;
 }
 
@@ -219,7 +219,7 @@ export function createTestApp(
   const chatRepo = new SqliteChatRepo(db);
   // Exposed on the fixture: a route test needs to plant a skill the CRUD
   // cannot create -- a pending one, which only the agent's tool writes.
-  const skills = new SkillsVault(mkdtempSync(join(tmpdir(), 'popy-test-skills-')));
+  const skills = new SkillsVault(mkdtempSync(join(tmpdir(), 'pop-test-skills-')));
   const skillUsage = new SqliteSkillUsageRepo(db);
   const skillRevisions = new SqliteSkillRevisionsRepo(db);
   const distillation = new SqliteDistillationRepo(db);
@@ -271,10 +271,10 @@ export function createTestApp(
   });
 
   const settings = new SettingsService(settingsRepo);
-  // Files as a plain folder (popy.spec §14): a real service over a throwaway
+  // Files as a plain folder (pop-agent.spec §14): a real service over a throwaway
   // tree, exactly as main.ts wires it.
   const files = new FilesService({
-    root: mkdtempSync(join(tmpdir(), 'popy-test-files-')),
+    root: mkdtempSync(join(tmpdir(), 'pop-test-files-')),
     clock,
   });
   // Wired exactly the way main.ts wires it: with no key configured the title
@@ -294,12 +294,12 @@ export function createTestApp(
     }),
   });
 
-  // Wired exactly the way main.ts wires it (popy.spec §6): a delete stops the
+  // Wired exactly the way main.ts wires it (pop-agent.spec §6): a delete stops the
   // chat's work first, then purges what it left in the workspace. The
   // workspace is a throwaway directory, so a test can look at it.
-  const workspace = mkdtempSync(join(tmpdir(), 'popy-test-workspace-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'pop-test-workspace-'));
   // One throwaway data directory, shared by the pieces that measure it.
-  const dataDir = mkdtempSync(join(tmpdir(), 'popy-test-data-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'pop-test-data-'));
   const mcp = new McpService({ repo: new SqliteMcpRepo(db), secrets: new MemorySecrets(), dataDir });
   const chats = new ChatService({
     chats: chatRepo,
@@ -308,7 +308,7 @@ export function createTestApp(
     purger: new FsChatPurger({ workspace, forgetSession: () => undefined }),
   });
 
-  // Background tasks (popy.spec §21). The timer is inert: nothing ticks by
+  // Background tasks (pop-agent.spec §21). The timer is inert: nothing ticks by
   // itself in a test, and `run-now` drives the queue directly.
   const taskRepo = new SqliteTaskRepo(db);
   const tasks = new TaskService({ tasks: taskRepo, clock });
@@ -378,7 +378,7 @@ export function createTestApp(
       status: () =>
         Promise.resolve({
           pi: { current: '0.83.0', latest: '0.83.0' },
-          popy: { current: '0.2.0-test', latest: undefined },
+          popAgent: { current: '0.2.0-test', latest: undefined },
           node: process.version,
           environment: [{ name: 'ffmpeg', version: '8.0.0-test' }],
           updateCommand: 'test',
@@ -386,12 +386,12 @@ export function createTestApp(
     },
     backups: new TarBackupService({
       dataDir,
-      backupsDir: mkdtempSync(join(tmpdir(), 'popy-test-backups-')),
+      backupsDir: mkdtempSync(join(tmpdir(), 'pop-test-backups-')),
       now: () => new Date(clock.now()).toISOString(),
     }),
     hub,
     clock,
-    versions: { popyVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
+    versions: { popAgentVersion: '0.0.0-test', nodeVersion: process.version, piVersion: '0.0.0-test' },
     ...(options.credits === undefined
       ? {}
       : { credits: () => Promise.resolve(options.credits) }),
@@ -415,13 +415,13 @@ export function createTestApp(
         timezone: 'UTC',
         serverTime: new Date(FIXED_NOW).toISOString(),
         nodeVersion: process.version,
-        popyVersion: '0.0.0-test',
+        popAgentVersion: '0.0.0-test',
         commit: 'abc1234',
         dbBytes: 100,
         workspaceBytes: 200,
         dataDir: '/tmp/data',
         workspace: '/tmp/workspace',
-      }) satisfies import('@popy/shared').ServerInfoResponse,
+      }) satisfies import('@pop-agent/shared').ServerInfoResponse,
     webDist: WEB_DIST,
     cliPack: CLI_PACK,
   });

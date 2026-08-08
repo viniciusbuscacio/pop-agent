@@ -26,12 +26,12 @@ import { shouldFailOver, type RunFailure } from './failover.js';
 
 export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
 
-/** A paused risky action denies itself after this long (popy.spec §10). */
+/** A paused risky action denies itself after this long (pop-agent.spec §10). */
 export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * How long one attempt may say NOTHING -- no token, no thinking, no tool --
- * before it is abandoned for the next provider (popy.spec §15, fase 2).
+ * before it is abandoned for the next provider (pop-agent.spec §15, fase 2).
  *
  * Without it a dead endpoint does not fail: the socket waits on the operating
  * system's TCP timeout, minutes long, and the failover chain never runs
@@ -45,13 +45,13 @@ export const ATTEMPT_SILENCE_TIMEOUT_MS = 60 * 1000;
 export interface StartRunOptions {
   /**
    * Push a notification when this run finishes. Default true. A background
-   * task whose notification is switched off passes false (popy.spec §21) --
+   * task whose notification is switched off passes false (pop-agent.spec §21) --
    * a task on a ten-minute interval is otherwise a phone buzzing every ten
    * minutes.
    */
   notify?: boolean;
   /**
-   * Which client sent this, recorded on the message (popy.spec §13). The
+   * Which client sent this, recorded on the message (pop-agent.spec §13). The
    * `ip` half is stored and never reaches the model: it answers "who
    * connected", which is an audit question, and no answer of hers would
    * change because of it.
@@ -76,7 +76,7 @@ export type StartRunResult =
 /**
  * How a run ended, for whoever asked to be told ({@link RunService.whenRunEnds}).
  * The background-task scheduler is the caller: it writes the code down as the
- * task's last status (popy.spec §21).
+ * task's last status (pop-agent.spec §21).
  */
 export type RunOutcome = { ok: true } | { ok: false; code: string };
 
@@ -95,10 +95,10 @@ export interface RunDeps {
   attemptTimeoutMs?: number;
   /** Offered every finished run; decides by itself whether to rewrite. */
   titles?: { maybeRetitle(chatId: string): Promise<void> };
-  /** Where what the run cost is written down (popy.spec §14). */
+  /** Where what the run cost is written down (pop-agent.spec §14). */
   llmRuns?: LlmRunsRepo;
   /**
-   * Told when a run finished, to push a notification (popy.spec §14) and to
+   * Told when a run finished, to push a notification (pop-agent.spec §14) and to
    * count the run for health. `notify` false means only the push is skipped --
    * a background task with its notification switched off (§21) still happened.
    */
@@ -108,16 +108,16 @@ export interface RunDeps {
     notify: boolean;
     code?: string;
   }) => void;
-  /** Told after a run's messages are stored, to embed them (popy.spec §7). */
+  /** Told after a run's messages are stored, to embed them (pop-agent.spec §7). */
   indexMessages?: () => void;
   /**
    * Told when a run's work is over, with when it began (epoch ms). The
-   * provenance walk hangs off this (popy.spec §14): files under Files/
+   * provenance walk hangs off this (pop-agent.spec §14): files under Files/
    * touched during the window are logged as written by this chat.
    */
   onRunFinished?: (info: { chatId: string; startedAtMs: number }) => void;
   /**
-   * The ordered failover chain for a run (popy.spec §15, fase 2): every
+   * The ordered failover chain for a run (pop-agent.spec §15, fase 2): every
    * usable (provider, model) pair, the chat's override first. Absent -- the
    * fixture-less tests -- means one attempt with the chat's own pair, which
    * is exactly the phase-1 behaviour.
@@ -140,7 +140,7 @@ interface PendingRun {
   provider: string;
   attachments: Attachment[];
   controller: AbortController;
-  /** False silences the finished-run push for this run alone (popy.spec §21). */
+  /** False silences the finished-run push for this run alone (pop-agent.spec §21). */
   notify: boolean;
   /** The terminal whose hands this run has, if its message named one. */
   handsConnectionId: string | undefined;
@@ -226,7 +226,7 @@ export class RunService {
    *
    * `options.notify` is the one thing a caller may turn off: a background task
    * with its notification switched off still runs exactly like any other run,
-   * it just does not reach for the phone at the end (popy.spec §21).
+   * it just does not reach for the phone at the end (pop-agent.spec §21).
    */
   startRun(
     chatId: string,
@@ -290,7 +290,7 @@ export class RunService {
     // A sidebar full of "New chat" is a sidebar you cannot read. Phase 3 lets
     // a model write this; until then the first message names the chat.
     //
-    // `autoTitle` is the same veto the service model respects (popy.spec §14):
+    // `autoTitle` is the same veto the service model respects (pop-agent.spec §14):
     // a name chosen by hand is not the machine's to improve on, and a
     // background task's chat is named after the task before its first message
     // ever arrives (§21) -- even when the task is called "Chat 4".
@@ -386,7 +386,7 @@ export class RunService {
   }
 
   /**
-   * Resolves when this run ends, with how it ended (popy.spec §21). The
+   * Resolves when this run ends, with how it ended (pop-agent.spec §21). The
    * scheduler needs a run's outcome, not just its events, and an SSE sink is
    * a broadcast rather than an answer to one question.
    *
@@ -425,7 +425,7 @@ export class RunService {
   }
 
   /**
-   * Everything this chat has in flight, gone (popy.spec §6). A started run is
+   * Everything this chat has in flight, gone (pop-agent.spec §6). A started run is
    * aborted -- which reaches all the way down to pi killing the engine's
    * process group -- and anything of this chat still waiting for a slot is
    * dropped without ever reaching the engine.
@@ -755,7 +755,7 @@ export class RunService {
 
     sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
 
-    // The failover chain (popy.spec §15, fase 2): every usable pair in
+    // The failover chain (pop-agent.spec §15, fase 2): every usable pair in
     // resolution order, or -- without the resolver -- one attempt with the
     // chat's own pair, exactly the old behaviour.
     const chain = this.deps.resolveChain?.({ provider: run.provider, model: run.model }) ?? [
@@ -809,7 +809,7 @@ export class RunService {
     const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
     let messageId = '';
 
-    // The conversation may have been deleted while this ran (popy.spec §6):
+    // The conversation may have been deleted while this ran (pop-agent.spec §6):
     // the delete aborts the run first, but the abort unwinds asynchronously
     // and lands here. There is nowhere to store an answer, and writing one
     // would fail the foreign key -- so the run just ends.
@@ -835,7 +835,7 @@ export class RunService {
         createdAt: finishedAt,
       }).id;
     }
-    // EVERY failure also leaves a persisted system message (popy.spec §6): an
+    // EVERY failure also leaves a persisted system message (pop-agent.spec §6): an
     // error that existed only as an SSE event vanishes on reload, and the
     // user who saw it can no longer ask "what happened?". History is forever.
     if (failure !== undefined) {
@@ -867,7 +867,7 @@ export class RunService {
     if (failure === undefined && this.deps.titles !== undefined) {
       this.deps.titles.maybeRetitle(run.chatId).catch(() => undefined);
     }
-    // A push so the phone hears about it with the PWA closed (popy.spec §14).
+    // A push so the phone hears about it with the PWA closed (pop-agent.spec §14).
     // `notify` is carried rather than obeyed here: this hook is also where the
     // run is counted for health, and a quiet task is still a run that happened.
     this.deps.notifyDone?.({
@@ -881,7 +881,7 @@ export class RunService {
     // The provenance walk (§14): what this run left under Files/ is history now.
     this.deps.onRunFinished?.({ chatId: run.chatId, startedAtMs: run.startedAtMs });
 
-    // And whoever asked in code rather than over the stream (popy.spec §21).
+    // And whoever asked in code rather than over the stream (pop-agent.spec §21).
     this.endRun(
       run.runId,
       failure === undefined ? { ok: true } : { ok: false, code: failure.code },

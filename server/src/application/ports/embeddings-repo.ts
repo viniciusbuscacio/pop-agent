@@ -1,5 +1,5 @@
 /**
- * Storage for message embeddings (popy.spec §7). The rowid ties a vector to its
+ * Storage for message embeddings (pop-agent.spec §7). The rowid ties a vector to its
  * message so it drops by cascade on delete; the vectors are loaded whole for a
  * brute-force cosine search.
  */

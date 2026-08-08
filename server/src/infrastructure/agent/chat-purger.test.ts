@@ -29,7 +29,7 @@ let sessions: string;
 let forgotten: string[];
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-purge-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-purge-'));
   workspace = join(root, 'workspace');
   sessions = join(root, 'sessions');
   mkdirSync(workspace, { recursive: true });
@@ -46,7 +46,7 @@ describe('FsChatPurger', () => {
     const jsonl = join(sessions, 'session.jsonl');
     const sidecar = join(sessions, 'session');
     const attachments = join(workspace, 'attachments', CHAT);
-    // The user's Files must survive a chat deletion (popy.spec §14).
+    // The user's Files must survive a chat deletion (pop-agent.spec §14).
     const filesDir = join(root, 'files');
     writeFileSync(jsonl, '{}');
     mkdirSync(sidecar, { recursive: true });

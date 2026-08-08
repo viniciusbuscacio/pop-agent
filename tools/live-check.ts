@@ -1,9 +1,9 @@
 /**
- * The one test that spends money (popy.spec §20, Phase 3).
+ * The one test that spends money (pop-agent.spec §20, Phase 3).
  *
  * Everything else about the chat is proved against the fake bridge and costs
  * nothing: the gate, the smoke, CI. This file exists for the one question none
- * of them can answer -- whether the path from Popy through pi to a real model
+ * of them can answer -- whether the path from Pop Agent through pi to a real model
  * and back actually works -- and so it is deliberately not in the gate. Run it
  * by hand, read the cost it prints, close the terminal.
  *
@@ -107,8 +107,8 @@ function processesMatching(pattern: string): string[] {
 
 async function main(): Promise<void> {
   const key = apiKey();
-  const dataDir = mkdtempSync(join(tmpdir(), 'popy-live-'));
-  const workspace = mkdtempSync(join(tmpdir(), 'popy-live-workspace-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-live-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'pop-agent-live-workspace-'));
 
   const db = new Database(join(dataDir, 'live.db'));
   db.pragma('foreign_keys = ON');
@@ -176,7 +176,7 @@ async function main(): Promise<void> {
       // 2. Stop is a kill (spec §5): the shell child must die with the run.
       //
       // The child is found by its own command line, not by a marker in the
-      // prompt: pi hands the command to the shell on stdin, so nothing Popy
+      // prompt: pi hands the command to the shell on stdin, so nothing Pop Agent
       // wrote ever shows up in `ps`. An odd duration is the closest thing to a
       // unique name a bare `sleep` can have.
       const toolEvents: AgentEvent[] = [];

@@ -21,7 +21,7 @@ import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
 import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
 
 /**
- * The background distiller (popy.spec §8, auto-skill fase c): the half of
+ * The background distiller (pop-agent.spec §8, auto-skill fase c): the half of
  * auto-skill nobody has to ask for. Fase (b) waits for "vira skill"; this
  * reads the conversations that ended without anyone thinking to say it.
  *
@@ -77,7 +77,7 @@ export const DEDUP_THRESHOLD = 0.88;
  * duplicates (the nine re-distillations the broken index let through).
  *
  * Cosine alone cannot do it -- the two distributions overlap from 0.895 to
- * 0.936. That overlap is not academic: it filed a good "Restart Popy service"
+ * 0.936. That overlap is not academic: it filed a good "Restart Pop Agent service"
  * skill as a revision of `self-change` at 0.9017, where accepting it would
  * have replaced an unrelated skill and rejecting it hid the new one in a table.
  * With the second bar, `0.88 / 0.20` catches 32 of the 36 duplicates and merges
@@ -148,7 +148,7 @@ export class SkillDistiller implements MaintenanceJob {
 
     const { chat, window, requested } = target;
     const lastId = window[window.length - 1]!.id;
-    const journal = (line: string): void => this.deps.onJournal?.(`popy distiller: ${line}`);
+    const journal = (line: string): void => this.deps.onJournal?.(`pop distiller: ${line}`);
 
     // Conservative by design: one suspicious tool result anywhere in the window
     // and the whole conversation is skipped, permanently. The alternative --
@@ -327,7 +327,7 @@ export class SkillDistiller implements MaintenanceJob {
     // ships with the app; a `user` skill is the user's, or an auto skill they
     // edited, and either way a machine proposing to replace it is proposing to
     // undo a decision a person made. The first real collision was exactly this
-    // shape -- a distilled "Restart Popy service" offered as the new text of
+    // shape -- a distilled "Restart Pop Agent service" offered as the new text of
     // `self-change` -- and the damage was not the bad similarity score but that
     // a wrong target was reachable at all.
     if (current.source !== 'auto') return `${slug}=${current.source},skipped`;
@@ -440,7 +440,7 @@ function dot(left: Float32Array, right: Float32Array): number {
  * is not that. Passing their prose through the same check made the detector's
  * own vocabulary radioactive: measured against this repo's documentation, a
  * bare "system prompt" flags nine benign paragraphs, so every conversation
- * about how Popy works would have been skipped, silently and forever, because
+ * about how Pop Agent works would have been skipped, silently and forever, because
  * the watermark advances on a taint. That is precisely the set of
  * conversations most worth distilling.
  *

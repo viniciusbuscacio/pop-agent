@@ -40,8 +40,8 @@ describe('login', () => {
     await user.type(screen.getByTestId('login-password'), PASSWORD);
     await user.click(screen.getByTestId('login-submit'));
 
-    await waitFor(() => expect(sessionStorage.getItem('popy.token')).toBe('token-1'));
-    expect(localStorage.getItem('popy.token'), 'not remembered across tabs').toBeNull();
+    await waitFor(() => expect(sessionStorage.getItem('pop-agent.token')).toBe('token-1'));
+    expect(localStorage.getItem('pop-agent.token'), 'not remembered across tabs').toBeNull();
   });
 
   it('remembers the session when asked to', async () => {
@@ -53,7 +53,7 @@ describe('login', () => {
     await user.click(screen.getByTestId('login-keep-signed-in'));
     await user.click(screen.getByTestId('login-submit'));
 
-    await waitFor(() => expect(localStorage.getItem('popy.token')).toBe('token-2'));
+    await waitFor(() => expect(localStorage.getItem('pop-agent.token')).toBe('token-2'));
   });
 
   it('reports a wrong password inline and clears the field', async () => {

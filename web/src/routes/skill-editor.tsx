@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { SkillDTO } from '@popy/shared';
+import type { SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { skillsService } from '../services/skills';

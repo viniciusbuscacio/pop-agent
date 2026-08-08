@@ -5,7 +5,7 @@ import type {
   StorageResponse,
   UsageResponse,
   UserMemoryDTO,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 export const settingsService = {

@@ -3,7 +3,7 @@ import type { DirectorySize, DiskUsage } from '../ports/disk-usage.js';
 import type { StorageRepo } from '../ports/storage-repo.js';
 
 /**
- * Where the disk actually went (popy.spec §14).
+ * Where the disk actually went (pop-agent.spec §14).
  *
  * This exists before any quota does, on purpose, and the first install it was
  * pointed at settled the argument: 1.7 GB of downloaded whisper weights
@@ -34,7 +34,7 @@ export interface StorageEntry {
 }
 
 export interface StorageReport {
-  /** Everything Popy is responsible for, backups included. */
+  /** Everything Pop Agent is responsible for, backups included. */
   totalBytes: number;
   entries: StorageEntry[];
   /** The filesystem the data directory sits on, when the platform says. */
@@ -45,7 +45,7 @@ export interface StorageServiceDeps {
   repo: StorageRepo;
   disk: DiskUsage;
   dataDir: string;
-  /** The user's Files folder (popy.spec §14): measured as the tab shows it. */
+  /** The user's Files folder (pop-agent.spec §14): measured as the tab shows it. */
   filesDir: string;
   workspace: string;
   backupsDir: string;
@@ -64,9 +64,9 @@ export class StorageService {
     // The database's own three files: the WAL alone can outweigh the db after
     // a busy day, and a report that omitted it would not add up to the folder.
     const databaseBytes = disk.fileBytes(
-      join(dataDir, 'popy.db'),
-      join(dataDir, 'popy.db-wal'),
-      join(dataDir, 'popy.db-shm'),
+      join(dataDir, 'pop-agent.db'),
+      join(dataDir, 'pop-agent.db-wal'),
+      join(dataDir, 'pop-agent.db-shm'),
     );
     const workspaceSize = disk.directoryBytes(workspace);
     const backupsSize = disk.directoryBytes(backupsDir);

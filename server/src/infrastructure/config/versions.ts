@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 
 /**
- * Versions for Settings → About (popy.spec §13).
+ * Versions for Settings → About (pop-agent.spec §13).
  *
  * The pi version is read from the dependency string in server/package.json
  * rather than by importing the SDK: About must answer instantly and must not
  * pull a large bundle into memory just to print a number. The dependency is
- * pinned exactly (popy.spec §15), so the string is the version.
+ * pinned exactly (pop-agent.spec §15), so the string is the version.
  *
  * Both URLs resolve the same from src/ (tsx) and dist/ (compiled): each sits
  * the same depth below the server workspace.
@@ -16,14 +16,14 @@ const ROOT_PACKAGE = new URL('../../../../package.json', import.meta.url);
 const PI_PACKAGE = '@earendil-works/pi-coding-agent';
 
 export interface Versions {
-  popyVersion: string;
+  popAgentVersion: string;
   nodeVersion: string;
   piVersion: string;
 }
 
 export function readVersions(): Versions {
   return {
-    popyVersion: packageJson(ROOT_PACKAGE).version ?? 'unknown',
+    popAgentVersion: packageJson(ROOT_PACKAGE).version ?? 'unknown',
     nodeVersion: process.version,
     piVersion: pinnedVersion(packageJson(SERVER_PACKAGE).dependencies?.[PI_PACKAGE]),
   };

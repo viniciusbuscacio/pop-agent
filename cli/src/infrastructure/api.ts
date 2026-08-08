@@ -3,22 +3,22 @@ import {
   CLIENT_PLATFORM_HEADER,
   HANDS_HEADER,
   SESSION_TOKEN_HEADER,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import type {
   ChatDTO,
   ChatListResponse,
   EventTicketResponse,
   LoginResponse,
   SendMessageResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 
 /**
- * The one place `popy` speaks HTTP (docs/cli.md, "The wire"). Same rule the
+ * The one place `pop` speaks HTTP (docs/cli.md, "The wire"). Same rule the
  * PWA follows: nothing else in the client calls `fetch`, so the base URL, the
  * bearer token and token renewal live in one file.
  *
  * Renewal is the part that is easy to miss and expensive to skip: the server
- * hands back a fresh token in `x-popy-token` once the current one is a day
+ * hands back a fresh token in `x-pop-agent-token` once the current one is a day
  * old (spec §9), and a client that ignored it would be signed out on a
  * schedule for no reason.
  */
@@ -50,7 +50,7 @@ export interface ApiOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-export class PopyApi {
+export class PopAgentApi {
   private readonly http: typeof globalThis.fetch;
 
   constructor(private readonly options: ApiOptions) {
@@ -94,7 +94,7 @@ export class PopyApi {
   async request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
     const headers: Record<string, string> = {
       // Set here and nowhere else, so every call carries it -- including the
-      // ones nobody has written yet (popy.spec §13).
+      // ones nobody has written yet (pop-agent.spec §13).
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
     };
@@ -127,7 +127,7 @@ async function toApiError(response: Response): Promise<ApiError> {
       response.status,
     );
   } catch {
-    // A body that is not JSON is usually a proxy in the way, not Popy.
+    // A body that is not JSON is usually a proxy in the way, not Pop Agent.
     return new ApiError('operation_error', `The server answered ${String(response.status)}.`, response.status);
   }
 }

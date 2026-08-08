@@ -11,7 +11,7 @@ describe('inlineView', () => {
   });
 
   it('refuses the scriptable types that hide inside safe-looking families', () => {
-    // An uploaded page shown inline runs on Popy's origin, where the session
+    // An uploaded page shown inline runs on Pop Agent's origin, where the session
     // token lives. These two are the whole reason the rule is an allowlist.
     expect(inlineView('image/svg+xml')).toBeUndefined();
     expect(inlineView('text/html')).toBeUndefined();

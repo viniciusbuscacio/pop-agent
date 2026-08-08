@@ -1,10 +1,10 @@
-# AGENTS.md — Popy
+# AGENTS.md — Pop Agent
 
-**Read `popy.spec` before doing anything. It is the single source of truth.**
+**Read `pop-agent.spec` before doing anything. It is the single source of truth.**
 
 Quick facts for agents working in this repo:
 
-- Popy is a self-hosted, single-user personal agent platform. Node 22 +
+- Pop Agent is a self-hosted, single-user personal agent platform. Node 22 +
   TypeScript strict, pure ESM, monorepo (`shared/`, `server/`, `web/`).
   The engine is the pi agent (`@earendil-works/pi-coding-agent`) via SDK.
 - Architecture law: the backend is 100% clean architecture —
@@ -24,6 +24,6 @@ Quick facts for agents working in this repo:
 - Zero telemetry. No unasked network calls anywhere (update check is
   opt-in, default OFF).
 
-When a session produces a new rule or decision, update `popy.spec` (bump
+When a session produces a new rule or decision, update `pop-agent.spec` (bump
 its changelog) — not this file, unless the repo-specific quick facts above
 change.

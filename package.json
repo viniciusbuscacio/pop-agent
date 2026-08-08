@@ -1,5 +1,5 @@
 {
-  "name": "popy",
+  "name": "pop-agent",
   "private": true,
   "version": "0.2.0",
   "type": "module",
@@ -15,9 +15,9 @@
   "scripts": {
     "dev": "npm run build -w shared && tsx watch server/src/main.ts",
     "lint": "eslint .",
-    "typecheck": "tsc -b && npm run typecheck -w @popy/web && tsc --noEmit -p tools",
+    "typecheck": "tsc -b && npm run typecheck -w @pop-agent/web && tsc --noEmit -p tools",
     "test": "vitest run",
-    "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @popy/web",
+    "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @pop-agent/web",
     "gate": "npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke",
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",

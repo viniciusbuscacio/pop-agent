@@ -59,7 +59,7 @@ export function SlashMenu({
   );
 }
 
-/** One pickable model: the pair is the identity (popy.spec §15). */
+/** One pickable model: the pair is the identity (pop-agent.spec §15). */
 export interface ModelChoice {
   provider: string;
   model: string;

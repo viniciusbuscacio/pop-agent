@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /**
- * Theme is a property of the device, not of the account (popy.spec §14): it
+ * Theme is a property of the device, not of the account (pop-agent.spec §14): it
  * never travels to the server, so the phone can be dark while the desktop is
  * light. The same value is read by the inline script in index.html before the
  * first paint.
@@ -9,7 +9,7 @@ import { create } from 'zustand';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
-const STORAGE_KEY = 'popy.theme';
+const STORAGE_KEY = 'pop-agent.theme';
 
 function storedChoice(): ThemeChoice {
   try {

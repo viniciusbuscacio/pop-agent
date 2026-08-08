@@ -7,7 +7,7 @@ import { cleanRelative, isHiddenPath, resolveInFiles } from './safe-path.js';
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-safe-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-safe-'));
 });
 
 afterEach(() => {
@@ -37,7 +37,7 @@ describe('resolveInFiles', () => {
   });
 
   it('refuses a symlinked ancestor that escapes the root', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'popy-safe-out-'));
+    const outside = mkdtempSync(join(tmpdir(), 'pop-safe-out-'));
     symlinkSync(outside, join(root, 'escape'));
     expect(() => resolveInFiles(root, 'escape/loot.txt')).toThrow();
     rmSync(outside, { recursive: true, force: true });

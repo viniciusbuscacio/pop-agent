@@ -58,7 +58,7 @@ describe('app', () => {
 
   it('makes the shell always-revalidate so a new build is noticed', async () => {
     // sw.js and the HTML shell must not be cached hard, or the PWA keeps
-    // serving a stale worker and never sees a new version (popy.spec §15).
+    // serving a stale worker and never sees a new version (pop-agent.spec §15).
     const root = await createTestApp().app.request('/');
     expect(root.headers.get('cache-control')).toContain('no-cache');
 

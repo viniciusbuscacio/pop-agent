@@ -34,14 +34,14 @@ describe('compareVersions', () => {
 describe('installCommand', () => {
   it('puts the version in the filename, because npm caches by URL', () => {
     // Without it an update silently reinstalls whatever was fetched first.
-    expect(installCommand('https://popy.example', '0.3.0')).toBe(
-      'npm i -g https://popy.example/cli-0.3.0.tgz',
+    expect(installCommand('https://pop-agent.example', '0.3.0')).toBe(
+      'npm i -g https://pop-agent.example/cli-0.3.0.tgz',
     );
   });
 
   it('does not double the slash when the origin carries one', () => {
-    expect(installCommand('https://popy.example/', '0.3.0')).toBe(
-      'npm i -g https://popy.example/cli-0.3.0.tgz',
+    expect(installCommand('https://pop-agent.example/', '0.3.0')).toBe(
+      'npm i -g https://pop-agent.example/cli-0.3.0.tgz',
     );
   });
 });

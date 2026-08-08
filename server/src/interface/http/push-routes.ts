@@ -4,7 +4,7 @@ import type { PushService } from '../../application/ports/push-repo.js';
 import { badBody, readJson, schemaError } from './body.js';
 
 /**
- * Web Push subscription management (popy.spec §14). The browser fetches the
+ * Web Push subscription management (pop-agent.spec §14). The browser fetches the
  * VAPID public key, subscribes with the push service, and hands the result
  * here; unsubscribe removes it. Sending happens elsewhere, when a run finishes.
  */

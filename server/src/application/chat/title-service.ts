@@ -4,7 +4,7 @@ import type { ChatRepo } from '../ports/chat-repo.js';
 import type { EventSink } from '../ports/event-sink.js';
 
 /**
- * Titles and summaries written by the service model (popy.spec §14-§15, aw's
+ * Titles and summaries written by the service model (pop-agent.spec §14-§15, aw's
  * concept ported). The word-picking fallback names a chat at its first
  * message; this replaces that name once the conversation has a shape -- at the
  * user's third turn, then every tenth -- and writes the summary Phase 4's
@@ -37,7 +37,7 @@ export interface TitleServiceDeps {
   chats: ChatRepo;
   /**
    * One background completion, on whatever provider serves this chat
-   * (popy.spec §15, corrected 07/08). A title used to be hard-wired to
+   * (pop-agent.spec §15, corrected 07/08). A title used to be hard-wired to
    * OpenRouter and a global model id -- so a chat running on Maritaca had its
    * title written by a model that lived somewhere else entirely, if the id
    * existed at all. The provider is now inherited from the chat, and the model

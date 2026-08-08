@@ -1,5 +1,5 @@
 /**
- * Persistence for Web Push subscriptions (popy.spec §14). A subscription is a
+ * Persistence for Web Push subscriptions (pop-agent.spec §14). A subscription is a
  * browser's endpoint plus the keys to encrypt for it.
  */
 export interface PushSubscription {

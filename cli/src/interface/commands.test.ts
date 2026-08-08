@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
-import { PopyApi } from '../infrastructure/api.js';
+import { PopAgentApi } from '../infrastructure/api.js';
 import { ask, chats, login, logout, servers, type Context, type Terminal } from './commands.js';
 
 /**
  * The whole client, driven without a server (docs/cli.md, "Testable without a
- * server through a fake API"). The seam is `fetch`, handed to PopyApi.
+ * server through a fake API"). The seam is `fetch`, handed to PopAgentApi.
  */
 
 class MemoryStore implements ProfileStore {
@@ -41,7 +41,7 @@ function contextWith(
     terminal,
     profile: 'default',
     api: (options) =>
-      new PopyApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
+      new PopAgentApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
   };
 }
 
@@ -52,25 +52,25 @@ const json = (body: unknown, init: ResponseInit = {}): Response =>
     ...init,
   });
 
-describe('popy login', () => {
+describe('pop login', () => {
   it('stores the token and the server it came from', async () => {
     const profiles = new Profiles(new MemoryStore());
     const http = vi.fn(() => Promise.resolve(json({ token: 'tok-1' })));
 
     const code = await login(contextWith(http as never, profiles), {
-      url: 'https://popy.example/',
+      url: 'https://pop-agent.example/',
       password: 'hunter2',
     });
 
     expect(code).toBe(0);
     // The trailing slash is dropped, or every later path becomes `//v1/...`.
-    expect(profiles.get()).toEqual({ url: 'https://popy.example', token: 'tok-1' });
+    expect(profiles.get()).toEqual({ url: 'https://pop-agent.example', token: 'tok-1' });
   });
 
   it('asks for the password rather than taking it on the command line', async () => {
     // A password in argv lands in the shell history and in `ps`.
     const http = vi.fn(() => Promise.resolve(json({ token: 'tok-1' })));
-    await login(contextWith(http as never), { url: 'https://popy.example' });
+    await login(contextWith(http as never), { url: 'https://pop-agent.example' });
 
     const body = JSON.parse(String((http.mock.calls[0]?.[1] as RequestInit).body)) as {
       password: string;
@@ -92,16 +92,16 @@ describe('popy login', () => {
   });
 });
 
-describe('popy without a profile', () => {
+describe('pop without a profile', () => {
   it('points at login instead of failing obscurely', async () => {
     const http = vi.fn(() => Promise.reject(new Error('should never be called')));
     expect(await chats(contextWith(http as never))).toBe(1);
-    expect(said()).toContain('popy login');
+    expect(said()).toContain('pop login');
     expect(http).not.toHaveBeenCalled();
   });
 });
 
-describe('popy servers / logout', () => {
+describe('pop servers / logout', () => {
   it('lists what is signed in', () => {
     const profiles = new Profiles(
       new MemoryStore({ default: { url: 'http://a', token: 't' }, home: { url: 'http://b', token: 't' } }),
@@ -124,7 +124,7 @@ describe('token renewal', () => {
     const profiles = new Profiles(new MemoryStore({ default: { url: 'http://a', token: 'old' } }));
     const http = vi.fn(() =>
       Promise.resolve(
-        json({ chats: [] }, { headers: { 'content-type': 'application/json', 'x-popy-token': 'new' } }),
+        json({ chats: [] }, { headers: { 'content-type': 'application/json', 'x-pop-agent-token': 'new' } }),
       ),
     );
 
@@ -133,7 +133,7 @@ describe('token renewal', () => {
   });
 });
 
-describe('popy "question"', () => {
+describe('pop "question"', () => {
   const events = [
     { kind: 'run-status', chatId: 'chat-1', runId: 'run-1', status: 'running' },
     { kind: 'delta', chatId: 'chat-1', runId: 'run-1', seq: 0, text: 'Forty' },

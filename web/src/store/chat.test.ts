@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import { useChatStore } from './chat';
 
 const send = vi.fn();

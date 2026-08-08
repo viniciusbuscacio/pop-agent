@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { McpServerDTO } from '@popy/shared';
+import type { McpServerDTO } from '@pop-agent/shared';
 import { mcpService } from '../services/mcp';
 interface McpState { servers: McpServerDTO[]|undefined; reload:()=>Promise<void>; }
 let reloadGeneration = 0;

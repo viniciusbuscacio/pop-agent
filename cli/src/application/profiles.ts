@@ -1,18 +1,18 @@
 /**
- * Where `popy` remembers which server it talks to (docs/cli.md, "Client
+ * Where `pop` remembers which server it talks to (docs/cli.md, "Client
  * shape"). One entry per server: a URL and a session token.
  *
  * The token is the client's only secret and it is a full-access credential,
  * so the file is written 0600 and the directory 0700 -- the same care
- * `POPY_DATA_DIR` takes on the server. A laptop is shared with more processes
+ * `POP_AGENT_DATA_DIR` takes on the server. A laptop is shared with more processes
  * than a server is, not fewer.
  *
  * Pure over an injected filesystem so a test never touches a real home
- * directory, and so `popy` can be exercised without a server at all.
+ * directory, and so `pop` can be exercised without a server at all.
  */
 
 export interface Profile {
-  /** Base URL, no trailing slash: `https://popy.example` or `http://127.0.0.1:8787`. */
+  /** Base URL, no trailing slash: `https://pop-agent.example` or `http://127.0.0.1:8787`. */
   url: string;
   token: string;
 }
@@ -22,7 +22,7 @@ export interface ProfileStore {
   write(profiles: Record<string, Profile>): void;
 }
 
-/** The profile a bare `popy` uses when `--server` is absent. */
+/** The profile a bare `pop` uses when `--server` is absent. */
 export const DEFAULT_PROFILE = 'default';
 
 export class Profiles {
@@ -44,7 +44,7 @@ export class Profiles {
 
   /**
    * Replaces only the token, leaving the URL alone. This is what a renewed
-   * `x-popy-token` lands in: the server hands one back when the current token
+   * `x-pop-agent-token` lands in: the server hands one back when the current token
    * is a day old, and a client that ignored it would be signed out on a
    * schedule (spec §9).
    */

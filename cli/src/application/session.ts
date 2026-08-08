@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import { Transcript, emptyRun, type RunState } from './transcript.js';
 
 /**

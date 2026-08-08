@@ -1,12 +1,12 @@
 import type { Clock } from '../../application/ports/clock.js';
 
 /**
- * Sliding-window rate limit for the credential routes (popy.spec §9). In
+ * Sliding-window rate limit for the credential routes (pop-agent.spec §9). In
  * memory, like the lockout: one process, one account.
  *
  * Behind `tailscale serve` every request arrives from 127.0.0.1, so in the
  * home setup this collapses to a single global window. That is acceptable for
- * a single-user app -- and the moment Popy sits behind a real proxy that sets
+ * a single-user app -- and the moment Pop Agent sits behind a real proxy that sets
  * X-Forwarded-For, the same code starts limiting per client.
  */
 export type RateLimitDecision = { allowed: true } | { allowed: false; retryAfterSeconds: number };

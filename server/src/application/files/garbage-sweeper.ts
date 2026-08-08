@@ -2,7 +2,7 @@ import type { MaintenanceJob } from '../ports/maintenance-job.js';
 import type { FilesService } from './files-service.js';
 
 /**
- * Empties what the Garbage has kept long enough (popy.spec §14, §21).
+ * Empties what the Garbage has kept long enough (pop-agent.spec §14, §21).
  *
  * Housekeeping, not a task: nobody asked for it, there is no chat and no row,
  * and the agent cannot be asked about it. It rides the scheduler's tick like
@@ -32,10 +32,10 @@ export class GarbageSweeper implements MaintenanceJob {
       const purged = this.deps.files.purgeExpired();
       // Silence when there was nothing to do: a daily line saying zero is how
       // a log stops being read.
-      if (purged > 0) this.deps.onJournal?.(`popy garbage sweep: purged=${String(purged)}`);
+      if (purged > 0) this.deps.onJournal?.(`pop garbage sweep: purged=${String(purged)}`);
     } catch (error) {
       this.deps.onJournal?.(
-        `popy garbage sweep failed: ${error instanceof Error ? error.message : 'unknown'}`,
+        `pop garbage sweep failed: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
   }

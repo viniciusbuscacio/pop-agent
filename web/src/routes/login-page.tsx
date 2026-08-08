@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 
 /**
- * Vault-style login: one password field, no user name (popy.spec §9).
+ * Vault-style login: one password field, no user name (pop-agent.spec §9).
  *
  * When the server locks the account, the countdown ticks on screen rather than
  * showing a frozen number -- being told "wait 4 minutes" and having no idea

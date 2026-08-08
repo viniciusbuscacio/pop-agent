@@ -1,5 +1,5 @@
 {
-  "name": "@popy/server",
+  "name": "@pop-agent/server",
   "version": "0.2.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "@earendil-works/pi-coding-agent": "0.83.0",
     "@hono/node-server": "^2.0.12",
     "@huggingface/transformers": "^3.0.2",
-    "@popy/shared": "*",
+    "@pop-agent/shared": "*",
     "@simplewebauthn/server": "^13.1.1",
     "argon2": "^0.45.1",
     "better-sqlite3": "^13.0.2",
@@ -23,6 +23,6 @@
     "@types/web-push": "^3.6.4"
   },
   "bin": {
-    "popyman": "./dist/manager/main.js"
+    "popman": "./dist/manager/main.js"
   }
 }

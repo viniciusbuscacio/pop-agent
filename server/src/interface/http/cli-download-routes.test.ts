@@ -14,11 +14,11 @@ import { createCliDownloadRoutes } from './cli-download-routes.js';
 describe('cli download', () => {
   let pack: string;
 
-  const routes = (popyVersion: string) =>
-    createCliDownloadRoutes({ cliPack: pack, versions: { popyVersion } });
+  const routes = (popAgentVersion: string) =>
+    createCliDownloadRoutes({ cliPack: pack, versions: { popAgentVersion } });
 
   beforeEach(() => {
-    pack = mkdtempSync(join(tmpdir(), 'popy-pack-'));
+    pack = mkdtempSync(join(tmpdir(), 'pop-pack-'));
     writeFileSync(join(pack, 'cli-0.2.0.tgz'), 'tarball');
   });
 

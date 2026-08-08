@@ -5,7 +5,7 @@ import { apiError } from './errors.js';
 /**
  * Request-body plumbing shared by the routes: read JSON, and turn a Zod
  * failure into the project's error envelope with a code the frontend can
- * branch on (popy.spec §13).
+ * branch on (pop-agent.spec §13).
  */
 
 export async function readJson(c: Context): Promise<unknown> {
@@ -28,10 +28,10 @@ export function badBody(c: Context): Response {
 export function schemaError(c: Context, error: z.ZodError): Response {
   const issues = error.issues;
   if (issues.some((issue) => issue.code === 'unrecognized_keys')) {
-    return apiError(c, 400, 'invalid_field', 'The request carries a field Popy does not accept.');
+    return apiError(c, 400, 'invalid_field', 'The request carries a field Pop Agent does not accept.');
   }
   if (issues.some((issue) => issue.code === 'invalid_type')) {
     return apiError(c, 400, 'missing_field', 'The request is missing a required field.');
   }
-  return apiError(c, 400, 'invalid_field', 'The request has a field Popy cannot accept.');
+  return apiError(c, 400, 'invalid_field', 'The request has a field Pop Agent cannot accept.');
 }

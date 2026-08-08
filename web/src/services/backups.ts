@@ -1,4 +1,4 @@
-import type { BackupDTO, BackupsResponse } from '@popy/shared';
+import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import { apiDownload, apiRequest } from './api';
 
 export const backupsService = {

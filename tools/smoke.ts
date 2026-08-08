@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * End-to-end smoke test (popy.spec §20).
+ * End-to-end smoke test (pop-agent.spec §20).
  *
  * Unit tests build the app in-process; this one starts the real server as its
  * own process against a throwaway data directory and talks to it over HTTP,
@@ -356,24 +356,24 @@ async function run(base: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'popy-smoke-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-smoke-'));
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
 
-  console.log(`smoke: starting popy on ${base} with data in ${dataDir}`);
+  console.log(`smoke: starting pop on ${base} with data in ${dataDir}`);
   const child = spawn(process.execPath, [TSX_CLI, SERVER_MAIN], {
     env: {
       ...process.env,
-      POPY_PORT: String(port),
-      POPY_BIND: '127.0.0.1',
-      POPY_DATA_DIR: dataDir,
+      POP_AGENT_PORT: String(port),
+      POP_AGENT_BIND: '127.0.0.1',
+      POP_AGENT_DATA_DIR: dataDir,
       // Explicit, not inherited: the smoke runs in the gate and in CI, and it
       // must cost nothing no matter what the machine's default engine is.
-      POPY_AGENT: 'fake',
+      POP_AGENT_ENGINE: 'fake',
       // A disposable instance never holds the real systemd switch: the fake
       // only logs the call (field lesson: a validation run once restarted
       // the live service). Defense in depth even though smoke clicks nothing.
-      POPY_SERVICE_CONTROL: 'fake',
+      POP_AGENT_SERVICE_CONTROL: 'fake',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -38,7 +38,7 @@ describe('settings service', () => {
   });
 
   it('fills fields a document saved before they existed', () => {
-    // The store may hold a document from an older Popy; reading it must not
+    // The store may hold a document from an older Pop Agent; reading it must not
     // lose the fields that were invented since.
     const repo = new MemorySettings();
     repo.set('app', { language: 'en' });

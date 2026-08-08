@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Db } from './types.js';
 
 /**
- * Migration runner (popy.spec §6). Numbered .sql files, applied in order, each
+ * Migration runner (pop-agent.spec §6). Numbered .sql files, applied in order, each
  * inside its own transaction, recorded in schema_migrations so a restart is a
  * no-op. Deliberately not a library: the whole contract is "run the files that
  * have not run yet", and owning it keeps the schema readable as plain SQL.

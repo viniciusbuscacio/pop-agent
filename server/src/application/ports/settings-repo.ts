@@ -1,5 +1,5 @@
 /**
- * Persistence port for the settings table (popy.spec §6): one JSON document
+ * Persistence port for the settings table (pop-agent.spec §6): one JSON document
  * per key. The application layer only ever sees this interface; the SQLite
  * adapter lives in infrastructure and can be swapped without touching callers.
  */

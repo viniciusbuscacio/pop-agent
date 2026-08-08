@@ -1,20 +1,20 @@
 # Changelog
 
-All notable changes to Popy. Dates are ISO. See `popy.spec` for the full
+All notable changes to Pop Agent. Dates are ISO. See `pop-agent.spec` for the full
 normative history.
 
 ## Unreleased
 
 ### Added
 
-- **Popy learns from conversations you did not flag.** Every few minutes it
+- **Pop Agent learns from conversations you did not flag.** Every few minutes it
   reads one conversation that has gone quiet and, if something in it was a
   procedure worth keeping, writes it down as a skill. Nothing to press and
   nothing to remember -- and if there is nothing to learn, which is the usual
   answer, it costs nothing at all: a round with no new conversation makes no
   request to a model. Anything it writes waits for you on the Skills screen,
   the same queue as a skill you asked for.
-- **A skill Popy already knows gets a rewrite, not an overwrite.** When what
+- **A skill Pop Agent already knows gets a rewrite, not an overwrite.** When what
   it learned matches a skill you have, the new version waits beside the old
   one with the text laid out, and the skill you approved keeps working until
   you say yes. A conversation that read a web page is never learned from at
@@ -24,11 +24,11 @@ normative history.
   a button to bring any of them back. Archived, never deleted: a skill used
   once a year is exactly the one a "delete what is idle" rule would throw
   away.
-- **A line on the Skills screen says what Popy has been doing**: when it last
+- **A line on the Skills screen says what Pop Agent has been doing**: when it last
   looked and how much is waiting on you. Settings → Skills can slow it down
   or switch it off.
 - **A conversation can become a skill, by asking.** Say "vira skill" -- or
-  the same thing in English or Spanish, or any way you phrase it -- and Popy
+  the same thing in English or Spanish, or any way you phrase it -- and Pop Agent
   distils what just worked into a skill that comes back on its own the next
   time it is relevant. There is no button and no command to remember: the
   request is understood as a request. New skills wait for you on the Skills
@@ -38,7 +38,7 @@ normative history.
   A badge for built-in and for learned, a queue for anything waiting on your
   approval, and a use count per skill -- so a skill nothing ever routes is
   visible as such.
-- **A Service Model per provider.** The model Popy uses for its own work --
+- **A Service Model per provider.** The model Pop Agent uses for its own work --
   naming conversations, summaries, tidying voice notes -- now sits beside
   each provider's key instead of being one global choice. It follows that
   provider's chat model until you pick something cheaper. The old single
@@ -58,21 +58,21 @@ normative history.
 
 ### Fixed
 
-- **A skill whose steps contain a command no longer gets thrown away.** Popy
+- **A skill whose steps contain a command no longer gets thrown away.** Pop Agent
   asked itself for the procedure in a format where every quote and brace had to
   be escaped, so the moment a skill contained a real `curl` line the whole thing
   was discarded as unreadable. It now writes the procedure plainly, with nothing
   to escape.
-- **A skill Popy was writing no longer vanishes when the answer runs long.**
+- **A skill Pop Agent was writing no longer vanishes when the answer runs long.**
   If the model ran out of room mid-sentence, everything it had written was
   discarded and the conversation was marked as read, so a procedure it had
   just worked out was lost without a trace. It now keeps whatever finished and
   comes back for the rest.
-- **Popy no longer refuses to learn from conversations about itself.** The
+- **Pop Agent no longer refuses to learn from conversations about itself.** The
   check that keeps it from learning anything out of a page it read was also
   reading your own messages, and it treats the words "system prompt" as a
   warning sign -- so the conversations most worth learning from, the ones
-  about how Popy works, were quietly the ones it always skipped. It now looks
+  about how Pop Agent works, were quietly the ones it always skipped. It now looks
   only at what a tool brought back from outside.
 - **The injection detector stops flagging ordinary API notes.** Text like
   "send an Authorization header, and a session token" read as an attempt to
@@ -84,7 +84,7 @@ normative history.
   written to disk and then read straight back as "learned", so the automatic
   housekeeping still considered it its own.
 
-- **Files is a plain folder on disk.** `POPY_DATA_DIR/files/` with real
+- **Files is a plain folder on disk.** `POP_AGENT_DATA_DIR/files/` with real
   names is the single source of truth. The Files tab -- its own sidebar tab
   next to Chats and Tasks -- renders the disk: nested folders with a `+`/`−`
   toggle, "New folder", uploads landing in the open folder, rename and move
@@ -100,19 +100,19 @@ normative history.
   this replaces -- id-named blobs, the `artifacts` table, versions,
   `save_artifact`/`read_artifact` -- is gone; re-saving a name overwrites,
   as a folder should.
-- **`popy` -- the terminal client, with hands.** A chat in the terminal is
-  an ordinary Popy chat (same memory, budget, taint guard, PWA visibility),
+- **`pop` -- the terminal client, with hands.** A chat in the terminal is
+  an ordinary Pop Agent chat (same memory, budget, taint guard, PWA visibility),
   but a message typed in a terminal hands the agent a second set of tools --
   `local_bash`, `local_read`, `local_write`, `local_edit` -- running on the
   machine that typed it, over a dedicated WebSocket hands channel with a
   heartbeat. Hands belong to the message, not the chat: each message runs on
   the machine it was typed on; a phone message gets the server's tools only.
-  TUI built on pi-tui, one-shot mode (`popy "…"`), login and per-server
+  TUI built on pi-tui, one-shot mode (`pop "…"`), login and per-server
   profiles. The server serves its own client
-  (`npm i -g https://your-popy/cli-X.Y.Z.tgz`) and the attach compares
+  (`npm i -g https://your-pop/cli-X.Y.Z.tgz`) and the attach compares
   versions: silent when compatible, one line when merely behind, refused
   below the server's minimum.
-- **`popyman` -- the operator's tool.** `start | stop | restart | status |
+- **`popman` -- the operator's tool.** `start | stop | restart | status |
   backup | backups | restore | reset-password | update`, shipped with the
   server and running only there; the only thing that touches systemd, SQLite
   and the backups directory.
@@ -148,7 +148,7 @@ normative history.
   remembered per device.
 - **Restart resilience**: a server restart stores the partial answer of any
   in-flight run, marked as interrupted, instead of losing it.
-- **Settings -> Updates**: three cards -- the PWA update check, the Popy
+- **Settings -> Updates**: three cards -- the PWA update check, the Pop Agent
   server card (latest origin tag + the update command, with a push
   notification per new version that deep-links here), and the environment
   versions (pi, Node, ffmpeg, poppler, tesseract, whisper.cpp).
@@ -182,7 +182,7 @@ normative history.
   service worker, the Settings opt-in, the subscription, the send when a run
   finishes — but the notifications were signed with a contact address ending in
   `@localhost`, which Apple rejects outright (403 BadJwtToken) without telling
-  anyone. Popy now signs with a real URL, and `POPY_PUSH_SUBJECT` lets the
+  anyone. Pop Agent now signs with a real URL, and `POP_AGENT_PUSH_SUBJECT` lets the
   operator use their own address.
 - **Every delete from the UI looked dead**: the API layer parsed JSON out of
   every ok response, but a DELETE answers 204 with no body, so the parse threw
@@ -221,7 +221,7 @@ Everything on the v0.2 roadmap.
 
 - Attachments reach the agent through its workspace; it extracts what it needs
   with its own tools rather than a bundled PDF/OCR pipeline.
-- Popy does not update itself from the running process; the update is a gated
+- Pop Agent does not update itself from the running process; the update is a gated
   shell command.
 
 ## v0.1.0 — 2026-07-31
@@ -246,10 +246,10 @@ real tools on your own server, remembers across conversations, and keeps notes.
   list/read/search/write tools.
 - **web_fetch** — a public page in, its readable text out, with SSRF protection.
 - **Memory** — full-text search over every message, tools to search and open
-  past conversations, and a living document Popy keeps about you.
+  past conversations, and a living document Pop Agent keeps about you.
 - **Local voice** — record a note, transcribed on the server with whisper.cpp,
   no tokens spent.
-- **PWA** — installable, offline shell, update prompt, the final Popy icon.
+- **PWA** — installable, offline shell, update prompt, the final Pop Agent icon.
 
 ### Security
 

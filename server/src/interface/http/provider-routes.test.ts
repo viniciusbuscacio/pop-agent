@@ -502,7 +502,7 @@ describe('subscription sign-in routes', () => {
   });
 });
 
-describe('custom provider instances (popy.spec §15)', () => {
+describe('custom provider instances (pop-agent.spec §15)', () => {
   async function createCustom(name?: string): Promise<string> {
     const res = await authed('/v1/providers/custom', {
       method: 'POST',

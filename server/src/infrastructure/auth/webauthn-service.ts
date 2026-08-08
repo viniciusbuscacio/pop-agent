@@ -11,7 +11,7 @@ import {
 import type { WebAuthnGateway, WebAuthnRepo } from '../../application/ports/webauthn-repo.js';
 
 /**
- * Passkeys (popy.spec §9): registering a phone's Face ID / a security key, and
+ * Passkeys (pop-agent.spec §9): registering a phone's Face ID / a security key, and
  * unlocking with it instead of the password. The ceremony's challenge is held
  * in memory for the moment between issuing the options and verifying the
  * response -- one at a time is enough for a single-user server.
@@ -28,7 +28,7 @@ export interface WebAuthnServiceDeps {
 }
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
-const RP_NAME = 'Popy';
+const RP_NAME = 'Pop Agent';
 
 interface PendingChallenge {
   challenge: string;
@@ -45,7 +45,7 @@ export class WebAuthnService implements WebAuthnGateway {
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
       rpID: rpId,
-      userName: 'popy',
+      userName: 'pop',
       attestationType: 'none',
       excludeCredentials: this.deps.repo.list().map((credential) => ({ id: credential.id })),
       authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },

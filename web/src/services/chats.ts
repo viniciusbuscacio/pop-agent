@@ -9,7 +9,7 @@ import type {
   PatchChatRequest,
   SendMessageResponse,
   StopRunResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 export const chatsService = {

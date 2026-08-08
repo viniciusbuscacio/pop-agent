@@ -9,7 +9,7 @@ let outside: string;
 let jail: NoteJail;
 
 beforeEach(() => {
-  const base = mkdtempSync(join(tmpdir(), 'popy-jail-'));
+  const base = mkdtempSync(join(tmpdir(), 'pop-jail-'));
   root = join(base, 'notes');
   outside = join(base, 'outside');
   mkdirSync(root, { recursive: true });

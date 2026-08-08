@@ -15,7 +15,7 @@ describe('updates store', () => {
   it('remembers a valid choice on this device only', () => {
     useUpdatesStore.getState().setIntervalMinutes(1440);
 
-    expect(localStorage.getItem('popy.updateCheckMinutes')).toBe('1440');
+    expect(localStorage.getItem('pop-agent.updateCheckMinutes')).toBe('1440');
     expect(useUpdatesStore.getState().intervalMinutes).toBe(1440);
   });
 

@@ -1,7 +1,7 @@
-import type { HealthResponse } from '@popy/shared';
+import type { HealthResponse } from '@pop-agent/shared';
 
 /**
- * The connection monitor (popy.spec §14). It answers one question on the
+ * The connection monitor (pop-agent.spec §14). It answers one question on the
  * user's behalf -- can this app still reach its server? -- and it keeps the
  * two ways of answering no apart, because they need different words and
  * different actions. A phone with no signal is the user's to fix; a server

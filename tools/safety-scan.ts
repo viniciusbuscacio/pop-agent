@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { INJECTION_PATTERNS, sanitize } from '../server/src/domain/safety/sanitize.js';
 
 /**
- * False-positive meter for the safety layer (popy.spec §10, Backlog #8).
+ * False-positive meter for the safety layer (pop-agent.spec §10, Backlog #8).
  *
  * The injection patterns are easy to test in the direction that flatters them:
  * write a payload, watch it match. The question that decides whether they can
@@ -27,7 +27,7 @@ function walk(dir: string, out: string[] = []): string[] {
     if (statSync(full).isDirectory()) {
       if (['node_modules', '.git', 'dist', 'pack', 'coverage'].includes(entry)) continue;
       walk(full, out);
-    } else if (entry.endsWith('.md') || entry === 'popy.spec') {
+    } else if (entry.endsWith('.md') || entry === 'pop-agent.spec') {
       if (!full.includes('injection-tests')) out.push(full);
     }
   }

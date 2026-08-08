@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react';
-import type { OAuthStateResponse, ProviderStatusDTO, ProvidersResponse } from '@popy/shared';
+import type { OAuthStateResponse, ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { Button } from '../ui/controls';
 
 /**
- * The subscription sign-in, inline in the provider's card (popy.spec §15,
+ * The subscription sign-in, inline in the provider's card (pop-agent.spec §15,
  * fase 1.5). The flow runs on the server; this section starts it, polls its
  * transcript every two seconds and renders it: a link to open, a device code
  * to type, at most one question to answer. No token ever reaches the browser.
  */
 
 /**
- * The login methods pi offers for a subscription, by the id it sends. Popy
+ * The login methods pi offers for a subscription, by the id it sends. Pop Agent
  * relabels them because pi's own wording sells the wrong one: it calls the
  * browser redirect "(default)", and that redirect is the one method that
  * cannot complete on a self-hosted install -- the provider sends the browser
  * to a loopback address on the machine doing the browsing, which is not the
- * machine running Popy. The code method has no callback at all, so it is the
+ * machine running Pop Agent. The code method has no callback at all, so it is the
  * one that works from any device, and it leads here.
  */
 const METHOD_DEVICE_CODE = 'device_code';
@@ -294,7 +294,7 @@ export function OAuthSection({
 
 /**
  * How to sign in, when the flow offers a choice. pi's two known methods get
- * Popy's own words and the one that works everywhere goes first; anything
+ * Pop Agent's own words and the one that works everywhere goes first; anything
  * else pi may add later is rendered as it arrives, unrelabelled.
  */
 function MethodChoice({

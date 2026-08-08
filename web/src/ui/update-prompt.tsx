@@ -10,7 +10,7 @@ import { setUpdateChecker } from '../services/update-signal';
 import { useUpdatesStore } from '../store/updates';
 
 /**
- * Offers the new version instead of waiting for one (popy.spec §14, §15).
+ * Offers the new version instead of waiting for one (pop-agent.spec §14, §15).
  *
  * With silent auto-update an installed PWA keeps serving the previous build
  * until it is closed and reopened cold -- which on a phone can be days, and

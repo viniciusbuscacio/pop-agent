@@ -13,8 +13,8 @@ const JOB = { audioBase64: Buffer.from('fake audio').toString('base64'), format:
 
 function transcriber(overrides: Partial<ConstructorParameters<typeof WhisperTranscriber>[0]> = {}) {
   return new WhisperTranscriber({
-    whisperCli: 'popy-test-missing-whisper-cli',
-    ffmpeg: 'popy-test-missing-ffmpeg',
+    whisperCli: 'pop-test-missing-whisper-cli',
+    ffmpeg: 'pop-test-missing-ffmpeg',
     resolveModel: () => Promise.resolve('/nowhere/ggml-medium.bin'),
     ...overrides,
   });

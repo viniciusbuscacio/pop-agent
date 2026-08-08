@@ -24,7 +24,7 @@ let deleteTool: ToolDefinition;
 let searchTool: ToolDefinition;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-filetools-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-filetools-'));
   files = new FilesService({ root, clock: { now: () => Date.now() } });
   const tools = buildFileTools(defineTool, files);
   deleteTool = tools[0] as ToolDefinition;

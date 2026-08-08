@@ -13,9 +13,9 @@ import { cleanRelative, isHiddenPath, resolveInFiles } from '../../domain/files/
 import type { Clock } from '../ports/clock.js';
 
 /**
- * Files as a plain folder (popy.spec §14, "Files as a plain folder").
+ * Files as a plain folder (pop-agent.spec §14, "Files as a plain folder").
  *
- * `POPY_DATA_DIR/files/` is the single source of truth: real names, real
+ * `POP_AGENT_DATA_DIR/files/` is the single source of truth: real names, real
  * subfolders, no catalog. This service is the one place that touches the tree
  * on behalf of the app -- the tab, the upload, the download, the agent's
  * delete tool. Deleting moves into `Garbage/` and notes where the entry came
@@ -68,7 +68,7 @@ export type RestoreResult = 'ok' | 'not-found' | 'name-taken';
 export class FilesService {
   constructor(
     private readonly deps: {
-      /** Absolute path of the Files root (`POPY_DATA_DIR/files/`). */
+      /** Absolute path of the Files root (`POP_AGENT_DATA_DIR/files/`). */
       root: string;
       clock: Clock;
       /** Told after any mutation, so the session catalog can refresh. */
@@ -277,7 +277,7 @@ export class FilesService {
   /** The jail plus the two visibility rules: no dotfiles, no reaching into Garbage. */
   private resolveVisible(relativePath: string): string {
     const cleaned = cleanRelative(relativePath);
-    if (isHiddenPath(cleaned)) throw new Error('Hidden paths are reserved for Popy.');
+    if (isHiddenPath(cleaned)) throw new Error('Hidden paths are reserved for Pop Agent.');
     if (cleaned === GARBAGE_DIR || cleaned.startsWith(`${GARBAGE_DIR}/`)) {
       throw new Error('Garbage is managed through the trash operations.');
     }

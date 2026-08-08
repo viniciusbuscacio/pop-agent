@@ -1,9 +1,9 @@
 import type { Embedder, EmbeddingKind } from '../../application/ports/embedder.js';
 
 /**
- * Local embeddings with transformers.js (popy.spec §7): the multilingual
+ * Local embeddings with transformers.js (pop-agent.spec §7): the multilingual
  * e5-small model, run on the server's CPU. The model (~110 MB) downloads once
- * into POPY_DATA_DIR/models and is cached; the whole library is imported
+ * into POP_AGENT_DATA_DIR/models and is cached; the whole library is imported
  * dynamically so an install running the fake bridge -- CI, the smoke -- never
  * loads it.
  *
@@ -16,7 +16,7 @@ const MODEL_ID = 'Xenova/multilingual-e5-small';
 export const EMBEDDING_DIMENSION = 384;
 
 export interface TransformersEmbedderOptions {
-  /** Where the model files are cached; POPY_DATA_DIR/models. */
+  /** Where the model files are cached; POP_AGENT_DATA_DIR/models. */
   cacheDir: string;
 }
 

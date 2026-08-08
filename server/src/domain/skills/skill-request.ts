@@ -27,9 +27,9 @@ function fold(text: string): string {
 }
 
 /**
- * The request, in the languages Popy is spoken to. Portuguese first because
+ * The request, in the languages Pop Agent is spoken to. Portuguese first because
  * that is what the user writes; English and Spanish because the rule is that
- * the trigger works in any language (popy.spec §8), and a phrase list is the
+ * the trigger works in any language (pop-agent.spec §8), and a phrase list is the
  * only half of the router that can honour that without a translation pass.
  */
 const PHRASES = [

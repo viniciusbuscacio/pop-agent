@@ -3,7 +3,7 @@ import { extname, join } from 'node:path';
 import type { MaintenanceJob } from '../../application/ports/maintenance-job.js';
 
 /**
- * The orphan sweep (popy.spec §21): once a day, remove the derived files in
+ * The orphan sweep (pop-agent.spec §21): once a day, remove the derived files in
  * the workspace that nothing points at any more.
  *
  * Two targets, both deliberately narrow:
@@ -19,7 +19,7 @@ import type { MaintenanceJob } from '../../application/ports/maintenance-job.js'
  * Everything else is untouchable, and the list of what this must never do is
  * longer than what it does: never the attachments of a living chat, never the
  * database, never a directory in the workspace root (that is someone's
- * project), never a path outside `POPY_WORKSPACE`, never a symlink. Session
+ * project), never a path outside `POP_AGENT_WORKSPACE`, never a symlink. Session
  * history is forever -- a sweep only ever removes files derived from it.
  *
  * Deletion failures are swallowed by design: a file already gone is the goal.
@@ -54,7 +54,7 @@ export class WorkspaceSweeper implements MaintenanceJob {
   run(): void {
     const result = this.sweep();
     this.deps.onJournal?.(
-      `popy sweep: orphan attachment folders=${String(result.attachments)} ` +
+      `pop sweep: orphan attachment folders=${String(result.attachments)} ` +
         `scratch files=${String(result.scratch)}`,
     );
   }

@@ -3,7 +3,7 @@ import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
 import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
 
 /**
- * Application-owned settings (popy.spec §13). Deliberately not the wire DTO:
+ * Application-owned settings (pop-agent.spec §13). Deliberately not the wire DTO:
  * the interface layer maps between the two, so a rename here never silently
  * changes the API.
  *
@@ -12,21 +12,21 @@ import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
  */
 export interface AppSettings {
   language: 'en';
-  /** Provider used when a chat does not choose its own (popy.spec §15). */
+  /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
-  /** whisper.cpp model for voice transcription (popy.spec §14). */
+  /** whisper.cpp model for voice transcription (pop-agent.spec §14). */
   voiceModel: string;
   /** Whether an LLM pass improves the raw transcript. Off = raw text, fast. */
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
   /**
-   * Whether a skill Popy distils from a conversation goes straight into the
-   * router (popy.spec §8). Off -- the factory default -- means it is saved but
+   * Whether a skill Pop Agent distils from a conversation goes straight into the
+   * router (pop-agent.spec §8). Off -- the factory default -- means it is saved but
    * held until the user accepts it on the Skills screen. Named for the ON
    * state so that "off" reads as the cautious one it is: this flag is the
    * declared mitigation against a prompt injection earning a permanent place
@@ -35,7 +35,7 @@ export interface AppSettings {
   autoApproveSkills: boolean;
   /**
    * Whether the background distiller reads finished conversations at all
-   * (popy.spec §8, fase c). On by default: a tick with nothing idle and unread
+   * (pop-agent.spec §8, fase c). On by default: a tick with nothing idle and unread
    * makes no provider call, so the cost follows use and vanishes with it.
    */
   distillSkills: boolean;

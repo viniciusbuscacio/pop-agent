@@ -1,6 +1,6 @@
 /**
  * Telling the agent where a message came from, and only when it is news
- * (popy.spec §13).
+ * (pop-agent.spec §13).
  *
  * The naive version puts "this arrived through the CLI" on every turn. In a
  * fifty-turn conversation that is fifty copies of a fact that mattered once,
@@ -14,7 +14,7 @@
  */
 
 const NAMES: Record<string, string> = {
-  cli: 'the terminal (Popy CLI)',
+  cli: 'the terminal (Pop Agent CLI)',
   web: 'the web app in a browser',
   pwa: 'the installed app',
   desktop: 'the desktop app',
@@ -41,9 +41,9 @@ export function channelNote(
 
   const now = describe(current.kind, current.platform);
   if (previousKind === undefined) {
-    return `[Popy: this message arrived through ${now}.]`;
+    return `[Pop Agent: this message arrived through ${now}.]`;
   }
-  return `[Popy: this message arrived through ${now}; the earlier ones came through ${
+  return `[Pop Agent: this message arrived through ${now}; the earlier ones came through ${
     NAMES[previousKind] ?? previousKind
   }.]`;
 }

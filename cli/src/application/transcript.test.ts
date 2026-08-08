@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import { Transcript, emptyRun } from './transcript.js';
 
 const CHAT = 'chat-1';
@@ -31,7 +31,7 @@ describe('Transcript', () => {
   });
 
   it('ignores another run on the same connection', () => {
-    // Popy has one user and the hub sends everything to everyone, so a
+    // Pop Agent has one user and the hub sends everything to everyone, so a
     // terminal watching one answer really does see another chat go past.
     const transcript = fold([
       delta('mine', 0),

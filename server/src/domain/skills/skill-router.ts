@@ -2,7 +2,7 @@ import { dot, fuseRankings } from '../memory/rank-fusion.js';
 import type { SelectedSkill, Skill } from './skill.js';
 
 /**
- * The Skill Router (popy.spec §8): given what the user asked, pick the handful
+ * The Skill Router (pop-agent.spec §8): given what the user asked, pick the handful
  * of skills worth putting in front of the model this turn.
  *
  * Two rankings, fused. The lexical one is token overlap between the request and
@@ -11,7 +11,7 @@ import type { SelectedSkill, Skill } from './skill.js';
  * is cosine over the embeddings, and it is what reaches a "recipes" skill from
  * "help me make dinner" -- a request that shares no word with it. Neither
  * ranking has to know the other's score scale, because they are merged with the
- * same reciprocal-rank fusion the memory search uses (popy.spec §7). That
+ * same reciprocal-rank fusion the memory search uses (pop-agent.spec §7). That
  * replaces the hand-tuned blend this router used to carry, where a cosine was
  * turned into lexical points by a constant nobody could justify.
  *
@@ -25,7 +25,7 @@ import type { SelectedSkill, Skill } from './skill.js';
  * personal server should not pay a round trip to decide which instructions to
  * read. But it is worth knowing what that costs here, because "why not just
  * match words?" is the obvious question: the skills ship with English metadata
- * and Vinicius writes to Popy in Portuguese, so the two share almost no tokens
+ * and Vinicius writes to Pop Agent in Portuguese, so the two share almost no tokens
  * at all. Over ten labelled requests the lexical half alone found two, and both
  * were requests where the right answer was "nothing"; its single real hit was
  * `web-browsing` on "procura na internet", and only because "internet" happens
@@ -48,7 +48,7 @@ export interface RouteOptions {
   /** The semantic gate: standard deviations above this request's own mean. */
   minZ?: number;
   /**
-   * Optional embeddings (popy.spec §8): the message's vector and each skill's,
+   * Optional embeddings (pop-agent.spec §8): the message's vector and each skill's,
    * in the same order as `skills`. When present, the semantic ranking joins the
    * fusion; when absent, routing is lexical and nothing else changes.
    */
@@ -61,7 +61,7 @@ const DEFAULT_MIN_SCORE = 1;
 
 /**
  * The semantic bars, measured against the real vault (24 skills, e5) rather
- * than guessed -- which is what popy.spec §8 asks for.
+ * than guessed -- which is what pop-agent.spec §8 asks for.
  *
  * e5 compresses everything into a narrow band: over 192 query/skill pairs the
  * cosines ran 0.70 to 0.84, with the 90th percentile at 0.80. An absolute
@@ -105,7 +105,7 @@ interface Candidate {
 
 /**
  * The bodies of the pinned skills, in vault order. They skip routing entirely:
- * the bridge puts them in the session's system prompt (popy.spec §8).
+ * the bridge puts them in the session's system prompt (pop-agent.spec §8).
  */
 export function pinnedBodies(skills: readonly Skill[]): string[] {
   return skills.filter((skill) => skill.pinned === true).map((skill) => skill.body);

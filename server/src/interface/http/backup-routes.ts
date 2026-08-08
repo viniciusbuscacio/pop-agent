@@ -1,11 +1,11 @@
 import { createReadStream } from 'node:fs';
 import { Hono } from 'hono';
-import type { BackupDTO, BackupsResponse } from '@popy/shared';
+import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import type { BackupService } from '../../application/ports/backup-service.js';
 import { apiError } from './errors.js';
 
 /**
- * Backup and restore over HTTP (popy.spec §16). Settings → Backup lists the
+ * Backup and restore over HTTP (pop-agent.spec §16). Settings → Backup lists the
  * snapshots, makes one, downloads one, restores one (a restart applies it) and
  * deletes one. The download streams the tar.gz straight off disk.
  */

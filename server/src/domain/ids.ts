@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto';
 
 /**
- * Identifiers and internal file names (popy.spec §6). Two shapes, one
+ * Identifiers and internal file names (pop-agent.spec §6). Two shapes, one
  * generator:
  *
  * - **Entity id**: `prefix-<11 base62>` with a full-word prefix -- `chat-`,
  *   `message-`, `run-`, `file-`. The hyphen marks it as an id.
  * - **Internal file name**: `prefix_<11 base62>.ext`, e.g. `audio_2f9FmGo58Jm.wav`.
- *   The underscore marks it as a file Popy made, not a user's.
+ *   The underscore marks it as a file Pop Agent made, not a user's.
  *
  * Eleven base62 characters is ~65 bits from a CSPRNG -- more entropy than the
  * old hex ids, and drawn without modulo bias by rejection sampling, so nothing
@@ -34,7 +34,7 @@ export function entityId(prefix: string): string {
   return `${prefix}-${randomBase62(ID_LENGTH)}`;
 }
 
-/** A `prefix_<11 base62>.ext` name for a file Popy creates internally. */
+/** A `prefix_<11 base62>.ext` name for a file Pop Agent creates internally. */
 export function randomFileName(prefix: string, extension: string): string {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
   return `${prefix}_${randomBase62(ID_LENGTH)}${ext}`;

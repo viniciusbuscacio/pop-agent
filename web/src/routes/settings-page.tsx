@@ -10,7 +10,7 @@ import type {
   SkillDTO,
   StorageResponse,
   UsageResponse,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ProvidersSection } from './providers-section';
 import { ApiError } from '../services/api';
@@ -34,7 +34,7 @@ import { relativeTime } from '../lib/time';
 
 /**
  * Settings as a full screen with a back button -- never a drawer or a modal
- * (permanent house veto, popy.spec §14). Sections sit on the left on a wide
+ * (permanent house veto, pop-agent.spec §14). Sections sit on the left on a wide
  * screen and become a row of tabs when there is no room for a column.
  */
 
@@ -69,7 +69,7 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  // A push notification deep-links here with ?section=updates (popy.spec §15).
+  // A push notification deep-links here with ?section=updates (pop-agent.spec §15).
   const requested = new URLSearchParams(window.location.search).get('section');
   const [section, setSection] = useState<Section>(
     SECTIONS.some((entry) => entry.id === requested) ? (requested as Section) : 'general',
@@ -228,7 +228,7 @@ function GeneralSection() {
 }
 
 /**
- * The living document Popy keeps about the user (popy.spec §7). The agent
+ * The living document Pop Agent keeps about the user (pop-agent.spec §7). The agent
  * writes it through its tools; here the user can read, edit, and restore the
  * one-level backup.
  */
@@ -305,7 +305,7 @@ function MemorySection() {
   );
 }
 
-/** Passkey / Face ID setup and management (popy.spec §9). */
+/** Passkey / Face ID setup and management (pop-agent.spec §9). */
 function PasskeyControls() {
   const [supported] = useState(() => passkeyService.supported());
   const [credentials, setCredentials] = useState<{ id: string; label: string }[]>([]);
@@ -375,9 +375,9 @@ function PasskeyControls() {
   );
 }
 
-/** Backup and restore (popy.spec §16). */
+/** Backup and restore (pop-agent.spec §16). */
 function BackupSection() {
-  const [backups, setBackups] = useState<import('@popy/shared').BackupDTO[]>([]);
+  const [backups, setBackups] = useState<import('@pop-agent/shared').BackupDTO[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | undefined>(undefined);
 
@@ -481,7 +481,7 @@ function BackupSection() {
   );
 }
 
-/** The cost dashboard (popy.spec §14), read off llm_runs. */
+/** The cost dashboard (pop-agent.spec §14), read off llm_runs. */
 function UsageSection() {
   const [usage, setUsage] = useState<UsageResponse | undefined>(undefined);
 
@@ -546,7 +546,7 @@ function UsageSection() {
 }
 
 /**
- * Where the disk went (popy.spec §14). Measurement before any quota: a limit
+ * Where the disk went (pop-agent.spec §14). Measurement before any quota: a limit
  * chosen without this screen is a guess, and the guess is usually wrong about
  * which line is the expensive one. Sorted heaviest first for the same reason
  * -- the answer to "what is eating my disk" should be the first row, not
@@ -647,7 +647,7 @@ function Stat({ label, value, testId }: { label: string; value: string; testId?:
 }
 
 /**
- * Skills management (popy.spec §8). A list, and a full-screen editor when you
+ * Skills management (pop-agent.spec §8). A list, and a full-screen editor when you
  * create or edit one -- never a side drawer (permanent house veto). Built-in
  * skills can be edited but not deleted.
  */
@@ -716,7 +716,7 @@ export function SkillsSection() {
       <AutoApproveSkills />
 
       {/* One discreet line, never a card: the money already has a home in
-          Settings → Usage, so all this has to say is when Popy last looked and
+          Settings → Usage, so all this has to say is when Pop Agent last looked and
           how much is waiting on the reader. */}
       {distiller === undefined ? null : (
         <p data-testid="distiller-status" className="text-xs text-[var(--muted)]">
@@ -844,7 +844,7 @@ export function SkillsSection() {
 }
 
 /**
- * The status line's text. Two facts at most: when Popy last read a
+ * The status line's text. Two facts at most: when Pop Agent last read a
  * conversation, and how much is waiting on the reader -- joined only when both
  * are worth saying.
  */
@@ -868,7 +868,7 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
 };
 
 /**
- * The providers and the models (popy.spec §15). One card picks the global
+ * The providers and the models (pop-agent.spec §15). One card picks the global
  * default pair; below it, one card per provider carries its write-only key,
  * its key test and its default model. Provider is data: the list comes from
  * GET /v1/providers, never hardcoded here.
@@ -876,7 +876,7 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
 /**
  * Where the model catalogue came from -- live, cached, or the engine's offline
  * list. It used to also carry the global Service Model picker; that moved onto
- * each provider's own card on 07/08 (popy.spec §15), because one model id
+ * each provider's own card on 07/08 (pop-agent.spec §15), because one model id
  * cannot be right for every provider at once. What is left is the diagnosis.
  */
 function CatalogSourceCard() {
@@ -922,13 +922,13 @@ function AudioSection() {
 }
 
 /**
- * The optional LLM pass over a raw transcript (popy.spec §14). Off by default
+ * The optional LLM pass over a raw transcript (pop-agent.spec §14). Off by default
  * (decision of 31/07): the raw text lands in the composer in whisper time;
  * turning this on trades ~10s+ per note for punctuation fixes.
  */
 /**
- * Whether a skill Popy distils from a conversation goes live on its own
- * (popy.spec §8). It sits on the Skills screen rather than in General because
+ * Whether a skill Pop Agent distils from a conversation goes live on its own
+ * (pop-agent.spec §8). It sits on the Skills screen rather than in General because
  * this is where its consequence is visible: turn it off and skills queue here
  * for a tap; turn it on and they simply appear, already in use.
  *
@@ -1055,7 +1055,7 @@ function VoiceCleanupCard() {
   );
 }
 
-/** The whisper model for voice transcription (popy.spec §14). */
+/** The whisper model for voice transcription (pop-agent.spec §14). */
 function VoiceModelCard() {
   const [status, setStatus] = useState<VoiceModelStatus[]>([]);
   const [selected, setSelected] = useState('');
@@ -1169,7 +1169,7 @@ function FontSizeCard() {
 }
 
 /**
- * How the installed PWA notices a new build (popy.spec §15). Device-scoped
+ * How the installed PWA notices a new build (pop-agent.spec §15). Device-scoped
  * like the theme and notifications: the interval lives in localStorage and
  * never reaches the server. "Check now" asks the service worker immediately.
  */
@@ -1238,7 +1238,7 @@ function intervalLabel(minutes: number): string {
   return t('settings.updates.everyDay');
 }
 
-/** Web Push opt-in (popy.spec §14). Device-scoped, like the theme. */
+/** Web Push opt-in (pop-agent.spec §14). Device-scoped, like the theme. */
 function NotificationsCard() {
   const [supported] = useState(() => pushService.supported());
   const [subscribed, setSubscribed] = useState(false);
@@ -1434,13 +1434,13 @@ function SecuritySection() {
 }
 
 /**
- * Settings → Updates (popy.spec §15, design closed 31/07): three cards, one
+ * Settings → Updates (pop-agent.spec §15, design closed 31/07): three cards, one
  * per channel. The app checks and prompts; the server is notify-only -- a
  * push says a new tag exists and taps into this screen, applying it stays
  * the shell command shown here; the environment is visibility only.
  */
 function UpdatesSection() {
-  const [update, setUpdate] = useState<import('@popy/shared').UpdateStatusResponse | undefined>(
+  const [update, setUpdate] = useState<import('@pop-agent/shared').UpdateStatusResponse | undefined>(
     undefined,
   );
   const [copied, setCopied] = useState(false);
@@ -1452,8 +1452,8 @@ function UpdatesSection() {
       .catch(() => setUpdate(undefined));
   }, []);
 
-  const popyOutdated =
-    update?.popy.latest !== undefined && update.popy.latest !== update.popy.current;
+  const popAgentOutdated =
+    update?.popAgent.latest !== undefined && update.popAgent.latest !== update.popAgent.current;
   const piOutdated = update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
 
   return (
@@ -1464,12 +1464,12 @@ function UpdatesSection() {
         <h2 className="text-base font-semibold">{t('settings.updates.serverTitle')}</h2>
         <Row
           label={t('settings.updates.installed')}
-          value={update?.popy.current ?? '…'}
-          testId="update-popy-current"
+          value={update?.popAgent.current ?? '…'}
+          testId="update-pop-agent-current"
         />
-        {popyOutdated ? (
-          <p data-testid="update-popy-available" className="text-sm text-[var(--accent)]">
-            {t('settings.updates.popyAvailable', { version: update?.popy.latest ?? '' })}
+        {popAgentOutdated ? (
+          <p data-testid="update-pop-agent-available" className="text-sm text-[var(--accent)]">
+            {t('settings.updates.popAgentAvailable', { version: update?.popAgent.latest ?? '' })}
           </p>
         ) : (
           <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
@@ -1546,7 +1546,7 @@ function ServerSection() {
         <Row label={t('settings.server.time')} value={info ? new Date(info.serverTime).toLocaleString() : '…'} testId="server-time" />
         <Row label={t('settings.server.timezone')} value={info?.timezone ?? '…'} testId="server-timezone" />
         <Row label={t('settings.server.node')} value={info?.nodeVersion ?? '…'} testId="server-node" />
-        <Row label={t('settings.server.popy')} value={info ? `${info.popyVersion} (${info.commit})` : '…'} testId="server-popy" />
+        <Row label={t('settings.server.popAgent')} value={info ? `${info.popAgentVersion} (${info.commit})` : '…'} testId="server-pop-agent" />
       </Card>
 
       <Card className="flex flex-col gap-3">
@@ -1563,7 +1563,7 @@ function ServerSection() {
 
 /**
  * Four switches on two different machines, which is exactly why each one
- * carries its own consequence line: "Restart Popy" and "Restart LLM" share a
+ * carries its own consequence line: "Restart Pop Agent" and "Restart LLM" share a
  * verb and share nothing else. The LLM button is also labelled by the actual
  * state -- Start when it is off, Restart when it is on -- because a switch
  * that reads "Restart" while the model is stopped is the confusion this card
@@ -1706,11 +1706,11 @@ function AboutSection() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
-        <Row label={t('settings.about.popy')} value={about?.popyVersion ?? '…'} testId="about-popy" />
+        <Row label={t('settings.about.popAgent')} value={about?.popAgentVersion ?? '…'} testId="about-pop-agent" />
         <Row label={t('settings.about.node')} value={about?.nodeVersion ?? '…'} testId="about-node" />
         <Row label={t('settings.about.pi')} value={about?.piVersion ?? '…'} testId="about-pi" />
         <a
-          href="https://github.com/viniciusbuscacio/popy"
+          href="https://github.com/viniciusbuscacio/pop-agent"
           target="_blank"
           rel="noreferrer noopener"
           className="text-sm text-[var(--accent)] underline underline-offset-2"

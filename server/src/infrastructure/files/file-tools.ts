@@ -4,7 +4,7 @@ import { envelope, sanitize } from '../../domain/safety/sanitize.js';
 import type { FilesService } from '../../application/files/files-service.js';
 
 /**
- * The agent's Files tools (popy.spec §14, "Files as a plain folder").
+ * The agent's Files tools (pop-agent.spec §14, "Files as a plain folder").
  *
  * Files is a real folder now -- `Files/` in the workspace -- so the built-in
  * read/write/bash tools cover creating and reading. What remains as custom

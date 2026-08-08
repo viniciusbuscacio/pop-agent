@@ -12,7 +12,7 @@ import { ProgressiveLockout } from './lockout.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 
 /**
- * Auth endpoints (popy.spec §9). Mounted under /v1.
+ * Auth endpoints (pop-agent.spec §9). Mounted under /v1.
  *
  * The credential routes carry two independent brakes: a sliding rate limit on
  * request volume, and a progressive lockout on wrong answers. `auth/state` is
@@ -56,7 +56,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
     const result = await deps.auth.setup(parsed.data.password);
     if (!result.ok) {
       return result.reason === 'already_setup'
-        ? apiError(c, 409, 'already_setup', 'Popy has already been set up on this server.')
+        ? apiError(c, 409, 'already_setup', 'Pop Agent has already been set up on this server.')
         : weakPassword(c);
     }
     return c.json({ recoveryKey: result.recoveryKey, token: result.token });
@@ -151,7 +151,7 @@ function enforceLockout(c: Context, lockout: ProgressiveLockout): Response | und
   const body = {
     error: {
       code: 'locked',
-      message: 'Too many failed attempts. Popy is pausing sign-in for a moment.',
+      message: 'Too many failed attempts. Pop Agent is pausing sign-in for a moment.',
       status: 423,
     },
     retryAfterSeconds: status.retryAfterSeconds,
@@ -162,7 +162,7 @@ function enforceLockout(c: Context, lockout: ProgressiveLockout): Response | und
 /**
  * First hop of X-Forwarded-For when a proxy sets it. Behind `tailscale serve`
  * nothing does, so every caller shares one bucket -- fine for a single-user
- * app, and correct the day Popy sits behind a real proxy.
+ * app, and correct the day Pop Agent sits behind a real proxy.
  */
 function originOf(c: Context): string {
   const forwarded = c.req.header('X-Forwarded-For');

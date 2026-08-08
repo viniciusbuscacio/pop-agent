@@ -29,7 +29,7 @@ export class ChatService {
 
   create(): Chat {
     const now = new Date(this.deps.clock.now()).toISOString();
-    // The deterministic starter (popy.spec §14): "Chat N", lowest free N
+    // The deterministic starter (pop-agent.spec §14): "Chat N", lowest free N
     // among the living chats, so a brand-new sidebar is already readable.
     const starter = nextChatTitle(this.deps.chats.list({ archived: false }).map((c) => c.title));
     return this.deps.chats.create({
@@ -91,7 +91,7 @@ export class ChatService {
   }
 
   /**
-   * Deleting a conversation kills its work first (popy.spec §6). The order
+   * Deleting a conversation kills its work first (pop-agent.spec §6). The order
    * matters and is the whole point: abort, then delete, then purge. A run
    * still streaming into rows that are about to disappear would keep a pi
    * process group alive, keep spending the user's credit, and end by failing
@@ -103,7 +103,7 @@ export class ChatService {
     if (chat === undefined) return false;
     this.deps.runs?.discardChat(id);
     // Read the chat before the rows go, so the purger still knows where pi
-    // kept the session (popy.spec §6): SQLite by cascade, the rest by hand.
+    // kept the session (pop-agent.spec §6): SQLite by cascade, the rest by hand.
     this.deps.chats.delete(id);
     this.deps.purger?.purge(chat);
     return true;

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Signed download links for Files (popy.spec §14, "Files as a plain folder").
+ * Signed download links for Files (pop-agent.spec §14, "Files as a plain folder").
  *
  * Same contract the artifact links had, re-anchored on the path: no file is
  * reachable by a public URL without a signature. The signing key is derived
@@ -16,7 +16,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * time. There is no cleanup cron.
  */
 
-const CONTEXT = 'popy.files.download.v1';
+const CONTEXT = 'pop.files.download.v1';
 
 /** Default link lifetime: 30 days, configurable by the caller. */
 export const DEFAULT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;

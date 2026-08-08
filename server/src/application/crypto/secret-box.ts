@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 /**
  * Authenticated encryption for values stored in the secrets table
- * (popy.spec §9). AES-256-GCM over node:crypto -- no third-party dependency,
+ * (pop-agent.spec §9). AES-256-GCM over node:crypto -- no third-party dependency,
  * so this stays in a pure layer.
  *
  * A sealed value is a single buffer: nonce || ciphertext || tag. The nonce is
@@ -14,7 +14,7 @@ const ALGORITHM = 'aes-256-gcm';
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
 
-/** Length of the key file in POPY_DATA_DIR. */
+/** Length of the key file in POP_AGENT_DATA_DIR. */
 export const SECRET_KEY_BYTES = 32;
 
 export function seal(key: Buffer, plaintext: string): Buffer {

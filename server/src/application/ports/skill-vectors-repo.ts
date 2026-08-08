@@ -1,5 +1,5 @@
 /**
- * Storage for the skill router's vectors (popy.spec §8). One row per skill,
+ * Storage for the skill router's vectors (pop-agent.spec §8). One row per skill,
  * stamped with the routing text it was computed from, so a skill whose
  * description changed is re-embedded and one that did not is free -- across
  * restarts, which an in-process cache cannot manage.

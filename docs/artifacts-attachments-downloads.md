@@ -3,20 +3,20 @@
 > **HISTORICAL — superseded 2026-08-05.** The artifact catalog this plan
 > built — the `artifacts` table, versions, id-named blobs, per-id signed
 > links, `save_artifact`/`read_artifact` — was replaced by Files as a plain
-> folder (popy.spec 1.58/1.59, §4/§6/§14). Nothing below is normative; it
+> folder (pop-agent.spec 1.58/1.59, §4/§6/§14). Nothing below is normative; it
 > stays as the record of what was built and why it could be retired.
 
-> The normative rules land in `popy.spec`; this file is the working plan the
+> The normative rules land in `pop-agent.spec`; this file is the working plan the
 > maintainer's notes call RF-001–019. It is split into blocks that each end on
 > a green gate and a small commit. No block waits for manual acceptance
-> (working model, popy.spec §19/§20); the final iPhone checklist collects what
+> (working model, pop-agent.spec §19/§20); the final iPhone checklist collects what
 > only a device can confirm.
 
 ## What exists before this (verified 2026-07-31)
 
 - **Attachments** ride as data URIs on the message row (`attachments_json`,
   16 MB cap), and the pi bridge also writes each into
-  `POPY_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
+  `POP_AGENT_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
 - **No artifact model**: a file the agent writes lives in the workspace with no
   record, no download link and no UI. There is no signed-URL mechanism; the one
   existing download (backup) is session-authenticated.
@@ -40,14 +40,14 @@ regress the running server.
   PK collision, per §6), get, list-by-chat, delete.
 - `application/artifacts/artifact-download.ts`: HMAC signer keyed off
   `secret.key` (never a fresh secret). `payload = fileId + '.' + expiresAt`,
-  `sig = HMAC(HKDF(secret,"popy.artifact.download.v1"), payload)`. Verify checks
+  `sig = HMAC(HKDF(secret,"pop-agent.artifact.download.v1"), payload)`. Verify checks
   the signature **before** expiry, so a tampered `expires` fails as a bad
   signature, not as "expired". Default link TTL 30 days (RF-007).
 
 ### Block 1b — HTTP surface + disk store + cascade (RF-001/002-list/004-008)
 
 - `infrastructure/artifacts/artifact-store.ts`: write/read/remove bytes under
-  `POPY_DATA_DIR/artifacts/<chatId>/<id>`; remove a chat's whole folder.
+  `POP_AGENT_DATA_DIR/artifacts/<chatId>/<id>`; remove a chat's whole folder.
 - `application/artifacts/artifact-service.ts`: register-from-workspace, list,
   get, delete, mint-link.
 - Authenticated routes (`/v1`): list a chat's artifacts, mint a signed link,
@@ -87,6 +87,6 @@ timestamps.
 
 - HMAC secret derived from `secret.key`; no new standalone secret.
 - Extracted/OCR'd content is untrusted; it goes through the §10 safety layer.
-- Artifacts live under `POPY_DATA_DIR` so they ride the backup (they are user
+- Artifacts live under `POP_AGENT_DATA_DIR` so they ride the backup (they are user
   content); attachments stay in the workspace (not backed up), as today.
 - Everything in English in the repo; gate green before each commit.

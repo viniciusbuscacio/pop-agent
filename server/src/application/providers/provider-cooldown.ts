@@ -1,7 +1,7 @@
 import type { Clock } from '../ports/clock.js';
 
 /**
- * The advisory cooldown behind failover (popy.spec §15, fase 2): a provider
+ * The advisory cooldown behind failover (pop-agent.spec §15, fase 2): a provider
  * that just refused a run is skipped by the next chains for a few minutes,
  * so one dead key does not tax every conversation with a doomed first try.
  *

@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import type { Profile, ProfileStore } from '../application/profiles.js';
 
 /**
- * Profiles on disk, at `$XDG_CONFIG_HOME/popy/profiles.json` (docs/cli.md).
+ * Profiles on disk, at `$XDG_CONFIG_HOME/pop-agent/profiles.json` (docs/cli.md).
  *
  * 0700 on the directory and 0600 on the file, set explicitly rather than left
  * to the umask: the file holds a full-access session token, and a laptop runs
  * more other people's code than a server does. `mkdirSync`'s mode is filtered
  * by the umask, so the chmod afterwards is what actually guarantees it.
  *
- * A missing or unreadable file reads as "no profiles". `popy login` is then
+ * A missing or unreadable file reads as "no profiles". `pop login` is then
  * the obvious next step, which is a better answer than a stack trace about
  * JSON.
  */
@@ -39,5 +39,5 @@ export class FileProfileStore implements ProfileStore {
 export function defaultProfilePath(): string {
   const xdg = process.env['XDG_CONFIG_HOME'];
   const base = xdg !== undefined && xdg.length > 0 ? xdg : join(homedir(), '.config');
-  return join(base, 'popy', 'profiles.json');
+  return join(base, 'pop-agent', 'profiles.json');
 }

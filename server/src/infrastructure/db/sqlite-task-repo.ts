@@ -2,7 +2,7 @@ import type { TaskPatch, TaskRepo, TaskRunRecord } from '../../application/ports
 import type { Task } from '../../domain/tasks/task.js';
 import type { Db } from './types.js';
 
-/** SQLite adapter for {@link TaskRepo} (popy.spec §21). */
+/** SQLite adapter for {@link TaskRepo} (pop-agent.spec §21). */
 export class SqliteTaskRepo implements TaskRepo {
   constructor(private readonly db: Db) {}
 

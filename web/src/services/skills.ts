@@ -1,4 +1,4 @@
-import type { SaveSkillRequest, SkillDTO, SkillsResponse } from '@popy/shared';
+import type { SaveSkillRequest, SkillDTO, SkillsResponse } from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 export const skillsService = {
@@ -10,7 +10,7 @@ export const skillsService = {
     return apiRequest<SkillDTO>(`/skills/${skill.slug}`, { method: 'PUT', body: skill });
   },
 
-  /** Accepts a pending skill into the router (popy.spec §8). */
+  /** Accepts a pending skill into the router (pop-agent.spec §8). */
   approve(slug: string): Promise<SkillDTO> {
     return apiRequest<SkillDTO>(`/skills/${slug}/approve`, { method: 'POST' });
   },

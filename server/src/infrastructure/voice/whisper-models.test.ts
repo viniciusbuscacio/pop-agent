@@ -14,7 +14,7 @@ describe('WhisperModelStore manifest', () => {
   });
 
   it('rejects an unknown model name', async () => {
-    const store = new WhisperModelStore('/tmp/popy-voice-models-test');
+    const store = new WhisperModelStore('/tmp/pop-voice-models-test');
     await expect(store.ensure('nonexistent')).rejects.toThrow(WhisperModelError);
   });
 });

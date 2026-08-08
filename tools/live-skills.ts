@@ -1,5 +1,5 @@
 /**
- * The auto-skill loop against a real model (popy.spec §8, fases b and c).
+ * The auto-skill loop against a real model (pop-agent.spec §8, fases b and c).
  *
  * The gate proves the distiller's control flow against a scripted answer, and
  * proves the router's ranking against fixed vectors. Neither can answer the
@@ -102,8 +102,8 @@ async function main(): Promise<void> {
   // provider is first, which model each one serves, and the credentials. Read
   // only -- nothing here writes to the live database, and the distiller under
   // test writes to the throwaway one below.
-  const liveDir = join(process.env['HOME'] ?? '.', '.popy');
-  const liveDb = new Database(join(liveDir, 'popy.db'), { readonly: true });
+  const liveDir = join(process.env['HOME'] ?? '.', '.pop-agent');
+  const liveDb = new Database(join(liveDir, 'pop-agent.db'), { readonly: true });
   const liveSettings = new SqliteSettingsRepo(liveDb);
   const providers = new ProviderService({
     secrets: new SqliteSecretsRepo(liveDb, loadOrCreateSecretKey(join(liveDir, 'secret.key'))),
@@ -132,8 +132,8 @@ async function main(): Promise<void> {
       return { provider: doc?.defaultProvider ?? '', model: doc?.defaultModel ?? '' };
     },
   });
-  const dataDir = mkdtempSync(join(tmpdir(), 'popy-live-skills-'));
-  const db = new Database(join(dataDir, 'popy.db'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-live-skills-'));
+  const db = new Database(join(dataDir, 'pop-agent.db'));
   migrate(db);
 
   const chats = new SqliteChatRepo(db);
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
   const usage = new SqliteSkillUsageRepo(db);
   const vectors = new SqliteSkillVectorsRepo(db);
   // The real model, from the real cache: this is the embedder the server uses.
-  const embedder = new TransformersEmbedder({ cacheDir: join(process.env['HOME'] ?? '.', '.popy', 'models') });
+  const embedder = new TransformersEmbedder({ cacheDir: join(process.env['HOME'] ?? '.', '.pop-agent', 'models') });
 
   const before = vault.all().map((skill) => skill.slug);
   console.log(`vault starts with ${String(before.length)} built-in skills`);
@@ -191,7 +191,7 @@ async function main(): Promise<void> {
     // exercise, and bypassing it meant the run proved nothing about the path
     // production takes. It also produced a wrong conclusion -- an out-of-credit
     // error on a provider the instance does not even use first, read as a fact
-    // about Popy.
+    // about Pop Agent.
     complete: async (request, ctx) => {
       spent += 1;
       const result = await providers.completeAsService(request, ctx);

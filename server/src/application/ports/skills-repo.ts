@@ -1,7 +1,7 @@
 import type { Skill, SkillSource } from '../../domain/skills/skill.js';
 
 /**
- * Persistence for skills (popy.spec §8). The vault on disk is one adapter; the
+ * Persistence for skills (pop-agent.spec §8). The vault on disk is one adapter; the
  * routes and the router see only this. A bad request raises {@link SkillsError}
  * with words the UI can show.
  */
@@ -30,7 +30,7 @@ export interface SkillInput {
 }
 
 /**
- * Retiring a skill without destroying one (popy.spec §8). Kept apart from
+ * Retiring a skill without destroying one (pop-agent.spec §8). Kept apart from
  * {@link SkillsRepo} because it has exactly one caller -- the collector -- and
  * the router, the routes and the agent's tools have no business archiving
  * anything. A vault implements both; a fake in a test that only routes
@@ -52,7 +52,7 @@ export interface SkillsRepo {
   get(slug: string): Skill | undefined;
   write(input: SkillInput): Skill;
   /**
-   * Accepts a pending skill into the router (popy.spec §8). Separate from
+   * Accepts a pending skill into the router (pop-agent.spec §8). Separate from
    * `write` because approving is not editing: an edit promotes an auto skill to
    * `user`, and merely saying yes to one must not.
    */

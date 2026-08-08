@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
 
 /**
- * The typed route registry (popy.spec §9): the only way route groups reach
+ * The typed route registry (pop-agent.spec §9): the only way route groups reach
  * the app. A group is either session-guarded (mounted under /v1 behind the
  * auth middleware) or an explicitly declared public surface with a written
  * reason. TypeScript enforces the choice: `mountApi` does not accept a bare

@@ -1,9 +1,9 @@
 /**
  * Types shared between server and web. The web app never redefines a
- * server type — it imports from here (popy.spec §3, §13).
+ * server type — it imports from here (pop-agent.spec §3, §13).
  */
 
-/** Structured API error body. Codes are stable (popy.spec §13). */
+/** Structured API error body. Codes are stable (pop-agent.spec §13). */
 export interface ApiError {
   error: {
     code: string;
@@ -20,24 +20,24 @@ export interface LockedError extends ApiError {
 /**
  * Response header carrying a refreshed session token. The API renews a token
  * that is over a day old; the client swaps whatever it stored when it sees
- * this (popy.spec §9).
+ * this (pop-agent.spec §9).
  */
-export const SESSION_TOKEN_HEADER = 'x-popy-token';
+export const SESSION_TOKEN_HEADER = 'x-pop-agent-token';
 
 /**
- * Which client sent a request (popy.spec §13). Set once in each client's API
+ * Which client sent a request (pop-agent.spec §13). Set once in each client's API
  * layer, so every call carries it -- including the ones nobody has written
  * yet -- and recorded on the message so the history remembers where each turn
  * happened, not just where this one is.
  *
  * Deliberately NOT called `source`: that name is already two other things in
- * Popy (an artifact is `agent`/`upload`, a chat title is `auto`/`manual`).
+ * Pop Agent (an artifact is `agent`/`upload`, a chat title is `auto`/`manual`).
  *
  * A client with a token can forge this, and on a single-user install that
  * means the owner lying to himself. It is context, never a security decision.
  */
-export const CLIENT_HEADER = 'x-popy-client';
-export const CLIENT_PLATFORM_HEADER = 'x-popy-client-platform';
+export const CLIENT_HEADER = 'x-pop-agent-client';
+export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
 
 /**
  * The terminal that typed this message, named by the id its hands channel
@@ -51,10 +51,10 @@ export const CLIENT_PLATFORM_HEADER = 'x-popy-client-platform';
  * Only the CLI sends it. An unknown or departed id is not an error -- the run
  * simply has the server's tools, exactly like a message from the PWA.
  */
-export const HANDS_HEADER = 'x-popy-hands';
+export const HANDS_HEADER = 'x-pop-agent-hands';
 
 /**
- * The oldest `popy` this server will talk to (docs/cli.md, Version
+ * The oldest `pop` this server will talk to (docs/cli.md, Version
  * compatibility).
  *
  * Set BY HAND, and moved only when the wire changes in a way an older client
@@ -71,7 +71,7 @@ export const MIN_CLIENT_VERSION = '0.2.0';
 /**
  * Compares two `major.minor.patch` strings. Negative when `a` is older.
  *
- * Deliberately not semver-complete: Popy's own versions have no pre-release
+ * Deliberately not semver-complete: Pop Agent's own versions have no pre-release
  * or build metadata, and a dependency to compare three integers would be a
  * dependency to keep.
  */
@@ -170,17 +170,17 @@ export interface SignOutOthersResponse {
  * partial merge -- and rejects any field it does not know.
  *
  * Theme is absent by design: it belongs to the device, not the account
- * (popy.spec §14).
+ * (pop-agent.spec §14).
  */
 export interface SettingsDTO {
   language: 'en';
-  /** Provider used when a chat does not choose its own (popy.spec §15). */
+  /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
-  /** whisper.cpp model for voice transcription (popy.spec §14). */
+  /** whisper.cpp model for voice transcription (pop-agent.spec §14). */
   voiceModel: string;
   /** Whether an LLM pass improves the raw transcript before it is used. */
   voiceCleanup: boolean;
@@ -194,14 +194,14 @@ export interface SettingsDTO {
   distillIntervalMinutes: number;
 }
 
-/** `GET`/`PUT /v1/memory` — the living document Popy keeps about the user. */
+/** `GET`/`PUT /v1/memory` — the living document Pop Agent keeps about the user. */
 export interface UserMemoryDTO {
   doc: string;
   /** Whether a one-level backup exists to restore. */
   hasBackup: boolean;
 }
 
-/** A data-directory snapshot (popy.spec §16). */
+/** A data-directory snapshot (pop-agent.spec §16). */
 export interface BackupDTO {
   name: string;
   size: number;
@@ -213,7 +213,7 @@ export interface BackupsResponse {
 }
 
 /**
- * `GET /v1/storage` — where the disk went (popy.spec §14). One line per kind
+ * `GET /v1/storage` — where the disk went (pop-agent.spec §14). One line per kind
  * of weight, measured before any quota exists, because a limit chosen without
  * looking is a guess about which line is the expensive one.
  */
@@ -234,21 +234,21 @@ export interface StorageEntryDTO {
 }
 
 export interface StorageResponse {
-  /** Everything Popy is responsible for, the backups included. */
+  /** Everything Pop Agent is responsible for, the backups included. */
   totalBytes: number;
   entries: StorageEntryDTO[];
   /** The filesystem holding the data directory, when the platform reports it. */
   disk?: { freeBytes: number; totalBytes: number };
 }
 
-/** `GET /v1/usage` — the cost dashboard (popy.spec §14). */
+/** `GET /v1/usage` — the cost dashboard (pop-agent.spec §14). */
 export interface UsageResponse {
   total: { runs: number; tokensIn: number; tokensOut: number; cost: number };
   byModel: { model: string; runs: number; cost: number }[];
   byDay: { day: string; cost: number }[];
 }
 
-/** A skill as Settings → Skills shows and edits it (popy.spec §8). */
+/** A skill as Settings → Skills shows and edits it (pop-agent.spec §8). */
 export interface SkillDTO {
   slug: string;
   name: string;
@@ -256,7 +256,7 @@ export interface SkillDTO {
   whenToUse: string;
   body: string;
   /**
-   * Where the skill came from (popy.spec §8). `builtin` ships with the app and
+   * Where the skill came from (pop-agent.spec §8). `builtin` ships with the app and
    * cannot be deleted; `auto` was distilled from a conversation; `user` is the
    * user's own. Editing an auto skill promotes it to `user`.
    */
@@ -271,7 +271,7 @@ export interface SkillDTO {
   lastUsedAt?: string;
   /**
    * A rewrite the background distiller proposed for this skill, waiting on the
-   * user (popy.spec §8, fase c). While it waits, the skill above is what the
+   * user (pop-agent.spec §8, fase c). While it waits, the skill above is what the
    * router still uses -- that is the point of holding it out here instead of
    * writing it in.
    */
@@ -312,7 +312,7 @@ export interface DistillerStatusDTO {
   revisions: number;
 }
 
-// ---- Files as a plain folder (popy.spec §14, spec 1.58) ----
+// ---- Files as a plain folder (pop-agent.spec §14, spec 1.58) ----
 
 /**
  * One entry of the Files tree (`GET /v1/files`): the disk as it is. The path
@@ -373,10 +373,10 @@ export interface SaveSkillRequest {
   pinned?: boolean;
 }
 
-/** `GET /v1/update/status` — versions and whether newer pi/Popy exist (popy.spec §15). */
+/** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (pop-agent.spec §15). */
 export interface UpdateStatusResponse {
   pi: { current: string; latest?: string };
-  popy: { current: string; latest?: string };
+  popAgent: { current: string; latest?: string };
   node: string;
   /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */
   environment: { name: string; version: string }[];
@@ -385,7 +385,7 @@ export interface UpdateStatusResponse {
 
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
-  popyVersion: string;
+  popAgentVersion: string;
   nodeVersion: string;
   piVersion: string;
 }
@@ -404,14 +404,14 @@ export interface ServerInfoResponse {
   llmStopped?: boolean;
   cpu: { model: string; cores: number; load: number[] };
   memory: { total: number; used: number };
-  /** Bytes on the partition holding POPY_DATA_DIR. */
+  /** Bytes on the partition holding POP_AGENT_DATA_DIR. */
   disk: { total: number | null; free: number | null };
   uptimeSeconds: number;
   processUptimeSeconds: number;
   timezone: string;
   serverTime: string;
   nodeVersion: string;
-  popyVersion: string;
+  popAgentVersion: string;
   /** Short git commit of the running checkout, 'unknown' outside a clone. */
   commit: string;
   dbBytes: number | null;
@@ -421,7 +421,7 @@ export interface ServerInfoResponse {
 }
 
 /**
- * `GET /v1/health` — the sidebar's silence-means-healthy probe (popy.spec
+ * `GET /v1/health` — the sidebar's silence-means-healthy probe (pop-agent.spec
  * §13). Public, cheap, cached signals only: a missing answer means
  * "Server offline", an `error` field means connected-but-degraded.
  */
@@ -437,7 +437,7 @@ export interface ChatDTO {
   title: string;
   /** Empty means "whatever the default model is". */
   model: string;
-  /** Empty means "whatever the default provider is" (popy.spec §15). */
+  /** Empty means "whatever the default provider is" (pop-agent.spec §15). */
   provider: string;
   archived: boolean;
   createdAt: string;
@@ -495,12 +495,12 @@ export interface PatchChatRequest {
   title?: string;
   archived?: boolean;
   model?: string;
-  /** Must travel with `model`: the identity is the pair (popy.spec §15). */
+  /** Must travel with `model`: the identity is the pair (pop-agent.spec §15). */
   provider?: string;
 }
 
 /**
- * A file sent with a message (popy.spec §6, aw's shape). The data URI is the
+ * A file sent with a message (pop-agent.spec §6, aw's shape). The data URI is the
  * whole payload: stored on the message row, rendered from there, and written
  * into the agent's workspace so its tools can read the file.
  */
@@ -529,7 +529,7 @@ export interface StopRunResponse {
   stopped: boolean;
 }
 
-/** `POST /v1/chats/:id/confirm` — answers a paused risky action (popy.spec §10). */
+/** `POST /v1/chats/:id/confirm` — answers a paused risky action (pop-agent.spec §10). */
 export interface ConfirmRequest {
   runId: string;
   allow: boolean;
@@ -541,7 +541,7 @@ export interface ConfirmResponse {
 }
 
 /**
- * A background task as the Tasks screen shows it (popy.spec §21). Times are
+ * A background task as the Tasks screen shows it (pop-agent.spec §21). Times are
  * ISO strings on the wire, like every other timestamp the API hands out, even
  * though the table stores epoch milliseconds.
  */
@@ -645,10 +645,10 @@ export interface ProviderStatusDTO {
   configured: boolean;
   source: 'settings' | 'env' | 'oauth' | null;
   defaultModel: string;
-  /** The model this provider uses for Popy's own background work (§15). */
+  /** The model this provider uses for Pop Agent's own background work (§15). */
   serviceModel: string;
   allowCustomModel: boolean;
-  /** A custom instance's endpoint; never a secret (popy.spec §15). */
+  /** A custom instance's endpoint; never a secret (pop-agent.spec §15). */
   baseURL?: string;
   /** True for a user-created custom instance: editable, deletable. */
   custom?: boolean;
@@ -677,7 +677,7 @@ export interface SetProviderKeyRequest {
 }
 
 /**
- * Unlimited custom OpenAI-compatible providers (popy.spec §15). An instance
+ * Unlimited custom OpenAI-compatible providers (pop-agent.spec §15). An instance
  * is created empty first -- its id anchors the key and the card -- then
  * edited in place. The key travels only through the ordinary key route.
  */
@@ -729,7 +729,7 @@ export interface TestProviderResponse {
 }
 
 /**
- * Subscription sign-in (popy.spec §15, fase 1.5). The flow runs on the
+ * Subscription sign-in (pop-agent.spec §15, fase 1.5). The flow runs on the
  * server; the browser polls its transcript and answers at most one question.
  * No token material ever rides these shapes.
  */
@@ -801,7 +801,7 @@ export type StreamEvent =
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string }
   | { kind: 'title'; chatId: string; title: string }
-  /** A risky action is paused mid-run, waiting for Allow or Deny (popy.spec §10). */
+  /** A risky action is paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }

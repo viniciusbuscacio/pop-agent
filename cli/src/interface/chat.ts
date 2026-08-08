@@ -12,9 +12,9 @@ const VERSION = '0.2.0';
 const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
 const behindLine = (client: string, server: string, install: string): string =>
-  `  popy ${client} · server ${server} · update: ${install}`;
+  `  pop ${client} · server ${server} · update: ${install}`;
 const outdatedLines = (client: string, minimum: string, install: string): string[] => [
-  `This popy is ${client}; the server needs ${minimum} or newer, so the local tools are off.`,
+  `This pop is ${client}; the server needs ${minimum} or newer, so the local tools are off.`,
   `  ${install}`,
 ];
 const ranHere = (command: string): string =>
@@ -35,13 +35,13 @@ export async function chat(
   const profile = context.profiles.get(context.profile);
   if (profile === undefined) {
     const which = context.profile === DEFAULT_PROFILE ? '' : ` --server ${context.profile}`;
-    context.terminal.line(`No server configured. Run: popy login <url>${which}`);
+    context.terminal.line(`No server configured. Run: pop login <url>${which}`);
     return 1;
   }
   if (!process.stdout.isTTY) {
-    // The screen would paint escape codes into a pipe. `popy "question"` is
+    // The screen would paint escape codes into a pipe. `pop "question"` is
     // the shape that belongs in a script, so say so rather than misbehave.
-    context.terminal.line('The interactive screen needs a terminal. For a script: popy "question"');
+    context.terminal.line('The interactive screen needs a terminal. For a script: pop "question"');
     return 1;
   }
 

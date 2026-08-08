@@ -6,9 +6,9 @@ import { useTasksStore } from '../store/tasks';
 import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
 
 /**
- * Creating and editing a background task (popy.spec §21) as a **full screen**
+ * Creating and editing a background task (pop-agent.spec §21) as a **full screen**
  * with a back button -- never a drawer or a modal (permanent house veto,
- * popy.spec §14). One component serves both: with a `:taskId` it loads the
+ * pop-agent.spec §14). One component serves both: with a `:taskId` it loads the
  * task first, without one it starts blank.
  */
 
@@ -209,7 +209,7 @@ export function TaskFormPage() {
               </p>
             ) : null}
 
-            {/* Every Save has a Cancel (popy.spec §14). */}
+            {/* Every Save has a Cancel (pop-agent.spec §14). */}
             <div className="flex gap-2">
               <Button type="submit" data-testid="task-save" disabled={!canSave}>
                 {t('common.save')}

@@ -1,16 +1,16 @@
 {
-  "name": "@popy/cli",
+  "name": "@pop-agent/cli",
   "version": "0.2.0",
   "private": true,
   "type": "module",
   "bin": {
-    "popy": "./dist/main.js"
+    "pop": "./dist/main.js"
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
-    "@popy/shared": "*",
+    "@pop-agent/shared": "*",
     "@earendil-works/pi-tui": "0.83.0",
     "ws": "^8.21.1"
   }

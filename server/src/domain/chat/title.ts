@@ -1,7 +1,7 @@
 import { DEFAULT_CHAT_TITLE } from './chat.js';
 
 /**
- * Titling a conversation without asking a model (popy.spec §14, aw's
+ * Titling a conversation without asking a model (pop-agent.spec §14, aw's
  * FallbackChatTitle ported).
  *
  * Phase 3 replaces this with an LLM-written title once a provider exists, but

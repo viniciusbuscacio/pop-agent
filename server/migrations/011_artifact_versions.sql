@@ -1,4 +1,4 @@
--- Artifact version history (popy.spec §14, RF-018/019). Changing an artifact
+-- Artifact version history (pop-agent.spec §14, RF-018/019). Changing an artifact
 -- (re-uploading or the agent re-saving under the same name) keeps the previous
 -- bytes as a numbered version instead of losing them. The artifacts row always
 -- reflects the latest; this table is the trail (id, size, source, timestamp) --

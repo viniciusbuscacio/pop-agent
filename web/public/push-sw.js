@@ -1,6 +1,6 @@
 /*
- * Web Push handlers, imported into the generated service worker (popy.spec
- * §14). A push shows a notification; tapping it focuses an open Popy window or
+ * Web Push handlers, imported into the generated service worker (pop-agent.spec
+ * §14). A push shows a notification; tapping it focuses an open Pop Agent window or
  * opens one at the deep link the server sent.
  */
 
@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
   } catch {
     data = {};
   }
-  const title = data.title || 'Popy';
+  const title = data.title || 'Pop Agent';
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',

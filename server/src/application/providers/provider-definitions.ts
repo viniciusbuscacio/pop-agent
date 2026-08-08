@@ -1,7 +1,7 @@
 import type { ModelInfo } from '../ports/agent-bridge.js';
 
 /**
- * The declarative provider list (popy.spec §15: "provider is data, not a
+ * The declarative provider list (pop-agent.spec §15: "provider is data, not a
  * class"). Behaviour varies only by auth type -- `api-key` stores a key in
  * the secrets table, `oauth` rides a subscription credential pi's login flow
  * persisted -- and a vendor quirk is a point `if` somewhere, never a
@@ -72,8 +72,8 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     ],
   },
   {
-    // Subscription auth (popy.spec §15, fase 1.5): pi's own OAuth flow signs
-    // in with a ChatGPT Plus/Pro account; no key exists anywhere in Popy.
+    // Subscription auth (pop-agent.spec §15, fase 1.5): pi's own OAuth flow signs
+    // in with a ChatGPT Plus/Pro account; no key exists anywhere in Pop Agent.
     id: 'openai-codex',
     name: 'OpenAI — ChatGPT subscription',
     baseURL: '',
@@ -127,7 +127,7 @@ export function providerDefinition(id: string): ProviderDefinition | undefined {
 }
 
 /**
- * Whether a provider charges for the tokens a run spends (popy.spec §14, §15).
+ * Whether a provider charges for the tokens a run spends (pop-agent.spec §14, §15).
  *
  * A subscription does not. pi reports a `cost` for every run regardless --
  * tokens times the model's catalogue price -- which is the real bill for an
@@ -149,7 +149,7 @@ export function keySecretName(providerId: string): string {
 }
 
 /**
- * One user-created OpenAI-compatible provider (popy.spec §15): pure data in
+ * One user-created OpenAI-compatible provider (pop-agent.spec §15): pure data in
  * the settings registry, unlimited instances. The key is NOT here -- it sits
  * in the secrets store under {@link keySecretName} like everyone else's.
  */

@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
 
 /**
- * The notes vault's guard rail (popy.spec §11, aw's jail ported). Every path a
+ * The notes vault's guard rail (pop-agent.spec §11, aw's jail ported). Every path a
  * tool is handed is resolved against the vault root and rejected if it lands
  * outside it -- so a note called `../../secret.key` reads nothing, and a
  * symlink pointing out of the vault is followed and then refused.

@@ -1,6 +1,6 @@
 import { Profiles, normalizeServerUrl, DEFAULT_PROFILE } from '../application/profiles.js';
 import { Transcript, emptyRun } from '../application/transcript.js';
-import { ApiError, PopyApi } from '../infrastructure/api.js';
+import { ApiError, PopAgentApi } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
 
 /**
@@ -28,7 +28,7 @@ export interface Context {
     token?: string;
     /** This terminal's hands connection, read per call (docs/cli.md, Whose hands). */
     handsConnectionId?: () => string | undefined;
-  }) => PopyApi;
+  }) => PopAgentApi;
 }
 
 export async function login(
@@ -58,7 +58,7 @@ export function logout(context: Context): number {
 export function servers(context: Context): number {
   const list = context.profiles.list();
   if (list.length === 0) {
-    context.terminal.line('No servers yet. Run: popy login <url>');
+    context.terminal.line('No servers yet. Run: pop login <url>');
     return 0;
   }
   for (const entry of list) context.terminal.line(`${entry.name}\t${entry.url}`);
@@ -142,11 +142,11 @@ export async function ask(
 }
 
 /** The profile, or a message saying how to make one. */
-function connect(context: Context): { api: PopyApi } | undefined {
+function connect(context: Context): { api: PopAgentApi } | undefined {
   const profile = context.profiles.get(context.profile);
   if (profile === undefined) {
     const which = context.profile === DEFAULT_PROFILE ? '' : ` --server ${context.profile}`;
-    context.terminal.line(`No server configured. Run: popy login <url>${which}`);
+    context.terminal.line(`No server configured. Run: pop login <url>${which}`);
     return undefined;
   }
   // Token renewal is wired into the factory itself (see main): the store has
@@ -156,7 +156,7 @@ function connect(context: Context): { api: PopyApi } | undefined {
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.code === 'invalid_session') return 'That session expired. Run: popy login <url>';
+    if (error.code === 'invalid_session') return 'That session expired. Run: pop login <url>';
     return error.message;
   }
   if (error instanceof Error) return error.message;

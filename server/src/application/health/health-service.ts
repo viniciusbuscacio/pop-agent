@@ -18,7 +18,7 @@ export interface HealthServiceDeps {
 }
 
 /**
- * The sidebar's health probe (popy.spec §13): cheap enough to be polled
+ * The sidebar's health probe (pop-agent.spec §13): cheap enough to be polled
  * every few seconds. The server field is trivially 'ok' -- a process that
  * cannot serve HTTP never answers at all, and the frontend reads that as
  * "Server offline". The provider signal is deliberately cached state, not a

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
- * Pull down at the top of a list to refresh it (popy.spec §14).
+ * Pull down at the top of a list to refresh it (pop-agent.spec §14).
  *
  * An installed PWA has to build this itself. Safari's own pull-to-refresh
  * exists in a browser tab and NOT in standalone display mode, which is exactly
- * how Popy runs on the phone -- so the gesture every phone user already knows
+ * how Pop Agent runs on the phone -- so the gesture every phone user already knows
  * is simply missing there unless we put it back.
  *
  * Chrome's model rather than iOS's: the list does not move, a spinner slides

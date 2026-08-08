@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import type { TaskDTO, TasksResponse } from '@popy/shared';
+import type { TaskDTO, TasksResponse } from '@pop-agent/shared';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';

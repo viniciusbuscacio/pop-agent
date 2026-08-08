@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { McpAuthKind, McpServerDTO, McpTransport } from '@popy/shared';
+import type { McpAuthKind, McpServerDTO, McpTransport } from '@pop-agent/shared';
 import { mcpService } from '../services/mcp';
 import { useMcpStore } from '../store/mcp';
 import { SidebarNav } from './sidebar-nav';

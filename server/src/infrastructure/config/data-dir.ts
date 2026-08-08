@@ -3,13 +3,13 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Runtime data lives in one directory (popy.spec §4) so a backup is a folder
- * copy. Default ~/.popy, overridable with POPY_DATA_DIR (tests point it at a
+ * Runtime data lives in one directory (pop-agent.spec §4) so a backup is a folder
+ * copy. Default ~/.pop-agent, overridable with POP_AGENT_DATA_DIR (tests point it at a
  * temp dir).
  */
 export function resolveDataDir(): string {
-  const fromEnv = process.env['POPY_DATA_DIR'];
-  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : join(homedir(), '.popy');
+  const fromEnv = process.env['POP_AGENT_DATA_DIR'];
+  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : join(homedir(), '.pop-agent');
 }
 
 /** Creates the directory if needed and returns it. Owner-only: it holds keys. */
@@ -19,15 +19,15 @@ export function ensureDataDir(dataDir: string): string {
 }
 
 /**
- * The single root the agent works in (popy.spec §4). Kept apart from the data
+ * The single root the agent works in (pop-agent.spec §4). Kept apart from the data
  * directory on purpose: this one is meant to be looked at, edited and cloned
  * into, and it holds no keys.
  */
 export function resolveWorkspace(): string {
-  const fromEnv = process.env['POPY_WORKSPACE'];
+  const fromEnv = process.env['POP_AGENT_WORKSPACE'];
   return fromEnv !== undefined && fromEnv.length > 0
     ? fromEnv
-    : join(homedir(), 'popy-workspace');
+    : join(homedir(), 'pop-agent-workspace');
 }
 
 export function ensureWorkspace(workspace: string): string {
@@ -36,7 +36,7 @@ export function ensureWorkspace(workspace: string): string {
 }
 
 /**
- * The user's Files (popy.spec §14 "Files as a plain folder"): a plain
+ * The user's Files (pop-agent.spec §14 "Files as a plain folder"): a plain
  * directory tree with real names, inside the data directory so it rides the
  * backup. What `tree` shows here is exactly what the Files tab shows.
  */
@@ -74,7 +74,7 @@ export function ensureWorkspaceFilesLink(workspace: string, filesDir: string): s
 }
 
 /**
- * Where artifact bytes live (popy.spec §6, §14): inside the data directory so
+ * Where artifact bytes live (pop-agent.spec §6, §14): inside the data directory so
  * they ride the backup (they are the user's own content), grouped per chat.
  */
 export function resolveArtifactsDir(dataDir: string): string {

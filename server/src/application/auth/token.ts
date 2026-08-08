@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Stateless session tokens (popy.spec §9): `base64url(payload).base64url(sig)`
+ * Stateless session tokens (pop-agent.spec §9): `base64url(payload).base64url(sig)`
  * over HMAC-SHA256. No JWT library -- the format is fixed, the algorithm is
  * not negotiable, and that is precisely the class of bug JWT libraries keep
  * having.

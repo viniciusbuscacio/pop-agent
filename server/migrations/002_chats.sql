@@ -1,4 +1,4 @@
--- Conversations and their messages (popy.spec §6).
+-- Conversations and their messages (pop-agent.spec §6).
 --
 -- Messages carry the assembled result of a run: the answer text, the thinking
 -- that preceded it, and a JSON record of the tools that ran. Keeping those in

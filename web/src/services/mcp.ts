@@ -1,4 +1,4 @@
-import type { McpServerDTO, McpServersResponse, McpServerResponse, McpTestResponse } from '@popy/shared';
+import type { McpServerDTO, McpServersResponse, McpServerResponse, McpTestResponse } from '@pop-agent/shared';
 import { apiRequest } from './api';
 export const mcpService = {
   list: () => apiRequest<McpServersResponse>('/mcp/servers'),

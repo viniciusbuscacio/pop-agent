@@ -6,7 +6,7 @@ import { SidebarNav } from './sidebar-nav';
 import { useSkillsStore } from '../store/skills';
 
 /**
- * Skills as the right-hand pane of the shell (popy.spec §8, §14), the explorer
+ * Skills as the right-hand pane of the shell (pop-agent.spec §8, §14), the explorer
  * layout Chat and Files use: the sidebar carries the list, and this pane shows
  * the skill you picked. No `:slug` is the empty pane on a wide screen; `new`
  * starts a blank editor; any other slug edits that skill. On a phone the list

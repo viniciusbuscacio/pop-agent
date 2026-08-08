@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { run, systemctlArgv, type ManagerDeps } from './commands.js';
 
 /**
- * popyman's behaviour, without a systemd or a database (popy.spec §17).
+ * popman's behaviour, without a systemd or a database (pop-agent.spec §17).
  *
  * What is worth pinning is the wording as much as the exit code: these
  * commands are read by whoever is locked out at the time, and "the password
@@ -21,11 +21,11 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
       calls.push(verb);
       return 0;
     },
-    unit: 'popy-service',
+    unit: 'pop-agent-service',
     backups: {
-      create: () => ({ name: 'popy-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
+      create: () => ({ name: 'pop-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
       list: () => [],
-      restore: (name) => name === 'popy-2026-08-04.tar.gz',
+      restore: (name) => name === 'pop-2026-08-04.tar.gz',
     },
     resetPassword: () => Promise.resolve({ ok: true, recoveryKey: 'KEY-1234' }),
     askPassword: () => Promise.resolve('correcthorsebattery'),
@@ -36,7 +36,7 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
   return { deps, out, err, calls };
 }
 
-describe('popyman', () => {
+describe('popman', () => {
   it('passes the service verbs straight through', async () => {
     const h = harness();
     expect(await run(['restart'], h.deps)).toBe(0);
@@ -44,11 +44,11 @@ describe('popyman', () => {
   });
 
   it('says which unit it is acting on', async () => {
-    // A box can carry popy and popy-service at once, and "Failed to stop
-    // popy.service" is a true sentence about the wrong service.
+    // A box can carry pop and pop-agent-service at once, and "Failed to stop
+    // pop.service" is a true sentence about the wrong service.
     const h = harness();
     await run(['stop'], h.deps);
-    expect(h.out.join('\n')).toContain('popy-service');
+    expect(h.out.join('\n')).toContain('pop-agent-service');
   });
 
   it('does not announce status, which speaks for itself', async () => {
@@ -58,11 +58,11 @@ describe('popyman', () => {
   });
 
   it('prints usage and fails when asked for nothing', async () => {
-    // A bare `popyman` is a mistake, not a request; exiting 0 would let it
+    // A bare `popman` is a mistake, not a request; exiting 0 would let it
     // pass in a script that meant to start the service.
     const h = harness();
     expect(await run([], h.deps)).toBe(1);
-    expect(h.out.join('\n')).toContain('popyman start');
+    expect(h.out.join('\n')).toContain('popman start');
   });
 
   it('says which command it did not understand', async () => {
@@ -74,7 +74,7 @@ describe('popyman', () => {
   it('refuses restore without a name, and points at the list', async () => {
     const h = harness();
     expect(await run(['restore'], h.deps)).toBe(1);
-    expect(h.err.join('\n')).toContain('popyman backups');
+    expect(h.err.join('\n')).toContain('popman backups');
   });
 
   it('reports a backup name that does not exist', async () => {
@@ -85,8 +85,8 @@ describe('popyman', () => {
 
   it('tells you to restart after a restore, because it does not', async () => {
     const h = harness();
-    expect(await run(['restore', 'popy-2026-08-04.tar.gz'], h.deps)).toBe(0);
-    expect(h.out.join('\n')).toContain('popyman restart');
+    expect(await run(['restore', 'pop-2026-08-04.tar.gz'], h.deps)).toBe(0);
+    expect(h.out.join('\n')).toContain('popman restart');
   });
 
   it('shows the new recovery key once, and says it is once', async () => {
@@ -142,23 +142,23 @@ describe('popyman', () => {
     // Asking for a password to READ is a habit worth not teaching; and
     // without sudo the other three fall to polkit, whose text agent answers
     // "Authentication failure" on a plain SSH session.
-    expect(systemctlArgv('status', 'popy-service', false).command).toBe('systemctl');
-    expect(systemctlArgv('stop', 'popy-service', false)).toEqual({
+    expect(systemctlArgv('status', 'pop-agent-service', false).command).toBe('systemctl');
+    expect(systemctlArgv('stop', 'pop-agent-service', false)).toEqual({
       command: 'sudo',
-      args: ['systemctl', 'stop', 'popy-service'],
+      args: ['systemctl', 'stop', 'pop-agent-service'],
     });
   });
 
   it('skips sudo when it is already root', async () => {
-    expect(systemctlArgv('stop', 'popy', true)).toEqual({
+    expect(systemctlArgv('stop', 'pop', true)).toEqual({
       command: 'systemctl',
-      args: ['stop', 'popy'],
+      args: ['stop', 'pop'],
     });
   });
 
   it('says there are no backups instead of printing nothing', async () => {
     const h = harness();
     expect(await run(['backups'], h.deps)).toBe(0);
-    expect(h.out.join('\n')).toContain('popyman backup');
+    expect(h.out.join('\n')).toContain('popman backup');
   });
 });

@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { DistillerStatusDTO, SkillDTO, SkillsResponse } from '@popy/shared';
+import type { DistillerStatusDTO, SkillDTO, SkillsResponse } from '@pop-agent/shared';
 import type { Skill } from '../../domain/skills/skill.js';
 import {
   SkillsError,
@@ -17,7 +17,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * The skills CRUD (popy.spec §8): Settings → Skills lists them, lets the user
+ * The skills CRUD (pop-agent.spec §8): Settings → Skills lists them, lets the user
  * write their own and edit any, and delete their own. The Skill Router reads
  * the same vault to decide which fire per turn.
  *
@@ -43,7 +43,7 @@ export interface SkillsRoutesDeps {
   skills: SkillsRepo;
   /** Use counts, merged into the list so the screen can show what earns its slot. */
   usage?: SkillUsageRepo;
-  /** Proposed rewrites waiting for a yes (popy.spec §8, fase c). */
+  /** Proposed rewrites waiting for a yes (pop-agent.spec §8, fase c). */
   revisions?: SkillRevisionsRepo;
   /** The archive the collector fills, and the way back out of it. */
   archive?: SkillArchiveRepo;
@@ -78,7 +78,7 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
 
   routes.get('/skills', (c) => c.json(listing()));
 
-  // Accepting a pending skill (popy.spec §8). A POST with no body: the only
+  // Accepting a pending skill (pop-agent.spec §8). A POST with no body: the only
   // thing being said is "yes", and there is nothing else to send.
   routes.post('/skills/:slug/approve', (c) => {
     const skill = deps.skills.approve(c.req.param('slug'));
@@ -123,7 +123,7 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
     return c.body(null, 204);
   });
 
-  /** Out of the archive and back into the router (popy.spec §8). */
+  /** Out of the archive and back into the router (pop-agent.spec §8). */
   routes.post('/skills/:slug/restore', (c) => {
     const restored = deps.archive?.restore(c.req.param('slug'));
     return restored === undefined

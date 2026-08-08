@@ -29,7 +29,7 @@ describe('server routes', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['cpu']).toEqual({ model: 'Test CPU', cores: 2, load: [0, 0, 0] });
     expect(body['memory']).toEqual({ total: 1024, used: 512 });
-    expect(body['popyVersion']).toBe('0.0.0-test');
+    expect(body['popAgentVersion']).toBe('0.0.0-test');
     expect(body['commit']).toBe('abc1234');
     expect(body['dbBytes']).toBe(100);
     expect(body['workspaceBytes']).toBe(200);

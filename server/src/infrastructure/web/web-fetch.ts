@@ -2,7 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
 /**
- * A guarded fetch for the agent's web_fetch tool (popy.spec §12). Only http
+ * A guarded fetch for the agent's web_fetch tool (pop-agent.spec §12). Only http
  * and https, only public hosts, capped and timed out, and the readable text
  * pulled out of the HTML. SSRF is the real risk: the hostname is resolved and
  * every returned address checked against the private ranges before a
@@ -38,7 +38,7 @@ export async function webFetch(rawUrl: string, deps: WebFetchDeps = {}): Promise
 
   const response = await fetch(url, {
     redirect: 'error', // a redirect could point back at a private host
-    headers: { 'user-agent': 'PopyBot/0.1 (+https://github.com/viniciusbuscacio/popy)' },
+    headers: { 'user-agent': 'PopAgentBot/0.1 (+https://github.com/viniciusbuscacio/pop-agent)' },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   }).catch((error: unknown) => {
     throw new WebFetchError(error instanceof Error ? error.message : 'The page could not be fetched.');

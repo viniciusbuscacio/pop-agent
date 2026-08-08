@@ -8,7 +8,7 @@ import { loadOrCreateSecretKey } from './secret-key-file.js';
 const dirs: string[] = [];
 
 function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'popy-key-'));
+  const dir = mkdtempSync(join(tmpdir(), 'pop-key-'));
   dirs.push(dir);
   return dir;
 }

@@ -19,7 +19,7 @@ describe('theme', () => {
   it('remembers the choice on this device only', () => {
     useThemeStore.getState().setChoice('light');
 
-    expect(localStorage.getItem('popy.theme')).toBe('light');
+    expect(localStorage.getItem('pop-agent.theme')).toBe('light');
     expect(document.documentElement.dataset['theme']).toBe('light');
     expect(useThemeStore.getState().choice).toBe('light');
   });

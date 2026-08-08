@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { VoiceCleanup } from './voice-cleanup.js';
 
 /**
- * Best-effort by contract (popy.spec §14): whatever goes wrong -- no provider,
+ * Best-effort by contract (pop-agent.spec §14): whatever goes wrong -- no provider,
  * a refusal, a timeout -- the raw transcript comes back, so voice never breaks
  * because the cleanup did. Since 07/08 the call goes through the service-model
  * resolver rather than a hard-wired gateway, so what a test scripts here is one

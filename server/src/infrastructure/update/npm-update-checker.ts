@@ -3,8 +3,8 @@ import type { UpdateChecker, UpdateStatus } from '../../application/ports/update
 import type { Versions } from '../config/versions.js';
 
 /**
- * The update check (popy.spec §15): current versions, plus the latest pi on
- * the npm registry and the latest Popy tag on the git origin -- knowing a new
+ * The update check (pop-agent.spec §15): current versions, plus the latest pi on
+ * the npm registry and the latest Pop Agent tag on the git origin -- knowing a new
  * version exists is worth a cheap request, applying it stays a documented
  * shell procedure gated by `npm run gate`. Results are cached briefly so
  * opening Settings repeatedly does not hammer anyone, and a failed check just
@@ -16,7 +16,7 @@ const REGISTRY = 'https://registry.npmjs.org';
 const CACHE_MS = 60 * 60 * 1000;
 const TIMEOUT_MS = 8000;
 
-const UPDATE_COMMAND = 'cd ~/dev/popy && git pull && npm ci && npm run gate && sudo systemctl restart popy-service';
+const UPDATE_COMMAND = 'cd ~/dev/pop-agent && git pull && npm ci && npm run gate && sudo systemctl restart pop-agent-service';
 
 export interface NpmUpdateCheckerDeps {
   versions: Versions;
@@ -39,7 +39,7 @@ export class NpmUpdateChecker implements UpdateChecker {
   async status(): Promise<UpdateStatus> {
     return {
       pi: { current: this.deps.versions.piVersion, latest: await this.piLatest() },
-      popy: { current: this.deps.versions.popyVersion, latest: await this.popyLatest() },
+      popAgent: { current: this.deps.versions.popAgentVersion, latest: await this.popAgentLatest() },
       node: this.deps.versions.nodeVersion,
       environment: await this.environmentVersions(),
       updateCommand: UPDATE_COMMAND,
@@ -56,7 +56,7 @@ export class NpmUpdateChecker implements UpdateChecker {
     return latest;
   }
 
-  private async popyLatest(): Promise<string | undefined> {
+  private async popAgentLatest(): Promise<string | undefined> {
     if (this.tagCache !== undefined && this.deps.now() - this.tagCache.at < CACHE_MS) {
       return this.tagCache.latest;
     }

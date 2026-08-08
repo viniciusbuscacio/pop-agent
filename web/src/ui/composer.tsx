@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { AttachmentDTO } from '@popy/shared';
+import type { AttachmentDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -83,7 +83,7 @@ export function Composer({
   const attachmentsRef = useRef<AttachmentDTO[]>([]);
   const mentionsRef = useRef<{ path: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
-  const storageKey = `popy.draft.${chatId}`;
+  const storageKey = `pop-agent.draft.${chatId}`;
 
   textRef.current = text;
   attachmentsRef.current = attachments;
@@ -247,7 +247,7 @@ export function Composer({
       const existing = textRef.current.trim();
       const merged = existing.length > 0 ? `${existing}\n${result.text}` : result.text;
       // A voice note is meant to be sent: the transcript (with any typed draft
-      // in front of it) goes to the chat automatically (popy.spec §14).
+      // in front of it) goes to the chat automatically (pop-agent.spec §14).
       autoSendRef.current = false;
       onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.path));
       setMentions([]);
@@ -658,7 +658,7 @@ function ThinkingButton({ show, onToggle }: { show: boolean; onToggle: () => voi
   );
 }
 
-/** aw's 34px icon button, in Popy's rounder skin. */
+/** aw's 34px icon button, in Pop Agent's rounder skin. */
 function IconButton({
   testId,
   label,

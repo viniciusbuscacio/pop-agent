@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
  * Generates the placeholder app icons: an accent tile with a blocky "P".
  *
  * Written by hand rather than pulled from an image library because the icons
- * are a placeholder until the mascot is designed (popy.spec §14), and a
+ * are a placeholder until the mascot is designed (pop-agent.spec §14), and a
  * hundred lines of PNG encoding is cheaper than a build dependency that exists
  * to draw four rectangles.
  *

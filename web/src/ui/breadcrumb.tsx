@@ -4,7 +4,7 @@ import { useDismiss } from '../lib/dismiss';
 import { MenuItem } from './controls';
 
 /**
- * Where you are, and the way back (popy.spec §14).
+ * Where you are, and the way back (pop-agent.spec §14).
  *
  * The app's own text colour rather than the link blue: this is a title that
  * happens to be clickable, so it is the heaviest thing on the screen after the

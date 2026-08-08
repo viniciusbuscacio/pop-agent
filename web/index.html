@@ -9,13 +9,13 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
-    <title>Popy</title>
+    <title>Pop Agent</title>
     <script>
       // Applied before the first paint: reading the stored theme from React
       // would flash the wrong colours on every load.
       (function () {
         try {
-          var stored = localStorage.getItem('popy.theme') || 'system';
+          var stored = localStorage.getItem('pop-agent.theme') || 'system';
           var dark =
             stored === 'dark' ||
             (stored === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);

@@ -1,10 +1,10 @@
-# Popy
+# Pop Agent
 
 A self-hosted personal agent platform. Clone it, deploy it on a VPS, and
 your personal agent is live — reachable from any browser as a PWA, on
 desktop and mobile.
 
-Popy embeds the [pi agent](https://pi.dev) as its engine and builds the
+Pop Agent embeds the [pi agent](https://pi.dev) as its engine and builds the
 product around it:
 
 - **Chat** over HTTP + SSE — streaming, attachments, voice notes, image
@@ -15,8 +15,8 @@ product around it:
   the app, with signed download links and a restorable trash.
 - **Notes**, **skills** picked per turn by a local router, **scheduled
   tasks**, backups, Web Push, passkeys.
-- **A terminal client** — `popy` chats from any machine and lends the
-  agent local hands there; `popyman` operates the service on the server.
+- **A terminal client** — `pop` chats from any machine and lends the
+  agent local hands there; `popman` operates the service on the server.
 
 Principles:
 
@@ -33,7 +33,7 @@ still move without compatibility promises.
 
 ## Documentation
 
-`popy.spec` is the single source of truth for architecture and behavior;
+`pop-agent.spec` is the single source of truth for architecture and behavior;
 `CHANGELOG.md` tracks what shipped. Design deep-dives live in `docs/`.
 
 ## License

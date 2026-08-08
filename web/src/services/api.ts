@@ -1,9 +1,9 @@
-import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@popy/shared';
+import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@pop-agent/shared';
 import { healthMonitor } from './health';
 import { session } from './session';
 
 /**
- * The only module in the app that calls `fetch` (popy.spec §14, enforced by
+ * The only module in the app that calls `fetch` (pop-agent.spec §14, enforced by
  * ESLint). Everything the API layer owes the rest of the app happens here:
  * the base path, the bearer token, silent token renewal, and turning an error
  * envelope into something typed.
@@ -50,7 +50,7 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
 }
 
 /**
- * Which client this is, and what it is running on (popy.spec §13).
+ * Which client this is, and what it is running on (pop-agent.spec §13).
  *
  * `web` and `pwa` are the same code; the only real difference is whether it
  * was installed, which `display-mode: standalone` is exactly the question
@@ -159,6 +159,6 @@ async function toApiError(response: Response): Promise<ApiError> {
       body.retryAfterSeconds,
     );
   } catch {
-    return new ApiError('operation_error', 'Popy could not be reached.', response.status);
+    return new ApiError('operation_error', 'Pop Agent could not be reached.', response.status);
   }
 }

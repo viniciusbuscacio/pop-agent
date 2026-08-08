@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AboutResponse, SettingsDTO } from '@popy/shared';
+import type { AboutResponse, SettingsDTO } from '@pop-agent/shared';
 import type { AppSettings, SettingsService } from '../../application/settings/settings-service.js';
 import { badBody, readJson, schemaError } from './body.js';
 
 /**
- * Settings and About (popy.spec §13). Both need a session; the middleware has
+ * Settings and About (pop-agent.spec §13). Both need a session; the middleware has
  * already run by the time these handlers see a request.
  *
  * PUT replaces the whole document rather than merging: with `.strict()` on the
- * schema, a client sending a field Popy does not know gets told so, instead of
+ * schema, a client sending a field Pop Agent does not know gets told so, instead of
  * having it quietly dropped and believing it was saved.
  */
 

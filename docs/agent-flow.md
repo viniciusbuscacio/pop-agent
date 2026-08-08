@@ -1,11 +1,11 @@
 # Agent flow — frontend ↔ pi SDK, end to end
 
-Design detail for popy.spec §5, §13, §14. The spec stays normative; this
+Design detail for pop-agent.spec §5, §13, §14. The spec stays normative; this
 document explains how a message travels through every layer and what each
 layer maps. Update it when the flow changes.
 
 **The frontend never touches the pi SDK.** Its entire contract is DTOs
-(`@popy/shared`) over HTTP + SSE. The pi SDK lives behind two boundaries:
+(`@pop-agent/shared`) over HTTP + SSE. The pi SDK lives behind two boundaries:
 the `AgentBridge` port (application) and its adapter (infrastructure).
 
 ## The wire (what web sees)
@@ -50,7 +50,7 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   Inbound: Zod parse → command object for the use case. Outbound: the SSE
   hub maps application `AgentEvent`s to `StreamEvent` DTOs; route handlers
   map use-case results to response DTOs. All DTO shapes live in
-  `@popy/shared` so web imports the exact same types.
+  `@pop-agent/shared` so web imports the exact same types.
 - **Ports owned by application** (`application/ports/`):
   - `AgentBridge.run({ chatId, prompt, model, onEvent, signal })` and
     `listModels()` — the only door to pi.
@@ -65,7 +65,7 @@ GET /v1/events            EventSink port            pi events → AgentEvent
 - **Session cache**: `Map<chatId, { session, lastUsedAt }>`. Idle > 3h →
   dispose and drop (spec §5); reopening via `SessionManager.open(path)` is
   transparent. `chats.pi_session_id` stores the JSONL path; first run of a
-  chat uses `SessionManager.create(POPY_WORKSPACE, POPY_DATA_DIR/sessions)`
+  chat uses `SessionManager.create(POP_AGENT_WORKSPACE, POP_AGENT_DATA_DIR/sessions)`
   and records the path.
 - **Concurrency** is not here. The ceiling and the queue live in the
   application (`RunService`), where they belong: they are a product rule, not
@@ -201,8 +201,8 @@ satisfied by the SDK.
 
 `CreateAgentSessionOptions` has no system-prompt field, but
 `DefaultResourceLoader` takes two: `systemPrompt` replaces pi's base prompt
-and `appendSystemPrompt: string[]` extends it. Popy builds its own loader per
-session -- `systemPrompt` set to a short neutral Popy prompt (the coding-agent
+and `appendSystemPrompt: string[]` extends it. Pop Agent builds its own loader per
+session -- `systemPrompt` set to a short neutral Pop Agent prompt (the coding-agent
 persona is not what a personal assistant should sound like) and the user's
 custom instructions appended when present. The same loader construction turns
 off everything a server has no use for: `noExtensions`, `noSkills`,
@@ -265,21 +265,21 @@ const model = runtime.getModel('openrouter', 'moonshotai/kimi-k3');
 Why each piece:
 
 - **`authPath` isolated.** A stored credential outranks the environment
-  variable, so pointing at pi's own auth file would let a credential Popy never
-  set decide which account gets billed. Popy keeps its own.
-- **`modelsPath: null`.** Popy pins the models it offers; inheriting pi's local
+  variable, so pointing at pi's own auth file would let a credential Pop Agent never
+  set decide which account gets billed. Pop Agent keeps its own.
+- **`modelsPath: null`.** Pop Agent pins the models it offers; inheriting pi's local
   catalog would make behaviour depend on whatever the operator ran the CLI with.
 - **`allowModelNetwork: false`.** Boot must not depend on OpenRouter being
   reachable. The live catalog is a Settings-screen action (`runtime.refresh()`),
   not a startup cost.
-- **`agentDir` inside `POPY_DATA_DIR`.** Not in the original recipe, and it
+- **`agentDir` inside `POP_AGENT_DATA_DIR`.** Not in the original recipe, and it
   belongs for the same reason as the other three: `agentDir` is where pi reads
   settings, extensions and skills from, and a `~/.pi/agent` on the host must not
-  get a vote on how Popy behaves.
+  get a vote on how Pop Agent behaves.
 
 **`registerProvider` turned out to be unnecessary, and the reason is worth
 recording**: this section first said the built-in `openrouter` provider "ships
-with no model entries", so Popy had to declare its own row with pinned pricing.
+with no model entries", so Pop Agent had to declare its own row with pinned pricing.
 That is wrong. `pi-ai/dist/providers/data/openrouter.json` ships **303 models**,
 `moonshotai/kimi-k3` among them, priced exactly as OpenRouter's live catalog
 prices it: US$3/M input, US$15/M output, US$0.30/M cache read, 1,048,576
@@ -293,7 +293,7 @@ resolves that model offline in the gate: a pi release that drops the row breaks
 the build rather than the first conversation of the day.
 
 One footnote to "isolated": `ModelRuntime.create` *does* create the file at
-`authPath`, empty. That is fine -- it is Popy's own, inside `POPY_DATA_DIR`. The
+`authPath`, empty. That is fine -- it is Pop Agent's own, inside `POP_AGENT_DATA_DIR`. The
 point was isolation from `~/.pi`, not abstinence.
 
 Verified to exist with these signatures: `ModelRuntime.create(options)`,

@@ -1,6 +1,6 @@
 /**
- * Popy inspecting her own accessibility tree (Vinicius's question, 31/07).
- * Boots a throwaway popy (same pattern as tools/ui-crawl.ts), logs in,
+ * Pop Agent inspecting her own accessibility tree (Vinicius's question, 31/07).
+ * Boots a throwaway pop (same pattern as tools/ui-crawl.ts), logs in,
  * opens the seeded chat, and dumps the aria snapshot of the chat screen.
  */
 import { spawn } from 'node:child_process';
@@ -24,14 +24,14 @@ async function freePort() {
   });
 }
 
-const dataDir = mkdtempSync(join(tmpdir(), 'popy-crawl-')); // marker the sweepOrphans recognizes
+const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-crawl-')); // marker the sweepOrphans recognizes
 const port = await freePort();
 const base = `http://127.0.0.1:${port}`;
 
 const child = spawn(process.execPath,
   [join(ROOT, 'node_modules/tsx/dist/cli.mjs'), join(ROOT, 'server/src/main.ts')],
-  { env: { ...process.env, POPY_PORT: String(port), POPY_BIND: '127.0.0.1',
-           POPY_DATA_DIR: dataDir, POPY_AGENT: 'fake' },
+  { env: { ...process.env, POP_AGENT_PORT: String(port), POP_AGENT_BIND: '127.0.0.1',
+           POP_AGENT_DATA_DIR: dataDir, POP_AGENT_ENGINE: 'fake' },
     stdio: ['ignore', 'ignore', 'inherit'] });
 
 try {
@@ -69,10 +69,10 @@ try {
     await page.waitForTimeout(300);
 
     const snapshot = await page.locator('body').ariaSnapshot();
-    writeFileSync(join(process.env.HOME, 'popy-workspace/ax-chat-phone.yaml'), snapshot);
+    writeFileSync(join(process.env.HOME, 'pop-agent-workspace/ax-chat-phone.yaml'), snapshot);
     console.log('=== aria snapshot (phone, chat screen) ===');
     console.log(snapshot);
-    await page.screenshot({ path: join(process.env.HOME, 'popy-workspace/ax-chat-phone.png') });
+    await page.screenshot({ path: join(process.env.HOME, 'pop-agent-workspace/ax-chat-phone.png') });
   } finally {
     await browser.close();
   }

@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_ID, PROVIDER_ID } from './pi-engine.js';
 
 /**
- * SDK contract check (popy.spec §15): every pi API Popy relies on must
+ * SDK contract check (pop-agent.spec §15): every pi API Pop Agent relies on must
  * exist. This same check runs inside the update gate before a new pi
  * version is accepted — if pi renames or removes something we use, this
  * fails before the update ever activates.
  */
 describe('pi sdk contract', () => {
   it(
-    'exports the APIs Popy depends on',
+    'exports the APIs Pop Agent depends on',
     { timeout: 30_000 },
     async () => {
       const sdk = await import('@earendil-works/pi-coding-agent');
@@ -32,14 +32,14 @@ describe('pi sdk contract', () => {
         'abort',
         'setModel',
         'dispose',
-        // Where pi keeps the conversation. Popy stores the path, never reads
+        // Where pi keeps the conversation. Pop Agent stores the path, never reads
         // the file, and hands it back when the chat wakes up again.
         'sessionFile',
       ]) {
         expect(session, `AgentSession.${method}`).toContain(method);
       }
 
-      // The model runtime is how the key and the catalog stay Popy's own
+      // The model runtime is how the key and the catalog stay Pop Agent's own
       // rather than whatever ~/.pi happens to hold (docs/agent-flow.md §8).
       expect(typeof sdk.ModelRuntime?.create).toBe('function');
       const runtime = Object.getOwnPropertyNames(sdk.ModelRuntime.prototype);
@@ -54,11 +54,11 @@ describe('pi sdk contract', () => {
     { timeout: 30_000 },
     async () => {
       // Offline on purpose: no auth file, no models.json, no network. If this
-      // stops resolving, a pi release dropped the row Popy defaults to and the
+      // stops resolving, a pi release dropped the row Pop Agent defaults to and the
       // first thing a user would see is a chat that cannot answer.
       const sdk = await import('@earendil-works/pi-coding-agent');
       const runtime = await sdk.ModelRuntime.create({
-        authPath: join(mkdtempSync(join(tmpdir(), 'popy-sdk-')), 'auth.json'),
+        authPath: join(mkdtempSync(join(tmpdir(), 'pop-sdk-')), 'auth.json'),
         modelsPath: null,
         allowModelNetwork: false,
       });

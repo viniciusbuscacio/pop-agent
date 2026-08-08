@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { FileNodeDTO } from '@popy/shared';
+import type { FileNodeDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { saveFromLink, viewFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
@@ -795,7 +795,7 @@ export function FilesPage() {
       </PullToRefresh>
 
       {/* On a phone Files IS the screen, not a pane beside the sidebar, so it
-          carries the sidebar's bottom bar too -- otherwise Popy, the health
+          carries the sidebar's bottom bar too -- otherwise Pop Agent, the health
           dot and Settings disappear the moment you open Files. */}
       <div className="md:hidden">
         <ShellFooter />

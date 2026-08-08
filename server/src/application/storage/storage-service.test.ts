@@ -53,7 +53,7 @@ describe('StorageService', () => {
         '/data/files': { bytes: 1000, files: 7 },
         '/data/voice-models': { bytes: 2000, files: 2 },
       },
-      files: { '/data/popy.db': 500, '/data/popy.db-wal': 200 },
+      files: { '/data/pop-agent.db': 500, '/data/pop-agent.db-wal': 200 },
     }).report();
 
     expect(bytesOf(report, 'database')).toBe(700);
@@ -93,7 +93,7 @@ describe('StorageService', () => {
   it('does not count the index twice, since it is inside the database file', () => {
     const report = service({
       dirs: { '/data': { bytes: 1000, files: 5 } },
-      files: { '/data/popy.db': 1000 },
+      files: { '/data/pop-agent.db': 1000 },
       repo: { index: { bytes: 800, count: 42 } },
     }).report();
 

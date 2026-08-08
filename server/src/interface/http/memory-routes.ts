@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { UserMemoryDTO } from '@popy/shared';
+import type { UserMemoryDTO } from '@pop-agent/shared';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { badBody, readJson, schemaError } from './body.js';
 
 /**
- * The living user-memory document over HTTP (popy.spec §13): Settings → Memory
+ * The living user-memory document over HTTP (pop-agent.spec §13): Settings → Memory
  * shows it, lets the user edit it, and restore the one-level backup. The agent
  * edits the same document through its own tools.
  */

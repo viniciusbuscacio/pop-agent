@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { asksForSkill } from './skill-request.js';
 
 describe('asksForSkill', () => {
-  it('hears the request in the languages Popy is spoken to', () => {
+  it('hears the request in the languages Pop Agent is spoken to', () => {
     for (const message of [
       'isso ai foi otimo, vira skill',
       'Transforma isso numa skill por favor',

@@ -4,7 +4,7 @@ import { envelope, sanitize } from '../../domain/safety/sanitize.js';
 import { WebFetchError, webFetch, type WebFetchDeps } from './web-fetch.js';
 
 /**
- * The web_fetch tool (popy.spec §12). One page in, its readable text out,
+ * The web_fetch tool (pop-agent.spec §12). One page in, its readable text out,
  * always wrapped in the safety envelope with the URL as the source -- a web
  * page is the least trusted content there is, and the model must read it as
  * data. SSRF and the caps live in {@link webFetch}.

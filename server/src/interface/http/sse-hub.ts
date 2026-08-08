@@ -1,11 +1,11 @@
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 import type { EventSink, RunEvent } from '../../application/ports/event-sink.js';
 
 /**
  * The SSE hub: the adapter that turns application events into the single
  * stream the browser listens to (docs/agent-flow.md).
  *
- * Popy has one user, so every connection sees everything -- three tabs and a
+ * Pop Agent has one user, so every connection sees everything -- three tabs and a
  * phone all watch the same run. The client already discards events for runs it
  * is not showing, which is the same filter it needs for its own stale runs.
  */

@@ -3,7 +3,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 
 /**
- * The agent's read-only view of its own skills (popy.spec §8).
+ * The agent's read-only view of its own skills (pop-agent.spec §8).
  *
  * There used to be a `skill_write` beside it -- fase (b), "vira skill" answered
  * live, mid-conversation. It is gone (1.66). Writing a skill during a turn put
@@ -32,7 +32,7 @@ export function buildSkillTools(defineTool: DefineTool, skills: SkillsRepo): Too
     description:
       'Lists the skills you already have: id, name, where each came from (builtin, auto, user) and ' +
       'when it should fire. Use it to answer questions about what you can do. You cannot write a ' +
-      'skill -- Popy distils those from finished conversations in the background.',
+      'skill -- Pop Agent distils those from finished conversations in the background.',
     promptSnippet: 'skills_list() — the skills you already have',
     parameters: Type.Object({}),
     execute: () => {

@@ -27,7 +27,7 @@ function secretKey(id:string):string{return `mcp:${id}:env`;}
 class SimpleMcpClient {
   constructor(private readonly server:McpServer, private readonly envJson:string|undefined, private readonly dataDir:string) {}
   private id=0; private child: import('node:child_process').ChildProcessWithoutNullStreams|undefined;
-  async initialize():Promise<void>{ const result=await this.request('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'popy',version:'0.2.0'}}); if(result===undefined)throw new Error('MCP initialize returned no result'); }
+  async initialize():Promise<void>{ const result=await this.request('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'pop',version:'0.2.0'}}); if(result===undefined)throw new Error('MCP initialize returned no result'); }
   async callTool(name:string,args:Record<string,unknown>):Promise<unknown>{ return this.request('tools/call',{name,arguments:args}); }
   async capabilities():Promise<McpCapability[]>{ const result=await this.request('tools/list',{}); const raw=(result as {tools?:unknown[]}|undefined)?.tools??[]; return raw.filter((x):x is Record<string,unknown>=>!!x&&typeof x==='object').map((x)=>({id:entityId('mcp-capability'),serverId:this.server.id,kind:'tool',name:String(x['name']??''),description:String(x['description']??''),inputSchema:(x['inputSchema'] as Record<string,unknown>)??{},metadata:{},updatedAt:new Date().toISOString()})); }
   async close():Promise<void>{ if(this.child!==undefined){this.child.kill('SIGTERM');this.child=undefined;} }

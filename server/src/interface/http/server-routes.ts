@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { ServerInfoResponse } from '@popy/shared';
+import type { ServerInfoResponse } from '@pop-agent/shared';
 
 /**
  * Settings → Server (LOTE 6). The info snapshot is read-only; the danger

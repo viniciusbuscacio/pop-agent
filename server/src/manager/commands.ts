@@ -1,7 +1,7 @@
 /**
- * `popyman` — the operator's tool (docs/cli.md, Naming; popy.spec §17).
+ * `popman` — the operator's tool (docs/cli.md, Naming; pop-agent.spec §17).
  *
- * The split from `popy` is not cosmetic. Keeping them one command would drag
+ * The split from `pop` is not cosmetic. Keeping them one command would drag
  * `better-sqlite3`, `argon2` and code that knows where `secret.key` lives onto
  * every laptop that wants to chat from a terminal. So the everyday tool gets
  * the good name and installs anywhere, and the dangerous one ships with the
@@ -41,17 +41,17 @@ export interface ManagerDeps extends ManagerIo {
 }
 
 export const USAGE = [
-  'popyman — the Popy service, from the machine it runs on',
+  'popman — the Pop Agent service, from the machine it runs on',
   '',
-  '  popyman start | stop | restart | status',
-  '                                  (POPY_SERVICE picks the unit)',
-  '  popyman backup                  make one now',
-  '  popyman backups                 list what is kept',
-  '  popyman restore <name>          replace the data with a backup',
-  '  popyman reset-password          lost the password AND the recovery key',
-  '  popyman update                  how to move this install forward',
+  '  popman start | stop | restart | status',
+  '                                  (POP_AGENT_SERVICE picks the unit)',
+  '  popman backup                  make one now',
+  '  popman backups                 list what is kept',
+  '  popman restore <name>          replace the data with a backup',
+  '  popman reset-password          lost the password AND the recovery key',
+  '  popman update                  how to move this install forward',
   '',
-  'The chat client is a different command: popy. See docs/cli.md.',
+  'The chat client is a different command: pop. See docs/cli.md.',
 ];
 
 const MIN_PASSWORD = 10;
@@ -71,7 +71,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     case 'stop':
     case 'restart':
     case 'status':
-      // Named out loud, because "Failed to stop popy.service" was a baffling
+      // Named out loud, because "Failed to stop pop.service" was a baffling
       // answer to a command that never said which service it meant.
       if (command !== 'status') deps.out(`${command} ${deps.unit}`);
       return deps.service(command);
@@ -85,7 +85,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     case 'backups': {
       const kept = deps.backups.list();
       if (kept.length === 0) {
-        deps.out('No backups yet. `popyman backup` makes one.');
+        deps.out('No backups yet. `popman backup` makes one.');
         return 0;
       }
       for (const entry of kept) {
@@ -97,7 +97,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     case 'restore': {
       const name = rest[0];
       if (name === undefined) {
-        deps.err('Which backup? `popyman backups` lists them.');
+        deps.err('Which backup? `popman backups` lists them.');
         return 1;
       }
       // Not confirmed here, and that is deliberate: restore is reached by
@@ -107,7 +107,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
         deps.err(`No such backup: ${name}`);
         return 1;
       }
-      deps.out(`Restored ${name}. Restart the service: popyman restart`);
+      deps.out(`Restored ${name}. Restart the service: popman restart`);
       return 0;
     }
 
@@ -149,13 +149,13 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     }
 
     case 'access-list':
-      // Named in popy.spec §18 and not built: there is no IP access list to
+      // Named in pop-agent.spec §18 and not built: there is no IP access list to
       // manage yet. Saying so beats a command that appears to work.
-      deps.err('Not built yet: Popy has no IP access list (popy.spec §18).');
+      deps.err('Not built yet: Pop Agent has no IP access list (pop-agent.spec §18).');
       return 1;
 
     default:
-      deps.err(`popyman: unknown command "${command}"`);
+      deps.err(`popman: unknown command "${command}"`);
       for (const line of USAGE) deps.err(line);
       return 1;
   }

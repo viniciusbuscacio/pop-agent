@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { envelope, sanitize } from './sanitize.js';
 
 /**
- * A corpus test (popy.spec §10): the malicious lines must raise the risk, the
+ * A corpus test (pop-agent.spec §10): the malicious lines must raise the risk, the
  * benign ones must pass clean. Both lists are deliberately over twenty, so a
  * pattern change that starts crying wolf -- or goes quiet -- fails here.
  */

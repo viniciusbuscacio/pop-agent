@@ -1,20 +1,20 @@
 import type { MiddlewareHandler } from 'hono';
-import { SESSION_TOKEN_HEADER } from '@popy/shared';
+import { SESSION_TOKEN_HEADER } from '@pop-agent/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import { apiError } from './errors.js';
 import { publicV1PathSet } from './route-registry.js';
 
 /**
  * Routes under /v1 that answer without a session: derived from the typed
- * route registry (popy.spec §9), never duplicated here. Each path's written
+ * route registry (pop-agent.spec §9), never duplicated here. Each path's written
  * reason lives next to its declaration in route-registry.ts, and the probe
  * in route-guard.test.ts asserts nothing beyond that list slips through.
  */
 const PUBLIC_PATHS: ReadonlySet<string> = publicV1PathSet();
 
 /**
- * Bearer-token guard for /v1 (popy.spec §9). On a token past its first day it
- * also hands back a fresh one in `x-popy-token`, which is what keeps a weekly
+ * Bearer-token guard for /v1 (pop-agent.spec §9). On a token past its first day it
+ * also hands back a fresh one in `x-pop-agent-token`, which is what keeps a weekly
  * user from ever meeting the login screen.
  */
 export function authMiddleware(auth: AuthService): MiddlewareHandler {

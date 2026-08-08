@@ -23,7 +23,7 @@ let changed: number;
 let files: FilesService;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-files-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-files-'));
   clock = new TestClock();
   changed = 0;
   files = new FilesService({ root, clock, onChanged: () => (changed += 1) });
@@ -75,7 +75,7 @@ describe('the jail', () => {
     expect(() => files.write('/etc/passwd', Buffer.from('x'))).toThrow();
   });
 
-  it('refuses dotfile paths -- they are reserved for Popy', () => {
+  it('refuses dotfile paths -- they are reserved for Pop Agent', () => {
     expect(() => files.write('.garbage.json', Buffer.from('{}'))).toThrow();
     expect(() => files.read('Garbage/.garbage.json')).toThrow();
   });
@@ -88,7 +88,7 @@ describe('the jail', () => {
   });
 
   it('follows a symlinked folder and refuses it when it escapes', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'popy-outside-'));
+    const outside = mkdtempSync(join(tmpdir(), 'pop-outside-'));
     writeFileSync(join(outside, 'loot.txt'), 'loot');
     symlinkSync(outside, join(root, 'escape'));
     expect(() => files.read('escape/loot.txt')).toThrow();

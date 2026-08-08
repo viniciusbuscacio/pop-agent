@@ -66,8 +66,8 @@ import { createApp } from './interface/http/app.js';
 import { McpService } from './application/mcp/mcp-service.js';
 import { SseHub } from './interface/http/sse-hub.js';
 
-const port = Number(process.env['POPY_PORT'] ?? 8787);
-const hostname = process.env['POPY_BIND'] ?? '127.0.0.1';
+const port = Number(process.env['POP_AGENT_PORT'] ?? 8787);
+const hostname = process.env['POP_AGENT_BIND'] ?? '127.0.0.1';
 
 // Resolves the same from src/ (tsx) and dist/ (compiled): both sit two levels
 // below the repo root.
@@ -75,7 +75,7 @@ const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
 /** Where `npm run pack:cli` leaves the tarball the server hands out. */
 const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
 
-// Composition root: the one place that knows every layer (popy.spec §3).
+// Composition root: the one place that knows every layer (pop-agent.spec §3).
 const context = bootstrap();
 
 const auth = new AuthService({
@@ -85,24 +85,24 @@ const auth = new AuthService({
   clock: systemClock,
 });
 
-// Which engine answers (popy.spec §4). `fake` is scripted and free; `pi` is
+// Which engine answers (pop-agent.spec §4). `fake` is scripted and free; `pi` is
 // the real thing and spends money. A typo must not quietly pick either.
-const agent = process.env['POPY_AGENT'] ?? 'pi';
+const agent = process.env['POP_AGENT_ENGINE'] ?? 'pi';
 if (agent !== 'fake' && agent !== 'pi') {
-  throw new Error(`POPY_AGENT must be "fake" or "pi", got "${agent}"`);
+  throw new Error(`POP_AGENT_ENGINE must be "fake" or "pi", got "${agent}"`);
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
 // Which terminals are attached and whose hands they are (docs/cli.md step 3).
 const hands = new HandsRegistry((line) => console.log(line));
-// Files as a plain folder (popy.spec §14): real names under dataDir/files/,
+// Files as a plain folder (pop-agent.spec §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
 const files = new FilesService({ root: filesDir, clock: systemClock });
 // The agent sees the same folder as `Files/` in its workspace -- a symlink,
 // so the tab and the agent can never disagree about what exists.
 const filesLinkWarning = ensureWorkspaceFilesLink(workspace, filesDir);
-if (filesLinkWarning !== undefined) console.warn(`popy files: ${filesLinkWarning}`);
+if (filesLinkWarning !== undefined) console.warn(`pop files: ${filesLinkWarning}`);
 // The append-only "which chat wrote this" log (§6, §14), fed after each run.
 const fileProvenance = new FileProvenanceService({
   repo: context.fileProvenance,
@@ -112,15 +112,15 @@ const fileProvenance = new FileProvenanceService({
 // Beside the data directory, never inside it: a backup must not end up in the
 // next backup. Named once because the storage report has to count it too --
 // it is usually the heaviest thing on the disk (§16 keeps ten of them).
-const backupsDir = join(context.dataDir, '..', 'popy-backups');
+const backupsDir = join(context.dataDir, '..', 'pop-backups');
 const settings = new SettingsService(context.settings);
 const mcp = new McpService({ repo: context.mcp, secrets: context.secrets, dataDir: context.dataDir });
-// The agent's own notes vault (popy.spec §11), inside the data directory.
+// The agent's own notes vault (pop-agent.spec §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
-// The skills vault (popy.spec §8): seeds the defaults on first boot.
+// The skills vault (pop-agent.spec §8): seeds the defaults on first boot.
 const skillsVault = new SkillsVault(join(context.dataDir, 'skills'));
 
-// Local embeddings power semantic memory and skill routing (popy.spec §7, §8).
+// Local embeddings power semantic memory and skill routing (pop-agent.spec §7, §8).
 // Built only for the real agent -- the fake bridge never embeds anything -- and
 // the model downloads on first use into the data directory.
 const embedder =
@@ -133,7 +133,7 @@ const hybridMemory = new HybridMemory({
   ...(embedder === undefined ? {} : { embedder }),
 });
 // Selections are logged so router thresholds are tuned from data, not guessed
-// (popy.spec §8). Slugs and scores only -- message content stays out of logs.
+// (pop-agent.spec §8). Slugs and scores only -- message content stays out of logs.
 const skillRouter = new SkillRouterService({
   skills: skillsVault,
   ...(embedder === undefined ? {} : { embedder }),
@@ -153,7 +153,7 @@ const skillRouter = new SkillRouterService({
               return `${entry.slug}(rrf=${entry.score.toFixed(4)} lex=${entry.lexical.toFixed(2)}${cosine})`;
             })
             .join(' ');
-    console.log(`popy skills: ${picked}`);
+    console.log(`pop skills: ${picked}`);
   },
 });
 const indexer =
@@ -162,16 +162,16 @@ const indexer =
     : new EmbeddingIndexer({
         embeddings: context.embeddings,
         embedder,
-        onError: (message) => console.warn(`popy embedding: ${message}`),
+        onError: (message) => console.warn(`pop embedding: ${message}`),
       });
 const bridge: AgentBridge & ProviderAuthBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The providers seen by the routes: key precedence (secrets over
 // environment), the key test, and the per-provider model catalog with the
-// engine's as offline fallback (popy.spec §15). Provider is data: each id in
+// engine's as offline fallback (pop-agent.spec §15). Provider is data: each id in
 // the declarative list maps to a plain-HTTP gateway here.
 const gateway = createOpenRouterGateway();
-// The advisory failover cooldown (popy.spec §15, fase 2): shared by the
+// The advisory failover cooldown (pop-agent.spec §15, fase 2): shared by the
 // chain (which skips penalized providers), the run loop (which penalizes)
 // and the credential writes (which forgive).
 const cooldown = new ProviderCooldown({ clock: systemClock });
@@ -188,14 +188,14 @@ const providers: ProviderService = new ProviderService({
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: (providerId) => bridge.listModels(providerId),
-  // Subscription providers (popy.spec §15, fase 1.5): the engine owns the
+  // Subscription providers (pop-agent.spec §15, fase 1.5): the engine owns the
   // credential; the service only ever asks yes/no questions about it.
   engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),
   engineCheckAuth: (providerId) => bridge.checkProviderAuth(providerId),
   engineLogout: (providerId) => bridge.providerLogout(providerId),
   cooldown,
   setDefaultProvider: (providerId, model) => {
-    // The list's head IS the default (popy.spec §15): written back here so
+    // The list's head IS the default (pop-agent.spec §15): written back here so
     // Settings, /model and every new chat report the same provider.
     const current = settings.read();
     settings.write({ ...current, defaultProvider: providerId, defaultModel: model });
@@ -206,7 +206,7 @@ const providers: ProviderService = new ProviderService({
   }),
 });
 // The single-slot custom of the pre-registry era becomes a registry
-// instance on boot (popy.spec §15); with nothing legacy left this is a no-op.
+// instance on boot (pop-agent.spec §15); with nothing legacy left this is a no-op.
 providers.migrateLegacyCustom();
 // The one interactive sign-in at a time, driven through the bridge.
 const oauthFlows = new OAuthFlowService({
@@ -225,7 +225,7 @@ function piBridge(): PiAgentBridge {
     engine: new SdkPiEngine({
       workspace,
       sessionsDir: join(context.dataDir, 'sessions'),
-      // pi's own config, credentials and catalog cache, all inside Popy's data
+      // pi's own config, credentials and catalog cache, all inside Pop Agent's data
       // directory: a ~/.pi on the host must not reach into this process.
       // The terminal's tools, when one is attached to this chat.
       localTools: (sdk, handsConnectionId) => buildLocalTools(sdk, hands, handsConnectionId),
@@ -259,7 +259,7 @@ function piBridge(): PiAgentBridge {
       }))),
     }),
     resolvePair: (provider, model) => providers.resolve({ provider, model }),
-    // Pinned skills lead the session's system prompt (popy.spec §8): identity
+    // Pinned skills lead the session's system prompt (pop-agent.spec §8): identity
     // is not left to a per-turn router. The Files catalog rides along (§7.4)
     // so the agent knows what exists without being handed it. The bridge
     // reopens a session when this string changes, so a pin edit or a new
@@ -282,7 +282,7 @@ function piBridge(): PiAgentBridge {
       // been -- but only where it cannot be mistaken for a charge.
       const billed = billsPerToken(usage.provider);
       console.log(
-        `popy run usage: chat=${usage.chatId} model=${usage.model} ` +
+        `pop run usage: chat=${usage.chatId} model=${usage.model} ` +
           `in=${String(usage.inputTokens)} out=${String(usage.outputTokens)} ` +
           (billed
             ? `usd=${usage.cost.toFixed(6)}`
@@ -291,7 +291,7 @@ function piBridge(): PiAgentBridge {
     },
     onFailure: (failure) => {
       const detail = failure.message === undefined ? '' : ` -- ${failure.message}`;
-      console.warn(`popy run failed: chat=${failure.chatId} code=${failure.code}${detail}`);
+      console.warn(`pop run failed: chat=${failure.chatId} code=${failure.code}${detail}`);
     },
   });
 }
@@ -299,14 +299,14 @@ function piBridge(): PiAgentBridge {
 const hub = new SseHub();
 // Web Push: the VAPID keys live in the secrets table, generated once. The
 // subject is the JWT's contact URI, which Apple validates -- see the service.
-const push = new WebPushService(context.push, context.secrets, process.env['POPY_PUSH_SUBJECT']);
+const push = new WebPushService(context.push, context.secrets, process.env['POP_AGENT_PUSH_SUBJECT']);
 const updates = new NpmUpdateChecker({
   versions: readVersions(),
   now: () => systemClock.now(),
   environment: readEnvironmentVersions,
 });
 // The pi bridge is the only thing that can dispose a live session; the purger
-// asks it to forget a chat before deleting the chat's files (popy.spec §6).
+// asks it to forget a chat before deleting the chat's files (pop-agent.spec §6).
 const purger = new FsChatPurger({
   workspace,
   forgetSession: (chatId) => {
@@ -320,16 +320,16 @@ const runs = new RunService({
   sink: hub,
   clock: systemClock,
   llmRuns: context.llmRuns,
-  // Failover (popy.spec §15, fase 2): the chain of usable pairs, the
+  // Failover (pop-agent.spec §15, fase 2): the chain of usable pairs, the
   // cooldown a refusing provider is penalized into, and the journal line.
   resolveChain: (override) => providers.resolveChain(override),
   cooldown,
   onFallback: (info) => {
     console.log(
-      `popy fallback: chat=${info.chatId} from=${info.from} to=${info.to} code=${info.code}`,
+      `pop fallback: chat=${info.chatId} from=${info.from} to=${info.to} code=${info.code}`,
     );
   },
-  // When a run ends, tell the phone -- even with the PWA closed (popy.spec §14).
+  // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that
     // succeeded or failed, and health would otherwise stop seeing it.
@@ -338,7 +338,7 @@ const runs = new RunService({
     const chat = context.chats.get(info.chatId);
     void push
       .send({
-        title: 'Popy',
+        title: 'Pop Agent',
         body: info.failed
           ? `${chat?.title ?? 'Your chat'}: the answer could not be finished.`
           : `${chat?.title ?? 'Your chat'}: the answer is ready.`,
@@ -356,10 +356,10 @@ const runs = new RunService({
     if (startedAtMs === 0) return;
     try {
       const recorded = fileProvenance.recordRunWrites(chatId, startedAtMs);
-      if (recorded > 0) console.log(`popy provenance: chat=${chatId} files=${String(recorded)}`);
+      if (recorded > 0) console.log(`pop provenance: chat=${chatId} files=${String(recorded)}`);
     } catch (error) {
       console.warn(
-        `popy provenance failed: ${error instanceof Error ? error.message : 'unknown'}`,
+        `pop provenance failed: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
   },
@@ -367,15 +367,15 @@ const runs = new RunService({
     chats: context.chats,
     // The provider comes from the chat, the model from that provider's
     // Service Model, and a refusal walks the same failover chain a run does
-    // (popy.spec §15, corrected 07/08).
+    // (pop-agent.spec §15, corrected 07/08).
     complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
     sink: hub,
-    onFailure: (message) => console.warn(`popy ${message}`),
+    onFailure: (message) => console.warn(`pop ${message}`),
   }),
 });
 
 // Built after the run service on purpose: deleting a conversation stops its
-// work first (popy.spec §6), and that is the run service's job.
+// work first (pop-agent.spec §6), and that is the run service's job.
 const chats = new ChatService({
   chats: context.chats,
   clock: systemClock,
@@ -383,7 +383,7 @@ const chats = new ChatService({
   runs,
 });
 
-// Background tasks (popy.spec §21): the rows, the queue that runs them, and
+// Background tasks (pop-agent.spec §21): the rows, the queue that runs them, and
 // the daily housekeeping that rides the same tick. The sweep is internal --
 // it has no row, no chat and no agent tool; it only ever removes derived
 // files in the workspace that nothing points at any more.
@@ -395,7 +395,7 @@ const taskScheduler = new TaskScheduler({
   clock: systemClock,
   timer: intervalTimer,
   jobs: [
-    // The auto-skill pair (popy.spec §8, fase c). They ride this tick rather
+    // The auto-skill pair (pop-agent.spec §8, fase c). They ride this tick rather
     // than owning timers, so everything periodic in the process is in one
     // place -- and the distiller's interval is a getter over Settings, which
     // is why changing it takes effect on the next tick instead of the next
@@ -409,7 +409,7 @@ const taskScheduler = new TaskScheduler({
       vectors: context.skillVectors,
       // The provider is inherited from the chat being distilled; a job with no
       // parent chat would fall through to the default. Same failover chain as
-      // a run (popy.spec §15).
+      // a run (pop-agent.spec §15).
       complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
       clock: systemClock,
       enabled: () => settings.read().distillSkills,
@@ -423,7 +423,7 @@ const taskScheduler = new TaskScheduler({
       usage: context.skillUsage,
       onJournal: (line) => console.log(line),
     }),
-    // The Garbage empties itself once a day (popy.spec §14): thirty days is
+    // The Garbage empties itself once a day (pop-agent.spec §14): thirty days is
     // a floor, not a deadline, so a daily check is the right cadence.
     new GarbageSweeper({ files, onJournal: (line) => console.log(line) }),
     new WorkspaceSweeper({
@@ -441,14 +441,14 @@ const taskScheduler = new TaskScheduler({
 });
 
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
-// The model is selected in Settings and downloaded on demand; POPY_WHISPER_MODEL
+// The model is selected in Settings and downloaded on demand; POP_AGENT_WHISPER_MODEL
 // still pins an explicit path for an operator who wants one.
 const voiceModels = new WhisperModelStore(join(context.dataDir, 'voice-models'));
 const transcriber = new WhisperTranscriber({
-  whisperCli: process.env['POPY_WHISPER_CLI'] ?? 'whisper-cli',
-  ffmpeg: process.env['POPY_FFMPEG'] ?? 'ffmpeg',
+  whisperCli: process.env['POP_AGENT_WHISPER_CLI'] ?? 'whisper-cli',
+  ffmpeg: process.env['POP_AGENT_FFMPEG'] ?? 'ffmpeg',
   resolveModel: () => {
-    const override = process.env['POPY_WHISPER_MODEL'];
+    const override = process.env['POP_AGENT_WHISPER_MODEL'];
     if (override !== undefined && override.length > 0) return Promise.resolve(override);
     return voiceModels.ensure(settings.read().voiceModel);
   },
@@ -527,12 +527,12 @@ const app = createApp({
   serverControl: (() => {
     // The systemd unit this process runs as (LOTE 6); the name is
     // overridable for an install that names it differently. A disposable
-    // boot (POPY_SERVICE_CONTROL=fake) gets a logging no-op instead, so a
+    // boot (POP_AGENT_SERVICE_CONTROL=fake) gets a logging no-op instead, so a
     // validation click can never reach the real service.
     const service =
-      process.env['POPY_SERVICE_CONTROL'] === 'fake'
+      process.env['POP_AGENT_SERVICE_CONTROL'] === 'fake'
         ? createFakeServiceControl()
-        : createSystemdControl(process.env['POPY_SERVICE_NAME'] ?? 'popy-service');
+        : createSystemdControl(process.env['POP_AGENT_SERVICE_NAME'] ?? 'pop-agent-service');
     return {
       restart: () => service.restart(),
       stop: () => service.stop(),
@@ -549,14 +549,14 @@ const app = createApp({
   cliPack,
 });
 
-// The notify-only update channel (popy.spec §15, Vinicius 31/07): when a
-// newer Popy tag appears on the origin, one push per version -- tapping it
+// The notify-only update channel (pop-agent.spec §15, Vinicius 31/07): when a
+// newer Pop Agent tag appears on the origin, one push per version -- tapping it
 // deep-links into Settings → Updates. Applying the update stays a shell act.
 const updateNoticePath = join(context.dataDir, 'update-noticed');
 async function notifyNewVersion(): Promise<void> {
   const status = await updates.status();
-  const latest = status.popy.latest;
-  if (latest === undefined || !isNewerVersion(status.popy.current, latest)) return;
+  const latest = status.popAgent.latest;
+  if (latest === undefined || !isNewerVersion(status.popAgent.current, latest)) return;
   const noticed = ((): string => {
     try {
       return readFileSync(updateNoticePath, 'utf8').trim();
@@ -566,8 +566,8 @@ async function notifyNewVersion(): Promise<void> {
   })();
   if (noticed === latest) return;
   await push.send({
-    title: 'Popy',
-    body: `Popy ${latest} is available. Tap to open Updates.`,
+    title: 'Pop Agent',
+    body: `Pop Agent ${latest} is available. Tap to open Updates.`,
     url: '/settings?section=updates',
   });
   writeFileSync(updateNoticePath, latest);
@@ -584,7 +584,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   });
 }
 
-// Nothing runs itself until the server is actually up (popy.spec §21).
+// Nothing runs itself until the server is actually up (pop-agent.spec §21).
 taskScheduler.start();
 
 // The hands channel needs a WebSocket server the adaptor can upgrade onto
@@ -602,18 +602,18 @@ setInterval(() => hands.beat(), PING_EVERY_MS).unref();
 serve(
   { fetch: app.fetch, port, hostname, websocket: { server: wss as unknown as WebSocketServerLike } },
   (info) => {
-  console.log(`popy server listening on http://${info.address}:${info.port}`);
-  console.log(`popy data dir ${context.dataDir}`);
+  console.log(`pop server listening on http://${info.address}:${info.port}`);
+  console.log(`pop data dir ${context.dataDir}`);
   console.log(
     agent === 'pi'
-      ? `popy agent bridge: pi (real models, workspace ${workspace})`
-      : 'popy agent bridge: fake (scripted; no model is contacted)',
+      ? `pop agent bridge: pi (real models, workspace ${workspace})`
+      : 'pop agent bridge: fake (scripted; no model is contacted)',
   );
   // Catch up the embedding index for anything written before this boot, in the
-  // background so nothing waits on the model download (popy.spec §7).
+  // background so nothing waits on the model download (pop-agent.spec §7).
   if (indexer !== undefined) {
     const pending = context.embeddings.pendingCount();
-    if (pending > 0) console.log(`popy embedding backfill: ${String(pending)} messages`);
+    if (pending > 0) console.log(`pop embedding backfill: ${String(pending)} messages`);
     void indexer.backfill();
   }
   },

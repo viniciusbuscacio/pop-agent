@@ -10,7 +10,7 @@ import {
   type ChatDTO,
   type MessageDTO,
   type ModelDTO,
-} from '@popy/shared';
+} from '@pop-agent/shared';
 import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/chat/chat.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
@@ -24,7 +24,7 @@ import type { EventTickets } from './event-tickets.js';
 import type { SseHub } from './sse-hub.js';
 
 /**
- * Conversations, runs and the event stream (popy.spec §13).
+ * Conversations, runs and the event stream (pop-agent.spec §13).
  *
  * Sending a message answers 202 with ids and nothing else: the reply itself
  * arrives over the stream. That split is what lets a run outlive the request
@@ -79,7 +79,7 @@ export interface ChatRoutesDeps {
 }
 
 /**
- * Who sent this, off the headers (popy.spec §13).
+ * Who sent this, off the headers (pop-agent.spec §13).
  *
  * Validated against the known list rather than stored as given: an unknown
  * value would end up in the model's context and in the history as if it meant
@@ -271,7 +271,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
   });
 
   routes.get('/models', async (c) => {
-    // The catalog is per provider (popy.spec §15); absent param means the
+    // The catalog is per provider (pop-agent.spec §15); absent param means the
     // provider the next run would actually use.
     const provider = c.req.query('provider') ?? deps.providers.resolve().providerId;
     const catalog = await deps.providers.models(provider);

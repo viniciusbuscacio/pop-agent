@@ -1,5 +1,5 @@
 /**
- * Reciprocal-rank fusion (popy.spec §7): merging the lexical ranking (FTS5) and
+ * Reciprocal-rank fusion (pop-agent.spec §7): merging the lexical ranking (FTS5) and
  * the semantic ranking (vector similarity) into one, without either needing to
  * know the other's score scale. Each list contributes 1/(k+rank) to a key's
  * total; the keys with the highest sum win. It is the standard, boring,

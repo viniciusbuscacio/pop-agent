@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { extractText, isPrivateAddress, webFetch, WebFetchError } from './web-fetch.js';
 
 /**
- * SSRF is the point (popy.spec §12): the DNS resolver is injected, so a host
+ * SSRF is the point (pop-agent.spec §12): the DNS resolver is injected, so a host
  * that resolves to a private address is refused before any connection, with no
  * real network touched.
  */

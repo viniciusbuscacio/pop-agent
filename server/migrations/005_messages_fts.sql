@@ -1,4 +1,4 @@
--- Lexical memory over every message ever written (popy.spec §7).
+-- Lexical memory over every message ever written (pop-agent.spec §7).
 --
 -- FTS5 external-content index over messages.content: the index stores only the
 -- terms, the rows stay in messages. Triggers keep the two in sync, and the

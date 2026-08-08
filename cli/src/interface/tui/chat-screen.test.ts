@@ -86,7 +86,7 @@ function screenWith(terminal: Terminal, onExit = vi.fn()) {
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
-  const screen = new ChatScreen({ session, server: 'http://popy.test', terminal, onExit });
+  const screen = new ChatScreen({ session, server: 'http://pop-agent.test', terminal, onExit });
   return { screen, session, onExit };
 }
 
@@ -97,7 +97,7 @@ describe('ChatScreen', () => {
     await flush();
 
     expect(plain()).toContain('New conversation');
-    expect(plain()).toContain('http://popy.test');
+    expect(plain()).toContain('http://pop-agent.test');
     expect(plain()).toContain('/help');
   });
 

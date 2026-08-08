@@ -1,6 +1,6 @@
 /**
  * Clicks every button in the UI so a human does not have to (Vinicius,
- * 31/07). Boots a throwaway popy — temp data dir, fake agent, zero tokens —
+ * 31/07). Boots a throwaway pop — temp data dir, fake agent, zero tokens —
  * walks the screens at a desktop and a phone viewport, clicks everything
  * clickable, and reports what each click did: navigation, dialog, download,
  * file chooser, network, DOM change. The clicks that did NOTHING are where
@@ -8,7 +8,7 @@
  *
  * Not part of the gate — a hunting tool, run by hand:
  *   npm run ui:crawl
- * Screenshots and report.json land in /tmp/popy-ui-crawl/.
+ * Screenshots and report.json land in /tmp/pop-agent-ui-crawl/.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const OUT = '/tmp/popy-ui-crawl';
+const OUT = '/tmp/pop-agent-ui-crawl';
 const PASSWORD = 'ui crawl password';
 
 /** What one click did. Several can be true; none of them is the finding. */
@@ -262,7 +262,7 @@ function sweepOrphans(): void {
       if (!/^\d+$/.test(entry)) continue;
       try {
         const environ = readFileSync(`/proc/${entry}/environ`, 'utf8');
-        if (environ.includes('POPY_DATA_DIR=/tmp/popy-crawl-')) {
+        if (environ.includes('POP_AGENT_DATA_DIR=/tmp/pop-agent-crawl-')) {
           process.kill(Number(entry), 'SIGKILL');
           console.log(`  buried orphan server ${entry}`);
         }
@@ -275,7 +275,7 @@ function sweepOrphans(): void {
   }
   try {
     for (const entry of readdirSync(tmpdir())) {
-      if (entry.startsWith('popy-crawl-')) {
+      if (entry.startsWith('pop-agent-crawl-')) {
         rmSync(join(tmpdir(), entry), { recursive: true, force: true });
       }
     }
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
   sweepOrphans();
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
-  const dataDir = mkdtempSync(join(tmpdir(), 'popy-crawl-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-crawl-'));
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
 
@@ -298,10 +298,10 @@ async function main(): Promise<void> {
     {
       env: {
         ...process.env,
-        POPY_PORT: String(port),
-        POPY_BIND: '127.0.0.1',
-        POPY_DATA_DIR: dataDir,
-        POPY_AGENT: 'fake',
+        POP_AGENT_PORT: String(port),
+        POP_AGENT_BIND: '127.0.0.1',
+        POP_AGENT_DATA_DIR: dataDir,
+        POP_AGENT_ENGINE: 'fake',
       },
       stdio: ['ignore', 'ignore', 'inherit'],
     },

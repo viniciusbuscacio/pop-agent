@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { upgradeWebSocket } from '@hono/node-server';
-import { compareVersions, installCommand, MIN_CLIENT_VERSION } from '@popy/shared';
+import { compareVersions, installCommand, MIN_CLIENT_VERSION } from '@pop-agent/shared';
 import { entityId } from '../../domain/ids.js';
 import type { HandsMachine, HandsRegistry } from '../../application/hands/hands-registry.js';
 
@@ -41,7 +41,7 @@ interface AttachFrame {
 export interface HandsRoutesDeps {
   hands: HandsRegistry;
   /** This server's own version, for the comparison on attach. */
-  versions: { popyVersion: string };
+  versions: { popAgentVersion: string };
 }
 
 export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
@@ -76,7 +76,7 @@ export function createHandsRoutes(deps: HandsRoutesDeps): Hono {
             if (machine === undefined || typeof machine.hostname !== 'string') return;
 
             const client = typeof machine.clientVersion === 'string' ? machine.clientVersion : '';
-            const server = deps.versions.popyVersion;
+            const server = deps.versions.popAgentVersion;
             const install = installCommand(originOf(c.req.url), server);
 
             if (client.length === 0 || compareVersions(client, MIN_CLIENT_VERSION) < 0) {

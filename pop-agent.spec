@@ -1,16 +1,16 @@
-# popy.spec — the project specification
+# pop-agent.spec — the project specification
 
-Version 1.68 — 2026-08-08.
-This file is the single source of truth for Popy. AGENTS.md (and CLAUDE.md,
+Version 1.69 — 2026-08-08.
+This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
 maintainer's notes outside the repo; this file records only the current
 normative state.
 
-> Inspired by go-apps.spec, but Popy is NOT part of the go-apps family —
+> Inspired by go-apps.spec, but Pop Agent is NOT part of the go-apps family —
 > this spec is independent.
 
-## 1. What Popy is
+## 1. What Pop Agent is
 
 - A self-hosted personal agent platform: clone from GitHub, deploy on a
   VPS, and your personal agent is live — reachable from any browser as a
@@ -18,11 +18,12 @@ normative state.
 - **Single user per installation.** A second person runs a second instance
   on another port. This is a permanent design constraint, not a v1 shortcut.
 - The engine is the **pi agent** (https://pi.dev), embedded in-process via
-  its TypeScript SDK. Popy is the product around it: auth, chats, memory,
+  its TypeScript SDK. Pop Agent is the product around it: auth, chats, memory,
   notes, skills, costs, backup, PWA.
 - License MIT. Repo private until the maintainer opens it. Repo is 100%
   English — code, comments, tests, docs, UI strings, commits. npm package
-  name, if ever published: `popy-agent` (the unscoped `popy` is squatted).
+  name, if ever published: `pop-agent` (free on npm at the time of the rename;
+  the old `popy` was squatted).
 - **Zero telemetry, no phone-home** — declared in the README. The only
   outbound traffic: LLM/provider calls and the opt-in update check.
 
@@ -54,8 +55,8 @@ normative state.
 ## 3. Repo layout (monorepo, npm workspaces)
 
 ```
-popy/
-├── popy.spec              # this file — source of truth
+pop-agent/
+├── pop-agent.spec              # this file — source of truth
 ├── AGENTS.md              # pointer here + repo specifics
 ├── CLAUDE.md              # "@AGENTS.md"
 ├── package.json           # workspaces: shared, server, web
@@ -69,7 +70,7 @@ popy/
 │   ├── infrastructure/    # adapters with IO implementing the ports
 │   │   ├── db/            #   SQLite + migrations + FTS5 + vec
 │   │   ├── agent/         #   pi SDK bridge (§5)
-│   │   ├── notes/         #   Popy's own notes vault (§11)
+│   │   ├── notes/         #   Pop Agent's own notes vault (§11)
 │   │   ├── web/           #   web_fetch for the agent (§12)
 │   │   ├── backup/        #   snapshots (§16)
 │   │   └── update/        #   pi auto-update (§15)
@@ -107,28 +108,28 @@ domain / application / dto / infrastructure / appcore → interface+main):
   abstraction bet; optionally Drizzle as a typed query builder inside the
   adapter. FTS5/vec queries are raw SQL in the adapter, by design.
 
-## 4. Runtime data (`POPY_DATA_DIR`, default `~/.popy/`)
+## 4. Runtime data (`POP_AGENT_DATA_DIR`, default `~/.pop-agent/`)
 
 ```
-~/.popy/
-├── popy.db          # SQLite: product data (§6)
+~/.pop-agent/
+├── pop-agent.db          # SQLite: product data (§6)
 ├── secret.key       # 0600 — encrypts stored provider secrets; NEVER in backups
-├── sessions/        # pi's JSONL session files (pi-owned, never parsed by Popy)
+├── sessions/        # pi's JSONL session files (pi-owned, never parsed by Pop Agent)
 ├── attachments/     # uploaded files (metadata in DB)
 ├── files/           # the user's Files: a plain folder tree, real names (§14)
-├── notes/           # Popy's own markdown notes vault (§11)
+├── notes/           # Pop Agent's own markdown notes vault (§11)
 ├── skills/          # user-added skills (§8)
 └── backups/         # tar.gz snapshots (§16)
 ```
 
-- `.env`: `OPENROUTER_API_KEY` optional seed, `POPY_PORT` (default 8787),
-  `POPY_BIND` (default `127.0.0.1`), `POPY_DATA_DIR`, `POPY_WORKSPACE`,
-  `POPY_AGENT` (`fake` | `pi`; `fake` is the scripted bridge used to build and
+- `.env`: `OPENROUTER_API_KEY` optional seed, `POP_AGENT_PORT` (default 8787),
+  `POP_AGENT_BIND` (default `127.0.0.1`), `POP_AGENT_DATA_DIR`, `POP_AGENT_WORKSPACE`,
+  `POP_AGENT_ENGINE` (`fake` | `pi`; `fake` is the scripted bridge used to build and
   test the chat without spending tokens).
   The session HMAC secret is **not** an environment variable: it is
   generated at setup and kept in the encrypted `secrets` table (§9), so a
   leaked backup -- which excludes `secret.key` -- cannot forge a token.
-- `POPY_WORKSPACE` (default `~/popy-workspace/`): the single root directory
+- `POP_AGENT_WORKSPACE` (default `~/pop-agent-workspace/`): the single root directory
   where the agent works; remote-coding repos are cloned as subfolders.
 
 ## 5. pi integration (`infrastructure/agent/`)
@@ -142,17 +143,17 @@ domain / application / dto / infrastructure / appcore → interface+main):
   touching the rest.
 - **Who stores what**: pi persists sessions as JSONL trees (branching,
   compaction, model changes) — that is the *execution state*, the exact
-  context the model sees. Popy never parses those files. Popy's SQLite is
+  context the model sees. Pop Agent never parses those files. Pop Agent's SQLite is
   the *product state*: chat list, titles, rendered messages, search,
   memory. Messages exist in both places on purpose — a pi format change
   must never touch the UI or memory.
-- pi's `sessionDir` points into `POPY_DATA_DIR/sessions/`
+- pi's `sessionDir` points into `POP_AGENT_DATA_DIR/sessions/`
   (`SessionManager.create(cwd, sessionDir)`). Resume =
   `SessionManager.open(path)` with the path stored in
   `chats.pi_session_id`. Smoke tests use `SessionManager.inMemory()`.
 - **Tools**: read, bash, edit, write — all enabled, full power ("yolo
   mode"). No permission prompts. The only gate is the taint rule (§10).
-  Popy's own capabilities (memory, notes, web, skills) are registered as pi
+  Pop Agent's own capabilities (memory, notes, web, skills) are registered as pi
   custom tools via `defineTool` (typebox schemas).
 - **Concurrency**: multiple chats run in parallel. Cap configurable,
   default 20; excess queues with visible status.
@@ -177,7 +178,7 @@ domain / application / dto / infrastructure / appcore → interface+main):
 
 ## 6. Database (SQLite)
 
-Single file `popy.db`. Migrations numbered, run at boot.
+Single file `pop-agent.db`. Migrations numbered, run at boot.
 
 ```sql
 chats(id, title, model, archived, pi_session_id, summary, auto_title,
@@ -205,9 +206,9 @@ file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
     unlikely, but defined) the repo re-draws the id and retries once — it never
     fails the request or overwrites.
   - **Internal file** = `prefix_<11 base62>.ext` with an underscore, for files
-    Popy makes itself (`audio_2f9FmGo58Jm.wav`, `text_…`). Created with an
+    Pop Agent makes itself (`audio_2f9FmGo58Jm.wav`, `text_…`). Created with an
     exclusive flag; on `EEXIST` it re-draws. The user's own files (attachments,
-    notes) keep their names — the convention is for Popy's internal artifacts.
+    notes) keep their names — the convention is for Pop Agent's internal artifacts.
 - `messages.tools_json` holds **one record per tool call**, not per event: a
   call that starts, streams six lines and exits is one thing that happened.
   The frontend folds the live stream the same way, so a conversation reads
@@ -218,7 +219,7 @@ file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
   random ids cannot order them.
 - Attachments travel and rest as data URIs on the message row (`attachments_json`),
   16 MB cap, and the pi bridge also writes each into
-  `POPY_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
+  `POP_AGENT_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
 - **Deleting a chat kills its work, then deletes everything it left behind.**
   `DELETE /v1/chats/:id` first stops what the chat has in flight
   (`RunService.discardChat`): the running attempt is aborted — which reaches
@@ -232,7 +233,7 @@ file_provenance(id, chat_id, path, created_at)  -- append-only log, §14
   afterwards, finds its chat gone, and stores nothing. The live pi session, if
   cached, is disposed first so nothing rewrites the file after it is gone.
   FTS5/embedding rows go by the same cascade once they exist.
-- **Files** live in `POPY_DATA_DIR/files/` as a plain folder tree with real
+- **Files** live in `POP_AGENT_DATA_DIR/files/` as a plain folder tree with real
   names (§14) — the disk is the record; there is no artifacts table. The only
   thing the database keeps is `file_provenance`: an append-only log of which
   chat wrote which path and when. It is history, not state — a later rename
@@ -252,29 +253,29 @@ a dot product over `message_embeddings`), fused with RRF (`fuseRankings` in
 2. **Living user document** — one markdown doc of durable facts. The agent
    updates it via tool; ~8k chars cap in prompt; above ~6k an LLM condenses
    (max 1×/day, one-level backup, secret-scrub before persisting).
-   Editable in Settings → Memory. Ships EMPTY — no personal seed; Popy is
+   Editable in Settings → Memory. Ships EMPTY — no personal seed; Pop Agent is
    a product for anyone to deploy.
 3. **Long-chat compaction & restore** (aw's layered design, adapted 01/08 —
-   pi ALREADY does the heavy lifting, Popy wraps the policy):
+   pi ALREADY does the heavy lifting, Pop Agent wraps the policy):
    - **Compaction = pi's native auto-compaction**, explicitly configured via
      `SettingsManager` (before 01/08 it ran on implicit defaults):
      `contextTokens > contextWindow - reserveTokens` (reserve 16384,
      keepRecent 20k) → pi summarizes the old span with iterative context
      (previous summary composes in), cuts at turn boundaries (never inside a
      tool pair), and persists a `CompactionEntry` in the session JSONL.
-     Popy builds no summarizer of her own.
+     Pop Agent builds no summarizer of her own.
    - **Proactive trigger**: pi's own threshold check before each turn.
-   - **Reactive trigger = Popy's layer**: pi does NOT retry on a
+   - **Reactive trigger = Pop Agent's layer**: pi does NOT retry on a
      context-overflow error (its `retry.*` covers transient failures only).
      The bridge catches an overflow error, calls `session.compact()` and
      retries the SAME turn once — token accounting always errs a little,
      this is the safety net.
    - **Summary authority**: model-generated text never returns with system
      authority. Pi renders its summary as conversation context (verified
-     01/08); anything Popy adds herself follows the house pattern — inside
+     01/08); anything Pop Agent adds herself follows the house pattern — inside
      the untrusted-data envelope, never bare system.
    - **Restore after restart/idle-unload = pi's session resume** (replays
-     the JSONL honouring compaction entries), plus Popy's **continuity
+     the JSONL honouring compaction entries), plus Pop Agent's **continuity
      note** (untrusted envelope): real numbers ("the N newest of M stored
      messages"), how to page back (memory_open/memory_search), and the rule
      that kills a class of hallucination — "tool results from before the
@@ -298,15 +299,15 @@ a dot product over `message_embeddings`), fused with RRF (`fuseRankings` in
    agent's own tools. Explicitly **no per-turn RAG injection** of file
    chunks: an agent with a real filesystem fetches; it is not fed.
    Motivated by the OffSchool dialogue (2026-07-31): the answer sat in a
-   filename the agent had no way to see (`popy skills: none` in the log),
+   filename the agent had no way to see (`pop skills: none` in the log),
    and it went to the web instead of its own files_search.
 
 ## 8. Skills with local mini-RAG selection ⭐ (the **Skill Router**)
 
-Popy ships dozens of built-in skills but injects only the relevant ones per
+Pop Agent ships dozens of built-in skills but injects only the relevant ones per
 user message — selection is 100% local, no LLM call:
 
-- Skill format: two coexisting shapes in `POPY_DATA_DIR/skills/` —
+- Skill format: two coexisting shapes in `POP_AGENT_DATA_DIR/skills/` —
   (a) the original flat `<slug>.md` with `name` + `description` +
   `whenToUse` frontmatter (built-ins seeded from the repo keep this), and
   (b) the **Agent Skills standard** (agentskills.io): a directory holding
@@ -314,7 +315,7 @@ user message — selection is 100% local, no LLM call:
   are assets, not skills). Slug = directory name; `whenToUse` falls back
   to `description`. Flat wins on a slug collision. Decided 01/08: the
   ecosystem converged on the standard and **pi implements it natively**,
-  so Popy adopts it in her own scanner rather than patching/translating
+  so Pop Agent adopts it in her own scanner rather than patching/translating
   pi (a patch would break on every pi update). New self-authored skills
   prefer the folder shape; both shapes route identically.
 ### Auto-skill: conversations become skills (§8, built 07/08 — fase b)
@@ -328,12 +329,12 @@ user message — selection is 100% local, no LLM call:
   Compatibility: a file written before 07/08 says `builtin: true`, and the
   parser still reads that as `source: builtin` — no migration pass.
 - **Skills are invisible in the conversation** (1.66, decided by Vinicius
-  after reading a transcript). Popy never mentions a skill unless asked a
+  after reading a transcript). Pop Agent never mentions a skill unless asked a
   question about skills. It does not announce that it is writing one,
   considering one, or declining to write one. Creation belongs entirely to
   the background distiller.
   This replaces fase (b), which put the decision in the turn. What that cost,
-  measured on a real conversation about choosing a name for Popy: the
+  measured on a real conversation about choosing a name for Pop Agent: the
   `skill-creator` skill was routed into **nine of sixteen turns**, every one
   of them with `lex=0.00` — no lexical evidence at all, because the user
   never wrote the word "skill" — on cosines of 0.79–0.84, which is inside the
@@ -413,7 +414,7 @@ user message — selection is 100% local, no LLM call:
   distributions overlap from 0.895 to 0.936. `brainstorm` and `planning`
   score 0.936 being different things; two copies of one procedure score
   0.895 being the same one. The overlap is not academic: at `0.90` a good
-  "Restart Popy service" skill was filed as a revision of `self-change` at
+  "Restart Pop Agent service" skill was filed as a revision of `self-change` at
   0.9017, where accepting it would have replaced an unrelated skill and
   refusing it left the new one buried in a table.
   Vocabulary separates them because two skills in one domain share the
@@ -484,7 +485,7 @@ user message — selection is 100% local, no LLM call:
   approval has had no chance to be used. `POST /v1/skills/:slug/restore`
   brings one back.
 - **The Skills screen is the inbox**: badges for source, the two queues, and
-  one discreet status line — when Popy last looked, how much waits on the
+  one discreet status line — when Pop Agent last looked, how much waits on the
   reader. No card and no push (decided 07/08): the distiller runs every ten
   minutes, so a notification per skill would be noise, and the cost already
   has a home in Settings → Usage.
@@ -495,7 +496,7 @@ user message — selection is 100% local, no LLM call:
   multilingual and the lexical leg leans on translation-stable tokens.
 - pi's native behavior (progressive disclosure: ALL descriptions in the
   system prompt) does not scale to dozens of skills and models often skip
-  reading them. Popy's selector replaces it.
+  reading them. Pop Agent's selector replaces it.
 - **Selector (built; 1.60 describes what exists).** Two rankings, fused
   with the same `fuseRankings` (RRF) the memory search uses — one function,
   not a second mechanism:
@@ -551,7 +552,7 @@ user message — selection is 100% local, no LLM call:
   evidence the archiving collector will read; the collector itself is not
   built yet.
 - Verify while coding: whether the SDK can scope which skills pi exposes
-  per session/turn; if not, Popy injects the selected skills as its own
+  per session/turn; if not, Pop Agent injects the selected skills as its own
   context and disables pi's native listing.
 
 **Self-knowledge hardening** (designed in 1.25–1.26, built in 1.27):
@@ -588,9 +589,9 @@ user message — selection is 100% local, no LLM call:
   (see `skill-creator`). Real PT dialogues that misrouted become test cases.
 - **`self-architecture` skill** (routed, not pinned): the deep self-map —
   clean-architecture layers and the dependency rule, the monorepo layout,
-  where Popy's own source lives on the server (Popy has bash; it can read
-  its own code once it knows the path), and the decision rule: **Popy's
-  extensions are TypeScript on Popy's own runtime**. The repo-map section
+  where Pop Agent's own source lives on the server (Pop Agent has bash; it can read
+  its own code once it knows the path), and the decision rule: **Pop Agent's
+  extensions are TypeScript on Pop Agent's own runtime**. The repo-map section
   is **generated from the code by a script** (runs with the gate), never
   hand-written — the spec stays the normative source; the map is derived.
 - **UI map (navigation self-knowledge).** The agent runs server-side: it
@@ -600,7 +601,7 @@ user message — selection is 100% local, no LLM call:
   in `web/src/App.tsx` and every visible label in `web/src/i18n/en.ts`
   are the source of truth for screens, menus and Settings sections. The
   self-map generator therefore also emits a **UI map** — routes, Settings
-  sections, what each does — so Popy directs the user through its own
+  sections, what each does — so Pop Agent directs the user through its own
   interface ("Settings → Model") instead of guessing. Same rule as the
   repo map: generated, never hand-written.
 
@@ -629,8 +630,8 @@ user message — selection is 100% local, no LLM call:
   (`base64url(payload).base64url(sig)`, payload `{epoch, iat, exp}`,
   constant-time compare, ~60 lines over `node:crypto`). No JWT lib —
   evaluated and rejected. Exp 7 days. **Sliding renewal**: a token
-  over 24h old comes back refreshed in the `x-popy-token` response header
-  and the client swaps what it stored — somebody who opens Popy weekly
+  over 24h old comes back refreshed in the `x-pop-agent-token` response header
+  and the client swaps what it stored — somebody who opens Pop Agent weekly
   never meets the login screen, while a token idle for the full week
   still dies. **Epoch** increments on password change, on recovery and on
   **"Sign out other devices"** (Settings, v0.1): every other session
@@ -664,7 +665,7 @@ user message — selection is 100% local, no LLM call:
   device's secure hardware.
 - **Provider secrets**: SQLite is not fully encrypted (your own VPS, honest
   threat model). Secrets column is encrypted with the key in
-  `~/.popy/secret.key` (0600), which is **excluded from backups** — a
+  `~/.pop-agent/secret.key` (0600), which is **excluded from backups** — a
   leaked backup leaks no keys; restore on a new machine = re-enter keys. The
   session HMAC secret lives in the same table for the same reason.
   Root-level attackers are out of scope and the README says so.
@@ -705,7 +706,7 @@ LLM) over everything from outside — web, files, notes, tool output:
   Rename and there is no undo behind it. A confirm must state the real
   blast radius (the whole subtree's file count, not the direct children's).
 - **Implemented via pi's own `tool_call` / `tool_result` extension hooks**
-  (an inline extension Popy registers; `noExtensions` still keeps the
+  (an inline extension Pop Agent registers; `noExtensions` still keeps the
   host's out). A run whose tool output sanitizes as suspicious/high
   becomes tainted; in a tainted turn a bash command that would **exfiltrate
   or read a secret** (curl/wget uploading a file, `curl -d/-F @file`,
@@ -721,8 +722,8 @@ LLM) over everything from outside — web, files, notes, tool output:
 
 ## 11. Notes (`infrastructure/notes/`)
 
-Popy owns its notes: a vault of plain markdown files at
-`POPY_DATA_DIR/notes/`, created and maintained by the agent. No external
+Pop Agent owns its notes: a vault of plain markdown files at
+`POP_AGENT_DATA_DIR/notes/`, created and maintained by the agent. No external
 vault integration — Obsidian-compatible by being plain .md; users may
 sync/open it externally.
 
@@ -740,7 +741,7 @@ sync/open it externally.
 ## 12. Web access (`infrastructure/web/`)
 
 - v0.1: `web_fetch(url)` — fetch + Readability extraction + safety envelope
-  (§10). pi has NO native web tools (confirmed) — this is a Popy custom
+  (§10). pi has NO native web tools (confirmed) — this is a Pop Agent custom
   tool.
 - Later: `web_search` (engine TBD) and Playwright for dynamic pages.
 
@@ -778,12 +779,12 @@ connection — one user, several tabs — and sends a `:ka` comment every 25s so
 a proxy does not mistake an idle stream for a dead one.
 
 `GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
-document and the schema is strict, so a field Popy does not know is a 400
+document and the schema is strict, so a field Pop Agent does not know is a 400
 rather than something silently dropped. Public (no session):
 `auth/state`, `setup`, `login`, `auth/recover`, `healthz`, `health` — and
 `/v1/events`, until Phase 2 decides how to authenticate a stream that
 EventSource cannot attach a header to. Any response may carry a refreshed
-`x-popy-token` (§9).
+`x-pop-agent-token` (§9).
 
 SSE events (typed in `shared/`): `delta`, `thinking`, `tool` (with
 start/output/done/error — `output` streams stdout in real time), `done`,
@@ -917,7 +918,7 @@ events from stale runs.
   ships a simple placeholder.
 - PWA: app-shell precache; API/SSE never cached; SW update prompt. iOS:
   HTTPS required, safe-areas, `dvh`. Android: WebAPK via manifest. Offline
-  is honest: shell + "Popy is offline". Web Push in v0.2 — exactly two
+  is honest: shell + "Pop Agent is offline". Web Push in v0.2 — exactly two
   triggers: "run finished" and "agent needs confirmation" (the second is
   still to be wired).
 - **Web Push, end to end**: `push-sw.js` is imported into the generated
@@ -934,8 +935,8 @@ events from stale runs.
   answers **403 `BadJwtToken`** for a subject it dislikes, silently — the
   phone simply never rings and nothing in the UI says why. `@localhost` is
   the trap: a perfectly good address for a machine talking to itself, and
-  not a domain Apple accepts. Popy signs with a real public URL by default;
-  `POPY_PUSH_SUBJECT` sets the operator's own `mailto:` or `https:` URI,
+  not a domain Apple accepts. Pop Agent signs with a real public URL by default;
+  `POP_AGENT_PUSH_SUBJECT` sets the operator's own `mailto:` or `https:` URI,
   and a value that would be rejected upstream is **dropped for the default
   rather than honoured** — a typo in an environment variable must not
   quietly switch every notification off.
@@ -947,11 +948,11 @@ events from stale runs.
 > design (`save_artifact`/`read_artifact`, id-addressed downloads, versions,
 > the path index) lives in the changelog if a rollback ever needs it.
 
-- **`POPY_DATA_DIR/files/` is the single source of truth.** Real names, real
+- **`POP_AGENT_DATA_DIR/files/` is the single source of truth.** Real names, real
   subfolders. The Files tab renders the tree as it is on disk — a `readdir`
   walk, no `artifacts` table, no `file-` ids, no path index. What `tree`
   shows over SSH is exactly what the tab shows. Hidden entries (dotfiles)
-  are reserved for Popy's own metadata and are never listed.
+  are reserved for Pop Agent's own metadata and are never listed.
 - **The agent sees Files as a folder.** `Files/` is exposed inside the
   workspace root, so the built-in `read`/`write`/`bash` tools already cover
   it: "save something for the user" means writing `Files/relatorio.pdf`.
@@ -994,7 +995,7 @@ events from stale runs.
   each latest version to `files/<folders>/<name>` (older versions are not
   carried over), seeds `file_provenance` from the rows' chat ids, then
   drops `artifacts`, `artifact_versions` and the folders table and removes
-  `POPY_DATA_DIR/artifacts/`. `FilesReindexJob` and the id-based routes go
+  `POP_AGENT_DATA_DIR/artifacts/`. `FilesReindexJob` and the id-based routes go
   with them.
 
 ## 15. Providers, models, updates
@@ -1071,7 +1072,7 @@ reimplemented.
   provider + model.
 - **Chat Model and Service Model, one pair PER PROVIDER** (corrected
   07/08, built 1.60). The Chat Model is what the user talks to; the Service
-  Model is what Popy uses for its own work — naming a conversation,
+  Model is what Pop Agent uses for its own work — naming a conversation,
   summarizing, tidying a voice transcript. It used to be one global setting,
   which was mono-provider thinking: a stored value is a *model id*, and a
   model id only means something inside one provider's catalogue. An install
@@ -1103,10 +1104,10 @@ reimplemented.
 ### Subscription OAuth (fase 1.5)
 
 - **Subscription auth rides pi's own login flows** — `openai-codex`
-  (ChatGPT Plus/Pro) and `github-copilot` (Copilot seat). Popy never
+  (ChatGPT Plus/Pro) and `github-copilot` (Copilot seat). Pop Agent never
   reimplements an OAuth dance: `ModelRuntime.login` runs the flow and
-  persists the credential into Popy's own auth file
-  (`POPY_DATA_DIR/pi-auth.json`); refresh happens inside pi per
+  persists the credential into Pop Agent's own auth file
+  (`POP_AGENT_DATA_DIR/pi-auth.json`); refresh happens inside pi per
   request. No key exists anywhere for these providers.
 - **One interactive flow at a time**, server-side
   (`OAuthFlowService`): `POST /v1/providers/:id/oauth/start` begins it
@@ -1131,11 +1132,11 @@ reimplemented.
   a new tab, a reload, the PWA resumed from the background. The card
   therefore asks for the flow state on mount and adopts a running flow,
   instead of only knowing about flows it started itself.
-- **The method choice is Popy's words, not pi's.** pi offers a
+- **The method choice is Pop Agent's words, not pi's.** pi offers a
   subscription two ways and calls the browser redirect "(default)" --
   but that redirect targets `localhost:1455` on the machine doing the
   browsing, which on a self-hosted install is not the machine running
-  Popy, so it can only end in a URL copied back by hand. The card
+  Pop Agent, so it can only end in a URL copied back by hand. The card
   relabels the two known methods (`device_code`, `browser`) itself and
   puts the code one -- no callback, works from any device -- first.
   Methods pi may add later render unrelabelled, as they arrive.
@@ -1144,7 +1145,7 @@ reimplemented.
   The warning comes *before* the input, because a user who meets the
   failed page unwarned reads the whole sign-in as broken and stops
   there. The steps carry the sign-in link, so the transcript drops its
-  duplicate row, and the input uses Popy's own placeholder -- pi's is
+  duplicate row, and the input uses Pop Agent's own placeholder -- pi's is
   the loopback URL itself, which reads like something to type.
 
 ### Multi-provider (fase 2 — automatic fallback)
@@ -1209,7 +1210,7 @@ reimplemented.
   restart forgives everyone.
 - **Failover is LOUD**: a persisted system message in the chat
   ("Answer retried via X after Y failed (code).") plus one journal
-  line (`popy fallback: chat=… from=… to=… code=…`). Every billed
+  line (`pop fallback: chat=… from=… to=… code=…`). Every billed
   attempt books its own `llm_runs` row (failover attempts under
   `<runId>-f<n>`), so the accounting shows what each provider really
   charged.
@@ -1223,7 +1224,7 @@ unasked network calls), versions pinned exactly, a recorded
 **last-known-good**, and a **post-update smoke gate** before the new
 version is accepted.
 
-**pi channel** (npm, the sensitive one — a pi release can break Popy):
+**pi channel** (npm, the sensitive one — a pi release can break Pop Agent):
 
 1. Daily semver check against npm (when auto-check is on); SSE banner;
    install = `npm install @earendil-works/pi-coding-agent@<v> --save-exact`
@@ -1231,11 +1232,11 @@ version is accepted.
 2. Before activating: run the **update gate** — the smoke suite against
    the new version (in-memory session + fake provider: create session,
    run a turn, event shapes, custom-tool registration, abort) plus an SDK
-   contract check (every API Popy imports still exists). Zero tokens.
+   contract check (every API Pop Agent imports still exists). Zero tokens.
 3. Gate passes → version activates and becomes last-known-good. Gate
    fails (or the bridge fails to boot) → **automatic rollback** to
    last-known-good, **auto-update disables itself**, and the user is
-   notified (banner + SSE; push when v0.2 lands): "pi X broke Popy,
+   notified (banner + SSE; push when v0.2 lands): "pi X broke Pop Agent,
    rolled back to Y, auto-update off until you re-enable it."
 4. **Probation**: a version that passes the gate stays on probation for
    24h; if the pi bridge crashes repeatedly (threshold N) during
@@ -1243,13 +1244,13 @@ version is accepted.
 5. `POST /v1/update/apply {version}` accepts any exact version = manual
    pin or manual rollback.
 
-**Popy channel** (its own repo):
+**Pop Agent channel** (its own repo):
 
-- Settings → Updates gains a "Popy" card: checks the repo's release tags,
+- Settings → Updates gains a "Pop Agent" card: checks the repo's release tags,
   shows changelog link. Update = fetch tag → `npm ci` → build → smoke —
   all **before** restarting; failure reverts the checkout and the running
   server never stopped. Success → systemd restart into the new version.
-- CLI: `popy update [--to vX.Y.Z]` does the same from the shell;
+- CLI: `pop update [--to vX.Y.Z]` does the same from the shell;
   `--to` on an older tag = rollback.
 - Plain `git pull && npm ci && npm run build && restart` remains
   documented for hands-on users.
@@ -1272,38 +1273,38 @@ channels above):
 
 ## 16. Backup and restore
 
-- Automatic snapshots: tar.gz of `POPY_DATA_DIR` (minus `secret.key`,
+- Automatic snapshots: tar.gz of `POP_AGENT_DATA_DIR` (minus `secret.key`,
   minus `backups/` itself), consistent SQLite copy via the backup API
   (never a raw copy of a hot WAL db). Retention: daily × 7 + weekly × 4
   (tunable). Settings → Backup lists snapshots for download.
-- **Restore only with the server stopped**: `popy restore <file>`. Never
+- **Restore only with the server stopped**: `pop restore <file>`. Never
   over a running server. Restore UI: maybe later.
 
 ## 17. Two CLIs
 
-Not one command with a mode: `popy` and `popyman` are separate programs
+Not one command with a mode: `pop` and `popman` are separate programs
 with separate audiences, and the split is what keeps the everyday one
 installable. Full design in `docs/cli.md`.
 
-**`popy`** — the chat client. Ships as `@popy/cli`, installs on any
+**`pop`** — the chat client. Ships as `@pop-agent/cli`, installs on any
 machine (`npm i -g <server>/cli-X.Y.Z.tgz`, served by the server itself),
 and carries no server code: no `better-sqlite3`, no `argon2`, nothing
 that knows where `secret.key` lives. A conversation started there is an
-ordinary Popy chat, and while it is open the agent also has a second set
+ordinary Pop Agent chat, and while it is open the agent also has a second set
 of tools running on the machine that typed it (`local_bash`,
 `local_read`, ...). Those hands belong to the MESSAGE, not to the chat.
 
-    popy | popy "question" | popy -p "…"
-    popy login | logout | servers | chats
+    pop | pop "question" | pop -p "…"
+    pop login | logout | servers | chats
 
-**`popyman`** — the operator's tool. Ships with the server, runs only
+**`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and
 the backups directory.
 
-    popyman start | stop | restart | status
-    popyman backup | backups | restore <name>
-    popyman reset-password
-    popyman update
+    popman start | stop | restart | status
+    popman backup | backups | restore <name>
+    popman reset-password
+    popman update
 
 `reset-password` covers "forgot the password AND the recovery key" for
 whoever has shell: no proof is asked for, because owning the machine is
@@ -1313,7 +1314,7 @@ the URL. It bumps the session epoch, so every signed-in device is signed
 out, and prints a new recovery key once.
 
 `access-list` is named in §18 and **not built**: there is no IP access
-list to manage yet. `popyman access-list` says so rather than pretending.
+list to manage yet. `popman access-list` says so rather than pretending.
 
 **Client/server versions.** The server holds its own version and the
 oldest client it accepts; the hands channel's attach compares them.
@@ -1340,11 +1341,11 @@ is set by hand and moves only when the wire changes.
     server is exposed.
 - Login protection: rate limit (10/min/IP) + progressive lockout + **IP
   access list** (CIDR blocks, managed in Settings and via CLI). If you
-  lock yourself out: `popy access-list clean` over SSH.
+  lock yourself out: `pop access-list clean` over SSH.
 - Control plane `GET /v1/ax`: describes the app for agents (route map,
   error contract, action catalog with risk levels), own X-API-Key separate
   from user sessions, OFF by default. `tools/smoke.ts` starts the server as its
-  own process with a temp `POPY_DATA_DIR` on an ephemeral port and drives
+  own process with a temp `POP_AGENT_DATA_DIR` on an ephemeral port and drives
   it over HTTP end to end — health, first-run state, setup, the session
   guard, a settings roundtrip, a password change that drops old tokens,
   recovery spending its key, sign out others, and the built frontend being
@@ -1380,7 +1381,7 @@ is set by hand and moves only when the wire changes.
   clear, stop and explain before deciding.
 - **Dev happens on the test server, not on the maintainer's machines**:
   the agent connects over SSH to `ubuntu-home` (Ubuntu Server 26.04, home
-  LAN / tailnet), codes in the clone at `~/dev/popy`, runs the gate, the
+  LAN / tailnet), codes in the clone at `~/dev/pop-agent`, runs the gate, the
   dev server and the smoke there, and pushes to GitHub from there. The
   Windows ThinkPad is only the terminal (and holds a read-only mirror
   clone); the Mac has npm blocked by corporate policy. UI testing: the
@@ -1389,7 +1390,7 @@ is set by hand and moves only when the wire changes.
   systemd + Node 22 (`npm run build` + systemd unit example in repo).
   Docker: maybe later, never required.
 - The test server runs the dev build under **systemd**
-  (`deploy/popy-service.service`: sources through tsx, absolute `ExecStart`
+  (`deploy/pop-agent-service.service`: sources through tsx, absolute `ExecStart`
   because systemd's boot PATH is minimal), so the tailnet URL answers
   after a reboot with nobody logged in. The production unit points at the
   compiled `dist/` instead.
@@ -1478,7 +1479,7 @@ is set by hand and moves only when the wire changes.
   in the UI. It rides the scheduler's tick on a daily cadence, and runs on the
   first tick after boot so a machine that reboots every night still sweeps.
 - Two targets, both deliberately narrow:
-  - `POPY_WORKSPACE/attachments/<chatId>/` whose chat is no longer in the
+  - `POP_AGENT_WORKSPACE/attachments/<chatId>/` whose chat is no longer in the
     database. A chat deleted through the API already takes its folder with it
     (§6); this catches what a crash, a restore or a hand-edited database left.
   - Scratch files sitting **directly** in the workspace root, older than thirty
@@ -1487,13 +1488,38 @@ is set by hand and moves only when the wire changes.
 - The list of what it must never do is longer than what it does: never the
   attachments of a living chat, never the database, never a directory in the
   workspace root (that is someone's project), never anything outside
-  `POPY_WORKSPACE`, never a symlink. **Session history is forever** — a sweep
+  `POP_AGENT_WORKSPACE`, never a symlink. **Session history is forever** — a sweep
   only ever removes files *derived* from it, never a message, a chat or a
   title. Deletion failures are swallowed: a file already gone is the goal.
 - One journal line per sweep, with the counts, even when both are zero — a
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.69 (2026-08-08): **Popy is renamed Pop Agent, as a clean break.** The
+  display name is `Pop Agent` — UI strings, PWA manifest, WebAuthn RP name,
+  the agent's own system prompt and the self-knowledge skill. The slug is
+  `pop-agent`: repo, npm packages (`pop-agent`, `@pop-agent/*`), data
+  directory `~/.pop-agent`, database `pop-agent.db`, workspace
+  `~/pop-agent-workspace`, systemd unit `pop-agent-service`, CLI profiles in
+  `$XDG_CONFIG_HOME/pop-agent/`, env prefix `POP_AGENT_*`. The two binaries
+  drop the project name and take the short form: `pop` (chat client) and
+  `popman` (operator), so the thing typed all day stays two syllables.
+  `POPY_AGENT` became `POP_AGENT_ENGINE` rather than `POP_AGENT_AGENT`; the
+  wire field `popy` on `GET /v1/update/status` became `popAgent`.
+  **No compatibility layer, on purpose** — no `POPY_*` fallback, no reading
+  `~/.popy` when `~/.pop-agent` is absent. The instance is single-user and
+  pre-release, so a shim would be permanent cost for one migration. The cost
+  paid instead: the session token header is `x-pop-agent-token` and the
+  browser keys are `pop-agent.*`, so every client re-authenticates once and
+  loses its theme and drafts; the PWA must be re-added to the iPhone home
+  screen to pick up the new name and push. Passkeys survive — they are
+  anchored to the `rpId` (the domain), and only the display `RP_NAME`
+  changed. The timing is deliberate: Docker (§18) and the Go client would
+  each freeze another set of names.
+  Not migrated, and left visibly stale: conversations, the memory document
+  and the distilled auto-skills still say "Popy", because they are the
+  user's content and rewriting them is not the rename's business.
 
 - 1.68 (2026-08-08): **The dedup bars are measured, and the distiller may only
   revise its own work (§8).** Found by testing the 1.66 request path against
@@ -1522,7 +1548,7 @@ is set by hand and moves only when the wire changes.
   exactly what the stale replay did — so a mode that passes without calling a
   model defeats the only thing it is for. The gate is where fixtures belong.
 - 1.66 (2026-08-08): **Skills leave the conversation (§8).** Vinicius read a
-  transcript where he was choosing a name for Popy and got, turn after turn, a
+  transcript where he was choosing a name for Pop Agent and got, turn after turn, a
   paragraph explaining why no skill was being created. The log says why:
   `skill-creator` was routed into nine of sixteen turns, every one at
   `lex=0.00` and cosine 0.79–0.84 — inside the e5 noise band this spec already
@@ -1531,7 +1557,7 @@ is set by hand and moves only when the wire changes.
   meaning, and an internal check should never have had a voice.
   So fase (b) is withdrawn. `skill_write` is off the agent's hand, the
   `skill-creator` skill is out of the built-ins, and the system prompt says
-  plainly that Popy does not write skills and must not narrate the subject.
+  plainly that Pop Agent does not write skills and must not narrate the subject.
   The distiller is the only writer. An explicit "vira skill" survives as a
   **separate path**: matched by phrase list on the user's own messages, it
   makes that chat jump the queue, skip the idle wait, and forbids the empty
@@ -1607,7 +1633,7 @@ is set by hand and moves only when the wire changes.
   **The correction that mattered more** is in the distiller: it was reading
   the whole window — the user's messages included — through `sanitize`, which
   made the detector's own vocabulary radioactive. A bare "system prompt"
-  flags nine paragraphs of this spec, so every conversation about how Popy
+  flags nine paragraphs of this spec, so every conversation about how Pop Agent
   works would have been skipped, silently and permanently, since the
   watermark advances on a taint. It now reads **only tool output**, which is
   what §10's threat model was ever about: indirect injection is text that
@@ -1712,7 +1738,7 @@ is set by hand and moves only when the wire changes.
   `artifacts` table, versions, a path index, trash rows — was carrying
   features this install does not want: Vinicius wants to `tree` his files
   over SSH, wants a re-save to overwrite, and wants the trash to be a
-  folder he can open. So `POPY_DATA_DIR/files/` with real names is now the
+  folder he can open. So `POP_AGENT_DATA_DIR/files/` with real names is now the
   single source of truth; the tab renders the disk, uploads and the agent
   write straight into it, and `save_artifact`/`read_artifact` retire in
   favour of the built-in file tools. What survives, survives simpler:
@@ -1729,10 +1755,10 @@ is set by hand and moves only when the wire changes.
   entry supersedes the artifact half of 1.47–1.53.
 
 - 1.57 (2026-08-04): **Two CLIs, and a server that hands out its own
-  client (§17).** `popy` is the chat client and `popyman` the operator's
+  client (§17).** `pop` is the chat client and `popman` the operator's
   tool; keeping them one command would drag `better-sqlite3`, `argon2`
   and code that knows where `secret.key` lives onto every laptop that
-  wants to chat from a terminal. `popyman` ships with the server and is
+  wants to chat from a terminal. `popman` ships with the server and is
   the only thing touching systemd, SQLite and the backups directory;
   `reset-password` lives there and NOWHERE else, because it proves
   nothing and owning the machine is the proof -- an HTTP route with the
@@ -1748,13 +1774,13 @@ is set by hand and moves only when the wire changes.
   versions**: silent when compatible, one line when merely behind, and
   refused with the install command below `MIN_CLIENT_VERSION`, which is
   set by hand and moves only when the wire changes. Packing bundles every
-  `@popy/*` into `dist/` and leaves the two public dependencies external,
+  `@pop-agent/*` into `dist/` and leaves the two public dependencies external,
   which is what makes the tarball installable at all (`npm pack` alone
-  404s on `@popy/shared`).
+  404s on `@pop-agent/shared`).
   Also: **hands belong to the message, not the chat** (docs/cli.md). A
   chat used to have an owner, so a message from the phone ran commands on
   whichever laptop had opened it -- possibly one that is shut. The
-  terminal now names itself on each message (`x-popy-hands`), which
+  terminal now names itself on each message (`x-pop-agent-hands`), which
   deleted the ownership map, the claim frame and the spectator rule.
 
 - 1.56 (2026-08-04): **Every message remembers where it came from (§13).**
@@ -1768,7 +1794,7 @@ is set by hand and moves only when the wire changes.
   iPhone" would otherwise be two answers at once; the phone half is the
   platform. Named `client`, NOT `source`: that word is already an
   artifact's `agent`/`upload` and a title's `auto`/`manual`.
-  Carried in `x-popy-client` / `x-popy-client-platform`, set once in each
+  Carried in `x-pop-agent-client` / `x-pop-agent-client-platform`, set once in each
   client's api layer so every call has it, and validated at the edge --
   an unknown value is recorded as nothing rather than passed through into
   the model's context. NULL is the honest value for the 427 rows that
@@ -1786,7 +1812,7 @@ is set by hand and moves only when the wire changes.
   from the socket otherwise; reading only the header recorded nothing for
   every direct connection.
 - 1.55 (2026-08-04): **Providers are added, not configured (§14, §15).** The
-  Model screen used to show every provider Popy knows about, configured or
+  Model screen used to show every provider Pop Agent knows about, configured or
   not, each an open form -- six cards to read before finding the one you had
   set up, plus a separate drag-to-reorder priority list. Now the screen says
   what you HAVE: an **Add provider** button, then one card per configured
@@ -1890,7 +1916,7 @@ is set by hand and moves only when the wire changes.
 - 1.50 (2026-08-03): **Pull down to refresh, on the phone (§14, §15).** An
   installed PWA has to build this itself: Safari's own pull-to-refresh
   exists in a browser tab and NOT in standalone display mode, which is how
-  Popy runs on a phone, so the gesture every phone user knows was simply
+  Pop Agent runs on a phone, so the gesture every phone user knows was simply
   missing. `lib/pull-to-refresh` + `ui/PullToRefresh` wrap a scroll area;
   the chat list and Files use it. Chrome's model, not iOS's -- the list
   stays put and a spinner slides over it, because translating the scroller
@@ -1925,7 +1951,7 @@ is set by hand and moves only when the wire changes.
   video, with text-ish types (markdown, csv, json) relabelled `text/plain`
   so they are read rather than saved. An **allowlist, never a denylist**:
   `text/html` and `image/svg+xml` are excluded on purpose, because uploaded
-  markup rendered inline on Popy's own origin can read the session token;
+  markup rendered inline on Pop Agent's own origin can read the session token;
   anything unrecognised downloads, as before. `nosniff` and a `sandbox` CSP
   ride along. A web page cannot hand a file to the operating system's
   default application -- that door is closed to every website -- so "open in
@@ -2034,7 +2060,7 @@ is set by hand and moves only when the wire changes.
   redirect as the default; on a self-hosted install that is the one
   method that cannot finish by itself, and it dead-ends on a blank
   `localhost` page whose address the user is expected to copy out of
-  the bar. The card now names the choice in Popy's own words with the
+  the bar. The card now names the choice in Pop Agent's own words with the
   code method first, and the redirect path reads as three steps that
   warn about the failed page before asking for its address. Both paths
   still work; an API key remains the third way in.
@@ -2051,10 +2077,10 @@ is set by hand and moves only when the wire changes.
 - 1.40 (2026-08-01): **iOS push actually arrives (§14).** The whole chain
   existed — service worker with `push`/`notificationclick`, the Settings
   opt-in, `/v1/push/*`, the send on run finish — and delivered nothing on
-  iPhone, because the VAPID `sub` claim was `mailto:popy@localhost` and
+  iPhone, because the VAPID `sub` claim was `mailto:pop-agent@localhost` and
   Apple validates it: measured against web.push.apple.com, that subject
-  answers 403 `BadJwtToken` while a real public URL answers 201. Popy now
-  signs with its own project URL by default, `POPY_PUSH_SUBJECT` takes an
+  answers 403 `BadJwtToken` while a real public URL answers 201. Pop Agent now
+  signs with its own project URL by default, `POP_AGENT_PUSH_SUBJECT` takes an
   operator `mailto:`/`https:` URI, and an override that would be rejected
   upstream is dropped for the default rather than honoured — a typo must
   not silently switch every notification off. §14 gains the end-to-end
@@ -2073,7 +2099,7 @@ is set by hand and moves only when the wire changes.
   removes `attachments/<chatId>/` for chats that no longer exist plus
   root-level scratch older than 30 days (`.png`, `.yaml`, `.mjs` only),
   never a live chat's attachments, never a directory, never a symlink,
-  never anything outside POPY_WORKSPACE, never the database. One journal
+  never anything outside POP_AGENT_WORKSPACE, never the database. One journal
   line per sweep with the counts. Session history is forever: sweeps touch
   only derived workspace files.
 - 1.38 (2026-08-01): **Background tasks (§21).** New third sidebar tab —
@@ -2138,14 +2164,14 @@ is set by hand and moves only when the wire changes.
   penalize. New in-memory advisory `ProviderCooldown` (5 min): the
   chain skips penalized providers unless all are; key save / sign-in
   forgives; restart resets. Failover is loud: persisted system message
-  in the chat + `popy fallback:` journal line; every billed attempt
+  in the chat + `pop fallback:` journal line; every billed attempt
   books its own `llm_runs` row (`<runId>-f<n>` for retries). Context
   overflow keeps its §7 compact-and-retry path, same provider.
 - 1.34 (2026-08-01): **Subscription providers via OAuth (§15, fase
   1.5).** `openai-codex` (ChatGPT subscription) and `github-copilot`
   (Copilot subscription) join the declarative list with
   `authType: "oauth"`. pi's `ModelRuntime.login` runs the whole flow;
-  Popy adds a single-active `OAuthFlowService` (10-minute timeout, new
+  Pop Agent adds a single-active `OAuthFlowService` (10-minute timeout, new
   flow cancels the old), five `/v1/providers/:id/oauth/*` routes
   (start/state/input/cancel/logout), and the Settings card swaps the
   key input for Sign in / Disconnect with the flow's transcript inline
@@ -2175,7 +2201,7 @@ is set by hand and moves only when the wire changes.
   clicks and screenshots, with the rules spelled out (untrusted content,
   web_fetch's address policy, close the browser, prefer web_fetch for
   static pages); know-thyself mentions the capability. (2)
-  `npm run ui:crawl` (tools/ui-crawl.ts) boots a throwaway popy (temp
+  `npm run ui:crawl` (tools/ui-crawl.ts) boots a throwaway pop (temp
   data dir, fake agent), logs in through the real form at a desktop and a
   phone viewport, clicks every visible button on every screen, and
   reports NO-OP buttons and console errors with screenshots — the class
@@ -2204,7 +2230,7 @@ is set by hand and moves only when the wire changes.
   injection — the agent fetches with its own tools. Motivated by the
   OffSchool dialogue, where the answer sat in a filename the agent could
   not see. Also validated live today: the self-architecture skill routed
-  at 6.54 for the auto-programming question and Popy answered TypeScript
+  at 6.54 for the auto-programming question and Pop Agent answered TypeScript
   with the platform's own reasons.
 
 - 1.27 (2026-07-31): **Self-knowledge hardening built (§8).** Skills carry a
@@ -2214,7 +2240,7 @@ is set by hand and moves only when the wire changes.
   changes — so a pin edit reaches the next run. know-thyself ships pinned,
   and is pinned by code even where a v0.2 file predates the flag. The
   router service reports every selection and main logs
-  `popy skills: <slug>=<score> …` — slugs and scores only, never message
+  `pop skills: <slug>=<score> …` — slugs and scores only, never message
   content. New routed **self-architecture** skill: the decision rule
   ("your extensions are TypeScript on your own runtime"), how to read
   your own source, and the generated repo/UI map. The map lives in
@@ -2230,12 +2256,12 @@ is set by hand and moves only when the wire changes.
   the user's browser, out of reach. Navigation knowledge ships as data
   instead: the self-map generator derives a UI map (routes from
   `web/src/App.tsx`, labels and Settings sections from
-  `web/src/i18n/en.ts`) so Popy can guide the user through its own
+  `web/src/i18n/en.ts`) so Pop Agent can guide the user through its own
   screens. Design recorded; implementation pending with 1.25.
 
 - 1.25 (2026-07-31): **Self-knowledge hardening (§8) — design recorded,
   implementation pending.** Motivated by a real PT dialogue where the
-  router never surfaced know-thyself and Popy recommended Python for its
+  router never surfaced know-thyself and Pop Agent recommended Python for its
   own extensions. Four rules land in §8: skills can be **pinned** into the
   session system prompt (know-thyself ships pinned; pinned set stays
   tiny); the router **logs selections and scores** per turn, and
@@ -2243,8 +2269,8 @@ is set by hand and moves only when the wire changes.
   — do not eyeball the floor); `whenToUse` carries translation-stable
   PT/EN trigger tokens, with misrouted real dialogues as test cases; and a
   routed **self-architecture** skill carries the deep map — layers,
-  dependency rule, where the source lives, "Popy's extensions are
-  TypeScript on Popy's runtime" — with its repo-map section generated by a
+  dependency rule, where the source lives, "Pop Agent's extensions are
+  TypeScript on Pop Agent's runtime" — with its repo-map section generated by a
   script, never hand-written.
 
 - 1.24 (2026-07-31): **Round 6 — voice raw-first, Files, semantic file
@@ -2287,7 +2313,7 @@ is set by hand and moves only when the wire changes.
   parks every in-flight run's partial answer as an interrupted-marked
   message instead of eating it (§6, §14); **Settings -> Updates** ships
   its first cut (§15): three cards — the PWA check (moved from
-  Appearance), the Popy server card reading the latest origin tag with
+  Appearance), the Pop Agent server card reading the latest origin tag with
   the update command shown (the **notify-only** channel: one push per new
   version, deep-linking to ?section=updates; applying stays a shell act),
   and an Environment card (pi/node/ffmpeg/poppler/tesseract/whisper
@@ -2298,18 +2324,18 @@ is set by hand and moves only when the wire changes.
   this hardware (medium measured 5.8x realtime on 4 cores).
 
 - 1.12 (2026-07-31): **v0.2 built, tagged v0.2.0.** Skills + the Skill
-  Router (§8): markdown skills under POPY_DATA_DIR/skills, a pure lexical
+  Router (§8): markdown skills under POP_AGENT_DATA_DIR/skills, a pure lexical
   router that prepends the relevant few per turn, 15 defaults led by
   know-thyself, a full-screen CRUD in Settings. Backup/restore as tar.gz
   with the key excluded (§16). Web Push when a run finishes, VAPID keys in
   the secrets table (§14). Passkeys via WebAuthn for Face ID unlock (§9).
   Local voice already shipped in 1.10. Cost dashboard over llm_runs (§14).
-  Two decisions recorded here: **attachments extraction** — Popy does not
+  Two decisions recorded here: **attachments extraction** — Pop Agent does not
   bundle a PDF/DOCX/OCR pipeline like aw; attachments are written into the
   agent's workspace and the agent extracts what it needs with its own
-  tools (pdftotext, unzip, its reader), which fits Popy's "agent with real
+  tools (pdftotext, unzip, its reader), which fits Pop Agent's "agent with real
   fs" design where aw's server-side extraction fit its tool-less desktop
-  app. **Update channel** (§15): Popy does not self-update from the running
+  app. **Update channel** (§15): Pop Agent does not self-update from the running
   process; `GET /v1/update/status` reports the installed versions and the
   latest pi on npm, and Settings shows the one-line shell update command,
   which runs the same `npm run gate` before restarting. Automatic
@@ -2325,7 +2351,7 @@ is set by hand and moves only when the wire changes.
   with a one-level backup, its own tools and GET/PUT /v1/memory (§7).
   Custom tools are built with typebox (added as a direct dependency).
   Conversation compaction is pi's own: it auto-compacts on context
-  pressure (SessionCompactEvent), so Popy builds nothing and inherits it.
+  pressure (SessionCompactEvent), so Pop Agent builds nothing and inherits it.
 
 - 1.10 (2026-07-31): Phase 4 begins and the mode changes. The external
   content safety layer landed (§10): pure sanitize (invisible-strip by
@@ -2347,7 +2373,7 @@ is set by hand and moves only when the wire changes.
   pi's offline built-in one, so CI never touches the network. Settings
   grew `defaultModel`, `serviceModel` and `customInstructions`; the
   instructions reach pi through a `DefaultResourceLoader` that replaces
-  the coding persona with Popy's neutral prompt and disables pi's CLI
+  the coding persona with Pop Agent's neutral prompt and disables pi's CLI
   resource discovery (§5). Auto-titles: at the user's 3rd turn and every
   10th after, the service model writes TITLE + SUMMARY in the
   conversation's language; failures are silent, a manual rename turns the
@@ -2369,7 +2395,7 @@ is set by hand and moves only when the wire changes.
   the `run-status` event; stopping a queued run drops it from the queue
   and still reports `aborted`; tool events are folded into one record per
   call on both sides of the wire; message order breaks ties on rowid;
-  `POPY_AGENT=fake|pi`; context menus are visible buttons rather than
+  `POP_AGENT_ENGINE=fake|pi`; context menus are visible buttons rather than
   long-press; and the skills selector is named the **Skill Router** (§8).
   The smoke grew to fourteen steps, now covering the stream, a tool run
   and Stop.
@@ -2384,7 +2410,7 @@ is set by hand and moves only when the wire changes.
   composition rules; the recovery-key alphabet without confusable
   characters, case-insensitive input and rejection sampling; recovery
   spends the key and issues a new one; "Sign out other devices" keeps the
-  acting device signed in; sliding session renewal via `x-popy-token`;
+  acting device signed in; sliding session renewal via `x-pop-agent-token`;
   settings PUT is a strict full replace; the theme belongs to the device
   and never reaches the server; narrow layouts follow the Telegram model
   instead of a drawer; and HTTPS is documented as two scenarios (§18) —
@@ -2393,7 +2419,7 @@ is set by hand and moves only when the wire changes.
 
 - 1.6 (2026-07-30): default port is 8787 — one single port on the test
   server until HTTPS (443 via Caddy) lands; the placeholder hello page
-  hands 8787 over to Popy (§4).
+  hands 8787 over to Pop Agent (§4).
 
 - 1.5 (2026-07-30): development moves onto the test server — the agent
   codes, gates and runs everything on ubuntu-home over SSH; nothing
@@ -2409,9 +2435,9 @@ is set by hand and moves only when the wire changes.
   (maintainer's addition to the design notes, consolidated here), slotted
   into the v0.2 roadmap; §19 updated.
 - 1.1 (2026-07-30): update model redesigned (§15) — two channels (pi from
-  npm, Popy from its repo) sharing last-known-good pinning, a post-update
+  npm, Pop Agent from its repo) sharing last-known-good pinning, a post-update
   smoke gate, automatic rollback with self-disabling auto-update + user
-  notification, and a 24h probation window for pi; `popy update` joins
+  notification, and a 24h probation window for pi; `pop update` joins
   the CLI (§17).
 - 1.0 (2026-07-30): first consolidated spec — extracted from the three
   vault notes (Visão e Escopo, Backend, Frontend) and the 60 alignment

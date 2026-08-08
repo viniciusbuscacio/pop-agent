@@ -3,7 +3,7 @@ import { createTestApp } from '../../testing/app-fixture.js';
 import { PUBLIC_V1_PATHS, publicV1PathSet } from './route-registry.js';
 
 /**
- * The probe half of the route-guard invariant (popy.spec §9): walk every
+ * The probe half of the route-guard invariant (pop-agent.spec §9): walk every
  * route the app actually registered and fire it without a session. Anything
  * under /v1 that is not on the declared public list must answer 401 -- not
  * 200, not 400, not 404 -- because the guard runs before any handler or
@@ -52,7 +52,7 @@ describe('route guard', () => {
 
   it('file downloads without a valid signature answer 4xx, never content', async () => {
     // The download surface sits outside the session guard on purpose: the
-    // HMAC in the URL is the whole authorisation (popy.spec §14). So the
+    // HMAC in the URL is the whole authorisation (pop-agent.spec §14). So the
     // probe here is the complement: without a valid signature, nothing.
     const { app } = createTestApp();
     const paths = [

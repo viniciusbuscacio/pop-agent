@@ -4,7 +4,7 @@ import type { FileProvenanceRepo } from '../ports/file-provenance-repo.js';
 import type { FilesService } from './files-service.js';
 
 /**
- * Writes the provenance log (popy.spec §14). Two sources feed it:
+ * Writes the provenance log (pop-agent.spec §14). Two sources feed it:
  *
  * - An upload names its chat (or none) directly -- `recordWrite`.
  * - The agent writes into `Files/` with its built-in tools, which the server

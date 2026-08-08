@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Clean-architecture boundary test (popy.spec §3), ported from aw's
+ * Clean-architecture boundary test (pop-agent.spec §3), ported from aw's
  * boundary_test.go. Two rules:
  *
  * 1. Dependency rule — a layer may import only the layers listed for it.
@@ -75,7 +75,7 @@ function importsOf(file: string): string[] {
 
 function classify(file: string, spec: string): { kind: 'builtin' | 'external' } | { kind: 'layer'; layer: Layer } {
   if (spec.startsWith('node:')) return { kind: 'builtin' };
-  if (spec === '@popy/shared' || spec.startsWith('@popy/shared/')) {
+  if (spec === '@pop-agent/shared' || spec.startsWith('@pop-agent/shared/')) {
     return { kind: 'layer', layer: 'shared' };
   }
   if (spec.startsWith('.')) {
@@ -113,9 +113,9 @@ describe('clean architecture boundaries', () => {
     for (const file of files) {
       for (const spec of importsOf(file)) {
         // Relative imports stay inside the package and node: builtins are
-        // allowed; everything else must be a popy workspace or allowlisted.
+        // allowed; everything else must be a pop workspace or allowlisted.
         if (spec.startsWith('.') || spec.startsWith('node:')) continue;
-        if (spec === '@popy/shared' || spec.startsWith('@popy/')) continue;
+        if (spec === '@pop-agent/shared' || spec.startsWith('@pop-agent/')) continue;
         if (allowedExternalForPureLayers.has(spec)) continue;
         violations.push(`pure layer file imports third-party package: ${file} imports ${spec}`);
       }

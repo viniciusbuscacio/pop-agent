@@ -38,7 +38,7 @@ export function ChatPage() {
   useEffect(() => {
     // Remembered per device, so the Chats segment reopens where you were.
     try {
-      localStorage.setItem('popy.lastChat', chatId);
+      localStorage.setItem('pop-agent.lastChat', chatId);
     } catch {
       // storage denied; the segment just falls back to the list
     }
@@ -59,7 +59,7 @@ export function ChatPage() {
   }, [chatId, openChat]);
 
   useEffect(() => {
-    // The pickable pairs (popy.spec §15): every provider that has a catalog
+    // The pickable pairs (pop-agent.spec §15): every provider that has a catalog
     // contributes its models, labelled with the provider when there are
     // several. A failed provider just contributes nothing.
     void (async () => {

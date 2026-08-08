@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 /**
  * The server hands out its own client (docs/cli.md, Distribution):
  *
- *     npm i -g https://your-popy.example/cli-0.2.0.tgz
+ *     npm i -g https://your-pop-agent.example/cli-0.2.0.tgz
  *
  * Unauthenticated, and it has to be: npm cannot log in. It fetches a URL with
  * no notion of a session, so a guarded route would simply fail with a 401
@@ -15,7 +15,7 @@ import { Readable } from 'node:stream';
  * What that exposes is worth stating plainly, since §18 is strict about new
  * public surface. The tarball is the client's own code -- no secrets, no
  * user data, nothing about this install except its version. Someone who
- * reaches the address learns a Popy answers there, which is already true of
+ * reaches the address learns a Pop Agent answers there, which is already true of
  * the login page at the same host. The install is not public in practice
  * anyway: it is behind the tailnet, which is where §18(b) puts it.
  *
@@ -32,14 +32,14 @@ import { Readable } from 'node:stream';
 export interface CliDownloadDeps {
   /** Directory holding the packed tarball (cli/pack). */
   cliPack: string;
-  versions: { popyVersion: string };
+  versions: { popAgentVersion: string };
 }
 
 export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
   const routes = new Hono();
 
   routes.get('/:file{cli-[0-9A-Za-z.\\-]+\\.tgz}', (c) => {
-    const expected = `cli-${deps.versions.popyVersion}.tgz`;
+    const expected = `cli-${deps.versions.popAgentVersion}.tgz`;
     if (c.req.param('file') !== expected) return c.notFound();
 
     // Joined with a constant, never with the parameter: the name above was

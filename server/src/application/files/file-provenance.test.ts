@@ -32,7 +32,7 @@ let repo: MemoryProvenance;
 let provenance: FileProvenanceService;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-prov-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-prov-'));
   files = new FilesService({ root, clock });
   repo = new MemoryProvenance();
   provenance = new FileProvenanceService({ repo, files, clock });

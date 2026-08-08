@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@popy/shared';
+import type { StreamEvent } from '@pop-agent/shared';
 
 /**
  * One run, folded out of the event stream (docs/cli.md, step 2).
@@ -6,7 +6,7 @@ import type { StreamEvent } from '@popy/shared';
  * Pure: events in, a snapshot out, no printing and no I/O. The terminal and
  * the PWA are two views of the same stream, and this is the half that has to
  * agree -- which is why the doc marks it as a candidate to move into
- * `@popy/shared` and be shared with the web store rather than written twice.
+ * `@pop-agent/shared` and be shared with the web store rather than written twice.
  *
  * **Dedupe by `seq`.** A client that reattaches mid-run seeds itself from the
  * `live` snapshot and then keeps receiving from the stream, so the overlap
@@ -14,7 +14,7 @@ import type { StreamEvent } from '@popy/shared';
  * expected on one connection, but a lower `seq` after a higher one is treated
  * as the duplicate it is rather than appended.
  *
- * Events from other runs are ignored outright. Popy has one user and the SSE
+ * Events from other runs are ignored outright. Pop Agent has one user and the SSE
  * hub sends everything to everyone (spec §14), so a terminal watching one
  * answer will genuinely see another chat's deltas go past.
  */

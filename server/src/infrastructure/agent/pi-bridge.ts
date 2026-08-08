@@ -23,7 +23,7 @@ import {
 import { TaintGuard } from './tool-taint.js';
 
 /**
- * pi behind the AgentBridge port (popy.spec §5, docs/agent-flow.md).
+ * pi behind the AgentBridge port (pop-agent.spec §5, docs/agent-flow.md).
  *
  * It is the same port the scripted fake implements, and the application layer
  * did not change by a line to accept it -- which was the point of building
@@ -32,7 +32,7 @@ import { TaintGuard } from './tool-taint.js';
  * Two things live here that the port cannot express:
  *
  * - **A session per conversation.** pi keeps the execution state (the context
- *   the model actually sees) in its own JSONL file; Popy keeps the product
+ *   the model actually sees) in its own JSONL file; Pop Agent keeps the product
  *   state in SQLite. The path to the former is stored on the chat, so a
  *   conversation resumes after an idle unload or a restart.
  * - **Tool output arrives as snapshots, not deltas.** pi re-sends the whole
@@ -64,7 +64,7 @@ export interface PiBridgeDeps {
   /** The Skill Router: the relevant skills for a message, as prompt blocks. */
   skillsFor?: (message: string) => Promise<string[]>;
   /**
-   * Resolves the pair that should actually run (popy.spec §15): the chat's
+   * Resolves the pair that should actually run (pop-agent.spec §15): the chat's
    * override when usable, the global default otherwise, with silent
    * degradation and the never-empty election inside. Read per run.
    */
@@ -75,7 +75,7 @@ export interface PiBridgeDeps {
   idleMs?: number;
   onUsage?: (usage: PiRunUsage) => void;
   /**
-   * The wire carries a stable code and nothing else (popy.spec §13), which is
+   * The wire carries a stable code and nothing else (pop-agent.spec §13), which is
    * right for the UI and useless for whoever has to explain why a run failed.
    * The provider's own words go here, to the server log.
    */
@@ -119,11 +119,11 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       await this.withSkills(this.withAttachments(request), request.prompt),
     );
     // Image attachments also go straight to the model when it is multimodal
-    // (popy.spec §14, RF-014); otherwise they stay files the agent reads with
+    // (pop-agent.spec §14, RF-014); otherwise they stay files the agent reads with
     // its tools (RF-015 fallback).
     const images = imagesFor(request);
 
-    // The pair is the identity (popy.spec §15): the chat's override when it
+    // The pair is the identity (pop-agent.spec §15): the chat's override when it
     // works, the global default when it does not -- never an error.
     const pair = this.deps.resolvePair?.(request.provider ?? '', model) ?? {
       providerId:
@@ -156,7 +156,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     // The safety guard for this run: it feeds on tool output and, in a turn
     // that read something suspicious, refuses on its own the commands that
     // would exfiltrate, read a secret, or destroy irreversibly -- no dialog,
-    // the model just gets told no (popy.spec §10). A clean turn runs freely.
+    // the model just gets told no (pop-agent.spec §10). A clean turn runs freely.
     entry.session.setGuard(
       new TaintGuard({
         ...(request.confirm === undefined ? {} : { confirm: request.confirm }),
@@ -180,7 +180,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     try {
       await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
 
-      // The reactive compaction trigger (popy.spec §7): token accounting
+      // The reactive compaction trigger (pop-agent.spec §7): token accounting
       // always errs a little, so when the provider refuses the turn for
       // context overflow, compact and retry the SAME turn -- exactly once,
       // never in a loop. The user sees one seamless run.
@@ -237,7 +237,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     return this.deps.engine.models(providerId ?? '');
   }
 
-  // Subscription auth (popy.spec §15, fase 1.5): the bridge only forwards --
+  // Subscription auth (pop-agent.spec §15, fase 1.5): the bridge only forwards --
   // credentials live in the engine's store and never surface here.
   hasProviderAuth(providerId: string): boolean {
     return this.deps.engine.hasProviderAuth(providerId);
@@ -285,8 +285,8 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
   }
 
   /**
-   * Prepends the skills the router picked for this message (popy.spec §8).
-   * These are Popy's own trusted instructions, so they lead the prompt rather
+   * Prepends the skills the router picked for this message (pop-agent.spec §8).
+   * These are Pop Agent's own trusted instructions, so they lead the prompt rather
    * than being wrapped as untrusted data.
    */
   private async withSkills(prompt: string, message: string): Promise<string> {
@@ -344,7 +344,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
 
     if (cached !== undefined) {
       // A mid-chat switch keeps the conversation: only the model inside the
-      // session is swapped, the JSONL history is untouched (popy.spec §15).
+      // session is swapped, the JSONL history is untouched (pop-agent.spec §15).
       if (cached.providerId !== providerId || cached.modelId !== modelId) {
         await cached.session.setModel(providerId, modelId);
         cached.providerId = providerId;
@@ -414,7 +414,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
 
 /**
  * What the bridge consumes, once pi's event stream has been read for the parts
- * Popy renders. Anything else pi emits -- turn boundaries, compaction, retries,
+ * Pop Agent renders. Anything else pi emits -- turn boundaries, compaction, retries,
  * queue updates -- is not an error, it is simply not ours.
  */
 type PiSignal =
@@ -432,7 +432,7 @@ interface TurnUsage {
 }
 
 /**
- * pi's events, mapped to the handful Popy renders (docs/agent-flow.md §1).
+ * pi's events, mapped to the handful Pop Agent renders (docs/agent-flow.md §1).
  *
  * Two corrections to the table written before the SDK was read: text and
  * thinking arrive *inside* `message_update`, and `message_update` is never
@@ -553,7 +553,7 @@ class RunTranslator {
 
   /**
    * The run settled on a provider error that names the context window
-   * (popy.spec §7, reactive trigger). pi retries transient failures by
+   * (pop-agent.spec §7, reactive trigger). pi retries transient failures by
    * itself; an overflow it only surfaces.
    */
   failedOnOverflow(): boolean {
@@ -564,7 +564,7 @@ class RunTranslator {
   finish(aborted: boolean): void {
     if (aborted || this.lastStopReason === 'aborted') this.fail('aborted', undefined);
     else if (this.lastStopReason === 'error') {
-      // Typed for failover (popy.spec §15, fase 2): a transport failure gets
+      // Typed for failover (pop-agent.spec §15, fase 2): a transport failure gets
       // its own code, and an HTTP refusal carries its status when the
       // provider's message names one.
       const message = this.lastErrorMessage;
@@ -620,7 +620,7 @@ function withRuntimeIdentity(request: AgentRunRequest, prompt: string): string {
 
 /**
  * The image attachments as multimodal content: base64 without the data-URI
- * prefix, plus the mime type (popy.spec §14, RF-014). Non-images, and payloads
+ * prefix, plus the mime type (pop-agent.spec §14, RF-014). Non-images, and payloads
  * that are not well-formed data URIs, are skipped -- they still land on disk
  * via saveAttachment for the agent's tools.
  */
@@ -711,7 +711,7 @@ function messageOf(error: unknown): string | undefined {
 /**
  * The HTTP status a thrown error carries, when the SDK put one on it
  * (`status`/`statusCode` on the error or its cause). Typed input for the
- * failover classifier (popy.spec §15, fase 2).
+ * failover classifier (pop-agent.spec §15, fase 2).
  */
 function statusOf(error: unknown): number | undefined {
   for (const candidate of [error, (error as { cause?: unknown } | null)?.cause]) {

@@ -1,5 +1,5 @@
 /**
- * Reading the cost accounting back for the dashboard (popy.spec §14). The rows
+ * Reading the cost accounting back for the dashboard (pop-agent.spec §14). The rows
  * are written by the run service into `llm_runs`; this aggregates them.
  */
 

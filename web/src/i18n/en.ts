@@ -1,10 +1,10 @@
 /**
- * Every string the UI shows passes through here (popy.spec §14). The app is
+ * Every string the UI shows passes through here (pop-agent.spec §14). The app is
  * English today; the indirection is what lets another language land later
  * without hunting through JSX.
  */
 export const en = {
-  'app.name': 'Popy',
+  'app.name': 'Pop Agent',
   'app.loading': 'Loading…',
 
   'common.continue': 'Continue',
@@ -17,9 +17,9 @@ export const en = {
   'common.comingSoon': 'Coming soon',
   'common.edit': 'Edit',
 
-  'setup.welcome.title': 'Welcome to Popy',
+  'setup.welcome.title': 'Welcome to Pop Agent',
   'setup.welcome.body':
-    'This is your own Popy, running on your own server. Start by choosing a password — it is the only way in.',
+    'This is your own Pop Agent, running on your own server. Start by choosing a password — it is the only way in.',
   'setup.password.label': 'Password',
   'setup.password.confirmLabel': 'Confirm password',
   'setup.password.hint': 'At least 10 characters. Length beats punctuation.',
@@ -33,16 +33,16 @@ export const en = {
   'setup.recovery.body':
     'This key is the only way back in if you forget your password. It is shown once and never again.',
   'setup.recovery.confirm': 'I saved my recovery key',
-  'setup.recovery.filename': 'popy-recovery-key.txt',
+  'setup.recovery.filename': 'pop-agent-recovery-key.txt',
 
   'setup.provider.title': 'Connect a model',
   'setup.provider.body':
-    'Popy talks to a language model through OpenRouter. Paste an API key to connect — or skip and add one later in Settings.',
+    'Pop Agent talks to a language model through OpenRouter. Paste an API key to connect — or skip and add one later in Settings.',
   'setup.provider.skip': 'Skip for now',
 
   'setup.done.title': "You're all set",
-  'setup.done.body': 'Popy is ready. Start a conversation whenever you like.',
-  'setup.done.enter': 'Open Popy',
+  'setup.done.body': 'Pop Agent is ready. Start a conversation whenever you like.',
+  'setup.done.enter': 'Open Pop Agent',
 
   'login.title': 'Welcome back',
   'login.password': 'Password',
@@ -92,12 +92,12 @@ export const en = {
     'Your internet is working — the problem is on the server. Nothing you typed was lost. Trying to reconnect…',
   'connection.deviceOffline': "You're offline.",
   'connection.deviceOfflineDetail':
-    'This device has no internet connection. Popy reconnects on its own once it does.',
+    'This device has no internet connection. Pop Agent reconnects on its own once it does.',
   'connection.back': 'Back online.',
   'connection.retry': 'Try now',
 
 
-  'chat.placeholder': 'Message Popy…',
+  'chat.placeholder': 'Message Pop Agent…',
   'chat.send': 'Send',
   'chat.queue': 'Queue message',
   'chat.stop': 'Stop',
@@ -124,7 +124,7 @@ export const en = {
   'chat.stopped': 'You stopped this answer.',
   'chat.interrupted': 'This answer was interrupted — the server may have restarted.',
   'chat.failed': 'That answer could not be finished.',
-  'chat.confirm.title': 'Allow Popy to {action}?',
+  'chat.confirm.title': 'Allow Pop Agent to {action}?',
   'chat.confirm.why':
     'This run read untrusted external content, so a risky command is held until you decide.',
   'chat.confirm.allow': 'Allow',
@@ -146,18 +146,18 @@ export const en = {
   'settings.server.disk': 'Disk (data partition)',
   'settings.server.freeOf': 'free of',
   'settings.server.uptime': 'System uptime',
-  'settings.server.processUptime': 'Popy uptime',
+  'settings.server.processUptime': 'Pop Agent uptime',
   'settings.server.time': 'Server time',
   'settings.server.timezone': 'Timezone',
   'settings.server.node': 'Node',
-  'settings.server.popy': 'Popy (commit)',
-  'settings.server.db': 'popy.db size',
+  'settings.server.popAgent': 'Pop Agent (commit)',
+  'settings.server.db': 'pop-agent.db size',
   'settings.server.workspaceSize': 'Workspace size',
   'settings.server.dataDir': 'Data directory',
   'settings.server.workspace': 'Workspace',
   'settings.server.dangerZone': 'Danger zone',
-  'settings.server.restart': 'Restart Popy',
-  'settings.server.stop': 'Stop Popy (EMERGENCY)',
+  'settings.server.restart': 'Restart Pop Agent',
+  'settings.server.stop': 'Stop Pop Agent (EMERGENCY)',
   'settings.server.llmStop': 'Stop LLM',
   'settings.server.llmStart': 'Start LLM',
   'settings.server.llmRestart': 'Restart LLM',
@@ -165,19 +165,19 @@ export const en = {
   'settings.server.dangerLlm': 'Only the model',
   'settings.server.restartHint': 'Kills the whole process; systemd brings it back in ~10 seconds.',
   'settings.server.stopHint':
-    'Stops and does NOT come back — this web app dies with it. Only SSH revives it: popyman start.',
+    'Stops and does NOT come back — this web app dies with it. Only SSH revives it: popman start.',
   'settings.server.llmStopHint':
     'Aborts running answers and refuses new messages. Everything else keeps working: files, settings, history.',
   'settings.server.llmStartHint': 'Switches the model back on.',
   'settings.server.llmRestartHint':
     'Drops the live model sessions; the next message in each chat rebuilds them fresh.',
-  'settings.server.restartConfirm': 'Restart the whole Popy service? It comes back on its own in a few seconds.',
-  'settings.server.stopConfirm1': 'EMERGENCY STOP: the Popy service will stop and will NOT come back. The web app dies too.',
-  'settings.server.stopConfirm2': 'Last warning: after this, only logging into the server over SSH brings Popy back. Really stop?',
+  'settings.server.restartConfirm': 'Restart the whole Pop Agent service? It comes back on its own in a few seconds.',
+  'settings.server.stopConfirm1': 'EMERGENCY STOP: the Pop Agent service will stop and will NOT come back. The web app dies too.',
+  'settings.server.stopConfirm2': 'Last warning: after this, only logging into the server over SSH brings Pop Agent back. Really stop?',
   'settings.server.llmStopConfirm': 'Stop only the LLM? Active answers are aborted and new messages are refused; the web app keeps working.',
 
   // Providers, rebuilt around adding one at a time (03/08). The screen says
-  // what you have, not everything Popy could talk to.
+  // what you have, not everything Pop Agent could talk to.
   'provider.add': 'Add provider',
   'provider.add.intro': 'Pick the one you want to set up. You can add as many as you like.',
   'provider.add.openrouter': 'OpenRouter — API key',
@@ -188,13 +188,13 @@ export const en = {
   'provider.add.custom': 'Custom (OpenAI-compatible) — API key',
   'provider.add.failed': 'That could not be added.',
   'provider.alreadyAdded': 'already added',
-  'provider.none': 'No providers yet. Add one and Popy can start answering.',
+  'provider.none': 'No providers yet. Add one and Pop Agent can start answering.',
   'provider.priorityBadge': 'Priority {n}',
   'provider.bySubscription': 'subscription',
   'provider.deleteConfirm':
     'Remove "{name}"? A key has to be pasted again, and a subscription signed into again.',
   'provider.priority': 'Priority',
-  'provider.priorityHint': 'Number 1 answers. If it refuses, Popy walks down the list.',
+  'provider.priorityHint': 'Number 1 answers. If it refuses, Pop Agent walks down the list.',
   'provider.key': 'API key',
   'provider.key.replace': 'Replace the API key',
   'provider.key.storedHint': 'A key is stored. Leave this empty to keep it.',
@@ -230,8 +230,8 @@ export const en = {
 
   // Storage. Measurement first: the numbers are here so a quota can be chosen
   // by looking rather than guessing.
-  'storage.intro': 'What Popy is keeping, and where the disk went. Heaviest first.',
-  'storage.total': 'Popy uses',
+  'storage.intro': 'What Pop Agent is keeping, and where the disk went. Heaviest first.',
+  'storage.total': 'Pop Agent uses',
   'storage.free': 'Free on disk',
   'storage.diskUsed': 'The disk is {percent}% full of {total}.',
   'storage.items': '{count} item(s)',
@@ -258,34 +258,34 @@ export const en = {
   'usage.byDay': 'Recent days',
   'usage.empty': 'No usage yet.',
 
-  'skills.intro': 'Skills are know-how Popy pulls in when a request calls for it.',
+  'skills.intro': 'Skills are know-how Pop Agent pulls in when a request calls for it.',
   'skills.builtin': 'Built-in',
   'skills.auto': 'Learned',
   'skills.pending': 'Waiting for you',
-  'skills.pendingNote': 'Popy distilled this from a conversation. It stays out of the way until you accept it.',
+  'skills.pendingNote': 'Pop Agent distilled this from a conversation. It stays out of the way until you accept it.',
   'skills.approve': 'Accept',
   'skills.used': 'used {count}x',
   'skills.neverUsed': 'never used yet',
   'skills.autoApprove': 'Accept learned skills automatically',
   'skills.autoApproveNote':
-    'Off: a skill Popy distils from a conversation waits here for you. On: it goes straight into use. Off is safer — it is what stops something Popy read on the web from writing itself into every future conversation.',
+    'Off: a skill Pop Agent distils from a conversation waits here for you. On: it goes straight into use. Off is safer — it is what stops something Pop Agent read on the web from writing itself into every future conversation.',
   'skills.distill': 'Learn skills from conversations on your own',
   'skills.distillNote':
-    'Popy reads a conversation that has gone quiet and keeps what was a reusable procedure. A round with nothing new to read costs nothing.',
+    'Pop Agent reads a conversation that has gone quiet and keeps what was a reusable procedure. A round with nothing new to read costs nothing.',
   'skills.distillInterval': 'How often to look',
   'skills.distillIntervalNote': 'One conversation each time, so this is what it can cost.',
   'skills.distillEvery': 'every {minutes} min',
   'skills.revision': 'Rewrite waiting',
   'skills.revisionNote':
-    'Popy wants to rewrite this skill from a later conversation. The version above stays in use until you accept.',
+    'Pop Agent wants to rewrite this skill from a later conversation. The version above stays in use until you accept.',
   'skills.revisionApprove': 'Accept rewrite',
   'skills.revisionDiscard': 'Keep the current one',
   'skills.archived': 'Archived',
   'skills.archivedNote':
     'Retired to make room under the limit on learned skills. They are out of the way, not deleted.',
   'skills.restore': 'Bring back',
-  'skills.distiller.off': 'Popy is not learning skills from conversations right now.',
-  'skills.distiller.never': 'Popy has not looked at any conversation yet.',
+  'skills.distiller.off': 'Pop Agent is not learning skills from conversations right now.',
+  'skills.distiller.never': 'Pop Agent has not looked at any conversation yet.',
   'skills.distiller.lastRun': 'Last looked {when}',
   'skills.distiller.waiting': '{count} waiting for you',
   'skills.new': 'New skill',
@@ -303,10 +303,10 @@ export const en = {
   'skills.field.body': 'Instructions',
   'skills.back': 'Back to skills',
 
-  'settings.memory.label': 'What Popy knows about you',
+  'settings.memory.label': 'What Pop Agent knows about you',
   'settings.memory.hint':
-    'Popy keeps and updates this as you talk. Edit it freely — it is added to every conversation.',
-  'settings.memory.empty': 'Nothing yet. Popy fills this in as it learns about you.',
+    'Pop Agent keeps and updates this as you talk. Edit it freely — it is added to every conversation.',
+  'settings.memory.empty': 'Nothing yet. Pop Agent fills this in as it learns about you.',
   'settings.memory.restore': 'Restore previous version',
   'settings.memory.restoreConfirm': 'Restore the previous version of your memory?',
   'settings.section.security': 'Security',
@@ -316,7 +316,7 @@ export const en = {
   'settings.general.saved': 'Saved',
   'settings.general.instructions': 'Custom instructions',
   'settings.general.instructionsHint':
-    'Added to every conversation. How you want Popy to answer, in your own words.',
+    'Added to every conversation. How you want Pop Agent to answer, in your own words.',
 
   'provider.title': 'OpenRouter',
   'provider.keyLabel': 'API key',
@@ -340,7 +340,7 @@ export const en = {
   'provider.chatModel': 'Chat model',
   'provider.serviceModel': 'Service model',
   'provider.serviceModelHint':
-    'What Popy uses on THIS provider for its own work — naming conversations, summaries, tidying voice notes. Leave it on the chat model, or pick something cheaper.',
+    'What Pop Agent uses on THIS provider for its own work — naming conversations, summaries, tidying voice notes. Leave it on the chat model, or pick something cheaper.',
   'provider.serviceModelSame': 'Same as the chat model',
   'provider.saved': 'Saved',
   'provider.globalDefault': 'Global default',
@@ -380,7 +380,7 @@ export const en = {
     'Open a page at the provider and type a short code. Works from any device.',
   'provider.oauth.method.browser': 'With a browser redirect',
   'provider.oauth.method.browserHint':
-    'Only when this browser runs on the same machine as Popy. Otherwise you have to copy a URL back by hand.',
+    'Only when this browser runs on the same machine as Pop Agent. Otherwise you have to copy a URL back by hand.',
   'provider.oauth.paste.step1': 'Open the sign-in page and approve.',
   'provider.oauth.paste.step2':
     'The browser then lands on a page that does not load. That is expected.',
@@ -393,7 +393,7 @@ export const en = {
   'provider.oauth.done': 'Signed in.',
   'provider.oauth.failed': 'Sign-in failed: {message}',
 
-  'chat.noProvider': 'Popy has no model to talk to yet. Configure a provider in Settings.',
+  'chat.noProvider': 'Pop Agent has no model to talk to yet. Configure a provider in Settings.',
   'chat.noProviderLink': 'Open Settings',
 
   'settings.appearance.theme': 'Theme',
@@ -502,23 +502,23 @@ export const en = {
     'Off: the raw transcript is used as soon as whisper finishes. On: one model pass fixes punctuation and obvious mishears, at the cost of extra seconds per note.',
   'voice.cleanupModel': 'Model for the cleanup',
   'voice.cleanupModelDefault': 'Same as the service model',
-  'settings.updates.serverTitle': 'Popy server',
+  'settings.updates.serverTitle': 'Pop Agent server',
   'settings.updates.installed': 'Installed',
-  'settings.updates.popyAvailable': 'Popy {version} is available.',
+  'settings.updates.popAgentAvailable': 'Pop Agent {version} is available.',
   'settings.updates.notifyNote':
     'When a new version is published you get a push notification that opens this screen.',
   'settings.updates.copy': 'Copy command',
   'settings.updates.copied': 'Copied',
   'settings.updates.envTitle': 'Environment',
   'settings.updates.envNote':
-    'Environment packages are updated by hand on the server, never by Popy itself.',
+    'Environment packages are updated by hand on the server, never by Pop Agent itself.',
 
   'settings.notifications.title': 'Notifications',
   'settings.notifications.enable': 'Enable notifications',
   'settings.notifications.disable': 'Turn off notifications',
-  'settings.notifications.note': 'Popy tells this device when an answer is ready, even when closed.',
+  'settings.notifications.note': 'Pop Agent tells this device when an answer is ready, even when closed.',
   'settings.notifications.unsupported':
-    'Notifications need an installed app. On iPhone, add Popy to your home screen first.',
+    'Notifications need an installed app. On iPhone, add Pop Agent to your home screen first.',
 
   'settings.security.changePassword': 'Change password',
   'settings.security.currentPassword': 'Current password',
@@ -537,14 +537,14 @@ export const en = {
   'login.passkey': 'Unlock with a passkey',
   'settings.security.signOut': 'Sign out',
 
-  'settings.about.popy': 'Popy',
+  'settings.about.popAgent': 'Pop Agent',
   'settings.about.node': 'Node',
   'settings.about.pi': 'pi agent',
   'settings.about.repo': 'Source code',
   'settings.about.iconCredit': 'App icon based on Tabler Icons (MIT).',
 
   'settings.updates.title': 'Updates',
-  'settings.updates.upToDate': 'Popy is up to date.',
+  'settings.updates.upToDate': 'Pop Agent is up to date.',
   'settings.updates.piAvailable': 'A newer pi is available: {version}.',
   'settings.updates.how': 'Update from the server shell (the gate runs before restart):',
 
@@ -560,7 +560,7 @@ export const en = {
   'settings.updates.current': 'You are on the latest version.',
   'settings.updates.checkUnavailable': 'The service worker is not ready yet. Try again in a moment.',
   'settings.updates.checkNote':
-    'Popy also checks on this schedule and whenever you reopen it. Remembered on this device only.',
+    'Pop Agent also checks on this schedule and whenever you reopen it. Remembered on this device only.',
 
   'update.available': 'A new version is ready.',
   'update.reload': 'Reload',
@@ -569,9 +569,9 @@ export const en = {
 
   'tasks.new': 'New task',
   'tasks.none': 'No tasks yet.',
-  'tasks.empty.title': 'Popy, on a schedule',
+  'tasks.empty.title': 'Pop Agent, on a schedule',
   'tasks.empty.body':
-    'A task is a prompt Popy runs on its own — once, or every so often. Each run opens its own conversation, so you can read what happened.',
+    'A task is a prompt Pop Agent runs on its own — once, or every so often. Each run opens its own conversation, so you can read what happened.',
   'tasks.menu': 'Task options',
   'tasks.runNow': 'Run now',
   'tasks.edit': 'Edit',
@@ -596,7 +596,7 @@ export const en = {
   'tasks.form.title': 'Title',
   'tasks.form.titleHint': 'Also the name of every conversation this task opens.',
   'tasks.form.prompt': 'Prompt',
-  'tasks.form.promptHint': 'What Popy should do each time the task runs.',
+  'tasks.form.promptHint': 'What Pop Agent should do each time the task runs.',
   'tasks.form.schedule': 'Schedule',
   'tasks.form.once': 'Once',
   'tasks.form.interval': 'Every',
@@ -616,7 +616,7 @@ export const en = {
   'tasks.form.saveFailed': 'The task could not be saved.',
 
   'error.generic': 'Something went wrong. Try again.',
-  'error.offline': 'Popy is offline.',
+  'error.offline': 'Pop Agent is offline.',
 } as const;
 
 export type TranslationKey = keyof typeof en;

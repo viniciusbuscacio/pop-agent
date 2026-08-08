@@ -8,7 +8,7 @@ import type {
 import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
 
 /**
- * Web Push (popy.spec §14): the server telling a phone that a run finished even
+ * Web Push (pop-agent.spec §14): the server telling a phone that a run finished even
  * when the PWA is closed. The VAPID key pair is generated once and kept in the
  * secrets table, so a restart does not invalidate every subscription. A
  * subscription the push service reports gone (404/410) is deleted.
@@ -25,15 +25,15 @@ const VAPID_PRIVATE = 'push.vapidPrivateKey';
  * like a formality and is not one -- **Apple's push service validates it and
  * answers 403 `BadJwtToken` when it does not like what it sees**, so a
  * placeholder here means an iPhone never rings, with nothing in the UI to say
- * why (measured against web.push.apple.com, 01/08/2026: `mailto:popy@localhost`
+ * why (measured against web.push.apple.com, 01/08/2026: `mailto:pop-agent@localhost`
  * -> 403 BadJwtToken; the URL below -> 201 Created).
  *
  * `@localhost` is the trap: it is a perfectly good address for a machine
  * talking to itself and not a domain Apple will accept. The default is the
  * project's own public URL, which is a real contact point for whoever runs
- * this server; POPY_PUSH_SUBJECT replaces it with the operator's own address.
+ * this server; POP_AGENT_PUSH_SUBJECT replaces it with the operator's own address.
  */
-const DEFAULT_SUBJECT = 'https://github.com/viniciusbuscacio/popy';
+const DEFAULT_SUBJECT = 'https://github.com/viniciusbuscacio/pop-agent';
 
 /** A host with a dot in it -- `localhost` and bare names are what Apple rejects. */
 const DOMAIN = /^[^\s@<>]+\.[^\s@<>.]+$/;
@@ -71,7 +71,7 @@ export class WebPushService implements PushService {
   constructor(
     private readonly repo: PushRepo,
     secrets: SecretsRepo,
-    /** POPY_PUSH_SUBJECT, when the operator wants their own contact URI. */
+    /** POP_AGENT_PUSH_SUBJECT, when the operator wants their own contact URI. */
     subject?: string,
   ) {
     let publicKey = secrets.get(VAPID_PUBLIC);

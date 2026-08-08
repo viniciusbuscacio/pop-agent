@@ -10,7 +10,7 @@ let root: string;
 let vault: SkillsVault;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'popy-skills-'));
+  root = mkdtempSync(join(tmpdir(), 'pop-skills-'));
   vault = new SkillsVault(root);
 });
 
@@ -74,7 +74,7 @@ describe('SkillsVault', () => {
     // A v0.2 install: the file exists with neither `pinned` nor `seed`.
     writeFileSync(
       join(root, 'know-thyself.md'),
-      '---\nname: About Popy\ndescription: d\nwhenToUse: w\nbuiltin: true\n---\n\nold body\n',
+      '---\nname: About Pop Agent\ndescription: d\nwhenToUse: w\nbuiltin: true\n---\n\nold body\n',
     );
     const reopened = new SkillsVault(root);
     expect(reopened.get('know-thyself')?.pinned).toBe(true);
@@ -164,7 +164,7 @@ describe('SkillsVault', () => {
 });
 
 
-  describe('Agent Skills folders (popy.spec §8)', () => {
+  describe('Agent Skills folders (pop-agent.spec §8)', () => {
     it('discovers a directory holding SKILL.md, recursively', () => {
       mkdirSync(join(root, 'pack', 'deep-skill'), { recursive: true });
       writeFileSync(

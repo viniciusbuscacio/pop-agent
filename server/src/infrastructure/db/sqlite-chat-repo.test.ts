@@ -229,7 +229,7 @@ describe('messages', () => {
     expect(() => repo.appendMessage(message('chat-000000000000'))).toThrow();
   });
 
-  it('re-draws the id and retries on a primary-key collision (popy.spec §6)', () => {
+  it('re-draws the id and retries on a primary-key collision (pop-agent.spec §6)', () => {
     // Force a collision: create a chat, then try to create another with the
     // same id. The repo must not throw or overwrite -- it re-draws and inserts.
     const taken = chat({ id: 'chat-CollisionAAA', title: 'first' });

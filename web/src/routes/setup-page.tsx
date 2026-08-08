@@ -9,7 +9,7 @@ import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/contr
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 
 /**
- * First-run wizard (popy.spec §9). Four steps in one component: refreshing
+ * First-run wizard (pop-agent.spec §9). Four steps in one component: refreshing
  * mid-wizard sends the user back to the start, which is the right trade for a
  * flow that runs exactly once and must not leave a half-made account behind.
  */
@@ -148,7 +148,7 @@ export function SetupPage() {
 }
 
 /**
- * Wizard screen three: the OpenRouter key (popy.spec §15). Test before
+ * Wizard screen three: the OpenRouter key (pop-agent.spec §15). Test before
  * saving is encouraged, skipping is fine -- Settings has the same card.
  */
 function ProviderStep({ onDone }: { onDone: () => void }) {
@@ -262,7 +262,7 @@ function ProviderStep({ onDone }: { onDone: () => void }) {
 }
 
 /**
- * Length only. Popy asks for ten characters and nothing else (no symbol
+ * Length only. Pop Agent asks for ten characters and nothing else (no symbol
  * rules), so the meter should measure the thing that is actually required.
  */
 function StrengthMeter({ password }: { password: string }) {

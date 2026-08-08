@@ -1,4 +1,4 @@
-import type { ServerInfoResponse } from '@popy/shared';
+import type { ServerInfoResponse } from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 export const serverService = {

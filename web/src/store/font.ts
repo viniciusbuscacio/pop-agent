@@ -9,7 +9,7 @@ import { create } from 'zustand';
 
 export type FontSizeChoice = 'small' | 'default' | 'large' | 'xlarge' | 'huge';
 
-const STORAGE_KEY = 'popy.fontSize';
+const STORAGE_KEY = 'pop-agent.fontSize';
 
 const SCALE: Record<FontSizeChoice, string> = {
   small: '87.5%',

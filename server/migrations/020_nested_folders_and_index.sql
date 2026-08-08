@@ -42,7 +42,7 @@ CREATE TABLE path_index (
   kind       TEXT NOT NULL,             -- 'folder' | 'file'
   ref_id     TEXT NOT NULL,             -- folder id or artifact id
   name       TEXT NOT NULL,             -- display name
-  path       TEXT NOT NULL,             -- 'Projetos/specs/popy.md'
+  path       TEXT NOT NULL,             -- 'Projetos/specs/pop-agent.md'
   parent_id  TEXT,                      -- containing folder id (NULL = root)
   PRIMARY KEY (kind, ref_id)
 );

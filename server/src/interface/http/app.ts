@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AboutResponse, ServerInfoResponse } from '@popy/shared';
+import type { AboutResponse, ServerInfoResponse } from '@pop-agent/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
@@ -59,16 +59,16 @@ export interface AppDeps {
   auth: AuthService;
   settings: SettingsService;
   chats: ChatService;
-  /** The user's Files as a plain folder (popy.spec §14). */
+  /** The user's Files as a plain folder (pop-agent.spec §14). */
   files: FilesService;
   /** Signs Files download links; derived key, from `secret.key` (§9, §14). */
   secretKey: Buffer;
   runs: RunService;
-  /** Background tasks (popy.spec §21): the rows, and the queue that runs them. */
+  /** Background tasks (pop-agent.spec §21): the rows, and the queue that runs them. */
   tasks: TaskService;
   taskScheduler: TaskScheduler;
   providers: ProviderService;
-  /** The single-active subscription sign-in flow (popy.spec §15). */
+  /** The single-active subscription sign-in flow (pop-agent.spec §15). */
   oauthFlows: OAuthFlowService;
   health: HealthService;
   transcriber: Transcriber;
@@ -121,13 +121,13 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
-  // Liveness and the sidebar's health probe (popy.spec §13), as their own
+  // Liveness and the sidebar's health probe (pop-agent.spec §13), as their own
   // mini-app so the typed registry below can bless them explicitly.
   const health = new Hono();
   health.get('/healthz', (c) => c.json({ ok: true }));
   health.get('/v1/health', (c) => c.json(deps.health.report()));
 
-  // The typed route registry (popy.spec §9): every group is either
+  // The typed route registry (pop-agent.spec §9): every group is either
   // session-guarded or a declared public surface with a written reason --
   // an unauthenticated URL cannot be mounted by accident, and the probe in
   // route-guard.test.ts verifies the runtime half of the same invariant.
@@ -138,7 +138,7 @@ export function createApp(deps: AppDeps): Hono {
         health,
       ),
       publicSurface(
-        'the HMAC in the Files download URL is the whole authorisation (popy.spec §14, plain-folder design); the signature covers path and expiry together, the path jail gets the last word, and it must sit before the static site could mistake it for a missing file',
+        'the HMAC in the Files download URL is the whole authorisation (pop-agent.spec §14, plain-folder design); the signature covers path and expiry together, the path jail gets the last word, and it must sit before the static site could mistake it for a missing file',
         createFilesDownloadRoutes(deps),
       ),
       publicSurface(

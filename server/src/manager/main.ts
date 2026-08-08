@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `popyman`'s composition root (docs/cli.md, Naming; popy.spec §17).
+ * `popman`'s composition root (docs/cli.md, Naming; pop-agent.spec §17).
  *
  * The wiring only: systemd through `systemctl`, the backups through the same
  * service the HTTP routes use, the password through the same `AuthService`.
@@ -8,7 +8,7 @@
  * Settings cannot drift apart.
  *
  * Opening the database costs a moment and is only needed by one command, so
- * it happens inside that branch rather than at startup: `popyman restart` on
+ * it happens inside that branch rather than at startup: `popman restart` on
  * a broken install must not fail because SQLite would not open.
  */
 
@@ -20,16 +20,16 @@ import { run, systemctlArgv, type ManagerDeps, type ServiceVerb } from './comman
 /**
  * The unit. One name, fixed (Vinicius, 04/08).
  *
- * An earlier version asked systemd which `popy*` units were installed and
+ * An earlier version asked systemd which `pop*` units were installed and
  * took the first that existed. That was written to paper over a wrong
  * default, and it bought a command whose target depended on what happened to
  * be on the box -- fine on the one machine it was tested on, and a guess
  * everywhere else. A tool that stops a service should be predictable about
  * WHICH service before it is clever about finding one.
  *
- * `POPY_SERVICE` still overrides, for a box running two.
+ * `POP_AGENT_SERVICE` still overrides, for a box running two.
  */
-const UNIT = process.env['POPY_SERVICE'] ?? 'popy-service';
+const UNIT = process.env['POP_AGENT_SERVICE'] ?? 'pop-agent-service';
 
 function service(verb: ServiceVerb): number {
   // `sudo` for the verbs that change something. Without it systemd hands the
@@ -48,7 +48,7 @@ function service(verb: ServiceVerb): number {
  * `readline` cannot hide input on its own; muting the output stream while it
  * reads is the standard trick. Without a TTY there is nothing to mute and
  * nothing to prompt, so it reads a line and moves on -- which is what makes
- * `popyman reset-password < file` work in a script.
+ * `popman reset-password < file` work in a script.
  */
 async function askPassword(prompt: string): Promise<string | undefined> {
   const input = process.stdin;
@@ -89,7 +89,7 @@ async function deps(): Promise<ManagerDeps> {
   // a backup must not end up inside the next backup.
   const backups = new TarBackupService({
     dataDir: context.dataDir,
-    backupsDir: join(context.dataDir, '..', 'popy-backups'),
+    backupsDir: join(context.dataDir, '..', 'pop-backups'),
     now: () => new Date().toISOString(),
   });
   const auth = new AuthService({
@@ -118,7 +118,7 @@ async function deps(): Promise<ManagerDeps> {
       '  git pull',
       '  npm ci',
       '  npm run build',
-      '  popyman restart',
+      '  popman restart',
       '',
       'The terminal client updates separately, from this server:',
       '  the Settings → About card shows the current npm command.',
