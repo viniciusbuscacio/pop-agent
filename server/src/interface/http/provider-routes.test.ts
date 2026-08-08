@@ -151,10 +151,21 @@ describe('PUT /v1/providers/order', () => {
     });
 
     expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('missing_field');
   });
 });
 
 describe('PUT /v1/providers/:id/enabled', () => {
+  it('rejects a non-boolean enabled field with a schema error', async () => {
+    const res = await authed('/v1/providers/openrouter/enabled', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: 'yes' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('missing_field');
+  });
+
   it('switches a provider off and reports it', async () => {
     const res = await authed('/v1/providers/openrouter/enabled', {
       method: 'PUT',

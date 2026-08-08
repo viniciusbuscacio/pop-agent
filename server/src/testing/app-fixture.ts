@@ -272,7 +272,10 @@ export function createTestApp(
   });
   const oauthFlows = new OAuthFlowService({
     login: (providerId, interaction) => providerAuth.login(providerId, interaction),
-    onSuccess: (providerId) => cooldown.clear(providerId),
+    onSuccess: (providerId) => {
+      cooldown.clear(providerId);
+      providers.noteOAuthSuccess(providerId);
+    },
   });
 
   const settings = new SettingsService(settingsRepo);

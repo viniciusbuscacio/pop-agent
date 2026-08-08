@@ -9,7 +9,7 @@ import { ProviderCooldown } from './provider-cooldown.js';
 import { ProviderService, type ProviderStatus } from './provider-service.js';
 
 /**
- * createCustom can refuse now: the registry has a 265 ceiling. No test here is
+ * createCustom can refuse now: the registry has a 256 ceiling. No test here is
  * anywhere near it, so a refusal means the test itself is wrong -- which is
  * worth a thrown error rather than fifteen non-null assertions.
  */
@@ -229,6 +229,17 @@ describe('the key', () => {
     expect(service.apiKey(OPENROUTER)).toBe('sk-env');
   });
 
+  it('re-elects the default when the head loses its stored key', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([OPENROUTER, 'anthropic']);
+    expect(defaults.provider).toBe(OPENROUTER);
+
+    service.clearKey(OPENROUTER);
+
+    expect(defaults.provider).toBe('anthropic');
+  });
+
   it('only seeds OpenRouter from the environment', () => {
     envKey = 'sk-env';
 
@@ -269,6 +280,16 @@ describe('testing the key', () => {
 
     expect(result.ok).toBe(false);
     expect(gateway.completions).toHaveLength(0);
+  });
+
+  it('forgives a penalty when the connection test succeeds', async () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.setKey('anthropic', 'sk-ant');
+    cooldown.penalize(OPENROUTER);
+
+    await service.test(OPENROUTER);
+
+    expect(service.resolveChain()[0]?.providerId).toBe(OPENROUTER);
   });
 });
 
@@ -326,6 +347,43 @@ describe('the catalog', () => {
     engineCatalog = [];
 
     expect(await service.models(OPENROUTER)).toEqual({ models: FALLBACK_MODELS, source: 'static' });
+  });
+
+  it('refetches after the endpoint changes, not the stale cache', async () => {
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://old/v1',
+      defaultModel: 'old-model',
+    });
+    service.setKey(instance.id, 'sk-local');
+    gateway.catalog = [{ id: 'old/catalog' }];
+    await service.models(instance.id);
+    expect(gateway.listed).toBe(1);
+
+    service.updateCustom(instance.id, { baseURL: 'http://new/v1' });
+    gateway.catalog = [{ id: 'new/catalog' }];
+
+    expect(await service.models(instance.id)).toEqual({
+      models: [{ id: 'new/catalog' }],
+      source: 'live',
+    });
+    expect(gateway.listed).toBe(2);
+  });
+
+  it('refetches after a new key is saved, not the old account s catalog', async () => {
+    service.setKey(OPENROUTER, 'sk-old');
+    gateway.catalog = [{ id: 'account-a/model' }];
+    await service.models(OPENROUTER);
+    expect(gateway.listed).toBe(1);
+
+    service.setKey(OPENROUTER, 'sk-new');
+    gateway.catalog = [{ id: 'account-b/model' }];
+
+    expect(await service.models(OPENROUTER)).toEqual({
+      models: [{ id: 'account-b/model' }],
+      source: 'live',
+    });
+    expect(gateway.listed).toBe(2);
   });
 });
 
@@ -559,6 +617,18 @@ describe('the priority list', () => {
     service.deleteCustom(instance.id);
 
     expect(service.order()).not.toContain(instance.id);
+  });
+
+  it('re-elects the default when the head custom instance is deleted', () => {
+    const instance = mustCreate(service, { name: 'Head', baseURL: 'http://x/v1', defaultModel: 'm' });
+    service.setKey(instance.id, 'sk-head');
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([instance.id, 'anthropic', OPENROUTER]);
+    expect(defaults.provider).toBe(instance.id);
+
+    service.deleteCustom(instance.id);
+
+    expect(defaults.provider).toBe('anthropic');
   });
 });
 
@@ -886,5 +956,173 @@ describe('the Service Model, per provider (pop-agent.spec §15, corrected 07/08)
     expect(answer.text).toBe('ok');
     expect(answer.providerId).toBe(OPENROUTER);
     expect(calls).toBe(2);
+  });
+
+  it('skips a penalized head on the next background call', async () => {
+    cooldown = new ProviderCooldown({ clock, durationMs: 60_000 });
+    service = new ProviderService({
+      secrets,
+      settings,
+      gateways: { [OPENROUTER]: gateway },
+      customGateway: () => gateway,
+      customIdSource: () =>
+        nextCustomIds.shift() ?? (customIdFallback++).toString(16).padStart(10, '0'),
+      clock,
+      envKey: () => envKey,
+      engineModels: () => Promise.resolve(engineCatalog),
+      engineHasAuth: (providerId) => oauthAuthed.has(providerId),
+      engineComplete: (request) => {
+        engineCompletions.push(request);
+        return oauthAuthed.has(request.providerId)
+          ? Promise.resolve('engine answer')
+          : Promise.reject(new Error('Not signed in.'));
+      },
+      engineLogout: (providerId) => {
+        oauthAuthed.delete(providerId);
+        return Promise.resolve();
+      },
+      cooldown,
+      defaults: () => defaults,
+      setDefaultProvider: (provider, model) => {
+        defaults = { provider, model };
+      },
+    });
+
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.setKey(instance.id, 'sk-local');
+
+    gateway.failCompleting = 'rate limited';
+    await expect(
+      service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id }),
+    ).rejects.toThrow('rate limited');
+
+    service.setKey(OPENROUTER, 'sk-or');
+    expect(service.resolveServiceChain({ provider: instance.id })[0]?.providerId).toBe(OPENROUTER);
+  });
+
+  it('uses a recovered provider again after a success clears its penalty', async () => {
+    cooldown = new ProviderCooldown({ clock, durationMs: 60_000 });
+    service = new ProviderService({
+      secrets,
+      settings,
+      gateways: { [OPENROUTER]: gateway },
+      customGateway: () => gateway,
+      customIdSource: () =>
+        nextCustomIds.shift() ?? (customIdFallback++).toString(16).padStart(10, '0'),
+      clock,
+      envKey: () => envKey,
+      engineModels: () => Promise.resolve(engineCatalog),
+      engineHasAuth: (providerId) => oauthAuthed.has(providerId),
+      engineComplete: (request) => {
+        engineCompletions.push(request);
+        return oauthAuthed.has(request.providerId)
+          ? Promise.resolve('engine answer')
+          : Promise.reject(new Error('Not signed in.'));
+      },
+      engineLogout: (providerId) => {
+        oauthAuthed.delete(providerId);
+        return Promise.resolve();
+      },
+      cooldown,
+      defaults: () => defaults,
+      setDefaultProvider: (provider, model) => {
+        defaults = { provider, model };
+      },
+    });
+
+    const instance = mustCreate(service, {
+      name: 'Local',
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.setKey(instance.id, 'sk-local');
+
+    gateway.failCompleting = 'rate limited';
+    await expect(
+      service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id }),
+    ).rejects.toThrow('rate limited');
+
+    gateway.failCompleting = undefined;
+    await service.completeAsService({ prompt: 'p', maxTokens: 10 }, { provider: instance.id });
+
+    service.setKey(OPENROUTER, 'sk-or');
+    expect(service.resolveServiceChain({ provider: instance.id })[0]?.providerId).toBe(instance.id);
+  });
+});
+
+describe('auth failure marker (pop-agent.spec §15)', () => {
+  it('surfaces authErrorAt after noteAuthFailure', () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.noteAuthFailure(OPENROUTER);
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBe(
+      new Date(clock.now()).toISOString(),
+    );
+  });
+
+  it('clears authErrorAt when a fresh key is saved', () => {
+    service.setKey(OPENROUTER, 'sk-old');
+    service.noteAuthFailure(OPENROUTER);
+
+    service.setKey(OPENROUTER, 'sk-new');
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBeUndefined();
+  });
+
+  it('clears authErrorAt after a successful connection test', async () => {
+    service.setKey(OPENROUTER, 'sk-or');
+    service.noteAuthFailure(OPENROUTER);
+
+    await service.test(OPENROUTER);
+
+    expect(service.status(OPENROUTER)?.authErrorAt).toBeUndefined();
+  });
+
+  it('clears authErrorAt after a fresh sign-in', () => {
+    service.noteAuthFailure('openai-codex');
+
+    service.noteOAuthSuccess('openai-codex');
+
+    expect(service.status('openai-codex')?.authErrorAt).toBeUndefined();
+  });
+});
+
+describe('the legacy custom alias (pop-agent.spec §15)', () => {
+  it('follows the default model when the stored default is still "custom"', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    secrets.set('provider.custom.apiKey', 'sk-legacy');
+    service.migrateLegacyCustom();
+    const [instance] = service.listCustom();
+    if (instance === undefined) throw new Error('migration failed');
+
+    defaults = { provider: 'custom', model: 'llama4' };
+    service.setDefaultModel(instance.id, 'llama4-updated');
+
+    expect(defaults).toEqual({ provider: instance.id, model: 'llama4-updated' });
+  });
+
+  it('re-elects when the stored default is still "custom" and the head is unusable', () => {
+    settings.set('provider.custom.config', {
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama4',
+    });
+    service.migrateLegacyCustom();
+    const [instance] = service.listCustom();
+    if (instance === undefined) throw new Error('migration failed');
+
+    defaults = { provider: 'custom', model: 'llama4' };
+    service.setKey('anthropic', 'sk-ant');
+    service.setOrder([instance.id, 'anthropic', OPENROUTER]);
+
+    service.setEnabled(instance.id, false);
+
+    expect(defaults.provider).toBe('anthropic');
   });
 });

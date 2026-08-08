@@ -212,7 +212,10 @@ providers.migrateLegacyCustom();
 const oauthFlows = new OAuthFlowService({
   login: (providerId, interaction) => bridge.providerLogin(providerId, interaction),
   // A fresh sign-in is new evidence: the provider's penalty is forgiven.
-  onSuccess: (providerId) => cooldown.clear(providerId),
+  onSuccess: (providerId) => {
+    cooldown.clear(providerId);
+    providers.noteOAuthSuccess(providerId);
+  },
 });
 
 function piBridge(): PiAgentBridge {

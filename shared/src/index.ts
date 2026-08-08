@@ -659,6 +659,8 @@ export interface ProviderStatusDTO {
   order: number;
   /** The user's on/off switch: a disabled provider never serves a run. */
   enabled: boolean;
+  /** When set, the last run failed with an auth-class error (pop-agent.spec §15). */
+  authErrorAt?: string;
 }
 
 export interface ProvidersResponse {
