@@ -55,6 +55,8 @@ const confirmSchema = z.object({ runId: z.string().min(1).max(80), allow: z.bool
 const sendSchema = z
   .object({
     text: z.string().min(1).max(MAX_MESSAGE_LENGTH),
+    /** Default joins the live loop; follow_up is the explicit /queue command. */
+    delivery: z.enum(['steer', 'follow_up']).optional(),
     attachments: z
       .array(
         z
@@ -247,6 +249,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       }
       const queued = deps.queuedMessages.enqueue(chatId, {
         text: parsed.data.text,
+        deliveryMode: parsed.data.delivery ?? 'steer',
         attachments: parsed.data.attachments ?? [],
         filePaths: parsed.data.filePaths ?? [],
         ...origin,
@@ -424,6 +427,7 @@ function toQueuedMessageDto(message: QueuedMessage): QueuedMessageDTO {
     id: message.id,
     chatId: message.chatId,
     text: message.text,
+    deliveryMode: message.deliveryMode,
     attachments: message.attachments,
     filePaths: message.filePaths,
     createdAt: message.createdAt,

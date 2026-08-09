@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { AttachmentDTO, QueuedMessageDTO } from '@pop-agent/shared';
+import type { AttachmentDTO, MessageDelivery, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -8,6 +8,7 @@ import { useNotificationsStore } from '../store/notifications';
 import {
   ModelMenu,
   SlashMenu,
+  parseComposerDelivery,
   slashCommands,
   type ModelChoice,
   type SlashCommand,
@@ -46,7 +47,12 @@ export function Composer({
   chatId: string;
   busy: boolean;
   queuedMessage?: QueuedMessageDTO;
-  onSend: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  onSend: (
+    text: string,
+    attachments: AttachmentDTO[],
+    filePaths?: string[],
+    delivery?: MessageDelivery,
+  ) => Promise<void>;
   onUpdateQueued: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   onCancelQueued: () => Promise<void>;
   onStop: () => void;
@@ -169,6 +175,12 @@ export function Composer({
       persist('/');
       setSlashQuery('');
       setSlashActive(0);
+      area.current?.focus();
+      return;
+    }
+    if (command.name === 'queue') {
+      persist('/queue ');
+      setSlashQuery(undefined);
       area.current?.focus();
       return;
     }
@@ -352,8 +364,10 @@ export function Composer({
     setNotice(undefined);
     try {
       const filePaths = mentions.map((mention) => mention.path);
-      if (editingQueued) await onUpdateQueued(text.trim(), attachments, filePaths);
-      else await onSend(text.trim(), attachments, filePaths);
+      const outgoing = parseComposerDelivery(text);
+      if (outgoing.text.length === 0) return;
+      if (editingQueued) await onUpdateQueued(outgoing.text, attachments, filePaths);
+      else await onSend(outgoing.text, attachments, filePaths, outgoing.delivery);
       persist('');
       setAttachments([]);
       setMentions([]);
@@ -482,7 +496,10 @@ export function Composer({
           className="mb-2 flex items-center gap-2 rounded bg-[var(--panel-bg)] px-2 py-1.5 text-xs text-[var(--muted)]"
         >
           <span className="min-w-0 flex-1 truncate">
-            {t('chat.queued', { text: queuedMessage.text })}
+            {t(
+              queuedMessage.deliveryMode === 'follow_up' ? 'chat.queued' : 'chat.steering',
+              { text: queuedMessage.text },
+            )}
           </span>
           <button
             type="button"

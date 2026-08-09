@@ -4,6 +4,7 @@ import type {
   ChatListResponse,
   ConfirmResponse,
   MessagesResponse,
+  MessageDelivery,
   ModelsResponse,
   RecentModelsResponse,
   PatchChatRequest,
@@ -44,11 +45,13 @@ export const chatsService = {
     text: string,
     attachments: AttachmentDTO[] = [],
     filePaths: string[] = [],
+    delivery: MessageDelivery = 'steer',
   ): Promise<SendMessageResponse> {
     return apiRequest<SendMessageResponse>(`/chats/${id}/messages`, {
       method: 'POST',
       body: {
         text,
+        ...(delivery === 'steer' ? {} : { delivery }),
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(filePaths.length > 0 ? { filePaths } : {}),
       },

@@ -114,6 +114,7 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
                 id: event.message.id,
                 chatId: event.message.chatId,
                 text: event.message.text,
+                deliveryMode: event.message.deliveryMode,
                 attachments: event.message.attachments,
                 filePaths: event.message.filePaths,
                 createdAt: event.message.createdAt,

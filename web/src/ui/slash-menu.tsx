@@ -1,3 +1,4 @@
+import type { MessageDelivery } from '@pop-agent/shared';
 import { t } from '../i18n';
 
 /**
@@ -12,11 +13,24 @@ export interface SlashCommand {
   description: string;
 }
 
-/** v1: new chat, model picker (a submenu), and help (the menu itself). */
+/** /queue is transport syntax, not part of the words stored or sent to the model. */
+export function parseComposerDelivery(text: string): {
+  text: string;
+  delivery: MessageDelivery;
+} {
+  const trimmed = text.trim();
+  const match = /^\/queue(?:\s+([\s\S]*))?$/i.exec(trimmed);
+  return match === null
+    ? { text: trimmed, delivery: 'steer' }
+    : { text: (match[1] ?? '').trim(), delivery: 'follow_up' };
+}
+
+/** Composer commands: actions plus /queue, which prefixes a follow-up message. */
 export function slashCommands(): SlashCommand[] {
   return [
     { name: 'new', description: t('chat.slashNew') },
     { name: 'model', description: t('chat.slashModel') },
+    { name: 'queue', description: t('chat.slashQueue') },
     { name: 'help', description: t('chat.slashHelp') },
   ];
 }

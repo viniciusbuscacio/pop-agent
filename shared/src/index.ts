@@ -513,10 +513,13 @@ export interface LiveRunDTO {
   tools: ToolCallDTO[];
 }
 
+export type MessageDelivery = 'steer' | 'follow_up';
+
 export interface QueuedMessageDTO {
   id: string;
   chatId: string;
   text: string;
+  deliveryMode: MessageDelivery;
   attachments: AttachmentDTO[];
   /** Files already in Files, kept as references until this turn starts. */
   filePaths: string[];
@@ -555,6 +558,8 @@ export interface AttachmentDTO {
 /** Body of `POST /v1/chats/:id/messages` (docs/agent-flow.md). */
 export interface SendMessageRequest {
   text: string;
+  /** Omitted/default steers; /queue sends follow_up. */
+  delivery?: MessageDelivery;
   attachments?: AttachmentDTO[];
   /** Files already in Files, referenced by @ in the composer, by path. */
   filePaths?: string[];

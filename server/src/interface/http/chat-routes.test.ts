@@ -199,11 +199,33 @@ describe('sending a message', () => {
     });
 
     expect(res.status).toBe(202);
-    expect(await res.json()).toMatchObject({ queued: true, message: { chatId: chat.id, text: 'two' } });
+    expect(await res.json()).toMatchObject({
+      queued: true,
+      message: { chatId: chat.id, text: 'two', deliveryMode: 'steer' },
+    });
     const snapshot = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
       queued?: { text: string };
     };
     expect(snapshot.queued?.text).toBe('two');
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('keeps /queue delivery waiting for the active run to finish', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'later', delivery: 'follow_up' },
+    });
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
+      queued: true,
+      message: { text: 'later', deliveryMode: 'follow_up' },
+    });
+    expect(fixture.queuedMessages.get(chat.id)?.deliveryMode).toBe('follow_up');
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });

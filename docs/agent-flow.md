@@ -25,10 +25,13 @@ web                        server
 
 - Send is **fire-and-return**: the POST starts the run and answers immediately.
   If that chat is already running, the same POST atomically occupies its one
-  durable SQLite slot and offers it to pi as **steering**. Pi inserts it after
+  durable SQLite slot and offers it to pi as **steering** by default. The
+  composer command `/queue <message>` sends `delivery: follow_up` and preserves
+  the older behavior: do not offer it to pi; wait for the run to settle. Pi inserts steering after
   the current assistant turn and its tool calls, before the next model call.
   If the run has not reached pi, comes from different terminal hands, or ends
-  first, the row remains a normal follow-up. A third POST gets `queue_exists`.
+  first, the row remains a normal follow-up. The persisted `delivery_mode`
+  keeps `/queue` explicit across edits and reconnects. A third POST gets `queue_exists`.
   `PUT /v1/chats/:id/queue` edits it; `DELETE` cancels it before delivery.
 - Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
   the shared row when created/edited, nothing when cancelled, and a `started`

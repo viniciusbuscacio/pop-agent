@@ -45,6 +45,7 @@ function queuedMessage(text: string) {
     id: 'queued-00000000001',
     chatId: CHAT,
     text,
+    deliveryMode: 'steer' as const,
     attachments: [],
     filePaths: [],
     createdAt: '2026-08-09T00:00:00.000Z',

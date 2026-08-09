@@ -311,7 +311,9 @@ export function ChatPage() {
         chatId={chatId}
         busy={live !== undefined}
         {...(queued === undefined ? {} : { queuedMessage: queued })}
-        onSend={(text, attachments, filePaths) => send(chatId, text, attachments, filePaths)}
+        onSend={(text, attachments, filePaths, delivery) =>
+          send(chatId, text, attachments, filePaths, delivery)
+        }
         onUpdateQueued={(text, attachments, filePaths) =>
           updateQueued(chatId, text, attachments, filePaths)
         }

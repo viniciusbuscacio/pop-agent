@@ -914,7 +914,9 @@ events from stale runs.
   racing an active run fills that slot atomically; a third is refused without
   replacement. While pi is running with the same terminal hands, the row is
   offered through pi's native steering queue: it enters after the current
-  assistant turn and its tool calls, before the next model call. Delivery
+  assistant turn and its tool calls, before the next model call. `/queue <message>`
+  is the explicit escape hatch to the old behavior: it persists
+  `delivery_mode=follow_up` and is not offered to pi until the live run ends. Delivery
   persists the assistant segment before it, inserts the user bubble, and
   continues under the same run id. Until pi emits that user-message event the
   SQLite row remains authoritative, so a restart or an unavailable steering

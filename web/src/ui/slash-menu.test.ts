@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+import { parseComposerDelivery, slashCommands } from './slash-menu';
+
+describe('/queue', () => {
+  it('appears in the composer command list', () => {
+    expect(slashCommands().map((command) => command.name)).toContain('queue');
+  });
+
+  it('strips the command and selects the old follow-up behavior', () => {
+    expect(parseComposerDelivery('/queue summarize this later')).toEqual({
+      text: 'summarize this later',
+      delivery: 'follow_up',
+    });
+  });
+
+  it('keeps ordinary messages on steering by default', () => {
+    expect(parseComposerDelivery('change course now')).toEqual({
+      text: 'change course now',
+      delivery: 'steer',
+    });
+  });
+});

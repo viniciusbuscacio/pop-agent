@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   AttachmentDTO,
   ChatDTO,
+  MessageDelivery,
   MessageDTO,
   QueuedMessageDTO,
   StreamEvent,
@@ -51,7 +52,13 @@ interface ChatState {
   loadArchived: () => Promise<void>;
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string) => Promise<void>;
-  send: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  send: (
+    chatId: string,
+    text: string,
+    attachments?: AttachmentDTO[],
+    filePaths?: string[],
+    delivery?: MessageDelivery,
+  ) => Promise<void>;
   updateQueued: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   cancelQueued: (chatId: string) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
@@ -160,11 +167,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  async send(chatId, text, attachments = [], filePaths = []) {
+  async send(chatId, text, attachments = [], filePaths = [], delivery = 'steer') {
     // The server owns the race: this tab may believe the chat is idle while a
     // phone has just started a run. POST either starts now or fills the one
     // durable slot, never returning a transient run_in_progress to the client.
-    const response = await chatsService.send(chatId, text, attachments, filePaths);
+    const response = await chatsService.send(chatId, text, attachments, filePaths, delivery);
     if (response.queued === true) {
       deleteQueuedMessage(chatId);
       set((current) => ({

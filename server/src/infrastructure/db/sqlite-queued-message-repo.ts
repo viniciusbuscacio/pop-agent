@@ -9,6 +9,7 @@ interface QueueRow {
   id: string;
   chat_id: string;
   text: string;
+  delivery_mode: 'steer' | 'follow_up';
   attachments_json: string;
   file_paths_json: string;
   client_json: string | null;
@@ -38,9 +39,9 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
     const result = this.db
       .prepare(
         `INSERT INTO queued_messages
-           (id, chat_id, text, attachments_json, file_paths_json, client_json,
+           (id, chat_id, text, delivery_mode, attachments_json, file_paths_json, client_json,
             hands_connection_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(chat_id) DO NOTHING`,
       )
       .run(...values(message));
@@ -51,12 +52,13 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
     const result = this.db
       .prepare(
         `UPDATE queued_messages
-            SET text = ?, attachments_json = ?, file_paths_json = ?, client_json = ?,
+            SET text = ?, delivery_mode = ?, attachments_json = ?, file_paths_json = ?, client_json = ?,
                 hands_connection_id = ?, updated_at = ?
           WHERE chat_id = ? AND id = ?`,
       )
       .run(
         message.text,
+        message.deliveryMode,
         JSON.stringify(message.attachments),
         JSON.stringify(message.filePaths),
         message.client === undefined ? null : JSON.stringify(message.client),
@@ -78,6 +80,7 @@ function values(message: QueuedMessage): unknown[] {
     message.id,
     message.chatId,
     message.text,
+    message.deliveryMode,
     JSON.stringify(message.attachments),
     JSON.stringify(message.filePaths),
     message.client === undefined ? null : JSON.stringify(message.client),
@@ -95,6 +98,7 @@ function toMessage(row: QueueRow): QueuedMessage {
     id: row.id,
     chatId: row.chat_id,
     text: row.text,
+    deliveryMode: row.delivery_mode,
     attachments,
     filePaths,
     ...(client === undefined ? {} : { client }),

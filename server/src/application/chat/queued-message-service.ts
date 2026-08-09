@@ -3,11 +3,17 @@ import { entityId } from '../../domain/ids.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
-import type { QueuedMessage, QueuedMessageRepo } from '../ports/queued-message-repo.js';
+import type {
+  QueuedMessage,
+  QueuedMessageDelivery,
+  QueuedMessageRepo,
+} from '../ports/queued-message-repo.js';
 import type { RunService } from './run-service.js';
 
 export interface QueueInput {
   text: string;
+  /** Default steering; /queue explicitly chooses the old follow-up behavior. */
+  deliveryMode?: QueuedMessageDelivery;
   attachments: Attachment[];
   filePaths: string[];
   client?: MessageClient;
@@ -46,12 +52,13 @@ export class QueuedMessageService {
       id: entityId('queued'),
       chatId,
       ...input,
+      deliveryMode: input.deliveryMode ?? 'steer',
       createdAt: now,
       updatedAt: now,
     };
     if (!this.deps.repo.create(message)) return { ok: false, reason: 'queue_exists' };
     this.announce(message);
-    this.offerSteering(chatId);
+    if (message.deliveryMode === 'steer') this.offerSteering(chatId);
     return { ok: true, message };
   }
 
@@ -62,12 +69,14 @@ export class QueuedMessageService {
     const message: QueuedMessage = {
       ...current,
       ...input,
+      // Editing changes the payload, never the delivery contract originally chosen.
+      deliveryMode: current.deliveryMode,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
     this.deps.runs.cancelSteering(chatId, current.id);
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
     this.announce(message);
-    this.offerSteering(chatId);
+    if (message.deliveryMode === 'steer') this.offerSteering(chatId);
     return { ok: true, message };
   }
 
@@ -88,6 +97,7 @@ export class QueuedMessageService {
     const queued = this.deps.repo.get(chatId);
     if (
       queued === undefined ||
+      queued.deliveryMode !== 'steer' ||
       !this.deps.runs.canSteer(chatId, queued.handsConnectionId)
     ) {
       return false;

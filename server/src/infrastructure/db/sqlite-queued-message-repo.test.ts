@@ -29,6 +29,7 @@ describe('sqlite queued messages', () => {
         id: 'queued-one',
         chatId: CHAT.id,
         text: 'survive restart',
+        deliveryMode: 'follow_up',
         attachments: [{ name: 'a.txt', type: 'text/plain', dataUri: 'data:text/plain;base64,YQ==' }],
         filePaths: ['folder/report.txt'],
         createdAt: CHAT.createdAt,
@@ -40,6 +41,7 @@ describe('sqlite queued messages', () => {
     const second = openDatabase(file);
     expect(new SqliteQueuedMessageRepo(second).get(CHAT.id)).toMatchObject({
       text: 'survive restart',
+      deliveryMode: 'follow_up',
       filePaths: ['folder/report.txt'],
       attachments: [{ name: 'a.txt' }],
     });
@@ -54,6 +56,7 @@ describe('sqlite queued messages', () => {
       id: 'queued-one',
       chatId: CHAT.id,
       text: 'first',
+      deliveryMode: 'steer' as const,
       attachments: [],
       filePaths: [],
       createdAt: CHAT.createdAt,
