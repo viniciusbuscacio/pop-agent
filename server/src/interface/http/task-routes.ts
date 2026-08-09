@@ -27,6 +27,7 @@ const createSchema = z
     intervalMinutes: intervalMinutes.optional(),
     notifyOnFinish: z.boolean().optional(),
     archiveChat: z.boolean().optional(),
+    runOnlyWithNewMessages: z.boolean().optional(),
   })
   .strict()
   // An interval without minutes is a schedule that cannot be honoured.
@@ -48,6 +49,7 @@ const updateSchema = z
     intervalMinutes: intervalMinutes.optional(),
     notifyOnFinish: z.boolean().optional(),
     archiveChat: z.boolean().optional(),
+    runOnlyWithNewMessages: z.boolean().optional(),
   })
   .strict();
 
@@ -132,6 +134,7 @@ function toTaskDto(task: Task): TaskDTO {
     enabled: task.enabled,
     notifyOnFinish: task.notifyOnFinish,
     archiveChat: task.archiveChat,
+    runOnlyWithNewMessages: task.runOnlyWithNewMessages,
     createdAt: iso(task.createdAt),
     ...(task.lastRunAt === undefined ? {} : { lastRunAt: iso(task.lastRunAt) }),
     ...(task.lastStatus === undefined ? {} : { lastStatus: task.lastStatus }),

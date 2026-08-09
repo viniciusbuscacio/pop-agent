@@ -26,6 +26,7 @@ export function TaskFormPage() {
   const [unit, setUnit] = useState<Unit>('minutes');
   const [notifyOnFinish, setNotifyOnFinish] = useState(true);
   const [archiveChat, setArchiveChat] = useState(false);
+  const [runOnlyWithNewMessages, setRunOnlyWithNewMessages] = useState(false);
   const [loading, setLoading] = useState(taskId !== undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -42,6 +43,7 @@ export function TaskFormPage() {
         setScheduleKind(task.scheduleKind);
         setNotifyOnFinish(task.notifyOnFinish);
         setArchiveChat(task.archiveChat);
+        setRunOnlyWithNewMessages(task.runOnlyWithNewMessages);
         const minutes = task.intervalMinutes ?? 30;
         // Whole hours read as hours; anything else stays in minutes, so a
         // 90-minute schedule is not silently rounded on its way to the form.
@@ -83,6 +85,7 @@ export function TaskFormPage() {
         ...(scheduleKind === 'interval' ? { intervalMinutes: minutes } : {}),
         notifyOnFinish,
         archiveChat,
+        runOnlyWithNewMessages,
       };
       if (taskId === undefined) await tasksService.create(body);
       else await tasksService.update(taskId, body);
@@ -154,27 +157,39 @@ export function TaskFormPage() {
                 ]}
               />
               {scheduleKind === 'interval' ? (
-                <div className="flex items-center gap-2">
-                  <TextField
-                    id="task-interval"
-                    type="number"
-                    min={1}
-                    data-testid="task-interval"
-                    aria-label={t('tasks.form.interval')}
-                    value={every}
-                    onChange={(event) => setEvery(event.target.value)}
-                    className="w-24"
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <TextField
+                      id="task-interval"
+                      type="number"
+                      min={1}
+                      data-testid="task-interval"
+                      aria-label={t('tasks.form.interval')}
+                      value={every}
+                      onChange={(event) => setEvery(event.target.value)}
+                      className="w-24"
+                    />
+                    <Select
+                      id="task-interval-unit"
+                      data-testid="task-interval-unit"
+                      aria-label={t('tasks.form.unit')}
+                      value={unit}
+                      onChange={(event) =>
+                        setUnit(event.target.value === 'hours' ? 'hours' : 'minutes')
+                      }
+                    >
+                      <option value="minutes">{t('tasks.form.unitMinutes')}</option>
+                      <option value="hours">{t('tasks.form.unitHours')}</option>
+                    </Select>
+                  </div>
+                  <CheckField
+                    id="task-new-messages"
+                    testId="task-new-messages"
+                    label={t('tasks.form.newMessages')}
+                    hint={t('tasks.form.newMessagesHint')}
+                    checked={runOnlyWithNewMessages}
+                    onChange={setRunOnlyWithNewMessages}
                   />
-                  <Select
-                    id="task-interval-unit"
-                    data-testid="task-interval-unit"
-                    aria-label={t('tasks.form.unit')}
-                    value={unit}
-                    onChange={(event) => setUnit(event.target.value === 'hours' ? 'hours' : 'minutes')}
-                  >
-                    <option value="minutes">{t('tasks.form.unitMinutes')}</option>
-                    <option value="hours">{t('tasks.form.unitHours')}</option>
-                  </Select>
                 </div>
               ) : (
                 <p className="text-xs text-[var(--muted)]">{t('tasks.form.onceHint')}</p>

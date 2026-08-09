@@ -647,6 +647,8 @@ export interface TaskDTO {
   notifyOnFinish: boolean;
   /** Archive the conversation a run wrote into, as soon as it ends. Default off. */
   archiveChat: boolean;
+  /** Scheduled ticks call the LLM only after a real user message. Default off. */
+  runOnlyWithNewMessages: boolean;
   createdAt: string;
   lastRunAt?: string;
   /** `ok`, or the code the last run failed with. */
@@ -668,6 +670,7 @@ export interface CreateTaskRequest {
   intervalMinutes?: number;
   notifyOnFinish?: boolean;
   archiveChat?: boolean;
+  runOnlyWithNewMessages?: boolean;
 }
 
 /** `PATCH /v1/tasks/:id` — every field optional, the rest is left alone. */
@@ -678,6 +681,7 @@ export interface UpdateTaskRequest {
   intervalMinutes?: number;
   notifyOnFinish?: boolean;
   archiveChat?: boolean;
+  runOnlyWithNewMessages?: boolean;
 }
 
 /** `POST /v1/tasks/:id/toggle` — the enabled switch. */

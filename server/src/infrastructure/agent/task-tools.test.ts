@@ -20,6 +20,7 @@ const MELHORIAS: Task = {
   enabled: true,
   notifyOnFinish: false,
   archiveChat: true,
+  runOnlyWithNewMessages: true,
   createdAt: 0,
 };
 
@@ -43,6 +44,7 @@ describe('list_scheduled_tasks', () => {
     expect(text).toContain('every 60 min');
     expect(text).toContain('enabled');
     expect(text).toContain('next in ~10 min');
+    expect(text).toContain('waits for new messages');
   });
 
   it('carries the prompt as data, not as instructions', async () => {

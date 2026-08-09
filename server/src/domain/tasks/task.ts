@@ -34,6 +34,10 @@ export interface Task {
    * just filed.
    */
   archiveChat: boolean;
+  /** Skip scheduled runs until a real user message exists after the last scan. */
+  runOnlyWithNewMessages: boolean;
+  /** SQLite message rowid through which this task has already scanned. Internal only. */
+  activityCursor?: number;
   createdAt: number;
   lastRunAt?: number;
   /** `ok`, or the failure code the run ended with. */

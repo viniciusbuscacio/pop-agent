@@ -36,9 +36,10 @@ function describe(task: Task, now: number): string {
       ? 'not scheduled'
       : `next in ~${String(Math.max(0, Math.round((task.nextRunAt - now) / 60_000)))} min`;
   const state = task.enabled ? 'enabled' : 'disabled';
+  const activity = task.runOnlyWithNewMessages ? ' · waits for new messages' : '';
   return [
     `${task.title} (${task.id})`,
-    `  ${schedule} · ${state} · ${next}`,
+    `  ${schedule} · ${state} · ${next}${activity}`,
     `  prompt: ${envelope(sanitize(task.prompt).clean, `task ${task.id}`)}`,
   ].join('\n');
 }

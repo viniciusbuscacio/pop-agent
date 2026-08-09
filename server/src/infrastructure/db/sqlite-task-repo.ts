@@ -23,9 +23,9 @@ export class SqliteTaskRepo implements TaskRepo {
       .prepare(
         `INSERT INTO tasks
            (id, title, prompt, schedule_kind, interval_minutes, next_run_at,
-            enabled, notify_on_finish, archive_chat, created_at,
-            last_run_at, last_status, last_chat_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
+            enabled, notify_on_finish, archive_chat, run_only_with_new_messages,
+            activity_cursor, created_at, last_run_at, last_status, last_chat_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, NULL)`,
       )
       .run(
         task.id,
@@ -37,6 +37,7 @@ export class SqliteTaskRepo implements TaskRepo {
         task.enabled ? 1 : 0,
         task.notifyOnFinish ? 1 : 0,
         task.archiveChat ? 1 : 0,
+        task.runOnlyWithNewMessages ? 1 : 0,
         task.createdAt,
       );
     return task;
@@ -66,6 +67,10 @@ export class SqliteTaskRepo implements TaskRepo {
       put('notify_on_finish', patch.notifyOnFinish ? 1 : 0);
     }
     if (patch.archiveChat !== undefined) put('archive_chat', patch.archiveChat ? 1 : 0);
+    if (patch.runOnlyWithNewMessages !== undefined) {
+      put('run_only_with_new_messages', patch.runOnlyWithNewMessages ? 1 : 0);
+    }
+    if (patch.activityCursor !== undefined) put('activity_cursor', patch.activityCursor);
     if (sets.length === 0) return;
 
     values.push(id);
@@ -87,12 +92,42 @@ export class SqliteTaskRepo implements TaskRepo {
     return rows.map(toTask);
   }
 
+  latestUserMessageRowid(atOrBefore?: number): number {
+    const row = this.db
+      .prepare(
+        `SELECT COALESCE(MAX(m.rowid), 0) AS rowid
+           FROM messages m
+          WHERE m.role = 'user'
+            AND (? IS NULL OR m.created_at <= ?)
+            AND NOT EXISTS (
+              SELECT 1 FROM task_run_chats tr WHERE tr.chat_id = m.chat_id
+            )`,
+      )
+      .get(
+        atOrBefore === undefined ? null : new Date(atOrBefore).toISOString(),
+        atOrBefore === undefined ? null : new Date(atOrBefore).toISOString(),
+      ) as { rowid: number };
+    return row.rowid;
+  }
+
+  recordRunChat(taskId: string, chatId: string): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO task_run_chats (task_id, chat_id) VALUES (?, ?)')
+      .run(taskId, chatId);
+  }
+
+  recordActivitySkip(id: string, nextRunAt: number | undefined, activityCursor: number): void {
+    this.db
+      .prepare('UPDATE tasks SET next_run_at = ?, activity_cursor = ? WHERE id = ?')
+      .run(nextRunAt ?? null, activityCursor, id);
+  }
+
   recordRun(id: string, record: TaskRunRecord): void {
     this.db
       .prepare(
         `UPDATE tasks
             SET last_run_at = ?, last_status = ?, last_chat_id = ?,
-                next_run_at = ?, enabled = ?
+                next_run_at = ?, enabled = ?, activity_cursor = COALESCE(?, activity_cursor)
           WHERE id = ?`,
       )
       .run(
@@ -101,6 +136,7 @@ export class SqliteTaskRepo implements TaskRepo {
         record.lastChatId.length > 0 ? record.lastChatId : null,
         record.nextRunAt ?? null,
         record.enabled ? 1 : 0,
+        record.activityCursor ?? null,
         id,
       );
   }
@@ -116,6 +152,8 @@ interface TaskRow {
   enabled: number;
   notify_on_finish: number;
   archive_chat: number;
+  run_only_with_new_messages: number;
+  activity_cursor: number | null;
   created_at: number;
   last_run_at: number | null;
   last_status: string | null;
@@ -133,6 +171,8 @@ function toTask(row: TaskRow): Task {
     enabled: row.enabled === 1,
     notifyOnFinish: row.notify_on_finish === 1,
     archiveChat: row.archive_chat === 1,
+    runOnlyWithNewMessages: row.run_only_with_new_messages === 1,
+    ...(row.activity_cursor === null ? {} : { activityCursor: row.activity_cursor }),
     createdAt: row.created_at,
     ...(row.last_run_at === null ? {} : { lastRunAt: row.last_run_at }),
     ...(row.last_status === null ? {} : { lastStatus: row.last_status }),

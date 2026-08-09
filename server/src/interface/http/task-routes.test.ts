@@ -64,6 +64,7 @@ describe('/v1/tasks', () => {
     expect(task.enabled).toBe(true);
     expect(task.scheduleKind).toBe('once');
     expect(task.nextRunAt).toBeDefined();
+    expect(task.runOnlyWithNewMessages).toBe(false);
     expect(task.lastStatus).toBeUndefined();
 
     const list = (await (await authed('/v1/tasks')).json()) as TasksResponse;
@@ -113,12 +114,17 @@ describe('/v1/tasks', () => {
 
     const res = await authed(`/v1/tasks/${task.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ title: 'Evening briefing', intervalMinutes: 5 }),
+      body: JSON.stringify({
+        title: 'Evening briefing',
+        intervalMinutes: 5,
+        runOnlyWithNewMessages: true,
+      }),
     });
     const updated = (await res.json()) as TaskDTO;
 
     expect(updated.title).toBe('Evening briefing');
     expect(updated.intervalMinutes).toBe(5);
+    expect(updated.runOnlyWithNewMessages).toBe(true);
     // The old six-hour parking must not survive a five-minute schedule.
     expect(Date.parse(updated.nextRunAt ?? '')).toBe(fixture.clock.now() + 5 * 60_000);
   });

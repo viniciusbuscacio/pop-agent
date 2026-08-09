@@ -48,7 +48,7 @@ export interface TaskSchedulerDeps {
 export type TaskRunNowResult = 'started' | 'not_found' | 'paused';
 
 export class TaskScheduler {
-  private readonly queue: string[] = [];
+  private readonly queue: { taskId: string; force: boolean }[] = [];
   private running: string | undefined;
   private pumping = false;
   private readonly idleWaiters: (() => void)[] = [];
@@ -81,7 +81,7 @@ export class TaskScheduler {
   async tick(): Promise<void> {
     if (this.admissionPaused) return;
     const now = this.deps.clock.now();
-    for (const task of this.deps.tasks.due(now)) this.enqueue(task.id);
+    for (const task of this.deps.tasks.due(now)) this.enqueue(task.id, false);
     await this.pump();
     await this.runJobs(now);
   }
@@ -94,7 +94,7 @@ export class TaskScheduler {
   runNow(taskId: string): TaskRunNowResult {
     if (this.deps.tasks.get(taskId) === undefined) return 'not_found';
     if (this.admissionPaused) return 'paused';
-    this.enqueue(taskId);
+    this.enqueue(taskId, true);
     void this.pump();
     return 'started';
   }
@@ -117,11 +117,17 @@ export class TaskScheduler {
     return new Promise((resolve) => this.idleWaiters.push(resolve));
   }
 
-  private enqueue(taskId: string): void {
+  private enqueue(taskId: string, force: boolean): void {
     // A task that is already waiting, or already running, is not queued twice:
-    // a tick during a long run must not stack up copies of it.
-    if (this.running === taskId || this.queue.includes(taskId)) return;
-    this.queue.push(taskId);
+    // a tick during a long run must not stack up copies of it. A manual request
+    // upgrades an already queued scheduled check so the explicit click wins.
+    if (this.running === taskId) return;
+    const queued = this.queue.find((item) => item.taskId === taskId);
+    if (queued !== undefined) {
+      if (force) queued.force = true;
+      return;
+    }
+    this.queue.push({ taskId, force });
   }
 
   private async pump(): Promise<void> {
@@ -129,11 +135,11 @@ export class TaskScheduler {
     this.pumping = true;
     try {
       for (;;) {
-        const taskId = this.queue.shift();
-        if (taskId === undefined) return;
-        this.running = taskId;
+        const queued = this.queue.shift();
+        if (queued === undefined) return;
+        this.running = queued.taskId;
         try {
-          await this.runTask(taskId);
+          await this.runTask(queued.taskId, queued.force);
         } finally {
           this.running = undefined;
         }
@@ -152,9 +158,28 @@ export class TaskScheduler {
    * conversation, so neither the deterministic first-message fallback nor the
    * service model will ever rewrite a name the user chose for the task.
    */
-  private async runTask(taskId: string): Promise<void> {
+  private async runTask(taskId: string, force: boolean): Promise<void> {
     const task = this.deps.tasks.get(taskId);
     if (task === undefined) return; // deleted between being queued and now
+
+    let activityCursor: number | undefined;
+    if (task.runOnlyWithNewMessages) {
+      const baseline = task.activityCursor ??
+        this.deps.tasks.latestUserMessageRowid(task.lastRunAt ?? task.createdAt);
+      activityCursor = this.deps.tasks.latestUserMessageRowid();
+      if (!force && activityCursor <= baseline) {
+        const checkedAt = this.deps.clock.now();
+        this.deps.tasks.recordActivitySkip(
+          taskId,
+          nextRunAfter(task, checkedAt),
+          activityCursor,
+        );
+        this.deps.onJournal?.(
+          `pop task: id=${taskId} title=${task.title} status=skipped_no_new_messages`,
+        );
+        return;
+      }
+    }
 
     let chatId = '';
     let status = 'ok';
@@ -162,6 +187,7 @@ export class TaskScheduler {
     try {
       const chat = this.deps.chats.create();
       chatId = chat.id;
+      this.deps.tasks.recordRunChat(taskId, chat.id);
       this.deps.chats.rename(chat.id, task.title);
 
       const started = this.deps.runs.startRun(chat.id, task.prompt, [], {
@@ -199,6 +225,7 @@ export class TaskScheduler {
       lastChatId: chatId,
       nextRunAt: nextRunAfter(task, finishedAt),
       enabled: enabledAfterRun(task),
+      ...(activityCursor === undefined ? {} : { activityCursor }),
     });
     this.deps.onJournal?.(
       `pop task: id=${taskId} title=${task.title} status=${status} chat=${chatId}`,

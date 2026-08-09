@@ -182,6 +182,71 @@ describe('a due task', () => {
     expect(repeated?.nextRunAt).toBe(NOW + 10 * MINUTE + 10 * MINUTE);
   });
 
+  it('does not open a chat or call the LLM when an activity-gated task has no new user message', async () => {
+    const task = tasks.create({
+      title: 'Review conversations',
+      prompt: 'Find one improvement',
+      scheduleKind: 'interval',
+      intervalMinutes: 1,
+      runOnlyWithNewMessages: true,
+    });
+    clock.advance(MINUTE);
+
+    await scheduler.tick();
+
+    expect(bridge.prompts).toEqual([]);
+    expect(chatRepo.list({ archived: false })).toEqual([]);
+    expect(taskRepo.get(task.id)?.lastRunAt).toBeUndefined();
+    expect(taskRepo.get(task.id)?.nextRunAt).toBe(clock.now() + MINUTE);
+    expect(journal.at(-1)).toContain('skipped_no_new_messages');
+  });
+
+  it('runs an activity-gated task once after a real user message, but not for its own prompt', async () => {
+    const task = tasks.create({
+      title: 'Review conversations',
+      prompt: 'Find one improvement',
+      scheduleKind: 'interval',
+      intervalMinutes: 1,
+      runOnlyWithNewMessages: true,
+    });
+    const userChat = chats.create();
+    clock.advance(1);
+    chatRepo.appendMessage({
+      id: 'msg-real-user',
+      chatId: userChat.id,
+      role: 'user',
+      content: 'Something new happened',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: new Date(clock.now()).toISOString(),
+    });
+    clock.advance(MINUTE);
+
+    await scheduler.tick();
+    expect(bridge.prompts).toEqual(['Find one improvement']);
+
+    clock.advance(MINUTE);
+    await scheduler.tick();
+    expect(bridge.prompts).toEqual(['Find one improvement']);
+    expect(taskRepo.get(task.id)?.nextRunAt).toBe(clock.now() + MINUTE);
+  });
+
+  it('run-now bypasses the new-message gate', async () => {
+    const task = tasks.create({
+      title: 'Manual review',
+      prompt: 'Run explicitly',
+      scheduleKind: 'interval',
+      intervalMinutes: 60,
+      runOnlyWithNewMessages: true,
+    });
+
+    expect(scheduler.runNow(task.id)).toBe('started');
+    await scheduler.whenIdle();
+
+    expect(bridge.prompts).toEqual(['Run explicitly']);
+  });
+
   it('is not picked up again while it is still running', async () => {
     tasks.create({ title: 'Slow', prompt: 'a', scheduleKind: 'interval', intervalMinutes: 1 });
     clock.advance(MINUTE);

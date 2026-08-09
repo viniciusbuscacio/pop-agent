@@ -31,6 +31,7 @@ export interface TaskInput {
   intervalMinutes?: number | undefined;
   notifyOnFinish?: boolean | undefined;
   archiveChat?: boolean | undefined;
+  runOnlyWithNewMessages?: boolean | undefined;
 }
 
 export interface TaskEdit {
@@ -40,6 +41,7 @@ export interface TaskEdit {
   intervalMinutes?: number | undefined;
   notifyOnFinish?: boolean | undefined;
   archiveChat?: boolean | undefined;
+  runOnlyWithNewMessages?: boolean | undefined;
 }
 
 export interface TaskServiceDeps {
@@ -73,6 +75,8 @@ export class TaskService {
       // omitted field keeps that; filing the conversation away is a choice.
       notifyOnFinish: input.notifyOnFinish ?? true,
       archiveChat: input.archiveChat ?? false,
+      runOnlyWithNewMessages:
+        schedule.scheduleKind === 'interval' && (input.runOnlyWithNewMessages ?? false),
       createdAt: now,
     });
   }
@@ -92,6 +96,10 @@ export class TaskService {
       ...(edit.prompt === undefined ? {} : { prompt: clip(edit.prompt, MAX_PROMPT) }),
       ...(edit.notifyOnFinish === undefined ? {} : { notifyOnFinish: edit.notifyOnFinish }),
       ...(edit.archiveChat === undefined ? {} : { archiveChat: edit.archiveChat }),
+      runOnlyWithNewMessages:
+        schedule.scheduleKind === 'interval'
+          ? (edit.runOnlyWithNewMessages ?? current.runOnlyWithNewMessages)
+          : false,
       scheduleKind: schedule.scheduleKind,
       intervalMinutes: schedule.intervalMinutes,
       // A schedule the user just changed must be re-parked, or an edit from

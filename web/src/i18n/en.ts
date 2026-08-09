@@ -683,6 +683,9 @@ export const en = {
   'tasks.form.unitMinutes': 'minutes',
   'tasks.form.unitHours': 'hours',
   'tasks.form.onceHint': 'Runs once, within the next minute, then switches itself off.',
+  'tasks.form.newMessages': 'Only when there are new messages',
+  'tasks.form.newMessagesHint':
+    'Skips the LLM when you have not sent a new message since this task last checked.',
   'tasks.form.whenDone': 'When a run finishes',
   'tasks.form.notify': 'Notify me',
   'tasks.form.notifyHint':

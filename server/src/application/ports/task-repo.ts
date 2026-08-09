@@ -16,6 +16,8 @@ export interface TaskPatch {
   enabled?: boolean;
   notifyOnFinish?: boolean;
   archiveChat?: boolean;
+  runOnlyWithNewMessages?: boolean;
+  activityCursor?: number;
 }
 
 /** What a finished run writes back onto the task. */
@@ -25,6 +27,7 @@ export interface TaskRunRecord {
   lastChatId: string;
   nextRunAt: number | undefined;
   enabled: boolean;
+  activityCursor?: number;
 }
 
 export interface TaskRepo {
@@ -37,6 +40,13 @@ export interface TaskRepo {
 
   /** Enabled, scheduled, and not in the future -- soonest first. */
   due(now: number): Task[];
+
+  /** Highest real-user message rowid, excluding prompts injected by task runs. */
+  latestUserMessageRowid(atOrBefore?: number): number;
+  /** Marks a chat before its prompt is persisted, so it can never count as activity. */
+  recordRunChat(taskId: string, chatId: string): void;
+  /** Advances a due task without pretending an LLM run happened. */
+  recordActivitySkip(id: string, nextRunAt: number | undefined, activityCursor: number): void;
 
   recordRun(id: string, record: TaskRunRecord): void;
 }
