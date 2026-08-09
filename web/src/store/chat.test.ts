@@ -240,6 +240,62 @@ describe('mounting mid-run', () => {
 });
 
 describe('a run started somewhere else', () => {
+  it('adds its user turn and adopts the run before fragments arrive', () => {
+    apply({
+      kind: 'run-started',
+      chatId: CHAT,
+      runId: 'run-from-the-phone',
+      user: {
+        id: 'message-from-the-phone',
+        chatId: CHAT,
+        role: 'user',
+        content: 'sent on the phone',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:00.000Z',
+      },
+    });
+
+    expect(messages().at(-1)).toMatchObject({
+      id: 'message-from-the-phone',
+      content: 'sent on the phone',
+    });
+    expect(live()).toMatchObject({ runId: 'run-from-the-phone', status: 'queued' });
+  });
+
+  it('does not duplicate its own user turn when SSE beats the POST response', async () => {
+    let answerSend: (response: { runId: string; userMessageId: string }) => void = () => undefined;
+    send.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerSend = resolve;
+        }),
+    );
+    const sending = useChatStore.getState().send(CHAT, 'my question');
+    await Promise.resolve();
+
+    apply({
+      kind: 'run-started',
+      chatId: CHAT,
+      runId: RUN,
+      user: {
+        id: 'my-user-message',
+        chatId: CHAT,
+        role: 'user',
+        content: 'my question',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:00.000Z',
+      },
+    });
+    answerSend({ runId: RUN, userMessageId: 'my-user-message' });
+    await sending;
+
+    expect(messages().filter((message) => message.id === 'my-user-message')).toHaveLength(1);
+  });
+
   it('is adopted so a second window shows the same answer', () => {
     apply({ kind: 'delta', chatId: CHAT, runId: 'run-from-the-phone', seq: 1, text: 'hello' });
 

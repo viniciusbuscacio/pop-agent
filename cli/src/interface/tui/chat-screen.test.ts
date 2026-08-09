@@ -85,6 +85,7 @@ function screenWith(terminal: Terminal, onExit = vi.fn()) {
     onIdle: () => undefined,
     onQueued: () => undefined,
     onSteering: () => undefined,
+    onExternalUser: () => undefined,
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
@@ -176,6 +177,16 @@ describe('ChatScreen', () => {
     expect(frame.split('answer before steering')).toHaveLength(2);
     expect(frame.split('answer after steering')).toHaveLength(2);
     expect(frame.indexOf('answer before steering')).toBeLessThan(frame.indexOf('answer after steering'));
+  });
+
+  it('shows a user turn synchronized from another client', async () => {
+    const { terminal, plain } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    screen.onExternalUser('sent from the web');
+    await flush();
+
+    expect(plain()).toContain('> sent from the web');
   });
 
   it('keeps the editor below the transcript, never above it', async () => {

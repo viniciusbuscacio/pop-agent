@@ -895,6 +895,8 @@ export type StreamEvent =
   /** A durable fallback marker, delivered while the replacement attempt is running. */
   | { kind: 'system-message'; chatId: string; runId: string; message: MessageDTO }
   | { kind: 'title'; chatId: string; title: string }
+  /** A persisted user turn opened a run, whichever client sent it. */
+  | { kind: 'run-started'; chatId: string; runId: string; user: MessageDTO }
   /** A risky action is paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */

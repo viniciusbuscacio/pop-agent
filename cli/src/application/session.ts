@@ -31,6 +31,8 @@ export interface SessionListener {
   onQueued(text: string): void;
   /** Pi consumed that guidance and started a new visible assistant segment. */
   onSteering(): void;
+  /** Another client persisted a user turn in the chat this screen is watching. */
+  onExternalUser(text: string): void;
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
@@ -41,6 +43,12 @@ export class ChatSession {
   private transcript: Transcript | undefined;
   private chatId: string | undefined;
   private reading = false;
+  /** Requests whose run-started event may race their HTTP response. */
+  private readonly pendingSends: { text: string }[] = [];
+  /** Own responses that arrived before their run-started event. */
+  private readonly ownRunIds = new Set<string>();
+  /** Durable turns already echoed locally but not consumed by pi yet. */
+  private readonly ownQueuedTexts: string[] = [];
 
   constructor(
     private readonly ports: SessionPorts,
@@ -77,15 +85,29 @@ export class ChatSession {
   }
 
   async ask(text: string): Promise<void> {
-    const chatId = this.chatId ?? (await this.ports.createChat()).id;
-    this.chatId = chatId;
-    const response = await this.ports.send(chatId, text);
-    if (response.queued === true) {
-      this.listener.onQueued(response.message.text);
-      return;
+    const pending = { text };
+    this.pendingSends.push(pending);
+    try {
+      const chatId = this.chatId ?? (await this.ports.createChat()).id;
+      this.chatId = chatId;
+      const response = await this.ports.send(chatId, text);
+      if (response.queued === true) {
+        this.ownQueuedTexts.push(response.message.text);
+        this.listener.onQueued(response.message.text);
+        return;
+      }
+      // The SSE event can beat this response. Preserve the buffer it already
+      // opened; otherwise remember the id so that a later event is recognized
+      // as our own turn rather than printed a second time.
+      if (this.transcript?.snapshot().runId !== response.runId) {
+        this.ownRunIds.add(response.runId);
+        this.transcript = new Transcript(emptyRun(chatId, response.runId));
+        this.listener.onRun(this.transcript.snapshot());
+      }
+    } finally {
+      const index = this.pendingSends.indexOf(pending);
+      if (index >= 0) this.pendingSends.splice(index, 1);
     }
-    this.transcript = new Transcript(emptyRun(chatId, response.runId));
-    this.listener.onRun(this.transcript.snapshot());
   }
 
   async stop(): Promise<void> {
@@ -94,6 +116,27 @@ export class ChatSession {
   }
 
   private absorb(event: StreamEvent): void {
+    if (event.kind === 'run-started') {
+      if (event.chatId !== this.chatId) return;
+      const queuedIndex = this.ownQueuedTexts.indexOf(event.user.content);
+      const own =
+        this.ownRunIds.delete(event.runId) ||
+        this.pendingSends.some((pending) => pending.text === event.user.content) ||
+        queuedIndex >= 0;
+      if (queuedIndex >= 0) this.ownQueuedTexts.splice(queuedIndex, 1);
+      if (!own) this.listener.onExternalUser(event.user.content);
+      if (this.transcript?.snapshot().runId !== event.runId) {
+        this.transcript = new Transcript(emptyRun(event.chatId, event.runId));
+        this.listener.onRun(this.transcript.snapshot());
+      }
+      return;
+    }
+
+    if (event.kind === 'steering-delivered') {
+      const queuedIndex = this.ownQueuedTexts.indexOf(event.user.content);
+      if (queuedIndex >= 0) this.ownQueuedTexts.splice(queuedIndex, 1);
+    }
+
     const transcript = this.transcript;
     if (transcript === undefined) return;
     if (!transcript.apply(event)) return;

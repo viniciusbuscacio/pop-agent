@@ -187,19 +187,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return {
         messages: {
           ...current.messages,
-          [chatId]: [
-            ...(current.messages[chatId] ?? []),
-            {
-              id: userMessageId,
-              chatId,
-              role: 'user',
-              content: text,
-              thinking: '',
-              tools: [],
-              attachments,
-              createdAt: new Date().toISOString(),
-            },
-          ],
+          [chatId]: (current.messages[chatId] ?? []).some((message) => message.id === userMessageId)
+            ? (current.messages[chatId] ?? [])
+            : [
+                ...(current.messages[chatId] ?? []),
+                {
+                  id: userMessageId,
+                  chatId,
+                  role: 'user',
+                  content: text,
+                  thinking: '',
+                  tools: [],
+                  attachments,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
         },
         // The stream can beat this response; if it already opened a buffer for
         // this very run, keep what it collected.
@@ -329,6 +331,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           chat.id === event.chatId ? { ...chat, title: event.title } : chat,
         ),
       }));
+      return;
+    }
+    if (event.kind === 'run-started') {
+      set((state) => {
+        const known = state.messages[event.chatId] ?? [];
+        const current = state.live[event.chatId];
+        return {
+          messages: known.some((message) => message.id === event.user.id)
+            ? state.messages
+            : { ...state.messages, [event.chatId]: [...known, event.user] },
+          live: {
+            ...state.live,
+            [event.chatId]:
+              current?.runId === event.runId ? current : emptyRun(event.runId, 'queued'),
+          },
+          failures: without(state.failures, event.chatId),
+        };
+      });
       return;
     }
     if (event.kind === 'confirm') {

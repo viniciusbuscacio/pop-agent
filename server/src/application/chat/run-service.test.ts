@@ -102,6 +102,14 @@ describe('starting a run', () => {
     expect(stored[0]?.role).toBe('user');
     expect(stored[0]?.content).toBe('hello there');
     expect(stored[0]?.id).toBe(result.userMessageId);
+    expect(sink.of('run-started')).toEqual([
+      {
+        kind: 'run-started',
+        chatId,
+        runId: result.runId,
+        user: stored[0],
+      },
+    ]);
   });
 
   it('refuses a chat that does not exist', () => {
@@ -205,7 +213,14 @@ describe('finishing a run', () => {
     runs.startRun(newChat(), 'question');
     await runs.whenIdle();
 
-    expect(sink.kinds()).toEqual(['title', 'run-status', 'delta', 'delta', 'done']);
+    expect(sink.kinds()).toEqual([
+      'title',
+      'run-started',
+      'run-status',
+      'delta',
+      'delta',
+      'done',
+    ]);
   });
 
   it('keeps the half-written answer when the run fails', async () => {

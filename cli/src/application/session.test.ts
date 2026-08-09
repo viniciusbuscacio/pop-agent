@@ -14,6 +14,7 @@ function harness(events: StreamEvent[] = []) {
     idle: RunState[];
     queued: string[];
     steering: number;
+    externalUsers: string[];
     titles: string[];
     ended: number;
   } = {
@@ -21,6 +22,7 @@ function harness(events: StreamEvent[] = []) {
     idle: [],
     queued: [],
     steering: 0,
+    externalUsers: [],
     titles: [],
     ended: 0,
   };
@@ -31,6 +33,7 @@ function harness(events: StreamEvent[] = []) {
     onSteering: () => {
       seen.steering += 1;
     },
+    onExternalUser: (text) => seen.externalUsers.push(text),
     onTitle: (title) => seen.titles.push(title),
     onStreamEnd: () => {
       seen.ended += 1;
@@ -159,6 +162,141 @@ describe('ChatSession', () => {
     expect(seen.steering).toBe(1);
     expect(seen.runs.map((state) => state.text)).toContain('');
     expect(seen.idle.at(-1)).toMatchObject({ runId: 'run-1', text: 'after' });
+  });
+
+  it('adopts a run started on another client in the open chat', async () => {
+    const { session, seen, release } = harness([
+      {
+        kind: 'run-started',
+        chatId: 'chat-1',
+        runId: 'run-from-web',
+        user: {
+          id: 'user-from-web',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'sent from the web',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+      { kind: 'delta', chatId: 'chat-1', runId: 'run-from-web', seq: 1, text: 'shared answer' },
+      { kind: 'done', chatId: 'chat-1', runId: 'run-from-web', messageId: 'answer-from-web' },
+    ]);
+    session.open('chat-1');
+    const listening = session.listen();
+    release();
+    await listening;
+
+    expect(seen.externalUsers).toEqual(['sent from the web']);
+    expect(seen.idle.at(-1)).toMatchObject({ runId: 'run-from-web', text: 'shared answer' });
+  });
+
+  it('does not print its own turn twice when SSE beats the send response', async () => {
+    const { session, ports, seen, release } = harness([
+      {
+        kind: 'run-started',
+        chatId: 'chat-1',
+        runId: 'run-1',
+        user: {
+          id: 'own-user',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'my question',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+    ]);
+    let answerSend: (response: { runId: string; userMessageId: string }) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerSend = resolve;
+        }),
+    );
+
+    const listening = session.listen();
+    const asking = session.ask('my question');
+    await Promise.resolve();
+    release();
+    await listening;
+    answerSend({ runId: 'run-1', userMessageId: 'own-user' });
+    await asking;
+
+    expect(seen.externalUsers).toEqual([]);
+    expect(seen.runs).toHaveLength(1);
+  });
+
+  it('does not print its own durable follow-up twice when it starts later', async () => {
+    const { session, ports, seen, release } = harness([
+      {
+        kind: 'run-started',
+        chatId: 'chat-1',
+        runId: 'run-follow-up',
+        user: {
+          id: 'follow-up-user',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'do this next',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+    ]);
+    session.open('chat-1');
+    vi.mocked(ports.send).mockResolvedValueOnce({
+      queued: true,
+      message: {
+        id: 'queued-follow-up',
+        chatId: 'chat-1',
+        text: 'do this next',
+        attachments: [],
+        filePaths: [],
+        createdAt: '',
+        updatedAt: '',
+      },
+    });
+    await session.ask('do this next');
+
+    const listening = session.listen();
+    release();
+    await listening;
+
+    expect(seen.externalUsers).toEqual([]);
+    expect(seen.runs.at(-1)?.runId).toBe('run-follow-up');
+  });
+
+  it('ignores a run started in a different chat', async () => {
+    const { session, seen, release } = harness([
+      {
+        kind: 'run-started',
+        chatId: 'chat-2',
+        runId: 'run-elsewhere',
+        user: {
+          id: 'user-elsewhere',
+          chatId: 'chat-2',
+          role: 'user',
+          content: 'not this screen',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+    ]);
+    session.open('chat-1');
+    const listening = session.listen();
+    release();
+    await listening;
+
+    expect(seen.externalUsers).toEqual([]);
+    expect(seen.runs).toEqual([]);
   });
 
   it('is busy until the run ends', async () => {

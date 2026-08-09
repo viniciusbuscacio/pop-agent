@@ -92,6 +92,13 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
       };
     case 'title':
       return { kind: 'title', chatId: event.chatId, title: event.title };
+    case 'run-started':
+      return {
+        kind: 'run-started',
+        chatId: event.chatId,
+        runId: event.runId,
+        user: toWireMessage(event.user),
+      };
     case 'run-status':
       return {
         kind: 'run-status',

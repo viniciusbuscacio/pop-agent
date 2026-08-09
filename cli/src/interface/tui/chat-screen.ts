@@ -221,6 +221,11 @@ export class ChatScreen {
     this.say(paint.yellow(`Guiding this answer: ${text}`));
   }
 
+  /** A user turn arrived from the web, PWA, or another terminal. */
+  onExternalUser(text: string): void {
+    this.showUser(text);
+  }
+
   /**
    * Pi consumed a steering message. Freeze the Text component exactly where
    * it is and let the next delta create a new one below the user's guidance.
@@ -247,14 +252,7 @@ export class ChatScreen {
     // slot and either accepts this into the live pi loop or explains that one
     // is already waiting. Blocking here made the server feature unreachable.
 
-    // A blank line before the question and none after it: a turn is a
-    // question and its answer, and the eye needs the gap between turns, not
-    // inside them.
-    // Spacer, not an empty Text: `Text` trims, so whitespace-only content
-    // renders zero lines and the separator silently is not there.
-    if (this.spoken) this.append(new Spacer(1));
-    this.spoken = true;
-    this.say(paint.cyan(`> ${text}`));
+    this.showUser(text);
     try {
       await this.options.session.ask(text);
       const chatId = this.options.session.currentChatId;
@@ -262,6 +260,18 @@ export class ChatScreen {
     } catch (error) {
       this.say(paint.red(error instanceof Error ? error.message : 'That did not send.'));
     }
+  }
+
+  /**
+   * One user bubble, local or synchronized. A blank line belongs between
+   * turns, never between a question and its answer.
+   */
+  private showUser(text: string): void {
+    // Spacer, not an empty Text: `Text` trims, so whitespace-only content
+    // renders zero lines and the separator silently is not there.
+    if (this.spoken) this.append(new Spacer(1));
+    this.spoken = true;
+    this.say(paint.cyan(`> ${text}`));
   }
 
   private command(text: string): void {

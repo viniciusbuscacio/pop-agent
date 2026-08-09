@@ -368,6 +368,15 @@ export class RunService {
     };
     this.runs.set(run.runId, run);
     this.runIdByChat.set(chatId, run.runId);
+    // Broadcast the persisted user turn before any status or fragment. That
+    // lets a terminal already watching this chat adopt a run started on the
+    // web (and vice versa) without polling or inventing message contents.
+    this.deps.sink.emit({
+      kind: 'run-started',
+      chatId,
+      runId: run.runId,
+      user: userMessage,
+    });
 
     if (this.running < this.ceiling) {
       void this.execute(run);
