@@ -53,6 +53,10 @@ const HELP = COMMANDS.map(
   (command) => `  /${command.name.padEnd(8)}${command.description ?? ''}`,
 ).join('\n');
 
+/** One fixed-width monochrome glyph, rotated without adding terminal lines. */
+const THINKING_FRAMES = ['◰', '◳', '◲', '◱'] as const;
+const THINKING_FRAME_MS = 140;
+
 export interface ScreenOptions {
   session: ChatSession;
   /** Shown in the header, so two terminals on two servers are told apart. */
@@ -81,6 +85,10 @@ export class ChatScreen {
   private readonly header: Text;
   /** The answer being streamed. Replaced by Markdown once it settles. */
   private streaming: Text | undefined;
+  /** Placeholder occupying the exact position where the answer will grow. */
+  private activity: Text | undefined;
+  private activityTimer: ReturnType<typeof setInterval> | undefined;
+  private activityFrame = 0;
   private thinkingShown = false;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
   private spoken = false;
@@ -118,6 +126,7 @@ export class ChatScreen {
       // Escape stops the run, not the program: the run is what a person wants
       // to interrupt, and Ctrl+C is already the way out.
       if (matchesKey(data, 'escape')) {
+        this.stopActivity(true);
         void this.options.session.stop();
         return { consume: true };
       }
@@ -131,6 +140,7 @@ export class ChatScreen {
   }
 
   quit(): void {
+    this.stopActivity(false);
     this.tui.stop();
     if (this.options.onExit !== undefined) return this.options.onExit();
     process.exit(0);
@@ -189,7 +199,22 @@ export class ChatScreen {
       : state.text;
     const tools = state.tools.map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`)).join('\n');
     const shown = [tools, body].filter((part) => part.length > 0).join('\n');
-    if (shown.length === 0) return;
+    if (shown.length === 0) {
+      this.startActivity();
+      return;
+    }
+
+    // Reuse the placeholder instead of removing and appending: steering may
+    // already have put a user line below it, and moving the answer would put
+    // that answer on the wrong side of the intervention.
+    if (this.activity !== undefined) {
+      const placeholder = this.activity;
+      this.stopActivity(false);
+      placeholder.setText(shown);
+      this.streaming = placeholder;
+      this.tui.requestRender();
+      return;
+    }
 
     if (this.streaming === undefined) {
       this.streaming = new Text(shown, 0, 0);
@@ -206,6 +231,7 @@ export class ChatScreen {
    * once the text stops arriving mid-token.
    */
   onIdle(state: RunState): void {
+    this.stopActivity(true);
     if (this.streaming !== undefined) {
       this.tui.removeChild(this.streaming);
       this.streaming = undefined;
@@ -234,11 +260,43 @@ export class ChatScreen {
    * the guidance: this TUI is append-only and deliberately has no insertion.
    */
   onSteering(): void {
+    this.stopActivity(true);
     this.streaming = undefined;
+    this.startActivity();
   }
 
   onStreamEnd(): void {
+    this.stopActivity(true);
     this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
+  }
+
+  private startActivity(): void {
+    if (this.activity !== undefined || this.streaming !== undefined) return;
+    this.activityFrame = 0;
+    this.activity = new Text(this.activityText(), 0, 0);
+    this.append(this.activity);
+    this.activityTimer = setInterval(() => {
+      if (this.activity === undefined) return;
+      this.activityFrame = (this.activityFrame + 1) % THINKING_FRAMES.length;
+      this.activity.setText(this.activityText());
+      this.tui.requestRender();
+    }, THINKING_FRAME_MS);
+    this.activityTimer.unref();
+  }
+
+  /** Stops animation; optionally removes the placeholder instead of promoting it. */
+  private stopActivity(remove: boolean): void {
+    if (this.activityTimer !== undefined) clearInterval(this.activityTimer);
+    this.activityTimer = undefined;
+    if (remove && this.activity !== undefined) {
+      this.tui.removeChild(this.activity);
+      this.tui.requestRender();
+    }
+    this.activity = undefined;
+  }
+
+  private activityText(): string {
+    return paint.dim(`${THINKING_FRAMES[this.activityFrame]} Thinking…`);
   }
 
   private async submit(raw: string): Promise<void> {

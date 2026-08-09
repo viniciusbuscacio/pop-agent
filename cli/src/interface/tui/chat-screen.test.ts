@@ -104,6 +104,43 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('/help');
   });
 
+  it('animates a dim square while waiting and promotes it into the answer', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    const waiting = { ...emptyRun('chat-1', 'run-1'), status: 'running' as const };
+    screen.onRun(waiting);
+    await flush();
+    expect(plain()).toMatch(/[◰◳◲◱] Thinking…/);
+
+    screen.onRun({ ...waiting, text: 'Now there is an answer.' });
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(plain()).not.toContain('Thinking…');
+    expect(plain().split('Now there is an answer.')).toHaveLength(2);
+    screen.onIdle({ ...waiting, text: 'Now there is an answer.', status: 'done' });
+  });
+
+  it('removes the activity indicator when a run ends without content', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    screen.onRun({ ...emptyRun('chat-1', 'run-1'), status: 'running' });
+    await flush();
+    screen.onIdle({ ...emptyRun('chat-1', 'run-1'), status: 'error', errorCode: 'aborted' });
+    await flush();
+
+    writes.length = 0;
+    repaint();
+    await flush();
+    expect(plain()).not.toContain('Thinking…');
+    expect(plain()).toContain('aborted');
+  });
+
   it('shows the answer once when the run settles, not twice', async () => {
     // The streamed plain text is swapped for rendered markdown. If the swap
     // leaves the old component behind, the answer is on screen twice -- the
