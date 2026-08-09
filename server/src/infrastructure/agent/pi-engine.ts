@@ -544,14 +544,11 @@ export class SdkPiEngine implements PiEngine {
 
   /** Whether the runtime already holds auth for a provider (OAuth included). */
   hasProviderAuth(providerId: string): boolean {
-    // The question is sync (status endpoints are), the runtime build is not:
-    // warm it and answer "not yet" until it exists. The constructor already
-    // starts the build, so this only matters in the first instants of a boot.
-    if (this.runtimeNow === undefined) {
-      void this.modelRuntime().catch(() => undefined);
-      return false;
-    }
-    return this.runtimeNow.hasConfiguredAuth(providerId);
+    // The truth is the auth file, not the runtime's snapshot: the snapshot only
+    // learns a credential when pi's post-login refresh finishes, and that
+    // refresh can stall on a network fetch -- the credential on disk, the
+    // provider invisible in Settings (Vinicius, 08/08).
+    return this.readCredentialEntry(providerId) !== undefined;
   }
 
   /**
@@ -668,10 +665,11 @@ export class SdkPiEngine implements PiEngine {
     // sits in the runtime's store is configured all the same -- a login flow
     // put it there, and pi resolves it per request. Only declared-oauth
     // providers take this door: an api-key provider must never quietly ride
-    // ambient host credentials.
+    // ambient host credentials. Read from the auth file like hasProviderAuth:
+    // the runtime's snapshot lags behind a stalled post-login refresh.
     if (
       providerDefinition(providerId)?.authType === 'oauth' &&
-      runtime.hasConfiguredAuth(providerId)
+      this.readCredentialEntry(providerId) !== undefined
     ) {
       return runtime;
     }
