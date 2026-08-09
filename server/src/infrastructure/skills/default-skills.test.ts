@@ -7,7 +7,7 @@ import { DEFAULT_SKILLS } from './default-skills.js';
  * The shipped defaults against the real dialogue (2026-07-31) in which the
  * router surfaced no self-knowledge and Pop Agent recommended Python for its own
  * skills (pop-agent.spec §8). The user writes Portuguese, the routing texts are
- * English: these messages must reach self-architecture on translation-stable
+ * English: these messages must reach pop-agent-codebase on translation-stable
  * tokens alone -- no embedder in the loop.
  */
 
@@ -16,7 +16,7 @@ const SKILLS: Skill[] = DEFAULT_SKILLS.map((skill) => ({ ...skill, source: 'buil
 describe('default skills routing', () => {
   it('routes a Portuguese question about self-programming', () => {
     const selected = selectSkills('Vc saberia se auto-programar?', SKILLS);
-    expect(selected[0]?.skill.slug).toBe('self-architecture');
+    expect(selected[0]?.skill.slug).toBe('pop-agent-codebase');
   });
 
   it('routes a Portuguese question about a self-development tool', () => {
@@ -24,17 +24,17 @@ describe('default skills routing', () => {
       'Então seria bom se você tivesse uma ferramenta de auto-desenvolvimento?',
       SKILLS,
     );
-    expect(selected[0]?.skill.slug).toBe('self-architecture');
+    expect(selected[0]?.skill.slug).toBe('pop-agent-codebase');
   });
 
   it('routes the language question that went wrong in production', () => {
     const selected = selectSkills('Porque não typescript?', SKILLS);
-    expect(selected[0]?.skill.slug).toBe('self-architecture');
+    expect(selected[0]?.skill.slug).toBe('pop-agent-codebase');
   });
 
-  it('routes a Portuguese screenshot request to the browser skill', () => {
+  it('routes a Portuguese screenshot request to the web-research skill', () => {
     const selected = selectSkills('Tira um screenshot do site pra mim, navega na internet', SKILLS);
-    expect(selected[0]?.skill.slug).toBe('web-browsing');
+    expect(selected[0]?.skill.slug).toBe('web-research');
   });
 
   it('has no skill that routes on the word "skill"', () => {
@@ -50,20 +50,24 @@ describe('default skills routing', () => {
     }
   });
 
-  it('ships know-thyself pinned: identity is not left to the router', () => {
-    expect(DEFAULT_SKILLS.find((skill) => skill.slug === 'know-thyself')?.pinned).toBe(true);
+  it('ships pop-agent-manual pinned: identity is not left to the router', () => {
+    expect(DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-manual')?.pinned).toBe(true);
   });
 
-  it('teaches the files-and-memory-first instinct in know-thyself', () => {
-    const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'know-thyself')?.body ?? '';
+  it('teaches the files-and-memory-first instinct in pop-agent-manual', () => {
+    const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-manual')?.body ?? '';
     expect(body).toContain('files_search');
     expect(body).toContain('memory_search');
   });
 
   it('tells Pop Agent its extensions are TypeScript', () => {
-    const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'self-architecture')?.body ?? '';
+    const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-codebase')?.body ?? '';
     expect(body).toContain('TypeScript on');
     expect(body).toContain('## Repo map');
     expect(body).toContain('## UI map');
+  });
+
+  it('ships exactly seven built-in skills', () => {
+    expect(DEFAULT_SKILLS).toHaveLength(7);
   });
 });

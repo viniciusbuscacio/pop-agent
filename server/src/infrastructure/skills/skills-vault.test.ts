@@ -19,11 +19,11 @@ afterEach(() => {
 });
 
 describe('SkillsVault', () => {
-  it('seeds the default skills, including know-thyself', () => {
+  it('seeds the default skills, including pop-agent-manual', () => {
     const slugs = vault.all().map((skill) => skill.slug);
-    expect(slugs).toContain('know-thyself');
+    expect(slugs).toContain('pop-agent-manual');
     expect(vault.all().length).toBe(DEFAULT_SKILLS.length);
-    expect(vault.get('know-thyself')?.source).toBe('builtin');
+    expect(vault.get('pop-agent-manual')?.source).toBe('builtin');
   });
 
   it('creates and reads back a user skill', () => {
@@ -42,8 +42,8 @@ describe('SkillsVault', () => {
   });
 
   it('refuses to delete a built-in skill', () => {
-    expect(() => vault.delete('know-thyself')).toThrow(SkillsError);
-    expect(vault.get('know-thyself')).toBeDefined();
+    expect(() => vault.delete('pop-agent-manual')).toThrow(SkillsError);
+    expect(vault.get('pop-agent-manual')).toBeDefined();
   });
 
   it('deletes a user skill', () => {
@@ -70,21 +70,21 @@ describe('SkillsVault', () => {
     expect(vault.get('my-identity')?.pinned).toBe(true);
   });
 
-  it('pins know-thyself even when the seeded file predates the flag', () => {
+  it('pins pop-agent-manual even when the seeded file predates the flag', () => {
     // A v0.2 install: the file exists with neither `pinned` nor `seed`.
     writeFileSync(
-      join(root, 'know-thyself.md'),
+      join(root, 'pop-agent-manual.md'),
       '---\nname: About Pop Agent\ndescription: d\nwhenToUse: w\nbuiltin: true\n---\n\nold body\n',
     );
     const reopened = new SkillsVault(root);
-    expect(reopened.get('know-thyself')?.pinned).toBe(true);
-    expect(reopened.get('know-thyself')?.source).toBe('builtin'); // `builtin: true` still reads
+    expect(reopened.get('pop-agent-manual')?.pinned).toBe(true);
+    expect(reopened.get('pop-agent-manual')?.source).toBe('builtin'); // `builtin: true` still reads
   });
 
   it('upgrades a default the user never touched when the shipped content changes', () => {
     const old = { name: 'Old', description: 'od', whenToUse: 'ow', body: 'old body' };
     writeFileSync(
-      join(root, 'summarize.md'),
+      join(root, 'note-taking.md'),
       [
         '---',
         `name: ${old.name}`,
@@ -99,12 +99,12 @@ describe('SkillsVault', () => {
       ].join('\n'),
     );
     const reopened = new SkillsVault(root);
-    expect(reopened.get('summarize')?.name).toBe('Summarize');
+    expect(reopened.get('note-taking')?.name).toBe('Note taking');
   });
 
   it('stamps a pre-seed-era file that still matches the shipped default', () => {
     // v0.2 wrote defaults with no seed marker; strip it to simulate that.
-    const path = join(root, 'summarize.md');
+    const path = join(root, 'note-taking.md');
     writeFileSync(path, readFileSync(path, 'utf8').replace(/^seed: .*\n/m, ''));
     expect(parse(readFileSync(path, 'utf8')).seed).toBeUndefined();
 
@@ -145,21 +145,21 @@ describe('SkillsVault', () => {
   });
 
   it('leaves a skill that was never pending alone', () => {
-    const before = vault.get('summarize');
-    expect(vault.approve('summarize')).toEqual(before);
+    const before = vault.get('note-taking');
+    expect(vault.approve('note-taking')).toEqual(before);
     expect(vault.approve('nope')).toBeUndefined();
   });
 
   it('keeps a user edit to a default skill across reboot', () => {
     vault.write({
-      slug: 'summarize',
-      name: 'My summarize',
+      slug: 'note-taking',
+      name: 'My note-taking',
       description: 'mine',
       whenToUse: 'mine',
       body: 'mine',
     });
     const reopened = new SkillsVault(root);
-    expect(reopened.get('summarize')?.name).toBe('My summarize');
+    expect(reopened.get('note-taking')?.name).toBe('My note-taking');
   });
 });
 
@@ -282,7 +282,7 @@ describe('SkillsVault archiving', () => {
   });
 
   it('refuses a built-in, which the next boot would seed straight back', () => {
-    expect(() => vault.archive('know-thyself')).toThrow(SkillsError);
+    expect(() => vault.archive('pop-agent-manual')).toThrow(SkillsError);
   });
 
   it('answers false for a skill that is not there', () => {

@@ -37,9 +37,9 @@ describe('/v1/skills', () => {
     expect((await app.request('/v1/skills')).status).toBe(401);
   });
 
-  it('lists the seeded skills including know-thyself', async () => {
+  it('lists the seeded skills including pop-agent-manual', async () => {
     const body = (await (await authed('/v1/skills')).json()) as SkillsResponse;
-    expect(body.skills.some((s) => s.slug === 'know-thyself' && s.source === 'builtin')).toBe(
+    expect(body.skills.some((s) => s.slug === 'pop-agent-manual' && s.source === 'builtin')).toBe(
       true,
     );
   });
@@ -63,7 +63,7 @@ describe('/v1/skills', () => {
   });
 
   it('refuses to delete a built-in skill', async () => {
-    const res = await authed('/v1/skills/know-thyself', { method: 'DELETE' });
+    const res = await authed('/v1/skills/pop-agent-manual', { method: 'DELETE' });
     expect(res.status).toBe(409);
   });
 

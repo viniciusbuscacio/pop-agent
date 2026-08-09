@@ -1,5 +1,5 @@
 /**
- * Generates the derived half of the self-architecture skill (pop-agent.spec §8):
+ * Generates the derived half of the pop-agent-codebase skill (pop-agent.spec §8):
  * the repo map and the UI map, read from the code so they cannot drift from
  * it. Hand-written architecture docs lie within weeks; this one is emitted by
  * `npm run selfmap` and the gate fails on drift (`npm run selfmap:check`).
