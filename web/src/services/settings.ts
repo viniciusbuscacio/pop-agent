@@ -42,7 +42,8 @@ export const settingsService = {
     return apiRequest<StorageResponse>('/storage');
   },
 
-  updateStatus(): Promise<UpdateStatusResponse> {
-    return apiRequest<UpdateStatusResponse>('/update/status');
+  updateStatus(refresh = false): Promise<UpdateStatusResponse> {
+    const query = refresh ? '?refresh=1' : '';
+    return apiRequest<UpdateStatusResponse>(`/update/status${query}`);
   },
 };

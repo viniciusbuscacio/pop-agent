@@ -1444,12 +1444,27 @@ function UpdatesSection() {
     undefined,
   );
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
+
+  async function load(refresh: boolean): Promise<void> {
+    if (refresh) {
+      setRefreshing(true);
+      setRefreshNote(undefined);
+    }
+    try {
+      setUpdate(await settingsService.updateStatus(refresh));
+      if (refresh) setRefreshNote(t('settings.updates.refreshed'));
+    } catch {
+      if (refresh) setRefreshNote(t('settings.updates.refreshFailed'));
+      else setUpdate(undefined);
+    } finally {
+      if (refresh) setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
-    settingsService
-      .updateStatus()
-      .then(setUpdate)
-      .catch(() => setUpdate(undefined));
+    void load(false);
   }, []);
 
   const popAgentOutdated =
@@ -1459,6 +1474,23 @@ function UpdatesSection() {
   return (
     <div className="flex flex-col gap-4">
       <AppUpdatesCard />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="update-refresh-server"
+          disabled={refreshing}
+          onClick={() => void load(true)}
+        >
+          {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.refreshServer')}
+        </Button>
+        {refreshNote !== undefined ? (
+          <p role="status" data-testid="update-refresh-result" className="text-xs text-[var(--muted)]">
+            {refreshNote}
+          </p>
+        ) : null}
+      </div>
 
       <Card className="flex flex-col gap-2">
         <h2 className="text-base font-semibold">{t('settings.updates.serverTitle')}</h2>

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import type { UpdateChecker, UpdateStatus } from '../../application/ports/update-checker.js';
+import type { UpdateChecker, UpdateStatus, UpdateStatusOptions } from '../../application/ports/update-checker.js';
 import type { Versions } from '../config/versions.js';
 
 /**
@@ -36,7 +36,12 @@ export class NpmUpdateChecker implements UpdateChecker {
 
   constructor(private readonly deps: NpmUpdateCheckerDeps) {}
 
-  async status(): Promise<UpdateStatus> {
+  async status(options?: UpdateStatusOptions): Promise<UpdateStatus> {
+    if (options?.refresh) {
+      this.cache = undefined;
+      this.tagCache = undefined;
+      this.envCache = undefined;
+    }
     return {
       pi: { current: this.deps.versions.piVersion, latest: await this.piLatest() },
       popAgent: { current: this.deps.versions.popAgentVersion, latest: await this.popAgentLatest() },

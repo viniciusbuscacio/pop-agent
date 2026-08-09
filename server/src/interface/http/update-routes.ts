@@ -16,7 +16,8 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
   const routes = new Hono();
 
   routes.get('/update/status', async (c) => {
-    const status = await deps.updates.status();
+    const refresh = c.req.query('refresh') === '1';
+    const status = await deps.updates.status({ refresh });
     const response: UpdateStatusResponse = {
       pi: {
         current: status.pi.current,

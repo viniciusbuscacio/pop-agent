@@ -572,11 +572,15 @@ export const en = {
   'settings.updates.everyDay': 'Once a day',
   'settings.updates.checkNow': 'Check now',
   'settings.updates.checking': 'Checking…',
+  'settings.updates.refreshServer': 'Refresh from server',
+  'settings.updates.refreshingServer': 'Refreshing…',
+  'settings.updates.refreshed': 'Refreshed from the server.',
+  'settings.updates.refreshFailed': 'Could not reach the server. Try again.',
   'settings.updates.found': 'An update is on the way — the reload banner will appear.',
   'settings.updates.current': 'You are on the latest version.',
   'settings.updates.checkUnavailable': 'The service worker is not ready yet. Try again in a moment.',
   'settings.updates.checkNote':
-    'Pop Agent also checks on this schedule and whenever you reopen it. Remembered on this device only.',
+    'Checks whether a newer Pop Agent build is installed on this device (the PWA shell). Server versions — pi, Node, ffmpeg — use "Refresh from server" below. Pop Agent also checks on this schedule and whenever you reopen it. Remembered on this device only.',
 
   'update.available': 'A new version is ready.',
   'update.reload': 'Reload',

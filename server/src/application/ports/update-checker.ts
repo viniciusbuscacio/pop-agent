@@ -15,6 +15,11 @@ export interface UpdateStatus {
   updateCommand: string;
 }
 
+export interface UpdateStatusOptions {
+  /** Drop cached npm/tag lookups and read installed versions again. */
+  refresh?: boolean;
+}
+
 export interface UpdateChecker {
-  status(): Promise<UpdateStatus>;
+  status(options?: UpdateStatusOptions): Promise<UpdateStatus>;
 }
