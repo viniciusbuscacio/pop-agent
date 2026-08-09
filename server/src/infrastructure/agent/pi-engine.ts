@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import type {
   AgentSession,
   AgentSessionEvent,
@@ -558,10 +558,79 @@ export class SdkPiEngine implements PiEngine {
    * pi's interactive OAuth login (pop-agent.spec §15, fase 1.5). The credential is
    * persisted by the runtime into Pop Agent's own auth file (`authPath`); nothing
    * comes back to the caller.
+   *
+   * The promise resolves when the credential LANDS, not when pi's login call
+   * returns: after saving, pi runs a catalog/availability refresh whose fetches
+   * carry no timeout, and one stalled request used to hold the sign-in hostage
+   * forever -- credential on disk, card still spinning (Vinicius, 08/08). The
+   * bookkeeping continues in the background and only journals its outcome.
    */
   async providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {
     const runtime = await this.modelRuntime();
-    await runtime.login(providerId, 'oauth', interaction);
+    const before = this.readCredentialEntry(providerId);
+    const login = runtime.login(providerId, 'oauth', interaction);
+    const settled = login.then(
+      () => console.log(`pop oauth: ${providerId} engine bookkeeping settled`),
+      (error: unknown) =>
+        console.log(
+          `pop oauth: ${providerId} engine bookkeeping failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+    );
+    const landed = this.watchCredential(providerId, before, interaction.signal);
+    await Promise.race([
+      landed,
+      // A login that settles before any credential change answers directly --
+      // success with nothing to save, or the failure that must propagate.
+      settled.then(() => login),
+    ]);
+    // The watcher polls on a timer; whatever the race decided, it stops here.
+    landed.stop();
+  }
+
+  /** The provider's raw entry in the auth file; undefined when absent. */
+  private readCredentialEntry(providerId: string): string | undefined {
+    try {
+      const all = JSON.parse(readFileSync(this.options.authPath, 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      const entry = all[providerId];
+      return entry === undefined ? undefined : JSON.stringify(entry);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Polls the auth file until the provider's credential appears or changes.
+   * Rejects on abort; `stop` disarms the timer once the login race is over.
+   */
+  private watchCredential(
+    providerId: string,
+    before: string | undefined,
+    signal: AbortSignal | undefined,
+  ): { promise: Promise<void>; stop: () => void } {
+    let stop = (): void => undefined;
+    const promise = new Promise<void>((resolve, reject) => {
+      const timer = setInterval(() => {
+        const current = this.readCredentialEntry(providerId);
+        if (current !== undefined && current !== before) {
+          stop();
+          resolve();
+        }
+      }, 500);
+      timer.unref?.();
+      const onAbort = (): void => {
+        stop();
+        reject(new Error('the sign-in was aborted'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      stop = () => {
+        clearInterval(timer);
+        signal?.removeEventListener('abort', onAbort);
+      };
+    });
+    return { promise, stop };
   }
 
   async providerLogout(providerId: string): Promise<void> {
