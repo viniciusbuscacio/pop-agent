@@ -148,6 +148,8 @@ describe('ChatScreen', () => {
 
     expect(ports.send).toHaveBeenLastCalledWith('chat-1', 'change course');
     expect(plain()).not.toContain('Still answering');
+    expect(plain()).not.toContain('Guiding this answer:');
+    expect(plain().split('change course')).toHaveLength(2);
   });
 
   it('freezes the partial segment before rendering post-steering text', async () => {

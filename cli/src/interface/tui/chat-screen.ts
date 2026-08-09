@@ -217,8 +217,9 @@ export class ChatScreen {
     if (state.text.length > 0) this.markdown(state.text);
   }
 
-  onQueued(text: string): void {
-    this.say(paint.yellow(`Guiding this answer: ${text}`));
+  onQueued(_text: string): void {
+    // submit() already rendered this as a user turn. The queue acknowledgment
+    // must stay silent or the same guidance appears twice in the transcript.
   }
 
   /** A user turn arrived from the web, PWA, or another terminal. */
