@@ -65,6 +65,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   constructor(private readonly root: string) {
     mkdirSync(root, { recursive: true });
     this.seedDefaults();
+    this.sweepStaleBuiltins();
   }
 
   all(): Skill[] {
@@ -322,6 +323,47 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       }
       const pristine = existing.seed === seedHash(existing);
       if (pristine && !matchesShipped) writeFileSync(path, fresh);
+    }
+  }
+
+  /**
+   * Drops built-ins removed from the shipped roster (pop-agent.spec §8). A file
+   * the user never touched is deleted; one they edited is promoted to `user`
+   * so their words are never destroyed.
+   */
+  private sweepStaleBuiltins(): void {
+    const roster = new Set(DEFAULT_SKILLS.map((skill) => skill.slug));
+    for (const file of readdirSync(this.root).filter((entry) => entry.endsWith('.md'))) {
+      const slug = file.slice(0, -3);
+      if (roster.has(slug)) continue;
+
+      const path = join(this.root, file);
+      let parsed: Parsed;
+      try {
+        parsed = parse(readFileSync(path, 'utf8'));
+      } catch {
+        continue;
+      }
+      if (parsed.source !== 'builtin') continue;
+
+      const pristine = parsed.seed !== undefined && parsed.seed === seedHash(parsed);
+      if (pristine) {
+        rmSync(path, { force: true });
+        continue;
+      }
+
+      writeFileSync(
+        path,
+        serialize({
+          name: parsed.name.length > 0 ? parsed.name : slug,
+          description: parsed.description,
+          whenToUse: parsed.whenToUse,
+          body: parsed.body,
+          source: 'user',
+          ...(parsed.pinned ? { pinned: true } : {}),
+          ...(parsed.pending ? { pending: true } : {}),
+        }),
+      );
     }
   }
 }

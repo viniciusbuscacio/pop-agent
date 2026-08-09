@@ -290,3 +290,62 @@ describe('SkillsVault archiving', () => {
     expect(vault.restore('ghost')).toBeUndefined();
   });
 });
+
+describe('SkillsVault stale built-in sweep', () => {
+  it('deletes a removed built-in the user never edited', () => {
+    writeFileSync(
+      join(root, 'summarize.md'),
+      [
+        '---',
+        'name: Summarize',
+        'description: Condense text',
+        'whenToUse: when summarizing',
+        'source: builtin',
+        `seed: ${seedHash({ name: 'Summarize', description: 'Condense text', whenToUse: 'when summarizing', body: '# Summarizing\n- short' })}`,
+        '---',
+        '',
+        '# Summarizing',
+        '- short',
+        '',
+      ].join('\n'),
+    );
+
+    new SkillsVault(root);
+
+    expect(existsSync(join(root, 'summarize.md'))).toBe(false);
+    expect(vault.get('summarize')).toBeUndefined();
+  });
+
+  it('promotes a removed built-in the user edited to user source', () => {
+    writeFileSync(
+      join(root, 'writing-clear.md'),
+      [
+        '---',
+        'name: My writing',
+        'description: Mine',
+        'whenToUse: mine',
+        'source: builtin',
+        `seed: ${seedHash({ name: 'Clear writing', description: 'Rewrite text', whenToUse: 'when writing', body: '# Clear writing\n- lead' })}`,
+        '---',
+        '',
+        '# My version',
+        '- keep this',
+        '',
+      ].join('\n'),
+    );
+
+    new SkillsVault(root);
+
+    const skill = new SkillsVault(root).get('writing-clear');
+    expect(skill?.source).toBe('user');
+    expect(skill?.body).toContain('My version');
+    expect(parse(readFileSync(join(root, 'writing-clear.md'), 'utf8')).seed).toBeUndefined();
+  });
+
+  it('leaves a built-in still in the roster alone', () => {
+    const before = readFileSync(join(root, 'shell-safety.md'), 'utf8');
+    new SkillsVault(root);
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).toBe(before);
+    expect(vault.get('shell-safety')?.source).toBe('builtin');
+  });
+});
