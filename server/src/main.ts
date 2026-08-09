@@ -616,6 +616,10 @@ const app = createApp({
       return value;
     };
   })(),
+  // The OpenAI subscription card asks the engine so pi can refresh OAuth
+  // before the provider usage endpoint is called. Identity fields never leave
+  // that boundary; this callback receives only plan allowance numbers.
+  subscriptionUsage: (providerId) => bridge.providerSubscriptionUsage(providerId),
   hub,
   clock: systemClock,
   versions: readVersions(),

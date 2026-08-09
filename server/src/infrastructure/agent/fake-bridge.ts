@@ -51,6 +51,10 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
     return Promise.resolve();
   }
 
+  providerSubscriptionUsage(): Promise<undefined> {
+    return Promise.resolve(undefined);
+  }
+
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const { prompt, onEvent, signal } = request;
 

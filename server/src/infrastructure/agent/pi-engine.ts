@@ -12,6 +12,8 @@ import type {
 import type {
   ModelInfo,
   ProviderAuthInteraction,
+  ProviderSubscriptionUsage,
+  ProviderUsageWindow,
   RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
@@ -187,6 +189,8 @@ export interface PiEngine {
   providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void>;
   /** Drops the stored credential (disconnect). */
   providerLogout(providerId: string): Promise<void>;
+  /** Reads a provider-published allowance; undefined when it publishes none. */
+  providerSubscriptionUsage(providerId: string): Promise<ProviderSubscriptionUsage | undefined>;
 }
 
 export interface SdkPiEngineOptions {
@@ -657,6 +661,58 @@ export class SdkPiEngine implements PiEngine {
     await runtime.logout(providerId);
   }
 
+  /**
+   * Reads the Codex allowance through the same OAuth credential pi uses for
+   * turns. `getAuth` refreshes and persists a near-expiry token first; only the
+   * percentage/clock fields cross back out of the engine. Account id, email and
+   * token material stay inside this infrastructure boundary.
+   */
+  async providerSubscriptionUsage(
+    providerId: string,
+  ): Promise<ProviderSubscriptionUsage | undefined> {
+    if (providerId !== 'openai-codex') return undefined;
+
+    const runtime = await this.modelRuntime();
+    const auth = await runtime.getAuth(providerId, {
+      minOAuthValidityMs: 10 * 60 * 1000,
+      signal: AbortSignal.timeout(10_000),
+    });
+    const access = auth?.auth.apiKey;
+    const accountId = this.readOAuthAccountId(providerId);
+    if (access === undefined || accountId === undefined) return undefined;
+
+    const response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
+      headers: {
+        Authorization: `Bearer ${access}`,
+        'ChatGPT-Account-Id': accountId,
+        'User-Agent': 'pop-agent',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      throw new Error(`OpenAI subscription usage failed with HTTP ${String(response.status)}`);
+    }
+    return parseOpenAISubscriptionUsage(await response.json());
+  }
+
+  /** The account selector is stored beside the token but is never returned to HTTP. */
+  private readOAuthAccountId(providerId: string): string | undefined {
+    try {
+      const all = JSON.parse(readFileSync(this.options.authPath, 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      const credential = all[providerId];
+      if (credential === null || typeof credential !== 'object' || Array.isArray(credential)) {
+        return undefined;
+      }
+      const accountId = (credential as Record<string, unknown>)['accountId'];
+      return typeof accountId === 'string' && accountId.length > 0 ? accountId : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async authenticatedRuntime(providerId: string): Promise<ModelRuntime> {
     const runtime = await this.modelRuntime();
     // A custom instance registers (or re-registers) lazily on use, so an
@@ -780,6 +836,56 @@ export class SdkPiEngine implements PiEngine {
       allowModelNetwork: false,
     });
   }
+}
+
+/** Keep the unstable provider payload at the edge and discard identity fields. */
+function parseOpenAISubscriptionUsage(value: unknown): ProviderSubscriptionUsage {
+  const root = record(value);
+  const rateLimit = record(root['rate_limit']);
+  const primary = parseUsageWindow(rateLimit['primary_window']);
+  const secondaryValue = rateLimit['secondary_window'];
+  const secondary =
+    secondaryValue === null || secondaryValue === undefined
+      ? undefined
+      : parseUsageWindow(secondaryValue);
+  const plan = root['plan_type'];
+  const allowed = rateLimit['allowed'];
+  const limitReached = rateLimit['limit_reached'];
+  if (typeof plan !== 'string' || typeof allowed !== 'boolean' || typeof limitReached !== 'boolean') {
+    throw new Error('OpenAI subscription usage response was malformed');
+  }
+  return {
+    plan,
+    allowed,
+    limitReached,
+    primary,
+    ...(secondary === undefined ? {} : { secondary }),
+  };
+}
+
+function parseUsageWindow(value: unknown): ProviderUsageWindow {
+  const window = record(value);
+  const usedPercent = window['used_percent'];
+  const windowSeconds = window['limit_window_seconds'];
+  const resetAt = window['reset_at'];
+  if (
+    typeof usedPercent !== 'number' ||
+    !Number.isFinite(usedPercent) ||
+    typeof windowSeconds !== 'number' ||
+    !Number.isFinite(windowSeconds) ||
+    typeof resetAt !== 'number' ||
+    !Number.isFinite(resetAt)
+  ) {
+    throw new Error('OpenAI subscription usage window was malformed');
+  }
+  return { usedPercent, windowSeconds, resetAt };
+}
+
+function record(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('OpenAI subscription usage response was malformed');
+  }
+  return value as Record<string, unknown>;
 }
 
 class SdkPiSession implements PiSession {

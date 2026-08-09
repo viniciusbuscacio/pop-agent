@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
-import type { AboutResponse, ServerInfoResponse } from '@pop-agent/shared';
+import type {
+  AboutResponse,
+  ProviderSubscriptionUsageResponse,
+  ServerInfoResponse,
+} from '@pop-agent/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
@@ -118,6 +122,10 @@ export interface AppDeps {
   };
   /** Provider balance lookup (LOTE 6); absent means "no balance to show". */
   credits?: (providerId: string) => Promise<{ remaining: number; used: number } | undefined>;
+  /** Provider subscription allowance; absent/undefined means it publishes none. */
+  subscriptionUsage?: (
+    providerId: string,
+  ) => Promise<ProviderSubscriptionUsageResponse | undefined>;
   /** Directory holding the built frontend (web/dist). */
   webDist: string;
   /** Directory holding the packed CLI tarball (cli/pack); see Distribution. */

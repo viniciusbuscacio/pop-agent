@@ -3,6 +3,7 @@ import type {
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
+  ProviderSubscriptionUsageResponse,
   ProvidersResponse,
   TestProviderResponse,
   TranscribeResponse,
@@ -79,6 +80,13 @@ export const providersService = {
    */
   credits(providerId: string): Promise<ProviderCreditsResponse> {
     return apiRequest<ProviderCreditsResponse>(`/providers/${providerId}/credits`);
+  },
+
+  /** OAuth subscription allowance; no account identity is returned. */
+  subscriptionUsage(providerId: string): Promise<ProviderSubscriptionUsageResponse> {
+    return apiRequest<ProviderSubscriptionUsageResponse>(
+      `/providers/${providerId}/subscription-usage`,
+    );
   },
 
   /** The provider's default model; '' resets to the built-in one. */

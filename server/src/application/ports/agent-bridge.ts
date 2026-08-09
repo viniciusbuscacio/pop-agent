@@ -151,6 +151,22 @@ export interface ProviderAuthInteraction {
   notify(event: ProviderAuthEvent): void;
 }
 
+/** One rolling allowance returned by a subscription provider. */
+export interface ProviderUsageWindow {
+  usedPercent: number;
+  windowSeconds: number;
+  resetAt: number;
+}
+
+/** Subscription allowance stripped of account identity and OAuth material. */
+export interface ProviderSubscriptionUsage {
+  plan: string;
+  allowed: boolean;
+  limitReached: boolean;
+  primary: ProviderUsageWindow;
+  secondary?: ProviderUsageWindow;
+}
+
 /**
  * The engine's subscription-auth surface (pop-agent.spec §15): whether a provider
  * holds an OAuth credential, the login flow that obtains one, and the logout
@@ -168,4 +184,6 @@ export interface ProviderAuthBridge {
   providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void>;
   /** Drops the stored credential (disconnect). */
   providerLogout(providerId: string): Promise<void>;
+  /** Reads a provider-published allowance; undefined when it publishes none. */
+  providerSubscriptionUsage(providerId: string): Promise<ProviderSubscriptionUsage | undefined>;
 }

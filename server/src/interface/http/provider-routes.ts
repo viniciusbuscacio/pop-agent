@@ -6,6 +6,7 @@ import type {
   OAuthStateResponse,
   ProviderCreditsResponse,
   ProviderStatusDTO,
+  ProviderSubscriptionUsageResponse,
   ProvidersResponse,
   TestProviderResponse,
   TranscribeResponse,
@@ -72,6 +73,10 @@ export interface ProviderRoutesDeps {
    * endpoint answers 404 and the client hides the row.
    */
   credits?: (providerId: string) => Promise<{ remaining: number; used: number } | undefined>;
+  /** Subscription allowance stripped of account identity and OAuth material. */
+  subscriptionUsage?: (
+    providerId: string,
+  ) => Promise<ProviderSubscriptionUsageResponse | undefined>;
 }
 
 export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
@@ -92,6 +97,24 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       return apiError(c, 404, 'not_found', 'This provider does not publish a balance right now.');
     }
     return c.json(credits satisfies ProviderCreditsResponse);
+  });
+
+  routes.get('/providers/:id/subscription-usage', async (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
+    if (status.authType !== 'oauth') {
+      return apiError(c, 404, 'not_found', 'This provider has no subscription allowance.');
+    }
+    try {
+      const usage = await deps.subscriptionUsage?.(id);
+      if (usage === undefined) {
+        return apiError(c, 404, 'not_found', 'This provider does not publish usage right now.');
+      }
+      return c.json(usage satisfies ProviderSubscriptionUsageResponse);
+    } catch {
+      return apiError(c, 502, 'provider_unavailable', 'The subscription usage could not be read.');
+    }
   });
 
   routes.put('/providers/:id/key', async (c) => {

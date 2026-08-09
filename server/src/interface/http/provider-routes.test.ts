@@ -128,6 +128,41 @@ describe('GET /v1/providers', () => {
   });
 });
 
+describe('GET /v1/providers/:id/subscription-usage', () => {
+  it('returns only the subscription allowance for an OAuth provider', async () => {
+    const local = createTestApp(undefined, {
+      subscriptionUsage: {
+        plan: 'plus',
+        allowed: true,
+        limitReached: false,
+        primary: { usedPercent: 3, windowSeconds: 604_800, resetAt: 1_786_894_871 },
+      },
+    });
+    const login = await local.app.request('/v1/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    const localToken = ((await login.json()) as { token: string }).token;
+    const res = await local.app.request('/v1/providers/openai-codex/subscription-usage', {
+      headers: { Authorization: `Bearer ${localToken}` },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      plan: 'plus',
+      allowed: true,
+      limitReached: false,
+      primary: { usedPercent: 3, windowSeconds: 604_800, resetAt: 1_786_894_871 },
+    });
+  });
+
+  it('does not offer subscription usage for an API-key provider', async () => {
+    const res = await authed('/v1/providers/openrouter/subscription-usage');
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('PUT /v1/providers/order', () => {
   it('reorders the list and reports the new positions', async () => {
     const res = await authed('/v1/providers/order', {

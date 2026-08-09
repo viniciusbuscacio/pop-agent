@@ -160,6 +160,10 @@ export const en = {
 
   'settings.title': 'Settings',
   'provider.credits': 'Balance: {remaining} remaining · {used} used',
+  'provider.subscriptionUsage.weekly': 'Weekly usage',
+  'provider.subscriptionUsage.hours': '{hours}-hour usage',
+  'provider.subscriptionUsage.resets': 'Resets {date}',
+  'provider.subscriptionUsage.plan': '{plan} plan',
   'settings.section.server': 'Server',
   'settings.section.general': 'General',
   'settings.server.cpu': 'CPU',

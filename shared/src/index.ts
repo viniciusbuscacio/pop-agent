@@ -772,6 +772,26 @@ export interface ProviderCreditsResponse {
   used: number;
 }
 
+/** One rolling subscription allowance reported by the provider. */
+export interface ProviderUsageWindowDTO {
+  usedPercent: number;
+  windowSeconds: number;
+  /** Unix time in seconds, exactly as the provider reports it. */
+  resetAt: number;
+}
+
+/**
+ * `GET /v1/providers/:id/subscription-usage` — plan allowance, never account
+ * identity or OAuth material. Currently published by the OpenAI subscription.
+ */
+export interface ProviderSubscriptionUsageResponse {
+  plan: string;
+  allowed: boolean;
+  limitReached: boolean;
+  primary: ProviderUsageWindowDTO;
+  secondary?: ProviderUsageWindowDTO;
+}
+
 /** `PUT /v1/providers/:id/key` — write-only: no route ever returns the key. */
 export interface SetProviderKeyRequest {
   apiKey: string;

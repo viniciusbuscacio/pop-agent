@@ -1196,6 +1196,13 @@ reimplemented.
   display events (info / auth_url / device_code / progress) and the
   pending prompt; credentials go from the flow straight into pi's
   store. The wire shapes are copied field-by-field, never spread.
+- **Subscription allowance belongs to its provider card.** Settings → Model →
+  OpenAI subscription reads the provider's rolling usage windows and reset
+  times through `GET /v1/providers/:id/subscription-usage`; it does not create
+  another total in Settings → Usage. The engine asks pi for fresh OAuth auth
+  first, then calls OpenAI's Codex usage endpoint. Only plan, percentages and
+  reset clocks cross the infrastructure boundary — never email, account id or
+  tokens. Failure hides the optional row rather than breaking Model settings.
 - **Status/resolve semantics**: for an oauth definition `configured`
   = "the engine holds a credential" (`hasConfiguredAuth`), reported as
   `source: "oauth"`; resolve treats a signed-in subscription exactly
@@ -1606,6 +1613,12 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.75 (2026-08-09): **OpenAI subscription allowance on its own provider card
+  (§15).** Settings → Model → OpenAI subscription now shows each rolling Codex
+  usage percentage as a progress bar, its reset time and the plan. The guarded
+  provider route returns only those allowance fields; the engine refreshes the
+  OAuth credential through pi before reading OpenAI, and strips account
+  identity and token material at the infrastructure boundary.
 - 1.74 (2026-08-08): **The built-in roster review (§8).** Seventeen shipped
   skills became seven: the generic text ones (writing, summary, translation,
   explanation, brainstorm, math, planning) only added routing noise against

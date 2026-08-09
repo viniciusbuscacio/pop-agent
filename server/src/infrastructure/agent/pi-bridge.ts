@@ -11,6 +11,7 @@ import type {
   ModelInfo,
   ProviderAuthBridge,
   ProviderAuthInteraction,
+  ProviderSubscriptionUsage,
   RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
@@ -330,6 +331,12 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
 
   providerLogout(providerId: string): Promise<void> {
     return this.deps.engine.providerLogout(providerId);
+  }
+
+  providerSubscriptionUsage(
+    providerId: string,
+  ): Promise<ProviderSubscriptionUsage | undefined> {
+    return this.deps.engine.providerSubscriptionUsage(providerId);
   }
 
   /**

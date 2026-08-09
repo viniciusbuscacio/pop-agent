@@ -255,6 +255,10 @@ class ScriptedEngine implements PiEngine {
   providerLogout(): Promise<void> {
     return Promise.resolve();
   }
+
+  providerSubscriptionUsage(): Promise<undefined> {
+    return Promise.resolve(undefined);
+  }
 }
 
 let db: Database.Database;

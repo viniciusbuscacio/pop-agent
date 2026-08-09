@@ -11,7 +11,10 @@ import { QueuedMessageService } from '../application/chat/queued-message-service
 import { TitleService } from '../application/chat/title-service.js';
 import { HealthService } from '../application/health/health-service.js';
 import type { Clock } from '../application/ports/clock.js';
-import type { ProviderAuthInteraction } from '../application/ports/agent-bridge.js';
+import type {
+  ProviderAuthInteraction,
+  ProviderSubscriptionUsage,
+} from '../application/ports/agent-bridge.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
 import type { CompletionRequest, ProviderGateway } from '../application/ports/provider-gateway.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
@@ -201,6 +204,8 @@ export interface TestApp {
 export interface TestAppOptions {
   /** Scripted provider balance for the credits route (LOTE 6). */
   credits?: { remaining: number; used: number };
+  /** Scripted subscription allowance for the provider card. */
+  subscriptionUsage?: ProviderSubscriptionUsage;
 
   /** Swap in a scripted gateway to test the provider routes. */
   gateway?: ProviderGateway;
@@ -451,6 +456,9 @@ export function createTestApp(
     ...(options.credits === undefined
       ? {}
       : { credits: () => Promise.resolve(options.credits) }),
+    ...(options.subscriptionUsage === undefined
+      ? {}
+      : { subscriptionUsage: () => Promise.resolve(options.subscriptionUsage) }),
     serverControl: {
       restart: () => {
         controlLog.push('restart');

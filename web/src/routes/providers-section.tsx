@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
+import type {
+  ProviderStatusDTO,
+  ProviderSubscriptionUsageResponse,
+  ProviderUsageWindowDTO,
+  ProvidersResponse,
+} from '@pop-agent/shared';
 import { t } from '../i18n';
 import { formatDollars } from '../lib/money';
 import { loadProviderCredits } from '../lib/provider-credits-cache';
@@ -220,6 +225,9 @@ function ProviderCard({
               {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
               {!provider.enabled ? ` · ${t('provider.priority.off')}` : ''}
             </p>
+            {provider.id === 'openai-codex' ? (
+              <SubscriptionUsage providerId={provider.id} listVersion={listVersion} />
+            ) : null}
           </div>
         </div>
         <span className="flex shrink-0 gap-2">
@@ -297,6 +305,89 @@ function Balance({
         used: formatDollars(credits.used),
       })}
     </p>
+  );
+}
+
+/** OpenAI's rolling allowance, kept inside its provider card (not Usage). */
+function SubscriptionUsage({
+  providerId,
+  listVersion,
+}: {
+  providerId: string;
+  listVersion: number;
+}) {
+  const [usage, setUsage] = useState<ProviderSubscriptionUsageResponse | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void providersService
+      .subscriptionUsage(providerId)
+      .then((value) => {
+        if (live) setUsage(value);
+      })
+      .catch(() => {
+        if (live) setUsage(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [providerId, listVersion]);
+
+  if (usage === null) return null;
+  const windows = [usage.primary, usage.secondary].filter(
+    (window): window is ProviderUsageWindowDTO => window !== undefined,
+  );
+  return (
+    <div className="mt-2 flex w-72 max-w-full flex-col gap-2" data-testid="provider-subscription-usage">
+      {windows.map((window) => (
+        <UsageWindow key={`${String(window.windowSeconds)}-${String(window.resetAt)}`} window={window} />
+      ))}
+      <p className="text-xs text-[var(--muted)]">
+        {t('provider.subscriptionUsage.plan', {
+          plan: usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1),
+        })}
+      </p>
+    </div>
+  );
+}
+
+function UsageWindow({ window }: { window: ProviderUsageWindowDTO }) {
+  const percent = Math.max(0, Math.min(100, window.usedPercent));
+  const label =
+    window.windowSeconds >= 6 * 24 * 60 * 60
+      ? t('provider.subscriptionUsage.weekly')
+      : t('provider.subscriptionUsage.hours', {
+          hours: Math.max(1, Math.round(window.windowSeconds / 3600)),
+        });
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-[var(--muted)]">{label}</span>
+        <span className="font-medium">{Math.round(percent * 10) / 10}%</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
+      >
+        <span
+          aria-hidden="true"
+          className="block h-full rounded-full bg-[var(--accent)]"
+          style={{ width: `${String(percent)}%` }}
+        />
+      </div>
+      <p className="text-xs text-[var(--muted)]">
+        {t('provider.subscriptionUsage.resets', {
+          date: new Date(window.resetAt * 1000).toLocaleString([], {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          }),
+        })}
+      </p>
+    </div>
   );
 }
 
