@@ -571,6 +571,7 @@ pop "explain this"       # one-shot: answer, print, exit
 pop -p "…"               # same, explicit, for scripts
 pop login | logout
 pop chats | open <id>
+pop update               # reinstall this CLI from the selected server, no LLM
 pop --server <profile>   # pick a saved server
 ```
 

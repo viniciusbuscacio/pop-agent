@@ -10,6 +10,7 @@ import type {
   EventTicketResponse,
   LoginResponse,
   SendMessageResponse,
+  UpdateStatusResponse,
 } from '@pop-agent/shared';
 
 /**
@@ -63,6 +64,10 @@ export class PopAgentApi {
 
   chats(): Promise<ChatListResponse> {
     return this.request<ChatListResponse>('/chats');
+  }
+
+  updateStatus(): Promise<UpdateStatusResponse> {
+    return this.request<UpdateStatusResponse>('/update/status');
   }
 
   createChat(): Promise<ChatDTO> {

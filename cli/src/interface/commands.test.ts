@@ -2,7 +2,7 @@ import { HANDS_HEADER } from '@pop-agent/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
 import { PopAgentApi } from '../infrastructure/api.js';
-import { ask, chats, login, logout, servers, type Context, type Terminal } from './commands.js';
+import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './commands.js';
 
 /**
  * The whole client, driven without a server (docs/cli.md, "Testable without a
@@ -59,6 +59,7 @@ function contextWith(
     api: (options) =>
       new PopAgentApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
     hands: handsFactory,
+    installCli: () => Promise.resolve(0),
   };
 }
 
@@ -147,6 +148,37 @@ describe('token renewal', () => {
 
     await chats(contextWith(http as never, profiles));
     expect(profiles.get()?.token).toBe('new');
+  });
+});
+
+describe('pop update', () => {
+  it('installs the server CLI directly without creating a chat', async () => {
+    const profiles = new Profiles(new MemoryStore({ default: { url: 'https://pop.example', token: 't' } }));
+    const http = vi.fn((input: RequestInfo | URL) => {
+      expect(String(input)).toBe('https://pop.example/v1/update/status');
+      return Promise.resolve(json({ popAgent: { current: '0.3.0' } }));
+    });
+    const context = contextWith(http as never, profiles);
+    const install = vi.fn(() => Promise.resolve(0));
+    context.installCli = install;
+
+    expect(await update(context)).toBe(0);
+    expect(install).toHaveBeenCalledWith('https://pop.example/cli-0.3.0.tgz');
+    expect(http).toHaveBeenCalledTimes(1);
+    expect(said()).toContain('Pop Agent CLI 0.3.0 installed successfully.');
+    expect(said()).toContain('Restart pop to use the updated version.');
+  });
+
+  it('reports npm failure in English and exits non-zero', async () => {
+    const profiles = new Profiles(new MemoryStore({ default: { url: 'http://pop', token: 't' } }));
+    const context = contextWith(
+      vi.fn(() => Promise.resolve(json({ popAgent: { current: '0.3.0' } }))) as never,
+      profiles,
+    );
+    context.installCli = () => Promise.resolve(7);
+
+    expect(await update(context)).toBe(1);
+    expect(said()).toContain('CLI update failed (npm exited with code 7).');
   });
 });
 

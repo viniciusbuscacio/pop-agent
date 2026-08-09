@@ -39,6 +39,8 @@ export interface Context {
   }) => PopAgentApi;
   /** Injected so one-shot commands stay testable without opening a real socket. */
   hands: (options: HandsOptions) => HandsClient;
+  /** Runs npm without a shell; injected so update tests never modify the machine. */
+  installCli: (packageUrl: string) => Promise<number>;
 }
 
 export async function login(
@@ -87,6 +89,30 @@ export async function chats(context: Context): Promise<number> {
     for (const chat of list) {
       context.terminal.line(`${chat.id}\t${chat.title === '' ? '(untitled)' : chat.title}`);
     }
+    return 0;
+  } catch (error) {
+    context.terminal.line(describe(error));
+    return 1;
+  }
+}
+
+/** Updates the terminal client directly. No chat, hands channel or LLM run. */
+export async function update(context: Context): Promise<number> {
+  const connected = connect(context);
+  if (connected === undefined) return 1;
+
+  try {
+    const status = await connected.api.updateStatus();
+    const version = status.popAgent.current;
+    const packageUrl = `${connected.profile.url}/cli-${version}.tgz`;
+    context.terminal.line(`Updating Pop Agent CLI to ${version}...`);
+    const code = await context.installCli(packageUrl);
+    if (code !== 0) {
+      context.terminal.line(`CLI update failed (npm exited with code ${String(code)}).`);
+      return 1;
+    }
+    context.terminal.line(`Pop Agent CLI ${version} installed successfully.`);
+    context.terminal.line('Restart pop to use the updated version.');
     return 0;
   } catch (error) {
     context.terminal.line(describe(error));

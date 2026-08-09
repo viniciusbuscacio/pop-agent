@@ -1359,8 +1359,9 @@ version is accepted.
   the server's cgroup. The supervisor restarts, health-checks, records
   last-known-good and, on failure, preserves the candidate under a
   `failed-update-*` ref, restores last-known-good, rebuilds and restarts again.
-- CLI: `pop update [--to vX.Y.Z]` does the same from the shell;
-  `--to` on an older tag = rollback.
+- Operator CLI: `popman update` does the same from the server shell.
+- The terminal chat client's `pop update` only reinstalls that client from its
+  selected server; it never creates a chat or invokes an LLM.
 - Plain `git pull && npm ci && npm run build && restart` remains
   documented for hands-on users.
 
@@ -1404,7 +1405,7 @@ of tools running on the machine that typed it (`local_bash`,
 `local_read`, ...). Those hands belong to the MESSAGE, not to the chat.
 
     pop | pop "question" | pop -p "…"
-    pop login | logout | servers | chats
+    pop login | logout | servers | chats | update
 
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and

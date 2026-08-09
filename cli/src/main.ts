@@ -5,7 +5,8 @@ import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
 import { PopAgentApi } from './infrastructure/api.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
 import { Hands } from './infrastructure/hands.js';
-import { ask, chats, login, logout, servers, type Context, type Terminal } from './interface/commands.js';
+import { installCli } from './infrastructure/installer.js';
+import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './interface/commands.js';
 import { chat } from './interface/chat.js';
 
 /**
@@ -23,6 +24,7 @@ const USAGE = `pop — a terminal client for your Pop Agent
   pop logout                forget this server's token
   pop servers               list the servers you have signed in to
   pop chats                 list conversations
+  pop update                update this CLI from the selected server
 
   --server <name>            use a saved server other than "${DEFAULT_PROFILE}"
   --chat <id>                continue an existing conversation
@@ -46,6 +48,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     api: (options) =>
       new PopAgentApi({ ...options, onToken: (token) => profiles.refresh(profile, token) }),
     hands: (options) => new Hands(options),
+    installCli,
   };
 
   const command = args[0];
@@ -76,6 +79,8 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
       return servers(context);
     case 'chats':
       return chats(context);
+    case 'update':
+      return update(context);
     default:
       // A bare argument is the question, which is what pi and Claude Code do
       // and what the hand expects (docs/cli.md).
