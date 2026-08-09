@@ -20,6 +20,7 @@ import { billsPerToken } from './application/providers/provider-definitions.js';
 import { SettingsService } from './application/settings/settings-service.js';
 import { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { TaskService } from './application/tasks/task-service.js';
+import { DeploymentCoordinator } from './application/update/deployment-coordinator.js';
 import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
@@ -61,6 +62,12 @@ import { WebPushService } from './infrastructure/push/web-push-service.js';
 import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
 import { isNewerVersion, NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
 import { readEnvironmentVersions } from './infrastructure/update/environment-versions.js';
+import {
+  DetachedDeploymentSupervisor,
+  GitDeploymentInspector,
+  JsonDeploymentStateStore,
+  gitCommit,
+} from './infrastructure/update/git-deployment.js';
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { McpService } from './application/mcp/mcp-service.js';
@@ -71,9 +78,15 @@ const hostname = process.env['POP_AGENT_BIND'] ?? '127.0.0.1';
 
 // Resolves the same from src/ (tsx) and dist/ (compiled): both sit two levels
 // below the repo root.
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const runningCommit = gitCommit(repoRoot);
 const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
 /** Where `npm run pack:cli` leaves the tarball the server hands out. */
 const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
+/** Built before activation; this process only launches it as an external unit. */
+const deploymentSupervisorScript = fileURLToPath(
+  new URL('../dist/manager/update-supervisor.js', import.meta.url),
+);
 
 // Composition root: the one place that knows every layer (pop-agent.spec §3).
 const context = bootstrap();
@@ -446,6 +459,31 @@ const taskScheduler = new TaskScheduler({
   onJournal: (line) => console.log(line),
 });
 
+// A committed checkout can advance while this process keeps answering from its
+// boot commit. The coordinator makes that difference explicit, drains work and
+// hands restart/health/rollback to a transient systemd unit outside our cgroup.
+const deploymentState = new JsonDeploymentStateStore(
+  join(context.dataDir, 'deployment-state.json'),
+);
+const deployment = new DeploymentCoordinator({
+  runningCommit,
+  inspector: new GitDeploymentInspector(repoRoot),
+  state: deploymentState,
+  supervisor: new DetachedDeploymentSupervisor({
+    repoRoot,
+    statePath: deploymentState.path,
+    scriptPath: deploymentSupervisorScript,
+    serviceName: process.env['POP_AGENT_SERVICE_NAME'] ?? 'pop-agent-service',
+    healthUrl: `http://127.0.0.1:${String(port)}/healthz`,
+  }),
+  quiesce: () => runs.quiesce(),
+  resume: () => runs.startLlm(),
+  waitForIdle: async () => {
+    await Promise.all([runs.whenIdle(), taskScheduler.whenIdle()]);
+  },
+  now: () => new Date(systemClock.now()).toISOString(),
+});
+
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
 // The model is selected in Settings and downloaded on demand; POP_AGENT_WHISPER_MODEL
 // still pins an explicit path for an operator who wants one.
@@ -505,6 +543,7 @@ const app = createApp({
   push,
   webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
   updates,
+  deployment,
   backups: new TarBackupService({
     dataDir: context.dataDir,
     backupsDir,
@@ -527,7 +566,12 @@ const app = createApp({
   clock: systemClock,
   versions: readVersions(),
   serverInfo: () => ({
-    ...readServerInfo({ dataDir: context.dataDir, workspace, versions: readVersions() }),
+    ...readServerInfo({
+      dataDir: context.dataDir,
+      workspace,
+      versions: readVersions(),
+      commit: runningCommit,
+    }),
     llmStopped: runs.isLlmStopped(),
   }),
   serverControl: (() => {

@@ -1,5 +1,6 @@
 import type {
   AboutResponse,
+  DeploymentRequestResponse,
   SettingsDTO,
   UpdateStatusResponse,
   StorageResponse,
@@ -45,5 +46,9 @@ export const settingsService = {
   updateStatus(refresh = false): Promise<UpdateStatusResponse> {
     const query = refresh ? '?refresh=1' : '';
     return apiRequest<UpdateStatusResponse>(`/update/status${query}`);
+  },
+
+  restartWhenIdle(): Promise<DeploymentRequestResponse> {
+    return apiRequest<DeploymentRequestResponse>('/update/restart-when-idle', { method: 'POST' });
   },
 };

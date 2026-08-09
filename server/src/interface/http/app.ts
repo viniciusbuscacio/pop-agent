@@ -22,6 +22,7 @@ import type { Transcriber } from '../../application/ports/transcriber.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import type { VoiceModelStore } from '../../application/ports/voice-models.js';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
+import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
 import type { UsageRepo } from '../../application/ports/usage-repo.js';
 import type { StorageService } from '../../application/storage/storage-service.js';
 import type { HandsRegistry } from '../../application/hands/hands-registry.js';
@@ -93,6 +94,8 @@ export interface AppDeps {
   push: PushService;
   webauthn: WebAuthnGateway;
   updates: UpdateChecker;
+  /** Safe hand-off from the running commit to the committed checkout on disk. */
+  deployment?: DeploymentCoordinator;
   /** The sink the run service emits into; the hub is its adapter. */
   hub: SseHub;
   clock: Clock;
@@ -167,7 +170,12 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createUsageRoutes(deps)),
       sessionGuarded(createStorageRoutes(deps)),
       sessionGuarded(createHandsRoutes(deps)),
-      sessionGuarded(createUpdateRoutes(deps)),
+      sessionGuarded(
+        createUpdateRoutes({
+          updates: deps.updates,
+          ...(deps.deployment === undefined ? {} : { deployment: deps.deployment }),
+        }),
+      ),
       sessionGuarded(createVoiceRoutes(deps)),
       sessionGuarded(createBackupRoutes(deps)),
       sessionGuarded(createPushRoutes(deps)),

@@ -479,6 +479,15 @@ export class RunService {
     this.llmHalted = false;
   }
 
+  /**
+   * Deployment drain: refuse new work without aborting what is already running.
+   * Unlike stopLlm(), this is patient -- the supervisor is not allowed to
+   * restart until whenIdle resolves and every current answer is persisted.
+   */
+  quiesce(): void {
+    this.llmHalted = true;
+  }
+
   /** Stops whatever this chat is doing. False when it was not doing anything. */
   stopRun(chatId: string): boolean {
     const runId = this.runIdByChat.get(chatId);

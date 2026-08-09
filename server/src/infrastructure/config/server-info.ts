@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process';
 import { statfsSync, statSync, readdirSync, lstatSync } from 'node:fs';
 import os from 'node:os';
 import type { Versions } from './versions.js';
@@ -17,13 +16,12 @@ import type { Versions } from './versions.js';
  * the interface layer declares the wire type.
  */
 
-/** Repo root, same trick as versions.ts: stable depth from src/ and dist/. */
-const REPO_ROOT = new URL('../../../../', import.meta.url);
-
 export interface ServerInfoDeps {
   dataDir: string;
   workspace: string;
   versions: Versions;
+  /** Captured once at boot; HEAD may advance while this process stays old. */
+  commit: string;
 }
 
 export function readServerInfo(deps: ServerInfoDeps) {
@@ -47,26 +45,12 @@ export function readServerInfo(deps: ServerInfoDeps) {
     serverTime: new Date().toISOString(),
     nodeVersion: process.version,
     popAgentVersion: deps.versions.popAgentVersion,
-    commit: gitCommit(),
+    commit: deps.commit === 'unknown' ? deps.commit : deps.commit.slice(0, 7),
     dbBytes: fileSize(`${deps.dataDir}/pop-agent.db`),
     workspaceBytes: dirSize(deps.workspace),
     dataDir: deps.dataDir,
     workspace: deps.workspace,
   };
-}
-
-/** Short commit of the running checkout; unknown outside a git clone. */
-function gitCommit(): string {
-  try {
-    return execSync('git rev-parse --short HEAD', {
-      cwd: REPO_ROOT,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
-  } catch {
-    return 'unknown';
-  }
 }
 
 function fileSize(path: string): number | null {

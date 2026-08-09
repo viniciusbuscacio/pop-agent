@@ -386,7 +386,31 @@ export interface UpdateStatusResponse {
   /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */
   environment: { name: string; version: string }[];
   updateCommand: string;
+  /** The checkout running now versus the committed checkout ready on disk. */
+  deployment?: {
+    runningCommit: string;
+    headCommit: string;
+    lastKnownGood: string;
+    pending: boolean;
+    clean: boolean;
+    phase:
+      | 'current'
+      | 'pending'
+      | 'waiting-idle'
+      | 'restarting'
+      | 'healthy'
+      | 'rolling-back'
+      | 'rolled-back'
+      | 'failed';
+    error?: string;
+    failedRef?: string;
+  };
 }
+
+/** `POST /v1/update/restart-when-idle` — hand a committed checkout to the supervisor. */
+export type DeploymentRequestResponse =
+  | { ok: true; deployment: NonNullable<UpdateStatusResponse['deployment']> }
+  | { ok: false; reason: 'already_current' | 'dirty_tree' | 'already_scheduled' };
 
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {

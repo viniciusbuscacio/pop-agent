@@ -1,15 +1,16 @@
 import { Hono } from 'hono';
-import type { UpdateStatusResponse } from '@pop-agent/shared';
+import type { DeploymentRequestResponse, UpdateStatusResponse } from '@pop-agent/shared';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
+import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
 
 /**
- * Update status (pop-agent.spec §15). Read-only: it says what is installed and
- * whether a newer pi is on npm, plus the command to update. Pop Agent does not
- * update itself from the running process; the gate runs the same suite the
- * maintainer runs before any restart.
+ * Update status and safe activation (pop-agent.spec §15). The running process
+ * never restarts itself: it drains work and hands a committed checkout to an
+ * external transient unit, which owns health validation and rollback.
  */
 export interface UpdateRoutesDeps {
   updates: UpdateChecker;
+  deployment?: DeploymentCoordinator;
 }
 
 export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
@@ -30,8 +31,24 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
       node: status.node,
       environment: status.environment,
       updateCommand: status.updateCommand,
+      ...(deps.deployment === undefined ? {} : { deployment: deps.deployment.status() }),
     };
     return c.json(response);
+  });
+
+  routes.post('/update/restart-when-idle', (c) => {
+    if (deps.deployment === undefined) {
+      return c.json(
+        { ok: false, reason: 'already_current' } satisfies DeploymentRequestResponse,
+        409,
+      );
+    }
+    const result = deps.deployment.requestRestartWhenIdle();
+    if (!result.ok) return c.json(result satisfies DeploymentRequestResponse, 409);
+    return c.json(
+      { ok: true, deployment: result.status } satisfies DeploymentRequestResponse,
+      202,
+    );
   });
 
   return routes;

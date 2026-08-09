@@ -307,6 +307,25 @@ describe('stopping a run', () => {
   it('reports nothing to stop when the chat is idle', () => {
     expect(runs.stopRun(newChat())).toBe(false);
   });
+
+  it('quiesces for deployment without aborting the answer already running', async () => {
+    let release = (): void => undefined;
+    bridge.script = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    const first = newChat();
+    const second = newChat();
+    expect(runs.startRun(first, 'finish this')).toMatchObject({ ok: true });
+
+    runs.quiesce();
+
+    expect(runs.startRun(second, 'too late')).toEqual({ ok: false, reason: 'llm_stopped' });
+    expect(sink.of('error')).toHaveLength(0);
+    release();
+    await runs.whenIdle();
+    expect(sink.of('done')).toHaveLength(1);
+  });
 });
 
 describe('the queue', () => {

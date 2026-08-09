@@ -1434,10 +1434,10 @@ function SecuritySection() {
 }
 
 /**
- * Settings → Updates (pop-agent.spec §15, design closed 31/07): three cards, one
- * per channel. The app checks and prompts; the server is notify-only -- a
- * push says a new tag exists and taps into this screen, applying it stays
- * the shell command shown here; the environment is visibility only.
+ * Settings → Updates (pop-agent.spec §15): three cards, one per channel. The
+ * shell still fetches/builds commits; once a clean committed checkout differs
+ * from the boot commit, this screen can drain work and hand activation to the
+ * external restart/health/rollback supervisor.
  */
 function UpdatesSection() {
   const [update, setUpdate] = useState<import('@pop-agent/shared').UpdateStatusResponse | undefined>(
@@ -1445,6 +1445,7 @@ function UpdatesSection() {
   );
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
 
   async function load(refresh: boolean): Promise<void> {
@@ -1457,7 +1458,8 @@ function UpdatesSection() {
       if (refresh) setRefreshNote(t('settings.updates.refreshed'));
     } catch {
       if (refresh) setRefreshNote(t('settings.updates.refreshFailed'));
-      else setUpdate(undefined);
+      // During a supervised restart the server is expected to disappear for a
+      // moment. Keep the last truthful deployment card while polling it back.
     } finally {
       if (refresh) setRefreshing(false);
     }
@@ -1470,6 +1472,35 @@ function UpdatesSection() {
   const popAgentOutdated =
     update?.popAgent.latest !== undefined && update.popAgent.latest !== update.popAgent.current;
   const piOutdated = update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
+  const deployment = update?.deployment;
+  const deploymentBusy =
+    deployment?.phase === 'waiting-idle' ||
+    deployment?.phase === 'restarting' ||
+    deployment?.phase === 'rolling-back';
+
+  useEffect(() => {
+    if (!deploymentBusy) return;
+    const timer = setInterval(() => void load(false), 2_000);
+    return () => clearInterval(timer);
+  }, [deploymentBusy]);
+
+  async function restartWhenIdle(): Promise<void> {
+    setDeploying(true);
+    setRefreshNote(undefined);
+    try {
+      const result = await settingsService.restartWhenIdle();
+      if (result.ok) {
+        setUpdate((current) =>
+          current === undefined ? current : { ...current, deployment: result.deployment },
+        );
+        setRefreshNote(t('settings.updates.restartScheduled'));
+      }
+    } catch {
+      setRefreshNote(t('settings.updates.restartFailed'));
+    } finally {
+      setDeploying(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1506,6 +1537,55 @@ function UpdatesSection() {
         ) : (
           <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
         )}
+        {deployment !== undefined ? (
+          <div className="mt-2 flex flex-col gap-2 rounded border border-[var(--border)] bg-[var(--input-bg)] p-3">
+            <Row
+              label={t('settings.updates.runningCommit')}
+              value={deployment.runningCommit}
+              testId="update-running-commit"
+            />
+            <Row
+              label={t('settings.updates.checkoutCommit')}
+              value={deployment.headCommit}
+              testId="update-head-commit"
+            />
+            <p
+              data-testid="update-deployment-phase"
+              className={deployment.pending ? 'text-sm text-[var(--accent)]' : 'text-sm text-[var(--muted)]'}
+            >
+              {t(`settings.updates.phase.${deployment.phase}`)}
+            </p>
+            {!deployment.clean ? (
+              <p role="alert" className="text-xs text-[var(--danger)]">
+                {t('settings.updates.dirtyTree')}
+              </p>
+            ) : null}
+            {deployment.error !== undefined ? (
+              <p role="alert" className="text-xs text-[var(--danger)]">
+                {deployment.error}
+              </p>
+            ) : null}
+            {deployment.failedRef !== undefined ? (
+              <p className="text-xs text-[var(--muted)]">
+                {t('settings.updates.failedRef', { ref: deployment.failedRef })}
+              </p>
+            ) : null}
+            {deployment.pending ? (
+              <div>
+                <Button
+                  type="button"
+                  data-testid="update-restart-when-idle"
+                  disabled={!deployment.clean || deploymentBusy || deploying}
+                  onClick={() => void restartWhenIdle()}
+                >
+                  {deploymentBusy || deploying
+                    ? t('settings.updates.waitingForIdle')
+                    : t('settings.updates.restartWhenIdle')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <p className="text-xs text-[var(--muted)]">{t('settings.updates.notifyNote')}</p>
         <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
         <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">

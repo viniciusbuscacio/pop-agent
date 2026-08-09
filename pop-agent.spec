@@ -1318,10 +1318,14 @@ version is accepted.
 
 **Pop Agent channel** (its own repo):
 
-- Settings → Updates gains a "Pop Agent" card: checks the repo's release tags,
-  shows changelog link. Update = fetch tag → `npm ci` → build → smoke —
-  all **before** restarting; failure reverts the checkout and the running
-  server never stopped. Success → systemd restart into the new version.
+- Settings → Updates has a "Pop Agent" card: checks the repo's release tags
+  and distinguishes the **boot commit** from checkout `HEAD`. Fetch/install/
+  gate still happens before activation. A clean committed checkout can be
+  handed to the safe deployment coordinator: it refuses new runs, drains live
+  conversations and tasks, then launches a transient systemd supervisor outside
+  the server's cgroup. The supervisor restarts, health-checks, records
+  last-known-good and, on failure, preserves the candidate under a
+  `failed-update-*` ref, restores last-known-good, rebuilds and restarts again.
 - CLI: `pop update [--to vX.Y.Z]` does the same from the shell;
   `--to` on an older tag = rollback.
 - Plain `git pull && npm ci && npm run build && restart` remains
