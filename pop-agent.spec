@@ -908,13 +908,19 @@ events from stale runs.
   language label). Mermaid/KaTeX: later.
 - Streaming UX (aw's machine as reference): runId registry, reload
   reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
-  via SSE, and per-chat drafts in localStorage. The **follow-up queue is
+  via SSE, and per-chat drafts in localStorage. The **pending-input slot is
   server-owned**: one SQLite row per chat, returned with the message snapshot
   and broadcast by SSE so phone, desktop and tabs see the same text. A POST
   racing an active run fills that slot atomically; a third is refused without
-  replacement. Completion consumes it exactly once and broadcasts the new user
-  bubble; PUT edits it and DELETE cancels it before execution. Text, uploads
-  and Files references survive PWA reclamation and server restart. Legacy
+  replacement. While pi is running with the same terminal hands, the row is
+  offered through pi's native steering queue: it enters after the current
+  assistant turn and its tool calls, before the next model call. Delivery
+  persists the assistant segment before it, inserts the user bubble, and
+  continues under the same run id. Until pi emits that user-message event the
+  SQLite row remains authoritative, so a restart or an unavailable steering
+  channel degrades into the ordinary follow-up path instead of losing input.
+  PUT edits it and DELETE cancels it before delivery. Text, uploads and Files
+  references survive PWA reclamation and server restart. Legacy
   `pop-agent.queued.*` localStorage rows migrate on first open.
 - **Adoption**: an event for a chat with no live buffer starts one, so a run
   begun on another device streams into every open window. Runs that already

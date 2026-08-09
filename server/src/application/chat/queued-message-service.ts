@@ -51,6 +51,7 @@ export class QueuedMessageService {
     };
     if (!this.deps.repo.create(message)) return { ok: false, reason: 'queue_exists' };
     this.announce(message);
+    this.offerSteering(chatId);
     return { ok: true, message };
   }
 
@@ -63,19 +64,55 @@ export class QueuedMessageService {
       ...input,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
+    this.deps.runs.cancelSteering(chatId, current.id);
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
     this.announce(message);
+    this.offerSteering(chatId);
     return { ok: true, message };
   }
 
   cancel(chatId: string): QueueWriteResult {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
     const current = this.deps.repo.get(chatId);
-    if (current === undefined || !this.deps.repo.delete(chatId)) {
+    if (current === undefined) return { ok: false, reason: 'queue_not_found' };
+    this.deps.runs.cancelSteering(chatId, current.id);
+    if (!this.deps.repo.delete(chatId)) {
       return { ok: false, reason: 'queue_not_found' };
     }
     this.announce(undefined, chatId);
     return { ok: true, message: current };
+  }
+
+  /** Offers the durable slot to pi without deleting it until pi consumes it. */
+  offerSteering(chatId: string): boolean {
+    const queued = this.deps.repo.get(chatId);
+    if (
+      queued === undefined ||
+      !this.deps.runs.canSteer(chatId, queued.handsConnectionId)
+    ) {
+      return false;
+    }
+    const referenced = this.resolveReferences(queued);
+    if (referenced === undefined) return false;
+    return this.deps.runs.offerSteering(chatId, {
+      id: queued.id,
+      text: queued.text,
+      attachments: [...queued.attachments, ...referenced],
+      ...(queued.client === undefined ? {} : { client: queued.client }),
+      ...(queued.handsConnectionId === undefined
+        ? {}
+        : { handsConnectionId: queued.handsConnectionId }),
+    });
+  }
+
+  /** Removes a slot only after pi emits the corresponding user-message start. */
+  delivered(chatId: string, steeringId: string): boolean {
+    const queued = this.deps.repo.get(chatId);
+    if (queued === undefined || queued.id !== steeringId || !this.deps.repo.delete(chatId)) {
+      return false;
+    }
+    this.announce(undefined, chatId);
+    return true;
   }
 
   /** Starts the waiting turn once, after its current run has left the registry. */
@@ -89,14 +126,10 @@ export class QueuedMessageService {
       return false;
     }
 
-    const referenced: Attachment[] = [];
-    for (const path of queued.filePaths) {
-      const attachment = this.deps.resolveFile(path);
-      // Keep the row editable/cancellable instead of losing it when a referenced
-      // file was moved while it waited.
-      if (attachment === undefined) return false;
-      referenced.push(attachment);
-    }
+    const referenced = this.resolveReferences(queued);
+    // Keep the row editable/cancellable instead of losing it when a referenced
+    // file was moved while it waited.
+    if (referenced === undefined) return false;
 
     const started = this.deps.runs.startRun(
       chatId,
@@ -128,6 +161,16 @@ export class QueuedMessageService {
       createdAt: new Date(this.deps.clock.now()).toISOString(),
     });
     return true;
+  }
+
+  private resolveReferences(queued: QueuedMessage): Attachment[] | undefined {
+    const referenced: Attachment[] = [];
+    for (const path of queued.filePaths) {
+      const attachment = this.deps.resolveFile(path);
+      if (attachment === undefined) return undefined;
+      referenced.push(attachment);
+    }
+    return referenced;
   }
 
   /** Recovery after a process restart, and after the operator starts the LLM. */

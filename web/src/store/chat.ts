@@ -324,6 +324,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
       return;
     }
+    if (event.kind === 'steering-delivered') {
+      set((state) => {
+        const known = state.messages[event.chatId] ?? [];
+        const additions = [event.assistant, event.user].filter(
+          (message): message is MessageDTO =>
+            message !== undefined && !known.some((item) => item.id === message.id),
+        );
+        return {
+          messages:
+            additions.length === 0
+              ? state.messages
+              : { ...state.messages, [event.chatId]: [...known, ...additions] },
+          live: {
+            ...state.live,
+            [event.chatId]: { ...emptyRun(event.runId, 'running'), seq: event.seq },
+          },
+          queued: without(state.queued, event.chatId),
+          failures: without(state.failures, event.chatId),
+        };
+      });
+      return;
+    }
     if (event.kind === 'queue') {
       set((state) => {
         const queued =

@@ -1,7 +1,16 @@
-import { type Attachment, type MessageClient, type ToolRecord } from '../../domain/chat/chat.js';
+import {
+  type Attachment,
+  type Message,
+  type MessageClient,
+  type ToolRecord,
+} from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
 import { fallbackTitle, isGenericTitle } from '../../domain/chat/title.js';
-import type { AgentBridge, AgentRunResult } from '../ports/agent-bridge.js';
+import type {
+  AgentBridge,
+  AgentRunControl,
+  AgentRunResult,
+} from '../ports/agent-bridge.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
@@ -134,8 +143,21 @@ export interface RunDeps {
   onAuthFailure?: (providerId: string) => void;
   /** Called after a chat leaves the run registry, so its durable follow-up may start. */
   onRunSettled?: (chatId: string) => void;
+  /** The bridge can now accept a durable steering input for this live run. */
+  onRunSteerable?: (chatId: string) => void;
+  /** A durable steering input entered pi's transcript and can leave the queue table. */
+  onSteeringDelivered?: (chatId: string, steeringId: string) => void;
   /** Called when the operator re-enables work, to recover persisted follow-ups. */
   onLlmStarted?: () => void;
+}
+
+interface PendingSteering {
+  id: string;
+  text: string;
+  prompt: string;
+  attachments: Attachment[];
+  client?: MessageClient;
+  handsConnectionId?: string;
 }
 
 interface PendingRun {
@@ -150,6 +172,10 @@ interface PendingRun {
   notify: boolean;
   /** The terminal whose hands this run has, if its message named one. */
   handsConnectionId: string | undefined;
+  /** Controls the concrete bridge attempt currently using this run. */
+  control: AgentRunControl | undefined;
+  /** At most one durable input may be waiting to enter pi's current loop. */
+  steering: PendingSteering | undefined;
   started: boolean;
   /** Epoch ms when execution began; 0 while still queued. */
   startedAtMs: number;
@@ -159,6 +185,14 @@ interface PendingRun {
   content: string;
   thinking: string;
   tools: ToolRecord[];
+}
+
+export interface SteeringInput {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+  client?: MessageClient;
+  handsConnectionId?: string;
 }
 
 /** The run in flight for a chat, as the routes hand it to a mounting client. */
@@ -327,6 +361,8 @@ export class RunService {
       controller: new AbortController(),
       notify: options.notify ?? true,
       handsConnectionId: options.handsConnectionId,
+      control: undefined,
+      steering: undefined,
       started: false,
       startedAtMs: 0,
       seq: 0,
@@ -518,6 +554,62 @@ export class RunService {
     return true;
   }
 
+  /** True only when the message can safely share the live session's tools. */
+  canSteer(chatId: string, handsConnectionId: string | undefined): boolean {
+    const runId = this.runIdByChat.get(chatId);
+    const run = runId === undefined ? undefined : this.runs.get(runId);
+    return (
+      run !== undefined &&
+      run.started &&
+      run.steering === undefined &&
+      run.handsConnectionId === handsConnectionId
+    );
+  }
+
+  /** Offers one durable input to the concrete bridge attempt currently in flight. */
+  offerSteering(chatId: string, input: SteeringInput): boolean {
+    const runId = this.runIdByChat.get(chatId);
+    const run = runId === undefined ? undefined : this.runs.get(runId);
+    if (
+      run === undefined ||
+      !run.started ||
+      run.handsConnectionId !== input.handsConnectionId ||
+      run.control === undefined
+    ) {
+      return false;
+    }
+    if (run.steering !== undefined && run.steering.id !== input.id) return false;
+    if (run.steering?.id === input.id) run.control.cancelSteering(input.id);
+
+    const previousClient = this.deps.chats.lastClientKind(chatId);
+    const note = channelNote(input.client, previousClient);
+    const steering: PendingSteering = {
+      ...input,
+      prompt: note === undefined ? input.text : `${note}\n\n${input.text}`,
+    };
+    run.steering = steering;
+    const control = run.control;
+    void control
+      .steer({ id: input.id, prompt: steering.prompt, attachments: input.attachments })
+      .then((accepted) => {
+        if (!accepted && run.steering?.id === input.id) run.steering = undefined;
+      })
+      .catch(() => {
+        if (run.steering?.id === input.id) run.steering = undefined;
+      });
+    return true;
+  }
+
+  /** Removes a not-yet-delivered intervention before the durable row is edited/deleted. */
+  cancelSteering(chatId: string, steeringId: string): boolean {
+    const runId = this.runIdByChat.get(chatId);
+    const run = runId === undefined ? undefined : this.runs.get(runId);
+    if (run?.steering?.id !== steeringId) return false;
+    run.control?.cancelSteering(steeringId);
+    run.steering = undefined;
+    return true;
+  }
+
   /** Resolves once nothing is running or waiting. Used by tests and shutdown. */
   whenIdle(): Promise<void> {
     if (this.isIdle()) return Promise.resolve();
@@ -662,6 +754,10 @@ export class RunService {
           ? {}
           : { handsConnectionId: run.handsConnectionId }),
         confirm: (question) => this.askConfirm(run, question),
+        onControlReady: (control) => {
+          run.control = control;
+          this.deps.onRunSteerable?.(run.chatId);
+        },
         signal: AbortSignal.any([run.controller.signal, silence.signal]),
         onEvent: (event) => {
           // The abandoned attempt may still be talking to itself.
@@ -714,6 +810,9 @@ export class RunService {
                 detail: event.detail,
               });
               break;
+            case 'steering-delivered':
+              this.acceptDeliveredSteering(run, event.steeringId);
+              break;
             case 'error':
               // Recorded, not emitted yet: the terminal event goes out after
               // whatever did arrive has been saved.
@@ -755,6 +854,7 @@ export class RunService {
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
+      run.control = undefined;
       disarm();
       surrender();
     }
@@ -788,6 +888,54 @@ export class RunService {
     }
 
     return failure;
+  }
+
+  /** Splits the persisted/UI transcript exactly where pi inserts a steering user turn. */
+  private acceptDeliveredSteering(run: PendingRun, steeringId: string): void {
+    const steering = run.steering;
+    if (steering === undefined || steering.id !== steeringId) return;
+
+    const createdAt = new Date(this.deps.clock.now()).toISOString();
+    const hasAssistant =
+      run.content.length > 0 || run.thinking.length > 0 || run.tools.length > 0;
+    const assistant: Message | undefined = hasAssistant
+      ? this.deps.chats.appendMessage({
+          id: newMessageId(),
+          chatId: run.chatId,
+          role: 'assistant',
+          content: run.content,
+          thinking: run.thinking,
+          tools: run.tools,
+          attachments: [],
+          createdAt,
+        })
+      : undefined;
+    const user = this.deps.chats.appendMessage({
+      id: newMessageId(),
+      chatId: run.chatId,
+      role: 'user',
+      content: steering.text,
+      thinking: '',
+      tools: [],
+      attachments: steering.attachments,
+      createdAt,
+      ...(steering.client === undefined ? {} : { client: steering.client }),
+    });
+    this.deps.chats.touch(run.chatId, createdAt);
+
+    run.content = '';
+    run.thinking = '';
+    run.tools = [];
+    run.steering = undefined;
+    this.deps.onSteeringDelivered?.(run.chatId, steeringId);
+    this.deps.sink.emit({
+      kind: 'steering-delivered',
+      chatId: run.chatId,
+      runId: run.runId,
+      seq: run.seq,
+      ...(assistant === undefined ? {} : { assistant }),
+      user,
+    });
   }
 
   private async execute(run: PendingRun): Promise<void> {

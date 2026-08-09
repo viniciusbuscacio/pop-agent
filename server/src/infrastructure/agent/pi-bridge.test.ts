@@ -1,7 +1,11 @@
 import Database from 'better-sqlite3';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AgentEvent, AgentRunResult } from '../../application/ports/agent-bridge.js';
+import type {
+  AgentEvent,
+  AgentRunControl,
+  AgentRunResult,
+} from '../../application/ports/agent-bridge.js';
 import { migrate } from '../db/migrate.js';
 import { SqliteChatRepo } from '../db/sqlite-chat-repo.js';
 import { PiAgentBridge, extractHttpStatus, isNetworkFailure, type PiRunUsage } from './pi-bridge.js';
@@ -172,6 +176,17 @@ class ScriptedSession implements PiSession {
     }
     for (const event of this.script) this.emit(event);
     await Promise.resolve();
+  }
+
+  readonly steering: string[] = [];
+  steer(text: string): Promise<void> {
+    this.steering.push(text);
+    return Promise.resolve();
+  }
+
+  clearQueue(): { steering: string[]; followUp: string[] } {
+    const steering = this.steering.splice(0);
+    return { steering, followUp: [] };
   }
 
   compactions = 0;
@@ -347,6 +362,46 @@ describe('mapping pi events', () => {
       { kind: 'tool', name: 'bash', status: 'output', detail: 'two\n' },
       { kind: 'tool', name: 'bash', status: 'done', detail: 'three\n' },
     ]);
+  });
+
+  it('hands a live steering input to pi and reports when pi consumes it', async () => {
+    let release: () => void = () => undefined;
+    engine.next.onPrompt = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    let control: AgentRunControl | undefined;
+    const { events, onEvent } = collect();
+    const running = bridge.run({
+      chatId: CHAT,
+      prompt: 'hello',
+      model: '',
+      attachments: [],
+      onEvent,
+      onControlReady: (ready) => {
+        control = ready;
+      },
+      signal: new AbortController().signal,
+    });
+    for (let attempt = 0; attempt < 20 && control === undefined; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(control).toBeDefined();
+    await control?.steer({ id: 'steer-one', prompt: 'change course', attachments: [] });
+    const prompt = engine.next.steering[0];
+    expect(prompt).toContain('change course');
+    engine.next.emit({
+      type: 'message_start',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: prompt ?? '' }],
+        timestamp: Date.now(),
+      },
+    });
+    release();
+    await running;
+
+    expect(events).toContainEqual({ kind: 'steering-delivered', steeringId: 'steer-one' });
   });
 
   it('marks a failed tool call as an error', async () => {

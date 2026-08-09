@@ -11,12 +11,28 @@ export type AgentEvent =
   | { kind: 'delta'; text: string }
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; name: string; status: ToolStatus; detail: string }
+  /** A steering input has entered pi's transcript and will shape its next turn. */
+  | { kind: 'steering-delivered'; steeringId: string }
   /**
    * `status` is the HTTP status of the provider's refusal, when the adapter
    * could tell -- it is what lets failover classify by type instead of prose
    * (pop-agent.spec §15, fase 2).
    */
   | { kind: 'error'; code: string; status?: number };
+
+export interface AgentSteeringInput {
+  id: string;
+  prompt: string;
+  attachments: Attachment[];
+}
+
+/** Controls that exist only while one concrete bridge run is alive. */
+export interface AgentRunControl {
+  /** Queues an input into the current pi loop, before its next model call. */
+  steer(input: AgentSteeringInput): Promise<boolean>;
+  /** Removes an input that pi has accepted but has not consumed yet. */
+  cancelSteering(id: string): boolean;
+}
 
 export interface AgentRunRequest {
   chatId: string;
@@ -33,6 +49,8 @@ export interface AgentRunRequest {
    */
   handsConnectionId?: string;
   onEvent: (event: AgentEvent) => void;
+  /** Called once the adapter can accept steering for this exact live run. */
+  onControlReady?: (control: AgentRunControl) => void;
   /**
    * Asks the user to allow a risky action mid-run (pop-agent.spec §10). Resolves
    * true to proceed, false to block. Absent means "no one is watching" -- the

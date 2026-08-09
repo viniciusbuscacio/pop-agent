@@ -25,11 +25,16 @@ web                        server
 
 - Send is **fire-and-return**: the POST starts the run and answers immediately.
   If that chat is already running, the same POST atomically occupies its one
-  durable SQLite follow-up slot instead. A third POST gets `queue_exists` and
-  cannot replace the row. `PUT /v1/chats/:id/queue` edits it; `DELETE` cancels.
+  durable SQLite slot and offers it to pi as **steering**. Pi inserts it after
+  the current assistant turn and its tool calls, before the next model call.
+  If the run has not reached pi, comes from different terminal hands, or ends
+  first, the row remains a normal follow-up. A third POST gets `queue_exists`.
+  `PUT /v1/chats/:id/queue` edits it; `DELETE` cancels it before delivery.
 - Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
   the shared row when created/edited, nothing when cancelled, and a `started`
-  user-message identity when consumed. The frontend keeps a **runId registry**:
+  user-message identity when consumed as a new run. `steering-delivered` closes
+  the current assistant segment, inserts the steering user message and resets
+  the live buffer while preserving the same run id. The frontend keeps a **runId registry**:
   stale run fragments are dropped while queue changes still reach every tab.
 - Stop: `POST /v1/chats/:id/stop` → server aborts; the run's terminal
   event is `error` with code `aborted` (or `done` if it finished first).
@@ -109,19 +114,21 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   `runId`/`messageId` — never duplicate a message that both paths deliver
   (aw's streaming machine, spec §14).
 - Send path: POST first, then append the accepted user message or the server's
-  queued row. `GET .../messages` reconciles both `live` and `queued`; SSE keeps
-  other devices current. When a run settles, the server starts and deletes the
-  row synchronously, then broadcasts `queue.started`, so every client adds the
-  same user bubble exactly once. Old on-device queue keys are uploaded once as
-  an upgrade path and deleted only after server acceptance.
+  durable row. `GET .../messages` reconciles both `live` and `queued`; SSE keeps
+  other devices current. The row is not deleted merely because pi accepted it:
+  only pi's user-message event consumes it. `steering-delivered` persists the
+  assistant segment before it, inserts the user message, and continues the same
+  run with an empty live buffer. If it was not delivered, run settlement starts
+  it normally and broadcasts `queue.started`. Old on-device queue keys are
+  uploaded once as an upgrade path and deleted only after server acceptance.
 
 ## Failure modes (design targets)
 
 | Failure                       | Behavior                                        |
 |-------------------------------|-------------------------------------------------|
 | SSE drops mid-run             | client reconnects + refetches; run unaffected   |
-| server restarts mid-run       | partial answer is marked interrupted; durable follow-up starts after boot |
-| PWA/tab closes with follow-up | SQLite row remains; snapshot restores it on any device |
+| server restarts mid-run       | partial answer is marked interrupted; undelivered steering starts as a follow-up after boot |
+| PWA/tab closes with pending input | SQLite row remains; snapshot restores it on any device |
 | two tabs queue simultaneously | unique chat key accepts one; the other gets `queue_exists` |
 | pi throws inside a run        | `error` event with stable code; user message already persisted |
 | provider auth/limit error     | `error` code surfaces the provider code; no retry loops |

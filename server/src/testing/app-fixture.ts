@@ -316,6 +316,9 @@ export function createTestApp(
       sink: hub,
     }),
     onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
+    onRunSteerable: (chatId) => queueDrain.service?.offerSteering(chatId),
+    onSteeringDelivered: (chatId, steeringId) =>
+      queueDrain.service?.delivered(chatId, steeringId),
     onLlmStarted: () => queueDrain.service?.drainAll(),
   });
   const queuedMessages = new QueuedMessageService({

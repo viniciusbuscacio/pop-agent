@@ -120,6 +120,10 @@ export interface PiImage {
 export interface PiSession {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, images?: PiImage[]): Promise<void>;
+  /** Inserts a user input into the live agent loop before its next model call. */
+  steer(text: string, images?: PiImage[]): Promise<void>;
+  /** Clears pi's in-memory queues; Pop Agent itself keeps pending input durable. */
+  clearQueue(): { steering: string[]; followUp: string[] };
   /** Whether the current model accepts image input (pop-agent.spec §14, RF-014). */
   readonly supportsImages: boolean;
   abort(): Promise<void>;
@@ -798,6 +802,21 @@ class SdkPiSession implements PiSession {
         mimeType: image.mimeType,
       })),
     });
+  }
+
+  steer(text: string, images?: PiImage[]): Promise<void> {
+    return this.session.steer(
+      text,
+      images?.map((image) => ({
+        type: 'image' as const,
+        data: image.data,
+        mimeType: image.mimeType,
+      })),
+    );
+  }
+
+  clearQueue(): { steering: string[]; followUp: string[] } {
+    return this.session.clearQueue();
   }
 
   abort(): Promise<void> {

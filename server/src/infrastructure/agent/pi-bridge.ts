@@ -152,8 +152,54 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     }
 
     let translator = new RunTranslator(onEvent);
+    const pendingSteering: { id: string; prompt: string }[] = [];
+    let controlActive = true;
     let unsubscribe = entry.session.subscribe((event) => {
+      const delivered = takeDeliveredSteering(event, pendingSteering);
+      if (delivered !== undefined) {
+        onEvent({ kind: 'steering-delivered', steeringId: delivered });
+      }
       translator.handle(event);
+    });
+
+    request.onControlReady?.({
+      steer: async (input) => {
+        if (!controlActive || signal.aborted) return false;
+        const steeringRequest: AgentRunRequest = {
+          ...request,
+          prompt: input.prompt,
+          attachments: input.attachments,
+        };
+        const steeringPrompt = withRuntimeIdentity(
+          steeringRequest,
+          await this.withSkills(
+            this.withAttachments(steeringRequest),
+            steeringRequest.prompt,
+          ),
+        );
+        if (!controlActive || signal.aborted) return false;
+        pendingSteering.push({ id: input.id, prompt: steeringPrompt });
+        try {
+          await entry.session.steer(
+            steeringPrompt,
+            entry.session.supportsImages ? imagesFor(steeringRequest) : undefined,
+          );
+          return true;
+        } catch {
+          const index = pendingSteering.findIndex((item) => item.id === input.id);
+          if (index >= 0) pendingSteering.splice(index, 1);
+          return false;
+        }
+      },
+      cancelSteering: (id) => {
+        const index = pendingSteering.findIndex((item) => item.id === id);
+        if (index < 0) return false;
+        // Pop Agent exposes one pending input per chat. Clearing pi's queue is
+        // therefore the atomic counterpart of removing that durable slot.
+        entry.session.clearQueue();
+        pendingSteering.splice(index, 1);
+        return true;
+      },
     });
 
     // The safety guard for this run: it feeds on tool output and, in a turn
@@ -209,6 +255,10 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
         translator = new RunTranslator(onEvent);
         translator.carryUsageFrom(firstAttempt);
         unsubscribe = entry.session.subscribe((event) => {
+          const delivered = takeDeliveredSteering(event, pendingSteering);
+          if (delivered !== undefined) {
+            onEvent({ kind: 'steering-delivered', steeringId: delivered });
+          }
           translator.handle(event);
         });
         await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
@@ -222,6 +272,11 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
         statusOf(error),
       );
     } finally {
+      controlActive = false;
+      if (pendingSteering.length > 0) {
+        entry.session.clearQueue();
+        pendingSteering.length = 0;
+      }
       entry.session.setGuard(undefined);
       unsubscribe();
       signal.removeEventListener('abort', onAbort);
@@ -440,6 +495,24 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     // A cache of idle sessions is not a reason to keep the process alive.
     this.sweeper.unref?.();
   }
+}
+
+/** Matches pi's user-message event to the durable steering item that produced it. */
+function takeDeliveredSteering(
+  event: AgentSessionEvent,
+  pending: { id: string; prompt: string }[],
+): string | undefined {
+  if (event.type !== 'message_start' || event.message.role !== 'user') return undefined;
+  const content = event.message.content;
+  const text = typeof content === 'string'
+    ? content
+    : content
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join('');
+  const index = pending.findIndex((item) => item.prompt === text);
+  if (index < 0) return undefined;
+  return pending.splice(index, 1)[0]?.id;
 }
 
 /**

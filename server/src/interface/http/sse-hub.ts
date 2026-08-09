@@ -94,6 +94,15 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         action: event.action,
         detail: event.detail,
       };
+    case 'steering-delivered':
+      return {
+        kind: 'steering-delivered',
+        chatId: event.chatId,
+        runId: event.runId,
+        seq: event.seq,
+        ...(event.assistant === undefined ? {} : { assistant: toWireMessage(event.assistant) }),
+        user: toWireMessage(event.user),
+      };
     case 'queue':
       return {
         kind: 'queue',
@@ -114,4 +123,17 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         ...(event.started === undefined ? {} : { started: event.started }),
       };
   }
+}
+
+function toWireMessage(message: import('../../domain/chat/chat.js').Message) {
+  return {
+    id: message.id,
+    chatId: message.chatId,
+    role: message.role,
+    content: message.content,
+    thinking: message.thinking,
+    tools: message.tools,
+    attachments: message.attachments,
+    createdAt: message.createdAt,
+  };
 }

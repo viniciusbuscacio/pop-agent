@@ -848,6 +848,15 @@ export type StreamEvent =
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
+  /** A steering input split one live run into two visible assistant segments. */
+  | {
+      kind: 'steering-delivered';
+      chatId: string;
+      runId: string;
+      seq: number;
+      assistant?: MessageDTO;
+      user: MessageDTO;
+    }
   /** The durable follow-up changed; `started` carries its user bubble into every client. */
   | {
       kind: 'queue';

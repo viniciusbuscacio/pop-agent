@@ -1,4 +1,4 @@
-import type { ToolStatus } from '../../domain/chat/chat.js';
+import type { Message, ToolStatus } from '../../domain/chat/chat.js';
 import type { QueuedMessage } from './queued-message-repo.js';
 
 /**
@@ -25,6 +25,15 @@ export type RunEvent =
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
   /** A risky action is paused, waiting for the user to allow or deny it. */
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
+  /** Pi consumed a steering input: close the old assistant segment and continue the same run. */
+  | {
+      kind: 'steering-delivered';
+      chatId: string;
+      runId: string;
+      seq: number;
+      assistant?: Message;
+      user: Message;
+    }
   /** The durable follow-up changed; `started` carries its user bubble to every client. */
   | {
       kind: 'queue';

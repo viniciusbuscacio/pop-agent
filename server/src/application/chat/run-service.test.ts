@@ -379,6 +379,67 @@ describe('the queue', () => {
   });
 });
 
+describe('steering a live run', () => {
+  it('persists the assistant boundary, inserts the user, and continues the same run', async () => {
+    const chatId = newChat();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    bridge.script = async (request) => {
+      request.onEvent({ kind: 'delta', text: 'before' });
+      request.onControlReady?.({
+        steer: async (input) => {
+          request.onEvent({ kind: 'steering-delivered', steeringId: input.id });
+          request.onEvent({ kind: 'delta', text: 'after' });
+          return true;
+        },
+        cancelSteering: () => true,
+      });
+      await held;
+    };
+
+    const started = runs.startRun(chatId, 'first');
+    expect(started.ok).toBe(true);
+    expect(runs.canSteer(chatId, undefined)).toBe(true);
+    expect(
+      runs.offerSteering(chatId, {
+        id: 'steering-one',
+        text: 'change course',
+        attachments: [],
+      }),
+    ).toBe(true);
+
+    release();
+    await runs.whenIdle();
+
+    expect(
+      repo.getMessages(chatId, { limit: 10 }).map((message) => [message.role, message.content]),
+    ).toEqual([
+      ['user', 'first'],
+      ['assistant', 'before'],
+      ['user', 'change course'],
+      ['assistant', 'after'],
+    ]);
+    expect(sink.of('steering-delivered')[0]).toMatchObject({
+      runId: started.ok ? started.runId : '',
+      seq: 1,
+      assistant: { content: 'before' },
+      user: { content: 'change course' },
+    });
+  });
+
+  it('does not lend one terminal hands to an intervention from another client', async () => {
+    bridge.script = () => new Promise(() => undefined);
+    const chatId = newChat();
+    runs.startRun(chatId, 'first', [], { handsConnectionId: 'mac' });
+
+    expect(runs.canSteer(chatId, undefined)).toBe(false);
+    expect(runs.canSteer(chatId, 'other-mac')).toBe(false);
+    expect(runs.canSteer(chatId, 'mac')).toBe(true);
+  });
+});
+
 describe('automatic titles', () => {
   it('names a new chat after its first message', async () => {
     const chatId = newChat();

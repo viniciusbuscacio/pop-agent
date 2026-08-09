@@ -29,6 +29,8 @@ describe('pi sdk contract', () => {
       for (const method of [
         'subscribe',
         'prompt',
+        'steer',
+        'clearQueue',
         'abort',
         'setModel',
         'dispose',

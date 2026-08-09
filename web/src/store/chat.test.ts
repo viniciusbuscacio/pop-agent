@@ -303,6 +303,47 @@ describe('the server-side queue', () => {
     expect(live()?.runId).toBe('run-second');
   });
 
+  it('splits the live assistant bubble when pi consumes a steering message', async () => {
+    await useChatStore.getState().send(CHAT, 'first');
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'before' });
+    useChatStore.setState({ queued: { [CHAT]: queuedMessage('change course') } });
+
+    apply({
+      kind: 'steering-delivered',
+      chatId: CHAT,
+      runId: RUN,
+      seq: 1,
+      assistant: {
+        id: 'assistant-before',
+        chatId: CHAT,
+        role: 'assistant',
+        content: 'before',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:01.000Z',
+      },
+      user: {
+        id: 'user-steering',
+        chatId: CHAT,
+        role: 'user',
+        content: 'change course',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:01.000Z',
+      },
+    });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 2, text: 'after' });
+
+    expect(messages().slice(-2).map((message) => message.content)).toEqual([
+      'before',
+      'change course',
+    ]);
+    expect(live()).toMatchObject({ runId: RUN, seq: 2, content: 'after' });
+    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+  });
+
   it('edits and cancels through server endpoints', async () => {
     useChatStore.setState({ queued: { [CHAT]: queuedMessage('old') } });
 

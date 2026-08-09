@@ -358,6 +358,9 @@ const runs = new RunService({
   },
   onAuthFailure: (providerId) => providers.noteAuthFailure(providerId),
   onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
+  onRunSteerable: (chatId) => queueDrain.service?.offerSteering(chatId),
+  onSteeringDelivered: (chatId, steeringId) =>
+    queueDrain.service?.delivered(chatId, steeringId),
   onLlmStarted: () => queueDrain.service?.drainAll(),
   // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {
