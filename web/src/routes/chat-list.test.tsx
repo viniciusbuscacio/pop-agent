@@ -137,7 +137,7 @@ describe('archive all other chats', () => {
 });
 
 describe('pinned chats', () => {
-  it('hides grey pins, pins from the row menu and keeps the blue unpin button', async () => {
+  it('shows no icon when unpinned and a neutral hollow pin when pinned', async () => {
     renderList();
     await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
 
@@ -150,5 +150,7 @@ describe('pinned chats', () => {
     const pinButton = screen.getByTestId('chat-pin');
     expect(pinButton.getAttribute('aria-label')).toBe('Unpin this chat');
     expect(pinButton.getAttribute('aria-pressed')).toBe('true');
+    expect(pinButton.className).toContain('text-[var(--muted)]');
+    expect(pinButton.querySelector('svg')?.getAttribute('fill')).toBe('none');
   });
 });

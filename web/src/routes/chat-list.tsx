@@ -1001,8 +1001,8 @@ function ChatRow({
         ) : null}
       </NavLink>
 
-      {/* Pinned chats keep the blue one-tap indicator. Unpinned chats expose
-          Pin in the row menu instead of filling the list with grey pins. */}
+      {/* Only pinned chats show an indicator, kept neutral and hollow. Unpinned
+          chats expose Pin in the row menu instead of adding an icon to every row. */}
       {chat.pinned ? (
         <button
           type="button"
@@ -1012,9 +1012,9 @@ function ChatRow({
           title={t('shell.unpin')}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => void setPinned(chat.id, false)}
-          className="absolute top-1 right-9 rounded p-1.5 text-[var(--accent)] hover:bg-[var(--hover-overlay)]"
+          className="absolute top-1 right-9 rounded p-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
         >
-          <PinIcon pinned />
+          <PinIcon />
         </button>
       ) : null}
       <button
@@ -1077,15 +1077,15 @@ function ChatRow({
   );
 }
 
-function PinIcon({ pinned = false }: { pinned?: boolean }) {
-  // Lucide's monochrome Pin: icons follow text colour and never introduce an
-  // emoji palette or a second accent into the conversation list (§14).
+function PinIcon() {
+  // The pin is an outline-only state marker; being present already means the
+  // chat is pinned, so colour and fill would add redundant emphasis.
   return (
     <svg
       width="14"
       height="14"
       viewBox="0 0 24 24"
-      fill={pinned ? 'currentColor' : 'none'}
+      fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
