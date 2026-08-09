@@ -48,6 +48,8 @@ import { SqliteWebAuthnRepo } from '../infrastructure/db/sqlite-webauthn-repo.js
 import { SqliteLlmRunsRepo } from '../infrastructure/db/sqlite-llm-runs-repo.js';
 import { SqliteMcpRepo } from '../infrastructure/db/sqlite-mcp-repo.js';
 import { McpService } from '../application/mcp/mcp-service.js';
+import type { McpClientFactory } from '../application/ports/mcp-client.js';
+import { OfficialMcpClientFactory } from '../infrastructure/mcp/official-mcp-client.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
 import { mimeOf } from '../domain/files/mime.js';
@@ -177,6 +179,7 @@ export interface TestApp {
   queuedMessages: QueuedMessageService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
+  mcp: McpService;
   /** The throwaway POP_AGENT_WORKSPACE this app's purger and sweeps act on. */
   workspace: string;
   providers: ProviderService;
@@ -209,6 +212,8 @@ export interface TestAppOptions {
   providerAuth?: FakeProviderAuth;
   /** Drive the task scheduler's tick by hand (pop-agent.spec §21). */
   timer?: Timer;
+  /** Replace the official MCP transport with a deterministic contract fake. */
+  mcpClients?: McpClientFactory;
 }
 
 export function createTestApp(
@@ -342,7 +347,12 @@ export function createTestApp(
   const workspace = mkdtempSync(join(tmpdir(), 'pop-test-workspace-'));
   // One throwaway data directory, shared by the pieces that measure it.
   const dataDir = mkdtempSync(join(tmpdir(), 'pop-test-data-'));
-  const mcp = new McpService({ repo: new SqliteMcpRepo(db), secrets: new MemorySecrets(), dataDir });
+  const mcp = new McpService({
+    repo: new SqliteMcpRepo(db),
+    secrets: new MemorySecrets(),
+    clients: options.mcpClients ?? new OfficialMcpClientFactory(),
+    dataDir,
+  });
   const chats = new ChatService({
     chats: chatRepo,
     clock,
@@ -479,6 +489,7 @@ export function createTestApp(
     queuedMessages,
     tasks,
     taskScheduler,
+    mcp,
     workspace,
     providers,
     providerAuth,

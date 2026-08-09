@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { McpClientFactory, McpConnection } from '../ports/mcp-client.js';
 import type { McpCapability, McpRepo, McpServer } from '../ports/mcp-repo.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import { McpService } from './mcp-service.js';
@@ -9,17 +10,9 @@ import { McpService } from './mcp-service.js';
 class MemoryMcpRepo implements McpRepo {
   server: McpServer | undefined;
   savedCapabilities: McpCapability[] = [];
-
-  list(): McpServer[] {
-    return this.server === undefined ? [] : [this.server];
-  }
-  get(id: string): McpServer | undefined {
-    return this.server?.id === id ? this.server : undefined;
-  }
-  create(server: McpServer): McpServer {
-    this.server = server;
-    return server;
-  }
+  list(): McpServer[] { return this.server === undefined ? [] : [this.server]; }
+  get(id: string): McpServer | undefined { return this.server?.id === id ? this.server : undefined; }
+  create(server: McpServer): McpServer { this.server = server; return server; }
   update(id: string, patch: Partial<McpServer>): McpServer | undefined {
     if (this.server?.id !== id) return undefined;
     this.server = { ...this.server, ...patch };
@@ -30,9 +23,7 @@ class MemoryMcpRepo implements McpRepo {
     this.server = undefined;
     return true;
   }
-  capabilities(): McpCapability[] {
-    return this.savedCapabilities;
-  }
+  capabilities(): McpCapability[] { return this.savedCapabilities; }
   replaceCapabilities(_serverId: string, capabilities: McpCapability[]): void {
     this.savedCapabilities = capabilities;
   }
@@ -40,83 +31,82 @@ class MemoryMcpRepo implements McpRepo {
 
 class MemorySecrets implements SecretsRepo {
   private readonly values = new Map<string, string>();
-  get(key: string): string | undefined {
-    return this.values.get(key);
-  }
-  set(key: string, value: string): void {
-    this.values.set(key, value);
-  }
-  delete(key: string): void {
-    this.values.delete(key);
-  }
+  get(key: string): string | undefined { return this.values.get(key); }
+  set(key: string, value: string): void { this.values.set(key, value); }
+  delete(key: string): void { this.values.delete(key); }
 }
 
 let root: string;
 let repo: MemoryMcpRepo;
+let connection: McpConnection;
+let connect: ReturnType<typeof vi.fn<McpClientFactory['connect']>>;
 let service: McpService;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'pop-mcp-test-'));
   repo = new MemoryMcpRepo();
-  service = new McpService({ repo, secrets: new MemorySecrets(), dataDir: root });
+  connection = {
+    protocolEra: 'modern',
+    protocolVersion: '2026-07-28',
+    capabilities: vi.fn(() => Promise.resolve([
+      { kind: 'tool' as const, name: 'weather', description: 'Forecast', inputSchema: { type: 'object' }, metadata: {} },
+    ])),
+    callTool: vi.fn(() => Promise.resolve({ content: [{ type: 'text', text: 'sunny' }] })),
+    close: vi.fn(() => Promise.resolve()),
+  };
+  connect = vi.fn(() => Promise.resolve(connection));
+  service = new McpService({
+    repo,
+    secrets: new MemorySecrets(),
+    clients: { connect },
+    dataDir: root,
+  });
+  repo.server = stdioServer();
 });
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function stdioServer(command: string, args: string[] = []): McpServer {
+function stdioServer(): McpServer {
   return {
-    id: 'mcp-test',
-    name: 'test',
-    description: '',
-    transport: 'stdio',
-    endpoint: '',
-    command,
-    args,
-    authKind: 'none',
-    authHeader: '',
-    enabled: true,
-    timeoutMs: 2_000,
-    status: 'unknown',
-    lastError: '',
-    cwd: root,
-    createdAt: 'T',
-    updatedAt: 'T',
+    id: 'mcp-test', name: 'test', description: '', transport: 'stdio', endpoint: '',
+    command: process.execPath, args: [], authKind: 'none', authHeader: '', enabled: true,
+    timeoutMs: 2_000, status: 'unknown', lastError: '', cwd: root, createdAt: 'T', updatedAt: 'T',
   };
 }
 
-describe('McpService stdio transport', () => {
-  it('turns a missing executable into a normal failed test instead of crashing Node', async () => {
-    repo.server = stdioServer(join(root, 'does-not-exist'));
+describe('McpService', () => {
+  it('persists capabilities and the negotiated stateless protocol era', async () => {
+    const result = await service.test('mcp-test');
 
-    await expect(service.test(repo.server.id)).rejects.toThrow(/ENOENT/);
-    expect(repo.server.status).toBe('error');
+    expect(result.server).toMatchObject({
+      status: 'connected',
+      protocolEra: 'modern',
+      protocolVersion: '2026-07-28',
+    });
+    expect(result.capabilities[0]).toMatchObject({ name: 'weather', serverId: 'mcp-test' });
+    expect(connection.close).toHaveBeenCalledOnce();
   });
 
-  it('assembles JSON-RPC replies split across stdout chunks and drains diagnostics', async () => {
-    const script = join(root, 'server.mjs');
-    writeFileSync(
-      script,
-      `import readline from 'node:readline';
-const lines = readline.createInterface({ input: process.stdin });
-lines.on('line', (line) => {
-  const request = JSON.parse(line);
-  process.stderr.write('diagnostic\\n');
-  const result = request.method === 'initialize'
-    ? { protocolVersion: '2025-03-26' }
-    : { tools: [{ name: 'weather', description: 'Forecast', inputSchema: { type: 'object' } }] };
-  const response = JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n';
-  const middle = Math.floor(response.length / 2);
-  process.stdout.write(response.slice(0, middle));
-  setTimeout(() => process.stdout.write(response.slice(middle)), 5);
-});
-`,
+  it('closes the SDK connection after a tool call', async () => {
+    await service.test('mcp-test');
+    vi.mocked(connection.close).mockClear();
+    const signal = new AbortController().signal;
+    expect(JSON.parse(await service.callTool('mcp-test', 'weather', { city: 'Rio' }, signal))).toMatchObject({
+      content: [{ text: 'sunny' }],
+    });
+    expect(connection.callTool).toHaveBeenCalledWith(
+      'weather',
+      { city: 'Rio' },
+      expect.objectContaining({ name: 'weather', inputSchema: { type: 'object' } }),
+      signal,
     );
-    repo.server = stdioServer(process.execPath, [script]);
+    expect(connection.close).toHaveBeenCalledOnce();
+  });
 
-    const result = await service.test(repo.server.id);
+  it('records a normal error when SDK connection fails', async () => {
+    connect.mockRejectedValueOnce(new Error('spawn ENOENT'));
 
-    expect(result.server.status).toBe('connected');
-    expect(result.capabilities).toHaveLength(1);
-    expect(result.capabilities[0]).toMatchObject({ name: 'weather', description: 'Forecast' });
+    await expect(service.test('mcp-test')).rejects.toThrow('spawn ENOENT');
+    expect(repo.server).toMatchObject({ status: 'error', lastError: 'spawn ENOENT' });
   });
 });

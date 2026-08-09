@@ -694,7 +694,15 @@ function McpSidebar({ filter }: { filter: string }) {
                 onClick={() => navigate(`/mcp/${server.id}`)}
               >
                 <span className="min-w-0 truncate text-sm">{server.name}</span>
-                <span className="shrink-0 text-xs text-[var(--muted)]">{server.status}</span>
+                <span className="flex shrink-0 flex-col items-end text-xs text-[var(--muted)]">
+                  <span>{server.status}</span>
+                  {server.protocolEra === undefined ? null : (
+                    <span>
+                      {server.protocolEra === 'modern' ? 'stateless' : 'legacy'}{' '}
+                      {server.protocolVersion ?? ''}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}

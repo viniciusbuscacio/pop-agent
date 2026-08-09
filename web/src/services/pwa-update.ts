@@ -96,22 +96,23 @@ export async function applyUpdate(): Promise<void> {
   }
   target ??= registration?.waiting ?? undefined;
 
-  // Last resort only -- long enough that it can no longer win the race.
-  setTimeout(reload, 8000);
-
   if (target !== undefined) {
     const worker = target;
     // Its own activation is as good a reload signal as the controller change.
     worker.addEventListener('statechange', () => {
       if (worker.state === 'activated') reload();
     });
+    // Last resort for browsers that activate the worker but miss both events.
+    // It starts only after the newest worker is fully installed, so it cannot
+    // reload the page while that worker is still downloading its precache.
+    setTimeout(reload, 8000);
     // The generated worker calls skipWaiting() on this message (vite.config.ts).
     worker.postMessage({ type: 'SKIP_WAITING' });
     return;
   }
 
-  // Nothing waited (already current, or a worker still mid-flight): hand off to
-  // the library, which messages its own tracked worker and reloads.
+  // Nothing waited (already current, or the direct check was unavailable):
+  // hand off to the library, which messages its own tracked worker and reloads.
   await updateSW?.(true);
 }
 
@@ -124,7 +125,6 @@ export async function applyUpdate(): Promise<void> {
  */
 async function newestWaitingWorker(
   reg: ServiceWorkerRegistration | undefined,
-  timeoutMs = 5000,
 ): Promise<ServiceWorker | undefined> {
   if (reg === undefined) return undefined;
   const installing = reg.installing;
@@ -142,7 +142,8 @@ async function newestWaitingWorker(
         }
       };
       installing.addEventListener('statechange', settle);
-      setTimeout(resolve, timeoutMs);
+      // The state can change between reading `reg.installing` and subscribing.
+      settle();
     });
   }
   return reg.waiting ?? undefined;

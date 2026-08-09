@@ -27,6 +27,9 @@ export interface McpServerDTO {
   status: McpServerStatus;
   lastError: string;
   lastConnectedAt?: string;
+  /** `modern` is the stateless 2026 protocol; `legacy` uses initialize/session semantics. */
+  protocolEra?: 'modern' | 'legacy';
+  protocolVersion?: string;
   cwd: string;
   capabilities: McpCapabilityDTO[];
 }

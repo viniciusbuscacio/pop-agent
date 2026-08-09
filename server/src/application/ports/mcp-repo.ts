@@ -29,6 +29,9 @@ export interface McpServer {
   status: McpServerStatus;
   lastError: string;
   lastConnectedAt?: string;
+  /** Negotiated by the official SDK: modern is the stateless 2026 era. */
+  protocolEra?: 'modern' | 'legacy';
+  protocolVersion?: string;
   cwd: string;
   createdAt: string;
   updatedAt: string;

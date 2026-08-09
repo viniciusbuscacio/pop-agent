@@ -785,6 +785,23 @@ sync/open it externally.
   tool.
 - Later: `web_search` (engine TBD) and Playwright for dynamic pages.
 
+### MCP clients (`infrastructure/mcp/`)
+
+MCP protocol mechanics belong to the official TypeScript SDK v2, behind the
+application-owned `McpClientFactory` port — no hand-written JSON-RPC framing.
+`stdio` and Streamable HTTP negotiate with `server/discover` first, selecting
+the stateless 2026-07-28 era when available and falling back to the legacy
+`initialize` era otherwise. Explicit HTTP/SSE remains legacy-only. Era verdicts
+are cached for ten minutes per server configuration and authorization scope;
+failures evict them. Settings records and shows `modern/stateless` or `legacy`
+and the negotiated version. Discovery covers tools, resources/templates and
+prompts. The SDK owns pagination, request-scoped SSE, cancellation, modern
+per-request metadata and required HTTP headers, sessions for legacy servers,
+and stdio child cleanup. A stdio child inherits only the SDK safe environment
+plus that server's encrypted variables, never the full Pop Agent environment.
+MCP results remain untrusted external content under §10. Full rationale and
+contract cases: `docs/mcp.md`.
+
 ## 13. API contract
 
 Everything under `/v1`. Errors always structured:
