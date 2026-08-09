@@ -169,4 +169,13 @@ describe('pinnedBodies', () => {
     const identity: Skill = { ...skill('identity', 'Identity', 'w', 'w'), pinned: true };
     expect(pinnedBodies([...SKILLS, identity])).toEqual(['# Identity']);
   });
+
+  it('leaves a disabled pinned skill out of the session prompt', () => {
+    const identity: Skill = {
+      ...skill('identity', 'Identity', 'w', 'w'),
+      pinned: true,
+      enabled: false,
+    };
+    expect(pinnedBodies([...SKILLS, identity])).toEqual([]);
+  });
 });

@@ -37,6 +37,7 @@ function repo(initial: Skill[] = []): SkillsRepo & { written: SkillInput[] } {
     },
     approve: (slug) => skills.get(slug),
     delete: () => true,
+    setEnabled: () => true,
   };
 }
 

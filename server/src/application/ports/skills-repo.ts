@@ -27,6 +27,8 @@ export interface SkillInput {
   source?: SkillSource;
   /** Held outside the router until the user accepts it (§8, auto-skill). */
   pending?: boolean;
+  /** Switched off by the user. Absent means enabled. */
+  enabled?: boolean;
 }
 
 /**
@@ -58,4 +60,6 @@ export interface SkillsRepo {
    */
   approve(slug: string): Skill | undefined;
   delete(slug: string): boolean;
+  /** Toggle whether a skill may route or pin. Returns false for unknown slugs. */
+  setEnabled(slug: string, enabled: boolean): boolean;
 }

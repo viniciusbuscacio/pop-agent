@@ -688,11 +688,11 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     const chatId = newChat();
     bridge.script = (request) => {
       if (request.provider === 'p1') {
-        return new Promise((_resolve, reject) => {
+        return new Promise<void>((_resolve, reject) => {
           request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
             once: true,
           });
-        });
+        }).catch((): void => undefined);
       }
       request.onEvent({ kind: 'delta', text: 'p2 answered' });
       return Promise.resolve();
@@ -745,11 +745,11 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     const chatId = newChat();
     bridge.script = (request) => {
       if (request.provider === 'p1') {
-        return new Promise((_resolve, reject) => {
+        return new Promise<void>((_resolve, reject) => {
           request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
             once: true,
           });
-        });
+        }).catch((): void => undefined);
       }
       request.onEvent?.({ kind: 'delta', text: 'p2 answered' });
       return Promise.resolve();
@@ -786,11 +786,11 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     const chatId = newChat();
     bridge.script = (request) => {
       request.onEvent({ kind: 'delta', text: 'half a sentence' });
-      return new Promise((_resolve, reject) => {
+      return new Promise<void>((_resolve, reject) => {
         request.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
           once: true,
         });
-      });
+      }).catch((): void => undefined);
     };
 
     runs.startRun(chatId, 'a question');

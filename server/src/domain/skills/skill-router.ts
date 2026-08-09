@@ -120,7 +120,9 @@ interface Candidate {
  * the bridge puts them in the session's system prompt (pop-agent.spec §8).
  */
 export function pinnedBodies(skills: readonly Skill[]): string[] {
-  return skills.filter((skill) => skill.pinned === true).map((skill) => skill.body);
+  return skills
+    .filter((skill) => skill.pinned === true && skill.enabled !== false)
+    .map((skill) => skill.body);
 }
 
 export function selectSkills(
@@ -135,7 +137,7 @@ export function selectSkills(
   // index alignment survives the filter.
   const candidates = skills
     .map((skill, index) => ({ skill, vector: options.skillVectors?.[index] }))
-    .filter((candidate) => candidate.skill.pinned !== true);
+    .filter((candidate) => candidate.skill.pinned !== true && candidate.skill.enabled !== false);
   if (candidates.length === 0) return [];
 
   const scored = measure(tokenize(message), candidates, options.messageVector);

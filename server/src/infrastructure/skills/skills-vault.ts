@@ -65,6 +65,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   constructor(private readonly root: string) {
     mkdirSync(root, { recursive: true });
     this.seedDefaults();
+    this.sweepStaleBuiltins();
   }
 
   all(): Skill[] {
@@ -106,7 +107,33 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
     const source: SkillSource =
       input.source ??
       (current === undefined ? 'user' : current.source === 'auto' ? 'user' : current.source);
-    const content = serialize({ ...input, source });
+    const enabled =
+      input.enabled === true
+        ? undefined
+        : input.enabled === false
+          ? false
+          : current?.enabled === false
+            ? false
+            : undefined;
+    let seed: string | undefined;
+    if (current !== undefined) {
+      const flatPath = join(this.root, `${input.slug}.md`);
+      const folder = this.discoverFolderSkills().find((entry) => entry.slug === input.slug);
+      const path = existsSync(flatPath) ? flatPath : folder?.path;
+      if (path !== undefined) {
+        try {
+          seed = parse(readFileSync(path, 'utf8')).seed;
+        } catch {
+          seed = undefined;
+        }
+      }
+    }
+    const content = serialize({
+      ...input,
+      source,
+      ...(enabled === false ? { enabled: false } : {}),
+      ...(seed === undefined ? {} : { seed }),
+    });
 
     const existingFolder = this.discoverFolderSkills().find((entry) => entry.slug === input.slug);
     const flatPath = join(this.root, `${input.slug}.md`);
@@ -158,6 +185,24 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       return true;
     }
     rmSync(join(this.root, `${slug}.md`), { force: true });
+    return true;
+  }
+
+  /** Rewrites front matter so a skill may or may not route and pin (§8). */
+  setEnabled(slug: string, enabled: boolean): boolean {
+    const skill = this.get(slug);
+    if (skill === undefined) return false;
+    this.write({
+      slug: skill.slug,
+      name: skill.name,
+      description: skill.description,
+      whenToUse: skill.whenToUse,
+      body: skill.body,
+      source: skill.source,
+      ...(skill.pinned === true ? { pinned: true } : {}),
+      ...(skill.pending === true ? { pending: true } : {}),
+      enabled,
+    });
     return true;
   }
 
@@ -266,6 +311,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       source,
       ...(parsed.pinned ? { pinned: true } : {}),
       ...(parsed.pending ? { pending: true } : {}),
+      ...(parsed.enabled === false ? { enabled: false } : {}),
     };
   }
 
@@ -293,6 +339,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       source: parsed.source ?? 'user',
       ...(pinned ? { pinned: true } : {}),
       ...(parsed.pending ? { pending: true } : {}),
+      ...(parsed.enabled === false ? { enabled: false } : {}),
     };
   }
 
@@ -324,6 +371,47 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       if (pristine && !matchesShipped) writeFileSync(path, fresh);
     }
   }
+
+  /**
+   * Drops built-ins removed from the shipped roster (pop-agent.spec §8). A file
+   * the user never touched is deleted; one they edited is promoted to `user`
+   * so their words are never destroyed.
+   */
+  private sweepStaleBuiltins(): void {
+    const roster = new Set(DEFAULT_SKILLS.map((skill) => skill.slug));
+    for (const file of readdirSync(this.root).filter((entry) => entry.endsWith('.md'))) {
+      const slug = file.slice(0, -3);
+      if (roster.has(slug)) continue;
+
+      const path = join(this.root, file);
+      let parsed: Parsed;
+      try {
+        parsed = parse(readFileSync(path, 'utf8'));
+      } catch {
+        continue;
+      }
+      if (parsed.source !== 'builtin') continue;
+
+      const pristine = parsed.seed !== undefined && parsed.seed === seedHash(parsed);
+      if (pristine) {
+        rmSync(path, { force: true });
+        continue;
+      }
+
+      writeFileSync(
+        path,
+        serialize({
+          name: parsed.name.length > 0 ? parsed.name : slug,
+          description: parsed.description,
+          whenToUse: parsed.whenToUse,
+          body: parsed.body,
+          source: 'user',
+          ...(parsed.pinned ? { pinned: true } : {}),
+          ...(parsed.pending ? { pending: true } : {}),
+        }),
+      );
+    }
+  }
 }
 
 /** What a default's routed fields hash to; the seed marker of an untouched file. */
@@ -348,6 +436,8 @@ interface Parsed {
   source?: SkillSource;
   pinned: boolean;
   pending: boolean;
+  /** Absent means enabled; only `false` is stored on disk (§8). */
+  enabled?: boolean;
   /** The seed marker written by seedDefaults; absent on user files and edits. */
   seed?: string;
 }
@@ -383,6 +473,7 @@ export function parse(raw: string): Parsed {
     ...(source === undefined ? {} : { source }),
     pinned: meta.get('pinned') === 'true',
     pending: meta.get('pending') === 'true',
+    ...(meta.get('enabled') === 'false' ? { enabled: false as const } : {}),
     ...(seed === undefined ? {} : { seed }),
   };
 }
@@ -395,6 +486,7 @@ function serialize(input: {
   source?: SkillSource;
   pinned?: boolean;
   pending?: boolean;
+  enabled?: boolean;
   seed?: string;
 }): string {
   const escape = (value: string): string => value.replace(/\r?\n/g, ' ').trim();
@@ -412,6 +504,7 @@ function serialize(input: {
     ...(input.source === undefined ? [] : [`source: ${input.source}`]),
     ...(input.pinned ? ['pinned: true'] : []),
     ...(input.pending ? ['pending: true'] : []),
+    ...(input.enabled === false ? ['enabled: false'] : []),
     ...(input.seed === undefined ? [] : [`seed: ${input.seed}`]),
     '---',
     '',

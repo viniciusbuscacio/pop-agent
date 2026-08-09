@@ -19,11 +19,11 @@ afterEach(() => {
 });
 
 describe('SkillsVault', () => {
-  it('seeds the default skills, including know-thyself', () => {
+  it('seeds the default skills, including pop-agent-manual', () => {
     const slugs = vault.all().map((skill) => skill.slug);
-    expect(slugs).toContain('know-thyself');
+    expect(slugs).toContain('pop-agent-manual');
     expect(vault.all().length).toBe(DEFAULT_SKILLS.length);
-    expect(vault.get('know-thyself')?.source).toBe('builtin');
+    expect(vault.get('pop-agent-manual')?.source).toBe('builtin');
   });
 
   it('creates and reads back a user skill', () => {
@@ -42,8 +42,8 @@ describe('SkillsVault', () => {
   });
 
   it('refuses to delete a built-in skill', () => {
-    expect(() => vault.delete('know-thyself')).toThrow(SkillsError);
-    expect(vault.get('know-thyself')).toBeDefined();
+    expect(() => vault.delete('pop-agent-manual')).toThrow(SkillsError);
+    expect(vault.get('pop-agent-manual')).toBeDefined();
   });
 
   it('deletes a user skill', () => {
@@ -70,21 +70,21 @@ describe('SkillsVault', () => {
     expect(vault.get('my-identity')?.pinned).toBe(true);
   });
 
-  it('pins know-thyself even when the seeded file predates the flag', () => {
+  it('pins pop-agent-manual even when the seeded file predates the flag', () => {
     // A v0.2 install: the file exists with neither `pinned` nor `seed`.
     writeFileSync(
-      join(root, 'know-thyself.md'),
+      join(root, 'pop-agent-manual.md'),
       '---\nname: About Pop Agent\ndescription: d\nwhenToUse: w\nbuiltin: true\n---\n\nold body\n',
     );
     const reopened = new SkillsVault(root);
-    expect(reopened.get('know-thyself')?.pinned).toBe(true);
-    expect(reopened.get('know-thyself')?.source).toBe('builtin'); // `builtin: true` still reads
+    expect(reopened.get('pop-agent-manual')?.pinned).toBe(true);
+    expect(reopened.get('pop-agent-manual')?.source).toBe('builtin'); // `builtin: true` still reads
   });
 
   it('upgrades a default the user never touched when the shipped content changes', () => {
     const old = { name: 'Old', description: 'od', whenToUse: 'ow', body: 'old body' };
     writeFileSync(
-      join(root, 'summarize.md'),
+      join(root, 'note-taking.md'),
       [
         '---',
         `name: ${old.name}`,
@@ -99,12 +99,12 @@ describe('SkillsVault', () => {
       ].join('\n'),
     );
     const reopened = new SkillsVault(root);
-    expect(reopened.get('summarize')?.name).toBe('Summarize');
+    expect(reopened.get('note-taking')?.name).toBe('Note taking');
   });
 
   it('stamps a pre-seed-era file that still matches the shipped default', () => {
     // v0.2 wrote defaults with no seed marker; strip it to simulate that.
-    const path = join(root, 'summarize.md');
+    const path = join(root, 'note-taking.md');
     writeFileSync(path, readFileSync(path, 'utf8').replace(/^seed: .*\n/m, ''));
     expect(parse(readFileSync(path, 'utf8')).seed).toBeUndefined();
 
@@ -145,21 +145,21 @@ describe('SkillsVault', () => {
   });
 
   it('leaves a skill that was never pending alone', () => {
-    const before = vault.get('summarize');
-    expect(vault.approve('summarize')).toEqual(before);
+    const before = vault.get('note-taking');
+    expect(vault.approve('note-taking')).toEqual(before);
     expect(vault.approve('nope')).toBeUndefined();
   });
 
   it('keeps a user edit to a default skill across reboot', () => {
     vault.write({
-      slug: 'summarize',
-      name: 'My summarize',
+      slug: 'note-taking',
+      name: 'My note-taking',
       description: 'mine',
       whenToUse: 'mine',
       body: 'mine',
     });
     const reopened = new SkillsVault(root);
-    expect(reopened.get('summarize')?.name).toBe('My summarize');
+    expect(reopened.get('note-taking')?.name).toBe('My note-taking');
   });
 });
 
@@ -282,11 +282,95 @@ describe('SkillsVault archiving', () => {
   });
 
   it('refuses a built-in, which the next boot would seed straight back', () => {
-    expect(() => vault.archive('know-thyself')).toThrow(SkillsError);
+    expect(() => vault.archive('pop-agent-manual')).toThrow(SkillsError);
   });
 
   it('answers false for a skill that is not there', () => {
     expect(vault.archive('ghost')).toBe(false);
     expect(vault.restore('ghost')).toBeUndefined();
+  });
+});
+
+describe('SkillsVault stale built-in sweep', () => {
+  it('deletes a removed built-in the user never edited', () => {
+    writeFileSync(
+      join(root, 'summarize.md'),
+      [
+        '---',
+        'name: Summarize',
+        'description: Condense text',
+        'whenToUse: when summarizing',
+        'source: builtin',
+        `seed: ${seedHash({ name: 'Summarize', description: 'Condense text', whenToUse: 'when summarizing', body: '# Summarizing\n- short' })}`,
+        '---',
+        '',
+        '# Summarizing',
+        '- short',
+        '',
+      ].join('\n'),
+    );
+
+    new SkillsVault(root);
+
+    expect(existsSync(join(root, 'summarize.md'))).toBe(false);
+    expect(vault.get('summarize')).toBeUndefined();
+  });
+
+  it('promotes a removed built-in the user edited to user source', () => {
+    writeFileSync(
+      join(root, 'writing-clear.md'),
+      [
+        '---',
+        'name: My writing',
+        'description: Mine',
+        'whenToUse: mine',
+        'source: builtin',
+        `seed: ${seedHash({ name: 'Clear writing', description: 'Rewrite text', whenToUse: 'when writing', body: '# Clear writing\n- lead' })}`,
+        '---',
+        '',
+        '# My version',
+        '- keep this',
+        '',
+      ].join('\n'),
+    );
+
+    new SkillsVault(root);
+
+    const skill = new SkillsVault(root).get('writing-clear');
+    expect(skill?.source).toBe('user');
+    expect(skill?.body).toContain('My version');
+    expect(parse(readFileSync(join(root, 'writing-clear.md'), 'utf8')).seed).toBeUndefined();
+  });
+
+  it('leaves a built-in still in the roster alone', () => {
+    const before = readFileSync(join(root, 'shell-safety.md'), 'utf8');
+    new SkillsVault(root);
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).toBe(before);
+    expect(vault.get('shell-safety')?.source).toBe('builtin');
+  });
+});
+
+describe('SkillsVault enabled', () => {
+  it('persists disabled across a vault reopen', () => {
+    expect(vault.setEnabled('shell-safety', false)).toBe(true);
+    expect(vault.get('shell-safety')?.enabled).toBe(false);
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).toContain('enabled: false');
+
+    const reopened = new SkillsVault(root);
+    expect(reopened.get('shell-safety')?.enabled).toBe(false);
+
+    expect(reopened.setEnabled('shell-safety', true)).toBe(true);
+    expect(reopened.get('shell-safety')?.enabled).toBeUndefined();
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).not.toContain('enabled:');
+  });
+
+  it('can disable a built-in without deleting it', () => {
+    expect(vault.setEnabled('pop-agent-manual', false)).toBe(true);
+    expect(vault.get('pop-agent-manual')?.source).toBe('builtin');
+    expect(vault.get('pop-agent-manual')?.enabled).toBe(false);
+  });
+
+  it('answers false for an unknown slug', () => {
+    expect(vault.setEnabled('ghost', false)).toBe(false);
   });
 });

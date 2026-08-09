@@ -39,6 +39,8 @@ const saveSchema = z
   })
   .strict();
 
+const enabledSchema = z.object({ enabled: z.boolean() }).strict();
+
 export interface SkillsRoutesDeps {
   skills: SkillsRepo;
   /** Use counts, merged into the list so the screen can show what earns its slot. */
@@ -151,6 +153,21 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   routes.post('/skills', save);
   routes.put('/skills/:slug', save);
 
+  routes.post('/skills/:slug/enabled', async (c) => {
+    const slug = c.req.param('slug');
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = enabledSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+    if (!deps.skills.setEnabled(slug, parsed.data.enabled)) {
+      return apiError(c, 404, 'not_found', 'No such skill.');
+    }
+    const skill = deps.skills.get(slug);
+    return skill === undefined
+      ? apiError(c, 404, 'not_found', 'No such skill.')
+      : c.json(toDto(skill));
+  });
+
   routes.delete('/skills/:slug', (c) => {
     const slug = c.req.param('slug');
     try {
@@ -180,6 +197,7 @@ function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): Skil
     source: skill.source,
     ...(skill.pinned === true ? { pinned: true } : {}),
     ...(skill.pending === true ? { pending: true } : {}),
+    ...(skill.enabled === false ? { enabled: false } : {}),
     ...(usage === undefined ? {} : { useCount: usage.useCount, lastUsedAt: usage.lastUsedAt }),
     ...(revision === undefined
       ? {}

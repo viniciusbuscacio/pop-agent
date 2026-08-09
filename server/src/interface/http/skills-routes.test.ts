@@ -37,9 +37,9 @@ describe('/v1/skills', () => {
     expect((await app.request('/v1/skills')).status).toBe(401);
   });
 
-  it('lists the seeded skills including know-thyself', async () => {
+  it('lists the seeded skills including pop-agent-manual', async () => {
     const body = (await (await authed('/v1/skills')).json()) as SkillsResponse;
-    expect(body.skills.some((s) => s.slug === 'know-thyself' && s.source === 'builtin')).toBe(
+    expect(body.skills.some((s) => s.slug === 'pop-agent-manual' && s.source === 'builtin')).toBe(
       true,
     );
   });
@@ -63,7 +63,7 @@ describe('/v1/skills', () => {
   });
 
   it('refuses to delete a built-in skill', async () => {
-    const res = await authed('/v1/skills/know-thyself', { method: 'DELETE' });
+    const res = await authed('/v1/skills/pop-agent-manual', { method: 'DELETE' });
     expect(res.status).toBe(409);
   });
 
@@ -82,6 +82,38 @@ describe('/v1/skills', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  describe('POST /v1/skills/:slug/enabled', () => {
+    it('rejects a non-boolean enabled field with a schema error', async () => {
+      const res = await authed('/v1/skills/shell-safety/enabled', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: 'no' }),
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe('missing_field');
+    });
+
+    it('disables a skill and returns the updated dto', async () => {
+      const res = await authed('/v1/skills/shell-safety/enabled', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: false }),
+      });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as SkillDTO)).toMatchObject({
+        slug: 'shell-safety',
+        enabled: false,
+      });
+    });
+
+    it('404s for an unknown slug', async () => {
+      const res = await authed('/v1/skills/ghost/enabled', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: false }),
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
   it('holds a pending skill out of the list until it is accepted', async () => {
     await authed('/v1/skills/learned', {
       method: 'PUT',
