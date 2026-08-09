@@ -12,6 +12,7 @@ const CHAT = {
   model: '',
   provider: '',
   archived: false,
+  pinned: false,
   piSessionId: '',
   summary: '',
   autoTitle: true,

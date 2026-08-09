@@ -65,6 +65,7 @@ interface ChatState {
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
+  setPinned: (chatId: string, pinned: boolean) => Promise<void>;
   archiveOthers: (keepChatId: string) => Promise<number>;
   setModel: (chatId: string, model: string, provider: string) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
@@ -268,6 +269,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   async setArchived(chatId, archived) {
     await chatsService.patch(chatId, { archived });
     // The chat leaves one list and joins the other, so refresh both.
+    await Promise.all([get().loadChats(), get().loadArchived()]);
+  },
+
+  async setPinned(chatId, pinned) {
+    await chatsService.patch(chatId, { pinned });
+    // Pinning changes list order; ask the server for the canonical ordering.
     await Promise.all([get().loadChats(), get().loadArchived()]);
   },
 

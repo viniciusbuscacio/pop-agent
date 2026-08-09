@@ -154,6 +154,7 @@ async function main(): Promise<void> {
     model: '',
     provider: '',
     archived: false,
+    pinned: false,
     piSessionId: '',
     summary: '',
     autoTitle: true,

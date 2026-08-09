@@ -121,6 +121,7 @@ async function main(): Promise<void> {
     model: DEFAULT_MODEL_ID,
     provider: 'openrouter',
     archived: false,
+    pinned: false,
     piSessionId: '',
     summary: '',
     autoTitle: true,

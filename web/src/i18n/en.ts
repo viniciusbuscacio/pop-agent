@@ -72,6 +72,9 @@ export const en = {
   'shell.archived': 'Archived ({count})',
   'shell.chatMenu': 'Conversation options',
   'shell.rename': 'Rename',
+  'shell.pin': 'Pin this chat',
+  'shell.unpin': 'Unpin this chat',
+  'shell.pinned': 'Pinned',
   'shell.archive': 'Archive',
   'shell.unarchive': 'Unarchive',
   'shell.delete': 'Delete',
@@ -474,8 +477,11 @@ export const en = {
   'shell.viewArchived': 'View archived ({count})',
   'shell.viewActive': 'View active chats',
   'shell.archiveOthers': 'Archive all other chats ({count})',
+  'shell.archiveExceptPinned': 'Archive all except active and pinned ({count})',
   'shell.archiveOthersConfirm':
     'Archive all other chats ({count})? “{title}” will remain open.',
+  'shell.archiveExceptPinnedConfirm':
+    'Archive all except active and pinned ({count})? “{title}” and pinned chats will remain open.',
   'shell.archiveOthersBusy': 'Archiving…',
   'shell.archiveOthersDone': 'Archived chats: {count}.',
   'shell.archiveOthersFailed': 'The conversations could not be archived.',

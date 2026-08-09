@@ -41,6 +41,7 @@ const patchSchema = z
   .object({
     title: z.string().optional(),
     archived: z.boolean().optional(),
+    pinned: z.boolean().optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
   })
@@ -163,6 +164,9 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     if (parsed.data.title !== undefined) chat = deps.chats.rename(id, parsed.data.title) ?? chat;
     if (parsed.data.archived !== undefined) {
       chat = deps.chats.setArchived(id, parsed.data.archived) ?? chat;
+    }
+    if (parsed.data.pinned !== undefined) {
+      chat = deps.chats.setPinned(id, parsed.data.pinned) ?? chat;
     }
     if (parsed.data.model !== undefined) {
       // The pair is the identity: a model without a provider keeps the chat's
@@ -420,6 +424,7 @@ function toChatDto(chat: Chat | ChatSummary): ChatDTO {
     model: chat.model,
     provider: chat.provider,
     archived: chat.archived,
+    pinned: chat.pinned,
     createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     preview: 'preview' in chat ? chat.preview : '',

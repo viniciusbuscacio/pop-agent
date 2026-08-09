@@ -38,6 +38,7 @@ export class ChatService {
       model: '',
       provider: '',
       archived: false,
+      pinned: false,
       piSessionId: '',
       summary: '',
       autoTitle: true,
@@ -79,7 +80,13 @@ export class ChatService {
     return this.deps.chats.get(id);
   }
 
-  /** Archives every open conversation except a validated open chat. */
+  setPinned(id: string, pinned: boolean): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    this.deps.chats.setPinned(id, pinned);
+    return this.deps.chats.get(id);
+  }
+
+  /** Archives every open conversation except the active one and pinned chats. */
   archiveOthers(keepChatId: string): number | undefined {
     const keep = this.deps.chats.get(keepChatId);
     if (keep === undefined || keep.archived) return undefined;

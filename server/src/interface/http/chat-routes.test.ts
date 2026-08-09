@@ -54,11 +54,13 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
-  it('archives every open chat except the one the user keeps', async () => {
+  it('archives every open chat except the active one and pinned chats', async () => {
     const keep = await newChat();
+    const pinned = await newChat();
     const one = await newChat();
     const two = await newChat();
     const alreadyFiled = await newChat();
+    await api(`/v1/chats/${pinned.id}`, { method: 'PATCH', body: { pinned: true } });
     await api(`/v1/chats/${alreadyFiled.id}`, { method: 'PATCH', body: { archived: true } });
 
     const response = await api('/v1/chats/archive-others', {
@@ -69,7 +71,8 @@ describe('chat collection', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ archived: 2 });
     const active = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
-    expect(active.chats.map((chat) => chat.id)).toEqual([keep.id]);
+    expect(new Set(active.chats.map((chat) => chat.id))).toEqual(new Set([keep.id, pinned.id]));
+    expect(active.chats[0]?.id).toBe(pinned.id);
     const archived = (await (await api('/v1/chats?archived=true')).json()) as {
       chats: ChatDTO[];
     };
@@ -135,13 +138,18 @@ describe('chat collection', () => {
     expect(archivedList.chats.map((chat) => chat.id)).toEqual([filed.id]);
   });
 
-  it('renames and re-models', async () => {
+  it('renames, pins and re-models', async () => {
     const chat = await newChat();
 
     const renamed = (await (
       await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { title: 'Groceries' } })
     ).json()) as ChatDTO;
     expect(renamed.title).toBe('Groceries');
+
+    const pinned = (await (
+      await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { pinned: true } })
+    ).json()) as ChatDTO;
+    expect(pinned.pinned).toBe(true);
 
     const remodelled = (await (
       await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { model: 'fake/model-2' } })

@@ -36,6 +36,7 @@ function chat(id: string, updatedAt: string, provider = 'openrouter'): ChatSumma
     model: '',
     provider,
     archived: false,
+    pinned: false,
     piSessionId: '',
     summary: '',
     autoTitle: true,

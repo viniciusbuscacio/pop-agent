@@ -483,6 +483,8 @@ export interface ChatDTO {
   /** Empty means "whatever the default provider is" (pop-agent.spec §15). */
   provider: string;
   archived: boolean;
+  /** Kept at the top of the list and exempt from bulk archiving. */
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
   /** Last message, for the list. Empty for a chat nobody has written in. */
@@ -579,6 +581,7 @@ export interface MessagesResponse {
 export interface PatchChatRequest {
   title?: string;
   archived?: boolean;
+  pinned?: boolean;
   model?: string;
   /** Must travel with `model`: the identity is the pair (pop-agent.spec §15). */
   provider?: string;

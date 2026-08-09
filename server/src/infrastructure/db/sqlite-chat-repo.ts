@@ -29,8 +29,8 @@ export class SqliteChatRepo implements ChatRepo {
   create(chat: Chat): Chat {
     const insert = this.db.prepare(
       `INSERT INTO chats
-         (id, title, model, provider, archived, pi_session_id, summary, auto_title, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, title, model, provider, archived, pinned, pi_session_id, summary, auto_title, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = chat;
     for (let attempt = 0; ; attempt += 1) {
@@ -41,6 +41,7 @@ export class SqliteChatRepo implements ChatRepo {
           current.model,
           current.provider,
           current.archived ? 1 : 0,
+          current.pinned ? 1 : 0,
           current.piSessionId,
           current.summary,
           current.autoTitle ? 1 : 0,
@@ -72,7 +73,7 @@ export class SqliteChatRepo implements ChatRepo {
                            LIMIT 1), '') AS preview
            FROM chats c
           WHERE c.archived = ?
-       ORDER BY c.updated_at DESC, c.id DESC`,
+       ORDER BY c.pinned DESC, c.updated_at DESC, c.id DESC`,
       )
       .all(options.archived ? 1 : 0) as (ChatRow & { preview: string })[];
 
@@ -87,14 +88,21 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET archived = ? WHERE id = ?').run(archived ? 1 : 0, id);
   }
 
+  setPinned(id: string, pinned: boolean): void {
+    this.db.prepare('UPDATE chats SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, id);
+  }
+
   archiveOthers(keepChatId: string): number {
     // The EXISTS is the final guard against a stale/mistyped keep id turning
     // "all others" into "all" between validation and this atomic statement.
+    // Pinned chats are deliberately another exception: the bulk action is for
+    // clearing the disposable list, never the conversations the owner kept.
     return this.db
       .prepare(
         `UPDATE chats
             SET archived = 1
           WHERE archived = 0
+            AND pinned = 0
             AND id <> ?
             AND EXISTS (SELECT 1 FROM chats WHERE id = ? AND archived = 0)`,
       )
@@ -302,6 +310,7 @@ interface ChatRow {
   model: string;
   provider: string;
   archived: number;
+  pinned: number;
   pi_session_id: string;
   summary: string;
   auto_title: number;
@@ -331,6 +340,7 @@ function toChat(row: ChatRow): Chat {
     model: row.model,
     provider: row.provider ?? '',
     archived: row.archived === 1,
+    pinned: row.pinned === 1,
     piSessionId: row.pi_session_id,
     summary: row.summary,
     autoTitle: row.auto_title === 1,

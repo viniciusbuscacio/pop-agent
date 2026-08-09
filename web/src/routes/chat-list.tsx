@@ -76,7 +76,11 @@ export function ChatList() {
   }
   const keepChatId = openChat?.params.chatId ?? rememberedChatId;
   const keepChat = chats.find((chat) => chat.id === keepChatId);
-  const archiveOthersCount = keepChat === undefined ? 0 : Math.max(0, chats.length - 1);
+  const hasPinnedChats = chats.some((chat) => chat.pinned);
+  const archiveOthersCount =
+    keepChat === undefined
+      ? 0
+      : chats.filter((chat) => chat.id !== keepChat.id && !chat.pinned).length;
 
   useEffect(() => {
     void loadChats();
@@ -144,7 +148,7 @@ export function ChatList() {
     if (keepChat === undefined || archiveOthersCount === 0 || archivingOthers) return;
     if (
       !window.confirm(
-        t('shell.archiveOthersConfirm', {
+        t(hasPinnedChats ? 'shell.archiveExceptPinnedConfirm' : 'shell.archiveOthersConfirm', {
           count: archiveOthersCount,
           title: keepChat.title,
         }),
@@ -251,7 +255,9 @@ export function ChatList() {
                 label={
                   archivingOthers
                     ? t('shell.archiveOthersBusy')
-                    : t('shell.archiveOthers', { count: archiveOthersCount })
+                    : t(hasPinnedChats ? 'shell.archiveExceptPinned' : 'shell.archiveOthers', {
+                        count: archiveOthersCount,
+                      })
                 }
                 disabled={keepChat === undefined || archiveOthersCount === 0 || archivingOthers}
                 onClick={() => void archiveAllOthers()}
@@ -803,6 +809,7 @@ function ChatRow({
 }) {
   const rename = useChatStore((state) => state.rename);
   const setArchived = useChatStore((state) => state.setArchived);
+  const setPinned = useChatStore((state) => state.setPinned);
   const remove = useChatStore((state) => state.remove);
   const live = useChatStore((state) => state.live[chat.id]);
 
@@ -972,6 +979,16 @@ function ChatRow({
             >
               {chat.title}
             </span>
+            {chat.pinned ? (
+              <span
+                data-testid="pinned-badge"
+                title={t('shell.pinned')}
+                aria-label={t('shell.pinned')}
+                className="shrink-0 text-[var(--muted)]"
+              >
+                <PinIcon />
+              </span>
+            ) : null}
             {badge ? (
               <span
                 data-testid="archived-badge"
@@ -1029,6 +1046,14 @@ function ChatRow({
             }}
           />
           <MenuItem
+            testId="chat-pin"
+            label={chat.pinned ? t('shell.unpin') : t('shell.pin')}
+            onClick={() => {
+              setMenuOpen(false);
+              void setPinned(chat.id, !chat.pinned);
+            }}
+          />
+          <MenuItem
             testId="chat-archive"
             label={archived ? t('shell.unarchive') : t('shell.archive')}
             onClick={() => {
@@ -1048,6 +1073,29 @@ function ChatRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+function PinIcon() {
+  // Lucide's monochrome Pin: icons follow text colour and never introduce an
+  // emoji palette or a second accent into the conversation list (§14).
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 17v5" />
+      <path d="M5 17h14" />
+      <path d="M15 4.5 14 10l3 3v2H7v-2l3-3-1-5.5" />
+      <path d="M9 4h6" />
+    </svg>
   );
 }
 

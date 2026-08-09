@@ -14,6 +14,7 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     model: '',
     provider: '',
     archived: false,
+    pinned: false,
     piSessionId: '',
     summary: '',
     autoTitle: true,

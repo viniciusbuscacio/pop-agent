@@ -17,6 +17,7 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     model: '',
     provider: '',
     archived: false,
+    pinned: false,
     piSessionId: '',
     summary: '',
     autoTitle: true,
@@ -58,11 +59,13 @@ describe('chats', () => {
     expect(repo.get('chat-000000000000')).toBeUndefined();
   });
 
-  it('lists the most recently active first', () => {
+  it('lists pinned chats first, then the most recently active', () => {
     const older = repo.create(chat({ updatedAt: '2026-07-30T10:00:00.000Z' }));
     const newer = repo.create(chat({ updatedAt: '2026-07-30T18:00:00.000Z' }));
+    repo.setPinned(older.id, true);
 
-    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([newer.id, older.id]);
+    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([older.id, newer.id]);
+    expect(repo.get(older.id)?.pinned).toBe(true);
   });
 
   it('keeps archived chats out of the main list', () => {
@@ -74,14 +77,17 @@ describe('chats', () => {
     expect(repo.list({ archived: true }).map((row) => row.id)).toEqual([filed.id]);
   });
 
-  it('archives every open chat except the one being kept', () => {
+  it('archives every open chat except the active one and pinned chats', () => {
     const keep = repo.create(chat());
+    const pinned = repo.create(chat({ pinned: true }));
     const one = repo.create(chat());
     const two = repo.create(chat());
     const alreadyFiled = repo.create(chat({ archived: true }));
 
     expect(repo.archiveOthers(keep.id)).toBe(2);
-    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([keep.id]);
+    expect(new Set(repo.list({ archived: false }).map((row) => row.id))).toEqual(
+      new Set([keep.id, pinned.id]),
+    );
     expect(new Set(repo.list({ archived: true }).map((row) => row.id))).toEqual(
       new Set([one.id, two.id, alreadyFiled.id]),
     );

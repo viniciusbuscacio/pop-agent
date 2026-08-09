@@ -15,6 +15,8 @@ export interface Chat {
    */
   provider: string;
   archived: boolean;
+  /** Kept at the top of the list and exempt from bulk archiving. */
+  pinned: boolean;
   /** Path to pi's JSONL session. Empty until a real agent run happens. */
   piSessionId: string;
   /** Written by the service model with the title; Phase 4's memory reads it. */
