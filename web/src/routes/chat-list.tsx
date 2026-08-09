@@ -964,7 +964,7 @@ function ChatRow({
       >
         {/* The top-right corner belongs to the row menu (Vinicius, 31/07):
             the timestamp used to sit there too, hiding the ⋯ under it. */}
-        <div className="flex items-baseline justify-between gap-2 pr-14">
+        <div className={`flex items-baseline justify-between gap-2 ${chat.pinned ? 'pr-14' : 'pr-8'}`}>
           <span className="flex min-w-0 items-baseline gap-1.5">
             <span
               className="truncate text-sm font-medium"
@@ -989,7 +989,7 @@ function ChatRow({
             ) : null}
           </span>
         </div>
-        <span className="truncate pr-14 text-xs text-[var(--muted)]">
+        <span className={`truncate text-xs text-[var(--muted)] ${chat.pinned ? 'pr-14' : 'pr-8'}`}>
           {live !== undefined ? t('chat.answering') : chat.preview}
         </span>
         {live !== undefined ? (
@@ -1001,25 +1001,22 @@ function ChatRow({
         ) : null}
       </NavLink>
 
-      {/*
-        Visible buttons rather than long-press: on a touch screen a hidden
-        gesture has no affordance and fights the scroll, and on a pointer
-        screen hover-only controls are invisible to keyboards.
-      */}
-      <button
-        type="button"
-        data-testid="chat-pin"
-        aria-label={chat.pinned ? t('shell.unpin') : t('shell.pin')}
-        aria-pressed={chat.pinned}
-        title={chat.pinned ? t('shell.unpin') : t('shell.pin')}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => void setPinned(chat.id, !chat.pinned)}
-        className={`absolute top-1 right-9 rounded p-1.5 hover:bg-[var(--hover-overlay)] ${
-          chat.pinned ? 'text-[var(--accent)]' : 'text-[var(--muted)]'
-        }`}
-      >
-        <PinIcon pinned={chat.pinned} />
-      </button>
+      {/* Pinned chats keep the blue one-tap indicator. Unpinned chats expose
+          Pin in the row menu instead of filling the list with grey pins. */}
+      {chat.pinned ? (
+        <button
+          type="button"
+          data-testid="chat-pin"
+          aria-label={t('shell.unpin')}
+          aria-pressed="true"
+          title={t('shell.unpin')}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => void setPinned(chat.id, false)}
+          className="absolute top-1 right-9 rounded p-1.5 text-[var(--accent)] hover:bg-[var(--hover-overlay)]"
+        >
+          <PinIcon pinned />
+        </button>
+      ) : null}
       <button
         type="button"
         data-testid="chat-menu"
@@ -1040,6 +1037,14 @@ function ChatRow({
           role="menu"
           className="absolute top-8 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
         >
+          <MenuItem
+            testId="chat-pin-menu"
+            label={chat.pinned ? t('shell.unpin') : t('shell.pin')}
+            onClick={() => {
+              setMenuOpen(false);
+              void setPinned(chat.id, !chat.pinned);
+            }}
+          />
           <MenuItem
             testId="chat-rename"
             label={t('shell.rename')}
