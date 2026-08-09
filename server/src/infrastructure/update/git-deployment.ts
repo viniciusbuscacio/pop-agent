@@ -5,6 +5,7 @@ import { userInfo } from 'node:os';
 import type {
   DeploymentInspector,
   DeploymentRecord,
+  DeploymentRequester,
   DeploymentStateStore,
   DeploymentSupervisor,
 } from '../../application/ports/deployment.js';
@@ -36,6 +37,40 @@ export class GitDeploymentInspector implements DeploymentInspector {
           stdio: ['ignore', 'pipe', 'ignore'],
           encoding: 'utf8',
         }).trim().length === 0
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  isPrepared(commit: string): boolean {
+    try {
+      const tree = execFileSync('git', ['rev-parse', `${commit}^{tree}`], {
+        cwd: this.repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      const receiptPath = execFileSync(
+        'git',
+        ['rev-parse', '--git-path', 'pop-agent-gate-receipt.json'],
+        { cwd: this.repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      ).trim();
+      const absoluteReceipt = receiptPath.startsWith('/')
+        ? receiptPath
+        : join(this.repoRoot, receiptPath);
+      const parsed = JSON.parse(readFileSync(absoluteReceipt, 'utf8')) as {
+        version?: number;
+        tree?: string;
+        node?: string;
+        completedAt?: string;
+      };
+      const completed = Date.parse(parsed.completedAt ?? '');
+      return (
+        parsed.version === 1 &&
+        parsed.tree === tree &&
+        parsed.node === process.version &&
+        Number.isFinite(completed) &&
+        Date.now() - completed <= 24 * 60 * 60 * 1000
       );
     } catch {
       return false;
@@ -79,6 +114,7 @@ export class DetachedDeploymentSupervisor implements DeploymentSupervisor {
     runningCommit: string;
     targetCommit: string;
     lastKnownGood: string;
+    requestedBy: DeploymentRequester;
   }): void {
     const planPath = join(dirname(this.deps.statePath), 'deployment-plan.json');
     writeFileSync(

@@ -215,6 +215,7 @@ async function run(base: string): Promise<void> {
     autoApproveSkills: false,
     distillSkills: true,
     distillIntervalMinutes: 10,
+    autoActivatePreparedUpdates: false,
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

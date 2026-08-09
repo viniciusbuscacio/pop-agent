@@ -1,5 +1,6 @@
 import type {
   AboutResponse,
+  DeploymentCancelResponse,
   DeploymentRequestResponse,
   SettingsDTO,
   UpdateStatusResponse,
@@ -50,5 +51,9 @@ export const settingsService = {
 
   restartWhenIdle(): Promise<DeploymentRequestResponse> {
     return apiRequest<DeploymentRequestResponse>('/update/restart-when-idle', { method: 'POST' });
+  },
+
+  cancelRestart(): Promise<DeploymentCancelResponse> {
+    return apiRequest<DeploymentCancelResponse>('/update/cancel', { method: 'POST' });
   },
 };

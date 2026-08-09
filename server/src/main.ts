@@ -22,6 +22,9 @@ import { SettingsService } from './application/settings/settings-service.js';
 import { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { TaskService } from './application/tasks/task-service.js';
 import { DeploymentCoordinator } from './application/update/deployment-coordinator.js';
+import { AutomaticDeploymentService } from './application/update/automatic-deployment.js';
+import type { RunService } from './application/chat/run-service.js';
+import type { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
@@ -503,6 +506,9 @@ const deploymentState = new JsonDeploymentStateStore(
   join(context.dataDir, 'deployment-state.json'),
 );
 const deployment = new DeploymentCoordinator({
+  // Expose the actual run/task services to the coordinator for idle tracking.
+  runs,
+  tasks: taskScheduler,
   runningCommit,
   inspector: new GitDeploymentInspector(repoRoot),
   state: deploymentState,
@@ -513,12 +519,23 @@ const deployment = new DeploymentCoordinator({
     serviceName: process.env['POP_AGENT_SERVICE_NAME'] ?? 'pop-agent-service',
     healthUrl: `http://127.0.0.1:${String(port)}/healthz`,
   }),
-  quiesce: () => runs.quiesce(),
-  resume: () => runs.startLlm(),
+  pauseTasks: () => taskScheduler.pauseAdmission(),
+  resumeTasks: () => taskScheduler.resumeAdmission(),
+  quiesceRuns: () => runs.beginDeploymentDrain(),
+  resumeRuns: () => runs.endDeploymentDrain(),
   waitForIdle: async () => {
     await Promise.all([runs.whenIdle(), taskScheduler.whenIdle()]);
   },
   now: () => new Date(systemClock.now()).toISOString(),
+});
+const automaticDeployment = new AutomaticDeploymentService({
+  deployment,
+  state: deploymentState,
+  settings,
+  push,
+  timer: intervalTimer,
+  now: () => new Date(systemClock.now()).toISOString(),
+  onJournal: (line) => console.log(line),
 });
 
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
@@ -674,6 +691,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 // Nothing runs itself until the server is actually up (pop-agent.spec §21).
 taskScheduler.start();
+automaticDeployment.start();
 
 // The hands channel needs a WebSocket server the adaptor can upgrade onto
 // (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.

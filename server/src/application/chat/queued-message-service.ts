@@ -131,7 +131,7 @@ export class QueuedMessageService {
     if (
       queued === undefined ||
       this.deps.runs.liveRun(chatId) !== undefined ||
-      this.deps.runs.isLlmStopped()
+      !this.deps.runs.isAcceptingRuns()
     ) {
       return false;
     }

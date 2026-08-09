@@ -11,10 +11,12 @@ export interface DeploymentPlan {
   serviceName: string;
   healthUrl: string;
   timeoutMs: number;
+  requestedBy: 'manual' | 'automatic';
 }
 
 interface SupervisorDeps {
   command(command: string, args: string[], cwd?: string): void;
+  candidateMatches(): boolean;
   healthy(url: string): Promise<boolean>;
   sleep(ms: number): Promise<void>;
   now(): string;
@@ -31,7 +33,18 @@ export async function superviseDeployment(plan: DeploymentPlan, deps: Supervisor
   const common = {
     targetCommit: plan.targetCommit,
     lastKnownGood: plan.lastKnownGood,
+    requestedBy: plan.requestedBy,
   };
+  if (!deps.candidateMatches()) {
+    deps.write({
+      ...common,
+      phase: 'superseded',
+      runningCommit: plan.runningCommit,
+      updatedAt: deps.now(),
+      error: 'The checkout changed before the supervisor could restart it.',
+    });
+    return;
+  }
   try {
     deps.write({
       ...common,
@@ -119,6 +132,23 @@ function realDeps(plan: DeploymentPlan): SupervisorDeps {
         stdio: 'ignore',
         timeout: 10 * 60 * 1000,
       });
+    },
+    candidateMatches: () => {
+      try {
+        const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: plan.repoRoot,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+        const dirty = execFileSync('git', ['status', '--porcelain'], {
+          cwd: plan.repoRoot,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+        return head === plan.targetCommit && dirty.length === 0;
+      } catch {
+        return false;
+      }
     },
     healthy: async (url) => {
       try {

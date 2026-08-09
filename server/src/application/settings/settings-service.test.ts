@@ -31,6 +31,7 @@ describe('settings service', () => {
       autoApproveSkills: true,
       distillSkills: false,
       distillIntervalMinutes: 30,
+      autoActivatePreparedUpdates: true,
     };
 
     expect(service.write(next)).toEqual(next);

@@ -45,12 +45,15 @@ export interface TaskSchedulerDeps {
   onJournal?: (line: string) => void;
 }
 
+export type TaskRunNowResult = 'started' | 'not_found' | 'paused';
+
 export class TaskScheduler {
   private readonly queue: string[] = [];
   private running: string | undefined;
   private pumping = false;
   private readonly idleWaiters: (() => void)[] = [];
   private stopTimer: (() => void) | undefined;
+  private admissionPaused = false;
   /** When each maintenance job last ran, so the cadence survives a busy tick. */
   private readonly jobRuns = new Map<string, number>();
 
@@ -58,7 +61,7 @@ export class TaskScheduler {
 
   /** Wires the tick. Idempotent, so a double start cannot double the rate. */
   start(): void {
-    if (this.stopTimer !== undefined) return;
+    if (this.stopTimer !== undefined || this.admissionPaused) return;
     this.stopTimer = this.deps.timer.every(this.deps.tickMs ?? TASK_TICK_MS, () => {
       void this.tick();
     });
@@ -76,6 +79,7 @@ export class TaskScheduler {
    * pump busy and returns immediately.
    */
   async tick(): Promise<void> {
+    if (this.admissionPaused) return;
     const now = this.deps.clock.now();
     for (const task of this.deps.tasks.due(now)) this.enqueue(task.id);
     await this.pump();
@@ -87,11 +91,24 @@ export class TaskScheduler {
    * in the same single-file queue as a scheduled one, so pressing the button
    * during a run waits rather than doubling up.
    */
-  runNow(taskId: string): boolean {
-    if (this.deps.tasks.get(taskId) === undefined) return false;
+  runNow(taskId: string): TaskRunNowResult {
+    if (this.deps.tasks.get(taskId) === undefined) return 'not_found';
+    if (this.admissionPaused) return 'paused';
     this.enqueue(taskId);
     void this.pump();
-    return true;
+    return 'started';
+  }
+
+  /** Stops new scheduled/manual admissions while already accepted work drains. */
+  pauseAdmission(): void {
+    this.admissionPaused = true;
+    this.stop();
+  }
+
+  resumeAdmission(): void {
+    if (!this.admissionPaused) return;
+    this.admissionPaused = false;
+    this.start();
   }
 
   /** Resolves once the queue is empty and nothing is running. */

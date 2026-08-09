@@ -6,7 +6,11 @@ function routes() {
   let record: import('../../application/ports/deployment.js').DeploymentRecord | undefined;
   const deployment = new DeploymentCoordinator({
     runningCommit: 'aaaaaaaaaaaaaaaa',
-    inspector: { headCommit: () => 'bbbbbbbbbbbbbbbb', isClean: () => true },
+    inspector: {
+      headCommit: () => 'bbbbbbbbbbbbbbbb',
+      isClean: () => true,
+      isPrepared: () => true,
+    },
     state: {
       read: () => record,
       write: (next) => {
@@ -14,8 +18,10 @@ function routes() {
       },
     },
     supervisor: { start: vi.fn() },
-    quiesce: vi.fn(),
-    resume: vi.fn(),
+    pauseTasks: vi.fn(),
+    resumeTasks: vi.fn(),
+    quiesceRuns: vi.fn(),
+    resumeRuns: vi.fn(),
     waitForIdle: () => new Promise<void>(() => undefined),
     now: () => '2026-08-09T00:00:00.000Z',
   });

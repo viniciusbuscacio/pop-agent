@@ -2,90 +2,100 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DeploymentRecord } from '../ports/deployment.js';
 import { DeploymentCoordinator } from './deployment-coordinator.js';
 
-function harness(options: { running?: string; head?: string; clean?: boolean } = {}) {
+function harness(options: { running?: string; head?: string; clean?: boolean; prepared?: boolean } = {}) {
   let record: DeploymentRecord | undefined;
+  let head = options.head ?? 'bbbbbbbbbbbbbbbb';
   let resolveIdle = (): void => undefined;
-  const idle = new Promise<void>((resolve) => {
-    resolveIdle = resolve;
-  });
+  let idle = new Promise<void>((resolve) => { resolveIdle = resolve; });
   const supervisor = vi.fn();
-  const quiesce = vi.fn();
-  const resume = vi.fn();
+  const pauseTasks = vi.fn();
+  const resumeTasks = vi.fn();
+  const quiesceRuns = vi.fn();
+  const resumeRuns = vi.fn();
   const coordinator = new DeploymentCoordinator({
     runningCommit: options.running ?? 'aaaaaaaaaaaaaaaa',
     inspector: {
-      headCommit: () => options.head ?? 'bbbbbbbbbbbbbbbb',
+      headCommit: () => head,
       isClean: () => options.clean ?? true,
+      isPrepared: () => options.prepared ?? true,
     },
     state: {
       read: () => record,
-      write: (next) => {
-        record = next;
-      },
+      write: (next) => { record = next; },
     },
     supervisor: { start: supervisor },
-    quiesce,
-    resume,
+    pauseTasks,
+    resumeTasks,
+    quiesceRuns,
+    resumeRuns,
     waitForIdle: () => idle,
     now: () => '2026-08-09T00:00:00.000Z',
   });
-  return { coordinator, supervisor, quiesce, resume, resolveIdle, record: () => record };
+  return {
+    coordinator, supervisor, pauseTasks, resumeTasks, quiesceRuns, resumeRuns,
+    resolveIdle,
+    nextIdle: () => { idle = new Promise<void>((resolve) => { resolveIdle = resolve; }); },
+    resolve: () => resolveIdle(),
+    setHead: (value: string) => { head = value; },
+    record: () => record,
+  };
+}
+
+async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe('DeploymentCoordinator', () => {
-  it('distinguishes the boot commit from the checkout HEAD', () => {
-    const { coordinator } = harness();
-
-    expect(coordinator.status()).toMatchObject({
-      runningCommit: 'aaaaaaa',
-      headCommit: 'bbbbbbb',
-      lastKnownGood: 'aaaaaaa',
-      pending: true,
-      clean: true,
-      phase: 'pending',
+  it('reports whether HEAD has an exact green-gate receipt', () => {
+    expect(harness({ prepared: false }).coordinator.status()).toMatchObject({
+      pending: true, clean: true, prepared: false, phase: 'pending',
     });
   });
 
-  it('refuses an uncommitted checkout', () => {
-    const { coordinator, quiesce } = harness({ clean: false });
-
-    expect(coordinator.requestRestartWhenIdle()).toEqual({ ok: false, reason: 'dirty_tree' });
-    expect(quiesce).not.toHaveBeenCalled();
+  it('requires preparation only for automatic activation', () => {
+    const h = harness({ prepared: false });
+    expect(h.coordinator.requestRestartWhenIdle('automatic')).toEqual({ ok: false, reason: 'not_prepared' });
+    expect(h.coordinator.requestRestartWhenIdle('manual')).toMatchObject({ ok: true });
   });
 
-  it('quiesces new runs and hands off only after all active work drains', async () => {
-    const { coordinator, quiesce, supervisor, resolveIdle, record } = harness();
+  it('waits passively, then closes task and run admission before hand-off', async () => {
+    const h = harness();
+    expect(h.coordinator.requestRestartWhenIdle('automatic')).toMatchObject({ ok: true });
+    expect(h.quiesceRuns).not.toHaveBeenCalled();
 
-    expect(coordinator.requestRestartWhenIdle()).toMatchObject({ ok: true });
-    expect(quiesce).toHaveBeenCalledOnce();
-    expect(record()?.phase).toBe('waiting-idle');
-    expect(supervisor).not.toHaveBeenCalled();
+    h.resolve();
+    await flush();
 
-    resolveIdle();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(record()?.phase).toBe('restarting');
-    expect(supervisor).toHaveBeenCalledWith({
-      runningCommit: 'aaaaaaaaaaaaaaaa',
-      targetCommit: 'bbbbbbbbbbbbbbbb',
-      lastKnownGood: 'aaaaaaaaaaaaaaaa',
+    expect(h.pauseTasks).toHaveBeenCalledOnce();
+    expect(h.quiesceRuns).toHaveBeenCalledOnce();
+    expect(h.supervisor).toHaveBeenCalledWith({
+      runningCommit: 'aaaaaaaaaaaaaaaa', targetCommit: 'bbbbbbbbbbbbbbbb',
+      lastKnownGood: 'aaaaaaaaaaaaaaaa', requestedBy: 'automatic',
     });
   });
 
-  it('reopens the run gate when the external hand-off fails', async () => {
-    const { coordinator, supervisor, resume, resolveIdle, record } = harness();
-    supervisor.mockImplementation(() => {
-      throw new Error('systemd-run denied');
-    });
+  it('reopens admission instead of activating a checkout that changed during the wait', async () => {
+    const h = harness();
+    h.coordinator.requestRestartWhenIdle('automatic');
+    h.setHead('cccccccccccccccc');
+    h.resolve();
+    await flush();
 
-    coordinator.requestRestartWhenIdle();
-    resolveIdle();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(h.supervisor).not.toHaveBeenCalled();
+    expect(h.resumeRuns).toHaveBeenCalledOnce();
+    expect(h.resumeTasks).toHaveBeenCalledOnce();
+    expect(h.record()).toMatchObject({ phase: 'superseded' });
+  });
 
-    expect(resume).toHaveBeenCalledOnce();
-    expect(record()).toMatchObject({ phase: 'failed', error: 'systemd-run denied' });
+  it('can cancel an automatic wait without changing the operator LLM switch', () => {
+    const h = harness();
+    h.coordinator.requestRestartWhenIdle('automatic');
+
+    expect(h.coordinator.cancelWaiting('automatic')).toBe(true);
+    expect(h.resumeRuns).toHaveBeenCalledOnce();
+    expect(h.resumeTasks).toHaveBeenCalledOnce();
+    expect(h.record()).toMatchObject({ phase: 'cancelled' });
   });
 });

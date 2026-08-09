@@ -10,6 +10,7 @@ const plan: DeploymentPlan = {
   serviceName: 'pop-agent-test',
   healthUrl: 'http://127.0.0.1:39001/healthz',
   timeoutMs: 1_000,
+  requestedBy: 'manual',
 };
 
 function harness(health: boolean[]) {
@@ -24,6 +25,7 @@ function harness(health: boolean[]) {
       command: (command: string, args: string[], cwd?: string) => {
         commands.push({ command, args, ...(cwd === undefined ? {} : { cwd }) });
       },
+      candidateMatches: () => true,
       healthy,
       sleep: () => Promise.resolve(),
       now: () => '2026-08-09T00:00:00.000Z',

@@ -45,6 +45,8 @@ export interface AppSettings {
    * intended factory setting once it has been watched for a while is thirty.
    */
   distillIntervalMinutes: number;
+  /** Activate a gate-verified committed checkout once conversations and tasks are idle. */
+  autoActivatePreparedUpdates: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -58,6 +60,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoApproveSkills: false,
   distillSkills: true,
   distillIntervalMinutes: 10,
+  autoActivatePreparedUpdates: false,
+  autoRestartIdleMinutes: 10,
 };
 
 const SETTINGS_KEY = 'app';
@@ -75,5 +79,10 @@ export class SettingsService {
   write(next: AppSettings): AppSettings {
     this.repo.set(SETTINGS_KEY, next);
     return next;
+  }
+
+  /** Internal atomic-looking merge for background policy changes such as rollback disabling auto activation. */
+  update(patch: Partial<AppSettings>): AppSettings {
+    return this.write({ ...this.read(), ...patch });
   }
 }

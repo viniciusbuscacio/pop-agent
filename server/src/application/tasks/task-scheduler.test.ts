@@ -321,7 +321,7 @@ describe('the queue', () => {
     const task = tasks.create({ title: 'Manual', prompt: 'a', scheduleKind: 'interval', intervalMinutes: 60 });
     tasks.toggle(task.id, false);
 
-    expect(scheduler.runNow(task.id)).toBe(true);
+    expect(scheduler.runNow(task.id)).toBe('started');
     await scheduler.whenIdle();
 
     const stored = taskRepo.get(task.id);
@@ -331,7 +331,7 @@ describe('the queue', () => {
   });
 
   it('run-now says no to a task that does not exist', () => {
-    expect(scheduler.runNow('task-nope')).toBe(false);
+    expect(scheduler.runNow('task-nope')).toBe('not_found');
   });
 
   it('a task deleted while it waits in the queue is simply skipped', async () => {

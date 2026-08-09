@@ -80,7 +80,10 @@ export interface StartRunOptions {
 
 export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
-  | { ok: false; reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' };
+  | {
+      ok: false;
+      reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' | 'deployment_pending';
+    };
 
 /**
  * How a run ended, for whoever asked to be told ({@link RunService.whenRunEnds}).
@@ -253,6 +256,8 @@ export class RunService {
    * engine. The web/API keep working; only the brain is off.
    */
   private llmHalted = false;
+  /** Separate from the operator switch: cancelling a deployment must not start a stopped LLM. */
+  private deploymentDraining = false;
 
   constructor(private readonly deps: RunDeps) {}
 
@@ -277,6 +282,8 @@ export class RunService {
     const chat = this.deps.chats.get(chatId);
     if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
     if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
+    // The HTTP layer turns this into the durable queue; no words are persisted twice here.
+    if (this.deploymentDraining) return { ok: false, reason: 'deployment_pending' };
 
     const now = new Date(this.deps.clock.now()).toISOString();
     const isFirstMessage = this.deps.chats.countMessages(chatId) === 0;
@@ -501,6 +508,11 @@ export class RunService {
     return this.llmHalted;
   }
 
+  /** Whether a durable queued message may enter the runtime right now. */
+  isAcceptingRuns(): boolean {
+    return !this.llmHalted && !this.deploymentDraining;
+  }
+
   /**
    * "Stop LLM" (LOTE 6): aborts every run in flight, drops the queue, and
    * refuses anything new until {@link startLlm}. Returns how many chats were
@@ -526,7 +538,17 @@ export class RunService {
    * restart until whenIdle resolves and every current answer is persisted.
    */
   quiesce(): void {
-    this.llmHalted = true;
+    this.beginDeploymentDrain();
+  }
+
+  beginDeploymentDrain(): void {
+    this.deploymentDraining = true;
+  }
+
+  endDeploymentDrain(): void {
+    if (!this.deploymentDraining) return;
+    this.deploymentDraining = false;
+    this.deps.onLlmStarted?.();
   }
 
   /** Stops whatever this chat is doing. False when it was not doing anything. */

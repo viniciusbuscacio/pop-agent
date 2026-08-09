@@ -192,6 +192,10 @@ export interface SettingsDTO {
   distillSkills: boolean;
   /** Minutes between its ticks; one conversation per tick is the cost ceiling. */
   distillIntervalMinutes: number;
+  /** Activate a gate-verified local commit automatically after work drains. */
+  autoActivatePreparedUpdates: boolean;
+  /** Minutes of total inactivity (no runs or tasks) before an automatic restart triggers. */
+  autoRestartIdleMinutes: number;
 }
 
 /** `GET`/`PUT /v1/memory` — the living document Pop Agent keeps about the user. */
@@ -393,6 +397,8 @@ export interface UpdateStatusResponse {
     lastKnownGood: string;
     pending: boolean;
     clean: boolean;
+    /** Current HEAD's tree exactly matches a recent successful gate receipt. */
+    prepared: boolean;
     phase:
       | 'current'
       | 'pending'
@@ -401,7 +407,10 @@ export interface UpdateStatusResponse {
       | 'healthy'
       | 'rolling-back'
       | 'rolled-back'
+      | 'cancelled'
+      | 'superseded'
       | 'failed';
+    requestedBy?: 'manual' | 'automatic';
     error?: string;
     failedRef?: string;
   };
@@ -410,7 +419,12 @@ export interface UpdateStatusResponse {
 /** `POST /v1/update/restart-when-idle` — hand a committed checkout to the supervisor. */
 export type DeploymentRequestResponse =
   | { ok: true; deployment: NonNullable<UpdateStatusResponse['deployment']> }
-  | { ok: false; reason: 'already_current' | 'dirty_tree' | 'already_scheduled' };
+  | {
+      ok: false;
+      reason: 'already_current' | 'dirty_tree' | 'not_prepared' | 'already_scheduled';
+    };
+
+export type DeploymentCancelResponse = { ok: true } | { ok: false; reason: 'not_waiting' };
 
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {

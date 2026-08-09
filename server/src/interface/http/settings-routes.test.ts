@@ -13,6 +13,7 @@ beforeEach(async () => {
   app = fixture.app;
   const res = await app.request('/v1/setup', {
     method: 'POST',
+autoRestartIdleMinutes: 10,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ password: PASSWORD }),
   });
@@ -31,6 +32,7 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
     }),
   );
 }
+autoRestartIdleMinutes: 15,
 
 const DEFAULT_DOC = {
   language: 'en',
@@ -43,6 +45,7 @@ const DEFAULT_DOC = {
   autoApproveSkills: false,
   distillSkills: true,
   distillIntervalMinutes: 10,
+  autoActivatePreparedUpdates: false,
 };
 
 describe('GET /v1/settings', () => {

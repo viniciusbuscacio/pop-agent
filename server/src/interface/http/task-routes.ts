@@ -56,7 +56,7 @@ const toggleSchema = z.object({ enabled: z.boolean() }).strict();
 export interface TaskRoutesDeps {
   tasks: TaskService;
   /** The scheduler's single-file queue; "run now" is an entry into it. */
-  taskScheduler: { runNow(taskId: string): boolean };
+  taskScheduler: { runNow(taskId: string): 'started' | 'not_found' | 'paused' };
 }
 
 export function createTaskRoutes(deps: TaskRoutesDeps): Hono {
@@ -96,7 +96,11 @@ export function createTaskRoutes(deps: TaskRoutesDeps): Hono {
   routes.post('/tasks/:id/run-now', (c) => {
     // 202: queued behind whatever the scheduler is already doing. The answer
     // shows up in the task's last status and in its own conversation.
-    if (!deps.taskScheduler.runNow(c.req.param('id'))) return taskNotFound(c);
+    const result = deps.taskScheduler.runNow(c.req.param('id'));
+    if (result === 'not_found') return taskNotFound(c);
+    if (result === 'paused') {
+      return apiError(c, 409, 'deployment_pending', 'An update is about to restart Pop Agent.');
+    }
     return c.json({ started: true }, 202);
   });
 

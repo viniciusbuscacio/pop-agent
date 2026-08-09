@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
-import type { DeploymentRequestResponse, UpdateStatusResponse } from '@pop-agent/shared';
+import type {
+  DeploymentCancelResponse,
+  DeploymentRequestResponse,
+  UpdateStatusResponse,
+} from '@pop-agent/shared';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
 
@@ -49,6 +53,13 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
       { ok: true, deployment: result.status } satisfies DeploymentRequestResponse,
       202,
     );
+  });
+
+  routes.post('/update/cancel', (c) => {
+    if (deps.deployment?.cancelWaiting() !== true) {
+      return c.json({ ok: false, reason: 'not_waiting' } satisfies DeploymentCancelResponse, 409);
+    }
+    return c.json({ ok: true } satisfies DeploymentCancelResponse);
   });
 
   return routes;

@@ -28,6 +28,8 @@ const settingsSchema = z
     autoApproveSkills: z.boolean(),
     distillSkills: z.boolean(),
     distillIntervalMinutes: z.number().int().min(1).max(1440),
+    autoActivatePreparedUpdates: z.boolean(),
+    autoRestartIdleMinutes: z.number().int().min(1).max(1440),
   })
   .strict();
 
@@ -69,5 +71,6 @@ function toDto(settings: AppSettings): SettingsDTO {
     autoApproveSkills: settings.autoApproveSkills,
     distillSkills: settings.distillSkills,
     distillIntervalMinutes: settings.distillIntervalMinutes,
+    autoActivatePreparedUpdates: settings.autoActivatePreparedUpdates,
   };
 }
