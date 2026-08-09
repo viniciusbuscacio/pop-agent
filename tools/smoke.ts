@@ -367,6 +367,10 @@ async function main(): Promise<void> {
       POP_AGENT_PORT: String(port),
       POP_AGENT_BIND: '127.0.0.1',
       POP_AGENT_DATA_DIR: dataDir,
+      // Keep the throwaway Files symlink out of the live agent workspace. A
+      // disposable server must not repoint ~/pop-agent-workspace/Files and
+      // leave it dangling when its temporary data directory is removed.
+      POP_AGENT_WORKSPACE: join(dataDir, 'workspace'),
       // Explicit, not inherited: the smoke runs in the gate and in CI, and it
       // must cost nothing no matter what the machine's default engine is.
       POP_AGENT_ENGINE: 'fake',
