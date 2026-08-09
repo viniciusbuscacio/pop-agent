@@ -349,3 +349,28 @@ describe('SkillsVault stale built-in sweep', () => {
     expect(vault.get('shell-safety')?.source).toBe('builtin');
   });
 });
+
+describe('SkillsVault enabled', () => {
+  it('persists disabled across a vault reopen', () => {
+    expect(vault.setEnabled('shell-safety', false)).toBe(true);
+    expect(vault.get('shell-safety')?.enabled).toBe(false);
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).toContain('enabled: false');
+
+    const reopened = new SkillsVault(root);
+    expect(reopened.get('shell-safety')?.enabled).toBe(false);
+
+    expect(reopened.setEnabled('shell-safety', true)).toBe(true);
+    expect(reopened.get('shell-safety')?.enabled).toBeUndefined();
+    expect(readFileSync(join(root, 'shell-safety.md'), 'utf8')).not.toContain('enabled:');
+  });
+
+  it('can disable a built-in without deleting it', () => {
+    expect(vault.setEnabled('pop-agent-manual', false)).toBe(true);
+    expect(vault.get('pop-agent-manual')?.source).toBe('builtin');
+    expect(vault.get('pop-agent-manual')?.enabled).toBe(false);
+  });
+
+  it('answers false for an unknown slug', () => {
+    expect(vault.setEnabled('ghost', false)).toBe(false);
+  });
+});

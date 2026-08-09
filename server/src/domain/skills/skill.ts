@@ -36,6 +36,12 @@ export interface Skill {
    * every skill that predates auto-skill is one the user already has.
    */
   pending?: boolean;
+  /**
+   * A disabled skill stays in the vault but is excluded from routing and from
+   * the pinned set that reaches the session prompt (pop-agent.spec §8). Absent
+   * means enabled -- no frontmatter noise for the default case.
+   */
+  enabled?: boolean;
 }
 
 /** A skill the router picked, with why. */

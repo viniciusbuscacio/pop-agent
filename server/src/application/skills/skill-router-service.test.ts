@@ -21,6 +21,7 @@ function repo(skills: Skill[]): SkillsRepo {
     write: () => skills[0]!,
     approve: (slug) => skills.find((s) => s.slug === slug),
     delete: () => true,
+    setEnabled: () => true,
   };
 }
 
@@ -221,5 +222,13 @@ describe('SkillRouterService', () => {
 
     expect(vectors.rows.has('gone')).toBe(false);
     expect(vectors.rows.get('recipes')?.vector.length).toBe(2);
+  });
+
+  it('never routes a skill the user disabled', async () => {
+    const disabled = SKILLS.map((entry) =>
+      entry.slug === 'git' ? { ...entry, enabled: false as const } : entry,
+    );
+    const service = new SkillRouterService({ skills: repo(disabled) });
+    expect(await service.route('what git branches exist?')).toEqual([]);
   });
 });

@@ -23,6 +23,7 @@ function repo(skills: Skill[]): SkillsRepo {
     write: () => skills[0]!,
     approve: (slug) => skills.find((entry) => entry.slug === slug),
     delete: () => true,
+    setEnabled: () => true,
   };
 }
 

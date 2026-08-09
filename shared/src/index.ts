@@ -265,6 +265,8 @@ export interface SkillDTO {
   pinned?: boolean;
   /** Waiting for the user to accept it; not routed until then (§8). */
   pending?: boolean;
+  /** Switched off by the user; absent means enabled. Built-ins can be disabled, not deleted. */
+  enabled?: boolean;
   /** How many times the router has put this skill in front of the model (§8). */
   useCount?: number;
   /** ISO-8601 of the last time it did. Absent means never. */

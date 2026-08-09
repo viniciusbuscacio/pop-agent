@@ -167,7 +167,7 @@ export class SkillRouterService {
  * distiller dedups against.
  */
 function routable(skill: Skill): boolean {
-  return skill.pinned !== true && skill.pending !== true;
+  return skill.pinned !== true && skill.pending !== true && skill.enabled !== false;
 }
 
 function routingText(skill: Skill): string {

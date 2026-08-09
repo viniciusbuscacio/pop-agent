@@ -121,6 +121,7 @@ function skillsRepo(initial: Skill[] = []): SkillsRepo & { written: SkillInput[]
     },
     approve: (slug) => skills.find((entry) => entry.slug === slug),
     delete: () => true,
+    setEnabled: () => true,
   };
 }
 
