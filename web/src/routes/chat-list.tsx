@@ -10,7 +10,11 @@ import { ShellFooter } from './shell-header';
 import { joinPath, parentDir, useFilesStore } from '../store/files';
 import { useNotificationsStore } from '../store/notifications';
 import { filesService } from '../services/artifacts';
-import { useSkillsStore } from '../store/skills';
+import {
+  matchesSourceFilter,
+  type SkillSourceFilter,
+  useSkillsStore,
+} from '../store/skills';
 import { useMcpStore } from '../store/mcp';
 import { skillsService } from '../services/skills';
 import { TasksList } from './tasks-list';
@@ -455,6 +459,92 @@ function FolderTree() {
   );
 }
 
+const SKILL_FILTER_OPTIONS: { value: SkillSourceFilter; labelKey: Parameters<typeof t>[0] }[] = [
+  { value: 'all', labelKey: 'skills.filter.all' },
+  { value: 'personal', labelKey: 'skills.filter.personal' },
+  { value: 'auto', labelKey: 'skills.filter.auto' },
+  { value: 'pending', labelKey: 'skills.filter.pending' },
+  { value: 'builtin', labelKey: 'skills.filter.builtin' },
+];
+
+const SKILL_FIELD_CLASS =
+  'w-full truncate text-left rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]';
+
+/** Source filter dropdown, model-picker style, with a pending count on the button. */
+function SkillsSourceFilter({ pendingCount }: { pendingCount: number }) {
+  const sourceFilter = useSkillsStore((state) => state.sourceFilter);
+  const setSourceFilter = useSkillsStore((state) => state.setSourceFilter);
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function close(event: PointerEvent): void {
+      if (root.current !== null && !root.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  const baseLabel = t(
+    SKILL_FILTER_OPTIONS.find((option) => option.value === sourceFilter)?.labelKey ??
+      'skills.filter.all',
+  );
+  const buttonLabel =
+    pendingCount > 0 ? `${baseLabel} · ${t('skills.filter.pendingCount', { count: pendingCount })}` : baseLabel;
+
+  return (
+    <div ref={root} className="relative min-w-0 px-3 pb-2">
+      <span id="skills-source-filter-label" className="sr-only">
+        {t('skills.filter.label')}
+      </span>
+      <button
+        type="button"
+        data-testid="skills-source-filter"
+        role="combobox"
+        aria-label={t('skills.filter.label')}
+        aria-controls="skills-source-filter-listbox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((shown) => !shown)}
+        className={SKILL_FIELD_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {open ? (
+        <div className="absolute top-full right-3 left-3 z-20 mt-1 rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg">
+          <div
+            id="skills-source-filter-listbox"
+            role="listbox"
+            aria-label={t('skills.filter.label')}
+            className="flex flex-col"
+          >
+            {SKILL_FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                data-testid={`skills-source-filter-${option.value}`}
+                aria-selected={option.value === sourceFilter}
+                onClick={() => {
+                  setSourceFilter(option.value);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)]"
+              >
+                <span className="truncate">{t(option.labelKey)}</span>
+                {option.value === sourceFilter ? (
+                  <span className="ml-auto shrink-0 text-[var(--accent)]">✓</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The skills list in the sidebar (pop-agent.spec §8), the explorer twin of the
  * folder tree: the shared store keeps it in step with the editor pane, and a
@@ -464,6 +554,7 @@ function SkillsList({ filter }: { filter: string }) {
   const navigate = useNavigate();
   const { slug } = useParams();
   const skills = useSkillsStore((state) => state.skills);
+  const sourceFilter = useSkillsStore((state) => state.sourceFilter);
   const reload = useSkillsStore((state) => state.reload);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
@@ -480,14 +571,18 @@ function SkillsList({ filter }: { filter: string }) {
 
   if (skills === undefined) return <div className="flex-1" />;
 
+  const pendingCount = skills.filter((skill) => skill.pending === true).length;
   const query = filter.trim().toLowerCase();
-  const shown =
-    query.length === 0
-      ? skills
-      : skills.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(query));
+  const shown = skills.filter((skill) => {
+    if (!matchesSourceFilter(skill, sourceFilter)) return false;
+    if (query.length === 0) return true;
+    return `${skill.name} ${skill.description}`.toLowerCase().includes(query);
+  });
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SkillsSourceFilter pendingCount={pendingCount} />
+      <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
       {shown.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('skills.none')}</p>
       ) : (
@@ -566,6 +661,7 @@ function SkillsList({ filter }: { filter: string }) {
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }
