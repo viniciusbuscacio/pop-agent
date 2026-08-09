@@ -86,14 +86,22 @@ export class OAuthFlowService {
 
     const interaction: ProviderAuthInteraction = {
       signal: controller.signal,
-      prompt: (prompt) => this.ask(flow, prompt),
+      prompt: (prompt) => {
+        // The sign-in's own heartbeat, journaled: which question is up, when.
+        // The credential can land long before the login promise resolves, and
+        // only the journal says which side stopped talking (Vinicius, 08/08).
+        console.log(`pop oauth: ${providerId} asks ${prompt.type}`);
+        return this.ask(flow, prompt);
+      },
       notify: (event) => {
         if (!flow.state.done) flow.state.events.push(sanitizeEvent(event));
       },
     };
 
+    console.log(`pop oauth: ${providerId} flow started`);
     this.deps.login(providerId, interaction).then(
       () => {
+        console.log(`pop oauth: ${providerId} login resolved`);
         this.finish(flow, undefined);
         // Only a flow that really landed counts -- a cancel that raced the
         // login's own resolution keeps ok=false and stays penalized.
@@ -161,6 +169,9 @@ export class OAuthFlowService {
     flow.state.done = true;
     flow.state.ok = error === undefined;
     if (error !== undefined) flow.state.error = error;
+    console.log(
+      `pop oauth: ${flow.state.providerId} finished ok=${flow.state.ok}${error === undefined ? '' : ` (${error})`}`,
+    );
   }
 }
 
