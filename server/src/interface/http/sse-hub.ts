@@ -94,5 +94,24 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         action: event.action,
         detail: event.detail,
       };
+    case 'queue':
+      return {
+        kind: 'queue',
+        chatId: event.chatId,
+        ...(event.message === undefined
+          ? {}
+          : {
+              message: {
+                id: event.message.id,
+                chatId: event.message.chatId,
+                text: event.message.text,
+                attachments: event.message.attachments,
+                filePaths: event.message.filePaths,
+                createdAt: event.message.createdAt,
+                updatedAt: event.message.updatedAt,
+              },
+            }),
+        ...(event.started === undefined ? {} : { started: event.started }),
+      };
   }
 }

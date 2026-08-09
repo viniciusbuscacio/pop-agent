@@ -132,6 +132,10 @@ export interface RunDeps {
   onFallback?: (info: { chatId: string; from: string; to: string; code: string }) => void;
   /** Auth-class refusals, forwarded to the provider layer (pop-agent.spec §15). */
   onAuthFailure?: (providerId: string) => void;
+  /** Called after a chat leaves the run registry, so its durable follow-up may start. */
+  onRunSettled?: (chatId: string) => void;
+  /** Called when the operator re-enables work, to recover persisted follow-ups. */
+  onLlmStarted?: () => void;
 }
 
 interface PendingRun {
@@ -477,6 +481,7 @@ export class RunService {
   /** Clears the operator switch; sessions are recreated lazily by the bridge. */
   startLlm(): void {
     this.llmHalted = false;
+    this.deps.onLlmStarted?.();
   }
 
   /**
@@ -945,6 +950,7 @@ export class RunService {
     this.running -= 1;
     this.runs.delete(run.runId);
     this.runIdByChat.delete(run.chatId);
+    this.deps.onRunSettled?.(run.chatId);
     // A run that ended with a question still open denies it, so nothing leaks.
     const pending = this.confirms.get(run.runId);
     if (pending !== undefined) {

@@ -101,6 +101,8 @@ export const en = {
   'chat.send': 'Send',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
   'chat.queue': 'Queue message',
+  'chat.queueSave': 'Save queued message',
+  'chat.queueCancelFailed': 'Could not cancel the queued message.',
   'chat.stop': 'Stop',
   'chat.attach': 'Attach a file',
   'chat.mic': 'Record a voice note',

@@ -513,10 +513,23 @@ export interface LiveRunDTO {
   tools: ToolCallDTO[];
 }
 
+export interface QueuedMessageDTO {
+  id: string;
+  chatId: string;
+  text: string;
+  attachments: AttachmentDTO[];
+  /** Files already in Files, kept as references until this turn starts. */
+  filePaths: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MessagesResponse {
   messages: MessageDTO[];
   /** Present while this chat has a run in flight. */
   live?: LiveRunDTO;
+  /** The server-owned follow-up slot, shared by every client. */
+  queued?: QueuedMessageDTO;
 }
 
 /** `PATCH /v1/chats/:id` — send only what changes. */
@@ -547,11 +560,10 @@ export interface SendMessageRequest {
   filePaths?: string[];
 }
 
-/** 202 response of `POST /v1/chats/:id/messages`: the run has started. */
-export interface SendMessageResponse {
-  runId: string;
-  userMessageId: string;
-}
+/** 202 response of `POST /v1/chats/:id/messages`: started now, or safely queued. */
+export type SendMessageResponse =
+  | { queued?: false; runId: string; userMessageId: string }
+  | { queued: true; message: QueuedMessageDTO };
 
 /** `POST /v1/chats/:id/stop` — false when there was nothing to stop. */
 export interface StopRunResponse {
@@ -836,4 +848,11 @@ export type StreamEvent =
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
+  /** The durable follow-up changed; `started` carries its user bubble into every client. */
+  | {
+      kind: 'queue';
+      chatId: string;
+      message?: QueuedMessageDTO;
+      started?: { runId: string; userMessageId: string; text: string; attachments: AttachmentDTO[]; createdAt: string };
+    }
   | { kind: 'update'; status: 'available' | 'installing' | 'done' | 'error' };

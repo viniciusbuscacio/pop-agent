@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@pop-agent/shared';
+import type { SendMessageResponse, StreamEvent } from '@pop-agent/shared';
 import { Transcript, emptyRun, type RunState } from './transcript.js';
 
 /**
@@ -16,7 +16,7 @@ import { Transcript, emptyRun, type RunState } from './transcript.js';
 
 export interface SessionPorts {
   createChat(): Promise<{ id: string }>;
-  send(chatId: string, text: string): Promise<{ runId: string }>;
+  send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
   /** Yields until the connection ends. Reconnection is the caller's business. */
   events(): AsyncIterable<StreamEvent>;
@@ -27,6 +27,8 @@ export interface SessionListener {
   onRun(state: RunState): void;
   /** A run ended, cleanly or not. */
   onIdle(state: RunState): void;
+  /** The server accepted this behind a run another client already started. */
+  onQueued(text: string): void;
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
@@ -75,8 +77,12 @@ export class ChatSession {
   async ask(text: string): Promise<void> {
     const chatId = this.chatId ?? (await this.ports.createChat()).id;
     this.chatId = chatId;
-    const { runId } = await this.ports.send(chatId, text);
-    this.transcript = new Transcript(emptyRun(chatId, runId));
+    const response = await this.ports.send(chatId, text);
+    if (response.queued === true) {
+      this.listener.onQueued(response.message.text);
+      return;
+    }
+    this.transcript = new Transcript(emptyRun(chatId, response.runId));
     this.listener.onRun(this.transcript.snapshot());
   }
 

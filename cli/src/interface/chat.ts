@@ -96,6 +96,7 @@ export async function chat(
     {
       onRun: (state) => screen.onRun(state),
       onIdle: (state) => screen.onIdle(state),
+      onQueued: (text) => screen.onQueued(text),
       onTitle: (title) => screen.setTitle(title),
       onStreamEnd: () => screen.onStreamEnd(),
     },

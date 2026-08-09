@@ -217,6 +217,10 @@ export class ChatScreen {
     if (state.text.length > 0) this.markdown(state.text);
   }
 
+  onQueued(text: string): void {
+    this.say(paint.yellow(`Queued behind the current answer: ${text}`));
+  }
+
   onStreamEnd(): void {
     this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
   }

@@ -189,7 +189,7 @@ describe('sending a message', () => {
     expect(messages[1]?.content).toContain('fake bridge');
   });
 
-  it('refuses a second run in the same chat', async () => {
+  it('persists one follow-up on the server while the first run is active', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
 
@@ -198,10 +198,115 @@ describe('sending a message', () => {
       body: { text: 'two' },
     });
 
-    expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('run_in_progress');
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ queued: true, message: { chatId: chat.id, text: 'two' } });
+    const snapshot = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      queued?: { text: string };
+    };
+    expect(snapshot.queued?.text).toBe('two');
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
+  });
+
+  it('refuses a third message without replacing the durable follow-up', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'two' } });
+
+    const third = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'three' },
+    });
+
+    expect(third.status).toBe(409);
+    expect(((await third.json()) as { error: { code: string } }).error.code).toBe('queue_exists');
+    expect(fixture.queuedMessages.get(chat.id)?.text).toBe('two');
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('preserves uploaded attachments and Files references until execution', async () => {
+    const chat = await newChat();
+    fixture.files.write('reports/context.txt', Buffer.from('server file'));
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: {
+        text: 'with files',
+        attachments: [
+          { name: 'upload.txt', type: 'text/plain', dataUri: 'data:text/plain;base64,dXBsb2Fk' },
+        ],
+        filePaths: ['reports/context.txt'],
+      },
+    });
+
+    expect(fixture.queuedMessages.get(chat.id)).toMatchObject({
+      text: 'with files',
+      attachments: [{ name: 'upload.txt' }],
+      filePaths: ['reports/context.txt'],
+    });
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+
+    const { messages } = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      messages: MessageDTO[];
+    };
+    const sent = messages.find((message) => message.role === 'user' && message.content === 'with files');
+    expect(sent?.attachments.map((attachment) => attachment.name)).toEqual([
+      'upload.txt',
+      'context.txt',
+    ]);
+  });
+
+  it('edits and cancels the queued message from any client', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'old text' } });
+
+    const edited = await api(`/v1/chats/${chat.id}/queue`, {
+      method: 'PUT',
+      body: { text: 'new text' },
+    });
+    expect(edited.status).toBe(200);
+    expect(await edited.json()).toMatchObject({ message: { text: 'new text' } });
+
+    expect((await api(`/v1/chats/${chat.id}/queue`, { method: 'DELETE' })).status).toBe(204);
+    expect(fixture.queuedMessages.get(chat.id)).toBeUndefined();
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('consumes the queued message exactly once when the chat becomes free', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'second' } });
+
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+    // Reconciliation, SSE and startup may all notice the free chat. Repeating
+    // the drain after consumption must remain a no-op.
+    fixture.queuedMessages.drainAll();
+
+    const { messages } = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      messages: MessageDTO[];
+    };
+    expect(messages.filter((message) => message.role === 'user' && message.content === 'second')).toHaveLength(1);
+    expect(fixture.queuedMessages.get(chat.id)).toBeUndefined();
+  });
+
+  it('broadcasts queue creation, edits and consumption to other devices', async () => {
+    const chat = await newChat();
+    const events: StreamEvent[] = [];
+    const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'two' } });
+    await api(`/v1/chats/${chat.id}/queue`, { method: 'PUT', body: { text: 'edited' } });
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+    unsubscribe();
+
+    const queueEvents = events.filter((event) => event.kind === 'queue');
+    expect(queueEvents.map((event) => event.message?.text)).toEqual(['two', 'edited', undefined]);
   });
 
   it('rejects an empty message', async () => {

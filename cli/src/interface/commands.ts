@@ -106,8 +106,13 @@ export async function ask(
     const { ticket } = await api.eventTicket();
     const stream = await api.openEvents(ticket);
 
-    const { runId } = await api.send(chatId, text);
-    const transcript = new Transcript(emptyRun(chatId, runId));
+    const sent = await api.send(chatId, text);
+    if (sent.queued === true) {
+      context.terminal.line('Message queued behind the current answer.');
+      await stream.body?.cancel();
+      return 0;
+    }
+    const transcript = new Transcript(emptyRun(chatId, sent.runId));
 
     let printed = 0;
     let lastThinking = 0;

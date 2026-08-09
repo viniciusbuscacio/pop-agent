@@ -5,6 +5,7 @@ import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
 import type { MemoryRepo } from '../application/ports/memory-repo.js';
 import type { McpRepo } from '../application/ports/mcp-repo.js';
 import type { PushRepo } from '../application/ports/push-repo.js';
+import type { QueuedMessageRepo } from '../application/ports/queued-message-repo.js';
 import type { SecretsRepo } from '../application/ports/secrets-repo.js';
 import type { SettingsRepo } from '../application/ports/settings-repo.js';
 import type { SkillUsageRepo } from '../application/ports/skill-usage-repo.js';
@@ -27,6 +28,7 @@ import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
 import { SqliteMemoryRepo } from './db/sqlite-memory-repo.js';
 import { SqlitePushRepo } from './db/sqlite-push-repo.js';
+import { SqliteQueuedMessageRepo } from './db/sqlite-queued-message-repo.js';
 import { SqliteSecretsRepo } from './db/sqlite-secrets-repo.js';
 import { SqliteUsageRepo } from './db/sqlite-usage-repo.js';
 import { SqliteStorageRepo } from './db/sqlite-storage-repo.js';
@@ -52,6 +54,8 @@ export interface AppContext {
   settings: SettingsRepo;
   secrets: SecretsRepo;
   chats: ChatRepo;
+  /** One durable follow-up row per chat. */
+  queuedMessages: QueuedMessageRepo;
   /** Which chat wrote which Files path -- append-only history (§6, §14). */
   fileProvenance: FileProvenanceRepo;
   llmRuns: LlmRunsRepo;
@@ -102,6 +106,7 @@ export function bootstrap(): AppContext {
     settings: new SqliteSettingsRepo(db),
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),
+    queuedMessages: new SqliteQueuedMessageRepo(db),
     fileProvenance: new SqliteFileProvenanceRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),

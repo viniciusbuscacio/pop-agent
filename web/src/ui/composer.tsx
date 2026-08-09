@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { AttachmentDTO } from '@pop-agent/shared';
+import type { AttachmentDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -32,8 +32,10 @@ const MAX_ATTACHMENTS = 8;
 export function Composer({
   chatId,
   busy,
-  queuedText,
+  queuedMessage,
   onSend,
+  onUpdateQueued,
+  onCancelQueued,
   onStop,
   onNewChat,
   models,
@@ -43,8 +45,10 @@ export function Composer({
 }: {
   chatId: string;
   busy: boolean;
-  queuedText?: string;
+  queuedMessage?: QueuedMessageDTO;
   onSend: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  onUpdateQueued: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  onCancelQueued: () => Promise<void>;
   onStop: () => void;
   onNewChat: () => void;
   models: ModelChoice[];
@@ -57,6 +61,7 @@ export function Composer({
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [sending, setSending] = useState(false);
+  const [editingQueued, setEditingQueued] = useState(false);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
   const notify = useNotificationsStore((state) => state.notify);
@@ -102,6 +107,7 @@ export function Composer({
     setSlashQuery(undefined);
     setSlashMode('commands');
     setNotice(undefined);
+    setEditingQueued(false);
   }, [storageKey]);
 
   useEffect(() => {
@@ -341,18 +347,51 @@ export function Composer({
     }
     // One follow-up is already safe in the durable queue. Keep a third message
     // as the draft until that slot moves into a live run.
-    if (!canSend || sending || (busy && queuedText !== undefined)) return;
+    if (!canSend || sending || (busy && queuedMessage !== undefined && !editingQueued)) return;
     setSending(true);
     setNotice(undefined);
     try {
-      await onSend(text.trim(), attachments, mentions.map((m) => m.path));
+      const filePaths = mentions.map((mention) => mention.path);
+      if (editingQueued) await onUpdateQueued(text.trim(), attachments, filePaths);
+      else await onSend(text.trim(), attachments, filePaths);
       persist('');
       setAttachments([]);
       setMentions([]);
+      setEditingQueued(false);
     } catch {
       // Most importantly, do not clear anything: the exact draft and its files
       // remain available for another tap.
       setNotice(t('chat.sendFailed'));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function editQueued(): void {
+    if (queuedMessage === undefined) return;
+    persist(queuedMessage.text);
+    setAttachments(queuedMessage.attachments);
+    setMentions(
+      queuedMessage.filePaths.map((path) => ({ path, name: path.split('/').at(-1) ?? path })),
+    );
+    setEditingQueued(true);
+    queueMicrotask(() => area.current?.focus());
+  }
+
+  async function cancelQueued(): Promise<void> {
+    if (sending) return;
+    setSending(true);
+    setNotice(undefined);
+    try {
+      await onCancelQueued();
+      if (editingQueued) {
+        persist('');
+        setAttachments([]);
+        setMentions([]);
+        setEditingQueued(false);
+      }
+    } catch {
+      setNotice(t('chat.queueCancelFailed'));
     } finally {
       setSending(false);
     }
@@ -437,13 +476,33 @@ export function Composer({
         addFiles(event.dataTransfer.files);
       }}
     >
-      {queuedText !== undefined ? (
-        <p
+      {queuedMessage !== undefined ? (
+        <div
           data-testid="composer-queued"
-          className="mb-2 truncate rounded bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--muted)]"
+          className="mb-2 flex items-center gap-2 rounded bg-[var(--panel-bg)] px-2 py-1.5 text-xs text-[var(--muted)]"
         >
-          {t('chat.queued', { text: queuedText })}
-        </p>
+          <span className="min-w-0 flex-1 truncate">
+            {t('chat.queued', { text: queuedMessage.text })}
+          </span>
+          <button
+            type="button"
+            data-testid="queue-edit"
+            onClick={editQueued}
+            disabled={sending}
+            className="text-[var(--accent)] disabled:opacity-50"
+          >
+            {t('common.edit')}
+          </button>
+          <button
+            type="button"
+            data-testid="queue-cancel"
+            onClick={() => void cancelQueued()}
+            disabled={sending}
+            className="text-[var(--danger)] disabled:opacity-50"
+          >
+            {t('common.cancel')}
+          </button>
+        </div>
       ) : null}
 
       {notice !== undefined ? (
@@ -645,9 +704,9 @@ export function Composer({
         ) : (
           <IconButton
             testId="composer-send"
-            label={busy ? t('chat.queue') : t('chat.send')}
+            label={editingQueued ? t('chat.queueSave') : busy ? t('chat.queue') : t('chat.send')}
             primary
-            disabled={!canSend || sending || (busy && queuedText !== undefined)}
+            disabled={!canSend || sending || (busy && queuedMessage !== undefined && !editingQueued)}
             onClick={() => void submit()}
           >
             <SendIcon />

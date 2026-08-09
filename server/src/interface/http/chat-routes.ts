@@ -10,10 +10,13 @@ import {
   type ChatDTO,
   type MessageDTO,
   type ModelDTO,
+  type QueuedMessageDTO,
 } from '@pop-agent/shared';
 import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/chat/chat.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
+import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
+import type { QueuedMessage } from '../../application/ports/queued-message-repo.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { FilesService } from '../../application/files/files-service.js';
@@ -73,6 +76,7 @@ export interface ChatRoutesDeps {
   chats: ChatService;
   files: FilesService;
   runs: RunService;
+  queuedMessages: QueuedMessageService;
   providers: ProviderService;
   hub: SseHub;
   tickets: EventTickets;
@@ -184,9 +188,11 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     // A client mounting mid-run gets what already streamed, not a blank
     // bubble; only the first page carries it -- history pages have no "now".
     const live = before === undefined ? deps.runs.liveRun(chatId) : undefined;
+    const queued = before === undefined ? deps.queuedMessages.get(chatId) : undefined;
     return c.json({
       messages: messages.map(toMessageDto),
       ...(live === undefined ? {} : { live }),
+      ...(queued === undefined ? {} : { queued: toQueuedMessageDto(queued) }),
     });
   });
 
@@ -223,30 +229,85 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     // answers "is that connection still attached", and an id that names
     // nobody costs the run its second pair of hands and nothing else.
     const hands = c.req.header(HANDS_HEADER);
+    const chatId = c.req.param('id');
+    const origin = {
+      ...(client === undefined ? {} : { client }),
+      ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
+    };
     const result = deps.runs.startRun(
-      c.req.param('id'),
+      chatId,
       parsed.data.text,
       [...(parsed.data.attachments ?? []), ...referenced],
-      {
-        ...(client === undefined ? {} : { client }),
-        ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
-      },
+      origin,
     );
     if (!result.ok) {
       if (result.reason === 'chat_not_found') return chatNotFound(c);
-      return result.reason === 'llm_stopped'
-        ? apiError(c, 503, 'llm_stopped', 'The LLM is stopped by the operator (Settings → Server).')
-        : apiError(c, 409, 'run_in_progress', 'This chat is already waiting on an answer.');
+      if (result.reason === 'llm_stopped') {
+        return apiError(c, 503, 'llm_stopped', 'The LLM is stopped by the operator (Settings → Server).');
+      }
+      const queued = deps.queuedMessages.enqueue(chatId, {
+        text: parsed.data.text,
+        attachments: parsed.data.attachments ?? [],
+        filePaths: parsed.data.filePaths ?? [],
+        ...origin,
+      });
+      if (!queued.ok) {
+        return apiError(c, 409, 'queue_exists', 'This chat already has a queued message.');
+      }
+      return c.json({ queued: true as const, message: toQueuedMessageDto(queued.message) }, 202);
     }
 
     // 202: accepted and started. The answer arrives on the stream.
     return c.json({ runId: result.runId, userMessageId: result.userMessageId }, 202);
   });
 
+  routes.put('/chats/:id/queue', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = sendSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+    for (const filePath of parsed.data.filePaths ?? []) {
+      try {
+        if (deps.files.read(filePath) === undefined) {
+          return apiError(c, 404, 'not_found', `No such file: ${filePath}`);
+        }
+      } catch {
+        return apiError(c, 404, 'not_found', `No such file: ${filePath}`);
+      }
+    }
+    const client = readClient(c);
+    const hands = c.req.header(HANDS_HEADER);
+    const updated = deps.queuedMessages.update(c.req.param('id'), {
+      text: parsed.data.text,
+      attachments: parsed.data.attachments ?? [],
+      filePaths: parsed.data.filePaths ?? [],
+      ...(client === undefined ? {} : { client }),
+      ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
+    });
+    if (!updated.ok) {
+      return updated.reason === 'chat_not_found'
+        ? chatNotFound(c)
+        : apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
+    }
+    return c.json({ message: toQueuedMessageDto(updated.message) });
+  });
+
+  routes.delete('/chats/:id/queue', (c) => {
+    const removed = deps.queuedMessages.cancel(c.req.param('id'));
+    if (!removed.ok) {
+      return removed.reason === 'chat_not_found'
+        ? chatNotFound(c)
+        : apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
+    }
+    return c.body(null, 204);
+  });
+
   routes.post('/chats/:id/stop', (c) => {
     const id = c.req.param('id');
     if (deps.chats.get(id) === undefined) return chatNotFound(c);
-    return c.json({ stopped: deps.runs.stopRun(id) });
+    const stopped = deps.runs.stopRun(id);
+    deps.queuedMessages.drain(id);
+    return c.json({ stopped });
   });
 
   routes.post('/chats/:id/confirm', async (c) => {
@@ -355,6 +416,18 @@ function toModelDto(model: ModelInfo): ModelDTO {
     ...(model.name === undefined ? {} : { name: model.name }),
     ...(model.context === undefined ? {} : { context: model.context }),
     ...(model.pricing === undefined ? {} : { pricing: model.pricing }),
+  };
+}
+
+function toQueuedMessageDto(message: QueuedMessage): QueuedMessageDTO {
+  return {
+    id: message.id,
+    chatId: message.chatId,
+    text: message.text,
+    attachments: message.attachments,
+    filePaths: message.filePaths,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
   };
 }
 

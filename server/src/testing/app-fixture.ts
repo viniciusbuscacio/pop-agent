@@ -7,6 +7,7 @@ import type { Hono } from 'hono';
 import { AuthService } from '../application/auth/auth-service.js';
 import { ChatService } from '../application/chat/chat-service.js';
 import { RunService } from '../application/chat/run-service.js';
+import { QueuedMessageService } from '../application/chat/queued-message-service.js';
 import { TitleService } from '../application/chat/title-service.js';
 import { HealthService } from '../application/health/health-service.js';
 import type { Clock } from '../application/ports/clock.js';
@@ -31,6 +32,7 @@ import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { FilesService } from '../application/files/files-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteQueuedMessageRepo } from '../infrastructure/db/sqlite-queued-message-repo.js';
 import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
@@ -48,6 +50,7 @@ import { SqliteMcpRepo } from '../infrastructure/db/sqlite-mcp-repo.js';
 import { McpService } from '../application/mcp/mcp-service.js';
 import { createApp } from '../interface/http/app.js';
 import { SseHub } from '../interface/http/sse-hub.js';
+import { mimeOf } from '../domain/files/mime.js';
 
 /**
  * Test-only wiring: the real app, assembled the way main.ts assembles it, over
@@ -171,6 +174,7 @@ export interface TestApp {
   /** The user's Files over a throwaway tree (pop-agent.spec §14). */
   files: FilesService;
   runs: RunService;
+  queuedMessages: QueuedMessageService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
   /** The throwaway POP_AGENT_WORKSPACE this app's purger and sweeps act on. */
@@ -292,6 +296,7 @@ export function createTestApp(
   });
   // Wired exactly the way main.ts wires it: with no key configured the title
   // job is a silent no-op, which is what the fake-bridge tests need.
+  const queueDrain: { service?: QueuedMessageService } = {};
   const runs = new RunService({
     chats: chatRepo,
     bridge,
@@ -305,7 +310,31 @@ export function createTestApp(
       complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
       sink: hub,
     }),
+    onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
+    onLlmStarted: () => queueDrain.service?.drainAll(),
   });
+  const queuedMessages = new QueuedMessageService({
+    repo: new SqliteQueuedMessageRepo(db),
+    chats: chatRepo,
+    runs,
+    clock,
+    sink: hub,
+    resolveFile: (path) => {
+      try {
+        const bytes = files.read(path);
+        if (bytes === undefined) return undefined;
+        const type = mimeOf(path);
+        return {
+          name: path.split('/').at(-1) ?? path,
+          type,
+          dataUri: `data:${type};base64,${bytes.toString('base64')}`,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+  });
+  queueDrain.service = queuedMessages;
 
   // Wired exactly the way main.ts wires it (pop-agent.spec §6): a delete stops the
   // chat's work first, then purges what it left in the workspace. The
@@ -341,6 +370,7 @@ export function createTestApp(
     files,
     secretKey: Buffer.from('test-artifact-signing-key-000000'),
     runs,
+    queuedMessages,
     tasks,
     taskScheduler,
     providers,
@@ -446,6 +476,7 @@ export function createTestApp(
     chats,
     files,
     runs,
+    queuedMessages,
     tasks,
     taskScheduler,
     workspace,

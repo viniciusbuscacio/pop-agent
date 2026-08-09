@@ -9,15 +9,17 @@ import type { RunState } from './transcript.js';
  */
 
 function harness(events: StreamEvent[] = []) {
-  const seen: { runs: RunState[]; idle: RunState[]; titles: string[]; ended: number } = {
+  const seen: { runs: RunState[]; idle: RunState[]; queued: string[]; titles: string[]; ended: number } = {
     runs: [],
     idle: [],
+    queued: [],
     titles: [],
     ended: 0,
   };
   const listener: SessionListener = {
     onRun: (state) => seen.runs.push(state),
     onIdle: (state) => seen.idle.push(state),
+    onQueued: (text) => seen.queued.push(text),
     onTitle: (title) => seen.titles.push(title),
     onStreamEnd: () => {
       seen.ended += 1;
@@ -50,6 +52,27 @@ const delta = (text: string, seq: number): StreamEvent => ({
 });
 
 describe('ChatSession', () => {
+  it('reports a server-queued turn without inventing a run id', async () => {
+    const { session, ports, seen } = harness();
+    vi.mocked(ports.send).mockResolvedValueOnce({
+      queued: true,
+      message: {
+        id: 'queued-1',
+        chatId: 'chat-1',
+        text: 'wait behind phone',
+        attachments: [],
+        filePaths: [],
+        createdAt: '',
+        updatedAt: '',
+      },
+    });
+
+    await session.ask('wait behind phone');
+
+    expect(seen.queued).toEqual(['wait behind phone']);
+    expect(session.busy).toBe(false);
+  });
+
   it('creates a chat on the first question and keeps it for the next', async () => {
     const { session, ports } = harness();
     await session.ask('first');

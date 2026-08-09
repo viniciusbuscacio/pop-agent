@@ -9,6 +9,7 @@ import { envelope } from './domain/safety/sanitize.js';
 import { AuthService } from './application/auth/auth-service.js';
 import { ChatService } from './application/chat/chat-service.js';
 import { RunService } from './application/chat/run-service.js';
+import { QueuedMessageService } from './application/chat/queued-message-service.js';
 import { TitleService } from './application/chat/title-service.js';
 import { HealthService } from './application/health/health-service.js';
 import type { AgentBridge, ProviderAuthBridge } from './application/ports/agent-bridge.js';
@@ -29,6 +30,7 @@ import { FilesService } from './application/files/files-service.js';
 import { FileProvenanceService } from './application/files/file-provenance.js';
 import { GarbageSweeper } from './application/files/garbage-sweeper.js';
 import { filesCatalogBlock } from './application/files/files-catalog.js';
+import { mimeOf } from './domain/files/mime.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { buildLocalTools } from './infrastructure/agent/local-tools.js';
@@ -332,6 +334,7 @@ const purger = new FsChatPurger({
   },
 });
 const health = new HealthService({ providers, pingDb: context.pingDb });
+const queueDrain: { service?: QueuedMessageService } = {};
 const runs = new RunService({
   chats: context.chats,
   bridge,
@@ -348,6 +351,8 @@ const runs = new RunService({
     );
   },
   onAuthFailure: (providerId) => providers.noteAuthFailure(providerId),
+  onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
+  onLlmStarted: () => queueDrain.service?.drainAll(),
   // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that
@@ -401,6 +406,29 @@ const chats = new ChatService({
   purger,
   runs,
 });
+const queuedMessages = new QueuedMessageService({
+  repo: context.queuedMessages,
+  chats: context.chats,
+  runs,
+  clock: systemClock,
+  sink: hub,
+  resolveFile: (path) => {
+    try {
+      const bytes = files.read(path);
+      if (bytes === undefined) return undefined;
+      const type = mimeOf(path);
+      return {
+        name: path.split('/').at(-1) ?? path,
+        type,
+        dataUri: `data:${type};base64,${bytes.toString('base64')}`,
+      };
+    } catch {
+      return undefined;
+    }
+  },
+});
+queueDrain.service = queuedMessages;
+queuedMessages.drainAll();
 
 // Background tasks (pop-agent.spec §21): the rows, the queue that runs them, and
 // the daily housekeeping that rides the same tick. The sweep is internal --
@@ -513,6 +541,7 @@ const app = createApp({
   files,
   secretKey: context.secretKey,
   runs,
+  queuedMessages,
   tasks,
   taskScheduler,
   providers,

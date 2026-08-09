@@ -7,6 +7,7 @@ import type {
   ModelsResponse,
   RecentModelsResponse,
   PatchChatRequest,
+  QueuedMessageDTO,
   SendMessageResponse,
   StopRunResponse,
 } from '@pop-agent/shared';
@@ -52,6 +53,26 @@ export const chatsService = {
         ...(filePaths.length > 0 ? { filePaths } : {}),
       },
     });
+  },
+
+  updateQueue(
+    id: string,
+    text: string,
+    attachments: AttachmentDTO[] = [],
+    filePaths: string[] = [],
+  ): Promise<{ message: QueuedMessageDTO }> {
+    return apiRequest<{ message: QueuedMessageDTO }>(`/chats/${id}/queue`, {
+      method: 'PUT',
+      body: {
+        text,
+        ...(attachments.length > 0 ? { attachments } : {}),
+        ...(filePaths.length > 0 ? { filePaths } : {}),
+      },
+    });
+  },
+
+  cancelQueue(id: string): Promise<void> {
+    return apiRequest<void>(`/chats/${id}/queue`, { method: 'DELETE' });
   },
 
   stop(id: string): Promise<StopRunResponse> {

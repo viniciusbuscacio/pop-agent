@@ -22,6 +22,8 @@ export function ChatPage() {
   const confirm = useChatStore((state) => state.confirms[chatId]);
   const openChat = useChatStore((state) => state.openChat);
   const send = useChatStore((state) => state.send);
+  const updateQueued = useChatStore((state) => state.updateQueued);
+  const cancelQueued = useChatStore((state) => state.cancelQueued);
   const stop = useChatStore((state) => state.stop);
   const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
@@ -308,8 +310,12 @@ export function ChatPage() {
       <Composer
         chatId={chatId}
         busy={live !== undefined}
-        {...(queued === undefined ? {} : { queuedText: queued.text })}
+        {...(queued === undefined ? {} : { queuedMessage: queued })}
         onSend={(text, attachments, filePaths) => send(chatId, text, attachments, filePaths)}
+        onUpdateQueued={(text, attachments, filePaths) =>
+          updateQueued(chatId, text, attachments, filePaths)
+        }
+        onCancelQueued={() => cancelQueued(chatId)}
         onStop={() => void stop(chatId)}
         onNewChat={() => {
           void createChat().then((created) => navigate(`/chat/${created.id}`));

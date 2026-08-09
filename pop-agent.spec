@@ -890,9 +890,15 @@ events from stale runs.
   HTML) + code highlight (Shiki, themes synced light/dark, copy button,
   language label). Mermaid/KaTeX: later.
 - Streaming UX (aw's machine as reference): runId registry, reload
-  reconciliation mid-run, polite autoscroll + "jump to latest", visible
-  message queue during a run, per-chat draft in localStorage, auto-title
-  via SSE.
+  reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
+  via SSE, and per-chat drafts in localStorage. The **follow-up queue is
+  server-owned**: one SQLite row per chat, returned with the message snapshot
+  and broadcast by SSE so phone, desktop and tabs see the same text. A POST
+  racing an active run fills that slot atomically; a third is refused without
+  replacement. Completion consumes it exactly once and broadcasts the new user
+  bubble; PUT edits it and DELETE cancels it before execution. Text, uploads
+  and Files references survive PWA reclamation and server restart. Legacy
+  `pop-agent.queued.*` localStorage rows migrate on first open.
 - **Adoption**: an event for a chat with no live buffer starts one, so a run
   begun on another device streams into every open window. Runs that already
   ended are remembered briefly, so their stragglers are ignored rather than

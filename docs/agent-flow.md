@@ -16,17 +16,21 @@ web                        server
  │ ────────────────────────────────────▶ { text, attachments? }
  │  202 Accepted                         SendMessageResponse DTO
  │ ◀──────────────────────────────────── { runId, userMessageId }
+ │                         or, if busy:  { queued: true, message }
  │
  │  GET /v1/events (EventSource, one per app instance)
  │ ◀━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ StreamEvent DTOs, one per SSE frame
  │    delta → thinking → tool(start|output|done) → … → done
 ```
 
-- Send is **fire-and-return**: the POST enqueues the run and answers
-  immediately; everything streamed comes through the single SSE channel.
-- Every event carries `chatId` + `runId`. The frontend keeps a **runId
-  registry**: events for unknown/stale runs are dropped (no cross-chat
-  leaks, no zombie deltas after Stop).
+- Send is **fire-and-return**: the POST starts the run and answers immediately.
+  If that chat is already running, the same POST atomically occupies its one
+  durable SQLite follow-up slot instead. A third POST gets `queue_exists` and
+  cannot replace the row. `PUT /v1/chats/:id/queue` edits it; `DELETE` cancels.
+- Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
+  the shared row when created/edited, nothing when cancelled, and a `started`
+  user-message identity when consumed. The frontend keeps a **runId registry**:
+  stale run fragments are dropped while queue changes still reach every tab.
 - Stop: `POST /v1/chats/:id/stop` → server aborts; the run's terminal
   event is `error` with code `aborted` (or `done` if it finished first).
 
@@ -104,15 +108,21 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   refetch `GET /v1/chats/:id/messages` and merge with the live buffer by
   `runId`/`messageId` — never duplicate a message that both paths deliver
   (aw's streaming machine, spec §14).
-- Send path: optimistic append of the user message, then POST; on
-  `run_in_progress`/cap errors show the queued chip (spec §14).
+- Send path: POST first, then append the accepted user message or the server's
+  queued row. `GET .../messages` reconciles both `live` and `queued`; SSE keeps
+  other devices current. When a run settles, the server starts and deletes the
+  row synchronously, then broadcasts `queue.started`, so every client adds the
+  same user bubble exactly once. Old on-device queue keys are uploaded once as
+  an upgrade path and deleted only after server acceptance.
 
 ## Failure modes (design targets)
 
 | Failure                       | Behavior                                        |
 |-------------------------------|-------------------------------------------------|
 | SSE drops mid-run             | client reconnects + refetches; run unaffected   |
-| server restarts mid-run       | run dies; the partial answer is persisted, marked interrupted |
+| server restarts mid-run       | partial answer is marked interrupted; durable follow-up starts after boot |
+| PWA/tab closes with follow-up | SQLite row remains; snapshot restores it on any device |
+| two tabs queue simultaneously | unique chat key accepts one; the other gets `queue_exists` |
 | pi throws inside a run        | `error` event with stable code; user message already persisted |
 | provider auth/limit error     | `error` code surfaces the provider code; no retry loops |
 | Stop pressed                  | abort + child process-group kill; terminal `error/aborted` |

@@ -59,7 +59,7 @@ export class Transcript {
    * avoid repainting a screen that did not move.
    */
   apply(event: StreamEvent): boolean {
-    if (event.kind === 'update') return false;
+    if (event.kind === 'update' || event.kind === 'queue') return false;
     if (event.chatId !== this.state.chatId) return false;
     // `title` is the one event about the chat rather than a run: it carries no
     // runId, and it arrives while a run is in flight.

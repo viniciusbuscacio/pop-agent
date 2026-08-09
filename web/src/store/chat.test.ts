@@ -5,6 +5,8 @@ import { useChatStore } from './chat';
 
 const send = vi.fn();
 const stop = vi.fn();
+const updateQueue = vi.fn();
+const cancelQueue = vi.fn();
 const patch = vi.fn();
 const messagesBody: { value: unknown } = { value: { messages: [] } };
 // What the server would answer after any patch: the two lists, post-change.
@@ -14,6 +16,8 @@ vi.mock('../services/chats', () => ({
   chatsService: {
     send: (chatId: string, text: string) => send(chatId, text) as Promise<unknown>,
     stop: (chatId: string) => stop(chatId) as Promise<unknown>,
+    updateQueue: (chatId: string, text: string) => updateQueue(chatId, text) as Promise<unknown>,
+    cancelQueue: (chatId: string) => cancelQueue(chatId) as Promise<unknown>,
     patch: (chatId: string, body: unknown) => patch(chatId, body) as Promise<unknown>,
     list: (archived = false) =>
       Promise.resolve({ chats: archived ? listBody.archived : listBody.active }),
@@ -36,13 +40,29 @@ function messages() {
   return useChatStore.getState().messages[CHAT] ?? [];
 }
 
+function queuedMessage(text: string) {
+  return {
+    id: 'queued-00000000001',
+    chatId: CHAT,
+    text,
+    attachments: [],
+    filePaths: [],
+    createdAt: '2026-08-09T00:00:00.000Z',
+    updatedAt: '2026-08-09T00:00:00.000Z',
+  };
+}
+
 beforeEach(() => {
   useChatStore.getState().reset();
   send.mockReset();
   stop.mockReset();
+  updateQueue.mockReset();
+  cancelQueue.mockReset();
   patch.mockReset();
   patch.mockResolvedValue({});
   send.mockResolvedValue({ runId: RUN, userMessageId: 'msg-0000000000000001' });
+  updateQueue.mockResolvedValue({ message: queuedMessage('edited') });
+  cancelQueue.mockResolvedValue(undefined);
   messagesBody.value = { messages: [] };
   listBody.active = [];
   listBody.archived = [];
@@ -230,68 +250,91 @@ describe('a run started somewhere else', () => {
   });
 });
 
-describe('the client-side queue', () => {
-  it('holds a message typed mid-run and sends it when the chat frees up', async () => {
+describe('the server-side queue', () => {
+  it('accepts the server decision to queue instead of posting again after done', async () => {
     await useChatStore.getState().send(CHAT, 'first');
-    expect(send).toHaveBeenCalledTimes(1);
+    send.mockResolvedValueOnce({ queued: true, message: queuedMessage('second') });
 
     await useChatStore.getState().send(CHAT, 'second');
-
-    expect(send, 'the second one waits').toHaveBeenCalledTimes(1);
-    expect(useChatStore.getState().queued[CHAT]).toEqual({ text: 'second', attachments: [], filePaths: [] });
-
-    send.mockResolvedValue({ runId: 'run-second', userMessageId: 'msg-second' });
     apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-answer' });
-    await Promise.resolve();
     await Promise.resolve();
 
     expect(send).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenLastCalledWith(CHAT, 'second');
-    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
   });
 
-  it('drains after resume discovers that the first run already finished', async () => {
-    await useChatStore.getState().send(CHAT, 'first');
-    await useChatStore.getState().send(CHAT, 'second');
-    send.mockResolvedValue({ runId: 'run-second', userMessageId: 'msg-second' });
+  it('loads the authoritative queue with the chat snapshot on another device', async () => {
+    messagesBody.value = {
+      messages: [],
+      live: { runId: RUN, status: 'running', seq: 0, content: '', thinking: '', tools: [] },
+      queued: queuedMessage('from the phone'),
+    };
 
-    messagesBody.value = { messages: [], live: undefined };
     await useChatStore.getState().openChat(CHAT);
-    await Promise.resolve();
-    await Promise.resolve();
 
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenLastCalledWith(CHAT, 'second');
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('from the phone');
+  });
+
+  it('synchronizes queue edits and consumption over SSE', () => {
+    apply({ kind: 'queue', chatId: CHAT, message: queuedMessage('edited elsewhere') });
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('edited elsewhere');
+
+    apply({ kind: 'queue', chatId: CHAT });
     expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
   });
 
-  it('keeps the queued message when its automatic POST fails', async () => {
-    await useChatStore.getState().send(CHAT, 'first');
-    await useChatStore.getState().send(CHAT, 'second');
-    send.mockRejectedValueOnce(new Error('offline'));
+  it('shows the queued user bubble when the server starts it', () => {
+    useChatStore.setState({ queued: { [CHAT]: queuedMessage('second') } });
 
-    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-answer' });
-    await Promise.resolve();
-    await Promise.resolve();
+    apply({
+      kind: 'queue',
+      chatId: CHAT,
+      started: {
+        runId: 'run-second',
+        userMessageId: 'message-second',
+        text: 'second',
+        attachments: [],
+        createdAt: '2026-08-09T00:00:01.000Z',
+      },
+    });
 
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
-    expect(useChatStore.getState().failures[CHAT]).toBe('queue_send_failed');
+    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    expect(messages().at(-1)).toMatchObject({ id: 'message-second', content: 'second' });
+    expect(live()?.runId).toBe('run-second');
   });
 
-  it('does not silently replace the follow-up that is already queued', async () => {
-    await useChatStore.getState().send(CHAT, 'first');
-    await useChatStore.getState().send(CHAT, 'second');
+  it('edits and cancels through server endpoints', async () => {
+    useChatStore.setState({ queued: { [CHAT]: queuedMessage('old') } });
 
-    await expect(useChatStore.getState().send(CHAT, 'third')).rejects.toThrow(
-      'already has a queued message',
+    await useChatStore.getState().updateQueued(CHAT, 'edited');
+    expect(updateQueue).toHaveBeenCalledWith(CHAT, 'edited');
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('edited');
+
+    await useChatStore.getState().cancelQueued(CHAT);
+    expect(cancelQueue).toHaveBeenCalledWith(CHAT);
+    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+  });
+
+  it('does not discard a different legacy message when the server slot is occupied', async () => {
+    localStorage.setItem(
+      `pop-agent.queued.${CHAT}`,
+      JSON.stringify({ text: 'older local message', attachments: [], filePaths: [] }),
     );
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
+    messagesBody.value = { messages: [], queued: queuedMessage('already on server') };
+
+    await useChatStore.getState().openChat(CHAT);
+
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('already on server');
+    expect(localStorage.getItem(`pop-agent.queued.${CHAT}`)).toContain('older local message');
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('restores a durable queue after the PWA state is reclaimed', async () => {
-    await useChatStore.getState().send(CHAT, 'first');
-    await useChatStore.getState().send(CHAT, 'survive reload');
-    useChatStore.setState({ queued: {} });
+  it('migrates a queue left by the previous PWA version exactly once', async () => {
+    localStorage.setItem(
+      `pop-agent.queued.${CHAT}`,
+      JSON.stringify({ text: 'legacy', attachments: [], filePaths: [] }),
+    );
+    send.mockResolvedValueOnce({ queued: true, message: queuedMessage('legacy') });
     messagesBody.value = {
       messages: [],
       live: { runId: RUN, status: 'running', seq: 0, content: '', thinking: '', tools: [] },
@@ -299,7 +342,9 @@ describe('the client-side queue', () => {
 
     await useChatStore.getState().openChat(CHAT);
 
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('survive reload');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('legacy');
+    expect(localStorage.getItem(`pop-agent.queued.${CHAT}`)).toBeNull();
   });
 });
 

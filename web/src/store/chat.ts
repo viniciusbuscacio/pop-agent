@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { AttachmentDTO, ChatDTO, MessageDTO, StreamEvent, ToolCallDTO } from '@pop-agent/shared';
+import type {
+  AttachmentDTO,
+  ChatDTO,
+  MessageDTO,
+  QueuedMessageDTO,
+  StreamEvent,
+  ToolCallDTO,
+} from '@pop-agent/shared';
 import { ApiError } from '../services/api';
 import { chatsService } from '../services/chats';
 
@@ -28,19 +35,13 @@ export interface LiveRun {
   tools: ToolCallDTO[];
 }
 
-interface QueuedMessage {
-  text: string;
-  attachments: AttachmentDTO[];
-  filePaths?: string[];
-}
-
 interface ChatState {
   chats: ChatDTO[];
   archived: ChatDTO[];
   messages: Record<string, MessageDTO[]>;
   live: Record<string, LiveRun>;
   /** One message per chat may wait for the current run to finish. */
-  queued: Record<string, QueuedMessage>;
+  queued: Record<string, QueuedMessageDTO>;
   failures: Record<string, string>;
 
   /** A risky action paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
@@ -51,7 +52,8 @@ interface ChatState {
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string) => Promise<void>;
   send: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
-  drainQueued: (chatId: string) => Promise<void>;
+  updateQueued: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  cancelQueued: (chatId: string) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
@@ -66,8 +68,7 @@ interface ChatState {
 
 /** Runs that have ended, so their stragglers are not mistaken for a new run. */
 const finished = new Set<string>();
-/** Resume and SSE can both notice the same finish; only one may POST. */
-const drainingQueued = new Set<string>();
+/** Legacy v0.2 queue keys, read once and migrated to the server on open. */
 const QUEUED_STORAGE_PREFIX = 'pop-agent.queued.';
 const FINISHED_MEMORY = 50;
 
@@ -88,7 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   archived: [],
   messages: {},
   live: {},
-  queued: restoreQueuedMessages(),
+  queued: {},
   failures: {},
   confirms: {},
 
@@ -119,8 +120,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * older than the snapshot's `seq` are dropped in {@link apply}.
    */
   async openChat(chatId) {
-    const { messages, live } = await chatsService.messages(chatId);
-    const restored = get().queued[chatId] ?? readQueuedMessage(chatId);
+    const { messages, live, queued } = await chatsService.messages(chatId);
+    const legacy = readQueuedMessage(chatId);
+    // Another upgraded tab may already have uploaded this exact legacy row.
+    // Delete only that duplicate. If the server slot contains different text,
+    // keep the older local row until the slot frees instead of silently eating
+    // what this device had queued before the upgrade.
+    if (queued !== undefined && legacy !== undefined && sameQueuedPayload(legacy, queued)) {
+      deleteQueuedMessage(chatId);
+    }
     set((state) => ({
       messages: { ...state.messages, [chatId]: messages },
       // The server is authoritative about what is in flight. It reports a run:
@@ -134,31 +142,38 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? { ...state.live, [chatId]: live }
           : without(state.live, chatId),
       queued:
-        restored === undefined ? state.queued : { ...state.queued, [chatId]: restored },
+        queued === undefined
+          ? without(state.queued, chatId)
+          : { ...state.queued, [chatId]: queued },
     }));
-    // The terminal SSE event may have been lost while iOS suspended the PWA.
-    // The snapshot is equally authoritative: no live run means the persisted
-    // follow-up can leave the queue now.
-    if (live === undefined) void get().drainQueued(chatId);
+    // One-time upgrade path from the former localStorage queue. The ordinary
+    // send endpoint decides atomically whether this starts now or occupies the
+    // server slot, then the old browser copy can be removed.
+    if (queued === undefined && legacy !== undefined) {
+      try {
+        await get().send(chatId, legacy.text, legacy.attachments, legacy.filePaths);
+        deleteQueuedMessage(chatId);
+      } catch {
+        // Keep the old copy for the next reconnect; losing it is worse than
+        // delaying migration while the server is unavailable.
+      }
+    }
   },
 
   async send(chatId, text, attachments = [], filePaths = []) {
-    const state = get();
-    if (state.live[chatId] !== undefined) {
-      // A run is already going: hold exactly one follow-up. Persist before the
-      // composer clears, so a reclaimed iOS PWA cannot eat the user's words.
-      if (state.queued[chatId] !== undefined || readQueuedMessage(chatId) !== undefined) {
-        throw new Error('This chat already has a queued message.');
-      }
-      const waiting = { text, attachments, filePaths };
-      writeQueuedMessage(chatId, waiting);
+    // The server owns the race: this tab may believe the chat is idle while a
+    // phone has just started a run. POST either starts now or fills the one
+    // durable slot, never returning a transient run_in_progress to the client.
+    const response = await chatsService.send(chatId, text, attachments, filePaths);
+    if (response.queued === true) {
+      deleteQueuedMessage(chatId);
       set((current) => ({
-        queued: { ...current.queued, [chatId]: waiting },
+        queued: { ...current.queued, [chatId]: response.message },
+        failures: without(current.failures, chatId),
       }));
       return;
     }
-
-    const { runId, userMessageId } = await chatsService.send(chatId, text, attachments, filePaths);
+    const { runId, userMessageId } = response;
     set((current) => {
       const existing = current.live[chatId];
       return {
@@ -189,29 +204,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  async drainQueued(chatId) {
-    if (drainingQueued.has(chatId) || get().live[chatId] !== undefined) return;
-    const waiting = get().queued[chatId];
-    if (waiting === undefined) return;
+  async updateQueued(chatId, text, attachments = [], filePaths = []) {
+    const { message } = await chatsService.updateQueue(chatId, text, attachments, filePaths);
+    set((state) => ({ queued: { ...state.queued, [chatId]: message } }));
+  },
 
-    drainingQueued.add(chatId);
-    try {
-      await get().send(chatId, waiting.text, waiting.attachments, waiting.filePaths);
-      // A newer value cannot normally exist (send refuses replacement), but
-      // identity keeps this safe if another tab updates the store mid-request.
-      if (get().queued[chatId] === waiting) {
-        set((state) => ({ queued: without(state.queued, chatId) }));
-        deleteQueuedMessage(chatId);
-      }
-    } catch {
-      // Keep both copies. A reconnection/openChat retries automatically; until
-      // then the queue pill tells the truth instead of silently losing text.
-      set((state) => ({
-        failures: { ...state.failures, [chatId]: 'queue_send_failed' },
-      }));
-    } finally {
-      drainingQueued.delete(chatId);
-    }
+  async cancelQueued(chatId) {
+    await chatsService.cancelQueue(chatId);
+    set((state) => ({ queued: without(state.queued, chatId) }));
   },
 
   async stop(chatId) {
@@ -322,6 +322,49 @@ export const useChatStore = create<ChatState>((set, get) => ({
           [event.chatId]: { runId: event.runId, action: event.action, detail: event.detail },
         },
       }));
+      return;
+    }
+    if (event.kind === 'queue') {
+      set((state) => {
+        const queued =
+          event.message === undefined
+            ? without(state.queued, event.chatId)
+            : { ...state.queued, [event.chatId]: event.message };
+        if (event.started === undefined) return { queued };
+
+        const known = state.messages[event.chatId] ?? [];
+        const messages = known.some((message) => message.id === event.started?.userMessageId)
+          ? state.messages
+          : {
+              ...state.messages,
+              [event.chatId]: [
+                ...known,
+                {
+                  id: event.started.userMessageId,
+                  chatId: event.chatId,
+                  role: 'user' as const,
+                  content: event.started.text,
+                  thinking: '',
+                  tools: [],
+                  attachments: event.started.attachments,
+                  createdAt: event.started.createdAt,
+                },
+              ],
+            };
+        const current = state.live[event.chatId];
+        return {
+          queued,
+          messages,
+          live: {
+            ...state.live,
+            [event.chatId]:
+              current?.runId === event.started.runId
+                ? current
+                : emptyRun(event.started.runId, 'running'),
+          },
+          failures: without(state.failures, event.chatId),
+        };
+      });
       return;
     }
     if (event.kind === 'update') return;
@@ -443,7 +486,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
               : without(state.failures, chatId),
         }));
 
-        void get().drainQueued(chatId);
         return;
       }
     }
@@ -451,7 +493,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   reset() {
     finished.clear();
-    drainingQueued.clear();
     clearQueuedMessages();
     set({
       chats: [],
@@ -465,12 +506,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
-/** Durable on-device queue: survives iOS reclaiming or reloading the PWA. */
-function writeQueuedMessage(chatId: string, message: QueuedMessage): void {
-  localStorage.setItem(`${QUEUED_STORAGE_PREFIX}${chatId}`, JSON.stringify(message));
+interface LegacyQueuedMessage {
+  text: string;
+  attachments: AttachmentDTO[];
+  filePaths: string[];
 }
 
-function readQueuedMessage(chatId: string): QueuedMessage | undefined {
+/** Reads the former client queue only long enough to migrate it to the server. */
+function readQueuedMessage(chatId: string): LegacyQueuedMessage | undefined {
   try {
     const raw = localStorage.getItem(`${QUEUED_STORAGE_PREFIX}${chatId}`);
     if (raw === null) return undefined;
@@ -483,22 +526,6 @@ function readQueuedMessage(chatId: string): QueuedMessage | undefined {
   } catch {
     return undefined;
   }
-}
-
-function restoreQueuedMessages(): Record<string, QueuedMessage> {
-  const restored: Record<string, QueuedMessage> = {};
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (key === null || !key.startsWith(QUEUED_STORAGE_PREFIX)) continue;
-      const chatId = key.slice(QUEUED_STORAGE_PREFIX.length);
-      const message = readQueuedMessage(chatId);
-      if (message !== undefined) restored[chatId] = message;
-    }
-  } catch {
-    // Storage denied: nothing can be restored; the composer keeps unsent drafts.
-  }
-  return restored;
 }
 
 function deleteQueuedMessage(chatId: string): void {
@@ -522,21 +549,33 @@ function clearQueuedMessages(): void {
   }
 }
 
-function isQueuedMessage(value: unknown): value is QueuedMessage {
+function isQueuedMessage(value: unknown): value is LegacyQueuedMessage {
   if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Partial<QueuedMessage>;
-  return (
-    typeof candidate.text === 'string' &&
-    Array.isArray(candidate.attachments) &&
-    candidate.attachments.every(
+  const candidate = value as Partial<LegacyQueuedMessage>;
+  if (
+    typeof candidate.text !== 'string' ||
+    !Array.isArray(candidate.attachments) ||
+    !candidate.attachments.every(
       (attachment) =>
         typeof attachment.name === 'string' &&
         typeof attachment.type === 'string' &&
         typeof attachment.dataUri === 'string',
-    ) &&
-    (candidate.filePaths === undefined ||
-      (Array.isArray(candidate.filePaths) &&
-        candidate.filePaths.every((path) => typeof path === 'string')))
+    )
+  ) {
+    return false;
+  }
+  if (candidate.filePaths === undefined) candidate.filePaths = [];
+  return (
+    Array.isArray(candidate.filePaths) &&
+    candidate.filePaths.every((path) => typeof path === 'string')
+  );
+}
+
+function sameQueuedPayload(legacy: LegacyQueuedMessage, queued: QueuedMessageDTO): boolean {
+  return (
+    legacy.text === queued.text &&
+    JSON.stringify(legacy.attachments) === JSON.stringify(queued.attachments) &&
+    JSON.stringify(legacy.filePaths) === JSON.stringify(queued.filePaths)
   );
 }
 

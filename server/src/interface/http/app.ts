@@ -4,6 +4,7 @@ import type { AuthService } from '../../application/auth/auth-service.js';
 import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
+import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
 import type { TaskService } from '../../application/tasks/task-service.js';
 import type { TaskScheduler } from '../../application/tasks/task-scheduler.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
@@ -65,6 +66,8 @@ export interface AppDeps {
   /** Signs Files download links; derived key, from `secret.key` (§9, §14). */
   secretKey: Buffer;
   runs: RunService;
+  /** One server-owned follow-up per conversation. */
+  queuedMessages: QueuedMessageService;
   /** Background tasks (pop-agent.spec §21): the rows, and the queue that runs them. */
   tasks: TaskService;
   taskScheduler: TaskScheduler;

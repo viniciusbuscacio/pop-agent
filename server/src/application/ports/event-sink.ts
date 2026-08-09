@@ -1,4 +1,5 @@
 import type { ToolStatus } from '../../domain/chat/chat.js';
+import type { QueuedMessage } from './queued-message-repo.js';
 
 /**
  * What the application broadcasts to whoever is watching (docs/agent-flow.md).
@@ -23,7 +24,20 @@ export type RunEvent =
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
   /** A risky action is paused, waiting for the user to allow or deny it. */
-  | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string };
+  | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
+  /** The durable follow-up changed; `started` carries its user bubble to every client. */
+  | {
+      kind: 'queue';
+      chatId: string;
+      message?: QueuedMessage;
+      started?: {
+        runId: string;
+        userMessageId: string;
+        text: string;
+        attachments: QueuedMessage['attachments'];
+        createdAt: string;
+      };
+    };
 
 export interface EventSink {
   emit(event: RunEvent): void;
