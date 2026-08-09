@@ -27,8 +27,10 @@ export interface SessionListener {
   onRun(state: RunState): void;
   /** A run ended, cleanly or not. */
   onIdle(state: RunState): void;
-  /** The server accepted this behind a run another client already started. */
+  /** The server accepted this as guidance for the run already in flight. */
   onQueued(text: string): void;
+  /** Pi consumed that guidance and started a new visible assistant segment. */
+  onSteering(): void;
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
@@ -101,6 +103,7 @@ export class ChatSession {
       this.listener.onTitle(event.title);
       return;
     }
+    if (event.kind === 'steering-delivered') this.listener.onSteering();
     this.listener.onRun(state);
     if (transcript.finished) this.listener.onIdle(state);
   }

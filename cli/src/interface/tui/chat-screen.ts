@@ -218,7 +218,17 @@ export class ChatScreen {
   }
 
   onQueued(text: string): void {
-    this.say(paint.yellow(`Queued behind the current answer: ${text}`));
+    this.say(paint.yellow(`Guiding this answer: ${text}`));
+  }
+
+  /**
+   * Pi consumed a steering message. Freeze the Text component exactly where
+   * it is and let the next delta create a new one below the user's guidance.
+   * Removing and re-appending it as Markdown would put the old answer AFTER
+   * the guidance: this TUI is append-only and deliberately has no insertion.
+   */
+  onSteering(): void {
+    this.streaming = undefined;
   }
 
   onStreamEnd(): void {
@@ -233,10 +243,9 @@ export class ChatScreen {
       this.command(text);
       return;
     }
-    if (this.options.session.busy) {
-      this.say(paint.yellow('Still answering. Escape interrupts it.'));
-      return;
-    }
+    // Sending while busy is intentional: the server owns the durable steering
+    // slot and either accepts this into the live pi loop or explains that one
+    // is already waiting. Blocking here made the server feature unreachable.
 
     // A blank line before the question and none after it: a turn is a
     // question and its answer, and the eye needs the gap between turns, not

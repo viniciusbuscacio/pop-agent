@@ -42,6 +42,8 @@ export function emptyRun(chatId: string, runId: string): RunState {
 
 export class Transcript {
   private highestSeq = -1;
+  /** Steering carries the last fragment's seq, so its persisted user id dedupes it. */
+  private readonly deliveredSteering = new Set<string>();
 
   constructor(private state: RunState) {}
 
@@ -89,6 +91,22 @@ export class Transcript {
         }
         return this.applyTool(event.name, event.status, event.detail);
       }
+      case 'steering-delivered':
+        // Same run, new visible assistant segment. The server persisted the
+        // partial segment and the steering user turn before emitting this;
+        // fragments after `seq` belong to a fresh accumulator. Its seq equals
+        // the latest fragment, so the persisted user id handles SSE overlap.
+        if (this.deliveredSteering.has(event.user.id)) return false;
+        this.deliveredSteering.add(event.user.id);
+        this.highestSeq = Math.max(this.highestSeq, event.seq);
+        this.state = {
+          ...this.state,
+          text: '',
+          thinking: '',
+          tools: [],
+          status: 'running',
+        };
+        return true;
       case 'run-status':
         this.state = { ...this.state, status: event.status };
         return true;

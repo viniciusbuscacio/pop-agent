@@ -41,6 +41,47 @@ describe('Transcript', () => {
     expect(transcript.snapshot().text).toBe('mine');
   });
 
+  it('starts a fresh visible segment when pi consumes steering', () => {
+    const transcript = fold([
+      delta('before', 0),
+      {
+        kind: 'steering-delivered',
+        chatId: CHAT,
+        runId: RUN,
+        seq: 0,
+        assistant: {
+          id: 'assistant-before',
+          chatId: CHAT,
+          role: 'assistant',
+          content: 'before',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+        user: {
+          id: 'user-steering',
+          chatId: CHAT,
+          role: 'user',
+          content: 'change course',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+      delta('after', 1),
+    ]);
+
+    expect(transcript.snapshot()).toMatchObject({
+      runId: RUN,
+      text: 'after',
+      thinking: '',
+      tools: [],
+      status: 'running',
+    });
+  });
+
   it('follows a run from queued to running to done', () => {
     const transcript = fold([
       { kind: 'run-status', chatId: CHAT, runId: RUN, status: 'queued' },

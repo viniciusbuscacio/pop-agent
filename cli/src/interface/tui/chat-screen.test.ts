@@ -73,9 +73,9 @@ function recorder() {
 
 function screenWith(terminal: Terminal, onExit = vi.fn()) {
   const ports: SessionPorts = {
-    createChat: () => Promise.resolve({ id: 'chat-1' }),
-    send: () => Promise.resolve({ runId: 'run-1' }),
-    stop: () => Promise.resolve(),
+    createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
+    send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
+    stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
       // Never yields: these tests feed the screen directly.
     },
@@ -83,11 +83,13 @@ function screenWith(terminal: Terminal, onExit = vi.fn()) {
   const session = new ChatSession(ports, {
     onRun: () => undefined,
     onIdle: () => undefined,
+    onQueued: () => undefined,
+    onSteering: () => undefined,
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
   const screen = new ChatScreen({ session, server: 'http://pop-agent.test', terminal, onExit });
-  return { screen, session, onExit };
+  return { screen, session, ports, onExit };
 }
 
 describe('ChatScreen', () => {
@@ -121,6 +123,59 @@ describe('ChatScreen', () => {
     repaint();
     await flush();
     expect(plain().split('Forty-two.').length - 1).toBe(1);
+  });
+
+  it('sends guidance instead of blocking input while an answer is running', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    await session.ask('first');
+    vi.mocked(ports.send).mockResolvedValueOnce({
+      queued: true,
+      message: {
+        id: 'queued-1',
+        chatId: 'chat-1',
+        text: 'change course',
+        attachments: [],
+        filePaths: [],
+        createdAt: '',
+        updatedAt: '',
+      },
+    });
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('change course');
+    await flush();
+
+    expect(ports.send).toHaveBeenLastCalledWith('chat-1', 'change course');
+    expect(plain()).not.toContain('Still answering');
+  });
+
+  it('freezes the partial segment before rendering post-steering text', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    screen.onRun({
+      ...emptyRun('chat-1', 'run-1'),
+      text: 'answer before steering',
+      status: 'running',
+    });
+    screen.onSteering();
+    const after = {
+      ...emptyRun('chat-1', 'run-1'),
+      text: 'answer after steering',
+      status: 'running' as const,
+    };
+    screen.onRun(after);
+    screen.onIdle({ ...after, status: 'done' });
+    await flush();
+
+    writes.length = 0;
+    repaint();
+    await flush();
+    const frame = plain();
+    expect(frame.split('answer before steering')).toHaveLength(2);
+    expect(frame.split('answer after steering')).toHaveLength(2);
+    expect(frame.indexOf('answer before steering')).toBeLessThan(frame.indexOf('answer after steering'));
   });
 
   it('keeps the editor below the transcript, never above it', async () => {

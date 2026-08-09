@@ -9,10 +9,18 @@ import type { RunState } from './transcript.js';
  */
 
 function harness(events: StreamEvent[] = []) {
-  const seen: { runs: RunState[]; idle: RunState[]; queued: string[]; titles: string[]; ended: number } = {
+  const seen: {
+    runs: RunState[];
+    idle: RunState[];
+    queued: string[];
+    steering: number;
+    titles: string[];
+    ended: number;
+  } = {
     runs: [],
     idle: [],
     queued: [],
+    steering: 0,
     titles: [],
     ended: 0,
   };
@@ -20,6 +28,9 @@ function harness(events: StreamEvent[] = []) {
     onRun: (state) => seen.runs.push(state),
     onIdle: (state) => seen.idle.push(state),
     onQueued: (text) => seen.queued.push(text),
+    onSteering: () => {
+      seen.steering += 1;
+    },
     onTitle: (title) => seen.titles.push(title),
     onStreamEnd: () => {
       seen.ended += 1;
@@ -106,6 +117,48 @@ describe('ChatSession', () => {
     // Exactly one idle: a screen that swapped the streamed text for rendered
     // markdown twice would print the answer twice.
     expect(seen.idle).toHaveLength(1);
+  });
+
+  it('keeps the same run and starts a new segment when steering is delivered', async () => {
+    const { session, seen, release } = harness([
+      delta('before', 0),
+      {
+        kind: 'steering-delivered',
+        chatId: 'chat-1',
+        runId: 'run-1',
+        seq: 0,
+        assistant: {
+          id: 'assistant-before',
+          chatId: 'chat-1',
+          role: 'assistant',
+          content: 'before',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+        user: {
+          id: 'user-steering',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'change course',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      },
+      delta('after', 1),
+      { kind: 'done', chatId: 'chat-1', runId: 'run-1', messageId: 'm' },
+    ]);
+    const listening = session.listen();
+    await session.ask('hi');
+    release();
+    await listening;
+
+    expect(seen.steering).toBe(1);
+    expect(seen.runs.map((state) => state.text)).toContain('');
+    expect(seen.idle.at(-1)).toMatchObject({ runId: 'run-1', text: 'after' });
   });
 
   it('is busy until the run ends', async () => {
