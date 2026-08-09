@@ -5,6 +5,21 @@ normative history.
 
 ## Unreleased
 
+### Changed
+
+- **The built-in skills got a review: 17 became 7.** The generic ones
+  (writing, summarizing, translating, explaining, brainstorming, math,
+  planning) are gone -- any current model does that natively, and each one
+  was a candidate competing with YOUR skills in the router. What remains is
+  what only Pop Agent knows: the manual, the codebase map, web research,
+  notes, shell safety, the daily review and code work. Built-ins you never
+  edited that left the roster are cleaned up on boot; one you edited becomes
+  yours. And every skill can now be switched off without deleting it --
+  built-ins included.
+- **The skills list has a filter.** All Skills / Personal / Auto / Pending /
+  Built-in, with the count of skills waiting for your approval right on the
+  filter, so an auto-skill never waits invisibly.
+
 ### Fixed
 
 - **The provider surface, end to end** (a review pass, nineteen findings):

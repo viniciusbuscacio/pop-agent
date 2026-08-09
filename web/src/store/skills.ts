@@ -5,9 +5,9 @@ import { skillsService } from '../services/skills';
 /** Which slice of the roster the sidebar list shows. Persisted in the store, not the URL. */
 export type SkillSourceFilter = 'all' | 'personal' | 'auto' | 'pending' | 'builtin';
 
-/** `enabled` is absent on the wire until the server lane lands; absent means enabled. */
+/** Absent means enabled; only an explicit `false` switches a skill off (§8). */
 export function skillEnabled(skill: SkillDTO): boolean {
-  return (skill as SkillDTO & { enabled?: boolean }).enabled !== false;
+  return skill.enabled !== false;
 }
 
 export function matchesSourceFilter(skill: SkillDTO, filter: SkillSourceFilter): boolean {

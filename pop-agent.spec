@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.73 — 2026-08-08.
+Version 1.74 — 2026-08-08.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -304,8 +304,10 @@ a dot product over `message_embeddings`), fused with RRF (`fuseRankings` in
 
 ## 8. Skills with local mini-RAG selection ⭐ (the **Skill Router**)
 
-Pop Agent ships dozens of built-in skills but injects only the relevant ones per
-user message — selection is 100% local, no LLM call:
+Pop Agent ships a small roster of built-in skills (1.74: seven — the manual,
+the codebase self-map, web research, note-taking, shell safety, the daily
+review and code work) but injects only the relevant ones per user message —
+selection is 100% local, no LLM call:
 
 - Skill format: two coexisting shapes in `POP_AGENT_DATA_DIR/skills/` —
   (a) the original flat `<slug>.md` with `name` + `description` +
@@ -328,6 +330,26 @@ user message — selection is 100% local, no LLM call:
   looking at it. Approving one does not: saying yes is not editing.
   Compatibility: a file written before 07/08 says `builtin: true`, and the
   parser still reads that as `source: builtin` — no migration pass.
+- **Built-ins can be disabled, never deleted** (1.74): `enabled: false` in
+  the front matter (absent means enabled) takes a skill out of the router
+  AND out of the pinned set that reaches the session prompt — the user's
+  veto over a built-in that routes badly, without destroying the app's copy.
+  The roster is swept on boot (1.74): a built-in file whose slug left the
+  shipped roster is deleted when pristine (seed marker still matches its
+  content) and promoted to `user` when edited — the user's words are never
+  destroyed.
+- **The built-in roster is deliberately small** (1.74): 17 became 7. Generic
+  text skills (writing, summarizing, translating, explaining, brainstorming,
+  math, planning) were cut — modern models do them natively, and every
+  generic candidate is routing noise against the user's own skills. What
+  survives teaches what the model cannot guess: the app's tools, its data
+  layout, its safety rules. The manual is `pop-agent-manual` (pinned; was
+  `know-thyself`), the self-map `pop-agent-codebase` (was
+  `self-architecture`); `web-research` merged browsing + research, and
+  `code-work` merged debugging + review, both rewritten against the real
+  tools. The sidebar filters the list by source (1.74): All Skills /
+  Personal / Auto / Pending / Built-in, with the pending count on the
+  filter itself so approvals never hide.
 - **Skills are invisible in the conversation** (1.66, decided by Vinicius
   after reading a transcript). Pop Agent never mentions a skill unless asked a
   question about skills. It does not announce that it is writing one,
@@ -1536,6 +1558,17 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.74 (2026-08-08): **The built-in roster review (§8).** Seventeen shipped
+  skills became seven: the generic text ones (writing, summary, translation,
+  explanation, brainstorm, math, planning) only added routing noise against
+  the user's own skills; the survivors merge into `pop-agent-manual`
+  (pinned manual, absorbing privacy), `pop-agent-codebase` (the generated
+  self-map), `web-research` and `code-work` (rewritten against the real
+  tools). A boot sweep removes built-ins that left the roster — deleted when
+  pristine, promoted to `user` when edited. And every skill, built-ins
+  included, can now be switched off (`enabled`, routed and pinned sets both
+  respect it), exposed in the sidebar with a source filter (All / Personal /
+  Auto / Pending / Built-in) whose button carries the pending count.
 - 1.73 (2026-08-08): **The provider review fixes (§15).** Nineteen findings
   from a full read of the provider surface, closed in three lanes.
   Provider core: deleting or clearing the active default's key re-elects the
