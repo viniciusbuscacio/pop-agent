@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.74 — 2026-08-08.
+Version 1.75 — 2026-08-09.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1167,6 +1167,16 @@ reimplemented.
   instead of the paid HTTP probe; the model catalog answers from pi's
   built-in list (no gateway, keyless). Session open for an oauth
   provider must not demand an API key.
+- **The auth file is the truth, not the snapshot.** pi's refresh
+  (post-login bookkeeping: remote catalogs, availability) is best
+  effort and may stall on the network, and its internal snapshot only
+  moves when that bookkeeping finishes -- so every Pop Agent decision
+  about "is there a credential" (`providerLogin`, `hasProviderAuth`,
+  the authenticated-runtime door) reads `pi-auth.json` directly, and
+  `providerLogin` resolves the moment the credential file lands,
+  letting pi's bookkeeping run in the background. To keep that
+  bookkeeping cheap and non-blocking, the service runs with
+  `PI_OFFLINE=1` (catalog updates ride pi package upgrades instead).
 - **The card outlives the page.** Signing in means leaving for the
   provider and coming back, and the way back is usually a fresh mount:
   a new tab, a reload, the PWA resumed from the background. The card

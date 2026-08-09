@@ -42,6 +42,15 @@ normative history.
     card instead of a run that only fails when you send it.
   - The model list for a provider is refetched when you change its key or
     endpoint, instead of showing yesterday's catalog.
+- **Subscription sign-in completes the moment it completes.** The device-code
+  card used to stay on "waiting" after approval: pi's login promise resolves
+  only after post-login bookkeeping (remote catalogs, availability) that can
+  stall on the network without a timeout. Now the flow resolves the instant
+  the credential lands in `pi-auth.json`, bookkeeping runs in the background,
+  and a saved-but-not-yet-visible provider appears in the list on save
+  because configured-ness reads the auth file, not pi's lagging snapshot.
+  The service also runs with `PI_OFFLINE=1`, so the bookkeeping is local by
+  construction (catalog updates ride pi package upgrades).
   - A negative OpenRouter balance renders as `-$0.10`, the balance is fetched
     once per visit instead of once per redraw, and the enable/disable switch
     is back on each provider card.

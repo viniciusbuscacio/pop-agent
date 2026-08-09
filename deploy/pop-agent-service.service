@@ -24,6 +24,10 @@ Type=simple
 User=vinicius
 WorkingDirectory=/home/vinicius/dev/pop-agent
 EnvironmentFile=-/home/vinicius/dev/pop-agent/.env
+# pi's catalog refresh runs without a network timeout; one stalled fetch used
+# to hold the OAuth login promise hostage (08/08). Offline mode keeps that
+# bookkeeping local -- model catalogs arrive with pi upgrades instead.
+Environment=PI_OFFLINE=1
 ExecStart=/usr/bin/node /home/vinicius/dev/pop-agent/node_modules/tsx/dist/cli.mjs server/src/main.ts
 Restart=on-failure
 RestartSec=2
