@@ -3,11 +3,8 @@ import { ChatSession } from '../application/session.js';
 import { DEFAULT_PROFILE } from '../application/profiles.js';
 import { readEvents } from '../infrastructure/events.js';
 import type { Context } from './commands.js';
-import { Hands } from '../infrastructure/hands.js';
 import { ChatScreen } from './tui/chat-screen.js';
-
-/** Kept next to the package, not read from it: no JSON import at runtime. */
-const VERSION = '0.2.0';
+import { VERSION } from '../version.js';
 
 const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
@@ -49,7 +46,7 @@ export async function chat(
   // The hands channel, alongside the chat and never in front of it: a server
   // that refuses the upgrade leaves the conversation working and the local
   // tools simply absent (docs/cli.md step 3).
-  const hands = new Hands({
+  const hands = context.hands({
     url: profile.url,
     token: profile.token,
     version: VERSION,

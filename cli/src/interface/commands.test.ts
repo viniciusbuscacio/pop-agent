@@ -1,3 +1,4 @@
+import { HANDS_HEADER } from '@pop-agent/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
 import { PopAgentApi } from '../infrastructure/api.js';
@@ -35,6 +36,21 @@ const said = (): string => out.join('');
 function contextWith(
   http: typeof globalThis.fetch,
   profiles = new Profiles(new MemoryStore()),
+  handsFactory: Context['hands'] = (options) => {
+    let id: string | undefined;
+    return {
+      connect: () => {
+        id = 'hands-test';
+        options.onEvent?.({ kind: 'attached' });
+      },
+      close: () => {
+        id = undefined;
+      },
+      get connectionId() {
+        return id;
+      },
+    };
+  },
 ): Context {
   return {
     profiles,
@@ -42,6 +58,7 @@ function contextWith(
     profile: 'default',
     api: (options) =>
       new PopAgentApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
+    hands: handsFactory,
   };
 }
 
@@ -165,6 +182,36 @@ describe('pop "question"', () => {
 
     expect(code).toBe(0);
     expect(said()).toContain('Forty-two.');
+  });
+
+  it('attaches this machine before sending and closes it after the answer', async () => {
+    const http = server();
+    const profiles = new Profiles(new MemoryStore({ default: { url: 'http://a', token: 't' } }));
+    let closed = false;
+    const hands: Context['hands'] = (options) => {
+      let id: string | undefined;
+      return {
+        connect: () => {
+          id = 'hands-one-shot';
+          options.onEvent?.({ kind: 'attached' });
+        },
+        close: () => {
+          id = undefined;
+          closed = true;
+        },
+        get connectionId() {
+          return id;
+        },
+      };
+    };
+
+    await ask(contextWith(http, profiles, hands), 'hello');
+
+    const message = (http as unknown as { mock: { calls: [RequestInfo | URL, RequestInit][] } }).mock.calls.find(
+      (call) => String(call[0]).includes('/messages'),
+    );
+    expect((message?.[1].headers as Record<string, string>)[HANDS_HEADER]).toBe('hands-one-shot');
+    expect(closed).toBe(true);
   });
 
   it('opens the stream before sending, or the first tokens are lost', async () => {

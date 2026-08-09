@@ -50,8 +50,10 @@ export function buildLocalTools(
     name,
     label: `${definition.label} (${machine.hostname})`,
     // The description carries the whole weight of the choice: it is the only
-    // thing telling the model which machine this touches.
-    description: `${what} on ${where} -- the machine the user is typing on, NOT the Pop Agent server. Use this for files and commands that live there. The unprefixed tools stay on the server.`,
+    // thing telling the model which machine this touches. The launch directory
+    // belongs here too: pi uses it for relative paths, but its stock tool text
+    // only says "current working directory" without naming that directory.
+    description: `${what} on ${where} -- the machine the user is typing on, NOT the Pop Agent server. Current working directory: ${machine.cwd}. Relative paths start there. Use this for files and commands that live there. The unprefixed tools stay on the server.`,
   });
 
   return [

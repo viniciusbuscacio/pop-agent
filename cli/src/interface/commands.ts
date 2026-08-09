@@ -1,7 +1,9 @@
-import { Profiles, normalizeServerUrl, DEFAULT_PROFILE } from '../application/profiles.js';
+import { Profiles, normalizeServerUrl, DEFAULT_PROFILE, type Profile } from '../application/profiles.js';
 import { Transcript, emptyRun } from '../application/transcript.js';
 import { ApiError, PopAgentApi } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
+import type { HandsOptions } from '../infrastructure/hands.js';
+import { VERSION } from '../version.js';
 
 /**
  * What each command does, with the terminal handed in (docs/cli.md, steps 1
@@ -18,6 +20,12 @@ export interface Terminal {
   password(prompt: string): Promise<string>;
 }
 
+export interface HandsClient {
+  connect(): void;
+  close(): void;
+  readonly connectionId: string | undefined;
+}
+
 export interface Context {
   profiles: Profiles;
   terminal: Terminal;
@@ -29,6 +37,8 @@ export interface Context {
     /** This terminal's hands connection, read per call (docs/cli.md, Whose hands). */
     handsConnectionId?: () => string | undefined;
   }) => PopAgentApi;
+  /** Injected so one-shot commands stay testable without opening a real socket. */
+  hands: (options: HandsOptions) => HandsClient;
 }
 
 export async function login(
@@ -99,9 +109,18 @@ export async function ask(
 ): Promise<number> {
   const connected = connect(context);
   if (connected === undefined) return 1;
-  const { api } = connected;
 
+  let hands: HandsClient | undefined;
   try {
+    // Unlike the interactive screen, a one-shot command cannot attach in the
+    // background: its first and only message must wait until it has an id, or
+    // the server truthfully gives that run no local tools at all.
+    hands = await attachHands(context, connected.profile);
+    const api = context.api({
+      url: connected.profile.url,
+      token: connected.profile.token,
+      handsConnectionId: () => hands?.connectionId,
+    });
     const chatId = options.chatId ?? (await api.createChat()).id;
     const { ticket } = await api.eventTicket();
     const stream = await api.openEvents(ticket);
@@ -143,11 +162,13 @@ export async function ask(
   } catch (error) {
     context.terminal.line(describe(error));
     return 1;
+  } finally {
+    hands?.close();
   }
 }
 
 /** The profile, or a message saying how to make one. */
-function connect(context: Context): { api: PopAgentApi } | undefined {
+function connect(context: Context): { api: PopAgentApi; profile: Profile } | undefined {
   const profile = context.profiles.get(context.profile);
   if (profile === undefined) {
     const which = context.profile === DEFAULT_PROFILE ? '' : ` --server ${context.profile}`;
@@ -156,7 +177,41 @@ function connect(context: Context): { api: PopAgentApi } | undefined {
   }
   // Token renewal is wired into the factory itself (see main): the store has
   // to be the same one this profile came from, and only main knows that.
-  return { api: context.api({ url: profile.url, token: profile.token }) };
+  return { api: context.api({ url: profile.url, token: profile.token }), profile };
+}
+
+/**
+ * Opens this process's short-lived hands channel and gives the handshake a
+ * bounded chance to finish. A server without Hands must still answer the
+ * question; it just does so with server-side tools, as older versions did.
+ */
+async function attachHands(context: Context, profile: Profile): Promise<HandsClient> {
+  let ready: () => void = () => undefined;
+  const attached = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const hands = context.hands({
+    url: profile.url,
+    token: profile.token,
+    version: VERSION,
+    onEvent: (event) => {
+      if (event.kind === 'attached' || event.kind === 'closed' || event.kind === 'outdated') ready();
+    },
+  });
+  hands.connect();
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      attached,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 2_000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+  return hands;
 }
 
 function describe(error: unknown): string {

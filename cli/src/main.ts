@@ -4,6 +4,7 @@ import { Writable } from 'node:stream';
 import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
 import { PopAgentApi } from './infrastructure/api.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
+import { Hands } from './infrastructure/hands.js';
 import { ask, chats, login, logout, servers, type Context, type Terminal } from './interface/commands.js';
 import { chat } from './interface/chat.js';
 
@@ -44,6 +45,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     // a client that runs once a week from being signed out (spec §9).
     api: (options) =>
       new PopAgentApi({ ...options, onToken: (token) => profiles.refresh(profile, token) }),
+    hands: (options) => new Hands(options),
   };
 
   const command = args[0];
