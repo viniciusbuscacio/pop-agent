@@ -908,22 +908,24 @@ events from stale runs.
   language label). Mermaid/KaTeX: later.
 - Streaming UX (aw's machine as reference): runId registry, reload
   reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
-  via SSE, and per-chat drafts in localStorage. The **pending-input slot is
-  server-owned**: one SQLite row per chat, returned with the message snapshot
-  and broadcast by SSE so phone, desktop and tabs see the same text. A POST
-  racing an active run fills that slot atomically; a third is refused without
-  replacement. While pi is running with the same terminal hands, the row is
-  offered through pi's native steering queue: it enters after the current
-  assistant turn and its tool calls, before the next model call. `/queue <message>`
-  is the explicit escape hatch to the old behavior: it persists
-  `delivery_mode=follow_up` and is not offered to pi until the live run ends. Delivery
-  persists the assistant segment before it, inserts the user bubble, and
-  continues under the same run id. Until pi emits that user-message event the
-  SQLite row remains authoritative, so a restart or an unavailable steering
-  channel degrades into the ordinary follow-up path instead of losing input.
-  PUT edits it and DELETE cancels it before delivery. Text, uploads and Files
-  references survive PWA reclamation and server restart. Legacy
-  `pop-agent.queued.*` localStorage rows migrate on first open.
+  via SSE, and per-chat drafts in localStorage. The **pending-input FIFO is
+  server-owned**: ordered SQLite rows survive restart, while the current head is
+  returned with the message snapshot and broadcast by SSE so phone, desktop and
+  tabs agree on what comes next. A POST racing an active run appends atomically;
+  the defensive ceiling is 1,024 pending inputs per chat, so only item 1,025 is
+  refused with `queue_full`. While pi is running with the same terminal hands,
+  Pop offers one head at a time through pi's native steering queue, inheriting
+  its default `one-at-a-time` behavior: each enters after the current assistant
+  turn and its tool calls, before the next model call. `/queue <message>` is the
+  explicit escape hatch to the old behavior: it persists
+  `delivery_mode=follow_up` and is not offered to pi until the live run ends.
+  Delivery persists the assistant segment before it, inserts the user bubble,
+  advances the FIFO and continues under the same run id. Until pi emits that
+  user-message event the SQLite row remains authoritative, so a restart or an
+  unavailable steering channel degrades into the ordinary follow-up path instead
+  of losing input. PUT edits the head and DELETE cancels the head before delivery.
+  Text, uploads and Files references survive PWA reclamation and server restart.
+  Legacy `pop-agent.queued.*` localStorage rows migrate on first open.
 - **Adoption**: an event for a chat with no live buffer starts one, so a run
   begun on another device streams into every open window. Runs that already
   ended are remembered briefly, so their stragglers are ignored rather than

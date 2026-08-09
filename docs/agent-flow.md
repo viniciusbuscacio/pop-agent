@@ -16,7 +16,7 @@ web                        server
  │ ────────────────────────────────────▶ { text, attachments? }
  │  202 Accepted                         SendMessageResponse DTO
  │ ◀──────────────────────────────────── { runId, userMessageId }
- │                         or, if busy:  { queued: true, message }
+ │                         or, if busy:  { queued: true, message, head }
  │
  │  GET /v1/events (EventSource, one per app instance)
  │ ◀━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ StreamEvent DTOs, one per SSE frame
@@ -24,17 +24,20 @@ web                        server
 ```
 
 - Send is **fire-and-return**: the POST starts the run and answers immediately.
-  If that chat is already running, the same POST atomically occupies its one
-  durable SQLite slot and offers it to pi as **steering** by default. The
-  composer command `/queue <message>` sends `delivery: follow_up` and preserves
-  the older behavior: do not offer it to pi; wait for the run to settle. Pi inserts steering after
-  the current assistant turn and its tool calls, before the next model call.
-  If the run has not reached pi, comes from different terminal hands, or ends
-  first, the row remains a normal follow-up. The persisted `delivery_mode`
-  keeps `/queue` explicit across edits and reconnects. A third POST gets `queue_exists`.
-  `PUT /v1/chats/:id/queue` edits it; `DELETE` cancels it before delivery.
+  If that chat is already running, the same POST atomically appends to its
+  durable SQLite FIFO and offers the head to pi as **steering** by default. The
+  FIFO accepts up to 1,024 pending inputs per chat; only the next append is
+  refused with `queue_full`. The composer command `/queue <message>` sends
+  `delivery: follow_up` and preserves the older behavior: do not offer that
+  item to pi; wait for the run to settle. Pi inserts steering after the current
+  assistant turn and its tool calls, before the next model call. Pop offers one
+  FIFO head at a time, inheriting pi's default `one-at-a-time` semantics. If the
+  run has not reached pi, comes from different terminal hands, or ends first,
+  the head remains a normal follow-up. The persisted `delivery_mode` keeps
+  `/queue` explicit across edits and reconnects. `PUT /v1/chats/:id/queue`
+  edits the head; `DELETE` cancels the head before delivery.
 - Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
-  the shared row when created/edited, nothing when cancelled, and a `started`
+  the shared FIFO head when created/edited/advanced, nothing when empty, and a `started`
   user-message identity when consumed as a new run. `steering-delivered` closes
   the current assistant segment, inserts the steering user message and resets
   the live buffer while preserving the same run id. The frontend keeps a **runId registry**:
@@ -117,12 +120,13 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   `runId`/`messageId` — never duplicate a message that both paths deliver
   (aw's streaming machine, spec §14).
 - Send path: POST first, then append the accepted user message or the server's
-  durable row. `GET .../messages` reconciles both `live` and `queued`; SSE keeps
-  other devices current. The row is not deleted merely because pi accepted it:
-  only pi's user-message event consumes it. `steering-delivered` persists the
-  assistant segment before it, inserts the user message, and continues the same
-  run with an empty live buffer. If it was not delivered, run settlement starts
-  it normally and broadcasts `queue.started`. Old on-device queue keys are
+  durable FIFO item. `GET .../messages` reconciles both `live` and the FIFO head;
+  SSE keeps other devices current. An item is not deleted merely because pi
+  accepted it: only pi's user-message event consumes it, advances the head and
+  offers the next steering item. `steering-delivered` persists the assistant
+  segment before it, inserts the user message, and continues the same run with
+  an empty live buffer. If it was not delivered, run settlement starts it
+  normally and broadcasts `queue.started`. Old on-device queue keys are
   uploaded once as an upgrade path and deleted only after server acceptance.
 
 ## Failure modes (design targets)
@@ -132,7 +136,7 @@ GET /v1/events            EventSink port            pi events → AgentEvent
 | SSE drops mid-run             | client reconnects + refetches; run unaffected   |
 | server restarts mid-run       | partial answer is marked interrupted; undelivered steering starts as a follow-up after boot |
 | PWA/tab closes with pending input | SQLite row remains; snapshot restores it on any device |
-| two tabs queue simultaneously | unique chat key accepts one; the other gets `queue_exists` |
+| two tabs queue simultaneously | synchronous appends preserve both in FIFO order; only item 1,025 gets `queue_full` |
 | pi throws inside a run        | `error` event with stable code; user message already persisted |
 | provider auth/limit error     | `error` code surfaces the provider code; no retry loops |
 | Stop pressed                  | abort + child process-group kill; terminal `error/aborted` |

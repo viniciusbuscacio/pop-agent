@@ -272,9 +272,21 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
         ...origin,
       });
       if (!queued.ok) {
-        return apiError(c, 409, 'queue_exists', 'This chat already has a queued message.');
+        return apiError(
+          c,
+          409,
+          'queue_full',
+          'This chat already has 1,024 pending messages.',
+        );
       }
-      return c.json({ queued: true as const, message: toQueuedMessageDto(queued.message) }, 202);
+      return c.json(
+        {
+          queued: true as const,
+          message: toQueuedMessageDto(queued.message),
+          head: toQueuedMessageDto(queued.head),
+        },
+        202,
+      );
     }
 
     // 202: accepted and started. The answer arrives on the stream.

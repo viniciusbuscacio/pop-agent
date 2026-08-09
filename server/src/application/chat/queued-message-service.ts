@@ -20,14 +20,16 @@ export interface QueueInput {
   handsConnectionId?: string;
 }
 
+export const MAX_PENDING_MESSAGES_PER_CHAT = 1024;
+
 export type QueueWriteResult =
-  | { ok: true; message: QueuedMessage }
-  | { ok: false; reason: 'chat_not_found' | 'queue_exists' | 'queue_not_found' };
+  | { ok: true; message: QueuedMessage; head: QueuedMessage }
+  | { ok: false; reason: 'chat_not_found' | 'queue_full' | 'queue_not_found' };
 
 /**
- * Owns the durable follow-up slot. HTTP may create/edit/cancel it, while run
- * completion drains it synchronously into RunService. SQLite's unique chat id
- * is the final arbiter when two tabs race to fill the same slot.
+ * Owns each chat's durable pending-input FIFO. HTTP may append and may
+ * edit/cancel its head, while steering delivery or run completion advances it.
+ * A high defensive cap prevents broken clients from growing it forever.
  */
 export class QueuedMessageService {
   constructor(
@@ -47,6 +49,9 @@ export class QueuedMessageService {
 
   enqueue(chatId: string, input: QueueInput): QueueWriteResult {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
+    if (this.deps.repo.count(chatId) >= MAX_PENDING_MESSAGES_PER_CHAT) {
+      return { ok: false, reason: 'queue_full' };
+    }
     const now = new Date(this.deps.clock.now()).toISOString();
     const message: QueuedMessage = {
       id: entityId('queued'),
@@ -56,10 +61,14 @@ export class QueuedMessageService {
       createdAt: now,
       updatedAt: now,
     };
-    if (!this.deps.repo.create(message)) return { ok: false, reason: 'queue_exists' };
-    this.announce(message);
-    if (message.deliveryMode === 'steer') this.offerSteering(chatId);
-    return { ok: true, message };
+    // Services are synchronous around this repository, so count + create cannot
+    // interleave inside this process. The id conflict fallback is still reported
+    // as full rather than silently losing an accepted input.
+    if (!this.deps.repo.create(message)) return { ok: false, reason: 'queue_full' };
+    const head = this.deps.repo.get(chatId) ?? message;
+    this.announce(head);
+    this.offerSteering(chatId);
+    return { ok: true, message, head };
   }
 
   update(chatId: string, input: QueueInput): QueueWriteResult {
@@ -77,7 +86,7 @@ export class QueuedMessageService {
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
     this.announce(message);
     if (message.deliveryMode === 'steer') this.offerSteering(chatId);
-    return { ok: true, message };
+    return { ok: true, message, head: message };
   }
 
   cancel(chatId: string): QueueWriteResult {
@@ -85,14 +94,16 @@ export class QueuedMessageService {
     const current = this.deps.repo.get(chatId);
     if (current === undefined) return { ok: false, reason: 'queue_not_found' };
     this.deps.runs.cancelSteering(chatId, current.id);
-    if (!this.deps.repo.delete(chatId)) {
+    if (!this.deps.repo.delete(current.id)) {
       return { ok: false, reason: 'queue_not_found' };
     }
-    this.announce(undefined, chatId);
-    return { ok: true, message: current };
+    const head = this.deps.repo.get(chatId);
+    this.announce(head, chatId);
+    this.offerSteering(chatId);
+    return { ok: true, message: current, head: head ?? current };
   }
 
-  /** Offers the durable slot to pi without deleting it until pi consumes it. */
+  /** Offers the FIFO head to pi without deleting it until pi consumes it. */
   offerSteering(chatId: string): boolean {
     const queued = this.deps.repo.get(chatId);
     if (
@@ -115,13 +126,16 @@ export class QueuedMessageService {
     });
   }
 
-  /** Removes a slot only after pi emits the corresponding user-message start. */
+  /** Advances the FIFO only after pi emits the corresponding user-message start. */
   delivered(chatId: string, steeringId: string): boolean {
     const queued = this.deps.repo.get(chatId);
-    if (queued === undefined || queued.id !== steeringId || !this.deps.repo.delete(chatId)) {
+    if (queued === undefined || queued.id !== steeringId || !this.deps.repo.delete(steeringId)) {
       return false;
     }
-    this.announce(undefined, chatId);
+    this.announce(this.deps.repo.get(chatId), chatId);
+    // Pi's default one-at-a-time mode has just consumed the former head. Offer
+    // the next item now so it can steer the following assistant turn.
+    this.offerSteering(chatId);
     return true;
   }
 
@@ -154,16 +168,16 @@ export class QueuedMessageService {
     );
     if (!started.ok) {
       if (started.reason === 'chat_not_found') {
-        this.deps.repo.delete(chatId);
-        this.announce(undefined, chatId);
+        this.deps.repo.delete(queued.id);
+        this.announce(this.deps.repo.get(chatId), chatId);
       }
       return false;
     }
 
     // startRun persists the user message before returning. Only now is the
     // queue row consumed; duplicate drain callbacks cannot send it again.
-    this.deps.repo.delete(chatId);
-    this.announce(undefined, chatId, {
+    this.deps.repo.delete(queued.id);
+    this.announce(this.deps.repo.get(chatId), chatId, {
       runId: started.runId,
       userMessageId: started.userMessageId,
       text: queued.text,

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatDTO, MessageDTO, StreamEvent } from '@pop-agent/shared';
 import type { Hono } from 'hono';
+import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
@@ -283,7 +284,7 @@ describe('sending a message', () => {
     await fixture.runs.whenIdle();
   });
 
-  it('refuses a third message without replacing the durable follow-up', async () => {
+  it('accepts multiple pending messages without replacing the FIFO head', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'two' } });
@@ -293,9 +294,49 @@ describe('sending a message', () => {
       body: { text: 'three' },
     });
 
-    expect(third.status).toBe(409);
-    expect(((await third.json()) as { error: { code: string } }).error.code).toBe('queue_exists');
+    expect(third.status).toBe(202);
+    expect(await third.json()).toMatchObject({
+      queued: true,
+      message: { text: 'three' },
+      head: { text: 'two' },
+    });
     expect(fixture.queuedMessages.get(chat.id)?.text).toBe('two');
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+
+    const transcript = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      messages: MessageDTO[];
+    };
+    expect(
+      transcript.messages
+        .filter((message) => message.role === 'user' && ['two', 'three'].includes(message.content))
+        .map((message) => message.content),
+    ).toEqual(['two', 'three']);
+  });
+
+  it('keeps a defensive 1,024-item cap for broken clients', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    for (let index = 0; index < MAX_PENDING_MESSAGES_PER_CHAT; index += 1) {
+      expect(
+        fixture.queuedMessages.enqueue(chat.id, {
+          text: `pending ${String(index)}`,
+          attachments: [],
+          filePaths: [],
+        }).ok,
+      ).toBe(true);
+    }
+
+    const overflow = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'one too many' },
+    });
+    expect(overflow.status).toBe(409);
+    expect(((await overflow.json()) as { error: { code: string } }).error.code).toBe('queue_full');
+
+    for (let index = 0; index < MAX_PENDING_MESSAGES_PER_CHAT; index += 1) {
+      expect(fixture.queuedMessages.cancel(chat.id).ok).toBe(true);
+    }
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });

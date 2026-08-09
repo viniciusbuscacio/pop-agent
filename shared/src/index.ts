@@ -573,7 +573,7 @@ export interface MessagesResponse {
   messages: MessageDTO[];
   /** Present while this chat has a run in flight. */
   live?: LiveRunDTO;
-  /** The server-owned follow-up slot, shared by every client. */
+  /** Oldest item in the server-owned pending-input FIFO, shared by every client. */
   queued?: QueuedMessageDTO;
 }
 
@@ -611,7 +611,13 @@ export interface SendMessageRequest {
 /** 202 response of `POST /v1/chats/:id/messages`: started now, or safely queued. */
 export type SendMessageResponse =
   | { queued?: false; runId: string; userMessageId: string }
-  | { queued: true; message: QueuedMessageDTO };
+  | {
+      queued: true;
+      /** The newly accepted input, used by the sending client for local echo. */
+      message: QueuedMessageDTO;
+      /** Oldest pending input. Older servers omitted it; clients fall back to message. */
+      head?: QueuedMessageDTO;
+    };
 
 /** `POST /v1/chats/:id/stop` — false when there was nothing to stop. */
 export interface StopRunResponse {

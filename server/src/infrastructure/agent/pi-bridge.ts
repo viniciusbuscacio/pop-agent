@@ -194,8 +194,9 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       cancelSteering: (id) => {
         const index = pendingSteering.findIndex((item) => item.id === id);
         if (index < 0) return false;
-        // Pop Agent exposes one pending input per chat. Clearing pi's queue is
-        // therefore the atomic counterpart of removing that durable slot.
+        // Pop Agent offers only the durable FIFO head to pi at a time. Clearing
+        // pi's queue therefore removes exactly that offered item; later inputs
+        // are still durable in SQLite and have not entered this bridge yet.
         entry.session.clearQueue();
         pendingSteering.splice(index, 1);
         return true;

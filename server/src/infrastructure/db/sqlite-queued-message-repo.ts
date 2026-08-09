@@ -18,15 +18,21 @@ interface QueueRow {
   updated_at: string;
 }
 
-/** SQLite adapter for the one-follow-up-per-chat queue (migration 033). */
+/** SQLite adapter for the per-chat pending-input FIFO. */
 export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
   constructor(private readonly db: Db) {}
 
   get(chatId: string): QueuedMessage | undefined {
     const row = this.db
-      .prepare('SELECT * FROM queued_messages WHERE chat_id = ?')
+      .prepare('SELECT * FROM queued_messages WHERE chat_id = ? ORDER BY created_at, rowid LIMIT 1')
       .get(chatId) as QueueRow | undefined;
     return row === undefined ? undefined : toMessage(row);
+  }
+
+  count(chatId: string): number {
+    return (this.db
+      .prepare('SELECT COUNT(*) AS count FROM queued_messages WHERE chat_id = ?')
+      .get(chatId) as { count: number }).count;
   }
 
   list(): QueuedMessage[] {
@@ -42,7 +48,7 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
            (id, chat_id, text, delivery_mode, attachments_json, file_paths_json, client_json,
             hands_connection_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(chat_id) DO NOTHING`,
+         ON CONFLICT(id) DO NOTHING`,
       )
       .run(...values(message));
     return result.changes === 1;
@@ -70,8 +76,8 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
     return result.changes === 1;
   }
 
-  delete(chatId: string): boolean {
-    return this.db.prepare('DELETE FROM queued_messages WHERE chat_id = ?').run(chatId).changes === 1;
+  delete(id: string): boolean {
+    return this.db.prepare('DELETE FROM queued_messages WHERE id = ?').run(id).changes === 1;
   }
 }
 

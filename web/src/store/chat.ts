@@ -177,7 +177,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (response.queued === true) {
       deleteQueuedMessage(chatId);
       set((current) => ({
-        queued: { ...current.queued, [chatId]: response.message },
+        queued: { ...current.queued, [chatId]: response.head ?? response.message },
         failures: without(current.failures, chatId),
       }));
       return;

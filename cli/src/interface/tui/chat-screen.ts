@@ -248,9 +248,9 @@ export class ChatScreen {
       this.command(text);
       return;
     }
-    // Sending while busy is intentional: the server owns the durable steering
-    // slot and either accepts this into the live pi loop or explains that one
-    // is already waiting. Blocking here made the server feature unreachable.
+    // Sending while busy is intentional: the server appends to the durable
+    // steering FIFO and feeds its head into pi. Blocking here made the server
+    // feature unreachable.
 
     this.showUser(text);
     try {

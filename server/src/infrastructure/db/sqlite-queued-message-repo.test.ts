@@ -49,7 +49,7 @@ describe('sqlite queued messages', () => {
     second.close();
   });
 
-  it('allows only one row per chat', () => {
+  it('keeps multiple rows per chat in insertion order', () => {
     const db = openDatabase(':memory:');
     new SqliteChatRepo(db).create(CHAT);
     const repo = new SqliteQueuedMessageRepo(db);
@@ -64,8 +64,11 @@ describe('sqlite queued messages', () => {
       updatedAt: CHAT.updatedAt,
     };
     expect(repo.create(message)).toBe(true);
-    expect(repo.create({ ...message, id: 'queued-two', text: 'second' })).toBe(false);
+    expect(repo.create({ ...message, id: 'queued-two', text: 'second' })).toBe(true);
+    expect(repo.count(CHAT.id)).toBe(2);
     expect(repo.get(CHAT.id)?.text).toBe('first');
+    expect(repo.delete('queued-one')).toBe(true);
+    expect(repo.get(CHAT.id)?.text).toBe('second');
     db.close();
   });
 });

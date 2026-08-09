@@ -165,7 +165,7 @@ interface PendingRun {
   handsConnectionId: string | undefined;
   /** Controls the concrete bridge attempt currently using this run. */
   control: AgentRunControl | undefined;
-  /** At most one durable input may be waiting to enter pi's current loop. */
+  /** The FIFO head currently offered to pi; later durable inputs stay in SQLite. */
   steering: PendingSteering | undefined;
   started: boolean;
   /** Epoch ms when execution began; 0 while still queued. */
@@ -586,7 +586,7 @@ export class RunService {
     );
   }
 
-  /** Offers one durable input to the concrete bridge attempt currently in flight. */
+  /** Offers the current durable FIFO head to the bridge attempt in flight. */
   offerSteering(chatId: string, input: SteeringInput): boolean {
     const runId = this.runIdByChat.get(chatId);
     const run = runId === undefined ? undefined : this.runs.get(runId);
