@@ -65,6 +65,7 @@ interface ChatState {
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
+  archiveOthers: (keepChatId: string) => Promise<number>;
   setModel: (chatId: string, model: string, provider: string) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
   /** Deletes every archived conversation in one call. */
@@ -266,6 +267,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await chatsService.patch(chatId, { archived });
     // The chat leaves one list and joins the other, so refresh both.
     await Promise.all([get().loadChats(), get().loadArchived()]);
+  },
+
+  async archiveOthers(keepChatId) {
+    const { archived } = await chatsService.archiveOthers(keepChatId);
+    // Reload rather than moving the local snapshot: another device may have
+    // created or archived a chat since this sidebar last came to the front.
+    await Promise.all([get().loadChats(), get().loadArchived()]);
+    return archived;
   },
 
   async setModel(chatId, model, provider) {

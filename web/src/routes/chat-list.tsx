@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import type { ChatDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
@@ -38,12 +38,16 @@ export function ChatList() {
   const archived = useChatStore((state) => state.archived);
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
+  const archiveOthers = useChatStore((state) => state.archiveOthers);
   const removeArchived = useChatStore((state) => state.removeArchived);
+  const notify = useNotificationsStore((state) => state.notify);
+  const [archivingOthers, setArchivingOthers] = useState(false);
   const [purging, setPurging] = useState(false);
   const createChat = useChatStore((state) => state.createChat);
   const reloadMcp = useMcpStore((state) => state.reload);
 
   const location = useLocation();
+  const openChat = useMatch('/chat/:chatId');
   const path = location.pathname;
   const segment: Segment = path.startsWith('/files')
     ? 'files'
@@ -59,6 +63,20 @@ export function ChatList() {
   const [listMenu, setListMenu] = useState(false);
   useDismiss(listMenu, () => setListMenu(false));
   const [creating, setCreating] = useState(false);
+
+  // On a wide screen the selected chat is in the route while this sidebar is
+  // visible. On a phone the sidebar is visible only after Back returns to '/',
+  // so keep the last chat ChatPage recorded -- but only if it is still open.
+  let rememberedChatId: string | undefined;
+  try {
+    rememberedChatId = localStorage.getItem('pop-agent.lastChat') ?? undefined;
+  } catch {
+    // Storage may be denied. With no reliable chat to preserve, the bulk
+    // action stays disabled rather than guessing and filing everything.
+  }
+  const keepChatId = openChat?.params.chatId ?? rememberedChatId;
+  const keepChat = chats.find((chat) => chat.id === keepChatId);
+  const archiveOthersCount = keepChat === undefined ? 0 : Math.max(0, chats.length - 1);
 
   useEffect(() => {
     void loadChats();
@@ -119,6 +137,31 @@ export function ChatList() {
       navigate(`/chat/${chat.id}`);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function archiveAllOthers(): Promise<void> {
+    if (keepChat === undefined || archiveOthersCount === 0 || archivingOthers) return;
+    if (
+      !window.confirm(
+        t('shell.archiveOthersConfirm', {
+          count: archiveOthersCount,
+          title: keepChat.title,
+        }),
+      )
+    ) {
+      return;
+    }
+
+    setListMenu(false);
+    setArchivingOthers(true);
+    try {
+      const count = await archiveOthers(keepChat.id);
+      notify(t('shell.archiveOthersDone', { count }));
+    } catch {
+      notify(t('shell.archiveOthersFailed'));
+    } finally {
+      setArchivingOthers(false);
     }
   }
 
@@ -202,6 +245,16 @@ export function ChatList() {
                   setListMenu(false);
                   setViewArchived((value) => !value);
                 }}
+              />
+              <MenuItem
+                testId="list-archive-others"
+                label={
+                  archivingOthers
+                    ? t('shell.archiveOthersBusy')
+                    : t('shell.archiveOthers', { count: archiveOthersCount })
+                }
+                disabled={keepChat === undefined || archiveOthersCount === 0 || archivingOthers}
+                onClick={() => void archiveAllOthers()}
               />
             </div>
           ) : null}
@@ -983,11 +1036,13 @@ function MenuItem({
   onClick,
   testId,
   danger = false,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   testId: string;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -995,7 +1050,8 @@ function MenuItem({
       role="menuitem"
       data-testid={testId}
       onClick={onClick}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${
+      disabled={disabled}
+      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${
         danger ? 'text-[var(--danger)]' : ''
       }`}
     >

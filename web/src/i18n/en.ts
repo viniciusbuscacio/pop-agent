@@ -458,6 +458,12 @@ export const en = {
   'shell.listMenu': 'List options',
   'shell.viewArchived': 'View archived ({count})',
   'shell.viewActive': 'View active chats',
+  'shell.archiveOthers': 'Archive all other chats ({count})',
+  'shell.archiveOthersConfirm':
+    'Archive all other chats ({count})? “{title}” will remain open.',
+  'shell.archiveOthersBusy': 'Archiving…',
+  'shell.archiveOthersDone': 'Archived chats: {count}.',
+  'shell.archiveOthersFailed': 'The conversations could not be archived.',
   'shell.archivedBadge': 'archived',
   'shell.deleteArchivedAll': 'Delete all archived ({count})',
   'shell.deleteArchivedConfirm1':

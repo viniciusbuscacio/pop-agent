@@ -79,6 +79,13 @@ export class ChatService {
     return this.deps.chats.get(id);
   }
 
+  /** Archives every open conversation except a validated open chat. */
+  archiveOthers(keepChatId: string): number | undefined {
+    const keep = this.deps.chats.get(keepChatId);
+    if (keep === undefined || keep.archived) return undefined;
+    return this.deps.chats.archiveOthers(keepChatId);
+  }
+
   setModel(id: string, model: string, provider: string): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setModel(id, model, provider);

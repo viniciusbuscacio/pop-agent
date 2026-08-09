@@ -80,6 +80,20 @@ export class SqliteChatRepo implements ChatRepo {
     this.db.prepare('UPDATE chats SET archived = ? WHERE id = ?').run(archived ? 1 : 0, id);
   }
 
+  archiveOthers(keepChatId: string): number {
+    // The EXISTS is the final guard against a stale/mistyped keep id turning
+    // "all others" into "all" between validation and this atomic statement.
+    return this.db
+      .prepare(
+        `UPDATE chats
+            SET archived = 1
+          WHERE archived = 0
+            AND id <> ?
+            AND EXISTS (SELECT 1 FROM chats WHERE id = ? AND archived = 0)`,
+      )
+      .run(keepChatId, keepChatId).changes;
+  }
+
   setModel(id: string, model: string, provider: string): void {
     this.db.prepare('UPDATE chats SET model = ?, provider = ? WHERE id = ?').run(model, provider, id);
   }

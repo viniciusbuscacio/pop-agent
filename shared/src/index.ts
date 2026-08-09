@@ -479,6 +479,15 @@ export interface ChatListResponse {
   chats: ChatDTO[];
 }
 
+/** `POST /v1/chats/archive-others` — keep one open and file the rest. */
+export interface ArchiveOtherChatsRequest {
+  keepChatId: string;
+}
+
+export interface ArchiveOtherChatsResponse {
+  archived: number;
+}
+
 /** What a tool call left behind, as rendered in a reloaded conversation. */
 export interface ToolCallDTO {
   name: string;

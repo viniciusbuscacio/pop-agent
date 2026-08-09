@@ -54,6 +54,51 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
+  it('archives every open chat except the one the user keeps', async () => {
+    const keep = await newChat();
+    const one = await newChat();
+    const two = await newChat();
+    const alreadyFiled = await newChat();
+    await api(`/v1/chats/${alreadyFiled.id}`, { method: 'PATCH', body: { archived: true } });
+
+    const response = await api('/v1/chats/archive-others', {
+      method: 'POST',
+      body: { keepChatId: keep.id },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ archived: 2 });
+    const active = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    expect(active.chats.map((chat) => chat.id)).toEqual([keep.id]);
+    const archived = (await (await api('/v1/chats?archived=true')).json()) as {
+      chats: ChatDTO[];
+    };
+    expect(new Set(archived.chats.map((chat) => chat.id))).toEqual(
+      new Set([one.id, two.id, alreadyFiled.id]),
+    );
+  });
+
+  it('refuses to archive others without a valid open chat to keep', async () => {
+    const filed = await newChat();
+    await api(`/v1/chats/${filed.id}`, { method: 'PATCH', body: { archived: true } });
+
+    expect(
+      (await api('/v1/chats/archive-others', {
+        method: 'POST',
+        body: { keepChatId: filed.id },
+      })).status,
+    ).toBe(404);
+    expect(
+      (await api('/v1/chats/archive-others', {
+        method: 'POST',
+        body: { keepChatId: 'chat-does-not-exist' },
+      })).status,
+    ).toBe(404);
+    expect(
+      (await api('/v1/chats/archive-others', { method: 'POST', body: {} })).status,
+    ).toBe(400);
+  });
+
   it('deletes every archived chat in one call, and only those', async () => {
     // The bulk route exists because the archive is where a scheduled task
     // piles up dozens of chats; and it must be registered before

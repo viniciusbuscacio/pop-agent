@@ -8,6 +8,7 @@ const stop = vi.fn();
 const updateQueue = vi.fn();
 const cancelQueue = vi.fn();
 const patch = vi.fn();
+const archiveOthers = vi.fn();
 const messagesBody: { value: unknown } = { value: { messages: [] } };
 // What the server would answer after any patch: the two lists, post-change.
 const listBody: { active: unknown[]; archived: unknown[] } = { active: [], archived: [] };
@@ -19,6 +20,7 @@ vi.mock('../services/chats', () => ({
     updateQueue: (chatId: string, text: string) => updateQueue(chatId, text) as Promise<unknown>,
     cancelQueue: (chatId: string) => cancelQueue(chatId) as Promise<unknown>,
     patch: (chatId: string, body: unknown) => patch(chatId, body) as Promise<unknown>,
+    archiveOthers: (keepChatId: string) => archiveOthers(keepChatId) as Promise<unknown>,
     list: (archived = false) =>
       Promise.resolve({ chats: archived ? listBody.archived : listBody.active }),
     messages: () => Promise.resolve(messagesBody.value),
@@ -60,7 +62,9 @@ beforeEach(() => {
   updateQueue.mockReset();
   cancelQueue.mockReset();
   patch.mockReset();
+  archiveOthers.mockReset();
   patch.mockResolvedValue({});
+  archiveOthers.mockResolvedValue({ archived: 0 });
   send.mockResolvedValue({ runId: RUN, userMessageId: 'msg-0000000000000001' });
   updateQueue.mockResolvedValue({ message: queuedMessage('edited') });
   cancelQueue.mockResolvedValue(undefined);
@@ -458,5 +462,23 @@ describe('archiving', () => {
 
     expect(useChatStore.getState().chats.map((entry) => entry.id)).toEqual([CHAT]);
     expect(useChatStore.getState().archived).toEqual([]);
+  });
+
+  it('archives all others in one call and reconciles both lists', async () => {
+    const other = { ...chat, id: 'chat-000000000002', title: 'Other' };
+    useChatStore.setState({ chats: [chat, other], messages: { [other.id]: [] } });
+    listBody.active = [chat];
+    listBody.archived = [{ ...other, archived: true }];
+    archiveOthers.mockResolvedValue({ archived: 1 });
+
+    const count = await useChatStore.getState().archiveOthers(CHAT);
+
+    expect(archiveOthers).toHaveBeenCalledWith(CHAT);
+    expect(count).toBe(1);
+    expect(useChatStore.getState().chats.map((entry) => entry.id)).toEqual([CHAT]);
+    expect(useChatStore.getState().archived.map((entry) => entry.id)).toEqual([other.id]);
+    // Archiving is not deletion: a still-running answer or loaded history may
+    // remain useful if the user opens the archived chat from search.
+    expect(useChatStore.getState().messages[other.id]).toEqual([]);
   });
 });

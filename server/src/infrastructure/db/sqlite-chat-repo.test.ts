@@ -74,6 +74,30 @@ describe('chats', () => {
     expect(repo.list({ archived: true }).map((row) => row.id)).toEqual([filed.id]);
   });
 
+  it('archives every open chat except the one being kept', () => {
+    const keep = repo.create(chat());
+    const one = repo.create(chat());
+    const two = repo.create(chat());
+    const alreadyFiled = repo.create(chat({ archived: true }));
+
+    expect(repo.archiveOthers(keep.id)).toBe(2);
+    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([keep.id]);
+    expect(new Set(repo.list({ archived: true }).map((row) => row.id))).toEqual(
+      new Set([one.id, two.id, alreadyFiled.id]),
+    );
+    expect(repo.archiveOthers(keep.id)).toBe(0);
+  });
+
+  it('does not archive anything when the chat to keep is invalid', () => {
+    const one = repo.create(chat());
+    const two = repo.create(chat());
+
+    expect(repo.archiveOthers('chat-does-not-exist')).toBe(0);
+    expect(new Set(repo.list({ archived: false }).map((row) => row.id))).toEqual(
+      new Set([one.id, two.id]),
+    );
+  });
+
   it('shows the last message as the preview', () => {
     const created = repo.create(chat());
     repo.appendMessage(message(created.id, { content: 'first', createdAt: T0 }));

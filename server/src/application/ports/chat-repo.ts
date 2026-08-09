@@ -13,6 +13,8 @@ export interface ChatRepo {
 
   rename(id: string, title: string): void;
   setArchived(id: string, archived: boolean): void;
+  /** Archives every open conversation except the one the user is keeping. */
+  archiveOthers(keepChatId: string): number;
   setModel(id: string, model: string, provider: string): void;
   recordRecentModel(entry: { provider: string; model: string; usedAt: string }): void;
   recentModels(limit: number): { provider: string; model: string; usedAt: string }[];

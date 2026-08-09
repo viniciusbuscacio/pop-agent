@@ -1,4 +1,5 @@
 import type {
+  ArchiveOtherChatsResponse,
   AttachmentDTO,
   ChatDTO,
   ChatListResponse,
@@ -21,6 +22,13 @@ export const chatsService = {
 
   create(): Promise<ChatDTO> {
     return apiRequest<ChatDTO>('/chats', { method: 'POST' });
+  },
+
+  archiveOthers(keepChatId: string): Promise<ArchiveOtherChatsResponse> {
+    return apiRequest<ArchiveOtherChatsResponse>('/chats/archive-others', {
+      method: 'POST',
+      body: { keepChatId },
+    });
   },
 
   patch(id: string, patch: PatchChatRequest): Promise<ChatDTO> {
