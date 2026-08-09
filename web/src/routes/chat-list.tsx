@@ -417,12 +417,8 @@ function FolderTree() {
   }
 
   // A row and, when open, its children -- indented by depth. A plain recursive
-  // helper, so the tree reconciles cleanly.
-  //
-  // A top-level row starts at the sidebar's own left edge: the +/- lives in the
-  // 1rem gutter the chat rows use as padding, so the folder icon lands exactly
-  // where a chat's title does instead of floating a column further right
-  // (Vinicius, 03/08).
+  // helper, so the tree reconciles cleanly. Real top-level folders start one
+  // level in because the permanent Files / row represents their root.
   function renderRow(folder: FileNodeDTO, depth: number) {
     const kids = (folder.children ?? []).filter((child) => child.kind === 'dir');
     const isOpen = expanded.has(folder.path);
@@ -509,9 +505,33 @@ function FolderTree() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
+      {/* The filesystem root is a place in its own right, even when it has no
+          folders. Keeping it visible prevents an empty sidebar from looking
+          broken and makes the pane on the right read as the contents of Files
+          /. It is structural, so unlike a real folder it cannot be renamed,
+          deleted or collapsed. */}
+      <div
+        className={`flex items-center pr-1 ${
+          currentPath === ''
+            ? 'bg-[var(--hover-overlay)] font-medium'
+            : 'hover:bg-[var(--hover-overlay)]'
+        }`}
+      >
+        <span className="h-5 w-4 shrink-0" aria-hidden="true" />
+        <button
+          type="button"
+          data-testid="tree-root"
+          aria-current={currentPath === '' ? 'page' : undefined}
+          onClick={() => navigate('/files')}
+          className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left"
+        >
+          <FolderIcon />
+          <span className="truncate text-sm">{t('files.rootCrumb')} /</span>
+        </button>
+      </div>
       {(tree ?? [])
         .filter((node) => node.kind === 'dir')
-        .map((folder) => renderRow(folder, 0))}
+        .map((folder) => renderRow(folder, 1))}
     </div>
   );
 }
