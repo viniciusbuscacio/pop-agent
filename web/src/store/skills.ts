@@ -34,6 +34,7 @@ interface SkillsState {
   skills: SkillDTO[] | undefined;
   sourceFilter: SkillSourceFilter;
   setSourceFilter: (filter: SkillSourceFilter) => void;
+  upsertSkill: (skill: SkillDTO) => void;
   reload: () => Promise<void>;
 }
 
@@ -41,6 +42,10 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   skills: undefined,
   sourceFilter: 'all',
   setSourceFilter: (filter) => set({ sourceFilter: filter }),
+  upsertSkill: (skill) =>
+    set((state) => ({
+      skills: state.skills?.map((entry) => (entry.slug === skill.slug ? skill : entry)) ?? [skill],
+    })),
   reload: async () => {
     try {
       set({ skills: (await skillsService.list()).skills });

@@ -12,6 +12,7 @@ import { useNotificationsStore } from '../store/notifications';
 import { filesService } from '../services/artifacts';
 import {
   matchesSourceFilter,
+  skillEnabled,
   type SkillSourceFilter,
   useSkillsStore,
 } from '../store/skills';
@@ -592,7 +593,7 @@ function SkillsList({ filter }: { filter: string }) {
               <div
                 className={`flex items-center gap-1 pr-1 ${
                   slug === skill.slug ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'
-                }`}
+                } ${skillEnabled(skill) ? '' : 'opacity-70'}`}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   setMenuFor(skill.slug);
@@ -614,6 +615,11 @@ function SkillsList({ filter }: { filter: string }) {
                     {skill.pending === true ? (
                       <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px]">
                         {t('skills.pending')}
+                      </span>
+                    ) : null}
+                    {!skillEnabled(skill) ? (
+                      <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
+                        {t('skills.disabled')}
                       </span>
                     ) : null}
                   </span>

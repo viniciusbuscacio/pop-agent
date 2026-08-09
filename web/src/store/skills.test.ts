@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SkillDTO } from '@pop-agent/shared';
-import { matchesSourceFilter, useSkillsStore } from './skills';
+import { matchesSourceFilter, skillEnabled, useSkillsStore } from './skills';
 
 function skill(
   slug: string,
@@ -46,5 +46,17 @@ describe('matchesSourceFilter', () => {
   it('shows only built-in skills', () => {
     expect(matchesSourceFilter(skill('core', 'builtin'), 'builtin')).toBe(true);
     expect(matchesSourceFilter(skill('mine', 'user'), 'builtin')).toBe(false);
+  });
+});
+
+describe('skillEnabled', () => {
+  it('treats absent enabled as on', () => {
+    expect(skillEnabled(skill('a', 'user'))).toBe(true);
+  });
+
+  it('respects an explicit false', () => {
+    expect(skillEnabled({ ...skill('a', 'user'), enabled: false } as SkillDTO & { enabled: boolean })).toBe(
+      false,
+    );
   });
 });
