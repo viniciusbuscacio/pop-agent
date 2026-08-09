@@ -8,7 +8,10 @@ export function resendSource(
   failureIndex: number,
 ): MessageDTO | undefined {
   const failure = messages[failureIndex];
-  if (failure?.role !== 'system' || !failure.content.startsWith(FAILED_ANSWER_PREFIX)) {
+  if (
+    failure?.role !== 'system' ||
+    (failure.notice?.kind !== 'run-failure' && !failure.content.startsWith(FAILED_ANSWER_PREFIX))
+  ) {
     return undefined;
   }
   for (let index = failureIndex - 1; index >= 0; index -= 1) {

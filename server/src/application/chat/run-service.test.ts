@@ -790,6 +790,12 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     const messages = repo.getMessages(chatId, { limit: 10 });
     const mark = messages.find((message) => message.role === 'system');
     expect(mark?.content).toBe('Answer retried via p2 after p1 failed (provider_error).');
+    expect(mark?.notice).toEqual({
+      kind: 'model-fallback',
+      failed: { providerId: 'p1', modelId: 'p1/model', code: 'provider_error', status: 402 },
+      fallback: { providerId: 'p2', modelId: 'p2/model' },
+    });
+    expect(sink.of('system-message')[0]?.message).toEqual(mark);
     expect(messages[messages.length - 1]?.content).toBe('saved by the second');
 
     // Penalized and journaled.
@@ -928,5 +934,10 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
       'Answer retried via p2 after p1 failed (provider_error).',
       'That answer could not be finished. (provider_error)',
     ]);
+    expect(marks[1]?.notice).toEqual({
+      kind: 'run-failure',
+      failed: { providerId: 'p2', modelId: 'p2/model', code: 'provider_error', status: 503 },
+    });
+    expect(sink.of('error')[0]?.message).toEqual(marks[1]);
   });
 });

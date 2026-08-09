@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
@@ -14,17 +14,47 @@ export function ChatMessage({
   streaming = false,
   onResend,
   resending = false,
+  onChangeModel,
 }: {
-  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments'>;
+  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice'>;
   streaming?: boolean;
   onResend?: () => void;
   resending?: boolean;
+  onChangeModel?: () => void;
 }) {
   const showThinking = useThinkingStore((state) => state.show);
 
   // A run that failed or was stopped leaves this mark in the history
   // forever (pop-agent.spec §6): quiet, centered, unmistakably not a reply.
   if (message.role === 'system') {
+    if (message.notice?.kind === 'model-fallback') {
+      const { failed, fallback } = message.notice;
+      return (
+        <SystemNoticeCard
+          testId="message-fallback"
+          title={t('chat.fallback.title', { model: modelLabel(failed) })}
+          detail={t('chat.fallback.detail', {
+            reason: failureReason(failed.code, failed.status),
+            model: modelLabel(fallback),
+          })}
+          {...(onChangeModel === undefined ? {} : { onChangeModel })}
+        />
+      );
+    }
+    if (message.notice?.kind === 'run-failure') {
+      const { failed } = message.notice;
+      return (
+        <SystemNoticeCard
+          danger
+          testId="message-failure"
+          title={t('chat.failure.title', { model: modelLabel(failed) })}
+          detail={failureReason(failed.code, failed.status)}
+          {...(onResend === undefined ? {} : { onResend })}
+          {...(onChangeModel === undefined ? {} : { onChangeModel })}
+          resending={resending}
+        />
+      );
+    }
     return (
       <div
         data-testid="message-system"
@@ -32,16 +62,10 @@ export function ChatMessage({
       >
         <span>{message.content}</span>
         {onResend === undefined ? null : (
-          <button
-            type="button"
-            data-testid="message-resend"
-            disabled={resending}
-            onClick={onResend}
-            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 font-medium text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)] disabled:opacity-60"
-          >
+          <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
             <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
             {t('chat.resend')}
-          </button>
+          </ActionButton>
         )}
       </div>
     );
@@ -79,6 +103,94 @@ export function ChatMessage({
         <Cursor />
       ) : null}
     </div>
+  );
+}
+
+function modelLabel(model: { providerId: string; modelId: string }): string {
+  return model.modelId.length === 0
+    ? model.providerId
+    : `${model.providerId} · ${model.modelId}`;
+}
+
+function failureReason(code: string, status?: number): string {
+  if (status === 401 || code === 'provider_not_configured') return t('chat.failure.auth');
+  if (status === 402) return t('chat.failure.quota');
+  if (status === 403) return t('chat.failure.access');
+  if (status === 404) return t('chat.failure.modelUnavailable');
+  if (status === 408 || code === 'attempt_timeout') return t('chat.failure.timeout');
+  if (status === 429) return t('chat.failure.rateLimit');
+  if (status !== undefined && status >= 500) return t('chat.failure.unavailable');
+  if (code === 'network_error') return t('chat.failure.network');
+  return t('chat.failure.technical', { code });
+}
+
+function SystemNoticeCard({
+  testId,
+  title,
+  detail,
+  danger = false,
+  onResend,
+  onChangeModel,
+  resending = false,
+}: {
+  testId: string;
+  title: string;
+  detail: string;
+  danger?: boolean;
+  onResend?: () => void;
+  onChangeModel?: () => void;
+  resending?: boolean;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      role={danger ? 'alert' : 'status'}
+      className={`rounded-lg border bg-[var(--panel-bg)] p-3 ${
+        danger ? 'border-[var(--danger)]' : 'border-[var(--border)]'
+      }`}
+    >
+      <p className="text-sm font-medium text-[var(--screen-fg)]">{title}</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">{detail}</p>
+      {onResend === undefined && onChangeModel === undefined ? null : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {onResend === undefined ? null : (
+            <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
+              <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
+              {t('chat.tryAgain')}
+            </ActionButton>
+          )}
+          {onChangeModel === undefined ? null : (
+            <ActionButton testId="message-change-model" onClick={onChangeModel}>
+              {t('chat.changeModel')}
+            </ActionButton>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  testId,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  testId: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)] disabled:opacity-60"
+    >
+      {children}
+    </button>
   );
 }
 

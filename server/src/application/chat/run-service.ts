@@ -855,10 +855,12 @@ export class RunService {
     ];
 
     let failure: RunFailure | undefined;
+    let lastPair: { providerId: string; modelId: string } | undefined;
 
     for (let index = 0; index < chain.length; index += 1) {
       const pair = chain[index];
       if (pair === undefined) break;
+      lastPair = pair;
 
       failure = await this.attempt(run, pair, index);
       if (failure === undefined) {
@@ -889,7 +891,7 @@ export class RunService {
 
       // Loud, and in the history: the reader of this chat deserves to know
       // the answer came from somewhere else, today and after every reload.
-      chats.appendMessage({
+      const fallbackMessage = chats.appendMessage({
         id: newMessageId(),
         chatId: run.chatId,
         role: 'system',
@@ -898,6 +900,22 @@ export class RunService {
         tools: [],
         attachments: [],
         createdAt: new Date(clock.now()).toISOString(),
+        notice: {
+          kind: 'model-fallback',
+          failed: {
+            providerId: pair.providerId,
+            modelId: pair.modelId,
+            code: failure.code,
+            ...(failure.status === undefined ? {} : { status: failure.status }),
+          },
+          fallback: { providerId: next.providerId, modelId: next.modelId },
+        },
+      });
+      sink.emit({
+        kind: 'system-message',
+        chatId: run.chatId,
+        runId: run.runId,
+        message: fallbackMessage,
       });
       this.deps.onFallback?.({
         chatId: run.chatId,
@@ -943,8 +961,9 @@ export class RunService {
     // EVERY failure also leaves a persisted system message (pop-agent.spec §6): an
     // error that existed only as an SSE event vanishes on reload, and the
     // user who saw it can no longer ask "what happened?". History is forever.
+    let failureMessage: Message | undefined;
     if (failure !== undefined) {
-      chats.appendMessage({
+      failureMessage = chats.appendMessage({
         id: newMessageId(),
         chatId: run.chatId,
         role: 'system',
@@ -956,6 +975,19 @@ export class RunService {
         tools: [],
         attachments: [],
         createdAt: finishedAt,
+        ...(failure.code === 'aborted' || lastPair === undefined
+          ? {}
+          : {
+              notice: {
+                kind: 'run-failure',
+                failed: {
+                  providerId: lastPair.providerId,
+                  modelId: lastPair.modelId,
+                  code: failure.code,
+                  ...(failure.status === undefined ? {} : { status: failure.status }),
+                },
+              },
+            }),
       });
     }
     // A message was always appended (the answer, or the error mark).
@@ -964,7 +996,13 @@ export class RunService {
     sink.emit(
       failure === undefined
         ? { kind: 'done', chatId: run.chatId, runId: run.runId, messageId }
-        : { kind: 'error', chatId: run.chatId, runId: run.runId, code: failure.code },
+        : {
+            kind: 'error',
+            chatId: run.chatId,
+            runId: run.runId,
+            code: failure.code,
+            ...(failureMessage === undefined ? {} : { message: failureMessage }),
+          },
     );
 
     // After the answer, never in its way: the title job is fire-and-forget,

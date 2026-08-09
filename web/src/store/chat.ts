@@ -362,6 +362,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
+    if (event.kind === 'system-message') {
+      set((state) => {
+        const known = state.messages[event.chatId] ?? [];
+        return known.some((message) => message.id === event.message.id)
+          ? state
+          : {
+              messages: {
+                ...state.messages,
+                [event.chatId]: [...known, event.message],
+              },
+            };
+      });
+      return;
+    }
     if (event.kind === 'queue') {
       set((state) => {
         const queued =
@@ -492,21 +506,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ]
           : [];
         if (event.kind === 'error') {
-          stored.push({
-            id: `local-${runId}-error`,
-            chatId,
-            role: 'system',
-            content:
-              event.code === 'aborted'
-                ? 'You stopped this answer.'
-                : event.code === 'interrupted'
-                  ? 'This answer was interrupted — the server may have restarted.'
-                  : `That answer could not be finished. (${event.code})`,
-            thinking: '',
-            tools: [],
-            attachments: [],
-            createdAt: new Date().toISOString(),
-          });
+          stored.push(
+            event.message ?? {
+              id: `local-${runId}-error`,
+              chatId,
+              role: 'system',
+              content:
+                event.code === 'aborted'
+                  ? 'You stopped this answer.'
+                  : event.code === 'interrupted'
+                    ? 'This answer was interrupted — the server may have restarted.'
+                    : `That answer could not be finished. (${event.code})`,
+              thinking: '',
+              tools: [],
+              attachments: [],
+              createdAt: new Date().toISOString(),
+            },
+          );
         }
 
         set((state) => ({

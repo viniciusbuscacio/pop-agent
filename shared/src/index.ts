@@ -509,6 +509,22 @@ export interface ToolCallDTO {
   detail: string;
 }
 
+export interface ModelAttemptDTO {
+  providerId: string;
+  modelId: string;
+  code: string;
+  status?: number;
+}
+
+/** Structured detail for actionable system history; content remains the legacy fallback. */
+export type SystemNoticeDTO =
+  | {
+      kind: 'model-fallback';
+      failed: ModelAttemptDTO;
+      fallback: { providerId: string; modelId: string };
+    }
+  | { kind: 'run-failure'; failed: ModelAttemptDTO };
+
 export interface MessageDTO {
   id: string;
   chatId: string;
@@ -518,6 +534,7 @@ export interface MessageDTO {
   tools: ToolCallDTO[];
   attachments: AttachmentDTO[];
   createdAt: string;
+  notice?: SystemNoticeDTO;
 }
 
 /**
@@ -870,7 +887,9 @@ export type StreamEvent =
       detail?: string;
     }
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
-  | { kind: 'error'; chatId: string; runId: string; code: string }
+  | { kind: 'error'; chatId: string; runId: string; code: string; message?: MessageDTO }
+  /** A durable fallback marker, delivered while the replacement attempt is running. */
+  | { kind: 'system-message'; chatId: string; runId: string; message: MessageDTO }
   | { kind: 'title'; chatId: string; title: string }
   /** A risky action is paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }

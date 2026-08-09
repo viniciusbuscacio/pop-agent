@@ -21,6 +21,24 @@ describe('resendSource', () => {
     expect(resendSource(messages, 2)).toEqual(user);
   });
 
+  it('uses structured run-failure metadata without parsing display text', () => {
+    const messages: MessageDTO[] = [
+      user,
+      {
+        ...base,
+        id: 'failure-1',
+        role: 'system',
+        content: 'Localized failure text',
+        notice: {
+          kind: 'run-failure',
+          failed: { providerId: 'openai', modelId: 'gpt-5', code: 'network_error' },
+        },
+      },
+    ];
+
+    expect(resendSource(messages, 1)).toEqual(user);
+  });
+
   it('does not offer resend for a user stop marker', () => {
     const messages: MessageDTO[] = [
       user,

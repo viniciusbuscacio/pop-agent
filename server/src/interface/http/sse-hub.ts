@@ -76,7 +76,20 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
     case 'done':
       return { kind: 'done', chatId: event.chatId, runId: event.runId, messageId: event.messageId };
     case 'error':
-      return { kind: 'error', chatId: event.chatId, runId: event.runId, code: event.code };
+      return {
+        kind: 'error',
+        chatId: event.chatId,
+        runId: event.runId,
+        code: event.code,
+        ...(event.message === undefined ? {} : { message: toWireMessage(event.message) }),
+      };
+    case 'system-message':
+      return {
+        kind: 'system-message',
+        chatId: event.chatId,
+        runId: event.runId,
+        message: toWireMessage(event.message),
+      };
     case 'title':
       return { kind: 'title', chatId: event.chatId, title: event.title };
     case 'run-status':
@@ -136,5 +149,6 @@ function toWireMessage(message: import('../../domain/chat/chat.js').Message) {
     tools: message.tools,
     attachments: message.attachments,
     createdAt: message.createdAt,
+    ...(message.notice === undefined ? {} : { notice: message.notice }),
   };
 }

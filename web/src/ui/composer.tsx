@@ -43,6 +43,7 @@ export function Composer({
   activeProvider,
   activeModel,
   onSetModel,
+  modelPickerRequest = 0,
 }: {
   chatId: string;
   busy: boolean;
@@ -61,6 +62,7 @@ export function Composer({
   activeProvider: string;
   activeModel: string;
   onSetModel: (model: string, provider: string) => void;
+  modelPickerRequest?: number;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
@@ -667,6 +669,7 @@ export function Composer({
           placeholder={t('chat.searchModels')}
           noResults={t('chat.noModelsFound')}
           compactLabel="M"
+          openRequest={modelPickerRequest}
           value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
           options={[
             { value: '', label: t('chat.defaultModel') },

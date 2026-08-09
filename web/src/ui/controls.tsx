@@ -234,6 +234,7 @@ export function ModelPicker({
   className = '',
   compactLabel,
   layout = 'toolbar',
+  openRequest = 0,
 }: {
   id: string;
   label: string;
@@ -244,6 +245,8 @@ export function ModelPicker({
   onChange: (value: string) => void;
   className?: string;
   compactLabel?: string;
+  /** Increment to open and focus the picker from an action elsewhere on the page. */
+  openRequest?: number;
   /**
    * Where the list opens and how wide the closed control is.
    *
@@ -263,6 +266,10 @@ export function ModelPicker({
   const filtered = options
     .filter((option) => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
     .slice(0, 50);
+
+  useEffect(() => {
+    if (openRequest > 0) setOpen(true);
+  }, [openRequest]);
 
   useEffect(() => {
     if (!open) return;

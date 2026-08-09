@@ -32,6 +32,7 @@ export function ChatPage() {
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
   const [resendingId, setResendingId] = useState<string | undefined>(undefined);
+  const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [missed, setMissed] = useState(0);
@@ -229,6 +230,9 @@ export function ChatPage() {
                           .finally(() => setResendingId(undefined));
                       },
                     })}
+                {...(message.notice === undefined
+                  ? {}
+                  : { onChangeModel: () => setModelPickerRequest((request) => request + 1) })}
               />
             );
           })}
@@ -346,6 +350,7 @@ export function ChatPage() {
         activeProvider={chat?.provider ?? ''}
         activeModel={chat?.model ?? ''}
         onSetModel={(model, provider) => void setModel(chatId, model, provider)}
+        modelPickerRequest={modelPickerRequest}
       />
 
     </>

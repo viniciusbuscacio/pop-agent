@@ -52,6 +52,21 @@ export interface Attachment {
   dataUri: string;
 }
 
+export interface ModelAttemptNotice {
+  providerId: string;
+  modelId: string;
+  code: string;
+  status?: number;
+}
+
+export type SystemNotice =
+  | {
+      kind: 'model-fallback';
+      failed: ModelAttemptNotice;
+      fallback: { providerId: string; modelId: string };
+    }
+  | { kind: 'run-failure'; failed: ModelAttemptNotice };
+
 export interface Message {
   id: string;
   chatId: string;
@@ -62,6 +77,8 @@ export interface Message {
   tools: ToolRecord[];
   attachments: Attachment[];
   createdAt: string;
+  /** Typed UI detail for system messages; their content remains readable without it. */
+  notice?: SystemNotice;
   /**
    * Which client the user sent this from (pop-agent.spec §13). Absent on every
    * assistant and system message -- those are born on the server -- and on

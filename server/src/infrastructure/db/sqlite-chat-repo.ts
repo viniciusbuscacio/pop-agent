@@ -1,4 +1,11 @@
-import type { Attachment, Chat, ChatSummary, Message, ToolRecord } from '../../domain/chat/chat.js';
+import type {
+  Attachment,
+  Chat,
+  ChatSummary,
+  Message,
+  SystemNotice,
+  ToolRecord,
+} from '../../domain/chat/chat.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
 import { entityId } from '../../domain/ids.js';
 import type { Db } from './types.js';
@@ -219,8 +226,8 @@ export class SqliteChatRepo implements ChatRepo {
     const insert = this.db.prepare(
       `INSERT INTO messages
          (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at,
-          client, client_platform, client_ip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          client, client_platform, client_ip, notice_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = message;
     for (let attempt = 0; ; attempt += 1) {
@@ -237,6 +244,7 @@ export class SqliteChatRepo implements ChatRepo {
           current.client?.kind ?? null,
           current.client?.platform ?? null,
           current.client?.ip ?? null,
+          JSON.stringify(current.notice ?? {}),
         );
         return current;
       } catch (error) {
@@ -313,6 +321,7 @@ interface MessageRow {
   client: string | null;
   client_platform: string | null;
   client_ip: string | null;
+  notice_json: string;
 }
 
 function toChat(row: ChatRow): Chat {
@@ -340,6 +349,7 @@ function toMessage(row: MessageRow): Message {
     tools: parseJson<ToolRecord[]>(row.tools_json, []),
     attachments: parseJson<Attachment[]>(row.attachments_json, []),
     createdAt: row.created_at,
+    ...noticeFromJson(row.notice_json),
     // Absent, not empty: a message written before the column existed, or one
     // the server itself wrote, genuinely has no client.
     ...(row.client === null || row.client === undefined
@@ -356,6 +366,13 @@ function toMessage(row: MessageRow): Message {
           },
         }),
   };
+}
+
+function noticeFromJson(raw: string | undefined): { notice?: SystemNotice } {
+  const value = parseJson<Partial<SystemNotice>>(raw ?? '{}', {});
+  return value.kind === 'model-fallback' || value.kind === 'run-failure'
+    ? { notice: value as SystemNotice }
+    : {};
 }
 
 /** A corrupt row must not take the whole conversation down with it. */
