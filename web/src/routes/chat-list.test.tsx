@@ -137,16 +137,18 @@ describe('archive all other chats', () => {
 });
 
 describe('pinned chats', () => {
-  it('pins from the row menu, moves the chat to the top and shows its marker', async () => {
+  it('pins from the row button, moves the chat to the top and highlights the button', async () => {
     renderList();
     await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
 
-    await userEvent.click(screen.getAllByTestId('chat-menu')[1]!);
-    expect(screen.getByTestId('chat-pin').textContent).toBe('Pin this chat');
-    await userEvent.click(screen.getByTestId('chat-pin'));
+    const pinButton = screen.getAllByTestId('chat-pin')[1]!;
+    expect(pinButton.getAttribute('aria-label')).toBe('Pin this chat');
+    expect(pinButton.getAttribute('aria-pressed')).toBe('false');
+    await userEvent.click(pinButton);
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith('chat-other', { pinned: true }));
     await waitFor(() => expect(screen.getAllByTestId('chat-row')[0]?.textContent).toContain('File this chat'));
-    expect(screen.getByTestId('pinned-badge')).toBeTruthy();
+    expect(screen.getAllByTestId('chat-pin')[0]?.getAttribute('aria-label')).toBe('Unpin this chat');
+    expect(screen.getAllByTestId('chat-pin')[0]?.getAttribute('aria-pressed')).toBe('true');
   });
 });

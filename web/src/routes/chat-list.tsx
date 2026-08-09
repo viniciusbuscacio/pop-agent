@@ -964,7 +964,7 @@ function ChatRow({
       >
         {/* The top-right corner belongs to the row menu (Vinicius, 31/07):
             the timestamp used to sit there too, hiding the ⋯ under it. */}
-        <div className="flex items-baseline justify-between gap-2 pr-6">
+        <div className="flex items-baseline justify-between gap-2 pr-14">
           <span className="flex min-w-0 items-baseline gap-1.5">
             <span
               className="truncate text-sm font-medium"
@@ -979,16 +979,6 @@ function ChatRow({
             >
               {chat.title}
             </span>
-            {chat.pinned ? (
-              <span
-                data-testid="pinned-badge"
-                title={t('shell.pinned')}
-                aria-label={t('shell.pinned')}
-                className="shrink-0 text-[var(--muted)]"
-              >
-                <PinIcon />
-              </span>
-            ) : null}
             {badge ? (
               <span
                 data-testid="archived-badge"
@@ -999,7 +989,7 @@ function ChatRow({
             ) : null}
           </span>
         </div>
-        <span className="truncate pr-6 text-xs text-[var(--muted)]">
+        <span className="truncate pr-14 text-xs text-[var(--muted)]">
           {live !== undefined ? t('chat.answering') : chat.preview}
         </span>
         {live !== undefined ? (
@@ -1012,10 +1002,24 @@ function ChatRow({
       </NavLink>
 
       {/*
-        A visible button rather than long-press: on a touch screen a hidden
+        Visible buttons rather than long-press: on a touch screen a hidden
         gesture has no affordance and fights the scroll, and on a pointer
         screen hover-only controls are invisible to keyboards.
       */}
+      <button
+        type="button"
+        data-testid="chat-pin"
+        aria-label={chat.pinned ? t('shell.unpin') : t('shell.pin')}
+        aria-pressed={chat.pinned}
+        title={chat.pinned ? t('shell.unpin') : t('shell.pin')}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => void setPinned(chat.id, !chat.pinned)}
+        className={`absolute top-1 right-9 rounded p-1.5 hover:bg-[var(--hover-overlay)] ${
+          chat.pinned ? 'text-[var(--accent)]' : 'text-[var(--muted)]'
+        }`}
+      >
+        <PinIcon pinned={chat.pinned} />
+      </button>
       <button
         type="button"
         data-testid="chat-menu"
@@ -1046,14 +1050,6 @@ function ChatRow({
             }}
           />
           <MenuItem
-            testId="chat-pin"
-            label={chat.pinned ? t('shell.unpin') : t('shell.pin')}
-            onClick={() => {
-              setMenuOpen(false);
-              void setPinned(chat.id, !chat.pinned);
-            }}
-          />
-          <MenuItem
             testId="chat-archive"
             label={archived ? t('shell.unarchive') : t('shell.archive')}
             onClick={() => {
@@ -1076,7 +1072,7 @@ function ChatRow({
   );
 }
 
-function PinIcon() {
+function PinIcon({ pinned = false }: { pinned?: boolean }) {
   // Lucide's monochrome Pin: icons follow text colour and never introduce an
   // emoji palette or a second accent into the conversation list (§14).
   return (
@@ -1084,7 +1080,7 @@ function PinIcon() {
       width="14"
       height="14"
       viewBox="0 0 24 24"
-      fill="none"
+      fill={pinned ? 'currentColor' : 'none'}
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
