@@ -249,6 +249,58 @@ describe('the client-side queue', () => {
     expect(send).toHaveBeenLastCalledWith(CHAT, 'second');
     expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
   });
+
+  it('drains after resume discovers that the first run already finished', async () => {
+    await useChatStore.getState().send(CHAT, 'first');
+    await useChatStore.getState().send(CHAT, 'second');
+    send.mockResolvedValue({ runId: 'run-second', userMessageId: 'msg-second' });
+
+    messagesBody.value = { messages: [], live: undefined };
+    await useChatStore.getState().openChat(CHAT);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(CHAT, 'second');
+    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+  });
+
+  it('keeps the queued message when its automatic POST fails', async () => {
+    await useChatStore.getState().send(CHAT, 'first');
+    await useChatStore.getState().send(CHAT, 'second');
+    send.mockRejectedValueOnce(new Error('offline'));
+
+    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-answer' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
+    expect(useChatStore.getState().failures[CHAT]).toBe('queue_send_failed');
+  });
+
+  it('does not silently replace the follow-up that is already queued', async () => {
+    await useChatStore.getState().send(CHAT, 'first');
+    await useChatStore.getState().send(CHAT, 'second');
+
+    await expect(useChatStore.getState().send(CHAT, 'third')).rejects.toThrow(
+      'already has a queued message',
+    );
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
+  });
+
+  it('restores a durable queue after the PWA state is reclaimed', async () => {
+    await useChatStore.getState().send(CHAT, 'first');
+    await useChatStore.getState().send(CHAT, 'survive reload');
+    useChatStore.setState({ queued: {} });
+    messagesBody.value = {
+      messages: [],
+      live: { runId: RUN, status: 'running', seq: 0, content: '', thinking: '', tools: [] },
+    };
+
+    await useChatStore.getState().openChat(CHAT);
+
+    expect(useChatStore.getState().queued[CHAT]?.text).toBe('survive reload');
+  });
 });
 
 describe('run status', () => {

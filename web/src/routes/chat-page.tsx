@@ -309,7 +309,7 @@ export function ChatPage() {
         chatId={chatId}
         busy={live !== undefined}
         {...(queued === undefined ? {} : { queuedText: queued.text })}
-        onSend={(text, attachments, filePaths) => void send(chatId, text, attachments, filePaths)}
+        onSend={(text, attachments, filePaths) => send(chatId, text, attachments, filePaths)}
         onStop={() => void stop(chatId)}
         onNewChat={() => {
           void createChat().then((created) => navigate(`/chat/${created.id}`));

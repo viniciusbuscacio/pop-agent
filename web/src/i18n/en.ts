@@ -99,6 +99,7 @@ export const en = {
 
   'chat.placeholder': 'Message Pop Agent…',
   'chat.send': 'Send',
+  'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
   'chat.queue': 'Queue message',
   'chat.stop': 'Stop',
   'chat.attach': 'Attach a file',

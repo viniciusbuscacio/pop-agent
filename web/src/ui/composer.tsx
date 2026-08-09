@@ -44,7 +44,7 @@ export function Composer({
   chatId: string;
   busy: boolean;
   queuedText?: string;
-  onSend: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => void;
+  onSend: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   onStop: () => void;
   onNewChat: () => void;
   models: ModelChoice[];
@@ -56,6 +56,7 @@ export function Composer({
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [sending, setSending] = useState(false);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
   const notify = useNotificationsStore((state) => state.notify);
@@ -249,7 +250,16 @@ export function Composer({
       // A voice note is meant to be sent: the transcript (with any typed draft
       // in front of it) goes to the chat automatically (pop-agent.spec §14).
       autoSendRef.current = false;
-      onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.path));
+      try {
+        await onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.path));
+      } catch {
+        // The transcription succeeded; it is the send/queue that failed. Put
+        // the merged words into the durable draft instead of misreporting a
+        // transcription failure or dropping the voice note.
+        persist(merged);
+        setNotice(t('chat.sendFailed'));
+        return;
+      }
       setMentions([]);
       persist('');
       setAttachments([]);
@@ -318,7 +328,7 @@ export function Composer({
   const canSend =
     text.trim().length > 0 || attachments.length > 0 || voice !== 'idle';
 
-  function submit(): void {
+  async function submit(): Promise<void> {
     // Send while talking means "stop, transcribe and send" (aw's errand).
     if (voice === 'recording') {
       autoSendRef.current = true;
@@ -329,11 +339,23 @@ export function Composer({
       autoSendRef.current = true;
       return;
     }
-    if (!canSend) return;
-    onSend(text.trim(), attachments, mentions.map((m) => m.path));
-    persist('');
-    setAttachments([]);
-    setMentions([]);
+    // One follow-up is already safe in the durable queue. Keep a third message
+    // as the draft until that slot moves into a live run.
+    if (!canSend || sending || (busy && queuedText !== undefined)) return;
+    setSending(true);
+    setNotice(undefined);
+    try {
+      await onSend(text.trim(), attachments, mentions.map((m) => m.path));
+      persist('');
+      setAttachments([]);
+      setMentions([]);
+    } catch {
+      // Most importantly, do not clear anything: the exact draft and its files
+      // remain available for another tap.
+      setNotice(t('chat.sendFailed'));
+    } finally {
+      setSending(false);
+    }
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
@@ -397,7 +419,7 @@ export function Composer({
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      submit();
+      void submit();
       return;
     }
     if (event.key === 'Escape' && busy) {
@@ -625,8 +647,8 @@ export function Composer({
             testId="composer-send"
             label={busy ? t('chat.queue') : t('chat.send')}
             primary
-            disabled={!canSend}
-            onClick={submit}
+            disabled={!canSend || sending || (busy && queuedText !== undefined)}
+            onClick={() => void submit()}
           >
             <SendIcon />
           </IconButton>
