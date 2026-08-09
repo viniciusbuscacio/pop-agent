@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillsResponse } from '@pop-agent/shared';
+import { ApiError } from '../services/api';
 import { SkillsPage } from './skills-page';
+import { useNotificationsStore } from '../store/notifications';
 import { useSkillsStore } from '../store/skills';
 
 /** No jest-dom in this suite: values are read off the element, as elsewhere. */
@@ -25,6 +27,7 @@ function valueOf(testId: string): string {
  */
 
 const list = vi.fn();
+const setEnabled = vi.fn();
 
 vi.mock('../services/skills', () => ({
   skillsService: {
@@ -35,6 +38,7 @@ vi.mock('../services/skills', () => ({
     discardRevision: vi.fn(),
     restore: vi.fn(),
     remove: vi.fn(),
+    setEnabled: (slug: string, enabled: boolean) => setEnabled(slug, enabled) as Promise<unknown>,
   },
 }));
 
@@ -69,6 +73,9 @@ function Harness() {
 
 beforeEach(() => {
   list.mockReset();
+  setEnabled.mockReset();
+  useSkillsStore.setState({ skills: undefined, sourceFilter: 'all' });
+  useNotificationsStore.setState({ toast: undefined });
   // A fresh array each time, like the real service: a reload genuinely changes
   // the identity of every skill object, which is the hazard the last test guards.
   list.mockImplementation(() => Promise.resolve({ ...SKILLS, skills: SKILLS.skills.map((s) => ({ ...s })) }));
@@ -154,5 +161,57 @@ describe('the skills editor and a list refresh', () => {
       expect(list).toHaveBeenCalledTimes(2);
     });
     expect(valueOf('skill-name')).toBe('Renamed but not saved');
+  });
+});
+
+describe('the skill enabled toggle', () => {
+  it('posts the new state and keeps the switch on when the server agrees', async () => {
+    setEnabled.mockResolvedValue({ ...SKILLS.skills[0], enabled: false });
+    render(
+      <MemoryRouter initialEntries={['/skills/alpha']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('skill-enabled-toggle')).toBeDefined();
+    });
+
+    await userEvent.click(screen.getByTestId('skill-enabled-toggle'));
+
+    await waitFor(() => {
+      expect(setEnabled).toHaveBeenCalledWith('alpha', false);
+    });
+    expect(screen.getByTestId('skill-enabled-toggle').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('rolls back and notifies when the switch fails', async () => {
+    setEnabled.mockRejectedValue(new ApiError('failed', 'failed', 500));
+    render(
+      <MemoryRouter initialEntries={['/skills/alpha']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('skill-enabled-toggle')).toBeDefined();
+    });
+
+    await userEvent.click(screen.getByTestId('skill-enabled-toggle'));
+
+    await waitFor(() => {
+      expect(useNotificationsStore.getState().toast?.message).toBeDefined();
+    });
+    expect(screen.getByTestId('skill-enabled-toggle').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('does not show the toggle on a new skill', async () => {
+    render(
+      <MemoryRouter initialEntries={['/skills/new']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('skill-slug')).toBeDefined();
+    });
+    expect(screen.queryByTestId('skill-enabled-toggle')).toBeNull();
   });
 });

@@ -1,0 +1,134 @@
+// @vitest-environment happy-dom
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SkillsResponse } from '@pop-agent/shared';
+import { ChatList } from './chat-list';
+import { useSkillsStore } from '../store/skills';
+
+const list = vi.fn();
+
+vi.mock('../services/skills', () => ({
+  skillsService: {
+    list: () => list() as Promise<SkillsResponse>,
+    save: vi.fn(),
+    approve: vi.fn(),
+    approveRevision: vi.fn(),
+    discardRevision: vi.fn(),
+    restore: vi.fn(),
+    remove: vi.fn(),
+  },
+}));
+
+vi.mock('../services/chats', () => ({
+  chatsService: {
+    list: () => Promise.resolve({ chats: [] }),
+    messages: () => Promise.resolve({ messages: [] }),
+  },
+}));
+
+const SKILLS: SkillsResponse = {
+  skills: [
+    {
+      slug: 'personal',
+      name: 'Personal skill',
+      description: 'mine',
+      whenToUse: 'when personal',
+      body: 'body',
+      source: 'user',
+    },
+    {
+      slug: 'learned',
+      name: 'Learned skill',
+      description: 'auto',
+      whenToUse: 'when learned',
+      body: 'body',
+      source: 'auto',
+    },
+    {
+      slug: 'waiting',
+      name: 'Waiting skill',
+      description: 'pending',
+      whenToUse: 'when waiting',
+      body: 'body',
+      source: 'auto',
+      pending: true,
+    },
+    {
+      slug: 'core',
+      name: 'Core skill',
+      description: 'builtin',
+      whenToUse: 'when core',
+      body: 'body',
+      source: 'builtin',
+    },
+  ],
+  archived: [],
+  distiller: { enabled: true, pending: 1, revisions: 0 },
+};
+
+function renderSkillsList() {
+  return render(
+    <MemoryRouter initialEntries={['/skills']}>
+      <ChatList />
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => {
+  list.mockReset();
+  list.mockResolvedValue({ ...SKILLS, skills: SKILLS.skills.map((entry) => ({ ...entry })) });
+  useSkillsStore.setState({ skills: undefined, sourceFilter: 'all' });
+});
+
+afterEach(cleanup);
+
+describe('the skills sidebar filter', () => {
+  it('filters the list by source', async () => {
+    renderSkillsList();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('skill-row')).toHaveLength(4);
+    });
+
+    await userEvent.click(screen.getByTestId('skills-source-filter'));
+    await userEvent.click(screen.getByTestId('skills-source-filter-pending'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('skill-row')).toHaveLength(1);
+    });
+    expect(screen.getByText('Waiting skill')).toBeDefined();
+  });
+
+  it('composes the source filter with text search', async () => {
+    renderSkillsList();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('skill-row')).toHaveLength(4);
+    });
+
+    await userEvent.type(screen.getByTestId('list-filter'), 'Personal');
+    await waitFor(() => {
+      expect(screen.getAllByTestId('skill-row')).toHaveLength(1);
+    });
+
+    await userEvent.click(screen.getByTestId('skills-source-filter'));
+    await userEvent.click(screen.getByTestId('skills-source-filter-builtin'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('skill-row')).toBeNull();
+    });
+  });
+
+  it('shows the pending count on the filter button from any filter', async () => {
+    renderSkillsList();
+    await waitFor(() => {
+      expect(screen.getByTestId('skills-source-filter').textContent).toContain('1 pending');
+    });
+
+    await userEvent.click(screen.getByTestId('skills-source-filter'));
+    await userEvent.click(screen.getByTestId('skills-source-filter-personal'));
+
+    expect(screen.getByTestId('skills-source-filter').textContent).toContain('1 pending');
+    expect(screen.getByTestId('skills-source-filter').textContent).toContain('Personal');
+  });
+});

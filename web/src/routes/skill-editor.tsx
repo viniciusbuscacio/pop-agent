@@ -3,6 +3,8 @@ import type { SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { skillsService } from '../services/skills';
+import { skillEnabled, useSkillsStore } from '../store/skills';
+import { useNotificationsStore } from '../store/notifications';
 import { Button, Card, TextArea, TextField } from '../ui/controls';
 
 /**
@@ -35,8 +37,12 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
   const [description, setDescription] = useState('');
   const [whenToUse, setWhenToUse] = useState('');
   const [body, setBody] = useState('');
+  const [enabled, setEnabled] = useState(true);
+  const [toggling, setToggling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const upsertSkill = useSkillsStore((state) => state.upsertSkill);
+  const notify = useNotificationsStore((state) => state.notify);
 
   // `new` and "nothing yet" are different states, and an empty string would
   // conflate them: a pane still waiting for the store must not look like the
@@ -49,14 +55,31 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
     setDescription(skill?.description ?? '');
     setWhenToUse(skill?.whenToUse ?? '');
     setBody(skill?.body ?? '');
+    setEnabled(skill === undefined ? true : skillEnabled(skill));
     // Everything that belonged to the previous skill goes too. A failure
     // message from the one before, left on screen, would read as this one's.
     setError(undefined);
     setBusy(false);
+    setToggling(false);
   }, [identity]);
 
   const isNew = skill === undefined;
   const canSave = slug.trim().length > 0 && name.trim().length > 0 && !busy;
+
+  async function toggleEnabled(): Promise<void> {
+    if (isNew || skill === undefined) return;
+    const next = !enabled;
+    setEnabled(next);
+    setToggling(true);
+    try {
+      upsertSkill(await skillsService.setEnabled(skill.slug, next));
+    } catch {
+      setEnabled(!next);
+      notify(t('skills.enableFailed'));
+    } finally {
+      setToggling(false);
+    }
+  }
 
   async function save(): Promise<void> {
     setBusy(true);
@@ -81,6 +104,35 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
       >
         ← {t('skills.back')}
       </button>
+
+      {isNew ? null : (
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            data-testid="skill-enabled-toggle"
+            aria-pressed={enabled}
+            aria-label={enabled ? t('skills.enabled') : t('skills.disabled')}
+            title={enabled ? t('skills.enabled') : t('skills.disabled')}
+            disabled={toggling}
+            onClick={() => void toggleEnabled()}
+            className={`flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+              enabled
+                ? 'border-transparent bg-[var(--accent)]'
+                : 'border-[var(--border)] bg-transparent'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={
+                enabled
+                  ? 'block h-3.5 w-3.5 translate-x-4 rounded-full bg-[var(--accent-fg)] transition-transform'
+                  : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
+              }
+            />
+          </button>
+          <span className="text-sm">{t('skills.enabled')}</span>
+        </div>
+      )}
 
       <TextField
         id="skill-slug"

@@ -33,4 +33,8 @@ export const skillsService = {
   remove(slug: string): Promise<void> {
     return apiRequest<void>(`/skills/${slug}`, { method: 'DELETE' });
   },
+
+  setEnabled(slug: string, enabled: boolean): Promise<SkillDTO> {
+    return apiRequest<SkillDTO>(`/skills/${slug}/enabled`, { method: 'POST', body: { enabled } });
+  },
 };
