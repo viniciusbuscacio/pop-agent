@@ -121,10 +121,13 @@ export function createFilesRoutes(deps: FilesRoutesDeps): Hono {
     const path = c.req.query('path') ?? '';
     if (path.length === 0) return apiError(c, 400, 'bad_request', 'A path is required.');
     return refusing(c, () => {
-      if (deps.files.remove(path) === 'not-found') {
+      const removed = deps.files.remove(path);
+      if (removed === 'not-found') {
         return apiError(c, 404, 'not_found', 'No such file.');
       }
-      return c.body(null, 204);
+      // The Garbage name can differ from the visible basename when two deleted
+      // entries collide. Returning the exact handle makes immediate undo safe.
+      return c.json(removed satisfies GarbageEntryDTO);
     });
   });
 

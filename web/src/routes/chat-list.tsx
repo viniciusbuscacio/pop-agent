@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ChatDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
+import { useTrashUndo } from '../lib/trash-undo';
 import { ApiError } from '../services/api';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
@@ -314,6 +315,7 @@ function FolderTree() {
   const tree = useFilesStore((state) => state.tree);
   const reload = useFilesStore((state) => state.reload);
   const notify = useNotificationsStore((state) => state.notify);
+  const announceTrash = useTrashUndo();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
@@ -346,8 +348,9 @@ function FolderTree() {
     await reload();
   }
   async function deleteFolder(folder: FileNodeDTO): Promise<void> {
-    await filesService.remove(folder.path);
+    const removed = await filesService.remove(folder.path);
     await reload();
+    announceTrash([removed]);
     if (folder.path === currentPath) navigate('/files');
   }
 

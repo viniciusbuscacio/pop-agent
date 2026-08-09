@@ -63,6 +63,7 @@ interface GarbageNote {
 }
 
 export type MoveResult = 'ok' | 'not-found' | 'target-exists';
+export type RemoveResult = GarbageEntry | 'not-found';
 export type RestoreResult = 'ok' | 'not-found' | 'name-taken';
 
 export class FilesService {
@@ -135,22 +136,28 @@ export class FilesService {
   }
 
   /** Deleting is a move into Garbage plus a note of where it came from. */
-  remove(relativePath: string): 'ok' | 'not-found' {
+  remove(relativePath: string): RemoveResult {
     const cleaned = cleanRelative(relativePath);
     const from = this.resolveVisible(cleaned);
     if (!existsSync(from)) return 'not-found';
 
+    const stat = statSync(from);
     const entryName = this.freeGarbageName(basename(cleaned));
     renameSync(from, join(this.garbageDir(), entryName));
 
+    const deletedAt = new Date(this.deps.clock.now()).toISOString();
     const notes = this.readNotes();
-    notes[entryName] = {
-      originalPath: cleaned,
-      deletedAt: new Date(this.deps.clock.now()).toISOString(),
-    };
+    notes[entryName] = { originalPath: cleaned, deletedAt };
     this.writeNotes(notes);
     this.deps.onChanged?.();
-    return 'ok';
+    return {
+      name: entryName,
+      originalPath: cleaned,
+      kind: stat.isDirectory() ? 'dir' : 'file',
+      size: stat.isDirectory() ? 0 : stat.size,
+      deletedAt,
+      purgeAt: new Date(new Date(deletedAt).getTime() + TRASH_RETENTION_MS).toISOString(),
+    };
   }
 
   listGarbage(): GarbageEntry[] {

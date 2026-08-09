@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { FileNodeDTO } from '@pop-agent/shared';
+import type { FileNodeDTO, GarbageEntryDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { saveFromLink, viewFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
+import { useTrashUndo } from '../lib/trash-undo';
 import { ApiError } from '../services/api';
 import { filesService } from '../services/artifacts';
 import {
@@ -41,6 +42,7 @@ export function FilesPage() {
   const tree = useFilesStore((state) => state.tree);
   const reload = useFilesStore((state) => state.reload);
   const notify = useNotificationsStore((state) => state.notify);
+  const announceTrash = useTrashUndo();
 
   const [filter, setFilter] = useState('');
   const [searchHits, setSearchHits] = useState<
@@ -226,8 +228,9 @@ export function FilesPage() {
   }
 
   async function deleteFile(file: FileNodeDTO): Promise<void> {
-    await filesService.remove(file.path);
+    const removed = await filesService.remove(file.path);
     await reload();
+    announceTrash([removed]);
   }
 
   // A folder created here lands under the folder you are in (a subfolder), or at
@@ -260,8 +263,9 @@ export function FilesPage() {
       t('files.deleteFolderConfirm', { name: folder.name, count: subtreeFileCount(folder) }),
     );
     if (!confirmed) return;
-    await filesService.remove(folder.path);
+    const removed = await filesService.remove(folder.path);
     await reload();
+    announceTrash([removed]);
     if (folder.path === currentPath) navigate('/files');
   }
 
@@ -308,11 +312,13 @@ export function FilesPage() {
             folders: selectedFolders.size,
           });
     if (!window.confirm(message)) return;
-    for (const path of selected) await filesService.remove(path);
-    for (const path of selectedFolders) await filesService.remove(path);
+    const removed: GarbageEntryDTO[] = [];
+    for (const path of selected) removed.push(await filesService.remove(path));
+    for (const path of selectedFolders) removed.push(await filesService.remove(path));
     const closedTheOpenOne = currentPath !== '' && selectedFolders.has(currentPath);
     clearSelection();
     await reload();
+    announceTrash(removed);
     if (closedTheOpenOne) navigate('/files');
   }
 

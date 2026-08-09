@@ -1046,7 +1046,10 @@ events from stale runs.
   the `.trashinfo` idea from the Linux desktop. Restore moves it back; a
   daily sweep purges what is older than 30 days. Self-healing by design: a
   file with no entry purges by its own mtime and restores to the Files
-  root; an entry with no file is dropped on the next sweep.
+  root; an entry with no file is dropped on the next sweep. The delete endpoint
+  returns the exact Garbage entry it created (collision-safe handle included),
+  and the UI immediately shows an actionable “moved to Trash” notice with
+  **Restore**; batch undo restores parents before separately selected children.
 - **Downloads stay HMAC-signed, now over the path.**
   `GET /files/download?path=<rel>&expires=<ms>&sig=<b64url>` — the
   signature covers path+expiry and is checked before the expiry, so

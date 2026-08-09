@@ -3,6 +3,7 @@ import type {
   FileNodeDTO,
   FilesNameSearchResponse,
   FilesTreeResponse,
+  GarbageEntryDTO,
   GarbageResponse,
 } from '@pop-agent/shared';
 import { apiRequest, apiUpload } from './api';
@@ -40,9 +41,21 @@ export const filesService = {
     return apiRequest<void>('/files/move', { method: 'POST', body: { from, to } });
   },
 
-  /** Moves the file or folder into the trash, reversible for thirty days. */
-  remove(path: string): Promise<void> {
-    return apiRequest<void>(`/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+  /** Moves the entry into trash and returns its exact handle for immediate undo. */
+  async remove(path: string): Promise<GarbageEntryDTO> {
+    const removed = await apiRequest<GarbageEntryDTO | undefined>(
+      `/files?path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+    if (removed !== undefined) return removed;
+
+    // During an update, a freshly loaded PWA can briefly meet the previous
+    // server, whose DELETE returned 204. Its Trash listing still exposes the
+    // collision-safe handle, so undo remains available across that boundary.
+    const { entries } = await apiRequest<GarbageResponse>('/trash');
+    const fallback = entries.find((entry) => entry.originalPath === path);
+    if (fallback === undefined) throw new Error('The deleted entry was not found in Trash.');
+    return fallback;
   },
 
   /** Mints a fresh signed download URL (public, no session). */

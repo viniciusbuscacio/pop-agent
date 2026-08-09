@@ -492,6 +492,11 @@ export const en = {
   'trash.emptyConfirm': 'Delete all {count} item(s) for good? This cannot be undone.',
   'trash.nameTaken': 'Something called "{name}" is already there. Rename it, then restore this.',
   'trash.restoreFailed': 'That could not be restored.',
+  'trash.moved': '“{name}” was moved to Trash.',
+  'trash.movedMany': '{count} items were moved to Trash.',
+  'trash.restoredOne': 'Item restored.',
+  'trash.restoredMany': '{count} items restored.',
+  'trash.undoFailed': '{count} item(s) could not be restored. They remain in Trash.',
   'files.deleteSelectedConfirm':
     'Delete the {count} selected file(s)? They go to the Trash for 30 days.',
   'files.deleteSelectedMixedConfirm':

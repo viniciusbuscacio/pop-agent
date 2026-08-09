@@ -14,17 +14,35 @@ export function Toasts() {
   const dismiss = useNotificationsStore((state) => state.dismiss);
 
   if (toast === undefined) return null;
+  const action = toast.action;
 
   return (
-    <div className="fixed top-16 right-3 z-50 flex flex-col gap-2" data-testid="toasts">
+    <div
+      className="fixed top-16 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] text-sm shadow-lg"
+      data-testid="toasts"
+      role="status"
+    >
       <button
         type="button"
         data-testid="toast"
         onClick={dismiss}
-        className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-left text-sm shadow-lg"
+        className="min-w-0 px-4 py-2 text-left"
       >
         {toast.message}
       </button>
+      {action === undefined ? null : (
+        <button
+          type="button"
+          data-testid="toast-action"
+          className="shrink-0 px-4 py-2 font-medium text-[var(--accent)]"
+          onClick={() => {
+            dismiss();
+            void action.run();
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }

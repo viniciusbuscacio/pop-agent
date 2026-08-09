@@ -99,7 +99,8 @@ describe('the jail', () => {
 describe('the Garbage', () => {
   it('deleting moves the entry and notes where it came from', () => {
     files.write('reports/a.pdf', Buffer.from('a'));
-    expect(files.remove('reports/a.pdf')).toBe('ok');
+    const removed = files.remove('reports/a.pdf');
+    expect(removed).toEqual(expect.objectContaining({ name: 'a.pdf', originalPath: 'reports/a.pdf' }));
 
     const [entry] = files.listGarbage();
     expect(entry?.name).toBe('a.pdf');
@@ -109,10 +110,12 @@ describe('the Garbage', () => {
 
   it('two deletes of the same name never collide', () => {
     files.write('a.txt', Buffer.from('one'));
-    files.remove('a.txt');
+    const first = files.remove('a.txt');
     files.write('a.txt', Buffer.from('two'));
-    files.remove('a.txt');
+    const second = files.remove('a.txt');
 
+    expect(first).toEqual(expect.objectContaining({ name: 'a.txt' }));
+    expect(second).toEqual(expect.objectContaining({ name: 'a (2).txt' }));
     const names = files.listGarbage().map((entry) => entry.name);
     expect(names.sort()).toEqual(['a (2).txt', 'a.txt']);
   });

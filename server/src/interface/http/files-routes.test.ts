@@ -106,7 +106,10 @@ describe('files routes', () => {
       method: 'DELETE',
       headers: auth(fixture.token),
     });
-    expect(deleted.status).toBe(204);
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual(
+      expect.objectContaining({ name: 'a.txt', originalPath: 'sub/a.txt', kind: 'file' }),
+    );
 
     const trash = await fixture.app.request('/v1/trash', { headers: auth(fixture.token) });
     const { entries } = (await trash.json()) as {
