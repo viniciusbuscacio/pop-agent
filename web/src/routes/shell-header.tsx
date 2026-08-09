@@ -82,16 +82,27 @@ export function ShellFooter() {
  * and the user does not feel like backgrounding the app to find out. It spins
  * while it works, so a fast network does not read as a dead button.
  */
+const REFRESH_SPIN_SLOT_MS = 1_000;
+
 function RefreshButton() {
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
   const [busy, setBusy] = useState(false);
 
   async function refresh(): Promise<void> {
+    const startedAt = performance.now();
     setBusy(true);
     try {
       await Promise.all([loadChats(), loadArchived()]);
     } finally {
+      // Finish on a one-second boundary instead of snapping the icon back in
+      // the middle of a turn: 0.2 s => 1 turn, 1.5 s => 2, 2.1 s => 3.
+      const elapsed = Math.max(0, performance.now() - startedAt);
+      const slots = Math.max(1, Math.ceil(elapsed / REFRESH_SPIN_SLOT_MS));
+      const remaining = slots * REFRESH_SPIN_SLOT_MS - elapsed;
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+      }
       setBusy(false);
     }
   }
