@@ -29,6 +29,7 @@ export function createStaticSite(distDir: string): MiddlewareHandler {
 
     const path = c.req.path;
     if (path.startsWith('/v1/') || path === '/healthz') return next();
+    if (safelyDecode(path) === undefined) return next();
 
     const asset = await readAsset(distDir, path);
     if (asset !== undefined) {
@@ -58,7 +59,7 @@ export function createStaticSite(distDir: string): MiddlewareHandler {
  * version. `no-cache` still caches, it just always revalidates first.
  */
 function cacheControl(urlPath: string): string {
-  const name = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  const name = safelyDecode(urlPath)?.replace(/^\/+/, '') ?? '';
   if (name.startsWith('assets/')) return 'public, max-age=31536000, immutable';
   return 'no-cache';
 }
@@ -69,7 +70,9 @@ interface Asset {
 }
 
 async function readAsset(distDir: string, urlPath: string): Promise<Asset | undefined> {
-  const relative = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  const decoded = safelyDecode(urlPath);
+  if (decoded === undefined) return undefined;
+  const relative = decoded.replace(/^\/+/, '');
   if (relative.length === 0) return readAsset(distDir, '/index.html');
 
   // Normalise before touching the disk: `..` in a URL must not escape dist.
@@ -79,6 +82,15 @@ async function readAsset(distDir: string, urlPath: string): Promise<Asset | unde
   try {
     const body = await readFile(target);
     return { body, contentType: CONTENT_TYPES[extname(target)] ?? 'application/octet-stream' };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Invalid percent escapes are a bad URL, not an exception worth a 500. */
+function safelyDecode(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
   } catch {
     return undefined;
   }

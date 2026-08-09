@@ -49,6 +49,12 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "sharp": "^0.35.3",
     "ws": "^8.21.1"
+  },
+  "overrides": {
+    "@huggingface/transformers": {
+      "sharp": "0.35.3"
+    }
   }
 }

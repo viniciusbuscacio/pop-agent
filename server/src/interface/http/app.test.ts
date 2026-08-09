@@ -82,4 +82,11 @@ describe('app', () => {
     // shell; what must never happen is a file from outside web/dist.
     expect(res.headers.get('content-type')).not.toContain('application/json');
   });
+
+  it('rejects malformed percent escapes without turning them into a 500', async () => {
+    const res = await createTestApp().app.request('/%E0%A4%A');
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'not_found' } });
+  });
 });

@@ -16,6 +16,7 @@ import type {
 } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
 import { providerDefinition } from '../../application/providers/provider-definitions.js';
+import { resumeOrCreate } from './session-file.js';
 import type { MemoryRepo } from '../../application/ports/memory-repo.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { envelope } from '../../domain/safety/sanitize.js';
@@ -301,15 +302,16 @@ export class SdkPiEngine implements PiEngine {
 
     // Reopening is how a conversation survives a restart, and how it survives
     // the idle unload below: pi reads its JSONL back and the model sees the
-    // same context it had.
-    const sessionManager =
-      options.sessionFile === undefined || options.sessionFile.length === 0
-        ? sdk.SessionManager.create(this.options.workspace, this.options.sessionsDir)
-        : sdk.SessionManager.open(
-            options.sessionFile,
-            this.options.sessionsDir,
-            this.options.workspace,
-          );
+    // same context it had. An old installation may still point at a session
+    // file that was removed or lived under the previous data directory. That
+    // stale pointer must not permanently brick the chat: start a fresh pi
+    // session and let rememberSessionFile replace it after the first write.
+    const sessionManager = resumeOrCreate({
+      sessionFile: options.sessionFile,
+      create: () => sdk.SessionManager.create(this.options.workspace, this.options.sessionsDir),
+      open: (path) => sdk.SessionManager.open(path, this.options.sessionsDir, this.options.workspace),
+      onMissing: (path) => console.warn(`pop session missing; starting fresh: ${path}`),
+    });
 
     // The one thing whose output can block a tool: an inline extension that
     // asks the session's current guard before every tool runs, and feeds it
@@ -566,7 +568,7 @@ export class SdkPiEngine implements PiEngine {
     const runtime = await this.modelRuntime();
     const before = this.readCredentialEntry(providerId);
     const login = runtime.login(providerId, 'oauth', interaction);
-    const settled = login.then(
+    void login.then(
       () => console.log(`pop oauth: ${providerId} engine bookkeeping settled`),
       (error: unknown) =>
         console.log(
@@ -574,14 +576,23 @@ export class SdkPiEngine implements PiEngine {
         ),
     );
     const landed = this.watchCredential(providerId, before, interaction.signal);
-    await Promise.race([
-      landed,
-      // A login that settles before any credential change answers directly --
-      // success with nothing to save, or the failure that must propagate.
-      settled.then(() => login),
-    ]);
-    // The watcher polls on a timer; whatever the race decided, it stops here.
-    landed.stop();
+    try {
+      await Promise.race([
+        landed.promise,
+        // Only failures propagate. A pi login that resolves before the
+        // credential lands must not finish the sign-in -- that was marking
+        // "Signed in" with an empty pi-auth.json (Vinicius, 09/08).
+        login.then(
+          () => new Promise<void>(() => undefined),
+          (error: unknown) => Promise.reject(error),
+        ),
+      ]);
+    } finally {
+      landed.stop();
+    }
+    if (this.readCredentialEntry(providerId) === undefined) {
+      throw new Error('The sign-in did not save a credential');
+    }
   }
 
   /** The provider's raw entry in the auth file; undefined when absent. */

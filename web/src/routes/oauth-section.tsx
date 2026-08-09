@@ -56,13 +56,27 @@ export function OAuthSection({
   // Done here rather than in an effect so a parent re-render can never loop
   // the refresh: only the callback that sees the transition triggers it.
   function absorb(next: OAuthStateResponse): void {
-    setFlow(next);
     if (next.done && next.ok === true) {
       providersService
         .list()
-        .then(onChanged)
-        .catch(() => undefined);
+        .then((response) => {
+          onChanged(response);
+          const connected =
+            response.providers.find((entry) => entry.id === provider.id)?.configured === true;
+          if (connected) {
+            setFlow(next);
+            return;
+          }
+          setFlow({
+            ...next,
+            ok: false,
+            error: t('provider.oauth.noCredential'),
+          });
+        })
+        .catch(() => setFlow(next));
+      return;
     }
+    setFlow(next);
   }
 
   // A sign-in already running on the server has to be visible here even when

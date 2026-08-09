@@ -28,6 +28,19 @@ vi.mock('../services/chats', () => ({
   },
 }));
 
+// ShellFooter subscribes on mount. This suite exercises the Skills list, not
+// the connection monitor, so a real fetch would leak out of the test process.
+vi.mock('../services/health', () => {
+  const healthy = { kind: 'ok' as const };
+  return {
+    healthMonitor: {
+      subscribe: () => () => undefined,
+      // useSyncExternalStore requires referentially stable snapshots.
+      getState: () => healthy,
+    },
+  };
+});
+
 const SKILLS: SkillsResponse = {
   skills: [
     {

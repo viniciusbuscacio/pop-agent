@@ -227,6 +227,9 @@ describe('OAuthSection', () => {
       render(<OAuthSection provider={PROVIDER} onChanged={onChanged} />);
       await act(async () => vi.advanceTimersByTimeAsync(0));
 
+      list.mockResolvedValue({
+        providers: [{ ...PROVIDER, configured: true, source: 'oauth' }],
+      });
       oauthState.mockResolvedValue({
         flowId: 'flow-1',
         providerId: 'openai-codex',
@@ -238,6 +241,29 @@ describe('OAuthSection', () => {
 
       expect(screen.getByRole('status').textContent).toContain('Signed in');
       expect(list).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports failure when the flow finishes without a saved credential', async () => {
+    vi.useFakeTimers();
+    try {
+      oauthState.mockResolvedValue(WAITING_FOR_PASTE);
+      render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+
+      list.mockResolvedValue({ providers: [PROVIDER] });
+      oauthState.mockResolvedValue({
+        flowId: 'flow-1',
+        providerId: 'openai-codex',
+        events: WAITING_FOR_PASTE.events,
+        done: true,
+        ok: true,
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(2100));
+
+      expect(screen.getByRole('status').textContent).toContain('no credential was saved');
     } finally {
       vi.useRealTimers();
     }

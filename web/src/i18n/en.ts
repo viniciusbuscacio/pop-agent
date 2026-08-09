@@ -406,6 +406,8 @@ export const en = {
   'provider.oauth.waiting': 'Waiting for the provider…',
   'provider.oauth.lost':
     'The sign-in is no longer running on the server. Check the status above, or start it again.',
+  'provider.oauth.noCredential':
+    'The sign-in finished but no credential was saved. Pick a sign-in method and try again.',
   'provider.oauth.done': 'Signed in.',
   'provider.oauth.failed': 'Sign-in failed: {message}',
 

@@ -78,12 +78,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 
     void (async () => {
       try {
-        const { codeToHtml } = await import('shiki');
-        const highlighted = await codeToHtml(code, {
-          lang: language,
-          themes: { light: 'github-light', dark: 'github-dark' },
-          defaultColor: false,
-        });
+        const { highlightCode } = await import('../lib/syntax-highlighter');
+        const highlighted = await highlightCode(code, language);
         if (!cancelled) setHtml(highlighted);
       } catch {
         // An unknown language (or a failed chunk load) simply stays plain.
