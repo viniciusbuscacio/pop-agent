@@ -72,5 +72,6 @@ function toDto(settings: AppSettings): SettingsDTO {
     distillSkills: settings.distillSkills,
     distillIntervalMinutes: settings.distillIntervalMinutes,
     autoActivatePreparedUpdates: settings.autoActivatePreparedUpdates,
+    autoRestartIdleMinutes: settings.autoRestartIdleMinutes,
   };
 }

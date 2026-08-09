@@ -47,6 +47,8 @@ export interface AppSettings {
   distillIntervalMinutes: number;
   /** Activate a gate-verified committed checkout once conversations and tasks are idle. */
   autoActivatePreparedUpdates: boolean;
+  /** Quiet period required before an automatic activation may begin. */
+  autoRestartIdleMinutes: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

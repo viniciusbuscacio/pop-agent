@@ -29,9 +29,6 @@ interface ScheduledDeployment {
  */
 export class DeploymentCoordinator {
   private scheduled: ScheduledDeployment | undefined;
-  /** Exposed for idle-tracker coupling. */
-  public get runs() { return this.deps.runs; }
-  public get tasks() { return this.deps.taskScheduler; }
 
   constructor(
     private readonly deps: {
@@ -149,7 +146,7 @@ export class DeploymentCoordinator {
       targetCommit: scheduled.targetCommit,
       lastKnownGood: previous?.lastKnownGood ?? this.deps.runningCommit,
       requestedBy: scheduled.requestedBy,
-      requestedAt: previous?.requestedAt,
+      ...(previous?.requestedAt === undefined ? {} : { requestedAt: previous.requestedAt }),
       updatedAt: now,
     });
     return true;

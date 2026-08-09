@@ -128,6 +128,7 @@ export const en = {
   'chat.stopped': 'You stopped this answer.',
   'chat.interrupted': 'This answer was interrupted — the server may have restarted.',
   'chat.failed': 'That answer could not be finished.',
+  'chat.resend': 'Resend',
   'chat.confirm.title': 'Allow Pop Agent to {action}?',
   'chat.confirm.why':
     'This run read untrusted external content, so a risky command is held until you decide.',
@@ -596,6 +597,12 @@ export const en = {
   'settings.updates.refreshFailed': 'Could not reach the server. Try again.',
   'settings.updates.runningCommit': 'Running commit',
   'settings.updates.checkoutCommit': 'Checkout commit',
+  'settings.updates.autoActivate': 'Automatically activate prepared updates',
+  'settings.updates.autoActivateHint':
+    'Off by default. Only a clean committed checkout with a matching green gate receipt can restart automatically.',
+  'settings.updates.idleMinutes': 'Quiet time before restart (minutes)',
+  'settings.updates.idleMinutesHint':
+    'Any new chat message resets this timer. Active conversations and tasks are still allowed to finish.',
   'settings.updates.restartWhenIdle': 'Restart safely when idle',
   'settings.updates.waitingForIdle': 'Waiting for active work…',
   'settings.updates.restartScheduled': 'Safe restart scheduled. Active work will finish first.',
@@ -609,6 +616,8 @@ export const en = {
   'settings.updates.phase.healthy': 'The new commit passed its health check.',
   'settings.updates.phase.rolling-back': 'The new commit failed; restoring last-known-good.',
   'settings.updates.phase.rolled-back': 'Rolled back to last-known-good.',
+  'settings.updates.phase.cancelled': 'The pending restart was cancelled.',
+  'settings.updates.phase.superseded': 'The checkout changed before it could restart.',
   'settings.updates.phase.failed': 'Deployment and rollback need operator attention.',
   'settings.updates.found': 'An update is on the way — the reload banner will appear.',
   'settings.updates.current': 'You are on the latest version.',

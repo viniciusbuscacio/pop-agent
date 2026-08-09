@@ -8,6 +8,7 @@ import type { ModelChoice } from '../ui/slash-menu';
 import { useChatStore } from '../store/chat';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
+import { resendSource } from '../lib/resend';
 
 /** One conversation: history, whatever is streaming, and the composer. */
 export function ChatPage() {
@@ -30,6 +31,7 @@ export function ChatPage() {
   const createChat = useChatStore((state) => state.createChat);
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
+  const [resendingId, setResendingId] = useState<string | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [missed, setMissed] = useState(0);
@@ -209,9 +211,27 @@ export function ChatPage() {
         className="relative flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
-          {(messages ?? []).map((message) => (
-            <ChatMessage key={message.id} message={message} />
-          ))}
+          {(messages ?? []).map((message, index, history) => {
+            const source = resendSource(history, index);
+            const canResend = source !== undefined && live === undefined && queued === undefined;
+            return (
+              <ChatMessage
+                key={message.id}
+                message={message}
+                resending={resendingId === message.id}
+                {...(!canResend
+                  ? {}
+                  : {
+                      onResend: () => {
+                        setResendingId(message.id);
+                        void send(chatId, source.content, source.attachments)
+                          .catch(() => undefined)
+                          .finally(() => setResendingId(undefined));
+                      },
+                    })}
+              />
+            );
+          })}
 
           {live !== undefined ? (
             live.status === 'queued' ? (

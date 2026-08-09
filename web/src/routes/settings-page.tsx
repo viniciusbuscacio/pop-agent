@@ -1447,6 +1447,7 @@ function UpdatesSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
+  const [appSettings, setAppSettings] = useState<SettingsDTO | undefined>(undefined);
 
   async function load(refresh: boolean): Promise<void> {
     if (refresh) {
@@ -1467,6 +1468,7 @@ function UpdatesSection() {
 
   useEffect(() => {
     void load(false);
+    void settingsService.read().then(setAppSettings).catch(() => undefined);
   }, []);
 
   const popAgentOutdated =
@@ -1483,6 +1485,14 @@ function UpdatesSection() {
     const timer = setInterval(() => void load(false), 2_000);
     return () => clearInterval(timer);
   }, [deploymentBusy]);
+
+  function saveAutomaticUpdate(patch: Partial<SettingsDTO>): void {
+    if (appSettings === undefined) return;
+    void settingsService
+      .write({ ...appSettings, ...patch })
+      .then(setAppSettings)
+      .catch(() => undefined);
+  }
 
   async function restartWhenIdle(): Promise<void> {
     setDeploying(true);
@@ -1505,6 +1515,35 @@ function UpdatesSection() {
   return (
     <div className="flex flex-col gap-4">
       <AppUpdatesCard />
+
+      {appSettings === undefined ? null : (
+        <Card className="flex flex-col gap-4">
+          <CheckField
+            id="updates-auto-activate"
+            testId="updates-auto-activate"
+            label={t('settings.updates.autoActivate')}
+            hint={t('settings.updates.autoActivateHint')}
+            checked={appSettings.autoActivatePreparedUpdates}
+            onChange={(checked) => saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
+          />
+          {appSettings.autoActivatePreparedUpdates ? (
+            <Select
+              id="updates-idle-minutes"
+              data-testid="updates-idle-minutes"
+              label={t('settings.updates.idleMinutes')}
+              hint={t('settings.updates.idleMinutesHint')}
+              value={String(appSettings.autoRestartIdleMinutes)}
+              onChange={(event) =>
+                saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
+              }
+            >
+              {[5, 10, 15, 30, 60].map((minutes) => (
+                <option key={minutes} value={minutes}>{minutes}</option>
+              ))}
+            </Select>
+          ) : null}
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

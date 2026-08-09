@@ -1,28 +1,16 @@
-import type { PushService } from '../ports/push-repo.js';
 import type { DeploymentStateStore } from '../ports/deployment.js';
+import type { PushService } from '../ports/push-repo.js';
 import type { Timer } from '../ports/timer.js';
 import type { SettingsService } from '../settings/settings-service.js';
 import type { DeploymentCoordinator } from './deployment-coordinator.js';
-import type { RunService } from '../chat/run-service.js';
-import type { TaskScheduler } from '../tasks/task-scheduler.js';
-import { IdleTracker } from './idle-tracker.js';
 
 export const AUTOMATIC_DEPLOYMENT_TICK_MS = 15_000;
 
-/**
- * How long must the server be idle before an automatic restart triggers.
- * @internal
- */
-export function automaticIdleMs(settings: SettingsService): number {
-  const minutes = settings.read().autoRestartIdleMinutes ?? 10;
-  return Math.max(1, minutes) * 60_000;
-}
-
-/** Watches local prepared commits; downloading releases remains an operator action. */
+/** Watches prepared local commits; downloading releases remains an operator action. */
 export class AutomaticDeploymentService {
   private stopTimer: (() => void) | undefined;
   private ticking = false;
-  private idleTracker: IdleTracker | undefined;
+  private lastActivityAt: number;
 
   constructor(
     private readonly deps: {
@@ -32,43 +20,28 @@ export class AutomaticDeploymentService {
       push: PushService;
       timer: Timer;
       now: () => string;
+      nowMs: () => number;
       onJournal?: (line: string) => void;
     },
-  ) {}
+  ) {
+    this.lastActivityAt = deps.nowMs();
+  }
 
   start(): void {
     if (this.stopTimer !== undefined) return;
     this.stopTimer = this.deps.timer.every(AUTOMATIC_DEPLOYMENT_TICK_MS, () => void this.tick());
     void this.tick();
-    this.startIdleTracker();
-  }
-
-  private startIdleTracker(): void {
-    if (this.idleTracker !== undefined) return;
-    // Unsafe cast: the coordinator already wraps the actual run/task services.
-    const runs = (this.deps.deployment as unknown as { runs: RunService }).runs;
-    const tasks = (this.deps.deployment as unknown as { tasks: TaskScheduler }).tasks;
-    if (runs === undefined || tasks === undefined) return;
-    this.idleTracker = new IdleTracker({
-      runs,
-      tasks,
-      settings: this.deps.settings,
-      timer: this.deps.timer,
-      now: () => Date.now(),
-      onIdle: () => void this.tick(),
-    });
-    this.idleTracker.start();
-  }
-
-  private stopIdleTracker(): void {
-    this.idleTracker?.stop();
-    this.idleTracker = undefined;
   }
 
   stop(): void {
     this.stopTimer?.();
     this.stopTimer = undefined;
-    this.stopIdleTracker();
+  }
+
+  /** Any accepted user message restarts the full quiet period. */
+  noteActivity(): void {
+    this.lastActivityAt = this.deps.nowMs();
+    this.deps.deployment.cancelWaiting('automatic');
   }
 
   async tick(): Promise<void> {
@@ -77,11 +50,14 @@ export class AutomaticDeploymentService {
     try {
       this.deps.deployment.reconcileExternalState();
       await this.publishFinishedAutomaticDeployment();
-      const enabled = this.deps.settings.read().autoActivatePreparedUpdates;
-      if (!enabled) {
+      const settings = this.deps.settings.read();
+      if (!settings.autoActivatePreparedUpdates) {
         this.deps.deployment.cancelWaiting('automatic');
         return;
       }
+      const quietMs = settings.autoRestartIdleMinutes * 60_000;
+      if (this.deps.nowMs() - this.lastActivityAt < quietMs) return;
+
       const status = this.deps.deployment.status();
       if (
         status.pending &&
@@ -91,7 +67,9 @@ export class AutomaticDeploymentService {
       ) {
         const result = this.deps.deployment.requestRestartWhenIdle('automatic');
         if (result.ok) {
-          this.deps.onJournal?.(`pop update: automatic activation waiting for idle (${status.headCommit})`);
+          this.deps.onJournal?.(
+            `pop update: automatic activation waiting for idle (${status.headCommit})`,
+          );
         }
       }
     } finally {

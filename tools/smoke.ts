@@ -216,6 +216,7 @@ async function run(base: string): Promise<void> {
     distillSkills: true,
     distillIntervalMinutes: 10,
     autoActivatePreparedUpdates: false,
+    autoRestartIdleMinutes: 10,
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

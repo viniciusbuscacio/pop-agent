@@ -12,9 +12,13 @@ import { Markdown } from './markdown';
 export function ChatMessage({
   message,
   streaming = false,
+  onResend,
+  resending = false,
 }: {
   message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments'>;
   streaming?: boolean;
+  onResend?: () => void;
+  resending?: boolean;
 }) {
   const showThinking = useThinkingStore((state) => state.show);
 
@@ -22,9 +26,24 @@ export function ChatMessage({
   // forever (pop-agent.spec §6): quiet, centered, unmistakably not a reply.
   if (message.role === 'system') {
     return (
-      <p data-testid="message-system" className="text-center text-xs text-[var(--danger)]">
-        {message.content}
-      </p>
+      <div
+        data-testid="message-system"
+        className="flex flex-wrap items-center justify-center gap-2 text-center text-xs text-[var(--danger)]"
+      >
+        <span>{message.content}</span>
+        {onResend === undefined ? null : (
+          <button
+            type="button"
+            data-testid="message-resend"
+            disabled={resending}
+            onClick={onResend}
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 font-medium text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)] disabled:opacity-60"
+          >
+            <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
+            {t('chat.resend')}
+          </button>
+        )}
+      </div>
     );
   }
 

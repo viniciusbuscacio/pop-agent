@@ -1265,15 +1265,12 @@ reimplemented.
   removing the old control moved nobody's answers. With nothing usable
   it degrades to the head of the list, so the run still fails with the
   error that points at Settings.
-- **An attempt may not hang** (`ATTEMPT_SILENCE_TIMEOUT_MS`, 60 s): one
-  attempt that produces NOTHING — no token, no thinking, no tool — is
-  aborted and the chain moves on, with code `attempt_timeout` (a
-  failover class of its own, deliberately distinct from the user's
-  `aborted`). Without it a dead endpoint does not fail at all: the
-  socket waits on the OS TCP timeout, minutes long, and the chain never
-  runs because it can only act on an error that comes back — the chat
-  just sits there with no answer and no message. Any event at all
-  retires the deadline; a slow first token is not a failure.
+- **Attempt lifetime belongs to pi/provider**: Pop Agent adds no competing
+  silence timeout around `AgentBridge.run`. pi's configured retry policy handles
+  transient failures and only its final outcome reaches the host bridge; the
+  provider transport owns request deadlines. This keeps slow reasoning and long
+  tool turns under the same policy as a native pi session instead of aborting a
+  healthy attempt at an arbitrary host-side minute.
 - **Error classification is TYPED** (`shouldFailOver`, application
   layer): by code and HTTP status, never substring-only. Fail-forward:
   401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,

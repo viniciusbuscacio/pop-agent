@@ -38,18 +38,6 @@ export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
 /** A paused risky action denies itself after this long (pop-agent.spec §10). */
 export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
 
-/**
- * How long one attempt may say NOTHING -- no token, no thinking, no tool --
- * before it is abandoned for the next provider (pop-agent.spec §15, fase 2).
- *
- * Without it a dead endpoint does not fail: the socket waits on the operating
- * system's TCP timeout, minutes long, and the failover chain never runs
- * because it can only act on an error that comes back. The chat just sits
- * there, no answer and no message. Generous on purpose -- a big local model
- * loading from disk can take most of a minute to say its first word.
- */
-export const ATTEMPT_SILENCE_TIMEOUT_MS = 60 * 1000;
-
 /** Per-run knobs. Everything absent is the ordinary chat behaviour. */
 export interface StartRunOptions {
   /**
@@ -103,8 +91,6 @@ export interface RunDeps {
   maxConcurrentRuns?: number;
   /** Overridable so tests do not wait five minutes for a denial. */
   confirmTimeoutMs?: number;
-  /** Overridable so tests do not wait a minute for a silent provider. */
-  attemptTimeoutMs?: number;
   /** Offered every finished run; decides by itself whether to rewrite. */
   titles?: { maybeRetitle(chatId: string): Promise<void> };
   /** Where what the run cost is written down (pop-agent.spec §14). */
@@ -120,6 +106,8 @@ export interface RunDeps {
     notify: boolean;
     code?: string;
   }) => void;
+  /** Accepted user work resets the quiet period before an automatic deployment. */
+  onActivity?: () => void;
   /** Told after a run's messages are stored, to embed them (pop-agent.spec §7). */
   indexMessages?: () => void;
   /**
@@ -284,6 +272,7 @@ export class RunService {
     if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
     // The HTTP layer turns this into the durable queue; no words are persisted twice here.
     if (this.deploymentDraining) return { ok: false, reason: 'deployment_pending' };
+    this.deps.onActivity?.();
 
     const now = new Date(this.deps.clock.now()).toISOString();
     const isFirstMessage = this.deps.chats.countMessages(chatId) === 0;
@@ -704,69 +693,8 @@ export class RunService {
     let failure: RunFailure | undefined;
     let result: AgentRunResult = {};
 
-    // The silence deadline: what stops a hung endpoint from holding the run
-    // forever. Its own controller, so the abort is telling apart from the
-    // user's Stop, which must never fail over.
-    //
-    // It RE-ARMS on every event rather than being cleared by the first one
-    // (Vinicius, 05/08). Clearing it measured time-to-first-word, not
-    // silence -- a provider that said one thing and then stopped was never
-    // caught, and the chat sat there with no answer, no error and no
-    // failover until the app was killed. That is exactly what a custom
-    // OpenAI-compatible endpoint did: it passed Test connection, opened a
-    // stream, and stalled.
-    //
-    // Suspended while one of OUR tools is running, because a tool call is
-    // not the provider being silent -- it is the provider waiting for us. A
-    // twenty-minute `npm install` on an attached terminal is ordinary and
-    // emits nothing between `start` and `done` (docs/cli.md: no timeout
-    // while the hands channel heart-beats). Only `start` and its ending are
-    // counted; `output` is liveness, not a new call.
-    const silence = new AbortController();
-    let timedOut = false;
-    let toolsInFlight = 0;
-    // Set once the attempt has been given up on, so a bridge that keeps
-    // running in the background cannot write into a run that already ended.
-    let abandoned = false;
-    /** Settles when the deadline gives up, so the await below cannot outlive it. */
-    let surrender: () => void = () => undefined;
-    const surrendered = new Promise<void>((resolve) => {
-      surrender = resolve;
-    });
-    // Stop is the same problem wearing the user's face: it aborts the same
-    // way, and a bridge that ignores the abort would leave the run standing
-    // after the person asked it to end. One escape, both callers.
-    if (run.controller.signal.aborted) surrender();
-    else run.controller.signal.addEventListener('abort', () => surrender(), { once: true });
-    const timeoutMs = this.deps.attemptTimeoutMs ?? ATTEMPT_SILENCE_TIMEOUT_MS;
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    const disarm = (): void => {
-      if (deadline !== undefined) clearTimeout(deadline);
-      deadline = undefined;
-    };
-    const arm = (): void => {
-      disarm();
-      deadline = setTimeout(() => {
-        timedOut = true;
-        // Asked first: a bridge that honours the signal stops cleanly and
-        // whatever it was doing is torn down.
-        silence.abort();
-        // Then taken. Aborting is a REQUEST, and a request is not a
-        // guarantee: pi opening a session against an endpoint that never
-        // answers does not observe the signal, so `await bridge.run(...)`
-        // stayed pending for ever and the run hung anyway -- measured on the
-        // live install, with the deadline firing and changing nothing
-        // (Vinicius, 05/08). Racing is what makes the deadline true.
-        abandoned = true;
-        surrender();
-      }, timeoutMs);
-      // Never a reason to keep the process alive on its own.
-      deadline.unref?.();
-    };
-    arm();
-
     try {
-      const attempt = bridge.run({
+      result = await bridge.run({
         chatId: run.chatId,
         prompt: run.prompt,
         model: pair.modelId,
@@ -780,19 +708,8 @@ export class RunService {
           run.control = control;
           this.deps.onRunSteerable?.(run.chatId);
         },
-        signal: AbortSignal.any([run.controller.signal, silence.signal]),
+        signal: run.controller.signal,
         onEvent: (event) => {
-          // The abandoned attempt may still be talking to itself.
-          if (abandoned) return;
-          if (event.kind === 'tool') {
-            if (event.status === 'start') toolsInFlight += 1;
-            else if (event.status === 'done' || event.status === 'error') {
-              toolsInFlight = Math.max(0, toolsInFlight - 1);
-            }
-          }
-          // Waiting on our own tool is not the provider going quiet.
-          if (toolsInFlight > 0) disarm();
-          else arm();
           // Fragments accumulate on the run itself, so a client mounting
           // mid-run can be handed everything that already streamed
           // ({@link liveRun}); seq marks each one so nothing is counted twice.
@@ -846,52 +763,14 @@ export class RunService {
           }
         },
       });
-      // Whichever comes first. A rejected attempt still rejects here; a
-      // surrendered one leaves it running and unheard.
-      attempt.catch(() => undefined);
-      const finished = await Promise.race([attempt.then(() => true), surrendered.then(() => false)]);
-      if (finished) {
-        result = await attempt;
-      } else {
-        // The bridge may still settle after we gave up. Book its usage once,
-        // under a late id, so spend is not lost when the zombie finishes.
-        void attempt.then((late) => {
-          const usage = late.usage;
-          if (usage === undefined || this.deps.llmRuns === undefined) return;
-          this.deps.llmRuns.record({
-            id:
-              attemptIndex === 0
-                ? `${run.runId}-late`
-                : `${run.runId}-f${String(attemptIndex)}-late`,
-            chatId: run.chatId,
-            provider: usage.provider,
-            model: usage.model,
-            tokensIn: usage.inputTokens,
-            tokensOut: usage.outputTokens,
-            cost: billsPerToken(usage.provider) ? usage.cost : 0,
-            createdAt: new Date(clock.now()).toISOString(),
-          });
-        });
-      }
     } catch {
       failure ??= { code: 'operation_error' };
     } finally {
       run.control = undefined;
-      disarm();
-      surrender();
-    }
-
-    // Our own abort, not the bridge's opinion of it: whatever error the abort
-    // surfaced, the truth is that this provider never said anything.
-    if (timedOut) {
-      failure = { code: 'attempt_timeout' };
-      // A deaf bridge keeps its cached session alive; drop it so failover
-      // opens fresh and the zombie cannot interleave into the next attempt.
-      bridge.discardSession?.(run.chatId);
     }
 
     const usage = result.usage;
-    if (usage !== undefined && this.deps.llmRuns !== undefined && !timedOut) {
+    if (usage !== undefined && this.deps.llmRuns !== undefined) {
       this.deps.llmRuns.record({
         // The first attempt keeps the run id; a failover attempt gets its own
         // suffixed row -- both were billed, and llm_runs ids are unique.
