@@ -217,7 +217,19 @@ export function ChatPage() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
           >
-            <img src="/icon.svg" alt="" className="h-24 w-24 select-none" />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-24 w-24 select-none text-[var(--muted)] opacity-25"
+            >
+              <path d="M12 16v1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v1" />
+              <path d="M12 6a2 2 0 0 1 2 2" />
+              <path d="M18 8c0 4-3.5 8-6 8s-6-4-6-8a6 6 0 0 1 12 0" />
+            </svg>
           </div>
         ) : null}
 

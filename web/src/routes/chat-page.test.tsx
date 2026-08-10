@@ -73,9 +73,9 @@ describe('chat transcript', () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
-    expect(screen.getByTestId('empty-chat-icon').querySelector('img')?.getAttribute('src')).toBe(
-      '/icon.svg',
-    );
+    const emptyIcon = screen.getByTestId('empty-chat-icon');
+    expect(emptyIcon.querySelector('svg')).toBeTruthy();
+    expect(emptyIcon.querySelector('rect')).toBeNull();
 
     useChatStore.setState((state) => ({
       messages: {
