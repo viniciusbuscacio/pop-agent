@@ -93,6 +93,18 @@ export class ChatService {
     return this.deps.chats.archiveOthers(keepChatId);
   }
 
+  /** Permanently deletes every open conversation except the active one and pinned chats. */
+  deleteOthers(keepChatId: string): number | undefined {
+    const keep = this.deps.chats.get(keepChatId);
+    if (keep === undefined || keep.archived) return undefined;
+
+    let deleted = 0;
+    for (const chat of this.deps.chats.list({ archived: false })) {
+      if (chat.id !== keepChatId && !chat.pinned && this.delete(chat.id)) deleted += 1;
+    }
+    return deleted;
+  }
+
   setModel(id: string, model: string, provider: string): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setModel(id, model, provider);

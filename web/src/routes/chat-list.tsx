@@ -39,9 +39,12 @@ export function ChatList() {
   const loadChats = useChatStore((state) => state.loadChats);
   const loadArchived = useChatStore((state) => state.loadArchived);
   const archiveOthers = useChatStore((state) => state.archiveOthers);
+  const deleteOthers = useChatStore((state) => state.deleteOthers);
   const removeArchived = useChatStore((state) => state.removeArchived);
   const notify = useNotificationsStore((state) => state.notify);
   const [archivingOthers, setArchivingOthers] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deletingOthers, setDeletingOthers] = useState(false);
   const [purging, setPurging] = useState(false);
   const createChat = useChatStore((state) => state.createChat);
   const reloadMcp = useMcpStore((state) => state.reload);
@@ -169,6 +172,29 @@ export function ChatList() {
     }
   }
 
+  async function deleteAllOthers(): Promise<void> {
+    if (keepChat === undefined || archiveOthersCount === 0 || deletingOthers) return;
+    setDeletingOthers(true);
+    try {
+      const count = await deleteOthers(keepChat.id);
+      setDeleteDialog(false);
+      notify(t('shell.deleteOthersDone', { count }));
+    } catch {
+      notify(t('shell.deleteOthersFailed'));
+    } finally {
+      setDeletingOthers(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!deleteDialog) return;
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !deletingOthers) setDeleteDialog(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [deleteDialog, deletingOthers]);
+
   return (
     <>
       <SidebarNav />
@@ -261,6 +287,16 @@ export function ChatList() {
                 }
                 disabled={keepChat === undefined || archiveOthersCount === 0 || archivingOthers}
                 onClick={() => void archiveAllOthers()}
+              />
+              <MenuItem
+                testId="list-delete-others"
+                label={t('shell.deleteExceptPinned', { count: archiveOthersCount })}
+                danger
+                disabled={keepChat === undefined || archiveOthersCount === 0 || deletingOthers}
+                onClick={() => {
+                  setListMenu(false);
+                  setDeleteDialog(true);
+                }}
               />
             </div>
           ) : null}
@@ -357,6 +393,56 @@ export function ChatList() {
           )}
         </PullToRefresh>
       )}
+
+      {deleteDialog && keepChat !== undefined ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--backdrop)] p-4"
+          role="presentation"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget && !deletingOthers) setDeleteDialog(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-others-title"
+            aria-describedby="delete-others-description"
+            className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] p-5 shadow-xl"
+          >
+            <h2 id="delete-others-title" className="text-base font-medium text-[var(--screen-fg)]">
+              {t('shell.deleteOthersTitle')}
+            </h2>
+            <p id="delete-others-description" className="mt-2 text-sm text-[var(--key-fg-dim)]">
+              {t('shell.deleteOthersConfirm', {
+                count: archiveOthersCount,
+                title: keepChat.title,
+              })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={deletingOthers}
+                onClick={() => setDeleteDialog(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                autoFocus
+                data-testid="confirm-delete-others"
+                disabled={deletingOthers}
+                onClick={() => void deleteAllOthers()}
+              >
+                {deletingOthers
+                  ? t('shell.deleteOthersBusy')
+                  : t('shell.deleteOthersConfirmButton', { count: archiveOthersCount })}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ShellFooter />
     </>

@@ -529,6 +529,14 @@ export const en = {
   'shell.archiveOthersBusy': 'Archiving…',
   'shell.archiveOthersDone': 'Archived chats: {count}.',
   'shell.archiveOthersFailed': 'The conversations could not be archived.',
+  'shell.deleteExceptPinned': 'Delete all except active and pinned ({count})',
+  'shell.deleteOthersTitle': 'Delete other conversations?',
+  'shell.deleteOthersConfirm':
+    'Conversations to delete permanently: {count}. “{title}” and pinned chats will remain. This cannot be undone.',
+  'shell.deleteOthersConfirmButton': 'Delete {count}',
+  'shell.deleteOthersBusy': 'Deleting…',
+  'shell.deleteOthersDone': 'Deleted conversations: {count}.',
+  'shell.deleteOthersFailed': 'The conversations could not be deleted.',
   'shell.archivedBadge': 'archived',
   'shell.deleteArchivedAll': 'Delete all archived ({count})',
   'shell.deleteArchivedConfirm1':

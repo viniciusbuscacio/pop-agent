@@ -67,6 +67,7 @@ interface ChatState {
   setArchived: (chatId: string, archived: boolean) => Promise<void>;
   setPinned: (chatId: string, pinned: boolean) => Promise<void>;
   archiveOthers: (keepChatId: string) => Promise<number>;
+  deleteOthers: (keepChatId: string) => Promise<number>;
   setModel: (chatId: string, model: string, provider: string) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
   /** Deletes every archived conversation in one call. */
@@ -284,6 +285,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // created or archived a chat since this sidebar last came to the front.
     await Promise.all([get().loadChats(), get().loadArchived()]);
     return archived;
+  },
+
+  async deleteOthers(keepChatId) {
+    const candidates = get().chats
+      .filter((chat) => chat.id !== keepChatId && !chat.pinned)
+      .map((chat) => chat.id);
+    const { deleted } = await chatsService.deleteOthers(keepChatId);
+    await Promise.all([get().loadChats(), get().loadArchived()]);
+    // Drop local run/history remnants only after the canonical lists arrive;
+    // another device may have pinned a chat since this sidebar last refreshed.
+    const alive = new Set([...get().chats, ...get().archived].map((chat) => chat.id));
+    for (const id of candidates) {
+      if (!alive.has(id)) deleteQueuedMessage(id);
+    }
+    set((state) => {
+      const strip = <V,>(record: Record<string, V>): Record<string, V> =>
+        Object.fromEntries(Object.entries(record).filter(([id]) => alive.has(id)));
+      return {
+        messages: strip(state.messages),
+        live: strip(state.live),
+        queued: strip(state.queued),
+      };
+    });
+    return deleted;
   },
 
   async setModel(chatId, model, provider) {

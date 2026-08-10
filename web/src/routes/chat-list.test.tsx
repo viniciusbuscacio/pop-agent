@@ -8,6 +8,7 @@ import { ChatList } from './chat-list';
 import { useChatStore } from '../store/chat';
 
 const archiveOthers = vi.fn();
+const deleteOthers = vi.fn();
 const patch = vi.fn();
 const active: ChatDTO[] = [
   {
@@ -41,6 +42,7 @@ vi.mock('../services/chats', () => ({
     list: (archived = false) =>
       Promise.resolve({ chats: archived ? archivedList : activeList }),
     archiveOthers: (keepChatId: string) => archiveOthers(keepChatId) as Promise<unknown>,
+    deleteOthers: (keepChatId: string) => deleteOthers(keepChatId) as Promise<unknown>,
     patch: (chatId: string, body: { pinned?: boolean }) => patch(chatId, body) as Promise<unknown>,
     messages: () => Promise.resolve({ messages: [] }),
   },
@@ -70,6 +72,7 @@ beforeEach(() => {
   activeList = active.map((chat) => ({ ...chat }));
   archivedList = [];
   archiveOthers.mockReset();
+  deleteOthers.mockReset();
   patch.mockReset();
   patch.mockImplementation((chatId: string, body: { pinned?: boolean }) => {
     activeList = activeList
@@ -82,6 +85,11 @@ beforeEach(() => {
     activeList = activeList.filter((chat) => chat.id === keepChatId || chat.pinned);
     archivedList = filed.map((chat) => ({ ...chat, archived: true }));
     return Promise.resolve({ archived: filed.length });
+  });
+  deleteOthers.mockImplementation((keepChatId: string) => {
+    const deleted = activeList.filter((chat) => chat.id !== keepChatId && !chat.pinned);
+    activeList = activeList.filter((chat) => chat.id === keepChatId || chat.pinned);
+    return Promise.resolve({ deleted: deleted.length });
   });
   vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
@@ -133,6 +141,32 @@ describe('archive all other chats', () => {
 
     expect(screen.getByTestId('list-archive-others')).toHaveProperty('disabled', true);
     expect(archiveOthers).not.toHaveBeenCalled();
+  });
+});
+
+describe('delete all other chats', () => {
+  it('shows a confirmation dialog and permanently deletes only unpinned inactive chats', async () => {
+    localStorage.setItem('pop-agent.lastChat', 'chat-keep');
+    activeList[1] = { ...activeList[1]!, pinned: true };
+    activeList.push({ ...active[1]!, id: 'chat-disposable', title: 'Disposable', pinned: false });
+    renderList();
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(3));
+
+    await userEvent.click(screen.getByTestId('list-menu'));
+    const action = screen.getByTestId('list-delete-others');
+    expect(action.textContent).toBe('Delete all except active and pinned (1)');
+    await userEvent.click(action);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).toContain('Conversations to delete permanently: 1.');
+    expect(deleteOthers).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId('confirm-delete-others'));
+
+    await waitFor(() => expect(deleteOthers).toHaveBeenCalledWith('chat-keep'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getAllByTestId('chat-row')).toHaveLength(2);
+    expect(screen.getByText('File this chat')).toBeTruthy();
+    expect(screen.queryByText('Disposable')).toBeNull();
   });
 });
 

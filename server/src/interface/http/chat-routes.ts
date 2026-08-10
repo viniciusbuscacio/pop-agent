@@ -47,7 +47,7 @@ const patchSchema = z
   })
   .strict();
 
-const archiveOthersSchema = z.object({ keepChatId: z.string().min(1).max(80) }).strict();
+const keepChatSchema = z.object({ keepChatId: z.string().min(1).max(80) }).strict();
 
 /** 16 MB of file is ~21.4 MB of base64; the schema allows a little slack. */
 const MAX_ATTACHMENT_DATA_URI = 22_400_000;
@@ -143,12 +143,23 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
   routes.post('/chats/archive-others', async (c) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
-    const parsed = archiveOthersSchema.safeParse(body);
+    const parsed = keepChatSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
     const archived = deps.chats.archiveOthers(parsed.data.keepChatId);
     if (archived === undefined) return chatNotFound(c);
     return c.json({ archived });
+  });
+
+  routes.post('/chats/delete-others', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = keepChatSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const deleted = deps.chats.deleteOthers(parsed.data.keepChatId);
+    if (deleted === undefined) return chatNotFound(c);
+    return c.json({ deleted });
   });
 
   routes.patch('/chats/:id', async (c) => {

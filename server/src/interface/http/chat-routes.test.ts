@@ -82,6 +82,30 @@ describe('chat collection', () => {
     );
   });
 
+  it('deletes every open chat except the active one and pinned chats', async () => {
+    const keep = await newChat();
+    const pinned = await newChat();
+    const one = await newChat();
+    const two = await newChat();
+    const archived = await newChat();
+    await api(`/v1/chats/${pinned.id}`, { method: 'PATCH', body: { pinned: true } });
+    await api(`/v1/chats/${archived.id}`, { method: 'PATCH', body: { archived: true } });
+
+    const response = await api('/v1/chats/delete-others', {
+      method: 'POST',
+      body: { keepChatId: keep.id },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: 2 });
+    const active = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
+    expect(new Set(active.chats.map((chat) => chat.id))).toEqual(new Set([keep.id, pinned.id]));
+    expect((await api(`/v1/chats/${one.id}/messages`)).status).toBe(404);
+    expect((await api(`/v1/chats/${two.id}/messages`)).status).toBe(404);
+    const filed = (await (await api('/v1/chats?archived=true')).json()) as { chats: ChatDTO[] };
+    expect(filed.chats.map((chat) => chat.id)).toEqual([archived.id]);
+  });
+
   it('refuses to archive others without a valid open chat to keep', async () => {
     const filed = await newChat();
     await api(`/v1/chats/${filed.id}`, { method: 'PATCH', body: { archived: true } });

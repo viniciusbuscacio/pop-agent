@@ -4,6 +4,7 @@ import type {
   ChatDTO,
   ChatListResponse,
   ConfirmResponse,
+  DeleteOtherChatsResponse,
   MessagesResponse,
   MessageDelivery,
   ModelsResponse,
@@ -26,6 +27,13 @@ export const chatsService = {
 
   archiveOthers(keepChatId: string): Promise<ArchiveOtherChatsResponse> {
     return apiRequest<ArchiveOtherChatsResponse>('/chats/archive-others', {
+      method: 'POST',
+      body: { keepChatId },
+    });
+  },
+
+  deleteOthers(keepChatId: string): Promise<DeleteOtherChatsResponse> {
+    return apiRequest<DeleteOtherChatsResponse>('/chats/delete-others', {
       method: 'POST',
       body: { keepChatId },
     });
