@@ -92,28 +92,60 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the skills pane', () => {
-  it('shows durable learning activity and queues a retry', async () => {
-    distillations
-      .mockResolvedValueOnce({
-        attempts: [{
-          id: 'attempt-one', chatId: 'chat-one', chatTitle: 'Deploy conversation',
-          trigger: 'automatic', state: 'completed', outcome: 'nothing', warnings: [],
-          startedAt: '2026-08-07T20:00:00.000Z', finishedAt: '2026-08-07T20:01:00.000Z',
-          results: [], retryable: true,
-        }],
-      })
-      .mockResolvedValueOnce({ attempts: [] });
-
+  it('keeps routine activity out of the default Skills pane', async () => {
     render(
       <MemoryRouter initialEntries={['/skills']}>
         <Harness />
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText('Deploy conversation')).toBeDefined());
-    expect(screen.getByText('Nothing to learn')).toBeDefined();
 
+    expect(screen.getByText('Select a skill')).toBeDefined();
+    expect(distillations).not.toHaveBeenCalled();
+  });
+
+  it('summarizes routine activity and expands it only when requested', async () => {
+    distillations.mockResolvedValue({
+      attempts: [{
+        id: 'attempt-one', chatId: 'chat-one', chatTitle: 'Deploy conversation',
+        trigger: 'automatic', state: 'completed', outcome: 'nothing', warnings: [],
+        startedAt: '2026-08-07T20:00:00.000Z', finishedAt: '2026-08-07T20:01:00.000Z',
+        results: [], retryable: false,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/skills/_activity']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId('routine-activity-summary')).toBeDefined());
+    expect(screen.queryByText('Deploy conversation')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show routine activity' }));
+    expect(screen.getByText('Deploy conversation')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('keeps retry for a real failed attempt', async () => {
+    distillations
+      .mockResolvedValueOnce({
+        attempts: [{
+          id: 'attempt-failed', chatId: 'chat-one', chatTitle: 'Failed conversation',
+          trigger: 'automatic', state: 'failed', outcome: 'failed', warnings: [],
+          errorMessage: 'Provider timed out.', startedAt: '2026-08-07T20:00:00.000Z',
+          finishedAt: '2026-08-07T20:01:00.000Z', results: [], retryable: true,
+        }],
+      })
+      .mockResolvedValueOnce({ attempts: [] });
+
+    render(
+      <MemoryRouter initialEntries={['/skills/_activity']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Failed conversation')).toBeDefined());
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(retryDistillation).toHaveBeenCalledWith('attempt-one'));
+    await waitFor(() => expect(retryDistillation).toHaveBeenCalledWith('attempt-failed'));
   });
 
   it('shows the skill in the route', async () => {

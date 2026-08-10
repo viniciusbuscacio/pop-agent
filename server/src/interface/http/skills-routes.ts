@@ -213,11 +213,10 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
 }
 
 function toAttemptDto(attempt: DistillationAttempt): SkillDistillationAttemptDTO {
-  const retryable =
-    attempt.state === 'failed' ||
-    attempt.outcome === 'nothing' ||
-    attempt.outcome === 'tainted' ||
-    attempt.outcome === 'invalid_output';
+  // A provider/parser failure may succeed unchanged on another pass. `nothing`
+  // and `tainted` are completed policy decisions over an exact immutable window;
+  // presenting retry there turns normal maintenance into apparent user work.
+  const retryable = attempt.state === 'failed' || attempt.outcome === 'invalid_output';
   return {
     id: attempt.id,
     chatId: attempt.chatId,

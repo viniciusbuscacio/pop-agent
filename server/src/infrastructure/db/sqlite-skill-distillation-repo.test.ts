@@ -96,7 +96,7 @@ describe('SqliteDistillationRepo', () => {
       trigger: 'automatic', requested: false, startedAt: '2026-08-07T18:00:00.000Z',
     });
     marks.finishAttempt('source', {
-      state: 'completed', outcome: 'nothing', finishedAt: '2026-08-07T18:01:00.000Z',
+      state: 'failed', outcome: 'failed', finishedAt: '2026-08-07T18:01:00.000Z',
     });
 
     expect(marks.queueRetry('source', 'retry-one', '2026-08-07T19:00:00.000Z')).toMatchObject({
@@ -104,6 +104,18 @@ describe('SqliteDistillationRepo', () => {
     });
     expect(marks.queueRetry('source', 'retry-two', '2026-08-07T19:01:00.000Z')?.id).toBe('retry-one');
     expect(marks.attempts(10)).toHaveLength(2);
+  });
+
+  it('does not retry a completed nothing-to-learn decision', () => {
+    marks.startAttempt({
+      id: 'nothing', chatId: 'chat-1', chatTitle: 'Chat', throughMessageId: 'm10',
+      trigger: 'automatic', requested: false, startedAt: '2026-08-07T20:00:00.000Z',
+    });
+    marks.finishAttempt('nothing', {
+      state: 'completed', outcome: 'nothing', finishedAt: '2026-08-07T20:01:00.000Z',
+    });
+
+    expect(marks.queueRetry('nothing', 'retry-nothing', '2026-08-07T21:00:00.000Z')).toBeUndefined();
   });
 });
 

@@ -279,7 +279,7 @@ describe('the distiller queue on /v1/skills', () => {
     expect(body.distiller).toMatchObject({ enabled: true, pending: 0, revisions: 0 });
   });
 
-  it('lists why a conversation produced nothing and queues an exact retry', async () => {
+  it('lists a routine nothing result without presenting it as retryable work', async () => {
     fixture.distillation.startAttempt({
       id: 'distillation-source',
       chatId: 'chat-source',
@@ -300,13 +300,10 @@ describe('the distiller queue on /v1/skills', () => {
       attempts: { id: string; outcome: string; retryable: boolean }[];
     };
     expect(listed.attempts[0]).toMatchObject({
-      id: 'distillation-source', outcome: 'nothing', retryable: true,
+      id: 'distillation-source', outcome: 'nothing', retryable: false,
     });
 
     const retried = await authed('/v1/skills/distillations/distillation-source/retry', { method: 'POST' });
-    expect(retried.status).toBe(202);
-    expect(await retried.json()).toMatchObject({
-      state: 'queued', retryOf: 'distillation-source', retryable: false,
-    });
+    expect(retried.status).toBe(409);
   });
 });

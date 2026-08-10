@@ -44,7 +44,14 @@ export function SkillsPage() {
       <div className="md:hidden">
         <SidebarNav />
       </div>
-      {slug === undefined || isActivity ? (
+      {slug === undefined ? (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <div className="max-w-sm text-center">
+            <h1 className="text-lg font-semibold">{t('skills.empty.title')}</h1>
+            <p className="mt-2 text-sm text-[var(--muted)]">{t('skills.empty.body')}</p>
+          </div>
+        </div>
+      ) : isActivity ? (
         <DistillationActivity />
       ) : isNew || skill !== undefined ? (
         <div className="mx-auto w-full max-w-3xl p-4">
@@ -64,11 +71,12 @@ export function SkillsPage() {
 /** Durable reasons behind the auto-skill inbox, grouped by conversation window. */
 function DistillationActivity() {
   const [attempts, setAttempts] = useState<SkillDistillationAttemptDTO[] | undefined>(undefined);
+  const [showRoutine, setShowRoutine] = useState(false);
   const [retrying, setRetrying] = useState<string | undefined>(undefined);
 
   async function reload(): Promise<void> {
     try {
-      setAttempts((await skillsService.distillations()).attempts);
+      setAttempts((await skillsService.distillations(100)).attempts);
     } catch {
       setAttempts((current) => current ?? []);
     }
@@ -88,6 +96,9 @@ function DistillationActivity() {
     }
   }
 
+  const routine = attempts?.filter(isRoutineAttempt) ?? [];
+  const visible = attempts?.filter((attempt) => showRoutine || !isRoutineAttempt(attempt)) ?? [];
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4" data-testid="distillation-activity">
       <div>
@@ -97,7 +108,20 @@ function DistillationActivity() {
       {attempts === undefined ? null : attempts.length === 0 ? (
         <Card><p className="text-sm text-[var(--muted)]">{t('skills.activity.empty')}</p></Card>
       ) : (
-        attempts.map((attempt) => (
+        <>
+          {routine.length > 0 ? (
+            <Card className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-[var(--muted)]" data-testid="routine-activity-summary">
+                {t('skills.activity.routineSummary', { count: routine.length })}
+              </p>
+              <Button type="button" variant="ghost" onClick={() => setShowRoutine((shown) => !shown)}>
+                {showRoutine ? t('skills.activity.hideRoutine') : t('skills.activity.showRoutine')}
+              </Button>
+            </Card>
+          ) : null}
+          {visible.length === 0 ? (
+            <Card><p className="text-sm text-[var(--muted)]">{t('skills.activity.noImportant')}</p></Card>
+          ) : visible.map((attempt) => (
           <Card key={attempt.id} className="flex flex-col gap-2" data-testid="distillation-attempt">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
@@ -137,10 +161,16 @@ function DistillationActivity() {
               </div>
             ) : null}
           </Card>
-        ))
+        ))}
+        </>
       )}
     </div>
   );
+}
+
+/** Nothing and taint are normal terminal decisions, not work waiting on the user. */
+function isRoutineAttempt(attempt: SkillDistillationAttemptDTO): boolean {
+  return attempt.outcome === 'nothing' || attempt.outcome === 'tainted';
 }
 
 function attemptLabel(attempt: SkillDistillationAttemptDTO): string {

@@ -142,6 +142,6 @@ describe('the skills sidebar filter', () => {
     await userEvent.click(screen.getByTestId('skills-source-filter-personal'));
 
     expect(screen.getByTestId('skills-source-filter').textContent).toContain('1 pending');
-    expect(screen.getByTestId('skills-source-filter').textContent).toContain('Personal');
+    expect(screen.getByTestId('skills-source-filter').textContent).toContain('Custom');
   });
 });

@@ -348,8 +348,11 @@ selection is 100% local, no LLM call:
   `self-architecture`); `web-research` merged browsing + research, and
   `code-work` merged debugging + review, both rewritten against the real
   tools. The sidebar filters the list by source (1.74): All Skills /
-  Personal / Auto / Pending / Built-in, with the pending count on the
-  filter itself so approvals never hide.
+  Custom / Auto / Pending / Built-in, with the pending count on the filter
+  itself so approvals never hide. `Custom` is the honest UI name for source
+  `user`: it includes local operational skills written by Pop Agent as well as
+  anything the user uploaded or edited; it does not imply the user personally
+  created every item.
 - **Skills are invisible in the conversation** (1.66, decided by Vinicius
   after reading a transcript). Pop Agent never mentions a skill unless asked a
   question about skills. It does not announce that it is writing one,
@@ -530,15 +533,17 @@ selection is 100% local, no LLM call:
   one discreet status line — when Pop Agent last looked, how much waits on the
   reader. No push (decided 07/08): the distiller runs every ten minutes, so a
   notification per skill would be noise, and the cost already has a home in
-  Settings → Usage. **Its empty pane is durable distiller activity** (09/08):
-  one row per bounded conversation window says whether it produced pending
-  skills, revisions, nothing, a taint refusal or a failure. This is structured
-  SQLite history, not a reading of journal prose; it stores warning codes and
-  measurements but never copies the transcript, provider answer or hostile
-  source text. Nothing, taint, invalid output and failures can queue an exact
-  retry of the original message range. Successful writes cannot be retried in
-  place because doing so would manufacture duplicates or revisions of their
-  own pending output.
+  Settings → Usage. **Learning activity is an explicit destination, never the
+  empty Skills pane** (09/08): one row per bounded conversation window says
+  whether it produced pending skills, revisions, nothing, a taint refusal or a
+  failure. This is structured SQLite history, not a reading of journal prose;
+  it stores warning codes and measurements but never copies the transcript,
+  provider answer or hostile source text. The default view shows only produced,
+  invalid and failed work; routine `nothing` and `tainted` outcomes are folded
+  into one summary and expand only on request. Only failures and invalid model
+  output can queue an exact retry. A normal empty decision, a taint refusal or a
+  successful write cannot be retried in place: unchanged input would create
+  noise, bypass a safety decision, or manufacture duplicates.
 
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end
