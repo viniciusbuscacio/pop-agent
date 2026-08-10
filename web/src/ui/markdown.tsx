@@ -1,7 +1,9 @@
 import { Children, useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { t } from '../i18n';
+import { saveFromLink } from '../lib/download';
+import { filesService } from '../services/artifacts';
 
 /**
  * Assistant text as markdown (pop-agent.spec §14). Raw HTML is not enabled: the
@@ -16,6 +18,7 @@ export function Markdown({ text }: { text: string }) {
     <div className="markdown flex flex-col gap-3 leading-relaxed break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={markdownUrlTransform}
         components={{
           pre: PreBlock,
           code: ({ className, children }) =>
@@ -26,16 +29,23 @@ export function Markdown({ text }: { text: string }) {
             ) : (
               <code className={className}>{children}</code>
             ),
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-[var(--accent)] underline underline-offset-2"
-            >
-              {children}
-            </a>
-          ),
+          // `urlTransform` keeps the internal image scheme long enough for
+          // MarkdownImage to resolve it. Links still get the stock sanitizer:
+          // an assistant cannot turn attachment:// into an external app launch.
+          a: ({ href, children }) => {
+            const safe = defaultUrlTransform(href ?? '');
+            return (
+              <a
+                href={safe.length === 0 ? undefined : safe}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-[var(--accent)] underline underline-offset-2"
+              >
+                {children}
+              </a>
+            );
+          },
+          img: MarkdownImage,
           table: ({ children }) => (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">{children}</table>
@@ -55,6 +65,155 @@ export function Markdown({ text }: { text: string }) {
       </ReactMarkdown>
     </div>
   );
+}
+
+/**
+ * A generated image is persisted in Files, not copied into the message row.
+ * Keep a stable path in markdown and mint a fresh signed URL when it is viewed:
+ * unlike a URL saved in message content, this still works after the 30-day link
+ * lifetime. The browser's load event is the final witness that the bytes really
+ * decoded; file existence on the server alone cannot prove that.
+ */
+function MarkdownImage({
+  src = '',
+  alt = '',
+}: {
+  src?: string | undefined;
+  alt?: string | undefined;
+}) {
+  const path = internalFilePath(src);
+  const [resolved, setResolved] = useState<{ preview: string; download: string } | undefined>(
+    path === undefined && src.length > 0 ? { preview: src, download: src } : undefined,
+  );
+  const [failed, setFailed] = useState(src.length === 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(src.length === 0);
+
+    if (path === undefined) {
+      setResolved(src.length === 0 ? undefined : { preview: src, download: src });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setResolved(undefined);
+    void filesService.link(path).then(
+      (download) => {
+        if (!cancelled) setResolved({ preview: `${download}&inline=1`, download });
+      },
+      () => {
+        if (!cancelled) setFailed(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [path, src]);
+
+  const label = alt.length > 0 ? alt : (path?.split('/').at(-1) ?? t('chat.image'));
+  if (failed) {
+    return (
+      <span
+        className="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-3 py-2 text-sm text-[var(--muted)]"
+        data-testid="markdown-image-fallback"
+      >
+        <span>{t('chat.imagePreviewFailed', { name: label })}</span>
+        {resolved === undefined ? (
+          <a className="text-[var(--accent)] underline underline-offset-2" href="/files">
+            {t('chat.openFiles')}
+          </a>
+        ) : path === undefined ? (
+          <a
+            className="text-[var(--accent)] underline underline-offset-2"
+            href={resolved.download}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {t('chat.openImage')}
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="text-[var(--accent)] underline underline-offset-2"
+            onClick={() => saveFromLink(resolved.download)}
+          >
+            {t('chat.downloadImage')}
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  if (resolved === undefined) {
+    return (
+      <span className="text-sm text-[var(--muted)]" data-testid="markdown-image-loading">
+        {t('chat.imageLoading', { name: label })}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={resolved.preview}
+      alt={alt}
+      loading="lazy"
+      className="max-h-[32rem] max-w-full rounded-xl object-contain"
+      data-testid="markdown-image"
+      onLoad={(event) => {
+        // A load with no decoded dimensions is still a broken preview (notably
+        // malformed image bytes returned with a plausible extension).
+        if (event.currentTarget.naturalWidth === 0 || event.currentTarget.naturalHeight === 0) {
+          setFailed(true);
+        }
+      }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/** Preserve only Pop Agent's internal image references; sanitize everything else normally. */
+function markdownUrlTransform(value: string): string {
+  return internalFilePath(value) === undefined ? defaultUrlTransform(value) : value;
+}
+
+/** A Files-relative path carried by current, future, or already-persisted messages. */
+export function internalFilePath(source: string): string | undefined {
+  let raw: string | undefined;
+  let encoded = true;
+  if (source.startsWith('attachment://')) raw = source.slice('attachment://'.length);
+  else if (source.startsWith('files://')) raw = source.slice('files://'.length);
+  else if (source.startsWith('Files/')) raw = source.slice('Files/'.length);
+  else if (source.startsWith('./Files/')) raw = source.slice('./Files/'.length);
+  else if (source.startsWith('/Files/')) raw = source.slice('/Files/'.length);
+  else if (source.startsWith('/files/download?')) {
+    try {
+      // URLSearchParams already decodes once. Decoding it again would turn a
+      // literal "%20" in a filename into a space when an old link is renewed.
+      raw = new URL(source, 'http://pop.invalid').searchParams.get('path') ?? undefined;
+      encoded = false;
+    } catch {
+      return undefined;
+    }
+  }
+  if (raw === undefined) return undefined;
+
+  let path: string;
+  try {
+    path = (encoded ? decodeURIComponent(raw) : raw).replace(/^\/+/, '');
+  } catch {
+    return undefined;
+  }
+  if (
+    path.length === 0 ||
+    path.includes('\\') ||
+    path.includes('\0') ||
+    path.split('/').some((part) => part.length === 0 || part === '.' || part === '..')
+  ) {
+    return undefined;
+  }
+  return path;
 }
 
 function PreBlock({ children }: { children?: ReactNode }) {
