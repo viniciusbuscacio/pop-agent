@@ -283,6 +283,22 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('dropped');
   });
 
+  it('quits in the background one hour after the stream drops', () => {
+    vi.useFakeTimers();
+    try {
+      const { terminal } = recorder();
+      const { screen, onExit } = screenWith(terminal);
+      screen.onStreamEnd();
+
+      vi.advanceTimersByTime(60 * 60 * 1_000 - 1);
+      expect(onExit).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(onExit).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the reasoning hidden until asked', async () => {
     const { terminal, plain } = recorder();
     const { screen } = screenWith(terminal);

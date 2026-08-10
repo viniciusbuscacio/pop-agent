@@ -56,6 +56,7 @@ const HELP = COMMANDS.map(
 /** One fixed-width monochrome glyph, rotated without adding terminal lines. */
 const THINKING_FRAMES = ['◰', '◳', '◲', '◱'] as const;
 const THINKING_FRAME_MS = 140;
+const DISCONNECT_QUIT_MS = 60 * 60 * 1_000;
 
 export interface ScreenOptions {
   session: ChatSession;
@@ -88,6 +89,7 @@ export class ChatScreen {
   /** Placeholder occupying the exact position where the answer will grow. */
   private activity: Text | undefined;
   private activityTimer: ReturnType<typeof setInterval> | undefined;
+  private disconnectQuitTimer: ReturnType<typeof setTimeout> | undefined;
   private activityFrame = 0;
   private thinkingShown = false;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
@@ -141,6 +143,8 @@ export class ChatScreen {
 
   quit(): void {
     this.stopActivity(false);
+    if (this.disconnectQuitTimer !== undefined) clearTimeout(this.disconnectQuitTimer);
+    this.disconnectQuitTimer = undefined;
     this.tui.stop();
     if (this.options.onExit !== undefined) return this.options.onExit();
     process.exit(0);
@@ -268,6 +272,13 @@ export class ChatScreen {
   onStreamEnd(): void {
     this.stopActivity(true);
     this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
+    // A dead interactive terminal can otherwise remain open indefinitely.
+    // Give the user an hour to read/copy anything before doing the same clean
+    // shutdown as `/quit`; unref keeps this safety timer from prolonging a
+    // process that is already able to end on its own.
+    if (this.disconnectQuitTimer !== undefined) return;
+    this.disconnectQuitTimer = setTimeout(() => this.quit(), DISCONNECT_QUIT_MS);
+    this.disconnectQuitTimer.unref();
   }
 
   private startActivity(): void {
