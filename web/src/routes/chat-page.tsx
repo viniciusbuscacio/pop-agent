@@ -211,6 +211,16 @@ export function ChatPage() {
         data-testid="chat-scroller"
         className="relative flex-1 overflow-y-auto"
       >
+        {messages?.length === 0 && live === undefined ? (
+          <div
+            data-testid="empty-chat-icon"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <img src="/icon.svg" alt="" className="h-24 w-24 select-none" />
+          </div>
+        ) : null}
+
         <div className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
           {(messages ?? []).map((message, index, history) => {
             const source = resendSource(history, index);
