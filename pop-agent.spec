@@ -709,6 +709,15 @@ selection is 100% local, no LLM call:
   user lock themselves out by refreshing the page.
 - Frontend storage: `sessionStorage` by default; "Keep me signed in"
   checkbox → `localStorage` (essential on mobile PWA).
+- **Pop Desktop Manager session (macOS):** the manager authenticates through
+  the same `POST /v1/login { password }` contract and stores only the returned
+  session token as a macOS Generic Password. Service is
+  `com.wails.pop-desktop-manager`; account is the normalized server origin.
+  The password is request-only and is never persisted. Startup validates the
+  token against a guarded endpoint, replaces it when
+  `x-pop-agent-token` renews the session, distinguishes an unreachable server
+  from `invalid_session`, and deletes an invalid token. This introduces no
+  second device credential or authentication protocol.
 - **Biometric unlock via WebAuthn/passkey** (Face ID on iOS 16+ installed
   PWA; fingerprint/face on any recent Android Chrome — same code): after a
   password login, Settings offers "Enable Face ID unlock" →
