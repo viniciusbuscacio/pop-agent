@@ -273,7 +273,7 @@ function piBridge(): PiAgentBridge {
       userMemory: context.userMemory,
       files,
       skills: skillsVault,
-      autoApproveSkills: () => settings.read().autoApproveSkills,
+      autoSkillMode: () => settings.read().autoSkillMode,
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: `mcp_${server.id.replace(/[^a-zA-Z0-9]/g, '_')}_${capability.name.replace(/[^a-zA-Z0-9_]/g, '_')}`,
         label: `${server.name}: ${capability.name}`,
@@ -471,8 +471,7 @@ const taskScheduler = new TaskScheduler({
       // a run (pop-agent.spec §15).
       complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
       clock: systemClock,
-      enabled: () => settings.read().distillSkills,
-      autoApprove: () => settings.read().autoApproveSkills,
+      mode: () => settings.read().autoSkillMode,
       everyMs: () => settings.read().distillIntervalMinutes * 60_000,
       onJournal: (line) => console.log(line),
     }),
@@ -581,7 +580,7 @@ const app = createApp({
   skillRevisions: context.skillRevisions,
   skillArchive: skillsVault,
   distillation: context.distillation,
-  distillerEnabled: () => settings.read().distillSkills,
+  distillerEnabled: () => settings.read().autoSkillMode !== 'disabled',
   mcp,
   usage: context.usage,
   hands,

@@ -9,7 +9,7 @@ export const SELF_MAP = [
   "server/src, clean architecture -- dependencies point inward only:",
   "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (70 modules)",
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
-  "- `domain/` -- entities, value objects and pure services -- the innermost layer (14 modules)",
+  "- `domain/` -- entities, value objects and pure services -- the innermost layer (15 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (65 modules)",
   "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (30 modules)",
   "- `manager/` -- see pop-agent.spec (3 modules)",
@@ -18,6 +18,6 @@ export const SELF_MAP = [
   "## UI map (generated)",
   "",
   "PWA routes: /setup, /login, /recover, /settings/*, /, /chat/:chatId, /files, /files/trash, /files/*, /tasks, /tasks/new, /tasks/:taskId, /skills, /skills/new, /skills/:slug, /mcp, /mcp/new, /mcp/:id.",
-  "Settings sections: Server, General, Model, Audio, Memory, Usage, Storage, Backup, Appearance, Security, About, Updates.",
+  "Settings sections: Server, General, Model, Audio, Auto-skills, Memory, Usage, Storage, Backup, Appearance, Security, About, Updates.",
   "Deep links: /settings?section=<name> opens a section directly.",
 ].join('\n');

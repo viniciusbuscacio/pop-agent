@@ -398,13 +398,19 @@ selection is 100% local, no LLM call:
   bricked up. Reading is not a consolation prize: "which skills do you have?"
   is an ordinary question, and answering it changes nothing.
   No argument could make that safe.
-- **Approval is a setting**, `autoApproveSkills`, **default off**. Off means
-  a distilled skill is saved complete but held out of the router until the
-  user accepts it on the Skills screen. The router filters `pending` — that
-  filter is the whole promise; without it the screen would say "waiting"
-  about a skill already in use. Named for the ON state so that "off" reads
-  as the cautious one it is: this flag is the declared mitigation against a
-  prompt injection earning a permanent place in future prompts.
+- **Auto-skill policy is one setting**, `autoSkillMode`, in **Settings →
+  Auto-skills**. It has three values: `disabled` (factory default: the
+  distiller does not run and creates nothing), `medium` (low-impact candidates
+  from a window with no external tool content go live; external, operational
+  and revision candidates wait for approval), and `full` (every candidate
+  that cleared the mandatory barrier goes live). Full means full automation,
+  never no safety: taint refusal, secret scrubbing, candidate validation,
+  duplicate handling, the ban on replacing `user`/`builtin` skills, router
+  relevance and the collector cap apply to both enabled modes. The router
+  filters `pending`; without that filter medium mode would say "waiting" about
+  a skill already in use. Existing two-boolean documents migrate losslessly:
+  distillation off → disabled, on plus manual approval → medium, and on plus
+  automatic approval → full.
 - **Endpoint**: `POST /v1/skills/:slug/approve` — a POST with no body,
   because the only thing being said is yes.
 - **The background distiller** (fase c, built 1.61) reads what nobody
@@ -470,10 +476,10 @@ selection is 100% local, no LLM call:
   instead of the vault, and the approved version keeps serving the router
   until the user accepts the new one
   (`POST /v1/skills/:slug/revision/approve`, `DELETE .../revision`).
-  `autoApproveSkills` governs this path too: without it the pending flag
-  would guard the front door while the update path stood open, and an
-  injection distilled as "a better version of a skill you already trust"
-  would walk in. The similarity is stored because 0.90 was chosen without
+  The selected auto-skill mode governs this path too. Medium holds every
+  revision for approval; full may update only an existing `auto` skill after
+  the same mandatory barrier. Without that rule the pending flag would guard
+  the front door while the update path stood open. The similarity is stored because 0.90 was chosen without
   data and that column is the data that will retune it. The number written
   is **measured or absent** (1.72): a slug collision used to record a
   hardcoded 1 — a perfect score no measurement produced, in exactly the
@@ -1866,12 +1872,12 @@ is set by hand and moves only when the wire changes.
   candidate matching an existing skill (slug, or 0.90 cosine) lands in
   `skill_revisions` rather than the vault, so the approved version keeps
   serving the router until the user accepts the rewrite —
-  `autoApproveSkills` governs the update path too, without which the pending
+  the approval policy governs the update path too, without which the pending
   flag would guard the front door and leave the update path open. The
   collector is a cap (50 auto-skills, least used archived to
   `skills/_archive/`, never deleted), which keeps the annual procedure that
-  any "idle for 90 days" rule would destroy. Settings gains `distillSkills`
-  (on) and `distillIntervalMinutes` (10); the Skills screen gains the two
+  any "idle for 90 days" rule would destroy. The original Settings gained
+  `distillSkills` (on) and `distillIntervalMinutes` (10); the Skills screen gains the two
   queues, the archive, and one status line — no card, no push.
 - 1.60 (2026-08-07): **Auto-skill fase (b), the router rebuilt on RRF, and
   the Service Model corrected to a per-provider pair (§2, §6, §7, §8, §15).**

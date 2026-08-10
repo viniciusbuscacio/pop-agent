@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_PROMPT } from './pi-engine.js';
+import { SYSTEM_PROMPT, autoSkillModeInstruction } from './pi-engine.js';
 
 describe('Pop Agent system prompt', () => {
   it('treats a committed clean checkout as part of completing a self-change', () => {
@@ -8,5 +8,11 @@ describe('Pop Agent system prompt', () => {
     expect(SYSTEM_PROMPT).toContain('commit only the related files');
     expect(SYSTEM_PROMPT).toContain('verify the resulting git status');
     expect(SYSTEM_PROMPT).toContain('After a timeout or resumed turn, inspect the real repository state');
+  });
+
+  it('describes explicit skill requests truthfully for every mode', () => {
+    expect(autoSkillModeInstruction('disabled')).toContain('disabled');
+    expect(autoSkillModeInstruction('medium')).toContain('low-risk');
+    expect(autoSkillModeInstruction('full')).toContain('activated automatically');
   });
 });

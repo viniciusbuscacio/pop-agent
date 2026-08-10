@@ -186,10 +186,8 @@ export interface SettingsDTO {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
-  /** Whether a distilled skill enters the router without being accepted (§8). */
-  autoApproveSkills: boolean;
-  /** Whether the background distiller reads finished conversations (§8, fase c). */
-  distillSkills: boolean;
+  /** Background auto-skill policy: off, selective automatic approval, or full automatic approval (§8). */
+  autoSkillMode: 'disabled' | 'medium' | 'full';
   /** Minutes between its ticks; one conversation per tick is the cost ceiling. */
   distillIntervalMinutes: number;
   /** Activate a gate-verified local commit automatically after work drains. */

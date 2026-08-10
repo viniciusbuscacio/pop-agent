@@ -30,6 +30,7 @@ import { buildNoteTools } from '../notes/note-tools.js';
 import { buildTaskTools } from './task-tools.js';
 import { buildSkillTools } from '../skills/skill-tools.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
+import type { AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
 
@@ -72,13 +73,11 @@ export const SYSTEM_PROMPT = [
   // Skills left the conversation entirely (pop-agent.spec §8, 1.66). Without this
   // line the model, asked to make one and holding no tool for it, improvises --
   // and improvising here means claiming it saved something it did not.
-  'You do not write skills yourself. Pop Agent reads finished conversations in the',
-  'background and distils them, and a skill appears on the Skills screen for the',
-  'user to accept. So never announce that you are creating, considering or',
-  'declining to create a skill -- it is not your decision and saying it out loud',
-  'is noise. If the user asks for one, say plainly that it will be picked up',
-  'shortly and will wait for them on the Skills screen; do not claim it exists',
-  'yet. Questions ABOUT skills are ordinary questions: answer them, with',
+  'You do not write skills yourself. Background auto-skill behavior is controlled',
+  'by Settings. Never announce that you are creating, considering or declining to',
+  'create a skill -- it is not your decision and saying it out loud is noise. If',
+  'the user asks for one, follow the auto-skill mode instruction below and never',
+  'claim it exists yet. Questions ABOUT skills are ordinary questions: answer them, with',
   'skills_list if it helps.',
   // Completion must not depend on the optional skill router recognizing that an
   // indirect request (for example, "apply item 5") changes Pop Agent itself.
@@ -88,6 +87,16 @@ export const SYSTEM_PROMPT = [
   'before its commit exists. After a timeout or resumed turn, inspect the real',
   'repository state before saying that tests or the commit were completed.',
 ].join(' ');
+
+export function autoSkillModeInstruction(mode: AutoSkillMode): string {
+  if (mode === 'disabled') {
+    return 'Auto-skills are disabled. If the user asks for one, say they can enable auto-skills in Settings.';
+  }
+  if (mode === 'full') {
+    return 'Auto-skills are fully enabled. If the user explicitly asks for one, say it will be picked up shortly and activated automatically after the baseline safety checks.';
+  }
+  return 'Auto-skills are enabled in Medium mode. If the user explicitly asks for one, say it will be picked up shortly; low-risk skills activate automatically and others wait on the Skills screen.';
+}
 
 export type PiEngineErrorCode = 'provider_not_configured' | 'model_not_available';
 
@@ -255,12 +264,8 @@ export interface SdkPiEngineOptions {
    * one when the user asks (pop-agent.spec §8, auto-skill fase b).
    */
   skills?: SkillsRepo;
-  /**
-   * Whether a skill the agent distils goes live immediately (pop-agent.spec §8).
-   * A thunk, so Settings takes effect on the next skill written rather than
-   * on the next restart.
-   */
-  autoApproveSkills?: () => boolean;
+  /** Current background auto-skill policy, read whenever a session opens (§8). */
+  autoSkillMode?: () => AutoSkillMode;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
   /**
@@ -346,7 +351,7 @@ export class SdkPiEngine implements PiEngine {
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: `${SYSTEM_PROMPT} ${autoSkillModeInstruction(this.options.autoSkillMode?.() ?? 'disabled')}`,
       extensionFactories: [
         (pi: ExtensionAPI) => {
           const onToolCall = async (event: ToolCallEvent): Promise<ToolCallEventResult> => {

@@ -1,3 +1,4 @@
+import type { AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
 import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
@@ -24,21 +25,8 @@ export interface AppSettings {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
-  /**
-   * Whether a skill Pop Agent distils from a conversation goes straight into the
-   * router (pop-agent.spec §8). Off -- the factory default -- means it is saved but
-   * held until the user accepts it on the Skills screen. Named for the ON
-   * state so that "off" reads as the cautious one it is: this flag is the
-   * declared mitigation against a prompt injection earning a permanent place
-   * in future prompts.
-   */
-  autoApproveSkills: boolean;
-  /**
-   * Whether the background distiller reads finished conversations at all
-   * (pop-agent.spec §8, fase c). On by default: a tick with nothing idle and unread
-   * makes no provider call, so the cost follows use and vanishes with it.
-   */
-  distillSkills: boolean;
+  /** Background learning and how far a baseline-safe candidate may go (§8). */
+  autoSkillMode: AutoSkillMode;
   /**
    * Minutes between its ticks. One conversation per tick is the cost ceiling,
    * so this is the dial that sets it. Ten while the feature is new; the
@@ -59,8 +47,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoApproveSkills: false,
-  distillSkills: true,
+  autoSkillMode: 'disabled',
   distillIntervalMinutes: 10,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
@@ -68,13 +55,43 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 const SETTINGS_KEY = 'app';
 
+interface LegacySkillSettings {
+  autoApproveSkills?: boolean;
+  distillSkills?: boolean;
+}
+
+function isAutoSkillMode(value: unknown): value is AutoSkillMode {
+  return value === 'disabled' || value === 'medium' || value === 'full';
+}
+
+function legacyAutoSkillMode(settings: LegacySkillSettings): AutoSkillMode {
+  if (settings.distillSkills !== true) return 'disabled';
+  return settings.autoApproveSkills === true ? 'full' : 'medium';
+}
+
+function withoutLegacyFields(
+  settings: Partial<AppSettings> & LegacySkillSettings,
+): Partial<AppSettings> {
+  const current = { ...settings } as Record<string, unknown>;
+  delete current.autoApproveSkills;
+  delete current.distillSkills;
+  return current as Partial<AppSettings>;
+}
+
 export class SettingsService {
   constructor(private readonly repo: SettingsRepo) {}
 
   read(): AppSettings {
     // Spread over the defaults: a document saved before a field existed still
-    // answers with every field.
-    return { ...DEFAULT_SETTINGS, ...this.repo.get<Partial<AppSettings>>(SETTINGS_KEY) };
+    // answers with every field. The two legacy booleans map losslessly onto the
+    // three modes, so upgrading never changes an existing owner's policy.
+    const stored = this.repo.get<Partial<AppSettings> & LegacySkillSettings>(SETTINGS_KEY);
+    if (stored === undefined) return DEFAULT_SETTINGS;
+
+    const autoSkillMode = isAutoSkillMode(stored.autoSkillMode)
+      ? stored.autoSkillMode
+      : legacyAutoSkillMode(stored);
+    return { ...DEFAULT_SETTINGS, ...withoutLegacyFields(stored), autoSkillMode };
   }
 
   /** Full replace: callers send the whole object, so there is no merge to reason about. */

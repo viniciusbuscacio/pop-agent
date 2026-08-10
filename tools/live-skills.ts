@@ -202,8 +202,7 @@ async function main(): Promise<void> {
       return result.text;
     },
     clock: { now: () => Date.now() },
-    enabled: () => true,
-    autoApprove: () => false,
+    mode: () => 'medium',
     everyMs: () => 600_000,
     idleMs: 0,
     onJournal: (line) => console.log(`  ${line}`),

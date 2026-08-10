@@ -176,8 +176,7 @@ function harness(options: {
   messages?: Record<string, Message[]>;
   skills?: Skill[];
   answer?: string | (() => Promise<string>);
-  autoApprove?: boolean;
-  enabled?: boolean;
+  mode?: 'disabled' | 'medium' | 'full';
   embedder?: Embedder;
   vectors?: StoredSkillVector[];
   tailReads?: { count: number };
@@ -208,8 +207,7 @@ function harness(options: {
       return typeof answer === 'string' ? Promise.resolve(answer) : answer();
     },
     clock: { now: () => NOW },
-    enabled: () => options.enabled ?? true,
-    autoApprove: () => options.autoApprove ?? false,
+    mode: () => options.mode ?? 'medium',
     everyMs: () => 600_000,
     onJournal: (line) => journal.push(line),
   });
@@ -235,11 +233,46 @@ describe('SkillDistiller', () => {
     });
   });
 
-  it('lets a skill go live when the user turned approval on', async () => {
-    world = harness({ autoApprove: true });
+  it('lets a skill go live in full mode', async () => {
+    world = harness({ mode: 'full' });
     await world.distiller.run();
 
     expect(world.skills.written[0]).toMatchObject({ pending: false });
+  });
+
+  it('automatically accepts only a low-impact first-party skill in medium mode', async () => {
+    world = harness({
+      mode: 'medium',
+      answer: ANSWER
+        .replace('deploy-blog', 'banana-farofa')
+        .replace('Deploy the blog', 'Make banana farofa')
+        .replace('How to publish a post', 'Make a simple banana farofa')
+        .replace('when the user wants to publish', 'when the user asks for banana farofa')
+        .replace('Push to main.', 'Brown the banana, add flour, season, and serve.'),
+    });
+    await world.distiller.run();
+
+    expect(world.skills.written[0]).toMatchObject({ slug: 'banana-farofa', pending: false });
+  });
+
+  it('holds a baseline-safe skill sourced from a tool in medium mode', async () => {
+    world = harness({
+      mode: 'medium',
+      messages: {
+        c1: [message('m1', 'make this a reusable recipe', [
+          { name: 'read', status: 'done', detail: 'Brown the banana and add flour.' },
+        ])],
+      },
+      answer: ANSWER
+        .replace('deploy-blog', 'banana-farofa')
+        .replace('Deploy the blog', 'Make banana farofa')
+        .replace('How to publish a post', 'Make a simple banana farofa')
+        .replace('when the user wants to publish', 'when the user asks for banana farofa')
+        .replace('Push to main.', 'Brown the banana, add flour, season, and serve.'),
+    });
+    await world.distiller.run();
+
+    expect(world.skills.written[0]).toMatchObject({ slug: 'banana-farofa', pending: true });
   });
 
   it('moves the watermark past a conversation it has read', async () => {
@@ -280,7 +313,7 @@ describe('SkillDistiller', () => {
   });
 
   it('does nothing at all when it is switched off', async () => {
-    world = harness({ enabled: false });
+    world = harness({ mode: 'disabled' });
     await world.distiller.run();
 
     expect(world.prompts).toHaveLength(0);
@@ -413,7 +446,7 @@ describe('SkillDistiller', () => {
 
   it('applies the rewrite directly when approval is off', async () => {
     world = harness({
-      autoApprove: true,
+      mode: 'full',
       skills: [
         {
           slug: 'deploy-blog',

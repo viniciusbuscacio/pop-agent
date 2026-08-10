@@ -242,6 +242,7 @@ export const en = {
   'provider.signInAgain': 'Sign in again',
   'settings.section.model': 'Model',
   'settings.section.audio': 'Audio',
+  'settings.section.autoSkills': 'Auto-skills',
   'settings.section.memory': 'Memory',
   'settings.section.usage': 'Usage',
   'settings.section.storage': 'Storage',
@@ -296,12 +297,18 @@ export const en = {
   'skills.approve': 'Accept',
   'skills.used': 'used {count}x',
   'skills.neverUsed': 'never used yet',
-  'skills.autoApprove': 'Accept learned skills automatically',
-  'skills.autoApproveNote':
-    'Off: a skill Pop Agent distils from a conversation waits here for you. On: it goes straight into use. Off is safer — it is what stops something Pop Agent read on the web from writing itself into every future conversation.',
-  'skills.distill': 'Learn skills from conversations on your own',
-  'skills.distillNote':
-    'Pop Agent reads a conversation that has gone quiet and keeps what was a reusable procedure. A round with nothing new to read costs nothing.',
+  'settings.autoSkills.mode': 'Auto-skill mode',
+  'settings.autoSkills.disabled': 'Disabled',
+  'settings.autoSkills.medium': 'Enabled — Medium',
+  'settings.autoSkills.full': 'Enabled — Full',
+  'settings.autoSkills.disabledHint':
+    'Default. Pop Agent does not run the background process or create new auto-skills.',
+  'settings.autoSkills.mediumHint':
+    'Low-risk first-party skills activate automatically. External, operational, and revision candidates wait for your approval.',
+  'settings.autoSkills.fullHint':
+    'Every valid candidate activates automatically after the mandatory safety checks.',
+  'settings.autoSkills.protections':
+    'Safety checks always remain active: suspicious external content is refused, secrets are scrubbed, candidates are validated, and personal or built-in skills cannot be replaced.',
   'skills.distillInterval': 'How often to look',
   'skills.distillIntervalNote': 'One conversation each time, so this is what it can cost.',
   'skills.distillEvery': 'every {minutes} min',

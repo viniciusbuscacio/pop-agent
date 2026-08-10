@@ -8,6 +8,7 @@ import {
   type SkillCandidate,
 } from '../../domain/skills/distillation.js';
 import { vocabularyOverlap } from '../../domain/skills/skill-router.js';
+import { autoApproveSkill, type AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
 import { asksForSkill } from '../../domain/skills/skill-request.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -102,8 +103,7 @@ export interface SkillDistillerDeps {
   ) => Promise<string>;
   clock: Clock;
   /** Read per tick, so Settings takes effect on the next one, not the next boot. */
-  enabled: () => boolean;
-  autoApprove: () => boolean;
+  mode: () => AutoSkillMode;
   everyMs: () => number;
   idleMs?: number;
   onJournal?: (line: string) => void;
@@ -135,7 +135,8 @@ export class SkillDistiller implements MaintenanceJob {
   }
 
   async run(): Promise<void> {
-    if (!this.deps.enabled()) return;
+    const mode = this.deps.mode();
+    if (mode === 'disabled') return;
 
     const chats = [
       ...this.deps.chats.list({ archived: false }),
@@ -154,7 +155,9 @@ export class SkillDistiller implements MaintenanceJob {
     // and the whole conversation is skipped, permanently. The alternative --
     // distilling the clean part -- assumes the injection stayed where it was
     // read, and a prompt injection's whole purpose is not to.
-    const verdict = sanitize(window.map((message) => externalContentOf(message)).join('\n'));
+    const externalContent = window.map((message) => externalContentOf(message)).join('\n');
+    const hasExternalContent = externalContent.trim().length > 0;
+    const verdict = sanitize(externalContent);
     if (verdict.riskLevel !== 'low') {
       this.advance(chat.id, lastId);
       journal(`chat=${chat.id} skipped (tainted: ${verdict.riskLevel})`);
@@ -202,7 +205,7 @@ export class SkillDistiller implements MaintenanceJob {
 
     const outcomes: string[] = [];
     for (const candidate of candidates) {
-      outcomes.push(await this.land(scrubCandidate(candidate)));
+      outcomes.push(await this.land(scrubCandidate(candidate), mode, hasExternalContent));
     }
     this.advance(chat.id, lastId);
     journal(`chat=${chat.id} ${outcomes.join(' ')}`);
@@ -268,8 +271,8 @@ export class SkillDistiller implements MaintenanceJob {
   }
 
   /**
-   * Where one candidate ends up: a new skill held for approval, a revision of
-   * one that already exists, or nothing. The slug decides before the vectors,
+   * Where one candidate ends up: live, held for approval, proposed as a revision,
+   * or rejected. The slug decides before the vectors,
    * because two skills sharing an id is not a similarity question -- but the
    * candidate is measured FIRST anyway: the revision table is the dataset the
    * dedup bars get retuned from, and the cosine is real or it is not written.
@@ -277,11 +280,22 @@ export class SkillDistiller implements MaintenanceJob {
    * score no measurement ever produced, in exactly the column that must stay
    * honest.
    */
-  private async land(candidate: SkillCandidate): Promise<string> {
+  private async land(
+    candidate: SkillCandidate,
+    mode: AutoSkillMode,
+    hasExternalContent: boolean,
+  ): Promise<string> {
     const existing = this.deps.skills.get(candidate.slug);
     const measured = await this.measure(candidate, existing?.slug);
     if (existing !== undefined) {
-      return this.propose(candidate, existing.slug, measured.against, `${candidate.slug}=revision(slug)`);
+      return this.propose(
+        candidate,
+        existing.slug,
+        measured.against,
+        `${candidate.slug}=revision(slug)`,
+        mode,
+        hasExternalContent,
+      );
     }
 
     // Already filtered on both bars; anything that came back is a match.
@@ -292,10 +306,12 @@ export class SkillDistiller implements MaintenanceJob {
         match.slug,
         match.score,
         `${match.slug}=revision(${match.score.toFixed(2)})`,
+        mode,
+        hasExternalContent,
       );
     }
 
-    const live = this.deps.autoApprove();
+    const live = autoApproveSkill(mode, { candidate, hasExternalContent, revision: false });
     try {
       this.deps.skills.write({
         slug: candidate.slug,
@@ -327,8 +343,8 @@ export class SkillDistiller implements MaintenanceJob {
   }
 
   /**
-   * A revision proposal -- or, when the user turned approval off, the edit
-   * itself. `source` is passed through explicitly so applying a revision does
+   * A revision proposal -- or, in full mode, the edit itself. `source` is
+   * passed through explicitly so applying a revision does
    * not read as a human edit: the vault promotes an auto skill to `user` when
    * it is edited, and the distiller rewriting its own work is not that.
    * `similarity` is written only when actually measured (never a constant).
@@ -338,6 +354,8 @@ export class SkillDistiller implements MaintenanceJob {
     slug: string,
     similarity: number | undefined,
     label: string,
+    mode: AutoSkillMode,
+    hasExternalContent: boolean,
   ): string {
     const current = this.deps.skills.get(slug);
     if (current === undefined) return `${slug}=gone`;
@@ -350,7 +368,7 @@ export class SkillDistiller implements MaintenanceJob {
     // a wrong target was reachable at all.
     if (current.source !== 'auto') return `${slug}=${current.source},skipped`;
 
-    if (this.deps.autoApprove()) {
+    if (autoApproveSkill(mode, { candidate, hasExternalContent, revision: true })) {
       this.deps.skills.write({
         slug,
         name: candidate.name,

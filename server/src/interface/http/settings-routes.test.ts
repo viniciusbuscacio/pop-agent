@@ -40,8 +40,7 @@ const DEFAULT_DOC = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoApproveSkills: false,
-  distillSkills: true,
+  autoSkillMode: 'disabled',
   distillIntervalMinutes: 10,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
@@ -86,6 +85,25 @@ describe('PUT /v1/settings', () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe('invalid_field');
+  });
+
+  it('accepts each auto-skill mode', async () => {
+    for (const autoSkillMode of ['disabled', 'medium', 'full']) {
+      const res = await authed('/v1/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ...DEFAULT_DOC, autoSkillMode }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).autoSkillMode).toBe(autoSkillMode);
+    }
+  });
+
+  it('rejects an unsupported auto-skill mode', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, autoSkillMode: 'unsafe' }),
+    });
+    expect(res.status).toBe(400);
   });
 
   it('rejects an unsupported language', async () => {

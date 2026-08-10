@@ -43,6 +43,7 @@ type Section =
   | 'general'
   | 'model'
   | 'audio'
+  | 'auto-skills'
   | 'memory'
   | 'usage'
   | 'storage'
@@ -57,6 +58,7 @@ const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'general', labelKey: 'settings.section.general' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'audio', labelKey: 'settings.section.audio' },
+  { id: 'auto-skills', labelKey: 'settings.section.autoSkills' },
   { id: 'memory', labelKey: 'settings.section.memory' },
   { id: 'usage', labelKey: 'settings.section.usage' },
   { id: 'storage', labelKey: 'settings.section.storage' },
@@ -124,6 +126,7 @@ export function SettingsPage() {
           {section === 'general' ? <GeneralSection /> : null}
           {section === 'model' ? <ProvidersSection /> : null}
           {section === 'audio' ? <AudioSection /> : null}
+          {section === 'auto-skills' ? <AutoSkillsSection /> : null}
           {section === 'memory' ? <MemorySection /> : null}
           {section === 'usage' ? <UsageSection /> : null}
           {section === 'storage' ? <StorageSection /> : null}
@@ -713,8 +716,6 @@ export function SkillsSection() {
         </div>
       </Card>
 
-      <AutoApproveSkills />
-
       {/* One discreet line, never a card: the money already has a home in
           Settings → Usage, so all this has to say is when Pop Agent last looked and
           how much is waiting on the reader. */}
@@ -926,17 +927,8 @@ function AudioSection() {
  * (decision of 31/07): the raw text lands in the composer in whisper time;
  * turning this on trades ~10s+ per note for punctuation fixes.
  */
-/**
- * Whether a skill Pop Agent distils from a conversation goes live on its own
- * (pop-agent.spec §8). It sits on the Skills screen rather than in General because
- * this is where its consequence is visible: turn it off and skills queue here
- * for a tap; turn it on and they simply appear, already in use.
- *
- * Default off, and the hint says why rather than just what: this flag is the
- * declared brake on a prompt injection earning a permanent place in future
- * prompts, which is not something a user can infer from its name.
- */
-function AutoApproveSkills() {
+/** The three background-learning policies live in Settings, not in the inbox they fill. */
+function AutoSkillsSection() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
 
   useEffect(() => {
@@ -957,44 +949,55 @@ function AutoApproveSkills() {
       .catch(() => undefined);
   }
 
+  const modeHint =
+    settings.autoSkillMode === 'disabled'
+      ? t('settings.autoSkills.disabledHint')
+      : settings.autoSkillMode === 'medium'
+        ? t('settings.autoSkills.mediumHint')
+        : t('settings.autoSkills.fullHint');
+
   return (
-    <Card className="flex flex-col gap-4">
-      <CheckField
-        id="skills-auto-approve"
-        testId="skills-auto-approve"
-        label={t('skills.autoApprove')}
-        hint={t('skills.autoApproveNote')}
-        checked={settings.autoApproveSkills}
-        onChange={(checked) => save({ autoApproveSkills: checked })}
-      />
-
-      <CheckField
-        id="skills-distill"
-        testId="skills-distill"
-        label={t('skills.distill')}
-        hint={t('skills.distillNote')}
-        checked={settings.distillSkills}
-        onChange={(checked) => save({ distillSkills: checked })}
-      />
-
-      {settings.distillSkills ? (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-4">
         <Select
-          id="skills-distill-interval"
-          data-testid="skills-distill-interval"
-          label={t('skills.distillInterval')}
-          hint={t('skills.distillIntervalNote')}
-          className="w-48"
-          value={String(settings.distillIntervalMinutes)}
-          onChange={(event) => save({ distillIntervalMinutes: Number(event.target.value) })}
+          id="settings-auto-skill-mode"
+          data-testid="settings-auto-skill-mode"
+          label={t('settings.autoSkills.mode')}
+          hint={modeHint}
+          className="w-full max-w-md"
+          value={settings.autoSkillMode}
+          onChange={(event) => save({
+            autoSkillMode: event.target.value as SettingsDTO['autoSkillMode'],
+          })}
         >
-          {DISTILL_INTERVALS.map((minutes) => (
-            <option key={minutes} value={minutes}>
-              {t('skills.distillEvery', { minutes })}
-            </option>
-          ))}
+          <option value="disabled">{t('settings.autoSkills.disabled')}</option>
+          <option value="medium">{t('settings.autoSkills.medium')}</option>
+          <option value="full">{t('settings.autoSkills.full')}</option>
         </Select>
-      ) : null}
-    </Card>
+
+        <p className="text-sm text-[var(--muted)]">{t('settings.autoSkills.protections')}</p>
+      </Card>
+
+      {settings.autoSkillMode === 'disabled' ? null : (
+        <Card>
+          <Select
+            id="skills-distill-interval"
+            data-testid="skills-distill-interval"
+            label={t('skills.distillInterval')}
+            hint={t('skills.distillIntervalNote')}
+            className="w-48"
+            value={String(settings.distillIntervalMinutes)}
+            onChange={(event) => save({ distillIntervalMinutes: Number(event.target.value) })}
+          >
+            {DISTILL_INTERVALS.map((minutes) => (
+              <option key={minutes} value={minutes}>
+                {t('skills.distillEvery', { minutes })}
+              </option>
+            ))}
+          </Select>
+        </Card>
+      )}
+    </div>
   );
 }
 
