@@ -129,7 +129,7 @@ export function ChatPage() {
       setMissed((count) => count + 1);
       setShowJump(true);
     }
-  }, [messages?.length, streamedLength]);
+  }, [messages?.length, queued?.id, streamedLength]);
 
   // "Is the reader at the bottom?" with aw's tolerance: generous enough that
   // a bounce or an address-bar resize keeps follow mode.
@@ -264,6 +264,18 @@ export function ChatPage() {
                 }}
               />
             )
+          ) : null}
+
+          {queued?.deliveryMode === 'steer' ? (
+            <ChatMessage
+              message={{
+                role: 'user',
+                content: queued.text,
+                thinking: '',
+                tools: [],
+                attachments: queued.attachments,
+              }}
+            />
           ) : null}
 
           {confirm !== undefined ? (

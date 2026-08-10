@@ -492,16 +492,13 @@ export function Composer({
         addFiles(event.dataTransfer.files);
       }}
     >
-      {queuedMessage !== undefined ? (
+      {queuedMessage?.deliveryMode === 'follow_up' ? (
         <div
           data-testid="composer-queued"
           className="mb-2 flex items-center gap-2 rounded bg-[var(--panel-bg)] px-2 py-1.5 text-xs text-[var(--muted)]"
         >
           <span className="min-w-0 flex-1 truncate">
-            {t(
-              queuedMessage.deliveryMode === 'follow_up' ? 'chat.queued' : 'chat.steering',
-              { text: queuedMessage.text },
-            )}
+            {t('chat.queued', { text: queuedMessage.text })}
           </span>
           <button
             type="button"

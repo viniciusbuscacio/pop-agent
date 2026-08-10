@@ -125,7 +125,6 @@ export const en = {
   'chat.ranTools': 'Ran {count} tools',
   'chat.toolFailed': 'failed',
   'chat.queued': 'After this run: {text}',
-  'chat.steering': 'Guiding this run: {text}',
   'chat.answering': 'Answering…',
   'chat.waitingTurn': 'Waiting for a free slot…',
   'chat.stopped': 'You stopped this answer.',

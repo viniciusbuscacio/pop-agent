@@ -68,7 +68,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('empty chat icon', () => {
+describe('chat transcript', () => {
   it('appears after an empty chat loads and disappears with the first message', async () => {
     renderPage();
 
@@ -97,5 +97,41 @@ describe('empty chat icon', () => {
 
     await waitFor(() => expect(screen.queryByTestId('empty-chat-icon')).toBeNull());
     expect(screen.getByTestId('chat-message').textContent).toBe('Hello');
+  });
+
+  it('shows pending steering as an ordinary user message after the live answer', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    useChatStore.setState({
+      live: {
+        [chat.id]: {
+          runId: 'run-1',
+          status: 'running',
+          seq: 1,
+          content: 'Answer in progress',
+          thinking: '',
+          tools: [],
+        },
+      },
+      queued: {
+        [chat.id]: {
+          id: 'steer-1',
+          chatId: chat.id,
+          text: 'Change course',
+          deliveryMode: 'steer',
+          attachments: [],
+          filePaths: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      },
+    });
+
+    await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(2));
+    expect(screen.getAllByTestId('chat-message').map((message) => message.textContent)).toEqual([
+      'Answer in progress',
+      'Change course',
+    ]);
   });
 });
