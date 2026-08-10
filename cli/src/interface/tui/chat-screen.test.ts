@@ -112,7 +112,7 @@ describe('ChatScreen', () => {
     const waiting = { ...emptyRun('chat-1', 'run-1'), status: 'running' as const };
     screen.onRun(waiting);
     await flush();
-    expect(plain()).toMatch(/[◰◳◲◱] Thinking…/);
+    expect(plain()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Thinking…/);
 
     screen.onRun({ ...waiting, text: 'Now there is an answer.' });
     await flush();

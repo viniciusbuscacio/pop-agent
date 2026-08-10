@@ -53,8 +53,8 @@ const HELP = COMMANDS.map(
   (command) => `  /${command.name.padEnd(8)}${command.description ?? ''}`,
 ).join('\n');
 
-/** One fixed-width monochrome glyph, rotated without adding terminal lines. */
-const THINKING_FRAMES = ['◰', '◳', '◲', '◱'] as const;
+/** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
+const THINKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const THINKING_FRAME_MS = 140;
 const DISCONNECT_QUIT_MS = 60 * 60 * 1_000;
 
