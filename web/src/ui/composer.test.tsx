@@ -52,7 +52,7 @@ describe('pending message presentation', () => {
   it('keeps the explicit follow-up queue controls', () => {
     renderComposer(queued('follow_up'));
 
-    expect(screen.getByTestId('composer-queued').textContent).toContain('Change course');
+    expect(screen.getByTestId('composer-queued').textContent).toContain('Queued: Change course');
     expect(screen.getByTestId('queue-edit')).toBeTruthy();
     expect(screen.getByTestId('queue-cancel')).toBeTruthy();
   });

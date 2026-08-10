@@ -129,6 +129,7 @@ describe('chat transcript', () => {
     });
 
     await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(2));
+    expect(screen.getByTestId('message-sending').textContent).toContain('Sending:');
     expect(screen.getAllByTestId('chat-message').map((message) => message.textContent)).toEqual([
       'Answer in progress',
       'Change course',

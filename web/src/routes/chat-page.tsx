@@ -267,15 +267,18 @@ export function ChatPage() {
           ) : null}
 
           {queued?.deliveryMode === 'steer' ? (
-            <ChatMessage
-              message={{
-                role: 'user',
-                content: queued.text,
-                thinking: '',
-                tools: [],
-                attachments: queued.attachments,
-              }}
-            />
+            <div className="flex flex-col items-end gap-1" data-testid="message-sending">
+              <span className="pr-1 text-xs text-[var(--muted)]">{t('chat.sending')}</span>
+              <ChatMessage
+                message={{
+                  role: 'user',
+                  content: queued.text,
+                  thinking: '',
+                  tools: [],
+                  attachments: queued.attachments,
+                }}
+              />
+            </div>
           ) : null}
 
           {confirm !== undefined ? (

@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.76 — 2026-08-09.
+Version 1.77 — 2026-08-09.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -936,8 +936,9 @@ events from stale runs.
   Delivery persists the assistant segment before it, inserts the user bubble,
   advances the FIFO and continues under the same run id. The pending steering
   head is already painted in that transcript position as an ordinary user
-  bubble; it never adds a separate composer status such as “Guiding this run”.
-  Until pi emits that
+  bubble with the quiet status `Sending:`; it never adds a separate composer
+  strip such as “Guiding this run”. The explicit follow-up strip says `Queued:`
+  because that input waits for the current run to finish. Until pi emits that
   user-message event the SQLite row remains authoritative, so a restart or an
   unavailable steering channel degrades into the ordinary follow-up path instead
   of losing input. PUT edits the head and DELETE cancels the head before delivery.
@@ -1630,6 +1631,10 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.77 (2026-08-09): **Pending-message wording reflects delivery (§14).** A
+  steering bubble carries the quiet `Sending:` status because it is entering
+  the current run; the explicit follow-up strip says `Queued:` because it waits
+  until that run ends. Neither label exposes the internal steering vocabulary.
 - 1.76 (2026-08-09): **Steering stays in the transcript (§14).** An ordinary
   message sent during a live answer appears once as a normal user bubble after
   that answer; the redundant “Guiding this run” strip above the composer is
