@@ -640,7 +640,7 @@ export const en = {
   'settings.about.node': 'Node',
   'settings.about.pi': 'pi agent',
   'settings.about.repo': 'Source code',
-  'settings.about.iconCredit': 'App icon based on Tabler Icons (MIT).',
+  'settings.about.iconCredit': 'App icon based on Lucide Icons (ISC). Previous P icon based on Tabler Icons (MIT).',
 
   'settings.updates.title': 'Updates',
   'settings.updates.upToDate': 'Pop Agent is up to date.',
