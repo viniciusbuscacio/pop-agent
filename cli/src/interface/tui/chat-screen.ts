@@ -13,6 +13,7 @@ import {
 } from '@earendil-works/pi-tui';
 import type { ChatSession } from '../../application/session.js';
 import type { RunState } from '../../application/transcript.js';
+import { ApiError } from '../../infrastructure/api.js';
 import { editorTheme, markdownTheme, paint } from './theme.js';
 
 /**
@@ -328,7 +329,13 @@ export class ChatScreen {
       const chatId = this.options.session.currentChatId;
       if (chatId !== undefined) this.options.onChatOpened?.(chatId);
     } catch (error) {
-      this.say(paint.red(error instanceof Error ? error.message : 'That did not send.'));
+      const message =
+        error instanceof ApiError && error.code === 'chat_not_found'
+          ? `${error.message} Type /new to start a new conversation`
+          : error instanceof Error
+            ? error.message
+            : 'That did not send.';
+      this.say(paint.red(message));
     }
   }
 

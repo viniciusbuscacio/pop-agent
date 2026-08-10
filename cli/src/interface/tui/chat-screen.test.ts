@@ -3,6 +3,7 @@ import { Markdown, Text, type Terminal } from '@earendil-works/pi-tui';
 import { markdownTheme } from './theme.js';
 import { ChatSession, type SessionPorts } from '../../application/session.js';
 import { emptyRun } from '../../application/transcript.js';
+import { ApiError } from '../../infrastructure/api.js';
 import { ChatScreen } from './chat-screen.js';
 
 /**
@@ -161,6 +162,21 @@ describe('ChatScreen', () => {
     repaint();
     await flush();
     expect(plain().split('Forty-two.').length - 1).toBe(1);
+  });
+
+  it('points to /new when the open conversation was deleted', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.send).mockRejectedValueOnce(
+      new ApiError('chat_not_found', 'That conversation does not exist.', 404),
+    );
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('still there?');
+    await flush();
+
+    expect(plain()).toContain(
+      'That conversation does not exist. Type /new to start a new conversation',
+    );
   });
 
   it('sends guidance instead of blocking input while an answer is running', async () => {
