@@ -210,6 +210,35 @@ export class SqliteChatRepo implements ChatRepo {
     return rows.reverse().map(toMessage);
   }
 
+  getMessageRange(
+    chatId: string,
+    options: { after?: string; through: string; limit: number },
+  ): Message[] {
+    // Read backwards from the recorded upper boundary so LIMIT keeps the same
+    // tail semantics as the original distillation window, then restore order.
+    const after = options.after;
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM messages
+          WHERE chat_id = ?
+            AND (created_at, rowid) <=
+                (SELECT created_at, rowid FROM messages WHERE id = ? AND chat_id = ?)
+            AND (? IS NULL OR (created_at, rowid) >
+                (SELECT created_at, rowid FROM messages WHERE id = ? AND chat_id = ?))
+       ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      )
+      .all(
+        chatId,
+        options.through,
+        chatId,
+        after ?? null,
+        after ?? '',
+        chatId,
+        options.limit,
+      ) as MessageRow[];
+    return rows.reverse().map(toMessage);
+  }
+
   lastMessageIds(): { chatId: string; lastMessageId?: string }[] {
     // Same ordering getMessages uses for its tail page, so the id compared
     // against the distiller's watermark is exactly the message a tail read

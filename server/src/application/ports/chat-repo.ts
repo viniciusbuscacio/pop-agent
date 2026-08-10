@@ -43,6 +43,12 @@ export interface ChatRepo {
    */
   getMessages(chatId: string, options: { before?: string; limit: number }): Message[];
 
+  /** A bounded historical window, used to repeat one exact distillation attempt. */
+  getMessageRange(
+    chatId: string,
+    options: { after?: string; through: string; limit: number },
+  ): Message[];
+
   /**
    * The newest message id of every chat, in one query (pop-agent.spec §8, fase
    * c). The distiller's tick compares these against its watermarks to find the

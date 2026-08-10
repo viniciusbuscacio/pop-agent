@@ -278,4 +278,35 @@ describe('the distiller queue on /v1/skills', () => {
     expect(body.distiller.lastRunAt).toBeUndefined();
     expect(body.distiller).toMatchObject({ enabled: true, pending: 0, revisions: 0 });
   });
+
+  it('lists why a conversation produced nothing and queues an exact retry', async () => {
+    fixture.distillation.startAttempt({
+      id: 'distillation-source',
+      chatId: 'chat-source',
+      chatTitle: 'Source conversation',
+      fromMessageId: 'm1',
+      throughMessageId: 'm9',
+      trigger: 'automatic',
+      requested: false,
+      startedAt: '2026-08-07T20:00:00.000Z',
+    });
+    fixture.distillation.finishAttempt('distillation-source', {
+      state: 'completed',
+      outcome: 'nothing',
+      finishedAt: '2026-08-07T20:01:00.000Z',
+    });
+
+    const listed = (await (await authed('/v1/skills/distillations')).json()) as {
+      attempts: { id: string; outcome: string; retryable: boolean }[];
+    };
+    expect(listed.attempts[0]).toMatchObject({
+      id: 'distillation-source', outcome: 'nothing', retryable: true,
+    });
+
+    const retried = await authed('/v1/skills/distillations/distillation-source/retry', { method: 'POST' });
+    expect(retried.status).toBe(202);
+    expect(await retried.json()).toMatchObject({
+      state: 'queued', retryOf: 'distillation-source', retryable: false,
+    });
+  });
 });

@@ -27,11 +27,15 @@ function valueOf(testId: string): string {
  */
 
 const list = vi.fn();
+const distillations = vi.fn();
+const retryDistillation = vi.fn();
 const setEnabled = vi.fn();
 
 vi.mock('../services/skills', () => ({
   skillsService: {
     list: () => list() as Promise<SkillsResponse>,
+    distillations: () => distillations() as Promise<{ attempts: unknown[] }>,
+    retryDistillation: (id: string) => retryDistillation(id) as Promise<unknown>,
     save: vi.fn(),
     approve: vi.fn(),
     approveRevision: vi.fn(),
@@ -73,6 +77,10 @@ function Harness() {
 
 beforeEach(() => {
   list.mockReset();
+  distillations.mockReset();
+  distillations.mockResolvedValue({ attempts: [] });
+  retryDistillation.mockReset();
+  retryDistillation.mockResolvedValue({});
   setEnabled.mockReset();
   useSkillsStore.setState({ skills: undefined, sourceFilter: 'all' });
   useNotificationsStore.setState({ toast: undefined });
@@ -84,6 +92,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the skills pane', () => {
+  it('shows durable learning activity and queues a retry', async () => {
+    distillations
+      .mockResolvedValueOnce({
+        attempts: [{
+          id: 'attempt-one', chatId: 'chat-one', chatTitle: 'Deploy conversation',
+          trigger: 'automatic', state: 'completed', outcome: 'nothing', warnings: [],
+          startedAt: '2026-08-07T20:00:00.000Z', finishedAt: '2026-08-07T20:01:00.000Z',
+          results: [], retryable: true,
+        }],
+      })
+      .mockResolvedValueOnce({ attempts: [] });
+
+    render(
+      <MemoryRouter initialEntries={['/skills']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Deploy conversation')).toBeDefined());
+    expect(screen.getByText('Nothing to learn')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(retryDistillation).toHaveBeenCalledWith('attempt-one'));
+  });
+
   it('shows the skill in the route', async () => {
     render(
       <MemoryRouter initialEntries={['/skills/alpha']}>

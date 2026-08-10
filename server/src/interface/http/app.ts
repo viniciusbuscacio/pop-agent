@@ -175,6 +175,7 @@ export function createApp(deps: AppDeps): Hono {
           ...(deps.skillArchive === undefined ? {} : { archive: deps.skillArchive }),
           ...(deps.distillation === undefined ? {} : { distillation: deps.distillation }),
           ...(deps.distillerEnabled === undefined ? {} : { distillerEnabled: deps.distillerEnabled }),
+          now: () => deps.clock.now(),
         }),
       ),
       sessionGuarded(createMcpRoutes(deps.mcp)),

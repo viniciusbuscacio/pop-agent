@@ -58,6 +58,53 @@ describe('SqliteDistillationRepo', () => {
 
     expect(marks.get('one')).toBeUndefined();
   });
+
+  it('records structured outcomes without copying a transcript', () => {
+    marks.startAttempt({
+      id: 'distillation-one',
+      chatId: 'chat-1',
+      chatTitle: 'Deploy the site',
+      throughMessageId: 'm9',
+      trigger: 'automatic',
+      requested: false,
+      startedAt: '2026-08-07T18:00:00.000Z',
+    });
+    marks.finishAttempt('distillation-one', {
+      state: 'completed',
+      outcome: 'produced',
+      finishedAt: '2026-08-07T18:01:00.000Z',
+      results: [{
+        slug: 'deploy-site',
+        disposition: 'revision',
+        targetSlug: 'deploy',
+        reason: 'dedup_match',
+        similarity: 0.91,
+        overlap: 0.42,
+      }],
+    });
+
+    expect(marks.attempt('distillation-one')).toMatchObject({
+      chatTitle: 'Deploy the site',
+      outcome: 'produced',
+      results: [{ disposition: 'revision', similarity: 0.91, overlap: 0.42 }],
+    });
+  });
+
+  it('queues at most one retry of a retryable window', () => {
+    marks.startAttempt({
+      id: 'source', chatId: 'chat-1', chatTitle: 'Chat', throughMessageId: 'm9',
+      trigger: 'automatic', requested: false, startedAt: '2026-08-07T18:00:00.000Z',
+    });
+    marks.finishAttempt('source', {
+      state: 'completed', outcome: 'nothing', finishedAt: '2026-08-07T18:01:00.000Z',
+    });
+
+    expect(marks.queueRetry('source', 'retry-one', '2026-08-07T19:00:00.000Z')).toMatchObject({
+      id: 'retry-one', state: 'queued', retryOf: 'source', throughMessageId: 'm9',
+    });
+    expect(marks.queueRetry('source', 'retry-two', '2026-08-07T19:01:00.000Z')?.id).toBe('retry-one');
+    expect(marks.attempts(10)).toHaveLength(2);
+  });
 });
 
 describe('SqliteSkillRevisionsRepo', () => {

@@ -300,8 +300,48 @@ export interface SkillsResponse {
   skills: SkillDTO[];
   /** Retired by the collector: out of the router, still on disk (§8). */
   archived: SkillDTO[];
-  /** One line of diagnostics for the Skills screen; never a card. */
+  /** A concise summary; detailed attempts live on their own paginated endpoint. */
   distiller: DistillerStatusDTO;
+}
+
+export interface SkillDistillationResultDTO {
+  slug: string;
+  disposition:
+    | 'pending'
+    | 'live'
+    | 'revision'
+    | 'updated'
+    | 'rejected'
+    | 'skipped_user'
+    | 'skipped_builtin'
+    | 'gone';
+  targetSlug?: string;
+  reason?: 'slug_collision' | 'dedup_match';
+  similarity?: number;
+  overlap?: number;
+}
+
+/** One attempt to learn from one bounded window of a conversation. */
+export interface SkillDistillationAttemptDTO {
+  id: string;
+  chatId: string;
+  chatTitle: string;
+  trigger: 'automatic' | 'explicit_request' | 'manual_retry';
+  state: 'queued' | 'running' | 'completed' | 'failed';
+  outcome?: 'produced' | 'nothing' | 'tainted' | 'failed' | 'invalid_output';
+  riskLevel?: 'suspicious' | 'high';
+  warnings: string[];
+  errorCode?: string;
+  errorMessage?: string;
+  retryOf?: string;
+  startedAt: string;
+  finishedAt?: string;
+  results: SkillDistillationResultDTO[];
+  retryable: boolean;
+}
+
+export interface SkillDistillationsResponse {
+  attempts: SkillDistillationAttemptDTO[];
 }
 
 /**

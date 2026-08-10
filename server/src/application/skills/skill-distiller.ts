@@ -1,4 +1,5 @@
 import type { Chat, Message } from '../../domain/chat/chat.js';
+import { entityId } from '../../domain/ids.js';
 import { sanitize } from '../../domain/safety/sanitize.js';
 import {
   buildDistillPrompt,
@@ -16,6 +17,7 @@ import type { Embedder } from '../ports/embedder.js';
 import type { MaintenanceJob } from '../ports/maintenance-job.js';
 import type {
   DistillationRepo,
+  DistillationResult,
   SkillRevisionsRepo,
 } from '../ports/skill-distillation-repo.js';
 import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
@@ -56,8 +58,12 @@ import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
 interface Target {
   chat: Chat;
   window: Message[];
+  /** The mark immediately before this bounded window, absent on the first read. */
+  fromMessageId?: string;
   /** The user asked for a skill here, in so many words. */
   requested: boolean;
+  /** Present when this target was cloned from a manual retry request. */
+  attemptId?: string;
 }
 
 /** How long a conversation must sit still before it is fair game. */
@@ -149,17 +155,40 @@ export class SkillDistiller implements MaintenanceJob {
 
     const { chat, window, requested } = target;
     const lastId = window[window.length - 1]!.id;
+    const now = (): string => new Date(this.deps.clock.now()).toISOString();
+    const attemptId = target.attemptId ?? entityId('distillation');
+    if (target.attemptId === undefined) {
+      this.deps.marks.startAttempt({
+        id: attemptId,
+        chatId: chat.id,
+        chatTitle: chat.title,
+        ...(target.fromMessageId === undefined ? {} : { fromMessageId: target.fromMessageId }),
+        throughMessageId: lastId,
+        trigger: requested ? 'explicit_request' : 'automatic',
+        requested,
+        startedAt: now(),
+      });
+    }
     const journal = (line: string): void => this.deps.onJournal?.(`pop distiller: ${line}`);
+    const finish = (
+      value: Parameters<DistillationRepo['finishAttempt']>[1],
+    ): void => this.deps.marks.finishAttempt(attemptId, value);
 
     // Conservative by design: one suspicious tool result anywhere in the window
-    // and the whole conversation is skipped, permanently. The alternative --
-    // distilling the clean part -- assumes the injection stayed where it was
-    // read, and a prompt injection's whole purpose is not to.
+    // and the whole conversation is skipped, permanently. Store only warning
+    // labels, never the hostile source text that produced them.
     const externalContent = window.map((message) => externalContentOf(message)).join('\n');
     const hasExternalContent = externalContent.trim().length > 0;
     const verdict = sanitize(externalContent);
     if (verdict.riskLevel !== 'low') {
-      this.advance(chat.id, lastId);
+      this.advanceTarget(target, lastId);
+      finish({
+        state: 'completed',
+        outcome: 'tainted',
+        riskLevel: verdict.riskLevel,
+        warnings: verdict.warnings,
+        finishedAt: now(),
+      });
       journal(`chat=${chat.id} skipped (tainted: ${verdict.riskLevel})`);
       return;
     }
@@ -178,37 +207,52 @@ export class SkillDistiller implements MaintenanceJob {
         { provider: chat.provider },
       );
     } catch (error) {
+      const message = safeError(error);
+      finish({ state: 'failed', outcome: 'failed', errorCode: 'provider_failure', errorMessage: message, finishedAt: now() });
       // The one outcome that does NOT move the mark.
-      journal(`chat=${chat.id} failed (${error instanceof Error ? error.message : 'unknown'})`);
+      journal(`chat=${chat.id} failed (${message})`);
       return;
     }
 
-    const { candidates, truncated } = parseDistillAnswer(answer);
-    if (candidates.length === 0) {
-      // A cut-off answer is not an empty one. The first live run against a real
-      // model produced a genuinely useful procedure and lost it here: a
-      // reasoning model spent its budget thinking, the JSON stopped mid-field,
-      // and "nothing to learn" moved the watermark past a conversation that had
-      // plenty. Truncation is treated like a provider failure instead -- the
-      // mark stays, and the next tick asks again.
-      if (truncated) {
+    const parsed = parseDistillAnswer(answer);
+    if (parsed.candidates.length === 0) {
+      if (parsed.truncated) {
+        finish({ state: 'failed', outcome: 'failed', errorCode: 'truncated_answer', errorMessage: 'The model answer ended before its closing marker.', finishedAt: now() });
         journal(`chat=${chat.id} answer truncated, nothing salvaged; will retry`);
         return;
       }
-      this.advance(chat.id, lastId);
-      // Worth its own line: the user asked and got nothing. There is no screen
-      // that shows a request the model talked itself out of, so the log is the
-      // only place it exists.
-      journal(`chat=${chat.id} nothing to learn${requested ? ' (asked for one)' : ''}`);
+      const invalid = parsed.invalidBlocks > 0 || !parsed.explicitEmpty || requested;
+      this.advanceTarget(target, lastId);
+      finish({
+        state: 'completed',
+        outcome: invalid ? 'invalid_output' : 'nothing',
+        ...(invalid
+          ? {
+              errorCode: requested ? 'requested_empty' : 'invalid_answer',
+              errorMessage: requested
+                ? 'The model returned no skill after an explicit request.'
+                : 'The model answer contained no complete valid skill.',
+            }
+          : {}),
+        finishedAt: now(),
+      });
+      journal(`chat=${chat.id} ${invalid ? 'invalid answer' : 'nothing to learn'}${requested ? ' (asked for one)' : ''}`);
       return;
     }
 
-    const outcomes: string[] = [];
-    for (const candidate of candidates) {
-      outcomes.push(await this.land(scrubCandidate(candidate), mode, hasExternalContent));
+    try {
+      const results: DistillationResult[] = [];
+      for (const candidate of parsed.candidates) {
+        results.push(await this.land(scrubCandidate(candidate), mode, hasExternalContent));
+      }
+      this.advanceTarget(target, lastId);
+      finish({ state: 'completed', outcome: 'produced', results, finishedAt: now() });
+      journal(`chat=${chat.id} ${results.map(resultLabel).join(' ')}`);
+    } catch (error) {
+      const message = safeError(error);
+      finish({ state: 'failed', outcome: 'failed', errorCode: 'landing_failure', errorMessage: message, finishedAt: now() });
+      journal(`chat=${chat.id} failed while saving (${message})`);
     }
-    this.advance(chat.id, lastId);
-    journal(`chat=${chat.id} ${outcomes.join(' ')}`);
   }
 
   /**
@@ -223,6 +267,47 @@ export class SkillDistiller implements MaintenanceJob {
    * costs no table, no column and no hook on the chat path.
    */
   private pick(chats: readonly Chat[]): Target | undefined {
+    const queued = this.deps.marks.nextQueuedAttempt();
+    if (queued !== undefined) {
+      const chat = chats.find((entry) => entry.id === queued.chatId);
+      if (chat === undefined) {
+        this.deps.marks.markAttemptRunning(queued.id, new Date(this.deps.clock.now()).toISOString());
+        this.deps.marks.finishAttempt(queued.id, {
+          state: 'failed',
+          outcome: 'failed',
+          errorCode: 'chat_gone',
+          errorMessage: 'The source conversation no longer exists.',
+          finishedAt: new Date(this.deps.clock.now()).toISOString(),
+        });
+      } else {
+        const window = this.deps.chats.getMessageRange(chat.id, {
+          ...(queued.fromMessageId === undefined ? {} : { after: queued.fromMessageId }),
+          through: queued.throughMessageId,
+          limit: WINDOW,
+        });
+        this.deps.marks.markAttemptRunning(queued.id, new Date(this.deps.clock.now()).toISOString());
+        if (window.length === 0 || window[window.length - 1]?.id !== queued.throughMessageId) {
+          this.deps.marks.finishAttempt(queued.id, {
+            state: 'failed',
+            outcome: 'failed',
+            errorCode: 'window_gone',
+            errorMessage: 'The original conversation window is no longer available.',
+            finishedAt: new Date(this.deps.clock.now()).toISOString(),
+          });
+        } else {
+          return {
+            chat,
+            window,
+            ...(queued.fromMessageId === undefined ? {} : { fromMessageId: queued.fromMessageId }),
+            requested: queued.requested,
+            attemptId: queued.id,
+          };
+        }
+      }
+      // A queued retry consumed this tick even when its source disappeared.
+      return undefined;
+    }
+
     const idleBefore = this.deps.clock.now() - (this.deps.idleMs ?? DEFAULT_IDLE_MS);
     const ordered = [...chats].sort(
       (left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt),
@@ -245,11 +330,12 @@ export class SkillDistiller implements MaintenanceJob {
       const window = this.unreadWindow(chat);
       if (window === undefined) continue;
 
+      const boundary = mark === undefined ? {} : { fromMessageId: mark.messageId };
       if (window.some((message) => message.role === 'user' && asksForSkill(message.content))) {
-        return { chat, window, requested: true };
+        return { chat, window, ...boundary, requested: true };
       }
       if (idle === undefined && Date.parse(chat.updatedAt) <= idleBefore) {
-        idle = { chat, window, requested: false };
+        idle = { chat, window, ...boundary, requested: false };
       }
     }
     return idle;
@@ -284,7 +370,7 @@ export class SkillDistiller implements MaintenanceJob {
     candidate: SkillCandidate,
     mode: AutoSkillMode,
     hasExternalContent: boolean,
-  ): Promise<string> {
+  ): Promise<DistillationResult> {
     const existing = this.deps.skills.get(candidate.slug);
     const measured = await this.measure(candidate, existing?.slug);
     if (existing !== undefined) {
@@ -292,7 +378,8 @@ export class SkillDistiller implements MaintenanceJob {
         candidate,
         existing.slug,
         measured.against,
-        `${candidate.slug}=revision(slug)`,
+        measured.againstOverlap,
+        'slug_collision',
         mode,
         hasExternalContent,
       );
@@ -305,7 +392,8 @@ export class SkillDistiller implements MaintenanceJob {
         { ...candidate, slug: match.slug },
         match.slug,
         match.score,
-        `${match.slug}=revision(${match.score.toFixed(2)})`,
+        match.overlap,
+        'dedup_match',
         mode,
         hasExternalContent,
       );
@@ -323,7 +411,7 @@ export class SkillDistiller implements MaintenanceJob {
         pending: !live,
       });
     } catch (error) {
-      if (error instanceof SkillsError) return `${candidate.slug}=rejected`;
+      if (error instanceof SkillsError) return { slug: candidate.slug, disposition: 'rejected' };
       throw error;
     }
     // The vector the dedup just computed is the vector the router would compute
@@ -334,12 +422,17 @@ export class SkillDistiller implements MaintenanceJob {
     if (measured.vector !== undefined) {
       this.deps.vectors?.save(candidate.slug, candidateRoutingText(candidate), measured.vector);
     }
-    const near =
-      measured.nearest === undefined
-        ? ''
-        : `,near=${measured.nearest.slug}(cos=${measured.nearest.score.toFixed(2)}` +
-          `,voc=${measured.nearest.overlap.toFixed(2)})`;
-    return `${candidate.slug}=${live ? 'live' : 'pending'}${near}`;
+    return {
+      slug: candidate.slug,
+      disposition: live ? 'live' : 'pending',
+      ...(measured.nearest === undefined
+        ? {}
+        : {
+            targetSlug: measured.nearest.slug,
+            similarity: measured.nearest.score,
+            overlap: measured.nearest.overlap,
+          }),
+    };
   }
 
   /**
@@ -353,12 +446,13 @@ export class SkillDistiller implements MaintenanceJob {
     candidate: SkillCandidate,
     slug: string,
     similarity: number | undefined,
-    label: string,
+    overlap: number | undefined,
+    reason: 'slug_collision' | 'dedup_match',
     mode: AutoSkillMode,
     hasExternalContent: boolean,
-  ): string {
+  ): DistillationResult {
     const current = this.deps.skills.get(slug);
-    if (current === undefined) return `${slug}=gone`;
+    if (current === undefined) return { slug, disposition: 'gone' };
     // The distiller may rewrite its own work and nothing else. A `builtin`
     // ships with the app; a `user` skill is the user's, or an auto skill they
     // edited, and either way a machine proposing to replace it is proposing to
@@ -366,7 +460,16 @@ export class SkillDistiller implements MaintenanceJob {
     // shape -- a distilled "Restart Pop Agent service" offered as the new text of
     // `self-change` -- and the damage was not the bad similarity score but that
     // a wrong target was reachable at all.
-    if (current.source !== 'auto') return `${slug}=${current.source},skipped`;
+    if (current.source !== 'auto') {
+      return {
+        slug: candidate.slug,
+        disposition: current.source === 'builtin' ? 'skipped_builtin' : 'skipped_user',
+        targetSlug: slug,
+        reason,
+        ...(similarity === undefined ? {} : { similarity }),
+        ...(overlap === undefined ? {} : { overlap }),
+      };
+    }
 
     if (autoApproveSkill(mode, { candidate, hasExternalContent, revision: true })) {
       this.deps.skills.write({
@@ -379,7 +482,14 @@ export class SkillDistiller implements MaintenanceJob {
         ...(current.pinned === true ? { pinned: true } : {}),
         pending: false,
       });
-      return `${slug}=updated`;
+      return {
+        slug,
+        disposition: 'updated',
+        targetSlug: slug,
+        reason,
+        ...(similarity === undefined ? {} : { similarity }),
+        ...(overlap === undefined ? {} : { overlap }),
+      };
     }
 
     this.deps.revisions.save({
@@ -391,7 +501,14 @@ export class SkillDistiller implements MaintenanceJob {
       createdAt: new Date(this.deps.clock.now()).toISOString(),
       ...(similarity === undefined ? {} : { similarity }),
     });
-    return label;
+    return {
+      slug,
+      disposition: 'revision',
+      targetSlug: slug,
+      reason,
+      ...(similarity === undefined ? {} : { similarity }),
+      ...(overlap === undefined ? {} : { overlap }),
+    };
   }
 
   /**
@@ -416,10 +533,14 @@ export class SkillDistiller implements MaintenanceJob {
     let nearest: Neighbour | undefined;
     let best: Neighbour | undefined;
     let against: number | undefined;
+    let againstOverlap: number | undefined;
     for (const entry of this.deps.vectors?.all() ?? []) {
       if (entry.vector.length !== vector.length) continue;
       const score = dot(vector, entry.vector);
-      if (entry.slug === alsoAgainst) against = score;
+      if (entry.slug === alsoAgainst) {
+        against = score;
+        againstOverlap = vocabularyOverlap(text, entry.signature);
+      }
       const neighbour = {
         slug: entry.slug,
         score,
@@ -438,11 +559,21 @@ export class SkillDistiller implements MaintenanceJob {
       ...(nearest === undefined ? {} : { nearest }),
       ...(best === undefined ? {} : { best }),
       ...(against === undefined ? {} : { against }),
+      ...(againstOverlap === undefined ? {} : { againstOverlap }),
     };
   }
 
-  private advance(chatId: string, messageId: string): void {
-    this.deps.marks.set(chatId, messageId, new Date(this.deps.clock.now()).toISOString());
+  private advanceTarget(target: Target, messageId: string): void {
+    if (target.attemptId !== undefined) {
+      const current = this.deps.marks.get(target.chat.id);
+      // An exact retry may be months old. It may fill a mark that is still at
+      // the retry's lower boundary, but it must never rewind a chat whose normal
+      // queue has already considered later messages.
+      if (current?.messageId !== target.fromMessageId) {
+        if (!(current === undefined && target.fromMessageId === undefined)) return;
+      }
+    }
+    this.deps.marks.set(target.chat.id, messageId, new Date(this.deps.clock.now()).toISOString());
   }
 }
 
@@ -465,6 +596,8 @@ interface Measured {
   best?: Neighbour;
   /** The cosine against the slug the candidate collided with, when asked. */
   against?: number;
+  /** Vocabulary overlap against that same collision target. */
+  againstOverlap?: number;
 }
 
 /** The vectors are L2-normalized by the embedder, so the dot product is cosine. */
@@ -494,4 +627,20 @@ function dot(left: Float32Array, right: Float32Array): number {
  */
 function externalContentOf(message: Message): string {
   return message.tools.map((tool) => tool.detail).join('\n');
+}
+
+function resultLabel(result: DistillationResult): string {
+  if (result.disposition === 'skipped_user') return `${result.slug}=user,skipped`;
+  if (result.disposition === 'skipped_builtin') return `${result.slug}=builtin,skipped`;
+  const measured =
+    result.similarity === undefined
+      ? ''
+      : `(cos=${result.similarity.toFixed(2)}${result.overlap === undefined ? '' : `,voc=${result.overlap.toFixed(2)}`})`;
+  return `${result.slug}=${result.disposition}${measured}`;
+}
+
+/** Provider errors are diagnostics, not a place to persist a response body. */
+function safeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'unknown';
+  return message.replace(/[\r\n]+/g, ' ').slice(0, 500);
 }

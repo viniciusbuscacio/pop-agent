@@ -4,9 +4,12 @@ import type { Skill } from '../../domain/skills/skill.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Embedder } from '../ports/embedder.js';
 import type {
+  DistillationAttempt,
   DistillationRepo,
+  FinishDistillationAttempt,
   SkillRevision,
   SkillRevisionsRepo,
+  StartDistillationAttempt,
   Watermark,
 } from '../ports/skill-distillation-repo.js';
 import type { SkillVectorsRepo, StoredSkillVector } from '../ports/skill-vectors-repo.js';
@@ -58,6 +61,12 @@ function chats(
       if (tailReads !== undefined) tailReads.count += 1;
       return messages[chatId] ?? [];
     },
+    getMessageRange: (chatId: string, options: { after?: string; through: string; limit: number }) => {
+      const all = messages[chatId] ?? [];
+      const after = options.after === undefined ? -1 : all.findIndex((entry) => entry.id === options.after);
+      const through = all.findIndex((entry) => entry.id === options.through);
+      return through < 0 ? [] : all.slice(after + 1, through + 1).slice(-options.limit);
+    },
     lastMessageIds: () =>
       Object.entries(messages).map(([chatId, msgs]) => ({
         chatId,
@@ -69,6 +78,7 @@ function chats(
 
 class MemoryMarks implements DistillationRepo {
   readonly marks = new Map<string, Watermark>();
+  readonly history = new Map<string, DistillationAttempt>();
   get(chatId: string): Watermark | undefined {
     return this.marks.get(chatId);
   }
@@ -80,6 +90,51 @@ class MemoryMarks implements DistillationRepo {
   }
   keepOnly(): void {
     /* nothing to prune in a test */
+  }
+  startAttempt(input: StartDistillationAttempt): void {
+    this.history.set(input.id, {
+      ...input,
+      state: input.state ?? 'running',
+      warnings: [],
+      results: [],
+    });
+  }
+  finishAttempt(id: string, finish: FinishDistillationAttempt): void {
+    const current = this.history.get(id);
+    if (current !== undefined) {
+      this.history.set(id, {
+        ...current,
+        ...finish,
+        warnings: finish.warnings ?? [],
+        results: finish.results ?? [],
+      });
+    }
+  }
+  attempt(id: string): DistillationAttempt | undefined { return this.history.get(id); }
+  attempts(): DistillationAttempt[] { return [...this.history.values()]; }
+  nextQueuedAttempt(): DistillationAttempt | undefined {
+    return [...this.history.values()].find((entry) => entry.state === 'queued');
+  }
+  markAttemptRunning(id: string, at: string): void {
+    const current = this.history.get(id);
+    if (current !== undefined) this.history.set(id, { ...current, state: 'running', startedAt: at });
+  }
+  queueRetry(sourceId: string, id: string, at: string): DistillationAttempt | undefined {
+    const source = this.history.get(sourceId);
+    if (source === undefined) return undefined;
+    this.startAttempt({
+      id,
+      chatId: source.chatId,
+      chatTitle: source.chatTitle,
+      ...(source.fromMessageId === undefined ? {} : { fromMessageId: source.fromMessageId }),
+      throughMessageId: source.throughMessageId,
+      trigger: 'manual_retry',
+      requested: source.requested,
+      state: 'queued',
+      retryOf: sourceId,
+      startedAt: at,
+    });
+    return this.history.get(id);
   }
 }
 
@@ -377,6 +432,29 @@ describe('SkillDistiller', () => {
 
     expect(world.skills.written).toHaveLength(0);
     expect(world.marks.get('c1')?.messageId).toBe('m1');
+    expect(world.marks.attempts()[0]).toMatchObject({ outcome: 'nothing', state: 'completed' });
+  });
+
+  it('retries an exact old window without rewinding a newer watermark', async () => {
+    world = harness({
+      messages: { c1: [message('m1', 'old boundary'), message('m2', 'retry this'), message('m3', 'newer work')] },
+    });
+    world.marks.startAttempt({
+      id: 'source', chatId: 'c1', chatTitle: 'c1', fromMessageId: 'm1', throughMessageId: 'm2',
+      trigger: 'automatic', requested: false, startedAt: LONG_AGO,
+    });
+    world.marks.finishAttempt('source', {
+      state: 'completed', outcome: 'nothing', finishedAt: LONG_AGO,
+    });
+    world.marks.queueRetry('source', 'retry', LONG_AGO);
+    world.marks.set('c1', 'm3', LONG_AGO);
+
+    await world.distiller.run();
+
+    expect(world.prompts[0]).toContain('retry this');
+    expect(world.prompts[0]).not.toContain('newer work');
+    expect(world.marks.get('c1')?.messageId).toBe('m3');
+    expect(world.marks.attempt('retry')).toMatchObject({ state: 'completed', outcome: 'produced' });
   });
 
   it('proposes a revision instead of overwriting a skill that already works', async () => {

@@ -1,6 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { DistillerStatusDTO, SkillDTO, SkillsResponse } from '@pop-agent/shared';
+import type {
+  DistillerStatusDTO,
+  SkillDistillationAttemptDTO,
+  SkillDTO,
+  SkillsResponse,
+} from '@pop-agent/shared';
+import { entityId } from '../../domain/ids.js';
 import type { Skill } from '../../domain/skills/skill.js';
 import {
   SkillsError,
@@ -9,6 +15,7 @@ import {
 } from '../../application/ports/skills-repo.js';
 import type { SkillUsage, SkillUsageRepo } from '../../application/ports/skill-usage-repo.js';
 import type {
+  DistillationAttempt,
   DistillationRepo,
   SkillRevision,
   SkillRevisionsRepo,
@@ -53,6 +60,8 @@ export interface SkillsRoutesDeps {
   distillation?: DistillationRepo;
   /** Whether the distiller is switched on at all, for the status line. */
   distillerEnabled?: () => boolean;
+  /** Clock for auditable retry admission; production passes the system clock. */
+  now?: () => number;
 }
 
 export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
@@ -79,6 +88,22 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   };
 
   routes.get('/skills', (c) => c.json(listing()));
+
+  routes.get('/skills/distillations', (c) => {
+    const raw = Number(c.req.query('limit') ?? 30);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 100) : 30;
+    return c.json({
+      attempts: (deps.distillation?.attempts(limit) ?? []).map(toAttemptDto),
+    });
+  });
+
+  routes.post('/skills/distillations/:id/retry', (c) => {
+    const at = new Date(deps.now?.() ?? Date.now()).toISOString();
+    const retry = deps.distillation?.queueRetry(c.req.param('id'), entityId('distillation'), at);
+    return retry === undefined
+      ? apiError(c, 409, 'operation_error', 'That distillation cannot be retried.')
+      : c.json(toAttemptDto(retry), 202);
+  });
 
   // Accepting a pending skill (pop-agent.spec §8). A POST with no body: the only
   // thing being said is "yes", and there is nothing else to send.
@@ -185,6 +210,31 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
   });
 
   return routes;
+}
+
+function toAttemptDto(attempt: DistillationAttempt): SkillDistillationAttemptDTO {
+  const retryable =
+    attempt.state === 'failed' ||
+    attempt.outcome === 'nothing' ||
+    attempt.outcome === 'tainted' ||
+    attempt.outcome === 'invalid_output';
+  return {
+    id: attempt.id,
+    chatId: attempt.chatId,
+    chatTitle: attempt.chatTitle,
+    trigger: attempt.trigger,
+    state: attempt.state,
+    ...(attempt.outcome === undefined ? {} : { outcome: attempt.outcome }),
+    ...(attempt.riskLevel === undefined ? {} : { riskLevel: attempt.riskLevel }),
+    warnings: attempt.warnings,
+    ...(attempt.errorCode === undefined ? {} : { errorCode: attempt.errorCode }),
+    ...(attempt.errorMessage === undefined ? {} : { errorMessage: attempt.errorMessage }),
+    ...(attempt.retryOf === undefined ? {} : { retryOf: attempt.retryOf }),
+    startedAt: attempt.startedAt,
+    ...(attempt.finishedAt === undefined ? {} : { finishedAt: attempt.finishedAt }),
+    results: attempt.results,
+    retryable,
+  };
 }
 
 function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): SkillDTO {

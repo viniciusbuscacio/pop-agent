@@ -528,9 +528,17 @@ selection is 100% local, no LLM call:
   brings one back.
 - **The Skills screen is the inbox**: badges for source, the two queues, and
   one discreet status line — when Pop Agent last looked, how much waits on the
-  reader. No card and no push (decided 07/08): the distiller runs every ten
-  minutes, so a notification per skill would be noise, and the cost already
-  has a home in Settings → Usage.
+  reader. No push (decided 07/08): the distiller runs every ten minutes, so a
+  notification per skill would be noise, and the cost already has a home in
+  Settings → Usage. **Its empty pane is durable distiller activity** (09/08):
+  one row per bounded conversation window says whether it produced pending
+  skills, revisions, nothing, a taint refusal or a failure. This is structured
+  SQLite history, not a reading of journal prose; it stores warning codes and
+  measurements but never copies the transcript, provider answer or hostile
+  source text. Nothing, taint, invalid output and failures can queue an exact
+  retry of the original message range. Successful writes cannot be retried in
+  place because doing so would manufacture duplicates or revisions of their
+  own pending output.
 
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end

@@ -24,6 +24,73 @@ export interface Watermark {
   at: string;
 }
 
+export type DistillationTrigger = 'automatic' | 'explicit_request' | 'manual_retry';
+export type DistillationState = 'queued' | 'running' | 'completed' | 'failed';
+export type DistillationOutcome = 'produced' | 'nothing' | 'tainted' | 'failed' | 'invalid_output';
+export type DistillationDisposition =
+  | 'pending'
+  | 'live'
+  | 'revision'
+  | 'updated'
+  | 'rejected'
+  | 'skipped_user'
+  | 'skipped_builtin'
+  | 'gone';
+
+export interface DistillationResult {
+  slug: string;
+  disposition: DistillationDisposition;
+  targetSlug?: string;
+  reason?: 'slug_collision' | 'dedup_match';
+  similarity?: number;
+  overlap?: number;
+}
+
+/** One durable account of one bounded conversation window. */
+export interface DistillationAttempt {
+  id: string;
+  chatId: string;
+  chatTitle: string;
+  fromMessageId?: string;
+  throughMessageId: string;
+  trigger: DistillationTrigger;
+  requested: boolean;
+  state: DistillationState;
+  outcome?: DistillationOutcome;
+  riskLevel?: 'suspicious' | 'high';
+  warnings: string[];
+  errorCode?: string;
+  errorMessage?: string;
+  retryOf?: string;
+  startedAt: string;
+  finishedAt?: string;
+  results: DistillationResult[];
+}
+
+export interface StartDistillationAttempt {
+  id: string;
+  chatId: string;
+  chatTitle: string;
+  fromMessageId?: string;
+  throughMessageId: string;
+  trigger: DistillationTrigger;
+  requested: boolean;
+  state?: 'queued' | 'running';
+  retryOf?: string;
+  startedAt: string;
+}
+
+export interface FinishDistillationAttempt {
+  state: 'completed' | 'failed';
+  outcome: DistillationOutcome;
+  finishedAt: string;
+  riskLevel?: 'suspicious' | 'high';
+  warnings?: string[];
+  errorCode?: string;
+  errorMessage?: string;
+  results?: DistillationResult[];
+}
+
 export interface DistillationRepo {
   get(chatId: string): Watermark | undefined;
 
@@ -38,8 +105,18 @@ export interface DistillationRepo {
   /** When the distiller last finished a conversation, for the status line. */
   lastRunAt(): string | undefined;
 
-  /** Drops the mark for chats that no longer exist. */
+  /** Drops the mark for chats that no longer exist. Attempts remain as history. */
   keepOnly(chatIds: readonly string[]): void;
+
+  startAttempt(attempt: StartDistillationAttempt): void;
+  finishAttempt(id: string, finish: FinishDistillationAttempt): void;
+  attempt(id: string): DistillationAttempt | undefined;
+  attempts(limit: number): DistillationAttempt[];
+  /** Oldest manual retry waiting for the distiller, if any. */
+  nextQueuedAttempt(): DistillationAttempt | undefined;
+  markAttemptRunning(id: string, at: string): void;
+  /** Clones an exact old window into the retry queue. */
+  queueRetry(sourceId: string, id: string, at: string): DistillationAttempt | undefined;
 }
 
 /** A proposed rewrite of a skill that already exists, waiting on the user. */

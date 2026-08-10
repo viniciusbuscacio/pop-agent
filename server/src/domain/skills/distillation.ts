@@ -154,6 +154,12 @@ export interface DistillAnswer {
    * writing. Load-bearing -- the caller keeps its watermark and asks again.
    */
   truncated: boolean;
+  /** Skill markers seen, including blocks rejected for missing fields. */
+  blocksSeen: number;
+  /** Blocks that did not contain a complete valid candidate. */
+  invalidBlocks: number;
+  /** The model deliberately returned only the end marker. */
+  explicitEmpty: boolean;
 }
 
 /**
@@ -187,6 +193,8 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
   let fields: Map<string, string> | undefined;
   let body: string[] | undefined;
   let ended = false;
+  let blocksSeen = 0;
+  let invalidBlocks = 0;
 
   const flush = (): void => {
     const open = fields;
@@ -201,7 +209,11 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
       whenToUse: open.get('whenToUse') ?? '',
       body: (text ?? []).join('\n').trim(),
     });
-    if (candidate === undefined || taken.has(candidate.slug)) return;
+    if (candidate === undefined) {
+      invalidBlocks += 1;
+      return;
+    }
+    if (taken.has(candidate.slug)) return;
     taken.add(candidate.slug);
     candidates.push(candidate);
   };
@@ -211,6 +223,7 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
 
     if (SKILL_LINE.test(trimmed)) {
       flush();
+      blocksSeen += 1;
       fields = new Map();
       continue;
     }
@@ -235,7 +248,13 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
     }
   }
 
-  return { candidates: candidates.slice(0, MAX_CANDIDATES), truncated: !ended };
+  return {
+    candidates: candidates.slice(0, MAX_CANDIDATES),
+    truncated: !ended,
+    blocksSeen,
+    invalidBlocks,
+    explicitEmpty: ended && blocksSeen === 0,
+  };
 }
 
 /** `whenToUse` may arrive as `whentouse` or `WhenToUse`; keys match either way. */
