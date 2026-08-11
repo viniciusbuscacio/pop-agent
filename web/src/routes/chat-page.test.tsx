@@ -110,8 +110,10 @@ describe('chat transcript', () => {
       scrollTop: { value: 500, writable: true, configurable: true },
     });
 
+    expect(scroller.style.touchAction).toBe('pan-y');
     fireEvent.touchStart(scroller, { touches: [{ clientY: 100 }] });
     fireEvent.touchMove(scroller, { touches: [{ clientY: 110 }] });
+    expect(screen.queryByTestId('jump-to-latest')).toBeNull();
 
     useChatStore.setState({
       live: {

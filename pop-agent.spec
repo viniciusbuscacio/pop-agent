@@ -938,8 +938,10 @@ events from stale runs.
   reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
   via SSE, and per-chat drafts in localStorage. While an answer streams, any
   reader gesture toward older content suspends autoscroll immediately, before
-  iOS applies its native scroll; streaming must not pull the viewport back to
-  the bottom. Following resumes only when the reader moves back to the latest
+  iOS applies its native scroll; the intent listener stays passive and the
+  floating control must not resize the scroller or interfere with native pan.
+  Streaming must not pull the viewport back to the bottom. Following resumes
+  only when the reader moves back to the latest
   content or taps "jump to latest". The **pending-input FIFO is
   server-owned**: ordered SQLite rows survive restart, while the current head is
   returned with the message snapshot and broadcast by SSE so phone, desktop and

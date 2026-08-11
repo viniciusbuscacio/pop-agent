@@ -40,7 +40,6 @@ export function ChatPage() {
   const [missed, setMissed] = useState(0);
   // The floating "↓" is the visible half of follow mode being off.
   const [showJump, setShowJump] = useState(false);
-  const touchY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     // Remembered per device, so the Chats segment reopens where you were.
@@ -152,27 +151,44 @@ export function ChatPage() {
     setShowJump(true);
   }
 
-  // Stop following on intent, before native scrolling has updated scrollTop.
-  // That ordering matters on iOS: a streaming chunk can otherwise arrive
-  // between touchmove and the browser's scroll and pull the reader back down.
+  // Mouse/trackpad intent can update the visible control immediately.
   function onWheel(event: React.WheelEvent): void {
     if (event.deltaY < 0) disarm();
   }
 
-  function onTouchStart(event: React.TouchEvent): void {
-    touchY.current = event.touches[0]?.clientY;
-  }
+  useEffect(() => {
+    const element = scroller.current;
+    if (element === null) return;
+    let startY: number | undefined;
 
-  function onTouchMove(event: React.TouchEvent): void {
-    const start = touchY.current;
-    const now = event.touches[0]?.clientY;
-    if (start === undefined || now === undefined) return;
-    if (now > start + 4) disarm();
-  }
+    const onTouchStart = (event: TouchEvent): void => {
+      startY = event.touches[0]?.clientY;
+    };
+    const onTouchMove = (event: TouchEvent): void => {
+      const now = event.touches[0]?.clientY;
+      if (startY === undefined || now === undefined || now <= startY + 4) return;
 
-  function onTouchEnd(): void {
-    touchY.current = undefined;
-  }
+      // This listener must stay passive: it records intent without taking
+      // ownership of Safari's native pan gesture. React state is left alone
+      // until scroll/streaming updates the floating control.
+      lastScrollTop.current = element.scrollTop;
+      atBottom.current = false;
+    };
+    const onTouchEnd = (): void => {
+      startY = undefined;
+    };
+
+    element.addEventListener('touchstart', onTouchStart, { passive: true });
+    element.addEventListener('touchmove', onTouchMove, { passive: true });
+    element.addEventListener('touchend', onTouchEnd, { passive: true });
+    element.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    return () => {
+      element.removeEventListener('touchstart', onTouchStart);
+      element.removeEventListener('touchmove', onTouchMove);
+      element.removeEventListener('touchend', onTouchEnd);
+      element.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [chatId]);
 
   // Scroll direction is also a fallback for keyboard, scrollbar and any input
   // method without wheel/touch intent events. Following resumes only after the
@@ -224,18 +240,16 @@ export function ChatPage() {
 
       </header>
 
-      <div
-        ref={scroller}
-        onScroll={onScroll}
-        onWheel={onWheel}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
-        data-testid="chat-scroller"
-        className="relative flex-1 overflow-y-auto"
-      >
-        {messages?.length === 0 && live === undefined ? (
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          ref={scroller}
+          onScroll={onScroll}
+          onWheel={onWheel}
+          data-testid="chat-scroller"
+          className="relative min-h-0 flex-1 overflow-y-auto"
+          style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+        >
+          {messages?.length === 0 && live === undefined ? (
           <div
             data-testid="empty-chat-icon"
             aria-hidden="true"
@@ -360,25 +374,26 @@ export function ChatPage() {
                   : t('chat.failed')}
             </p>
           ) : null}
+          </div>
         </div>
-      </div>
 
-      {showJump ? (
-        <button
-          type="button"
-          data-testid="jump-to-latest"
-          onClick={jumpToLatest}
-          aria-label={t('chat.jumpToLatest')}
-          className="mx-auto mb-2 flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
-        >
-          <span aria-hidden="true">↓</span>
-          {missed > 0 ? (
-            <span data-testid="jump-to-latest-badge" className="text-xs text-[var(--accent)]">
-              {t('chat.newMessages')}
-            </span>
-          ) : null}
-        </button>
-      ) : null}
+        {showJump ? (
+          <button
+            type="button"
+            data-testid="jump-to-latest"
+            onClick={jumpToLatest}
+            aria-label={t('chat.jumpToLatest')}
+            className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
+          >
+            <span aria-hidden="true">↓</span>
+            {missed > 0 ? (
+              <span data-testid="jump-to-latest-badge" className="text-xs text-[var(--accent)]">
+                {t('chat.newMessages')}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+      </div>
 
       {unconfigured ? (
         <p
