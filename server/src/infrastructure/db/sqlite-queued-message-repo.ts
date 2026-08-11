@@ -13,7 +13,7 @@ interface QueueRow {
   attachments_json: string;
   file_paths_json: string;
   client_json: string | null;
-  hands_connection_id: string | null;
+  local_connection_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +46,7 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
       .prepare(
         `INSERT INTO queued_messages
            (id, chat_id, text, delivery_mode, attachments_json, file_paths_json, client_json,
-            hands_connection_id, created_at, updated_at)
+            local_connection_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
       )
@@ -59,7 +59,7 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
       .prepare(
         `UPDATE queued_messages
             SET text = ?, delivery_mode = ?, attachments_json = ?, file_paths_json = ?, client_json = ?,
-                hands_connection_id = ?, updated_at = ?
+                local_connection_id = ?, updated_at = ?
           WHERE chat_id = ? AND id = ?`,
       )
       .run(
@@ -68,7 +68,7 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
         JSON.stringify(message.attachments),
         JSON.stringify(message.filePaths),
         message.client === undefined ? null : JSON.stringify(message.client),
-        message.handsConnectionId ?? null,
+        message.localConnectionId ?? null,
         message.updatedAt,
         message.chatId,
         message.id,
@@ -90,7 +90,7 @@ function values(message: QueuedMessage): unknown[] {
     JSON.stringify(message.attachments),
     JSON.stringify(message.filePaths),
     message.client === undefined ? null : JSON.stringify(message.client),
-    message.handsConnectionId ?? null,
+    message.localConnectionId ?? null,
     message.createdAt,
     message.updatedAt,
   ];
@@ -108,7 +108,7 @@ function toMessage(row: QueueRow): QueuedMessage {
     attachments,
     filePaths,
     ...(client === undefined ? {} : { client }),
-    ...(row.hands_connection_id === null ? {} : { handsConnectionId: row.hands_connection_id }),
+    ...(row.local_connection_id === null ? {} : { localConnectionId: row.local_connection_id }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

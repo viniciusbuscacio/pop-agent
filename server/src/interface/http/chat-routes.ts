@@ -5,7 +5,7 @@ import { z } from 'zod';
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
-  HANDS_HEADER,
+  LOCAL_CONNECTION_HEADER,
   isClientKind,
   type ChatDTO,
   type MessageDTO,
@@ -17,6 +17,7 @@ import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
 import type { QueuedMessage } from '../../application/ports/queued-message-repo.js';
+import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import type { ProviderService } from '../../application/providers/provider-service.js';
 import type { FilesService } from '../../application/files/files-service.js';
@@ -85,6 +86,7 @@ export interface ChatRoutesDeps {
   providers: ProviderService;
   hub: SseHub;
   tickets: EventTickets;
+  localConnections: LocalConnectionRegistry;
 }
 
 /**
@@ -116,6 +118,18 @@ function readClient(c: Context): MessageClient | undefined {
     ...(platform === undefined || platform.length === 0 ? {} : { platform: platform.slice(0, 40) }),
     ...(ip === undefined ? {} : { ip }),
   };
+}
+
+function selectLocalConnection(
+  c: Context,
+  registry: LocalConnectionRegistry,
+): { ok: true; connectionId?: string } | { ok: false } {
+  const explicit = c.req.header(LOCAL_CONNECTION_HEADER);
+  if (explicit !== undefined && explicit.length > 0) {
+    return registry.has(explicit) ? { ok: true, connectionId: explicit } : { ok: false };
+  }
+  const managed = registry.defaultConnection();
+  return managed === undefined ? { ok: true } : { ok: true, connectionId: managed.id };
 }
 
 /** The socket's own address, when the adapter can say. */
@@ -255,14 +269,14 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     }
 
     const client = readClient(c);
-    // Which terminal typed this, if one did. Not validated here: the registry
-    // answers "is that connection still attached", and an id that names
-    // nobody costs the run its second pair of hands and nothing else.
-    const hands = c.req.header(HANDS_HEADER);
+    const selected = selectLocalConnection(c, deps.localConnections);
+    if (!selected.ok) {
+      return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
+    }
     const chatId = c.req.param('id');
     const origin = {
       ...(client === undefined ? {} : { client }),
-      ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
+      ...(selected.connectionId === undefined ? {} : { localConnectionId: selected.connectionId }),
     };
     const result = deps.runs.startRun(
       chatId,
@@ -319,13 +333,16 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       }
     }
     const client = readClient(c);
-    const hands = c.req.header(HANDS_HEADER);
+    const selected = selectLocalConnection(c, deps.localConnections);
+    if (!selected.ok) {
+      return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
+    }
     const updated = deps.queuedMessages.update(c.req.param('id'), {
       text: parsed.data.text,
       attachments: parsed.data.attachments ?? [],
       filePaths: parsed.data.filePaths ?? [],
       ...(client === undefined ? {} : { client }),
-      ...(hands === undefined || hands.length === 0 ? {} : { handsConnectionId: hands }),
+      ...(selected.connectionId === undefined ? {} : { localConnectionId: selected.connectionId }),
     });
     if (!updated.ok) {
       return updated.reason === 'chat_not_found'

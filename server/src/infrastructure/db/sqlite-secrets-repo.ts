@@ -4,7 +4,7 @@ import type { Db } from './types.js';
 
 /**
  * SQLite adapter for {@link SecretsRepo}. Plaintext exists only in memory and
- * in the caller's hands: what reaches the table is always sealed.
+ * in the caller's memory: what reaches the table is always sealed.
  */
 export class SqliteSecretsRepo implements SecretsRepo {
   constructor(

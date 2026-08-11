@@ -6,9 +6,9 @@ import type { Context } from './commands.js';
 import { ChatScreen } from './tui/chat-screen.js';
 import { VERSION } from '../version.js';
 
-const handsReady = (): string =>
+const localAccessReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
-const handsReconnecting = (): string =>
+const localAccessReconnecting = (): string =>
   'Local tools disconnected; reconnecting in the background…';
 const behindLine = (client: string, server: string, install: string): string =>
   `  pop ${client} · server ${server} · update: ${install}`;
@@ -45,21 +45,21 @@ export async function chat(
   }
 
 
-  // The hands channel, alongside the chat and never in front of it: a server
+  // The local-tools channel, alongside the chat and never in front of it: a server
   // that refuses the upgrade leaves the conversation working and the local
   // tools simply absent (docs/cli.md step 3).
-  const hands = context.hands({
+  const localAccess = context.localAccess({
     url: profile.url,
     token: profile.token,
     version: VERSION,
     onEvent: (event) => {
-      if (event.kind === 'attached') screen.say(handsReady());
-      if (event.kind === 'closed') screen.say(handsReconnecting());
+      if (event.kind === 'attached') screen.say(localAccessReady());
+      if (event.kind === 'closed') screen.say(localAccessReconnecting());
       // Behind but talking: one line, said once, and never a question. A
       // prompt on every launch is answered `n` on reflex, and the reflex is
       // then what answers the one that mattered (docs/cli.md).
       if (event.kind === 'behind') screen.say(behindLine(VERSION, event.server, event.install));
-      // Refused: the conversation still works over REST, only the hands are
+      // Refused: the conversation still works over REST, only local access is
       // gone, so this says what is missing instead of killing the screen.
       if (event.kind === 'outdated') {
         for (const line of outdatedLines(VERSION, event.minimum, event.install)) screen.say(line);
@@ -73,11 +73,11 @@ export async function chat(
   // Every message this terminal sends names the connection above, which is
   // what gives its run the local tools. Read per call: the socket may attach
   // after this line and drop before the last request (docs/cli.md, Whose
-  // hands).
+  // local connections).
   const api = context.api({
     url: profile.url,
     token: profile.token,
-    handsConnectionId: () => hands.connectionId,
+    localConnectionId: () => localAccess.connectionId,
   });
 
   const session = new ChatSession(
@@ -110,7 +110,7 @@ export async function chat(
   });
   if (options.chatId !== undefined) session.open(options.chatId);
 
-  hands.connect();
+  localAccess.connect();
   screen.start();
   // Resolves only when the stream ends; the screen exits the process itself
   // on Ctrl+C or /quit.

@@ -1,9 +1,9 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { HandsRegistry } from '../../application/hands/hands-registry.js';
+import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import { remoteOperations } from './remote-operations.js';
 
 /**
- * The second pair of hands: pi's own tools, pointed at the attached terminal
+ * The local tool set: pi's own tools, pointed at the attached terminal
  * (docs/cli.md, step 3).
  *
  * The SAME definitions the server set uses, built again with remote
@@ -23,10 +23,10 @@ type Sdk = typeof import('@earendil-works/pi-coding-agent');
 
 export function buildLocalTools(
   sdk: Sdk,
-  hands: HandsRegistry,
+  localConnections: LocalConnectionRegistry,
   connectionId: string | undefined,
 ): ToolDefinition[] {
-  const connection = hands.connection(connectionId);
+  const connection = localConnections.connection(connectionId);
   // No terminal, no second pair: the tools are absent from the prompt rather
   // than present and failing, so she can say she has no access to that
   // machine instead of trying and apologising. Both cases land here -- a
@@ -36,7 +36,7 @@ export function buildLocalTools(
 
   const { machine } = connection;
   const where = `${machine.hostname} (${machine.platform}/${machine.arch})`;
-  const operations = remoteOperations(hands, connection.id);
+  const operations = remoteOperations(localConnections, connection.id);
 
   // Typed by what it actually touches, not by ToolDefinition: each of pi's
   // definitions is a narrower generic, and the contravariant `renderCall`

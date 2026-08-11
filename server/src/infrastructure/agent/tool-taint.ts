@@ -55,12 +55,12 @@ const READERS =
  */
 const SECRETS: Record<GuardedMachine, string> = {
   server: '(secret\\.key|pi-auth\\.json|\\.env\\b|id_rsa\\b|id_ed25519\\b|authorized_keys\\b|\\.ssh\\/)',
-  hands:
+  local:
     '(id_rsa\\b|id_ed25519\\b|authorized_keys\\b|\\.ssh\\/|\\.aws\\/|\\.config\\/gh\\/|\\.npmrc\\b|\\.git-credentials\\b|\\.kube\\/|\\.netrc\\b|Library\\/Keychains|\\.docker\\/config\\.json)',
 };
 
 /** Which machine a command is bound for; the tool name decides. */
-export type GuardedMachine = 'server' | 'hands';
+export type GuardedMachine = 'server' | 'local';
 
 const EXFIL_OR_SECRET = [
   // curl/wget uploading a local file (POST body, form, or --upload).
@@ -110,7 +110,7 @@ const REFUSED_UNDER_TAINT = new Set(['skill_write']);
 /** Which machine a tool runs on. Local tools carry the prefix; nothing else. */
 export function machineOfTool(tool: string): GuardedMachine | undefined {
   if (tool === 'bash') return 'server';
-  if (tool === 'local_bash') return 'hands';
+  if (tool === 'local_bash') return 'local';
   return undefined;
 }
 

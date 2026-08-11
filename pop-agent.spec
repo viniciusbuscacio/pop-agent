@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.80 — 2026-08-11.
+Version 1.81 — 2026-08-11.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -953,7 +953,7 @@ events from stale runs.
   returned with the message snapshot and broadcast by SSE so phone, desktop and
   tabs agree on what comes next. A POST racing an active run appends atomically;
   the defensive ceiling is 1,024 pending inputs per chat, so only item 1,025 is
-  refused with `queue_full`. While pi is running with the same terminal hands,
+  refused with `queue_full`. While pi is running with the same terminal local connection,
   Pop offers one head at a time through pi's native steering queue, inheriting
   its default `one-at-a-time` behavior: each enters after the current assistant
   turn and its tool calls, before the next model call. `/queue <message>` is the
@@ -1414,7 +1414,7 @@ version is accepted.
 - The terminal chat client's `pop update` only reinstalls that client from its
   selected server; it never creates a chat or invokes an LLM.
 - Plain `git pull && npm ci && npm run build && restart` remains
-  documented for hands-on users.
+  documented for local-on users.
 
 **PWA client freshness** (the installed frontend, distinct from the two
 channels above):
@@ -1450,20 +1450,32 @@ installable. Full design in `docs/cli.md`.
 **`pop`** — the chat client. Ships as `@pop-agent/cli`, installs on any
 machine (`npm i -g <server>/cli-X.Y.Z.tgz`, served by the server itself),
 and carries no server code: no `better-sqlite3`, no `argon2`, nothing
-that knows where `secret.key` lives. A conversation started there is an
-ordinary Pop Agent chat, and while it is open the agent also has a second set
-of tools running on the machine that typed it (`local_bash`,
-`local_read`, ...). Those hands belong to the MESSAGE, not to the chat.
-If the hands WebSocket drops, the CLI keeps chat available, reports the outage
-once and reconnects automatically with exponential backoff from 1 s to 30 s;
-explicit exit cancels retries. Messages sent before reattach honestly carry no
-hands, and later messages use the new connection id.
+that knows where `secret.key` lives. The package also carries **Pop Local
+Access (PLA)**, an internal library shared by interactive CLI and the Desktop
+Manager's hidden `--managed-local-access` child mode. PLA has no UI, install,
+version or credentials of its own and never creates a chat or invokes an LLM.
+
+PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
+failures with ordinary authenticated HTTPS still healthy, it falls back to
+the long-poll `/v1/local-tools/connections/*` transport. Both use the same
+Bearer session, application frames, limits, heartbeat, cancellation and
+connection id. The Manager passes its one-shot `{url, token, role}` config by
+stdin and launches the exact detected Node + CLI entry without a shell.
+
+An interactive message explicitly names its PLA connection. A message without
+one uses the Desktop's single `managed-default` connection when attached;
+otherwise it honestly receives no local tools. An explicit dead id is rejected
+before a run starts and never falls back to another machine. Disconnects fail
+pending calls and never replay non-idempotent work. Logout, password recovery,
+epoch change and token expiry close attached local access.
 
     pop | pop "question" | pop -p "…"
     pop login | logout | servers | chats | update
     pop --version
 
-`pop --version` is an entirely offline local-inspection command: it prints only the installed semantic version and exits, without reading a profile, opening hands, contacting a server or creating a chat. Desktop managers may use it to identify an installed client safely.
+`pop --version` is entirely offline: it prints only the installed semantic
+version and exits without reading a profile, opening PLA, contacting a server
+or creating a chat. Desktop managers may use it for safe discovery.
 
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and
@@ -1485,7 +1497,7 @@ out, and prints a new recovery key once.
 list to manage yet. `popman access-list` says so rather than pretending.
 
 **Client/server versions.** The server holds its own version and the
-oldest client it accepts; the hands channel's attach compares them.
+oldest client it accepts; the local-tools attach compares them.
 Compatible is silent, merely behind prints one line with the install
 command, and below the minimum is refused with that command. The minimum
 is set by hand and moves only when the wire changes.
@@ -1663,6 +1675,13 @@ is set by hand and moves only when the wire changes.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.81 (2026-08-11): **Pop Local Access replaces the user-facing hands concept (§17).**
+  CLI and Desktop share one internal TypeScript executor. WSS `/v1/local-tools`
+  has an authenticated HTTPS long-poll fallback, managed-default routing makes
+  Desktop local tools available to PWA messages, and session expiry/revocation,
+  cancellation, process-tree cleanup, transport limits and headless IPC are
+  explicit. The breaking wire ships as 0.2.6.
 
 - 1.78 (2026-08-11): **CLI hands reconnect instead of disappearing silently (§17).**
   A dropped hands WebSocket leaves chat running, emits one visible reconnecting
@@ -2052,7 +2071,7 @@ is set by hand and moves only when the wire changes.
   Also: **hands belong to the message, not the chat** (docs/cli.md). A
   chat used to have an owner, so a message from the phone ran commands on
   whichever laptop had opened it -- possibly one that is shut. The
-  terminal now names itself on each message (`x-pop-agent-hands`), which
+  terminal now names itself on each message (`x-pop-agent-local-connection`), which
   deleted the ownership map, the claim frame and the spectator rule.
 
 - 1.56 (2026-08-04): **Every message remembers where it came from (§13).**

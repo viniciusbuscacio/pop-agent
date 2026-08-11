@@ -1,4 +1,4 @@
-import { HANDS_HEADER } from '@pop-agent/shared';
+import { LOCAL_CONNECTION_HEADER } from '@pop-agent/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
 import { PopAgentApi } from '../infrastructure/api.js';
@@ -36,11 +36,11 @@ const said = (): string => out.join('');
 function contextWith(
   http: typeof globalThis.fetch,
   profiles = new Profiles(new MemoryStore()),
-  handsFactory: Context['hands'] = (options) => {
+  localAccessFactory: Context['localAccess'] = (options) => {
     let id: string | undefined;
     return {
       connect: () => {
-        id = 'hands-test';
+        id = 'local-test';
         options.onEvent?.({ kind: 'attached' });
       },
       close: () => {
@@ -58,7 +58,7 @@ function contextWith(
     profile: 'default',
     api: (options) =>
       new PopAgentApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
-    hands: handsFactory,
+    localAccess: localAccessFactory,
     installCli: () => Promise.resolve(0),
   };
 }
@@ -220,11 +220,11 @@ describe('pop "question"', () => {
     const http = server();
     const profiles = new Profiles(new MemoryStore({ default: { url: 'http://a', token: 't' } }));
     let closed = false;
-    const hands: Context['hands'] = (options) => {
+    const localAccess: Context['localAccess'] = (options) => {
       let id: string | undefined;
       return {
         connect: () => {
-          id = 'hands-one-shot';
+          id = 'local-one-shot';
           options.onEvent?.({ kind: 'attached' });
         },
         close: () => {
@@ -237,12 +237,12 @@ describe('pop "question"', () => {
       };
     };
 
-    await ask(contextWith(http, profiles, hands), 'hello');
+    await ask(contextWith(http, profiles, localAccess), 'hello');
 
     const message = (http as unknown as { mock: { calls: [RequestInfo | URL, RequestInit][] } }).mock.calls.find(
       (call) => String(call[0]).includes('/messages'),
     );
-    expect((message?.[1].headers as Record<string, string>)[HANDS_HEADER]).toBe('hands-one-shot');
+    expect((message?.[1].headers as Record<string, string>)[LOCAL_CONNECTION_HEADER]).toBe('local-one-shot');
     expect(closed).toBe(true);
   });
 

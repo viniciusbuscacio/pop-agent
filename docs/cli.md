@@ -1,9 +1,9 @@
-# `pop` — the terminal client, with hands
+# `pop` — the terminal client, with Pop Local Access
 
 Design for a new workspace (`cli/`) and the server changes it needs. The
 spec stays normative (§17 needs the split described in "Naming" below);
 this document explains what the CLI is, what it is *not*, and the one
-genuinely new mechanism it introduces: **remote brain, local hands**.
+genuinely new mechanism it introduces: **remote brain, local access**.
 
 Decisions here came from design conversations on 2026-08-02 and
 2026-08-04. Where the maintainer chose between options, that is marked
@@ -16,7 +16,7 @@ terminal is an ordinary Pop Agent chat: it appears in the PWA, it enters
 memory, it costs from the same budget, it passes the same taint guard, it
 gets the same title treatment. Nothing about it is a side channel.
 
-The difference is where the agent's hands are. Answering a message that
+The difference is where the agent's local tools are. Answering a message that
 came from a terminal she has **two pairs**: the system tools she always
 had, running on the server, and a second set running **on the machine
 that typed it**. Pop Agent's own tools (memory, notes, skills, the Files
@@ -24,7 +24,7 @@ folder, `web_fetch`) keep running on the server, as always.
 
 *(Revised 04/08. This first said the system tools MOVE to the terminal's
 machine while one is attached, and that a `pop` on the MacBook therefore
-had no access to the server's files — "hands follow the keyboard". Both
+had no access to the server's files — "local access follows the keyboard". Both
 was chosen instead: she should be able to read a file on the server and
 write it to the laptop in one turn, and moving the tools would have made
 the same tool mean different machines depending on who was connected.)*
@@ -48,10 +48,10 @@ OS.
    │  transcript, editor       ───┼───────────────▶│   ├ memory, skills     │
    │  thinking, live output    ◀──┼────────────────┤   ├ taint guard        │
    │                              │                │   ├ cost, history      │
-   │  pi's local operations    ◀──┼── hands ch. ──▶│   └ Files              │
+   │  pi's local operations    ◀──┼── local-tools ch. ──▶│   └ Files              │
    │  (bash/read/write/edit)      │                │                        │
    └──────────────────────────────┘                └────────────────────────┘
-        the hands                                        the brain
+        local access                                        the brain
 ```
 
 **This is not "the CLI runs an agent".** No model runs locally, no
@@ -72,16 +72,16 @@ client holds one secret: a session token.
 
 | Question | Decision |
 |---|---|
-| Hands opt-in or always? | **Always on**, no flag *(decided)* |
+| Local access opt-in or always? | **Always on**, no flag *(decided)* |
 | Does `cwd` matter? | **No.** No trust prompt, no project concept. The whole machine is the ground; the launch directory is only where `bash` starts *(decided)* |
-| `pop` run on the server itself? | Same rule, no special case: hands are "the machine that typed", which there happens to be the server *(decided)* |
+| `pop` run on the server itself? | Same rule, no special case: local tools are "the machine that typed", which there happens to be the server *(decided)* |
 | Confirmations | **Yolo**: never ask *(decided)* |
 | Taint guard | **Stays on, and learns which machine it is guarding.** The threat it answers is injection (a web page telling her to read `~/.ssh/id_rsa`), not the maintainer *(decided)* — see Guarding two machines |
-| Hands channel | **WebSocket** *(decided)* — see Why a WebSocket |
-| Dead hands | **Heartbeat**, 15 s ping, gone after three unanswered *(decided)* — see Losing the hands |
-| Whose hands are they? | **The sender's.** A message carries the hands of the machine that typed it, for the whole run it starts. There is no owner, no takeover, no spectator *(decided 04/08)* — see Whose hands |
+| Local-tools channel | **WebSocket** *(decided)* — see Why a WebSocket |
+| Dead local connection | **Heartbeat**, 15 s ping, gone after three unanswered *(decided)* — see Losing local access |
+| Whose local access are they? | **The sender's.** A message carries local access of the machine that typed it, for the whole run it starts. There is no owner, no takeover, no spectator *(decided 04/08)* — see Whose local access |
 | Tool behaviour | **Reuse pi's own operations**, not a re-implementation *(decided)* |
-| Long commands | No timeout while the hands channel is alive and heart-beating; the run dies when the channel dies *(decided)* |
+| Long commands | No timeout while the local-tools channel is alive and heart-beating; the run dies when the channel dies *(decided)* |
 | Live output | Printed **locally, as it happens**; the server receives the final result. No reverse streaming in v1 *(decided)* |
 | Interactive commands (`vim`, `sudo`, `[y/N]`) | Whatever pi's bash tool already does — inherited, not designed *(decided)* |
 | Machine awareness | Inject hostname, OS, architecture and cwd into the prompt. Start there, refine later if needed *(decided)* |
@@ -120,7 +120,7 @@ The two that did not survive:
    drift, in any language.
 2. ~~**`@pop-agent/shared` for compile-time wire coupling.**~~ Real, but
    small: the wire is a handful of REST calls, the `StreamEvent` shapes
-   and the hands frames. Another language would hand-write those structs
+   and local access frames. Another language would hand-write those structs
    and cover them with a contract test. Worth something; not worth a
    language.
 
@@ -165,9 +165,9 @@ is the next section, and it has to exist either way.)*
 
 ### Version compatibility
 
-The two ends share a wire — REST, the `StreamEvent` shapes, the hands
+The two ends share a wire — REST, the `StreamEvent` shapes, local access
 frames — and a mismatched pair fails in a way nobody can read. Nothing
-about *where the client came from* prevents that; only the handshake
+about *where the client came from* prevents that; only local accesshake
 does. Attach already carries the client version (see Protocol sketch);
 the server has to read it.
 
@@ -195,7 +195,7 @@ replace a running process mid-session.
 
 **Knowing when to raise the minimum** is a judgement, not a detection.
 The wire lives in few places — the `/v1` routes, the `StreamEvent`
-shapes, the hands frames. A commit that touches one of them is the cue to
+shapes, local access frames. A commit that touches one of them is the cue to
 ask whether the previous client survives it. A test that fails when those
 files change without the number changing is worth having as a prod; it
 cannot make the call.
@@ -332,7 +332,7 @@ then show `popman update` instead of a four-command incantation).
 
 ## The wire
 
-Everything below `/v1` already exists except the hands channel.
+Everything below `/v1` already exists except the local-tools channel.
 
 ```
 pop                                    server
@@ -345,7 +345,7 @@ pop                                    server
  │ ◀━━━━ delta · thinking · tool · done · error · title · run-status
  │  POST /v1/chats/:id/stop
  │
- │  ══ hands channel (new, bidirectional) ═══════════════════════════════
+ │  ══ local-tools channel (new, bidirectional) ═══════════════════════════════
  │ ◀──── tool request   { runId, tool, input }
  │ ────▶ tool result    { runId, callId, output | error }
 ```
@@ -358,7 +358,7 @@ pop                                    server
 - Session token renewal rides the existing `x-pop-agent-token` response
   header; the client rewrites its stored token when it sees one.
 
-### Why the hands need their own channel
+### Why local access need their own channel
 
 `SseHub` is a `Set` of subscribers with no identity — every event goes to
 every connection, by design ("Pop Agent has one user, so every connection sees
@@ -369,11 +369,11 @@ phone has the PWA open, it would receive the request too.
 One property is therefore required and does not exist today:
 **connection identity** — the client announces itself on connect, and a
 tool request is addressed to one connection instead of broadcast. Which
-connection that is comes from the message (see Whose hands), so the
+connection that is comes from the message (see Whose local access), so the
 channel only has to be able to address it.
 
 Rather than teach the SSE hub identity and risk the PWA's path, the CLI
-opens a **second, bidirectional channel** dedicated to hands. SSE stays
+opens a **second, bidirectional channel** dedicated to local access. SSE stays
 the read channel for everyone.
 
 ### Precedent: this round trip already exists
@@ -388,28 +388,28 @@ the read channel for everyone.
 A tool request is the same shape with a larger payload and a longer wait.
 This is a second instance of a tested pattern, not new ground.
 
-## Whose hands
+## Whose local access
 
-**The sender's** *(decided 04/08)*. A message carries the hands of the
+**The sender's** *(decided 04/08)*. A message carries local access of the
 machine that typed it, for the whole run it starts. Sent from the
 MacBook, the run gets the MacBook's `local_*` tools; sent from the phone,
 the run has the server's tools and nothing else; sent from the ThinkPad,
 the ThinkPad's. Nothing is attached to the *chat*.
 
-*(Replaces an earlier design where the chat had a hands **owner** — the
+*(Replaces an earlier design where the chat had a local-access **owner** — the
 first client to open it — so that a message from the phone would run
 `local_bash` on whichever laptop had opened the chat. Two things killed
 it. The laptop may simply be off, and a message must never depend on a
 machine the sender is not looking at. And it needed a takeover protocol,
 a spectator rule, and a story for two terminals racing — machinery for a
-question that stops existing when hands follow the message.)*
+question that stops existing when local access follows the message.)*
 
 The rule earns its keep by deleting problems rather than answering them:
 
 - **Two terminals on one chat.** MacBook and ThinkPad, same conversation.
   Each message runs on the machine it was typed on. No conflict to
   resolve, because there was never one pair to fight over.
-- **The phone.** It has no local hands, so it never has to be told it
+- **The phone.** It has no local access, so it never has to be told it
   cannot have them; it gets the server's tools, which is what a phone
   session always had.
 - **Reading the history back.** The machine is recorded on the message,
@@ -423,7 +423,7 @@ The rule earns its keep by deleting problems rather than answering them:
 - **Two `pop` on one machine**, different chats, commands at the same
   time. Fine, and not a case worth designing for: same machine, separate
   runs *(decided 04/08)*.
-- **Mid-run changes.** There are none to consider. The hands are fixed
+- **Mid-run changes.** There are none to consider. Local access are fixed
   when the message is accepted; attaching or detaching a terminal
   afterwards does not reach into a run already in flight.
 
@@ -456,7 +456,7 @@ workspace's, and none of it was considered.
 that target's list:
 
 - **server** — what it protects today, unchanged.
-- **hands** — SSH keys, plus the credential files a developer machine
+- **local machine** — SSH keys, plus the credential files a developer machine
   carries. Pop Agent's own server files are dropped: they are not there.
 
 The destructive shapes (`rm -rf`, `sudo`, `dd`, pipe-to-shell, fork bomb)
@@ -465,7 +465,7 @@ agent read, not the person at the keyboard, and that page is no more
 welcome to run `sudo` on the laptop than on the server. None of this is
 felt in ordinary use: the guard only exists inside a tainted turn.
 
-## Losing the hands
+## Losing local access
 
 "No timeout while the channel is alive" is the right rule and the easy
 half. The hard half is noticing when it stops being alive, because a
@@ -477,7 +477,7 @@ one sleeping laptop stalls the chat for the phone too.
 2026-08-04)*:
 
 - **The heartbeat** measures the machine. A ping every **15 s**; three
-  unanswered (**45 s**) and the server declares the hands gone: the
+  unanswered (**45 s**) and the server declares local access gone: the
   pending call fails, the run aborts and is persisted as interrupted --
   the same treatment a run already gets when the server restarts
   mid-flight -- and the queue slot is freed.
@@ -487,11 +487,11 @@ one sleeping laptop stalls the chat for the phone too.
 The limit is not "this is taking too long". It is "this machine stopped
 answering", which is a different question and the only one worth asking.
 
-When the CLI's hands WebSocket closes, chat remains available and the CLI
+When the CLI's local-tools WebSocket closes, chat remains available and the CLI
 reconnects automatically with exponential backoff from 1 s to 30 s. It says
 once that local tools disconnected and are reconnecting, then prints the normal
 attached line when they return. A message sent during the gap honestly carries
-no hands; after reattach, subsequent messages name the new connection id.
+no local access; after reattach, subsequent messages name the new connection id.
 An explicit `/quit` or process shutdown cancels retries.
 
 ## Why a WebSocket
@@ -506,7 +506,7 @@ that may quietly disappear. The failure mode is the deciding factor, not
 the happy path.
 
 SSE is untouched: it stays the read channel for the PWA and for every
-spectator. The WebSocket exists only for hands, and only the CLI opens it.
+spectator. The WebSocket exists only for local access, and only the CLI opens it.
 
 ## Protocol sketch
 
@@ -522,7 +522,7 @@ time: connecting a terminal does not change any chat.
 **Send.** A message posted by the CLI names its own connection. The
 server stores that on the message and the run inherits it; a message from
 the PWA names nothing and gets a server-only run. This is the whole of
-"whose hands" — one field on the message, decided when it is accepted and
+"whose local access" — one field on the message, decided when it is accepted and
 never revisited.
 
 **Tool registration.** When a run's message named a connection, the
@@ -557,10 +557,10 @@ bytes move.
 which is the same thing arriving late — any pending tool call fails, the
 run aborts and is persisted as interrupted, and the queue slot is freed.
 That is the same treatment a run gets when the server restarts
-mid-flight. The CLI keeps the chat open and reconnects its hands in the
-background; until reattach, a message names no hands, and afterward it names
+mid-flight. The CLI keeps the chat open and reconnects local access in the
+background; until reattach, a message names no local access, and afterward it names
 the new connection. Nothing else in the chat is affected: a message from the
-phone still brings no local hands.
+phone still brings no local access.
 
 **Consequence, stated plainly:** with two sets she can move things
 between the machines herself — read on the server, write on the laptop —
@@ -608,7 +608,7 @@ shape, Pop Agent's head.
 cli/
   src/
     application/    session, chat state, StreamEvent reducer
-    infrastructure/ api client, event stream, hands executor, fake api
+    infrastructure/ api client, event stream, local-access executor, fake api
     interface/tui/  pi-tui components; commands/ for one-shot
     main.ts         composition root
 ```
@@ -626,7 +626,7 @@ with `fake-bridge`.
    token renewal)
 2. Event stream + reducer + `pop "…"` one-shot (proves SSE, dedupe by
    `seq`; no TUI yet)
-3. Hands channel — **done 04/08**. The WebSocket, the attach with the
+3. Local-tools channel — **done 04/08**. The WebSocket, the attach with the
    machine's own description, the heartbeat, remote operations
    server-side, and the guard's second list, which landed WITH the channel
    and not after it. pi's tool definitions are registered a second time
@@ -644,7 +644,7 @@ with `fake-bridge`.
    today's look at the price of every later release.
 5. `popman`, and the §17 rewrite
 6. Distribution — the bundled pack, the unauthenticated tarball route,
-   and the version handshake. The handshake is the half that is not
+   and the version handshake. Local accesshake is the half that is not
    optional: without it the packaging is a delivery mechanism with
    nothing checking what it delivered
 

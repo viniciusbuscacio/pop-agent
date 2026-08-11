@@ -1,12 +1,12 @@
 import * as sdk from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { HandsRegistry, type HandsConnection } from '../../application/hands/hands-registry.js';
+import { LocalConnectionRegistry, type LocalConnection } from '../../application/local-access/local-connection-registry.js';
 import { buildLocalTools } from './local-tools.js';
 
-function attachedTerminal(cwd: string): { registry: HandsRegistry; connection: HandsConnection } {
-  const registry = new HandsRegistry();
-  const connection: HandsConnection = {
-    id: 'hands-1',
+function attachedTerminal(cwd: string): { registry: LocalConnectionRegistry; connection: LocalConnection } {
+  const registry = new LocalConnectionRegistry();
+  const connection: LocalConnection = {
+    id: 'local-1',
     machine: {
       hostname: 'vinicius-mac',
       platform: 'darwin',

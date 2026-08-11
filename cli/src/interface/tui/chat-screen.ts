@@ -105,7 +105,7 @@ export class ChatScreen {
     this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
     // Typing `/` now opens the menu, with Tab completing. The base path is the
     // launch directory, which is what pi-tui completes files against -- worth
-    // knowing that until the hands channel lands (step 3) those files are on
+    // knowing that until the local-tools channel lands (step 3) those files are on
     // THIS machine and the agent's tools still run on the server.
     this.editor.setAutocompleteProvider(new CombinedAutocompleteProvider(COMMANDS, process.cwd()));
 

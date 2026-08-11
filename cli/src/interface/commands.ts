@@ -2,7 +2,7 @@ import { Profiles, normalizeServerUrl, DEFAULT_PROFILE, type Profile } from '../
 import { Transcript, emptyRun } from '../application/transcript.js';
 import { ApiError, PopAgentApi } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
-import type { HandsOptions } from '../infrastructure/hands.js';
+import type { LocalAccessOptions } from '../infrastructure/local-access.js';
 import { VERSION } from '../version.js';
 
 /**
@@ -20,7 +20,7 @@ export interface Terminal {
   password(prompt: string): Promise<string>;
 }
 
-export interface HandsClient {
+export interface LocalAccessClient {
   connect(): void;
   close(): void;
   readonly connectionId: string | undefined;
@@ -34,11 +34,11 @@ export interface Context {
   api: (options: {
     url: string;
     token?: string;
-    /** This terminal's hands connection, read per call (docs/cli.md, Whose hands). */
-    handsConnectionId?: () => string | undefined;
+    /** This terminal's local connection, read per call (docs/cli.md, Whose local access). */
+    localConnectionId?: () => string | undefined;
   }) => PopAgentApi;
   /** Injected so one-shot commands stay testable without opening a real socket. */
-  hands: (options: HandsOptions) => HandsClient;
+  localAccess: (options: LocalAccessOptions) => LocalAccessClient;
   /** Runs npm without a shell; injected so update tests never modify the machine. */
   installCli: (packageUrl: string) => Promise<number>;
 }
@@ -96,7 +96,7 @@ export async function chats(context: Context): Promise<number> {
   }
 }
 
-/** Updates the terminal client directly. No chat, hands channel or LLM run. */
+/** Updates the terminal client directly. No chat, local-tools channel or LLM run. */
 export async function update(context: Context): Promise<number> {
   const connected = connect(context);
   if (connected === undefined) return 1;
@@ -136,16 +136,16 @@ export async function ask(
   const connected = connect(context);
   if (connected === undefined) return 1;
 
-  let hands: HandsClient | undefined;
+  let localAccess: LocalAccessClient | undefined;
   try {
     // Unlike the interactive screen, a one-shot command cannot attach in the
     // background: its first and only message must wait until it has an id, or
     // the server truthfully gives that run no local tools at all.
-    hands = await attachHands(context, connected.profile);
+    localAccess = await attachLocalAccess(context, connected.profile);
     const api = context.api({
       url: connected.profile.url,
       token: connected.profile.token,
-      handsConnectionId: () => hands?.connectionId,
+      localConnectionId: () => localAccess?.connectionId,
     });
     const chatId = options.chatId ?? (await api.createChat()).id;
     const { ticket } = await api.eventTicket();
@@ -189,7 +189,7 @@ export async function ask(
     context.terminal.line(describe(error));
     return 1;
   } finally {
-    hands?.close();
+    localAccess?.close();
   }
 }
 
@@ -207,16 +207,16 @@ function connect(context: Context): { api: PopAgentApi; profile: Profile } | und
 }
 
 /**
- * Opens this process's short-lived hands channel and gives the handshake a
- * bounded chance to finish. A server without Hands must still answer the
+ * Opens this process's short-lived local-tools channel and gives the handshake a
+ * bounded chance to finish. A server without local access must still answer the
  * question; it just does so with server-side tools, as older versions did.
  */
-async function attachHands(context: Context, profile: Profile): Promise<HandsClient> {
+async function attachLocalAccess(context: Context, profile: Profile): Promise<LocalAccessClient> {
   let ready: () => void = () => undefined;
   const attached = new Promise<void>((resolve) => {
     ready = resolve;
   });
-  const hands = context.hands({
+  const localAccess = context.localAccess({
     url: profile.url,
     token: profile.token,
     version: VERSION,
@@ -224,7 +224,7 @@ async function attachHands(context: Context, profile: Profile): Promise<HandsCli
       if (event.kind === 'attached' || event.kind === 'closed' || event.kind === 'outdated') ready();
     },
   });
-  hands.connect();
+  localAccess.connect();
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -237,7 +237,7 @@ async function attachHands(context: Context, profile: Profile): Promise<HandsCli
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-  return hands;
+  return localAccess;
 }
 
 function describe(error: unknown): string {

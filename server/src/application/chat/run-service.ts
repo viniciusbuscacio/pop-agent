@@ -56,14 +56,14 @@ export interface StartRunOptions {
   client?: MessageClient;
   /**
    * The terminal that typed this message, when one did (docs/cli.md, Whose
-   * hands). It rides on the MESSAGE and not on the chat: a laptop that is
+   * local connections). It rides on the MESSAGE and not on the chat: a laptop that is
    * shut must never be reachable through a message sent from the phone, and
    * a chat answered from two machines has to stay legible when read back.
    *
    * Fixed here and never revisited -- attaching or detaching a terminal
    * later does not reach into a run already in flight.
    */
-  handsConnectionId?: string;
+  localConnectionId?: string;
 }
 
 export type StartRunResult =
@@ -148,7 +148,7 @@ interface PendingSteering {
   prompt: string;
   attachments: Attachment[];
   client?: MessageClient;
-  handsConnectionId?: string;
+  localConnectionId?: string;
 }
 
 interface PendingRun {
@@ -161,8 +161,8 @@ interface PendingRun {
   controller: AbortController;
   /** False silences the finished-run push for this run alone (pop-agent.spec §21). */
   notify: boolean;
-  /** The terminal whose hands this run has, if its message named one. */
-  handsConnectionId: string | undefined;
+  /** The terminal whose local connection this run has, if its message named one. */
+  localConnectionId: string | undefined;
   /** Controls the concrete bridge attempt currently using this run. */
   control: AgentRunControl | undefined;
   /** The FIFO head currently offered to pi; later durable inputs stay in SQLite. */
@@ -183,7 +183,7 @@ export interface SteeringInput {
   text: string;
   attachments: Attachment[];
   client?: MessageClient;
-  handsConnectionId?: string;
+  localConnectionId?: string;
 }
 
 /** The run in flight for a chat, as the routes hand it to a mounting client. */
@@ -356,7 +356,7 @@ export class RunService {
       attachments,
       controller: new AbortController(),
       notify: options.notify ?? true,
-      handsConnectionId: options.handsConnectionId,
+      localConnectionId: options.localConnectionId,
       control: undefined,
       steering: undefined,
       started: false,
@@ -575,14 +575,14 @@ export class RunService {
   }
 
   /** True only when the message can safely share the live session's tools. */
-  canSteer(chatId: string, handsConnectionId: string | undefined): boolean {
+  canSteer(chatId: string, localConnectionId: string | undefined): boolean {
     const runId = this.runIdByChat.get(chatId);
     const run = runId === undefined ? undefined : this.runs.get(runId);
     return (
       run !== undefined &&
       run.started &&
       run.steering === undefined &&
-      run.handsConnectionId === handsConnectionId
+      run.localConnectionId === localConnectionId
     );
   }
 
@@ -593,7 +593,7 @@ export class RunService {
     if (
       run === undefined ||
       !run.started ||
-      run.handsConnectionId !== input.handsConnectionId ||
+      run.localConnectionId !== input.localConnectionId ||
       run.control === undefined
     ) {
       return false;
@@ -709,9 +709,9 @@ export class RunService {
         model: pair.modelId,
         provider: pair.providerId,
         attachments: run.attachments,
-        ...(run.handsConnectionId === undefined
+        ...(run.localConnectionId === undefined
           ? {}
-          : { handsConnectionId: run.handsConnectionId }),
+          : { localConnectionId: run.localConnectionId }),
         confirm: (question) => this.askConfirm(run, question),
         onControlReady: (control) => {
           run.control = control;

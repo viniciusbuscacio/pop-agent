@@ -29,7 +29,7 @@ import type { Timer } from '../application/ports/timer.js';
 import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { StorageService } from '../application/storage/storage-service.js';
-import { HandsRegistry } from '../application/hands/hands-registry.js';
+import { LocalConnectionRegistry } from '../application/local-access/local-connection-registry.js';
 import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
 import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { FilesService } from '../application/files/files-service.js';
@@ -180,6 +180,7 @@ export interface TestApp {
   files: FilesService;
   runs: RunService;
   queuedMessages: QueuedMessageService;
+  localConnections: LocalConnectionRegistry;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
   mcp: McpService;
@@ -381,6 +382,7 @@ export function createTestApp(
   });
 
   const controlLog: string[] = [];
+  const localConnections = new LocalConnectionRegistry(undefined, () => clock.now());
   const app = createApp({
     auth,
     settings,
@@ -414,9 +416,7 @@ export function createTestApp(
     distillerEnabled: () => true,
     mcp,
     usage: new SqliteUsageRepo(db),
-    // No terminal ever attaches in a fixture; the registry is here so the
-    // shape is complete and the routes mount.
-    hands: new HandsRegistry(),
+    localConnections,
     // A real service over a throwaway directory: the report has to survive
     // folders that do not exist, which is exactly the fixture's shape.
     storage: new StorageService({
@@ -498,6 +498,7 @@ export function createTestApp(
     files,
     runs,
     queuedMessages,
+    localConnections,
     tasks,
     taskScheduler,
     mcp,

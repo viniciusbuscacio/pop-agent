@@ -4,7 +4,7 @@ import type {
   ReadOperations,
   WriteOperations,
 } from '@earendil-works/pi-coding-agent';
-import type { HandsRegistry } from '../../application/hands/hands-registry.js';
+import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 
 /**
  * pi's tools, pointed at the terminal instead of this disk (docs/cli.md,
@@ -18,25 +18,32 @@ import type { HandsRegistry } from '../../application/hands/hands-registry.js';
  * definitions twice rather than writing a second family of tools that would
  * drift on the next pi release.
  *
- * Everything is per connection, because the hands are: the run carries the
+ * Everything is per connection, because local access is: the run carries the
  * terminal that sent its message, and two conversations answered from two
- * machines reach two machines (docs/cli.md, Whose hands).
+ * machines reach two machines (docs/cli.md, Whose local access).
  *
  * Infrastructure, not application: it speaks pi's types, and the boundary
  * test is right to keep a third-party import out of the pure layer.
  */
-export function remoteOperations(hands: HandsRegistry, connectionId: string) {
-  const call = (tool: string, input: unknown, onOutput: (chunk: string) => void = () => undefined) =>
-    hands.call(connectionId, { tool, input }, onOutput);
+export function remoteOperations(localConnections: LocalConnectionRegistry, connectionId: string) {
+  const call = (
+    tool: string,
+    input: unknown,
+    onOutput: (chunk: string) => void = () => undefined,
+    signal?: AbortSignal,
+  ) => localConnections.call(connectionId, { tool, input }, onOutput, signal);
 
   const bash: BashOperations = {
     exec: async (command, cwd, options) => {
       // Output is streamed as it arrives, not handed over at the end: a build
       // that takes minutes should show its progress, and pi's own tool renders
       // exactly that.
-      const result = await call('bash', { command, cwd, timeout: options.timeout }, (chunk) => {
-        options.onData(Buffer.from(chunk, 'utf8'));
-      });
+      const result = await call(
+        'bash',
+        { command, cwd, timeout: options.timeout },
+        (chunk) => options.onData(Buffer.from(chunk, 'utf8')),
+        options.signal,
+      );
       if (!result.ok && result.error !== undefined) throw new Error(result.error);
       return { exitCode: result.exitCode ?? 0 };
     },

@@ -32,7 +32,7 @@ web                        server
   item to pi; wait for the run to settle. Pi inserts steering after the current
   assistant turn and its tool calls, before the next model call. Pop offers one
   FIFO head at a time, inheriting pi's default `one-at-a-time` semantics. If the
-  run has not reached pi, comes from different terminal hands, or ends first,
+  run has not reached pi, comes from a different local connection, or ends first,
   the head remains a normal follow-up. The persisted `delivery_mode` keeps
   `/queue` explicit across edits and reconnects. `PUT /v1/chats/:id/queue`
   edits the head; `DELETE` cancels the head before delivery.

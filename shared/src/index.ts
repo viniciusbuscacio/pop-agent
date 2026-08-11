@@ -40,25 +40,25 @@ export const CLIENT_HEADER = 'x-pop-agent-client';
 export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
 
 /**
- * The terminal that typed this message, named by the id its hands channel
- * gave it on attach (docs/cli.md, Whose hands).
+ * The terminal that typed this message, named by the id its local-tools channel
+ * gave it on attach (docs/cli.md, Whose local access).
  *
- * On the message and not on the chat: the hands belong to whoever is typing,
+ * On the message and not on the chat: local access belongs to whoever is typing,
  * so a laptop that is shut is never reachable through a message sent from the
  * phone, and a conversation answered from two machines stays legible when it
  * is read back later.
  *
- * Only the CLI sends it. An unknown or departed id is not an error -- the run
- * simply has the server's tools, exactly like a message from the PWA.
+ * An explicit unknown or departed id is rejected before a run starts. When
+ * absent, the server may select the Desktop's managed-default connection.
  */
-export const HANDS_HEADER = 'x-pop-agent-hands';
+export const LOCAL_CONNECTION_HEADER = 'x-pop-agent-local-connection';
 
 /**
  * The oldest `pop` this server will talk to (docs/cli.md, Version
  * compatibility).
  *
  * Set BY HAND, and moved only when the wire changes in a way an older client
- * cannot survive -- the REST shapes, the StreamEvent shapes, the hands
+ * cannot survive -- the REST shapes, the StreamEvent shapes, local access
  * frames. Most releases do not touch it, which is the point: a version number
  * that rises every release blocks clients that were working fine.
  *
@@ -66,7 +66,7 @@ export const HANDS_HEADER = 'x-pop-agent-hands';
  * consult beforehand and no copy shipped inside the client: the client learns
  * the answer by attaching and being told, so the two can never disagree.
  */
-export const MIN_CLIENT_VERSION = '0.2.0';
+export const MIN_CLIENT_VERSION = '0.2.6';
 
 /**
  * Compares two `major.minor.patch` strings. Negative when `a` is older.

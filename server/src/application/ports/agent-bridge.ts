@@ -44,10 +44,10 @@ export interface AgentRunRequest {
   attachments: Attachment[];
   /**
    * The terminal that typed this message, when one did (docs/cli.md, Whose
-   * hands). The adapter points the `local_*` tools at it; undefined means the
+   * local connections). The adapter points the `local_*` tools at it; undefined means the
    * run has the server's tools only, which is every message from the PWA.
    */
-  handsConnectionId?: string;
+  localConnectionId?: string;
   onEvent: (event: AgentEvent) => void;
   /** Called once the adapter can accept steering for this exact live run. */
   onControlReady?: (control: AgentRunControl) => void;

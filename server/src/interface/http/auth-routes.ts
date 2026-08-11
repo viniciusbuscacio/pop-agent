@@ -6,6 +6,7 @@ import {
   type AuthService,
 } from '../../application/auth/auth-service.js';
 import type { Clock } from '../../application/ports/clock.js';
+import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import { ProgressiveLockout } from './lockout.js';
@@ -35,6 +36,7 @@ const changePasswordSchema = z
 export interface AuthRoutesDeps {
   auth: AuthService;
   clock: Clock;
+  localConnections?: LocalConnectionRegistry;
 }
 
 export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
@@ -96,6 +98,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       return invalidCredentials(c);
     }
     lockout.reset();
+    deps.localConnections?.revokeAll();
     return c.json({ token: result.token, recoveryKey: result.recoveryKey });
   });
 
@@ -114,10 +117,20 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
     if (!result.ok) {
       return result.reason === 'weak_password' ? weakPassword(c) : invalidCredentials(c);
     }
+    deps.localConnections?.revokeAll();
     return c.json({ token: result.token });
   });
 
-  routes.post('/auth/sign-out-others', (c) => c.json(deps.auth.signOutOthers()));
+  routes.post('/auth/sign-out-others', (c) => {
+    const result = deps.auth.signOutOthers();
+    deps.localConnections?.revokeAll();
+    return c.json(result);
+  });
+
+  // A no-body authenticated hop whose response may carry x-pop-agent-token
+  // from the common middleware. Native clients use it to renew before a
+  // long-lived local-tools connection reaches its original expiry.
+  routes.post('/session/refresh', (c) => c.body(null, 204));
 
   return routes;
 }

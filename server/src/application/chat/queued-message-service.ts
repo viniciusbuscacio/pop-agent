@@ -17,7 +17,7 @@ export interface QueueInput {
   attachments: Attachment[];
   filePaths: string[];
   client?: MessageClient;
-  handsConnectionId?: string;
+  localConnectionId?: string;
 }
 
 export const MAX_PENDING_MESSAGES_PER_CHAT = 1024;
@@ -109,7 +109,7 @@ export class QueuedMessageService {
     if (
       queued === undefined ||
       queued.deliveryMode !== 'steer' ||
-      !this.deps.runs.canSteer(chatId, queued.handsConnectionId)
+      !this.deps.runs.canSteer(chatId, queued.localConnectionId)
     ) {
       return false;
     }
@@ -120,9 +120,9 @@ export class QueuedMessageService {
       text: queued.text,
       attachments: [...queued.attachments, ...referenced],
       ...(queued.client === undefined ? {} : { client: queued.client }),
-      ...(queued.handsConnectionId === undefined
+      ...(queued.localConnectionId === undefined
         ? {}
-        : { handsConnectionId: queued.handsConnectionId }),
+        : { localConnectionId: queued.localConnectionId }),
     });
   }
 
@@ -161,9 +161,9 @@ export class QueuedMessageService {
       [...queued.attachments, ...referenced],
       {
         ...(queued.client === undefined ? {} : { client: queued.client }),
-        ...(queued.handsConnectionId === undefined
+        ...(queued.localConnectionId === undefined
           ? {}
-          : { handsConnectionId: queued.handsConnectionId }),
+          : { localConnectionId: queued.localConnectionId }),
       },
     );
     if (!started.ok) {

@@ -41,6 +41,16 @@ describe('GET /v1/auth/state', () => {
   });
 });
 
+describe('POST /v1/session/refresh', () => {
+  it('uses the common bearer session and stays body-free', async () => {
+    const { token } = await setup();
+    expect((await post('/v1/session/refresh')).status).toBe(401);
+    const response = await post('/v1/session/refresh', undefined, token);
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+  });
+});
+
 describe('POST /v1/setup', () => {
   it('creates the account and returns the recovery key once', async () => {
     const res = await post('/v1/setup', { password: PASSWORD });

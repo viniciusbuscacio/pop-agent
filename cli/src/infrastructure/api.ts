@@ -1,7 +1,7 @@
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
-  HANDS_HEADER,
+  LOCAL_CONNECTION_HEADER,
   SESSION_TOKEN_HEADER,
 } from '@pop-agent/shared';
 import type {
@@ -41,12 +41,12 @@ export interface ApiOptions {
   /** Told when the server issues a fresh token, so the profile can store it. */
   onToken?: (token: string) => void;
   /**
-   * This terminal's hands connection, read at call time and not captured:
+   * This terminal's local connection, read at call time and not captured:
    * the socket may attach after the first request and drop before the last.
    * Undefined means the message names no machine, and the run gets the
-   * server's tools only (docs/cli.md, Whose hands).
+   * server's tools only (docs/cli.md, Whose local access).
    */
-  handsConnectionId?: () => string | undefined;
+  localConnectionId?: () => string | undefined;
   /** Injected so tests never open a socket. */
   fetch?: typeof globalThis.fetch;
 }
@@ -103,8 +103,8 @@ export class PopAgentApi {
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
     };
-    const hands = this.options.handsConnectionId?.();
-    if (hands !== undefined) headers[HANDS_HEADER] = hands;
+    const localConnectionId = this.options.localConnectionId?.();
+    if (localConnectionId !== undefined) headers[LOCAL_CONNECTION_HEADER] = localConnectionId;
     if (init.body !== undefined) headers['content-type'] = 'application/json';
     if (this.options.token !== undefined) headers['authorization'] = `Bearer ${this.options.token}`;
 

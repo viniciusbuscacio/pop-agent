@@ -30,7 +30,7 @@ import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
 import type { UsageRepo } from '../../application/ports/usage-repo.js';
 import type { StorageService } from '../../application/storage/storage-service.js';
-import type { HandsRegistry } from '../../application/hands/hands-registry.js';
+import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import type { HealthService } from '../../application/health/health-service.js';
 import type { McpService } from '../../application/mcp/mcp-service.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
@@ -53,7 +53,7 @@ import { mountApi, publicSurface, sessionGuarded } from './route-registry.js';
 import { createSkillsRoutes } from './skills-routes.js';
 import { createTaskRoutes } from './task-routes.js';
 import { createUsageRoutes } from './usage-routes.js';
-import { createHandsRoutes } from './hands-routes.js';
+import { createLocalToolsRoutes } from './local-tools-routes.js';
 import { createStorageRoutes } from './storage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { createServerRoutes } from './server-routes.js';
@@ -96,7 +96,7 @@ export interface AppDeps {
   mcp: McpService;
   usage: UsageRepo;
   storage: StorageService;
-  hands: HandsRegistry;
+  localConnections: LocalConnectionRegistry;
   backups: BackupService;
   push: PushService;
   webauthn: WebAuthnGateway;
@@ -181,7 +181,7 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createMcpRoutes(deps.mcp)),
       sessionGuarded(createUsageRoutes(deps)),
       sessionGuarded(createStorageRoutes(deps)),
-      sessionGuarded(createHandsRoutes(deps)),
+      sessionGuarded(createLocalToolsRoutes(deps)),
       sessionGuarded(
         createUpdateRoutes({
           updates: deps.updates,

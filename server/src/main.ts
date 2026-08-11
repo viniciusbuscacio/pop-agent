@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
-import { HandsRegistry, PING_EVERY_MS } from './application/hands/hands-registry.js';
+import { LocalConnectionRegistry, PING_EVERY_MS } from './application/local-access/local-connection-registry.js';
 import { Type } from 'typebox';
 import { envelope } from './domain/safety/sanitize.js';
 import { AuthService } from './application/auth/auth-service.js';
@@ -110,8 +110,8 @@ if (agent !== 'fake' && agent !== 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
-// Which terminals are attached and whose hands they are (docs/cli.md step 3).
-const hands = new HandsRegistry((line) => console.log(line));
+// Which terminals are attached and which local connections are attached (docs/cli.md step 3).
+const localConnections = new LocalConnectionRegistry((line) => console.log(line));
 // Files as a plain folder (pop-agent.spec §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
@@ -255,7 +255,7 @@ function piBridge(): PiAgentBridge {
       // pi's own config, credentials and catalog cache, all inside Pop Agent's data
       // directory: a ~/.pi on the host must not reach into this process.
       // The terminal's tools, when one is attached to this chat.
-      localTools: (sdk, handsConnectionId) => buildLocalTools(sdk, hands, handsConnectionId),
+      localTools: (sdk, localConnectionId) => buildLocalTools(sdk, localConnections, localConnectionId),
       agentDir: join(context.dataDir, 'pi-agent'),
       authPath: join(context.dataDir, 'pi-auth.json'),
       modelsStorePath: join(context.dataDir, 'pi-models-store.json'),
@@ -583,7 +583,7 @@ const app = createApp({
   distillerEnabled: () => settings.read().autoSkillMode !== 'disabled',
   mcp,
   usage: context.usage,
-  hands,
+  localConnections,
   storage: new StorageService({
     repo: context.storage,
     disk: new NodeDiskUsage(),
@@ -695,14 +695,14 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 taskScheduler.start();
 automaticDeployment.start();
 
-// The hands channel needs a WebSocket server the adaptor can upgrade onto
+// The local-tools channel needs a WebSocket server the adaptor can upgrade onto
 // (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.
 const wss = new WebSocketServer({ noServer: true });
 
 // One timer for every attached terminal: 15s between pings, gone after three
 // silences. A closed laptop lid does not close a socket, and a run parked on a
 // sleeping machine would hold the queue for the phone too.
-setInterval(() => hands.beat(), PING_EVERY_MS).unref();
+setInterval(() => localConnections.beat(), PING_EVERY_MS).unref();
 
 // The cast is the honest kind: `ws`'s emitter overloads are broader than the
 // adaptor's structural `WebSocketServerLike`, so the compiler cannot prove a

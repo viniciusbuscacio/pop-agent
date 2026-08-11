@@ -12,7 +12,7 @@ export interface QueuedMessage {
   attachments: Attachment[];
   filePaths: string[];
   client?: MessageClient;
-  handsConnectionId?: string;
+  localConnectionId?: string;
   createdAt: string;
   updatedAt: string;
 }

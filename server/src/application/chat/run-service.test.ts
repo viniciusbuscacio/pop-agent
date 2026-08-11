@@ -450,7 +450,7 @@ describe('steering a live run', () => {
   it('does not lend one terminal hands to an intervention from another client', async () => {
     bridge.script = () => new Promise(() => undefined);
     const chatId = newChat();
-    runs.startRun(chatId, 'first', [], { handsConnectionId: 'mac' });
+    runs.startRun(chatId, 'first', [], { localConnectionId: 'mac' });
 
     expect(runs.canSteer(chatId, undefined)).toBe(false);
     expect(runs.canSteer(chatId, 'other-mac')).toBe(false);

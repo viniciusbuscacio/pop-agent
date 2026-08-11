@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatDTO, MessageDTO, StreamEvent } from '@pop-agent/shared';
+import { LOCAL_CONNECTION_HEADER, type ChatDTO, type MessageDTO, type StreamEvent } from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
@@ -14,9 +14,9 @@ let token: string;
 
 async function api(
   path: string,
-  options: { method?: string; body?: unknown; auth?: boolean } = {},
+  options: { method?: string; body?: unknown; auth?: boolean; headers?: Record<string, string> } = {},
 ): Promise<Response> {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': 'application/json', ...options.headers };
   if (options.auth !== false) headers['Authorization'] = `Bearer ${token}`;
   return app.request(path, {
     method: options.method ?? 'GET',
@@ -238,6 +238,17 @@ describe('chat collection', () => {
 });
 
 describe('sending a message', () => {
+  it('rejects an explicit stale local connection before creating a run', async () => {
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'hello' },
+      headers: { [LOCAL_CONNECTION_HEADER]: 'local-gone' },
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
+  });
+
   it('accepts with 202 and the ids the client needs', async () => {
     const chat = await newChat();
 

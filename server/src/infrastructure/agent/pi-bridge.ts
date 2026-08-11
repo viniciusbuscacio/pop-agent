@@ -97,9 +97,9 @@ interface CachedSession {
    * The terminal whose tools are registered in this session, if any. pi fixes
    * the tool list when the session opens, so a message from a DIFFERENT
    * machine -- or from the phone, naming none -- has to reopen it, exactly
-   * like changed instructions below (docs/cli.md, Whose hands).
+   * like changed instructions below (docs/cli.md, Whose local access).
    */
-  handsConnectionId: string | undefined;
+  localConnectionId: string | undefined;
   /** Runs currently using it; a session in use is never swept. */
   busy: number;
   lastUsedAt: number;
@@ -143,7 +143,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
         chatId,
         pair.providerId,
         pair.modelId,
-        request.handsConnectionId,
+        request.localConnectionId,
       );
     } catch (error) {
       const code = errorCode(error);
@@ -415,7 +415,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     chatId: string,
     providerId: string,
     modelId: string,
-    handsConnectionId: string | undefined,
+    localConnectionId: string | undefined,
   ): Promise<CachedSession> {
     const instructions = this.deps.instructions?.() ?? '';
 
@@ -423,12 +423,12 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     // Instructions live in the system prompt, and the local tools live in the
     // tool list; pi fixes both when the session opens. Reopening from the
     // JSONL is the same move that survives a restart, so either change costs
-    // one transparent reload, not the conversation. The hands belong to this
+    // one transparent reload, not the conversation. Local access belongs to this
     // MESSAGE, so answering from the laptop and then from the phone reopens
     // once each way -- which is the price of the tools meaning one machine.
     const stale =
       cached !== undefined &&
-      (cached.instructions !== instructions || cached.handsConnectionId !== handsConnectionId);
+      (cached.instructions !== instructions || cached.localConnectionId !== localConnectionId);
     if (cached !== undefined && stale && cached.busy === 0) {
       cached.session.dispose();
       this.sessions.delete(chatId);
@@ -455,7 +455,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       sessionFile: chat?.piSessionId,
       instructions,
       chatId,
-      ...(handsConnectionId === undefined ? {} : { handsConnectionId }),
+      ...(localConnectionId === undefined ? {} : { localConnectionId }),
     });
 
     const entry: CachedSession = {
@@ -464,7 +464,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       providerId,
       modelId,
       instructions,
-      handsConnectionId,
+      localConnectionId,
       busy: 1,
       lastUsedAt: Date.now(),
     };
