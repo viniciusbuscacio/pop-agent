@@ -58,12 +58,14 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
  * be two answers at once -- so the phone half is carried as the platform.
  */
 function clientHeaders(): Record<string, string> {
+  const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const desktopHost = /\bPopDesktop\/[0-9.]+\b/.test(agent);
   const standalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as { standalone?: boolean }).standalone === true);
   return {
-    [CLIENT_HEADER]: standalone ? 'pwa' : 'web',
+    [CLIENT_HEADER]: desktopHost ? 'desktop' : standalone ? 'pwa' : 'web',
     [CLIENT_PLATFORM_HEADER]: platformName(),
   };
 }

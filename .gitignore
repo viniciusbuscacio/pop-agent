@@ -7,5 +7,6 @@ coverage/
 *.local
 .DS_Store
 *.tsbuildinfo
-# The packed client is a build output, rebuilt by `npm run pack:cli`.
+# Packed clients are build outputs, rebuilt by their platform projects.
 cli/pack/
+desktop/pack/

@@ -464,6 +464,17 @@ export type DeploymentRequestResponse =
 
 export type DeploymentCancelResponse = { ok: true } | { ok: false; reason: 'not_waiting' };
 
+/** Manager-only metadata for the signed Pop Desktop host package. */
+export interface DesktopReleaseResponse {
+  version: string;
+  platform: 'darwin';
+  arch: 'arm64';
+  sha256: string;
+  size: number;
+  /** Same-origin authenticated path; clients must not follow an arbitrary host. */
+  downloadPath: string;
+}
+
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
   popAgentVersion: string;

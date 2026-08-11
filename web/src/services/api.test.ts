@@ -16,6 +16,24 @@ describe('apiRequest', () => {
     await expect(apiRequest('/chats/chat-1')).resolves.toEqual({ id: 'chat-1' });
   });
 
+  it('identifies the signed native webview host as the desktop client', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh) PopDesktop/0.1.0' });
+    const fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ ok: true }))));
+    vi.stubGlobal('fetch', fetch);
+
+    await apiRequest('/settings');
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/v1/settings',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-pop-agent-client': 'desktop',
+          'x-pop-agent-client-platform': 'macos',
+        }),
+      }),
+    );
+  });
+
   it('resolves a bodyless 204 instead of choking on the missing JSON', async () => {
     vi.stubGlobal('fetch', () => Promise.resolve(new Response(null, { status: 204 })));
 

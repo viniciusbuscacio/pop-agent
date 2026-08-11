@@ -1502,6 +1502,25 @@ Compatible is silent, merely behind prints one line with the install
 command, and below the minimum is refused with that command. The minimum
 is set by hand and moves only when the wire changes.
 
+### 17.1 Pop Desktop distribution
+
+Pop Desktop is the existing PWA inside a separately installed, minimal macOS
+`WKWebView` host. The host loads this server's HTTPS origin directly: no copied
+React build, localhost proxy, native JavaScript bridge, Node, CLI or PLA. Its
+first independent version is `0.1.0`; normal PWA changes do not require a host
+release.
+
+The authenticated Manager-only contract is:
+
+- `GET /v1/desktop/release` — `{version, platform:'darwin', arch:'arm64', sha256, size, downloadPath}`;
+- `GET /v1/desktop/package/pop-desktop-X.Y.Z-darwin-arm64.zip` — the exact immutable signed bundle.
+
+The path is same-origin and exact, the normal Bearer session guards both calls,
+and the package contains no token or user data. The server reads only
+`desktop/pack/release.json` and the file it names. A malformed manifest, absent
+package or size mismatch is a 404. `desktop/pack/` is release output, not source.
+Different bytes require a new host semver and URL.
+
 ## 18. Production exposure
 
 - Bind `127.0.0.1` by default. HTTPS has **two supported shapes**, and

@@ -37,6 +37,7 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createCliDownloadRoutes } from './cli-download-routes.js';
+import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 import { createFilesRoutes } from './files-routes.js';
 import { createFilesDownloadRoutes } from './files-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
@@ -130,6 +131,8 @@ export interface AppDeps {
   webDist: string;
   /** Directory holding the packed CLI tarball (cli/pack); see Distribution. */
   cliPack: string;
+  /** Directory holding the signed Pop Desktop host release. */
+  desktopPack: string;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -164,6 +167,7 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createAuthRoutes(deps)),
       sessionGuarded(createWebAuthnRoutes(deps)),
       sessionGuarded(createSettingsRoutes(deps)),
+      sessionGuarded(createDesktopDownloadRoutes(deps)),
       sessionGuarded(createServerRoutes(deps)),
       sessionGuarded(createProviderRoutes(deps)),
       sessionGuarded(createMemoryRoutes(deps)),
