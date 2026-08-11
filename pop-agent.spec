@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.78 — 2026-08-11.
+Version 1.79 — 2026-08-11.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1455,6 +1455,9 @@ hands, and later messages use the new connection id.
 
     pop | pop "question" | pop -p "…"
     pop login | logout | servers | chats | update
+    pop --version
+
+`pop --version` is an entirely offline local-inspection command: it prints only the installed semantic version and exits, without reading a profile, opening hands, contacting a server or creating a chat. Desktop managers may use it to identify an installed client safely.
 
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and

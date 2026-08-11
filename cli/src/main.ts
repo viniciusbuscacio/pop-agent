@@ -8,6 +8,7 @@ import { Hands } from './infrastructure/hands.js';
 import { installCli } from './infrastructure/installer.js';
 import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './interface/commands.js';
 import { chat } from './interface/chat.js';
+import { VERSION } from './version.js';
 
 /**
  * Composition root (docs/cli.md, "Layout"). The one place that knows there is
@@ -26,6 +27,7 @@ const USAGE = `pop — a terminal client for your Pop Agent
   pop chats                 list conversations
   pop update                update this CLI from the selected server
 
+  --version                  print this installed CLI version and exit
   --server <name>            use a saved server other than "${DEFAULT_PROFILE}"
   --chat <id>                continue an existing conversation
   --thinking                 show the reasoning as it streams
@@ -37,6 +39,14 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
   const chatId = takeOption(args, '--chat');
   const thinking = takeFlag(args, '--thinking');
   const prompt = takeOption(args, '-p');
+  const command = args[0];
+
+  if (command === '--version' || command === '-v') {
+    // Keep this before profile and API construction: desktop managers use it
+    // for local discovery, so it must remain a side-effect-free inspection.
+    terminal.line(VERSION);
+    return 0;
+  }
 
   const profiles = new Profiles(new FileProfileStore());
   const context: Context = {
@@ -50,8 +60,6 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     hands: (options) => new Hands(options),
     installCli,
   };
-
-  const command = args[0];
 
   if (prompt !== undefined) {
     return ask(context, prompt, { ...(chatId === undefined ? {} : { chatId }), thinking });

@@ -581,6 +581,7 @@ pop -p "…"               # same, explicit, for scripts
 pop login | logout
 pop chats | open <id>
 pop update               # reinstall this CLI from the selected server, no LLM
+pop --version            # print the installed CLI version offline, then exit
 pop --server <profile>   # pick a saved server
 ```
 
