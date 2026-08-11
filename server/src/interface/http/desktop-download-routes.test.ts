@@ -7,7 +7,7 @@ import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 
 describe('Pop Desktop distribution', () => {
   let pack: string;
-  const file = 'pop-desktop-0.1.0-darwin-arm64.zip';
+  const file = 'pop-desktop-0.2.6-darwin-arm64.zip';
 
   beforeEach(() => {
     pack = mkdtempSync(join(tmpdir(), 'pop-desktop-pack-'));
@@ -16,7 +16,7 @@ describe('Pop Desktop distribution', () => {
     writeFileSync(
       join(pack, 'release.json'),
       JSON.stringify({
-        version: '0.1.0', platform: 'darwin', arch: 'arm64', file,
+        version: '0.2.6', platform: 'darwin', arch: 'arm64', file,
         sha256: createHash('sha256').update(payload).digest('hex'), size: payload.length,
       }),
     );
@@ -29,12 +29,12 @@ describe('Pop Desktop distribution', () => {
     const metadata = await routes.request('/desktop/release');
     expect(metadata.status).toBe(200);
     expect(await metadata.json()).toEqual({
-      version: '0.1.0',
+      version: '0.2.6',
       platform: 'darwin',
       arch: 'arm64',
       sha256: createHash('sha256').update('signed desktop bundle').digest('hex'),
       size: 21,
-      downloadPath: '/v1/desktop/package/pop-desktop-0.1.0-darwin-arm64.zip',
+      downloadPath: '/v1/desktop/package/pop-desktop-0.2.6-darwin-arm64.zip',
     });
 
     const download = await routes.request(`/desktop/package/${file}`);
