@@ -55,8 +55,8 @@ const HELP = COMMANDS.map(
 ).join('\n');
 
 /** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
-const THINKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
-const THINKING_FRAME_MS = 140;
+const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+const WORKING_FRAME_MS = 140;
 const DISCONNECT_QUIT_MS = 60 * 60 * 1_000;
 
 export interface ScreenOptions {
@@ -87,11 +87,12 @@ export class ChatScreen {
   private readonly header: Text;
   /** The answer being streamed. Replaced by Markdown once it settles. */
   private streaming: Text | undefined;
-  /** Placeholder occupying the exact position where the answer will grow. */
-  private activity: Text | undefined;
-  private activityTimer: ReturnType<typeof setInterval> | undefined;
+  /** Run-level state kept immediately above the editor, separate from output. */
+  private runStatus: Text | undefined;
+  private runStatusKind: RunState['status'] | undefined;
+  private runStatusTimer: ReturnType<typeof setInterval> | undefined;
   private disconnectQuitTimer: ReturnType<typeof setTimeout> | undefined;
-  private activityFrame = 0;
+  private workingFrame = 0;
   private thinkingShown = false;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
   private spoken = false;
@@ -129,7 +130,6 @@ export class ChatScreen {
       // Escape stops the run, not the program: the run is what a person wants
       // to interrupt, and Ctrl+C is already the way out.
       if (matchesKey(data, 'escape')) {
-        this.stopActivity(true);
         void this.options.session.stop();
         return { consume: true };
       }
@@ -143,7 +143,7 @@ export class ChatScreen {
   }
 
   quit(): void {
-    this.stopActivity(false);
+    this.clearRunStatus(false);
     if (this.disconnectQuitTimer !== undefined) clearTimeout(this.disconnectQuitTimer);
     this.disconnectQuitTimer = undefined;
     this.tui.stop();
@@ -180,8 +180,12 @@ export class ChatScreen {
    * drops it.
    */
   private append(component: Component): void {
+    // The run status is a fixed tail, not part of the transcript. Temporarily
+    // lift both tail components so newly appended turns land above them.
     this.tui.removeChild(this.editor);
+    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
     this.tui.addChild(component);
+    if (this.runStatus !== undefined) this.tui.addChild(this.runStatus);
     this.tui.addChild(this.editor);
     this.tui.setFocus(this.editor);
     this.tui.requestRender();
@@ -197,37 +201,25 @@ export class ChatScreen {
     this.paintHeader();
   }
 
-  /** The run moved: repaint only the line that is growing. */
+  /** The run moved: repaint its output and its independent lifecycle line. */
   onRun(state: RunState): void {
     const body = this.thinkingShown && state.thinking.length > 0
       ? `${paint.dim(state.thinking)}\n\n${state.text}`
       : state.text;
     const tools = state.tools.map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`)).join('\n');
     const shown = [tools, body].filter((part) => part.length > 0).join('\n');
-    if (shown.length === 0) {
-      this.startActivity();
-      return;
+
+    if (shown.length > 0) {
+      if (this.streaming === undefined) {
+        this.streaming = new Text(shown, 0, 0);
+        this.append(this.streaming);
+      } else {
+        this.streaming.setText(shown);
+        this.tui.requestRender();
+      }
     }
 
-    // Reuse the placeholder instead of removing and appending: steering may
-    // already have put a user line below it, and moving the answer would put
-    // that answer on the wrong side of the intervention.
-    if (this.activity !== undefined) {
-      const placeholder = this.activity;
-      this.stopActivity(false);
-      placeholder.setText(shown);
-      this.streaming = placeholder;
-      this.tui.requestRender();
-      return;
-    }
-
-    if (this.streaming === undefined) {
-      this.streaming = new Text(shown, 0, 0);
-      this.append(this.streaming);
-      return;
-    }
-    this.streaming.setText(shown);
-    this.tui.requestRender();
+    this.setRunStatus(state.status);
   }
 
   /**
@@ -236,7 +228,7 @@ export class ChatScreen {
    * once the text stops arriving mid-token.
    */
   onIdle(state: RunState): void {
-    this.stopActivity(true);
+    this.clearRunStatus(true);
     if (this.streaming !== undefined) {
       this.tui.removeChild(this.streaming);
       this.streaming = undefined;
@@ -265,13 +257,11 @@ export class ChatScreen {
    * the guidance: this TUI is append-only and deliberately has no insertion.
    */
   onSteering(): void {
-    this.stopActivity(true);
     this.streaming = undefined;
-    this.startActivity();
   }
 
   onStreamEnd(): void {
-    this.stopActivity(true);
+    this.clearRunStatus(true);
     this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
     // A dead interactive terminal can otherwise remain open indefinitely.
     // Give the user an hour to read/copy anything before doing the same clean
@@ -282,33 +272,46 @@ export class ChatScreen {
     this.disconnectQuitTimer.unref();
   }
 
-  private startActivity(): void {
-    if (this.activity !== undefined || this.streaming !== undefined) return;
-    this.activityFrame = 0;
-    this.activity = new Text(this.activityText(), 0, 0);
-    this.append(this.activity);
-    this.activityTimer = setInterval(() => {
-      if (this.activity === undefined) return;
-      this.activityFrame = (this.activityFrame + 1) % THINKING_FRAMES.length;
-      this.activity.setText(this.activityText());
-      this.tui.requestRender();
-    }, THINKING_FRAME_MS);
-    this.activityTimer.unref();
-  }
-
-  /** Stops animation; optionally removes the placeholder instead of promoting it. */
-  private stopActivity(remove: boolean): void {
-    if (this.activityTimer !== undefined) clearInterval(this.activityTimer);
-    this.activityTimer = undefined;
-    if (remove && this.activity !== undefined) {
-      this.tui.removeChild(this.activity);
-      this.tui.requestRender();
+  private setRunStatus(status: RunState['status']): void {
+    if (status === 'done' || status === 'error') {
+      this.clearRunStatus(true);
+      return;
     }
-    this.activity = undefined;
+    if (this.runStatusKind === status && this.runStatus !== undefined) return;
+
+    this.clearRunStatus(false);
+    this.runStatusKind = status;
+    this.workingFrame = 0;
+    this.runStatus = new Text(this.runStatusText(), 0, 0);
+    this.tui.removeChild(this.editor);
+    this.tui.addChild(this.runStatus);
+    this.tui.addChild(this.editor);
+    this.tui.setFocus(this.editor);
+    this.tui.requestRender();
+
+    if (status === 'running') {
+      this.runStatusTimer = setInterval(() => {
+        if (this.runStatus === undefined) return;
+        this.workingFrame = (this.workingFrame + 1) % WORKING_FRAMES.length;
+        this.runStatus.setText(this.runStatusText());
+        this.tui.requestRender();
+      }, WORKING_FRAME_MS);
+      this.runStatusTimer.unref();
+    }
   }
 
-  private activityText(): string {
-    return paint.dim(`${THINKING_FRAMES[this.activityFrame]} Thinking…`);
+  private clearRunStatus(render: boolean): void {
+    if (this.runStatusTimer !== undefined) clearInterval(this.runStatusTimer);
+    this.runStatusTimer = undefined;
+    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
+    this.runStatus = undefined;
+    this.runStatusKind = undefined;
+    if (render) this.tui.requestRender();
+  }
+
+  private runStatusText(): string {
+    if (this.runStatusKind === 'queued') return paint.dim('Waiting for a free slot…');
+    return paint.dim(`${WORKING_FRAMES[this.workingFrame]} Working…`);
   }
 
   private async submit(raw: string): Promise<void> {

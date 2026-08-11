@@ -132,6 +132,30 @@ describe('chat transcript', () => {
     expect(scroller.scrollTop).toBe(500);
   });
 
+  it('keeps the run status outside the transcript immediately above the composer', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    useChatStore.setState({
+      live: {
+        [chat.id]: {
+          runId: 'run-1',
+          status: 'running',
+          seq: 2,
+          content: 'Partial answer',
+          thinking: '',
+          tools: [{ name: 'read', status: 'done', detail: 'file.ts' }],
+        },
+      },
+    });
+
+    const status = await screen.findByTestId('run-status-line');
+    const composer = screen.getByTestId('composer');
+    expect(status.textContent).toContain('Working…');
+    expect(screen.getByTestId('chat-scroller').contains(status)).toBe(false);
+    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
   it('shows pending steering as an ordinary user message after the live answer', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());

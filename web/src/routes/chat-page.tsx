@@ -8,6 +8,7 @@ import type { ModelChoice } from '../ui/slash-menu';
 import { useChatStore } from '../store/chat';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
+import { RunStatusLine } from '../ui/run-status-line';
 import { resendSource } from '../lib/resend';
 import { shouldResumeFollowing } from '../lib/chat-follow';
 
@@ -297,23 +298,16 @@ export function ChatPage() {
             );
           })}
 
-          {live !== undefined ? (
-            live.status === 'queued' ? (
-              <p data-testid="run-queued" className="text-sm text-[var(--muted)]">
-                {t('chat.waitingTurn')}
-              </p>
-            ) : (
-              <ChatMessage
-                streaming
-                message={{
-                  role: 'assistant',
-                  content: live.content,
-                  thinking: live.thinking,
-                  tools: live.tools,
-                  attachments: [],
-                }}
-              />
-            )
+          {live?.status === 'running' ? (
+            <ChatMessage
+              message={{
+                role: 'assistant',
+                content: live.content,
+                thinking: live.thinking,
+                tools: live.tools,
+                attachments: [],
+              }}
+            />
           ) : null}
 
           {queued?.deliveryMode === 'steer' ? (
@@ -406,6 +400,10 @@ export function ChatPage() {
           </Link>
         </p>
       ) : null}
+
+      {live === undefined ? null : (
+        <RunStatusLine status={confirm === undefined ? live.status : 'approval'} />
+      )}
 
       <Composer
         chatId={chatId}

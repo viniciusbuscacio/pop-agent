@@ -105,7 +105,7 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('/help');
   });
 
-  it('animates a dim square while waiting and promotes it into the answer', async () => {
+  it('keeps one working line below the answer until the run settles', async () => {
     const { terminal, plain, writes, repaint } = recorder();
     const { screen } = screenWith(terminal);
     screen.start();
@@ -113,7 +113,7 @@ describe('ChatScreen', () => {
     const waiting = { ...emptyRun('chat-1', 'run-1'), status: 'running' as const };
     screen.onRun(waiting);
     await flush();
-    expect(plain()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Thinking…/);
+    expect(plain()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Working…/);
 
     screen.onRun({ ...waiting, text: 'Now there is an answer.' });
     await flush();
@@ -121,9 +121,60 @@ describe('ChatScreen', () => {
     repaint();
     await flush();
 
-    expect(plain()).not.toContain('Thinking…');
-    expect(plain().split('Now there is an answer.')).toHaveLength(2);
+    const frame = plain();
+    const internals = screen as unknown as {
+      tui: { children: unknown[] };
+      runStatus: unknown;
+    };
+    expect(internals.tui.children.filter((child) => child === internals.runStatus)).toHaveLength(1);
+    expect(frame).toContain('Working…');
+    expect(frame.split('Now there is an answer.')).toHaveLength(2);
+    expect(frame.lastIndexOf('Now there is an answer.')).toBeLessThan(frame.lastIndexOf('Working…'));
     screen.onIdle({ ...waiting, text: 'Now there is an answer.', status: 'done' });
+  });
+
+  it('switches from a static queue status to the animated working line', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    const queued = emptyRun('chat-1', 'run-1');
+    screen.onRun(queued);
+    await flush();
+    expect(plain()).toContain('Waiting for a free slot…');
+    expect(plain()).not.toContain('Working…');
+
+    screen.onRun({ ...queued, status: 'running' });
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+    expect(plain()).not.toContain('Waiting for a free slot…');
+    expect(plain()).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Working…/);
+    screen.onIdle({ ...queued, status: 'done' });
+  });
+
+  it('keeps working after a tool finishes and while the model continues', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    const running = {
+      ...emptyRun('chat-1', 'run-1'),
+      status: 'running' as const,
+      tools: [{ name: 'read', status: 'done' as const, detail: 'file.ts' }],
+    };
+    screen.onRun(running);
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    const frame = plain();
+    expect(frame).toContain('· read done');
+    expect(frame).toContain('Working…');
+    expect(frame.indexOf('· read done')).toBeLessThan(frame.indexOf('Working…'));
+    screen.onIdle({ ...running, status: 'done' });
   });
 
   it('removes the activity indicator when a run ends without content', async () => {
@@ -138,7 +189,7 @@ describe('ChatScreen', () => {
     writes.length = 0;
     repaint();
     await flush();
-    expect(plain()).not.toContain('Thinking…');
+    expect(plain()).not.toContain('Working…');
     expect(plain()).toContain('aborted');
   });
 

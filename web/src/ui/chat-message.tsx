@@ -11,13 +11,11 @@ import { Markdown } from './markdown';
  */
 export function ChatMessage({
   message,
-  streaming = false,
   onResend,
   resending = false,
   onChangeModel,
 }: {
   message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice'>;
-  streaming?: boolean;
   onResend?: () => void;
   resending?: boolean;
   onChangeModel?: () => void;
@@ -93,14 +91,9 @@ export function ChatMessage({
       {message.tools.length > 0 ? <ToolCards tools={message.tools} /> : null}
 
       {message.content.length > 0 ? (
-        <div
-          className={streaming ? 'streaming-tail text-[var(--screen-fg)]' : 'text-[var(--screen-fg)]'}
-          {...(streaming ? { 'data-testid': 'stream-cursor' } : {})}
-        >
+        <div className="text-[var(--screen-fg)]">
           <Markdown text={message.content} />
         </div>
-      ) : streaming && message.thinking.length === 0 && message.tools.length === 0 ? (
-        <Cursor />
       ) : null}
     </div>
   );
@@ -327,16 +320,6 @@ function Spinner() {
     <span
       aria-hidden="true"
       className="inline-block h-3 w-3 animate-spin rounded-full border border-[var(--muted)] border-t-transparent"
-    />
-  );
-}
-
-function Cursor() {
-  return (
-    <span
-      data-testid="stream-cursor"
-      aria-hidden="true"
-      className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-[var(--accent)] align-text-bottom"
     />
   );
 }

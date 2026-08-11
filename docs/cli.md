@@ -595,7 +595,12 @@ creates the entry; afterwards `pop` just opens.
 
 **Screen.** Thinking dimmed as it streams, the chosen command highlighted,
 its output live underneath (it is running right there), and the answer
-arriving word by word. pi's shape, Pop Agent's head.
+arriving word by word. A run-level line stays immediately above the editor:
+queued is the static `Waiting for a free slot…`; running is a locally animated
+Braille spinner plus `Working…`; settlement removes it. It is deliberately
+separate from the growing answer and tool rows, matching the web client and
+preventing a completed tool from making a still-active run look idle. pi's
+shape, Pop Agent's head.
 
 ## Layout
 

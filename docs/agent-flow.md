@@ -115,6 +115,11 @@ GET /v1/events            EventSink port            pi events → AgentEvent
 - Store keeps per-chat: persisted messages + a live buffer keyed by
   `runId`. `delta`/`thinking`/`tool` append to the buffer; `done` promotes
   the buffer to a persisted message (id from the event) and clears it.
+- `run-status`, not token or tool traffic, drives the run-level line immediately
+  above the composer in both clients: queued is static, running animates
+  `Working…`, and the terminal `done`/`error` removes it. Spinner frames are
+  local presentation and never cross SSE. Tool events only drive tool cards,
+  so a finished tool cannot make an otherwise-active run look idle.
 - **Reload / reconnect reconciliation**: on mount or SSE reconnect,
   refetch `GET /v1/chats/:id/messages` and merge with the live buffer by
   `runId`/`messageId` — never duplicate a message that both paths deliver

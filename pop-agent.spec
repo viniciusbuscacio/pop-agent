@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.79 — 2026-08-11.
+Version 1.80 — 2026-08-11.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -941,8 +941,14 @@ events from stale runs.
   iOS applies its native scroll; the intent listener stays passive and the
   floating control must not resize the scroller or interfere with native pan.
   Streaming must not pull the viewport back to the bottom. Following resumes
-  only when the reader moves back to the latest
-  content or taps "jump to latest". The **pending-input FIFO is
+  only when the reader moves back to the latest content or taps "jump to
+  latest". **Run activity is a separate line immediately above the composer,
+  in both web and CLI**: queued is a static “Waiting for a free slot…”, running
+  is a locally animated Braille spinner plus “Working…”, and `done`/`error`
+  removes it. Text, thinking and tool cards never replace this line; tool
+  spinners describe one call, while `run-status` describes the whole run. The
+  clients animate locally -- SSE never carries presentation frames. The
+  **pending-input FIFO is
   server-owned**: ordered SQLite rows survive restart, while the current head is
   returned with the message snapshot and broadcast by SSE so phone, desktop and
   tabs agree on what comes next. A POST racing an active run appends atomically;
