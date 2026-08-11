@@ -936,7 +936,11 @@ events from stale runs.
   language label). Mermaid/KaTeX: later.
 - Streaming UX (aw's machine as reference): runId registry, reload
   reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
-  via SSE, and per-chat drafts in localStorage. The **pending-input FIFO is
+  via SSE, and per-chat drafts in localStorage. While an answer streams, any
+  reader gesture toward older content suspends autoscroll immediately, before
+  iOS applies its native scroll; streaming must not pull the viewport back to
+  the bottom. Following resumes only when the reader moves back to the latest
+  content or taps "jump to latest". The **pending-input FIFO is
   server-owned**: ordered SQLite rows survive restart, while the current head is
   returned with the message snapshot and broadcast by SSE so phone, desktop and
   tabs agree on what comes next. A POST racing an active run appends atomically;

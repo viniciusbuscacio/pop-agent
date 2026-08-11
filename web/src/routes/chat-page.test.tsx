@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
@@ -97,6 +97,37 @@ describe('chat transcript', () => {
 
     await waitFor(() => expect(screen.queryByTestId('empty-chat-icon')).toBeNull());
     expect(screen.getByTestId('chat-message').textContent).toBe('Hello');
+  });
+
+  it('stops following as soon as an iOS reading gesture starts', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    const scroller = screen.getByTestId('chat-scroller');
+    Object.defineProperties(scroller, {
+      scrollHeight: { value: 1_000, configurable: true },
+      clientHeight: { value: 500, configurable: true },
+      scrollTop: { value: 500, writable: true, configurable: true },
+    });
+
+    fireEvent.touchStart(scroller, { touches: [{ clientY: 100 }] });
+    fireEvent.touchMove(scroller, { touches: [{ clientY: 110 }] });
+
+    useChatStore.setState({
+      live: {
+        [chat.id]: {
+          runId: 'run-1',
+          status: 'running',
+          seq: 1,
+          content: 'Streaming chunk',
+          thinking: '',
+          tools: [],
+        },
+      },
+    });
+
+    await waitFor(() => expect(screen.getByTestId('jump-to-latest')).toBeTruthy());
+    expect(scroller.scrollTop).toBe(500);
   });
 
   it('shows pending steering as an ordinary user message after the live answer', async () => {

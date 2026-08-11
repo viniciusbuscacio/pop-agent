@@ -9,6 +9,7 @@ import { useChatStore } from '../store/chat';
 import { ChatMessage } from '../ui/chat-message';
 import { Composer } from '../ui/composer';
 import { resendSource } from '../lib/resend';
+import { shouldResumeFollowing } from '../lib/chat-follow';
 
 /** One conversation: history, whatever is streaming, and the composer. */
 export function ChatPage() {
@@ -35,6 +36,7 @@ export function ChatPage() {
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  const lastScrollTop = useRef(0);
   const [missed, setMissed] = useState(0);
   // The floating "↓" is the visible half of follow mode being off.
   const [showJump, setShowJump] = useState(false);
@@ -53,6 +55,7 @@ export function ChatPage() {
     setMissed(0);
     setShowJump(false);
     atBottom.current = true;
+    lastScrollTop.current = 0;
   }, [chatId, openChat]);
 
   useEffect(() => {
@@ -124,6 +127,7 @@ export function ChatPage() {
     // dragged back down.
     if (atBottom.current) {
       element.scrollTop = element.scrollHeight;
+      lastScrollTop.current = element.scrollTop;
       setMissed(0);
     } else {
       setMissed((count) => count + 1);
@@ -142,16 +146,17 @@ export function ChatPage() {
   }
 
   function disarm(): void {
+    const element = scroller.current;
+    if (element !== null) lastScrollTop.current = element.scrollTop;
     atBottom.current = false;
     setShowJump(true);
   }
 
-  // Follow mode is disarmed by the READER's hand, never by scrollTop math:
-  // programmatic scrolls (the autoscroll itself) move scrollTop too, and
-  // mistaking them for the reader is the classic jumpy-scroll bug. A wheel
-  // up or a finger dragging content down means "let me read above".
+  // Stop following on intent, before native scrolling has updated scrollTop.
+  // That ordering matters on iOS: a streaming chunk can otherwise arrive
+  // between touchmove and the browser's scroll and pull the reader back down.
   function onWheel(event: React.WheelEvent): void {
-    if (event.deltaY < 0 && distanceFromBottom() > BOTTOM_TOLERANCE_PX) disarm();
+    if (event.deltaY < 0) disarm();
   }
 
   function onTouchStart(event: React.TouchEvent): void {
@@ -162,15 +167,31 @@ export function ChatPage() {
     const start = touchY.current;
     const now = event.touches[0]?.clientY;
     if (start === undefined || now === undefined) return;
-    if (now > start + 4 && distanceFromBottom() > BOTTOM_TOLERANCE_PX) disarm();
-    touchY.current = now;
+    if (now > start + 4) disarm();
   }
 
-  // Reaching the bottom -- by finger, wheel or the jump button -- rearms
-  // follow mode. This one MAY come from scrollTop: it only fires when the
-  // bottom is actually visible, which is true however we got there.
+  function onTouchEnd(): void {
+    touchY.current = undefined;
+  }
+
+  // Scroll direction is also a fallback for keyboard, scrollbar and any input
+  // method without wheel/touch intent events. Following resumes only after the
+  // reader moves toward the latest content and reaches the bottom.
   function onScroll(): void {
-    if (distanceFromBottom() < BOTTOM_TOLERANCE_PX) {
+    const element = scroller.current;
+    if (element === null) return;
+    const previous = lastScrollTop.current;
+    const current = element.scrollTop;
+    const distance = distanceFromBottom();
+    lastScrollTop.current = current;
+
+    if (current < previous) {
+      atBottom.current = false;
+      setShowJump(true);
+      return;
+    }
+
+    if (!atBottom.current && shouldResumeFollowing(previous, current, distance, BOTTOM_TOLERANCE_PX)) {
       atBottom.current = true;
       setShowJump(false);
       setMissed(0);
@@ -182,6 +203,7 @@ export function ChatPage() {
     if (element === null) return;
     atBottom.current = true;
     element.scrollTop = element.scrollHeight;
+    lastScrollTop.current = element.scrollTop;
     setShowJump(false);
     setMissed(0);
   }
@@ -208,6 +230,8 @@ export function ChatPage() {
         onWheel={onWheel}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
         data-testid="chat-scroller"
         className="relative flex-1 overflow-y-auto"
       >
