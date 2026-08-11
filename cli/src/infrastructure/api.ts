@@ -9,6 +9,7 @@ import type {
   ChatListResponse,
   EventTicketResponse,
   LoginResponse,
+  MessagesResponse,
   SendMessageResponse,
   UpdateStatusResponse,
 } from '@pop-agent/shared';
@@ -72,6 +73,10 @@ export class PopAgentApi {
 
   createChat(): Promise<ChatDTO> {
     return this.request<ChatDTO>('/chats', { method: 'POST' });
+  }
+
+  messages(chatId: string): Promise<MessagesResponse> {
+    return this.request<MessagesResponse>(`/chats/${chatId}/messages`);
   }
 
   /** Fire and return: the answer arrives on the stream, not here. */

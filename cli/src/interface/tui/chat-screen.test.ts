@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ChatDTO } from '@pop-agent/shared';
 import { Markdown, Text, type Terminal } from '@earendil-works/pi-tui';
 import { markdownTheme } from './theme.js';
 import { ChatSession, type SessionPorts } from '../../application/session.js';
@@ -34,8 +35,10 @@ function recorder() {
   // geometry now identical, a swap changes nothing and the differential
   // renderer writes nothing, so the diff alone can no longer be read.
   let resize: () => void = () => undefined;
+  let input: (data: string) => void = () => undefined;
   const terminal: Terminal = {
-    start: (_onInput, onResize) => {
+    start: (onInput, onResize) => {
+      input = onInput;
       resize = onResize;
     },
     stop: () => undefined,
@@ -65,6 +68,7 @@ function recorder() {
     terminal,
     plain,
     writes,
+    send: (data: string) => input(data),
     repaint: () => {
       width = 79;
       resize();
@@ -72,16 +76,32 @@ function recorder() {
   };
 }
 
+const chatDto = (id = 'chat-1'): ChatDTO => ({
+  id,
+  title: 'Conversation from the web',
+  model: '',
+  provider: '',
+  archived: false,
+  pinned: false,
+  createdAt: '',
+  updatedAt: '',
+  preview: 'Earlier question',
+});
+
 function screenWith(terminal: Terminal, onExit = vi.fn()) {
   const ports: SessionPorts = {
     createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
+    listChats: vi.fn(() => Promise.resolve([])),
+    loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
       // Never yields: these tests feed the screen directly.
     },
   };
+  const holder: { screen?: ChatScreen } = {};
   const session = new ChatSession(ports, {
+    onChatLoaded: (chat, response) => holder.screen?.onChatLoaded(chat, response),
     onRun: () => undefined,
     onIdle: () => undefined,
     onQueued: () => undefined,
@@ -91,6 +111,7 @@ function screenWith(terminal: Terminal, onExit = vi.fn()) {
     onStreamEnd: () => undefined,
   });
   const screen = new ChatScreen({ session, server: 'http://pop-agent.test', terminal, onExit });
+  holder.screen = screen;
   return { screen, session, ports, onExit };
 }
 
@@ -103,6 +124,92 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('New conversation');
     expect(plain()).toContain('http://pop-agent.test');
     expect(plain()).toContain('/help');
+  });
+
+  it('opens /chats as a keyboard picker and loads the selected conversation', async () => {
+    const { terminal, plain, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listChats).mockResolvedValueOnce([chatDto()]);
+    vi.mocked(ports.loadChat).mockResolvedValueOnce({
+      messages: [
+        {
+          id: 'stored-user',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'Earlier question',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+        {
+          id: 'stored-assistant',
+          chatId: 'chat-1',
+          role: 'assistant',
+          content: 'Earlier answer',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      ],
+    });
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/chats');
+    await flush();
+    expect(plain()).toContain('Conversation from the web');
+
+    send('\r');
+    await flush();
+    expect(ports.loadChat).toHaveBeenCalledWith('chat-1');
+    expect(plain()).toContain('Earlier question');
+    expect(plain()).toContain('Earlier answer');
+  });
+
+  it('lets the chat picker consume Escape without stopping the current run', async () => {
+    const { terminal, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listChats).mockResolvedValueOnce([chatDto()]);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/chats');
+    await flush();
+    send('\u001b');
+    await flush();
+
+    expect(ports.stop).not.toHaveBeenCalled();
+    expect((screen as unknown as { tui: { hasOverlay(): boolean } }).tui.hasOverlay()).toBe(false);
+  });
+
+  it('replaces the old transcript when a loaded chat is painted', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    screen.say('old conversation only');
+    await flush();
+
+    screen.onChatLoaded(chatDto(), {
+      messages: [
+        {
+          id: 'new-user',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'loaded conversation only',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      ],
+    });
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(plain()).toContain('loaded conversation only');
+    expect(plain()).not.toContain('old conversation only');
   });
 
   it('keeps one working line below the answer until the run settles', async () => {

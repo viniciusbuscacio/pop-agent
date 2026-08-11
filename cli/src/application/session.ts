@@ -1,4 +1,9 @@
-import type { SendMessageResponse, StreamEvent } from '@pop-agent/shared';
+import type {
+  ChatDTO,
+  MessagesResponse,
+  SendMessageResponse,
+  StreamEvent,
+} from '@pop-agent/shared';
 import { Transcript, emptyRun, type RunState } from './transcript.js';
 
 /**
@@ -16,6 +21,8 @@ import { Transcript, emptyRun, type RunState } from './transcript.js';
 
 export interface SessionPorts {
   createChat(): Promise<{ id: string }>;
+  listChats(): Promise<ChatDTO[]>;
+  loadChat(chatId: string): Promise<MessagesResponse>;
   send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
   /** Yields until the connection ends. Reconnection is the caller's business. */
@@ -23,6 +30,8 @@ export interface SessionPorts {
 }
 
 export interface SessionListener {
+  /** Stored history replaced the visible conversation after a chat switch. */
+  onChatLoaded(chat: ChatDTO, response: MessagesResponse): void;
   /** The run moved: redraw. */
   onRun(state: RunState): void;
   /** A run ended, cleanly or not. */
@@ -49,6 +58,10 @@ export class ChatSession {
   private readonly ownRunIds = new Set<string>();
   /** Durable turns already echoed locally but not consumed by pi yet. */
   private readonly ownQueuedTexts: string[] = [];
+  /** Persisted messages already painted by the latest history load. */
+  private shownMessageIds = new Set<string>();
+  /** Events for the destination chat that arrive while its snapshot is loading. */
+  private loading: { chatId: string; events: StreamEvent[] } | undefined;
 
   constructor(
     private readonly ports: SessionPorts,
@@ -66,6 +79,58 @@ export class ChatSession {
   /** Opens on an existing chat, or on a new one at the first message. */
   open(chatId: string | undefined): void {
     this.chatId = chatId;
+  }
+
+  /** The canonical open-chat list, already ordered by the server like the web. */
+  listChats(): Promise<ChatDTO[]> {
+    return this.ports.listChats();
+  }
+
+  /**
+   * Replaces the current conversation with a server snapshot.
+   *
+   * The SSE channel is global and remains live during the request. Events for
+   * the destination are buffered, then replayed over the snapshot; its seq
+   * makes overlapping fragments harmless. A failed load leaves the old chat
+   * selected and replays anything that was temporarily held for it.
+   */
+  async switchTo(chat: ChatDTO): Promise<void> {
+    const loading = { chatId: chat.id, events: [] as StreamEvent[] };
+    this.loading = loading;
+
+    let response: MessagesResponse;
+    try {
+      response = await this.ports.loadChat(chat.id);
+    } catch (error) {
+      if (this.loading === loading) {
+        this.loading = undefined;
+        for (const event of loading.events) this.absorb(event);
+      }
+      throw error;
+    }
+    // A later selection superseded this request. Its snapshot owns the screen.
+    if (this.loading !== loading) return;
+
+    this.chatId = chat.id;
+    this.shownMessageIds = new Set(response.messages.map((message) => message.id));
+    this.transcript = response.live === undefined
+      ? undefined
+      : new Transcript(
+          {
+            runId: response.live.runId,
+            chatId: chat.id,
+            text: response.live.content,
+            thinking: response.live.thinking,
+            tools: response.live.tools,
+            status: response.live.status,
+          },
+          response.live.seq,
+        );
+    this.listener.onChatLoaded(chat, response);
+    if (this.transcript !== undefined) this.listener.onRun(this.transcript.snapshot());
+
+    this.loading = undefined;
+    for (const event of loading.events) this.absorb(event);
   }
 
   /**
@@ -116,6 +181,12 @@ export class ChatSession {
   }
 
   private absorb(event: StreamEvent): void {
+    const loading = this.loading;
+    if (loading !== undefined && 'chatId' in event && event.chatId === loading.chatId) {
+      loading.events.push(event);
+      return;
+    }
+
     if (event.kind === 'run-started') {
       if (event.chatId !== this.chatId) return;
       const queuedIndex = this.ownQueuedTexts.indexOf(event.user.content);
@@ -124,7 +195,9 @@ export class ChatSession {
         this.pendingSends.some((pending) => pending.text === event.user.content) ||
         queuedIndex >= 0;
       if (queuedIndex >= 0) this.ownQueuedTexts.splice(queuedIndex, 1);
-      if (!own) this.listener.onExternalUser(event.user.content);
+      const alreadyShown = this.shownMessageIds.has(event.user.id);
+      this.shownMessageIds.add(event.user.id);
+      if (!own && !alreadyShown) this.listener.onExternalUser(event.user.content);
       if (this.transcript?.snapshot().runId !== event.runId) {
         this.transcript = new Transcript(emptyRun(event.chatId, event.runId));
         this.listener.onRun(this.transcript.snapshot());

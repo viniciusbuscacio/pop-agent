@@ -595,7 +595,11 @@ creates the entry; afterwards `pop` just opens.
 
 **Screen.** Thinking dimmed as it streams, the chosen command highlighted,
 its output live underneath (it is running right there), and the answer
-arriving word by word. A run-level line stays immediately above the editor:
+arriving word by word. `/chats` opens the server's canonical unarchived list
+(pinned first, then recent) as a keyboard picker; arrows move, Enter replaces
+the visible transcript with the selected chat's latest history and live
+snapshot, and Escape cancels without stopping the run. A run-level line stays
+immediately above the editor:
 queued is the static `Waiting for a free slot…`; running is a locally animated
 Braille spinner plus `Working…`; settlement removes it. It is deliberately
 separate from the growing answer and tool rows, matching the web client and

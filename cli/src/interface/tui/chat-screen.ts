@@ -1,20 +1,24 @@
 import {
   CombinedAutocompleteProvider,
+  Container,
   Editor,
   Markdown,
   matchesKey,
+  SelectList,
   Spacer,
   ProcessTerminal,
   Text,
   TUI,
   type Component,
+  type OverlayHandle,
   type SlashCommand,
   type Terminal,
 } from '@earendil-works/pi-tui';
+import type { ChatDTO, MessageDTO, MessagesResponse } from '@pop-agent/shared';
 import type { ChatSession } from '../../application/session.js';
 import type { RunState } from '../../application/transcript.js';
 import { ApiError } from '../../infrastructure/api.js';
-import { editorTheme, markdownTheme, paint } from './theme.js';
+import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
 
 /**
  * The interactive screen (docs/cli.md, step 4): pi's shape, Pop Agent's head.
@@ -44,6 +48,7 @@ import { editorTheme, markdownTheme, paint } from './theme.js';
  */
 const COMMANDS: SlashCommand[] = [
   { name: 'new', description: 'Start a fresh conversation' },
+  { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
   { name: 'help', description: 'List these commands' },
@@ -85,6 +90,12 @@ export class ChatScreen {
   private readonly tui: TUI;
   private readonly editor: Editor;
   private readonly header: Text;
+  /** Replaceable history; the header and editor survive a chat switch. */
+  private readonly transcript = new Container();
+  /** The chat picker is a focus-capturing pi-tui overlay. */
+  private picker: OverlayHandle | undefined;
+  /** Prevents repeated /chats submissions from racing before the list arrives. */
+  private pickerOpening = false;
   /** The answer being streamed. Replaced by Markdown once it settles. */
   private streaming: Text | undefined;
   /** Run-level state kept immediately above the editor, separate from output. */
@@ -110,6 +121,7 @@ export class ChatScreen {
     this.editor.setAutocompleteProvider(new CombinedAutocompleteProvider(COMMANDS, process.cwd()));
 
     this.tui.addChild(this.header);
+    this.tui.addChild(this.transcript);
     this.tui.addChild(this.editor);
     this.tui.setFocus(this.editor);
     this.paintHeader();
@@ -127,6 +139,9 @@ export class ChatScreen {
         this.quit();
         return { consume: true };
       }
+      // An overlay owns Escape before the screen does. Let SelectList receive
+      // it so cancelling /chats never also interrupts the current answer.
+      if (matchesKey(data, 'escape') && this.picker !== undefined) return undefined;
       // Escape stops the run, not the program: the run is what a person wants
       // to interrupt, and Ctrl+C is already the way out.
       if (matchesKey(data, 'escape')) {
@@ -169,24 +184,12 @@ export class ChatScreen {
     this.append(new Markdown(text, 0, 0, markdownTheme));
   }
 
-  /**
-   * Adds to the transcript and puts the editor back underneath it.
-   *
-   * The TUI only appends -- there is no insert -- so a child added after the
-   * editor renders BELOW it. Left alone, that is a screen where you type at
-   * the top and your words appear at the bottom, which is exactly what it did
-   * (Vinicius, 04/08). The editor is lifted and set down again on every
-   * append, and focus is reasserted because removing the focused component
-   * drops it.
-   */
+  /** Adds a component to the replaceable history above the fixed editor. */
   private append(component: Component): void {
-    // The run status is a fixed tail, not part of the transcript. Temporarily
-    // lift both tail components so newly appended turns land above them.
-    this.tui.removeChild(this.editor);
-    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
-    this.tui.addChild(component);
-    if (this.runStatus !== undefined) this.tui.addChild(this.runStatus);
-    this.tui.addChild(this.editor);
+    // History lives in its own container. That keeps the fixed tail below it
+    // and, unlike the former root-level append, lets a chat switch replace the
+    // transcript without rebuilding the header, editor or TUI.
+    this.transcript.addChild(component);
     this.tui.setFocus(this.editor);
     this.tui.requestRender();
   }
@@ -199,6 +202,116 @@ export class ChatScreen {
   setTitle(title: string): void {
     this.title = title;
     this.paintHeader();
+  }
+
+  /** Replace the visible transcript with the authoritative server history. */
+  onChatLoaded(chat: ChatDTO, response: MessagesResponse): void {
+    this.clearRunStatus(false);
+    this.streaming = undefined;
+    this.transcript.clear();
+    this.spoken = false;
+    this.setTitle(chat.title.length === 0 ? 'Untitled conversation' : chat.title);
+
+    if (response.messages.length === 0) {
+      this.say(paint.dim('No messages yet.'));
+    } else {
+      for (const message of response.messages) this.showStoredMessage(message);
+    }
+    this.tui.setFocus(this.editor);
+    // Switching conversations is a genuine replacement, including terminal
+    // scrollback from the old one; force one clean frame rather than replaying
+    // a long differential deletion line by line.
+    this.tui.requestRender(true);
+  }
+
+  /** Render one persisted turn in the same visual language as live output. */
+  private showStoredMessage(message: MessageDTO): void {
+    if (message.role === 'user') {
+      this.showUser(message.content);
+      if (message.attachments.length > 0) {
+        this.say(paint.dim(`  attachments: ${message.attachments.map((entry) => entry.name).join(', ')}`));
+      }
+      return;
+    }
+
+    if (message.role === 'system') {
+      if (this.spoken) this.append(new Spacer(1));
+      this.spoken = true;
+      this.say(paint.red(message.content));
+      return;
+    }
+
+    // A history page can technically begin with an assistant turn when older
+    // messages are outside the server's 50-message window.
+    this.spoken = true;
+    if (this.thinkingShown && message.thinking.length > 0) {
+      this.say(paint.dim(message.thinking));
+    }
+    if (message.tools.length > 0) {
+      this.say(
+        message.tools
+          .map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`))
+          .join('\n'),
+      );
+    }
+    if (message.content.length > 0) this.markdown(message.content);
+  }
+
+  /** Fetch and display the server's canonical list of open conversations. */
+  private async openChatPicker(): Promise<void> {
+    if (this.picker !== undefined || this.pickerOpening) return;
+    this.pickerOpening = true;
+
+    try {
+      const chats = await this.options.session.listChats();
+      if (chats.length === 0) {
+        this.say(paint.dim('No open conversations.'));
+        return;
+      }
+
+      const byId = new Map(chats.map((chat) => [chat.id, chat]));
+      const list = new SelectList(
+        chats.map((chat) => ({
+          value: chat.id,
+          label: `${chat.pinned ? '◆ ' : ''}${chat.title.length === 0 ? '(untitled)' : chat.title}`,
+          ...(chat.preview.length === 0
+            ? {}
+            : { description: chat.preview.replace(/\s+/g, ' ').trim() }),
+        })),
+        8,
+        selectListTheme,
+      );
+      const current = chats.findIndex((chat) => chat.id === this.options.session.currentChatId);
+      if (current >= 0) list.setSelectedIndex(current);
+
+      const close = (): void => {
+        this.picker?.hide();
+        this.picker = undefined;
+        this.tui.setFocus(this.editor);
+      };
+      list.onCancel = close;
+      list.onSelect = (item) => {
+        const selected = byId.get(item.value);
+        close();
+        if (selected === undefined) return;
+        void this.options.session.switchTo(selected).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'That conversation did not load.';
+          this.say(paint.red(message));
+        });
+      };
+
+      this.picker = this.tui.showOverlay(list, {
+        width: '80%',
+        maxHeight: '70%',
+        anchor: 'center',
+        margin: 1,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The conversations did not load.';
+      this.say(paint.red(message));
+    } finally {
+      this.pickerOpening = false;
+    }
   }
 
   /** The run moved: repaint its output and its independent lifecycle line. */
@@ -230,7 +343,7 @@ export class ChatScreen {
   onIdle(state: RunState): void {
     this.clearRunStatus(true);
     if (this.streaming !== undefined) {
-      this.tui.removeChild(this.streaming);
+      this.transcript.removeChild(this.streaming);
       this.streaming = undefined;
     }
     if (state.status === 'error') {
@@ -363,6 +476,9 @@ export class ChatScreen {
         return;
       case '/help':
         this.say(HELP);
+        return;
+      case '/chats':
+        void this.openChatPicker();
         return;
       case '/stop':
         void this.options.session.stop();

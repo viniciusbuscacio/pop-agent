@@ -83,6 +83,8 @@ export async function chat(
   const session = new ChatSession(
     {
       createChat: () => api.createChat(),
+      listChats: async () => (await api.chats()).chats,
+      loadChat: (chatId) => api.messages(chatId),
       send: (chatId, text) => api.send(chatId, text),
       stop: (chatId) => api.stop(chatId),
       events: async function* () {
@@ -94,6 +96,7 @@ export async function chat(
       },
     },
     {
+      onChatLoaded: (opened, response) => screen.onChatLoaded(opened, response),
       onRun: (state) => screen.onRun(state),
       onIdle: (state) => screen.onIdle(state),
       onQueued: (text) => screen.onQueued(text),

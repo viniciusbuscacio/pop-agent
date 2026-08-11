@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { StreamEvent } from '@pop-agent/shared';
+import type { ChatDTO, StreamEvent } from '@pop-agent/shared';
 import { ChatSession, type SessionListener, type SessionPorts } from './session.js';
 import type { RunState } from './transcript.js';
 
@@ -16,6 +16,7 @@ function harness(events: StreamEvent[] = []) {
     steering: number;
     externalUsers: string[];
     titles: string[];
+    loaded: string[];
     ended: number;
   } = {
     runs: [],
@@ -24,9 +25,11 @@ function harness(events: StreamEvent[] = []) {
     steering: 0,
     externalUsers: [],
     titles: [],
+    loaded: [],
     ended: 0,
   };
   const listener: SessionListener = {
+    onChatLoaded: (chat) => seen.loaded.push(chat.id),
     onRun: (state) => seen.runs.push(state),
     onIdle: (state) => seen.idle.push(state),
     onQueued: (text) => seen.queued.push(text),
@@ -47,6 +50,8 @@ function harness(events: StreamEvent[] = []) {
   });
   const ports: SessionPorts = {
     createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
+    listChats: vi.fn(() => Promise.resolve([])),
+    loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
@@ -63,6 +68,18 @@ const delta = (text: string, seq: number): StreamEvent => ({
   runId: 'run-1',
   seq,
   text,
+});
+
+const chatDto = (id = 'chat-1'): ChatDTO => ({
+  id,
+  title: 'Loaded conversation',
+  model: '',
+  provider: '',
+  archived: false,
+  pinned: false,
+  createdAt: '',
+  updatedAt: '',
+  preview: '',
 });
 
 describe('ChatSession', () => {
@@ -103,6 +120,70 @@ describe('ChatSession', () => {
 
     expect(ports.createChat).not.toHaveBeenCalled();
     expect(ports.send).toHaveBeenCalledWith('chat-9', 'hello');
+  });
+
+  it('loads stored history and seeds the live run when switching chats', async () => {
+    const { session, ports, seen } = harness();
+    vi.mocked(ports.loadChat).mockResolvedValueOnce({
+      messages: [
+        {
+          id: 'stored-user',
+          chatId: 'chat-1',
+          role: 'user',
+          content: 'Earlier question',
+          thinking: '',
+          tools: [],
+          attachments: [],
+          createdAt: '',
+        },
+      ],
+      live: {
+        runId: 'run-1',
+        status: 'running',
+        seq: 4,
+        content: 'Partial answer',
+        thinking: '',
+        tools: [],
+      },
+    });
+
+    await session.switchTo(chatDto());
+
+    expect(session.currentChatId).toBe('chat-1');
+    expect(seen.loaded).toEqual(['chat-1']);
+    expect(seen.runs.at(-1)).toMatchObject({ text: 'Partial answer', status: 'running' });
+  });
+
+  it('replays destination events over the loaded snapshot without duplicating overlap', async () => {
+    const { session, ports, seen, release } = harness([
+      delta('overlap', 4),
+      delta(' and newer', 5),
+    ]);
+    let finishLoad: (response: Awaited<ReturnType<SessionPorts['loadChat']>>) => void = () => undefined;
+    vi.mocked(ports.loadChat).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishLoad = resolve;
+      }),
+    );
+
+    const switching = session.switchTo(chatDto());
+    const listening = session.listen();
+    release();
+    await listening;
+    finishLoad({
+      messages: [],
+      live: {
+        runId: 'run-1',
+        status: 'running',
+        seq: 4,
+        content: 'snapshot',
+        thinking: '',
+        tools: [],
+      },
+    });
+    await switching;
+
+    expect(seen.runs.at(-1)?.text).toBe('snapshot and newer');
   });
 
   it('reports the answer as it grows and once when it settles', async () => {

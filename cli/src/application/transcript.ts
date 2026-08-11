@@ -41,11 +41,13 @@ export function emptyRun(chatId: string, runId: string): RunState {
 }
 
 export class Transcript {
-  private highestSeq = -1;
+  private highestSeq: number;
   /** Steering carries the last fragment's seq, so its persisted user id dedupes it. */
   private readonly deliveredSteering = new Set<string>();
 
-  constructor(private state: RunState) {}
+  constructor(private state: RunState, highestSeq = -1) {
+    this.highestSeq = highestSeq;
+  }
 
   snapshot(): RunState {
     return this.state;
