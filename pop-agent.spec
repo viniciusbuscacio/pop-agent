@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.77 — 2026-08-09.
+Version 1.78 — 2026-08-11.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1448,6 +1448,10 @@ that knows where `secret.key` lives. A conversation started there is an
 ordinary Pop Agent chat, and while it is open the agent also has a second set
 of tools running on the machine that typed it (`local_bash`,
 `local_read`, ...). Those hands belong to the MESSAGE, not to the chat.
+If the hands WebSocket drops, the CLI keeps chat available, reports the outage
+once and reconnects automatically with exponential backoff from 1 s to 30 s;
+explicit exit cancels retries. Messages sent before reattach honestly carry no
+hands, and later messages use the new connection id.
 
     pop | pop "question" | pop -p "…"
     pop login | logout | servers | chats | update
@@ -1651,6 +1655,12 @@ is set by hand and moves only when the wire changes.
 
 ## Changelog
 
+- 1.78 (2026-08-11): **CLI hands reconnect instead of disappearing silently (§17).**
+  A dropped hands WebSocket leaves chat running, emits one visible reconnecting
+  line and retries with bounded exponential backoff; reattach gives subsequent
+  messages the new hands id. Explicit shutdown cancels retries. The CLI already
+  identifies every request as `cli` + platform; that metadata contract is
+  unchanged.
 - 1.77 (2026-08-09): **Pending-message wording reflects delivery (§14).** A
   steering bubble carries the quiet `Sending:` status because it is entering
   the current run; the explicit follow-up strip says `Queued:` because it waits

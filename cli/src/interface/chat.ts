@@ -8,6 +8,8 @@ import { VERSION } from '../version.js';
 
 const handsReady = (): string =>
   `This machine (${hostname()}) is attached: local tools run here.`;
+const handsReconnecting = (): string =>
+  'Local tools disconnected; reconnecting in the background…';
 const behindLine = (client: string, server: string, install: string): string =>
   `  pop ${client} · server ${server} · update: ${install}`;
 const outdatedLines = (client: string, minimum: string, install: string): string[] => [
@@ -52,6 +54,7 @@ export async function chat(
     version: VERSION,
     onEvent: (event) => {
       if (event.kind === 'attached') screen.say(handsReady());
+      if (event.kind === 'closed') screen.say(handsReconnecting());
       // Behind but talking: one line, said once, and never a question. A
       // prompt on every launch is answered `n` on reflex, and the reflex is
       // then what answers the one that mattered (docs/cli.md).

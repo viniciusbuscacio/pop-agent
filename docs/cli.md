@@ -487,6 +487,13 @@ one sleeping laptop stalls the chat for the phone too.
 The limit is not "this is taking too long". It is "this machine stopped
 answering", which is a different question and the only one worth asking.
 
+When the CLI's hands WebSocket closes, chat remains available and the CLI
+reconnects automatically with exponential backoff from 1 s to 30 s. It says
+once that local tools disconnected and are reconnecting, then prints the normal
+attached line when they return. A message sent during the gap honestly carries
+no hands; after reattach, subsequent messages name the new connection id.
+An explicit `/quit` or process shutdown cancels retries.
+
 ## Why a WebSocket
 
 *(decided 2026-08-04)* Ping/pong is a WebSocket frame, with a deadline the
@@ -550,8 +557,10 @@ bytes move.
 which is the same thing arriving late — any pending tool call fails, the
 run aborts and is persisted as interrupted, and the queue slot is freed.
 That is the same treatment a run gets when the server restarts
-mid-flight. Nothing else in the chat is affected: the next message brings
-whatever hands *it* was typed with, or none if it came from the phone.
+mid-flight. The CLI keeps the chat open and reconnects its hands in the
+background; until reattach, a message names no hands, and afterward it names
+the new connection. Nothing else in the chat is affected: a message from the
+phone still brings no local hands.
 
 **Consequence, stated plainly:** with two sets she can move things
 between the machines herself — read on the server, write on the laptop —

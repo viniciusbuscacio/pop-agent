@@ -23,6 +23,8 @@ export interface HandsOptions {
   version: string;
   /** Told when the socket opens or closes, and when something ran here. */
   onEvent?: (event: HandsEvent) => void;
+  /** Test seam; production retries use exponential backoff. */
+  reconnectDelayMs?: number;
 }
 
 export type HandsEvent =
@@ -33,6 +35,7 @@ export type HandsEvent =
   | { kind: 'outdated'; minimum: string; server: string; install: string }
   /** Something ran here; the screen says so, because it happened on YOUR machine. */
   | { kind: 'ran'; command: string }
+  /** The chat stays up while hands reconnect in the background. */
   | { kind: 'closed' };
 
 interface CallFrame {
@@ -63,12 +66,25 @@ export class Hands {
   private socket: WebSocket | undefined;
   /** The name the server gave this connection on attach. */
   private id: string | undefined;
-  /** Set when the server refused the version; the close that follows is not news. */
+  /** Set when the server refused the version; reconnecting cannot fix it. */
   private refused = false;
+  private shouldConnect = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private reconnectAttempt = 0;
+  private outageReported = false;
 
   constructor(private readonly options: HandsOptions) {}
 
   connect(): void {
+    if (this.shouldConnect) return;
+    this.shouldConnect = true;
+    this.refused = false;
+    this.openSocket();
+  }
+
+  private openSocket(): void {
+    if (!this.shouldConnect || this.refused) return;
+
     const url = `${this.options.url.replace(/^http/, 'ws')}/v1/hands`;
     // A Node client can send headers on the handshake, so the bearer token
     // goes the same way it does everywhere else -- no ticket needed, unlike
@@ -114,6 +130,7 @@ export class Hands {
       if (frame.kind === 'outdated') {
         // The server hung up; nothing here should retry into a wall.
         this.refused = true;
+        this.shouldConnect = false;
         this.options.onEvent?.({
           kind: 'outdated',
           minimum: frame.minimum ?? '',
@@ -127,6 +144,8 @@ export class Hands {
         // that is what gives the run its second pair of hands (docs/cli.md,
         // Whose hands). Attaching by itself claims no conversation.
         if (typeof frame.id === 'string') this.id = frame.id;
+        this.reconnectAttempt = 0;
+        this.outageReported = false;
         this.options.onEvent?.({ kind: 'attached' });
         if (frame.update !== undefined) {
           this.options.onEvent?.({
@@ -144,15 +163,31 @@ export class Hands {
     });
 
     socket.on('close', () => {
+      if (this.socket !== socket) return;
+      this.socket = undefined;
       this.id = undefined;
-      if (this.refused) return;
-      this.options.onEvent?.({ kind: 'closed' });
+      if (this.refused || !this.shouldConnect) return;
+      if (!this.outageReported) {
+        this.outageReported = true;
+        this.options.onEvent?.({ kind: 'closed' });
+      }
+      this.scheduleReconnect();
     });
 
-    // Swallowed on purpose: a server without the channel, or one that refuses
-    // the upgrade, must not take the chat down with it. The screen simply has
-    // no local hands.
+    // A failed handshake reaches `close` too. The chat remains usable and the
+    // retry loop restores local tools when the server or network comes back.
     socket.on('error', () => undefined);
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.shouldConnect || this.refused || this.reconnectTimer !== undefined) return;
+    const delay =
+      this.options.reconnectDelayMs ?? Math.min(1_000 * 2 ** this.reconnectAttempt, 30_000);
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      this.openSocket();
+    }, delay);
   }
 
   /**
@@ -226,8 +261,12 @@ export class Hands {
   }
 
   close(): void {
-    this.socket?.close();
+    this.shouldConnect = false;
+    if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
+    const socket = this.socket;
     this.socket = undefined;
     this.id = undefined;
+    socket?.close();
   }
 }
