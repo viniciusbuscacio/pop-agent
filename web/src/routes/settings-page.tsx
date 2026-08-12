@@ -24,7 +24,7 @@ import { serverService } from '../services/server';
 import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { SkillEditor } from './skill-editor';
-import { checkForUpdateNow } from '../services/pwa-update';
+import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
@@ -1180,20 +1180,27 @@ function AppUpdatesCard() {
   const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
   const setIntervalMinutes = useUpdatesStore((state) => state.setIntervalMinutes);
   const [checking, setChecking] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<string | undefined>(undefined);
 
-  async function checkNow(): Promise<void> {
+  async function updateNow(): Promise<void> {
     setChecking(true);
     setResult(undefined);
     const outcome = await checkForUpdateNow();
-    setResult(
-      outcome === 'update-found'
-        ? t('settings.updates.found')
-        : outcome === 'up-to-date'
-          ? t('settings.updates.current')
-          : t('settings.updates.checkUnavailable'),
-    );
     setChecking(false);
+
+    if (outcome === 'update-found') {
+      setApplying(true);
+      setResult(t('settings.updates.applying'));
+      await applyUpdate();
+      return;
+    }
+
+    setResult(
+      outcome === 'up-to-date'
+        ? t('settings.updates.current')
+        : t('settings.updates.checkUnavailable'),
+    );
   }
 
   return (
@@ -1218,10 +1225,14 @@ function AppUpdatesCard() {
           type="button"
           variant="ghost"
           data-testid="update-check-now"
-          disabled={checking}
-          onClick={() => void checkNow()}
+          disabled={checking || applying}
+          onClick={() => void updateNow()}
         >
-          {checking ? t('settings.updates.checking') : t('settings.updates.checkNow')}
+          {applying
+            ? t('settings.updates.applying')
+            : checking
+              ? t('settings.updates.checking')
+              : t('settings.updates.updateNow')}
         </Button>
       </div>
       {result !== undefined ? (

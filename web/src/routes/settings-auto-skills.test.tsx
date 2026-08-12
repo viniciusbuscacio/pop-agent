@@ -9,7 +9,10 @@ import { SettingsPage } from './settings-page';
 const read = vi.fn();
 const write = vi.fn();
 
-vi.mock('../services/pwa-update', () => ({ checkForUpdateNow: vi.fn() }));
+vi.mock('../services/pwa-update', () => ({
+  applyUpdate: vi.fn(),
+  checkForUpdateNow: vi.fn(),
+}));
 
 vi.mock('../services/settings', () => ({
   settingsService: {
