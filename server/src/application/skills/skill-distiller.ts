@@ -452,8 +452,14 @@ export class SkillDistiller implements MaintenanceJob {
 
     const action = target === undefined ? 'new' as const : 'revision' as const;
     const finalCandidate = target === undefined ? candidate : { ...candidate, slug: target.slug };
-    if (target !== undefined && skillVersionHash(finalCandidate) === skillVersionHash(target)) {
-      return { result: { slug: finalCandidate.slug, disposition: 'rejected', targetSlug: target.slug } };
+    if (target !== undefined) {
+      const identical = skillVersionHash(finalCandidate) === skillVersionHash(target);
+      const likelyRewording =
+        vocabularyOverlap(finalCandidate.body, target.body) >= 0.45 &&
+        finalCandidate.body.length <= target.body.length * 1.2;
+      if (identical || likelyRewording) {
+        return { result: { slug: finalCandidate.slug, disposition: 'rejected', targetSlug: target.slug } };
+      }
     }
     const neighbour = measured.nearest === undefined
       ? undefined

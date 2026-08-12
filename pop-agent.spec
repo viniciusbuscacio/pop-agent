@@ -358,7 +358,9 @@ selection is 100% local, no LLM call:
 - **Dedup remains measured:** cosine ≥ 0.88 AND vocabulary overlap ≥ 0.25. The full vault,
   including archived skills, remains comparison material. A match against `auto` proposes
   `revision`; a match against `builtin`/`user` ends as `protected_duplicate` without
-  spending the reviewer call. Precision beats aggressive merging.
+  spending the reviewer call. Exact duplicates and likely rewordings (high body-vocabulary
+  overlap without substantial expansion) also terminate locally before review. Precision
+  beats aggressive merging or revision churn.
 - **Review binding:** the SHA-256 `review_hash` covers normalized sanitized content, action
   (`new`/`revision`), target slug, target-version hash and nearest dedup neighbour. An
   approval for creation cannot authorize a revision, and a target changed after review fails.

@@ -529,6 +529,25 @@ describe('SkillDistiller', () => {
     });
   });
 
+  it('terminates a likely rewording before spending the reviewer call', async () => {
+    world = harness({
+      answer: ANSWER.replace('Push to main.', 'Read the current file, inspect recent evidence, then append one result.'),
+      skills: [{
+        slug: 'deploy-blog',
+        name: 'Deploy the blog',
+        description: 'How to publish a post',
+        whenToUse: 'when the user wants to publish',
+        body: 'Read the existing file, inspect recent evidence, and append a single result.',
+        source: 'auto',
+      }],
+    });
+    await world.distiller.run();
+
+    expect(world.prompts).toHaveLength(1);
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.results[0]).toMatchObject({ disposition: 'rejected' });
+  });
+
   it('records no synthetic similarity on a slug collision', async () => {
     // The revision table is the dataset the dedup bars get retuned from, so
     // the only numbers allowed in it are measured ones. A collision with no
