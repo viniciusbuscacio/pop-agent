@@ -52,10 +52,10 @@ const SKILLS: SkillsResponse = {
       source: 'user',
     },
     {
-      slug: 'learned',
+      slug: 'desktop-window-confirm-prompt-fix',
       name: 'Learned skill',
       description: 'auto',
-      whenToUse: 'when learned',
+      whenToUse: 'when the native confirmation callback is missing',
       body: 'body',
       source: 'auto',
     },
@@ -109,6 +109,21 @@ describe('the skills sidebar filter', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('skill-row')).toHaveLength(2);
     });
+    expect(screen.getByText('Learned skill')).toBeDefined();
+  });
+
+  it('finds skills by slug and routing trigger', async () => {
+    renderSkillsList();
+    await waitFor(() => expect(screen.getAllByTestId('skill-row')).toHaveLength(4));
+
+    const filter = screen.getByTestId('list-filter');
+    await userEvent.type(filter, 'desktop-window-confirm-prompt-fix');
+    await waitFor(() => expect(screen.getAllByTestId('skill-row')).toHaveLength(1));
+    expect(screen.getByText('Learned skill')).toBeDefined();
+
+    await userEvent.clear(filter);
+    await userEvent.type(filter, 'native confirmation callback');
+    await waitFor(() => expect(screen.getAllByTestId('skill-row')).toHaveLength(1));
     expect(screen.getByText('Learned skill')).toBeDefined();
   });
 

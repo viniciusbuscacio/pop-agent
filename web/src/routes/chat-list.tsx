@@ -775,7 +775,9 @@ function SkillsList({ filter }: { filter: string }) {
   const shown = skills.filter((skill) => {
     if (!matchesSourceFilter(skill, sourceFilter)) return false;
     if (query.length === 0) return true;
-    return `${skill.name} ${skill.description}`.toLowerCase().includes(query);
+    return `${skill.slug} ${skill.name} ${skill.description} ${skill.whenToUse}`
+      .toLowerCase()
+      .includes(query);
   });
 
   return (
