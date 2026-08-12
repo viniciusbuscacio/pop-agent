@@ -4,6 +4,7 @@ import { sanitize } from '../../domain/safety/sanitize.js';
 import {
   buildDistillPrompt,
   candidateRoutingText,
+  hasUnresolvedRunFailure,
   hasUsableRouting,
   parseDistillAnswer,
   scrubCandidate,
@@ -184,6 +185,19 @@ export class SkillDistiller implements MaintenanceJob {
     // Conservative by design: one suspicious tool result anywhere in the window
     // and the whole conversation is skipped, permanently. Store only warning
     // labels, never the hostile source text that produced them.
+    if (hasUnresolvedRunFailure(window)) {
+      this.advanceTarget(target, lastId);
+      finish({
+        state: 'completed',
+        outcome: 'nothing',
+        errorCode: 'unresolved_run_failure',
+        errorMessage: 'The conversation ended with an unresolved failed or interrupted run.',
+        finishedAt: now(),
+      });
+      journal(`chat=${chat.id} skipped (unresolved run failure)`);
+      return;
+    }
+
     const externalContent = window.map((message) => externalContentOf(message)).join('\n');
     const verdict = sanitize(externalContent);
     if (verdict.riskLevel !== 'low') {

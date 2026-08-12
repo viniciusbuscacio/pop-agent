@@ -66,6 +66,20 @@ const SKILL_LINE = /^=+\s*(?:candidate|skill)\s*=*$/i;
 const BODY_LINE = /^-+\s*body\s*-*$/i;
 const END_LINE = /^=+\s*end\s*=*$/i;
 
+export function hasUnresolvedRunFailure(messages: readonly Message[]): boolean {
+  let lastFailure = -1;
+  for (const [index, message] of messages.entries()) {
+    const persistedFailure = message.notice?.kind === 'run-failure';
+    const interrupted = message.role === 'assistant' && /interrupted by a server restart/i.test(message.content);
+    if (persistedFailure || interrupted) lastFailure = index;
+  }
+  if (lastFailure < 0) return false;
+  return !messages.slice(lastFailure + 1).some((message) =>
+    message.role === 'assistant' &&
+    message.content.trim().length > 0 &&
+    !/interrupted by a server restart/i.test(message.content));
+}
+
 export function buildDistillPrompt(
   messages: readonly Message[],
   existing: readonly { slug: string; description: string }[],
@@ -113,6 +127,9 @@ export function buildDistillPrompt(
     '  alone. This is the normal outcome and it is always better than a vague skill.',
     '- If the procedure is incomplete -- you would not be able to follow it yourself -- answer',
     '  with the end marker alone. A half-written skill is worse than none.',
+    '- A plan, recommendation, analysis, authorization to implement, or plausible next step is not',
+    '  a proven procedure. Require evidence that the work actually completed or that the user',
+    '  directly supplied a stable procedure. A failed/interrupted attempt is never success.',
     '- One conversation may yield several skills, one per distinct procedure. Do not merge two',
     `  unrelated procedures into one skill. At most ${String(MAX_CANDIDATES)}.`,
     '- Do not repeat a skill that already exists (listed below). Only propose one that overlaps',

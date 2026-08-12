@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '../chat/chat.js';
 import {
   buildDistillPrompt,
+  hasUnresolvedRunFailure,
   hasUsableRouting,
   parseDistillAnswer,
   scrubCandidate,
@@ -47,6 +48,27 @@ function block(overrides: Partial<SkillCandidate> = {}): string {
   ].join('\n');
 }
 
+describe('unresolved run failures', () => {
+  it('blocks a failed implementation followed only by an empty assistant shell', () => {
+    const failed: Message = {
+      ...message('system', 'That answer could not be finished. (provider_error)'),
+      id: 'failure',
+      notice: { kind: 'run-failure', failed: { providerId: 'p', modelId: 'm', code: 'provider_error' } },
+    };
+    expect(hasUnresolvedRunFailure([
+      message('user', 'please implement it'), failed, message('assistant', ''),
+    ])).toBe(true);
+  });
+
+  it('allows a later completed answer to resolve an earlier interruption', () => {
+    expect(hasUnresolvedRunFailure([
+      message('assistant', '*— interrupted by a server restart —*'),
+      message('user', 'did it work?'),
+      message('assistant', 'Yes. The validated operation completed successfully.'),
+    ])).toBe(false);
+  });
+});
+
 describe('buildDistillPrompt', () => {
   it('states the boundary the router depends on: facts are not skills', () => {
     const prompt = buildDistillPrompt([message('user', 'how do I deploy?')], []);
@@ -64,6 +86,7 @@ describe('buildDistillPrompt', () => {
   it('promises the body needs no escaping, which is why the format changed', () => {
     const prompt = buildDistillPrompt([message('user', 'hello')], []);
     expect(prompt).toMatch(/Nothing needs escaping/);
+    expect(prompt).toContain('A failed/interrupted attempt is never success');
   });
 
   it('lists what already exists, so it does not propose a duplicate', () => {

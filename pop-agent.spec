@@ -339,8 +339,11 @@ selection is 100% local, no LLM call:
   secret scrub → normalization → dedup → review envelope + review_hash → reviewer →
   final validation → recoverable publication + immediate indexing`.
 
-  A tainted window advances its watermark without any LLM call. The creator and reviewer
-  are fresh, isolated service completions with fixed English prompts. Creator output is
+  A tainted window advances its watermark without any LLM call. A conversation whose last
+  implementation run failed or was interrupted without a later completed answer is likewise
+  ineligible before either LLM: a plan, analysis, authorization or attempted implementation
+  is not evidence of a procedure that worked. The creator and reviewer are fresh, isolated
+  service completions with fixed English prompts. Creator output is
   marker-delimited Markdown (never JSON), includes stable evidence message ids, and may
   contain up to five candidates. The reviewer receives the sanitized original window and
   only surviving candidates as untrusted data; it returns exactly one APPROVE/REJECT block
