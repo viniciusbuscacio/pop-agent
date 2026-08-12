@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { LOCAL_CONNECTION_HEADER, type ChatDTO, type MessageDTO, type StreamEvent } from '@pop-agent/shared';
+import { CLIENT_HEADER, LOCAL_CONNECTION_HEADER, type ChatDTO, type MessageDTO, type StreamEvent } from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
@@ -265,6 +265,39 @@ describe('sending a message', () => {
     });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
+  });
+
+  it('uses managed local access only for Desktop-originated messages', async () => {
+    fixture.localConnections.attach({
+      id: 'local-managed',
+      role: 'managed-default',
+      machine: {
+        hostname: 'Mac', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.12',
+      },
+      send: () => undefined,
+      close: () => undefined,
+    });
+
+    const desktopChat = await newChat();
+    expect((await api(`/v1/chats/${desktopChat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'slow: desktop' },
+      headers: { [CLIENT_HEADER]: 'desktop' },
+    })).status).toBe(202);
+    expect(fixture.runs.canSteer(desktopChat.id, 'local-managed')).toBe(true);
+    await api(`/v1/chats/${desktopChat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+
+    const webChat = await newChat();
+    expect((await api(`/v1/chats/${webChat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'slow: browser' },
+      headers: { [CLIENT_HEADER]: 'web' },
+    })).status).toBe(202);
+    expect(fixture.runs.canSteer(webChat.id, undefined)).toBe(true);
+    expect(fixture.runs.canSteer(webChat.id, 'local-managed')).toBe(false);
+    await api(`/v1/chats/${webChat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
   });
 
   it('accepts with 202 and the ids the client needs', async () => {

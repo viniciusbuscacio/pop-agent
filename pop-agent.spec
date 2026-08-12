@@ -1466,20 +1466,24 @@ installable. Full design in `docs/cli.md`.
 machine (`npm i -g <server>/cli-X.Y.Z.tgz`, served by the server itself),
 and carries no server code: no `better-sqlite3`, no `argon2`, nothing
 that knows where `secret.key` lives. The package also carries **Pop Local
-Access (PLA)**, an internal library shared by interactive CLI and the Desktop
-Manager's hidden `--managed-local-access` child mode. PLA has no UI, install,
-version or credentials of its own and never creates a chat or invokes an LLM.
+Access (PLA)**, an internal library shared by interactive CLI and the Pop
+Desktop host's hidden `--managed-local-access` child mode. PLA has no UI,
+install, version or credentials of its own and never creates a chat or invokes
+an LLM.
 
 PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
 failures with ordinary authenticated HTTPS still healthy, it falls back to
 the long-poll `/v1/local-tools/connections/*` transport. Both use the same
 Bearer session, application frames, limits, heartbeat, cancellation and
-connection id. The Manager passes its one-shot `{url, token, role}` config by
-stdin and launches the exact detected Node + CLI entry without a shell.
+connection id. Pop Desktop passes `{url, token, role}` by stdin, keeps that
+pipe open for renewed web sessions, and launches the exact detected Node + CLI
+entry without a shell. The Manager installs and diagnoses those components but
+does not own the runtime connection.
 
-An interactive message explicitly names its PLA connection. A message without
-one uses the Desktop's single `managed-default` connection when attached;
-otherwise it honestly receives no local tools. An explicit dead id is rejected
+An interactive message explicitly names its PLA connection. A Desktop-originated
+message without one uses that Desktop's single `managed-default` connection
+when attached; ordinary web/PWA messages never inherit it implicitly. Otherwise
+the run honestly receives no local tools. An explicit dead id is rejected
 before a run starts and never falls back to another machine. Disconnects fail
 pending calls and never replay non-idempotent work. Logout, password recovery,
 epoch change and token expiry close attached local access.
@@ -1536,9 +1540,13 @@ is set by hand and moves only when the wire changes.
 
 Pop Desktop is the existing PWA inside a separately installed, minimal macOS
 `WKWebView` host. The host loads this server's HTTPS origin directly: no copied
-React build, localhost proxy, native JavaScript bridge, Node, CLI or PLA. Its
-release version follows the global Pop Agent version (`0.2.11` here); normal PWA changes do not require a host
-release, but the next native host change uses the then-current global version.
+React build or localhost proxy. A narrowly scoped main-frame, same-origin bridge
+synchronizes only the PWA bearer session; it exposes no filesystem, shell or
+native command API. The host detects a compatible local Node and Pop CLI, then
+supervises the CLI's PLA child for the Desktop lifetime. Its release version
+follows the global Pop Agent version (`0.2.12` here); normal PWA changes do not
+require a host release, but the next native host change uses the then-current
+global version.
 
 The authenticated Manager-only contract is:
 

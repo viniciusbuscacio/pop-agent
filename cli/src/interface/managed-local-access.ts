@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline';
+import type { Readable } from 'node:stream';
 import { LocalAccess, type LocalAccessEvent } from '../infrastructure/local-access.js';
 import { VERSION } from '../version.js';
 import type { Terminal } from './commands.js';
@@ -11,27 +12,39 @@ interface StartConfig {
   role: 'managed-default';
 }
 
+interface SessionUpdate {
+  kind: 'session';
+  token: string;
+}
+
 export async function managedLocalAccess(terminal: Terminal): Promise<number> {
-  const config = await readStartConfig();
+  const input = createManagedInput(process.stdin);
+  const config = await input.initial;
   if (config === undefined) {
+    input.close();
     terminal.line(JSON.stringify({ kind: 'fatal', code: 'invalid_config' }));
     return 64;
   }
 
   let fatalCode: number | undefined;
+  let stopReason: 'signal' | 'input_closed' | 'fatal' = 'signal';
   let finish: () => void = () => undefined;
   const stopped = new Promise<void>((resolve) => {
     finish = resolve;
   });
   const localAccess = new LocalAccess({
     url: config.url,
-    token: config.token,
+    // The Desktop keeps stdin open and can replace a renewed web session
+    // without tearing down an in-flight local call. The new token is used on
+    // the next HTTP request or reconnect.
+    token: () => input.token(),
     version: VERSION,
     role: 'managed-default',
     onEvent: (event) => {
       terminal.line(JSON.stringify(toLifecycle(event)));
       if (event.kind === 'outdated') {
         fatalCode = 78;
+        stopReason = 'fatal';
         finish();
       }
     },
@@ -43,13 +56,19 @@ export async function managedLocalAccess(terminal: Terminal): Promise<number> {
   process.once('SIGTERM', stop);
   localAccess.connect();
   try {
-    await stopped;
+    await Promise.race([
+      stopped,
+      input.closed.then(() => {
+        stopReason = 'input_closed';
+      }),
+    ]);
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
     localAccess.close();
+    input.close();
   }
-  terminal.line(JSON.stringify({ kind: 'stopped', reason: fatalCode === undefined ? 'signal' : 'fatal' }));
+  terminal.line(JSON.stringify({ kind: 'stopped', reason: stopReason }));
   return fatalCode ?? 0;
 }
 
@@ -70,35 +89,70 @@ function toLifecycle(event: LocalAccessEvent): Record<string, unknown> {
   }
 }
 
-function readStartConfig(): Promise<StartConfig | undefined> {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-    const timer = setTimeout(() => {
-      rl.close();
-      resolve(undefined);
-    }, 10_000);
-    rl.once('line', (line) => {
+export interface ManagedInput {
+  initial: Promise<StartConfig | undefined>;
+  closed: Promise<void>;
+  token(): string;
+  close(): void;
+}
+
+export function createManagedInput(source: Readable): ManagedInput {
+  const rl = createInterface({ input: source, crlfDelay: Infinity });
+  let token = '';
+  let receivedInitial = false;
+  let resolveInitial: (value: StartConfig | undefined) => void = () => undefined;
+  let resolveClosed: () => void = () => undefined;
+  const initial = new Promise<StartConfig | undefined>((resolve) => {
+    resolveInitial = resolve;
+  });
+  const closed = new Promise<void>((resolve) => {
+    resolveClosed = resolve;
+  });
+  const timer = setTimeout(() => {
+    if (!receivedInitial) resolveInitial(undefined);
+    rl.close();
+  }, 10_000);
+
+  rl.on('line', (line) => {
+    if (Buffer.byteLength(line, 'utf8') > 16 * 1024) {
+      if (!receivedInitial) {
+        receivedInitial = true;
+        clearTimeout(timer);
+        resolveInitial(undefined);
+        rl.close();
+      }
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      parsed = undefined;
+    }
+    if (!receivedInitial) {
+      receivedInitial = true;
       clearTimeout(timer);
-      rl.close();
-      if (Buffer.byteLength(line, 'utf8') > 16 * 1024) {
-        resolve(undefined);
+      if (!validConfig(parsed)) {
+        resolveInitial(undefined);
+        rl.close();
         return;
       }
-      try {
-        const parsed: unknown = JSON.parse(line);
-        if (!validConfig(parsed)) {
-          resolve(undefined);
-          return;
-        }
-        resolve(parsed);
-      } catch {
-        resolve(undefined);
-      }
-    });
-    rl.once('close', () => {
-      clearTimeout(timer);
-    });
+      token = parsed.token;
+      resolveInitial(parsed);
+      return;
+    }
+    if (validSessionUpdate(parsed)) token = parsed.token;
   });
+  rl.once('close', () => {
+    clearTimeout(timer);
+    if (!receivedInitial) {
+      receivedInitial = true;
+      resolveInitial(undefined);
+    }
+    resolveClosed();
+  });
+
+  return { initial, closed, token: () => token, close: () => rl.close() };
 }
 
 function validConfig(value: unknown): value is StartConfig {
@@ -109,8 +163,7 @@ function validConfig(value: unknown): value is StartConfig {
     item['kind'] !== 'start' ||
     item['protocol'] !== 1 ||
     item['role'] !== 'managed-default' ||
-    typeof item['token'] !== 'string' ||
-    item['token'].length === 0 ||
+    !validToken(item['token']) ||
     typeof item['url'] !== 'string'
   ) return false;
   try {
@@ -119,4 +172,15 @@ function validConfig(value: unknown): value is StartConfig {
   } catch {
     return false;
   }
+}
+
+function validSessionUpdate(value: unknown): value is SessionUpdate {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return Object.keys(item).every((key) => ['kind', 'token'].includes(key)) &&
+    item['kind'] === 'session' && validToken(item['token']);
+}
+
+function validToken(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 12 * 1024;
 }
