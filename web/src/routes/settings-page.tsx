@@ -14,7 +14,7 @@ import {
 } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ProvidersSection } from './providers-section';
-import { ApiError } from '../services/api';
+import { ApiError, clientEnvironment } from '../services/api';
 import { authService } from '../services/auth';
 import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
@@ -32,6 +32,7 @@ import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
 import { relativeTime } from '../lib/time';
+import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 
 /**
  * Settings as a full screen with a back button -- never a drawer or a modal
@@ -1183,6 +1184,7 @@ function AppUpdatesCard() {
   const [checking, setChecking] = useState(false);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<string | undefined>(undefined);
+  const client = clientEnvironment();
 
   async function updateNow(): Promise<void> {
     setChecking(true);
@@ -1206,21 +1208,21 @@ function AppUpdatesCard() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.updates.checkTitle')}</span>
-      <Select
-        id="update-interval"
-        data-testid="update-interval"
-        label={t('settings.updates.every')}
-        value={intervalMinutes}
-        onChange={(event) => setIntervalMinutes(Number(event.target.value))}
-        className="w-full max-w-xs"
-      >
-        {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
-          <option key={minutes} value={minutes}>
-            {intervalLabel(minutes)}
-          </option>
-        ))}
-      </Select>
+      <div>
+        <h2 className="text-base font-semibold">{client.deviceLabel}</h2>
+        <p className="text-xs text-[var(--muted)]">{t('settings.updates.deviceSubtitle')}</p>
+      </div>
+      <Row label={t('settings.updates.appType')} value={client.appLabel} testId="update-local-kind" />
+      <Row
+        label={t('settings.updates.localVersion')}
+        value={LOCAL_POP_AGENT_VERSION}
+        testId="update-local-version"
+      />
+      {result !== undefined ? (
+        <p role="status" data-testid="update-check-result" className="text-sm text-[var(--muted)]">
+          {result}
+        </p>
+      ) : null}
       <div>
         <Button
           type="button"
@@ -1233,15 +1235,24 @@ function AppUpdatesCard() {
             ? t('settings.updates.applying')
             : checking
               ? t('settings.updates.checking')
-              : t('settings.updates.updateNow')}
+              : t('settings.updates.checkAndUpdate')}
         </Button>
       </div>
-      {result !== undefined ? (
-        <p role="status" data-testid="update-check-result" className="text-xs text-[var(--muted)]">
-          {result}
-        </p>
-      ) : null}
-      <p className="text-xs text-[var(--muted)]">{t('settings.updates.checkNote')}</p>
+      <Select
+        id="update-interval"
+        data-testid="update-interval"
+        label={t('settings.updates.automaticChecks')}
+        value={intervalMinutes}
+        onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+        className="w-full max-w-xs"
+      >
+        {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
+          <option key={minutes} value={minutes}>
+            {intervalLabel(minutes)}
+          </option>
+        ))}
+      </Select>
+      <p className="text-xs text-[var(--muted)]">{t('settings.updates.deviceNote')}</p>
     </Card>
   );
 }
@@ -1533,150 +1544,163 @@ function UpdatesSection() {
     <div className="flex flex-col gap-4">
       <AppUpdatesCard />
 
-      {appSettings === undefined ? null : (
-        <Card className="flex flex-col gap-4">
-          <CheckField
-            id="updates-auto-activate"
-            testId="updates-auto-activate"
-            label={t('settings.updates.autoActivate')}
-            hint={t('settings.updates.autoActivateHint')}
-            checked={appSettings.autoActivatePreparedUpdates}
-            onChange={(checked) => saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
-          />
-          {appSettings.autoActivatePreparedUpdates ? (
-            <Select
-              id="updates-idle-minutes"
-              data-testid="updates-idle-minutes"
-              label={t('settings.updates.idleMinutes')}
-              hint={t('settings.updates.idleMinutesHint')}
-              value={String(appSettings.autoRestartIdleMinutes)}
-              onChange={(event) =>
-                saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
-              }
-            >
-              {[5, 10, 15, 30, 60].map((minutes) => (
-                <option key={minutes} value={minutes}>{minutes}</option>
-              ))}
-            </Select>
-          ) : null}
-        </Card>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          data-testid="update-refresh-server"
-          disabled={refreshing}
-          onClick={() => void load(true)}
-        >
-          {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.refreshServer')}
-        </Button>
-        {refreshNote !== undefined ? (
-          <p role="status" data-testid="update-refresh-result" className="text-xs text-[var(--muted)]">
-            {refreshNote}
-          </p>
-        ) : null}
-      </div>
-
-      <Card className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">{t('settings.updates.serverTitle')}</h2>
+      <Card className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-base font-semibold">{t('settings.updates.yourServer')}</h2>
+          <p className="text-xs text-[var(--muted)]">{t('settings.updates.serverSubtitle')}</p>
+        </div>
         <Row
-          label={t('settings.updates.installed')}
-          value={update?.popAgent.current ?? '…'}
+          label={t('settings.updates.runningNow')}
+          value={
+            update === undefined
+              ? '…'
+              : `${update.popAgent.current} · ${deployment?.runningCommit ?? 'unknown'}`
+          }
           testId="update-pop-agent-current"
         />
-        {popAgentOutdated ? (
-          <p data-testid="update-pop-agent-available" className="text-sm text-[var(--accent)]">
-            {t('settings.updates.popAgentAvailable', { version: update?.popAgent.latest ?? '' })}
-          </p>
-        ) : (
-          <p className="text-sm text-[var(--muted)]">{t('settings.updates.upToDate')}</p>
-        )}
+        {deployment?.pending ? (
+          <Row
+            label={t('settings.updates.readyToActivate')}
+            value={`${update?.popAgent.current ?? '…'} · ${deployment.headCommit}`}
+            testId="update-head-commit"
+          />
+        ) : null}
         {deployment !== undefined ? (
-          <div className="mt-2 flex flex-col gap-2 rounded border border-[var(--border)] bg-[var(--input-bg)] p-3">
-            <Row
-              label={t('settings.updates.runningCommit')}
-              value={deployment.runningCommit}
-              testId="update-running-commit"
-            />
-            <Row
-              label={t('settings.updates.checkoutCommit')}
-              value={deployment.headCommit}
-              testId="update-head-commit"
-            />
-            <p
-              data-testid="update-deployment-phase"
-              className={deployment.pending ? 'text-sm text-[var(--accent)]' : 'text-sm text-[var(--muted)]'}
+          <p
+            data-testid="update-deployment-phase"
+            className={deployment.pending ? 'text-sm text-[var(--accent)]' : 'text-sm text-[var(--muted)]'}
+          >
+            {t(`settings.updates.phase.${deployment.phase}`)}
+          </p>
+        ) : null}
+        {deployment?.clean === false ? (
+          <p role="alert" className="text-xs text-[var(--danger)]">
+            {t('settings.updates.dirtyTree')}
+          </p>
+        ) : null}
+        {deployment?.error !== undefined ? (
+          <p role="alert" className="text-xs text-[var(--danger)]">{deployment.error}</p>
+        ) : null}
+        {deployment?.failedRef !== undefined ? (
+          <p className="text-xs text-[var(--muted)]">
+            {t('settings.updates.failedRef', { ref: deployment.failedRef })}
+          </p>
+        ) : null}
+        {deployment?.pending ? (
+          <div>
+            <Button
+              type="button"
+              data-testid="update-restart-when-idle"
+              disabled={!deployment.clean || deploymentBusy || deploying}
+              onClick={() => void restartWhenIdle()}
             >
-              {t(`settings.updates.phase.${deployment.phase}`)}
-            </p>
-            {!deployment.clean ? (
-              <p role="alert" className="text-xs text-[var(--danger)]">
-                {t('settings.updates.dirtyTree')}
-              </p>
-            ) : null}
-            {deployment.error !== undefined ? (
-              <p role="alert" className="text-xs text-[var(--danger)]">
-                {deployment.error}
-              </p>
-            ) : null}
-            {deployment.failedRef !== undefined ? (
-              <p className="text-xs text-[var(--muted)]">
-                {t('settings.updates.failedRef', { ref: deployment.failedRef })}
-              </p>
-            ) : null}
-            {deployment.pending ? (
-              <div>
-                <Button
-                  type="button"
-                  data-testid="update-restart-when-idle"
-                  disabled={!deployment.clean || deploymentBusy || deploying}
-                  onClick={() => void restartWhenIdle()}
-                >
-                  {deploymentBusy || deploying
-                    ? t('settings.updates.waitingForIdle')
-                    : t('settings.updates.restartWhenIdle')}
-                </Button>
-              </div>
-            ) : null}
+              {deploymentBusy || deploying
+                ? t('settings.updates.waitingForIdle')
+                : t('settings.updates.restartWhenIdle')}
+            </Button>
           </div>
         ) : null}
-        <p className="text-xs text-[var(--muted)]">{t('settings.updates.notifyNote')}</p>
-        <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
-        <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
-          {update?.updateCommand ?? '…'}
-        </pre>
-        <div>
+
+        {appSettings === undefined ? null : (
+          <div className="mt-1 flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+            <CheckField
+              id="updates-auto-activate"
+              testId="updates-auto-activate"
+              label={t('settings.updates.autoActivate')}
+              hint={t('settings.updates.autoActivateHint')}
+              checked={appSettings.autoActivatePreparedUpdates}
+              onChange={(checked) => saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
+            />
+            {appSettings.autoActivatePreparedUpdates ? (
+              <Select
+                id="updates-idle-minutes"
+                data-testid="updates-idle-minutes"
+                label={t('settings.updates.idleMinutes')}
+                hint={t('settings.updates.idleMinutesHint')}
+                value={String(appSettings.autoRestartIdleMinutes)}
+                onChange={(event) =>
+                  saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
+                }
+              >
+                {[5, 10, 15, 30, 60].map((minutes) => (
+                  <option key={minutes} value={minutes}>{minutes}</option>
+                ))}
+              </Select>
+            ) : null}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
           <Button
             type="button"
             variant="ghost"
-            data-testid="update-copy-command"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(update?.updateCommand ?? '')
-                .then(() => setCopied(true));
-            }}
+            data-testid="update-refresh-server"
+            disabled={refreshing}
+            onClick={() => void load(true)}
           >
-            {copied ? t('settings.updates.copied') : t('settings.updates.copy')}
+            {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.refreshServer')}
           </Button>
+          {refreshNote !== undefined ? (
+            <p role="status" data-testid="update-refresh-result" className="text-xs text-[var(--muted)]">
+              {refreshNote}
+            </p>
+          ) : null}
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">{t('settings.updates.envTitle')}</h2>
-        <Row label="pi" value={update?.pi.current ?? '…'} testId="update-pi-current" />
-        {piOutdated ? (
-          <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
-            {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
-          </p>
-        ) : null}
-        <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
-        {(update?.environment ?? []).map((tool) => (
-          <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />
-        ))}
-        <p className="text-xs text-[var(--muted)]">{t('settings.updates.envNote')}</p>
-      </Card>
+      <details className="rounded-xl border border-[var(--border)] bg-[var(--panel-bg)] p-6">
+        <summary className="cursor-pointer text-base font-semibold">{t('settings.updates.advanced')}</summary>
+        <div className="mt-4 flex flex-col gap-4">
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">{t('settings.updates.publishedReleases')}</h3>
+            {popAgentOutdated ? (
+              <p data-testid="update-pop-agent-available" className="text-sm text-[var(--accent)]">
+                {t('settings.updates.popAgentAvailable', { version: update?.popAgent.latest ?? '' })}
+              </p>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">{t('settings.updates.noNewerRelease')}</p>
+            )}
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.notifyNote')}</p>
+          </section>
+
+          <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+            <h3 className="text-sm font-semibold">{t('settings.updates.runtimeComponents')}</h3>
+            <Row label="pi" value={update?.pi.current ?? '…'} testId="update-pi-current" />
+            {piOutdated ? (
+              <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
+                {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
+              </p>
+            ) : null}
+            <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
+            {(update?.environment ?? []).map((tool) => (
+              <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />
+            ))}
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.envNote')}</p>
+          </section>
+
+          <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+            <h3 className="text-sm font-semibold">{t('settings.updates.manualUpdate')}</h3>
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
+            <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
+              {update?.updateCommand ?? '…'}
+            </pre>
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="update-copy-command"
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(update?.updateCommand ?? '')
+                    .then(() => setCopied(true));
+                }}
+              >
+                {copied ? t('settings.updates.copied') : t('settings.updates.copy')}
+              </Button>
+            </div>
+          </section>
+        </div>
+      </details>
     </div>
   );
 }

@@ -57,16 +57,44 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
  * for. A form factor is NOT a client -- "PWA on an iPhone" would otherwise
  * be two answers at once -- so the phone half is carried as the platform.
  */
-function clientHeaders(): Record<string, string> {
+export interface ClientEnvironment {
+  kind: 'web' | 'pwa' | 'desktop';
+  platform: string;
+  deviceLabel: string;
+  appLabel: string;
+}
+
+/** Shared by request headers and Settings so both describe this client identically. */
+export function clientEnvironment(): ClientEnvironment {
   const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   const desktopHost = /\bPopDesktop\/[0-9.]+\b/.test(agent);
   const standalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as { standalone?: boolean }).standalone === true);
+  const kind = desktopHost ? 'desktop' : standalone ? 'pwa' : 'web';
+  const platform = platformName();
+  const applePhone = /iPhone|iPod/i.test(agent);
+  const appleTablet = /iPad/i.test(agent);
   return {
-    [CLIENT_HEADER]: desktopHost ? 'desktop' : standalone ? 'pwa' : 'web',
-    [CLIENT_PLATFORM_HEADER]: platformName(),
+    kind,
+    platform,
+    deviceLabel: applePhone
+      ? 'This iPhone'
+      : appleTablet
+        ? 'This iPad'
+        : platform === 'macos'
+          ? 'This Mac'
+          : 'This device',
+    appLabel: kind === 'pwa' ? 'Installed PWA' : kind === 'desktop' ? 'Pop Desktop' : 'Web browser',
+  };
+}
+
+function clientHeaders(): Record<string, string> {
+  const client = clientEnvironment();
+  return {
+    [CLIENT_HEADER]: client.kind,
+    [CLIENT_PLATFORM_HEADER]: client.platform,
   };
 }
 

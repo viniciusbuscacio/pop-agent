@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const popAgentVersion = readFileSync(join(root, 'VERSION'), 'utf8').trim();
 
 /**
  * The build writes to web/dist, which the Hono server serves directly. There
@@ -10,6 +16,11 @@ import { VitePWA } from 'vite-plugin-pwa';
  * exactly what production serves.
  */
 export default defineConfig({
+  // This is compiled into the PWA bundle. Settings must report the version
+  // loaded on this device, not ask the server and accidentally report its version.
+  define: {
+    __POP_AGENT_VERSION__: JSON.stringify(popAgentVersion),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -1,10 +1,26 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest } from './api';
+import { ApiError, apiRequest, clientEnvironment } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
+});
+
+describe('clientEnvironment', () => {
+  it('describes an installed iPhone PWA as this device, not as the server', () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+      standalone: true,
+    });
+
+    expect(clientEnvironment()).toEqual({
+      kind: 'pwa',
+      platform: 'ios',
+      deviceLabel: 'This iPhone',
+      appLabel: 'Installed PWA',
+    });
+  });
 });
 
 describe('apiRequest', () => {

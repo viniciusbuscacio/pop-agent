@@ -64,7 +64,7 @@ describe('Settings PWA update action', () => {
 
     await user.click(await screen.findByTestId('update-check-now'));
 
-    await screen.findByText('You are on the latest PWA version.');
+    await screen.findByText('This PWA is up to date.');
     expect(applyUpdate).not.toHaveBeenCalled();
   });
 
@@ -78,7 +78,7 @@ describe('Settings PWA update action', () => {
     } satisfies UpdateStatusResponse);
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    await screen.findByText('Pop Agent is up to date.');
+    await screen.findByText('No newer published server release.');
     expect(screen.queryByText('Pop Agent 0.2.0 is available.')).toBeNull();
   });
 
