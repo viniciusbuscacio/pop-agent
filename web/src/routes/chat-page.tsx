@@ -274,7 +274,7 @@ export function ChatPage() {
           </div>
         ) : null}
 
-        <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 p-4">
+        <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[90%]">
           {(messages ?? []).map((message, index, history) => {
             const source = resendSource(history, index);
             const canResend = source !== undefined && live === undefined && pending.length === 0;
@@ -432,7 +432,7 @@ export function ChatPage() {
       {unconfigured ? (
         <p
           data-testid="no-provider"
-          className="mx-auto mb-1 max-w-3xl px-4 text-center text-xs text-[var(--muted)]"
+          className="mx-auto mb-1 w-full px-4 text-center text-xs text-[var(--muted)] md:w-[90%]"
         >
           {t('chat.noProvider')}{' '}
           <Link to="/settings" className="text-[var(--accent)] underline underline-offset-2">

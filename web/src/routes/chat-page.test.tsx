@@ -202,8 +202,11 @@ describe('chat transcript', () => {
     const scroller = screen.getByTestId('chat-scroller');
     expect(scroller.className).toContain('overflow-x-hidden');
     expect(scroller.className).toContain('overflow-y-auto');
-    expect(screen.getByTestId('chat-transcript').className).toContain('w-full');
-    expect(screen.getByTestId('chat-transcript').className).toContain('min-w-0');
+    const transcript = screen.getByTestId('chat-transcript');
+    expect(transcript.className).toContain('w-full');
+    expect(transcript.className).toContain('md:w-[90%]');
+    expect(transcript.className).not.toContain('max-w-3xl');
+    expect(transcript.className).toContain('min-w-0');
     expect(scroller.style.touchAction).toBe('pan-y');
   });
 

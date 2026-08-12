@@ -12,7 +12,10 @@ describe('RunStatusLine', () => {
   it('shows a static queue status without an activity glyph', () => {
     render(<RunStatusLine status="queued" />);
 
-    expect(screen.getByTestId('run-status-line').textContent).toBe('Waiting for a free slot…');
+    const line = screen.getByTestId('run-status-line');
+    expect(line.textContent).toBe('Waiting for a free slot…');
+    expect(line.className).toContain('md:w-[90%]');
+    expect(line.className).not.toContain('max-w-3xl');
     expect(screen.queryByTestId('working-indicator')).toBeNull();
   });
 
