@@ -8,6 +8,12 @@ afterEach(cleanup);
 
 const base = { role: 'system' as const, content: '', thinking: '', tools: [], attachments: [] };
 
+describe('streaming performance', () => {
+  it('memoizes settled rows instead of revisiting them for every live fragment', () => {
+    expect(ChatMessage).toHaveProperty('$$typeof', Symbol.for('react.memo'));
+  });
+});
+
 describe('horizontal overflow containment', () => {
   it('wraps an unbroken user message inside its bubble', () => {
     render(

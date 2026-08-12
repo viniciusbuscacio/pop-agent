@@ -936,8 +936,12 @@ events from stale runs.
   language label). Mermaid/KaTeX: later.
 - Streaming UX (aw's machine as reference): runId registry, reload
   reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
-  via SSE, and per-chat drafts in localStorage. While an answer streams, any
-  reader gesture toward older content suspends autoscroll immediately, before
+  via SSE, and per-chat drafts in localStorage. Delta, thinking and tool
+  fragments are delivered to React at most once per animation frame, and
+  settled transcript rows keep stable memoized renders: a long conversation
+  must not reparse all historical Markdown for every new fragment. Lifecycle
+  events flush queued fragments first and remain immediate. While an answer
+  streams, any reader gesture toward older content suspends autoscroll immediately, before
   iOS applies its native scroll; the intent listener stays passive and the
   floating control must not resize the scroller or interfere with native pan.
   Streaming must not pull the viewport back to the bottom. Following resumes

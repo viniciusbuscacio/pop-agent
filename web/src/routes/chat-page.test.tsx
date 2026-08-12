@@ -33,11 +33,15 @@ vi.mock('../ui/composer', () => ({
   ),
 }));
 
+const chatMessageRender = vi.hoisted(() => vi.fn());
 vi.mock('../ui/chat-message', () => ({
-  ChatMessage: ({ message }: { message: MessageDTO }) => (
-    <div data-testid="chat-message">{message.content}</div>
-  ),
+  ChatMessage: ({ message }: { message: MessageDTO }) => {
+    chatMessageRender(message);
+    return <div data-testid="chat-message">{message.content}</div>;
+  },
 }));
+
+const realOpenChat = useChatStore.getState().openChat;
 
 const chat: ChatDTO = {
   id: 'chat-empty',
@@ -62,8 +66,9 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  chatMessageRender.mockClear();
   useChatStore.getState().reset();
-  useChatStore.setState({ chats: [chat] });
+  useChatStore.setState({ chats: [chat], openChat: realOpenChat });
   localStorage.clear();
 });
 
@@ -101,6 +106,47 @@ describe('chat transcript', () => {
 
     await waitFor(() => expect(screen.queryByTestId('empty-chat-icon')).toBeNull());
     expect(screen.getByTestId('chat-message').textContent).toBe('Hello');
+  });
+
+  it('does not revisit settled rows when only the live answer grows', async () => {
+    const settled: MessageDTO = {
+      id: 'message-settled',
+      chatId: chat.id,
+      role: 'assistant',
+      content: 'Historical Markdown',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: '',
+    };
+    useChatStore.setState({
+      openChat: vi.fn(async () => undefined),
+      messages: { [chat.id]: [settled] },
+      live: {
+        [chat.id]: {
+          runId: 'run-1',
+          status: 'running',
+          seq: 1,
+          content: 'First fragment',
+          thinking: '',
+          tools: [],
+        },
+      },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(2));
+    chatMessageRender.mockClear();
+
+    useChatStore.setState((state) => ({
+      live: {
+        ...state.live,
+        [chat.id]: { ...state.live[chat.id]!, seq: 2, content: 'First fragment, then another' },
+      },
+    }));
+
+    await waitFor(() => expect(screen.getAllByTestId('chat-message')[1]?.textContent).toContain('another'));
+    expect(chatMessageRender).toHaveBeenCalledTimes(1);
+    expect(chatMessageRender).toHaveBeenCalledWith(expect.objectContaining({ content: 'First fragment, then another' }));
   });
 
   it.each([

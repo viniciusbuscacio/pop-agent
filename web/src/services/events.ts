@@ -1,5 +1,6 @@
 import type { EventTicketResponse, StreamEvent } from '@pop-agent/shared';
 import { apiRequest } from './api';
+import { createStreamEventBatcher } from './stream-event-batcher';
 
 /**
  * The single EventSource (pop-agent.spec §14). Components never see it: they read
@@ -31,6 +32,9 @@ let watchingVisibility = false;
 let everConnected = false;
 const listeners = new Set<Listener>();
 const resumeListeners = new Set<ResumeListener>();
+const bufferedEvents = createStreamEventBatcher((event) => {
+  for (const listener of listeners) listener(event);
+});
 
 export const eventStream = {
   /** Idempotent: calling it twice keeps the one connection. */
@@ -47,6 +51,7 @@ export const eventStream = {
     retryTimer = undefined;
     source?.close();
     source = undefined;
+    bufferedEvents.clear();
     retryMs = FIRST_RETRY_MS;
     // A fresh start (after a logout/login) must treat its first open as a
     // first connection, not a reconnection, so it does not fire a catch-up.
@@ -137,7 +142,7 @@ async function connect(): Promise<void> {
     } catch {
       return;
     }
-    for (const listener of listeners) listener(parsed);
+    bufferedEvents.push(parsed);
   });
 
   connection.addEventListener('error', () => {

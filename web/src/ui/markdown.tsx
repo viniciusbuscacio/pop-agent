@@ -1,4 +1,4 @@
-import { Children, useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { t } from '../i18n';
@@ -13,7 +13,7 @@ import { filesService } from '../services/artifacts';
  * Code blocks are highlighted by Shiki, imported on demand so the highlighter
  * is not in the bundle that has to load before the login screen.
  */
-export function Markdown({ text }: { text: string }) {
+function MarkdownView({ text }: { text: string }) {
   return (
     <div className="markdown flex min-w-0 flex-col gap-3 leading-relaxed break-words [overflow-wrap:anywhere]">
       <ReactMarkdown
@@ -66,6 +66,9 @@ export function Markdown({ text }: { text: string }) {
     </div>
   );
 }
+
+/** Parsing GFM and highlighting code is skipped when an unchanged row is revisited. */
+export const Markdown = memo(MarkdownView);
 
 /**
  * A generated image is persisted in Files, not copied into the message row.

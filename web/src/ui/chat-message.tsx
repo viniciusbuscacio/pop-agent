@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useState, type ReactNode } from 'react';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
@@ -9,7 +9,7 @@ import { Markdown } from './markdown';
  * the assistant gets the full width, because its answer is the content and a
  * bubble around a page of markdown just wastes the screen.
  */
-export function ChatMessage({
+function ChatMessageView({
   message,
   onResend,
   resending = false,
@@ -98,6 +98,9 @@ export function ChatMessage({
     </div>
   );
 }
+
+/** Historical rows keep their object identity while only the live answer changes. */
+export const ChatMessage = memo(ChatMessageView);
 
 function modelLabel(model: { providerId: string; modelId: string }): string {
   return model.modelId.length === 0

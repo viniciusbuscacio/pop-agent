@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -125,6 +125,38 @@ export function ChatPage() {
     })();
   }, []);
 
+  // A live fragment changes several times a second. Keep the settled subtree
+  // byte-for-byte stable until history or resend availability actually changes,
+  // so React never even revisits old Markdown while the answer grows.
+  const idle = live === undefined;
+  const settledTranscript = useMemo(
+    () =>
+      (messages ?? []).map((message, index, history) => {
+        const source = resendSource(history, index);
+        const canResend = source !== undefined && idle && pending.length === 0;
+        return (
+          <ChatMessage
+            key={message.id}
+            message={message}
+            resending={resendingId === message.id}
+            {...(!canResend
+              ? {}
+              : {
+                  onResend: () => {
+                    setResendingId(message.id);
+                    void send(chatId, source.content, source.attachments)
+                      .catch(() => undefined)
+                      .finally(() => setResendingId(undefined));
+                  },
+                })}
+            {...(message.notice === undefined
+              ? {}
+              : { onChangeModel: () => setModelPickerRequest((request) => request + 1) })}
+          />
+        );
+      }),
+    [chatId, idle, messages, pending.length, resendingId, send],
+  );
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
 
   useLayoutEffect(() => {
@@ -264,30 +296,7 @@ export function ChatPage() {
         ) : null}
 
         <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[90%]">
-          {(messages ?? []).map((message, index, history) => {
-            const source = resendSource(history, index);
-            const canResend = source !== undefined && live === undefined && pending.length === 0;
-            return (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                resending={resendingId === message.id}
-                {...(!canResend
-                  ? {}
-                  : {
-                      onResend: () => {
-                        setResendingId(message.id);
-                        void send(chatId, source.content, source.attachments)
-                          .catch(() => undefined)
-                          .finally(() => setResendingId(undefined));
-                      },
-                    })}
-                {...(message.notice === undefined
-                  ? {}
-                  : { onChangeModel: () => setModelPickerRequest((request) => request + 1) })}
-              />
-            );
-          })}
+          {settledTranscript}
 
           {live?.status === 'running' ? (
             <ChatMessage
