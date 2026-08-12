@@ -1,6 +1,6 @@
 {
   "name": "@pop-agent/cli",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "private": true,
   "type": "module",
   "bin": {

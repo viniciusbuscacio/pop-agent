@@ -9,7 +9,7 @@ describe('native Desktop session bridge', () => {
     localStorage.clear();
     sessionStorage.clear();
     postMessage.mockReset();
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh) PopDesktop/0.2.13' });
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh) PopDesktop/0.2.14' });
     Object.defineProperty(window, 'webkit', {
       configurable: true,
       value: { messageHandlers: { popSession: { postMessage } } },

@@ -134,6 +134,18 @@ describe('archive one chat', () => {
 });
 
 describe('compact conversation search', () => {
+  it('keeps search and menu on the same rem-based square at every font scale', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
+
+    const searchClass = screen.getByTestId('chat-search-toggle').className;
+    const menuClass = screen.getByTestId('list-menu').className;
+    expect(searchClass).toContain('h-[2.375rem]');
+    expect(searchClass).toContain('w-[2.375rem]');
+    expect(menuClass).toContain('h-[2.375rem]');
+    expect(menuClass).toContain('w-[2.375rem]');
+  });
+
   it('keeps the field hidden until the search button opens and focuses it', async () => {
     renderList();
     await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));

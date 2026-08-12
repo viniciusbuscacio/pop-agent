@@ -32,6 +32,11 @@ import { PullToRefresh } from '../ui/pull-to-refresh';
  */
 type Segment = 'chats' | 'files' | 'tasks' | 'skills' | 'mcp';
 
+// Both controls must follow the device's root font scale together. A fixed
+// 38px search button became smaller than the rem-based menu on larger phone text.
+const chatHeaderIconButton =
+  'flex h-[2.375rem] w-[2.375rem] shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]';
+
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
   const navigate = useNavigate();
@@ -265,7 +270,7 @@ export function ChatList() {
                 if (searchOpen) closeSearch();
                 else setSearchOpen(true);
               }}
-              className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] ${
+              className={`${chatHeaderIconButton} ${
                 searchOpen ? 'bg-[var(--hover-overlay)]' : ''
               }`}
             >
@@ -280,7 +285,7 @@ export function ChatList() {
               aria-label={t('shell.listMenu')}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => setListMenu((value) => !value)}
-              className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+              className={chatHeaderIconButton}
             >
               ⋯
             </button>
