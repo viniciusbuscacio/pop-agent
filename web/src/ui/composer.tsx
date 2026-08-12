@@ -471,7 +471,8 @@ export function Composer({
 
   return (
     <div
-      className="border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      data-testid="composer"
+      className="min-w-0 overflow-x-hidden border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -535,7 +536,7 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end">
         <input
           ref={picker}
           type="file"
@@ -594,7 +595,7 @@ export function Composer({
             // block (not inline-block): an inline textarea leaves baseline
             // descender space in the wrapper, and with the row's items-end the
             // buttons aligned to that phantom bottom, sitting ~7px too low.
-            className="block max-h-[33dvh] w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+            className="block max-h-[33dvh] w-full resize-none overflow-x-hidden rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
           />
           </div>
         ) : (
@@ -616,7 +617,7 @@ export function Composer({
           </div>
         )}
 
-        <div className="relative flex items-center justify-end gap-2">
+        <div className="relative flex max-w-full shrink-0 items-center justify-end gap-2">
         <ModelPicker
           id="composer-model"
           label={t('chat.model')}

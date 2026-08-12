@@ -44,6 +44,20 @@ afterEach(() => {
 });
 
 describe('pending message composition', () => {
+  it('contains horizontal overflow before and after the textarea receives focus', () => {
+    renderComposer();
+
+    const composer = screen.getByTestId('composer');
+    const area = screen.getByTestId('composer-input');
+    expect(composer.className).toContain('min-w-0');
+    expect(composer.className).toContain('overflow-x-hidden');
+    expect(area.className).toContain('overflow-x-hidden');
+
+    fireEvent.focus(area);
+    expect(composer.className).toContain('overflow-x-hidden');
+    expect(area.className).toContain('overflow-x-hidden');
+  });
+
   it('keeps sending enabled while a run is busy so several inputs can queue', async () => {
     const { onSend } = renderComposer();
     const area = screen.getByRole('textbox');

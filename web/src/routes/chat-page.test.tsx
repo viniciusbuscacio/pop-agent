@@ -200,6 +200,8 @@ describe('chat transcript', () => {
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
 
     const scroller = screen.getByTestId('chat-scroller');
+    expect(scroller.parentElement?.className).toContain('min-w-0');
+    expect(scroller.parentElement?.className).toContain('overflow-x-hidden');
     expect(scroller.className).toContain('overflow-x-hidden');
     expect(scroller.className).toContain('overflow-y-auto');
     const transcript = screen.getByTestId('chat-transcript');

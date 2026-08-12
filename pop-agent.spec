@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.85 — 2026-08-12.
+Version 1.87 — 2026-08-12.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -945,8 +945,9 @@ events from stale runs.
   latest". The transcript itself never scrolls horizontally: ordinary text,
   paths and long tokens wrap within the column, while code and tables retain
   their own bounded horizontal scroll areas. The document root is horizontally
-  contained too, so focusing the composer cannot merely shift an outer page
-  overflow out of sight. **Run activity is a separate line immediately above the composer,
+  contained too, and the pane, transcript viewport and composer form each keep
+  the same containment before and after focus; focusing the composer cannot
+  merely shift an outer page overflow out of sight. **Run activity is a separate line immediately above the composer,
   in both web and CLI**: queued is a static “Waiting for a free slot…”, running
   is a locally animated Braille spinner plus “Working…”, and `done`/`error`
   removes its content. The web permanently reserves the line's height so an
@@ -1715,6 +1716,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.87 (2026-08-12): **Composer focus never changes horizontal containment
+  (§14).** The conversation pane and viewport now clip their horizontal axis,
+  the composer constrains its flex chain, and its textarea explicitly suppresses
+  horizontal overflow in both idle and focused states.
 - 1.86 (2026-08-12): **Chat titles wait for the conversation (§14).** A new
   conversation keeps its deterministic `Chat N` name through the first two
   user messages. After the third, one service-model call creates a short title

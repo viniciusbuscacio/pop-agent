@@ -52,7 +52,7 @@ export function ChatLayout() {
         <ChatList />
       </aside>
 
-      <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
+      <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col overflow-x-hidden`}>
         <Outlet />
       </main>
     </div>
