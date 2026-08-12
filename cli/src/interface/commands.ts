@@ -1,4 +1,5 @@
 import { Profiles, normalizeServerUrl, DEFAULT_PROFILE, type Profile } from '../application/profiles.js';
+import type { Preferences } from '../application/preferences.js';
 import { Transcript, emptyRun } from '../application/transcript.js';
 import { ApiError, PopAgentApi } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
@@ -28,6 +29,7 @@ export interface LocalAccessClient {
 
 export interface Context {
   profiles: Profiles;
+  preferences: Preferences;
   terminal: Terminal;
   profile: string;
   /** Built per command so a fresh token can be stored as soon as it arrives. */

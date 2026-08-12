@@ -85,7 +85,7 @@ client holds one secret: a session token.
 | Live output | Printed **locally, as it happens**; the server receives the final result. No reverse streaming in v1 *(decided)* |
 | Interactive commands (`vim`, `sudo`, `[y/N]`) | Whatever pi's bash tool already does — inherited, not designed *(decided)* |
 | Machine awareness | Inject hostname, OS, architecture and cwd into the prompt. Start there, refine later if needed *(decided)* |
-| Thinking | Streamed, dimmed, toggleable, remembered per machine *(decided)* |
+| Thinking | Visible by default; streamed, dimmed, toggleable with `/think`, preserved after settlement, and remembered per machine *(decided)* |
 | Where files land | The existing tool split already answers it: `local_write`/`local_edit` touch the machine that typed (your Obsidian vault, your repo); the server's own `write` into `Files/` lands in the user's Files tab. The model already chooses between them *(decided; revised 05/08 — `save_artifact` and the artifact catalog are gone, Files is a plain folder)* |
 | Language | **TypeScript** *(decided)* — see Language |
 | Client/server version mismatch | **The server sets a minimum and the attach enforces it**: silent when compatible, one dim line when merely behind, refused with the install command when below the minimum. Never a silent auto-update *(decided)* — see Version compatibility |
@@ -589,17 +589,20 @@ A bare argument meaning one-shot is what pi and Claude Code do, and what
 the hand expects. `-i` was rejected: it reads as *interactive*, the
 opposite of the scripting case it was proposed for.
 
-**Profiles.** `~/.config/pop-agent/` keeps one entry per server: URL + token.
-`localhost:8787` on the server, the `*.ts.net` name from a laptop. Login
-creates the entry; afterwards `pop` just opens.
+**Profiles and preferences.** `~/.config/pop-agent/profiles.json` keeps one
+entry per server: URL + token. `preferences.json` is deliberately separate:
+it contains device-local presentation choices, never credentials. Login
+creates the selected profile; afterwards `pop` just opens.
 
-**Screen.** Thinking dimmed as it streams, the chosen command highlighted,
+**Screen.** Thinking is visible by default and rendered dimmed as it streams,
 its output live underneath (it is running right there), and the answer
 arriving word by word. `/chats` opens the server's canonical unarchived list
 (pinned first, then recent) as a keyboard picker; arrows move, Enter replaces
 the visible transcript with the selected chat's latest history and live
-snapshot, and Escape cancels without stopping the run. A run-level line stays
-immediately above the editor:
+snapshot, and Escape cancels without stopping the run. `/think` immediately
+shows or hides reasoning in live and historical assistant segments, persists
+that choice for the machine, and reasoning remains visible after a run settles.
+A run-level line stays immediately above the editor:
 queued is the static `Waiting for a free slot…`; running is a locally animated
 Braille spinner plus `Working…`; settlement removes it. It is deliberately
 separate from the growing answer and tool rows, matching the web client and

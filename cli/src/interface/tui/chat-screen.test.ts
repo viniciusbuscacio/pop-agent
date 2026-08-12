@@ -70,7 +70,7 @@ function recorder() {
     writes,
     send: (data: string) => input(data),
     repaint: () => {
-      width = 79;
+      width = width === 80 ? 79 : 80;
       resize();
     },
   };
@@ -88,7 +88,11 @@ const chatDto = (id = 'chat-1'): ChatDTO => ({
   preview: 'Earlier question',
 });
 
-function screenWith(terminal: Terminal, onExit = vi.fn()) {
+function screenWith(
+  terminal: Terminal,
+  onExit = vi.fn(),
+  options: { thinkingShown?: boolean; onThinkingShownChange?: (shown: boolean) => void } = {},
+) {
   const ports: SessionPorts = {
     createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
     listChats: vi.fn(() => Promise.resolve([])),
@@ -110,7 +114,13 @@ function screenWith(terminal: Terminal, onExit = vi.fn()) {
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
-  const screen = new ChatScreen({ session, server: 'http://pop-agent.test', terminal, onExit });
+  const screen = new ChatScreen({
+    session,
+    server: 'http://pop-agent.test',
+    terminal,
+    onExit,
+    ...options,
+  });
   holder.screen = screen;
   return { screen, session, ports, onExit };
 }
@@ -210,6 +220,34 @@ describe('ChatScreen', () => {
 
     expect(plain()).toContain('loaded conversation only');
     expect(plain()).not.toContain('old conversation only');
+  });
+
+  it('applies /think immediately to reasoning loaded from history', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    screen.onChatLoaded(chatDto(), {
+      messages: [{
+        id: 'stored-assistant',
+        chatId: 'chat-1',
+        role: 'assistant',
+        content: 'Stored answer',
+        thinking: 'Stored reasoning',
+        tools: [],
+        attachments: [],
+        createdAt: '',
+      }],
+    });
+    await flush();
+    expect(plain()).toContain('Stored reasoning');
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/think');
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+    expect(plain()).not.toContain('Stored reasoning');
+    expect(plain()).toContain('Stored answer');
   });
 
   it('keeps one working line below the answer until the run settles', async () => {
@@ -473,19 +511,62 @@ describe('ChatScreen', () => {
     }
   });
 
-  it('keeps the reasoning hidden until asked', async () => {
-    const { terminal, plain } = recorder();
+  it('shows reasoning by default and preserves it after the run settles', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
     const { screen } = screenWith(terminal);
     screen.start();
-    screen.onRun({
+    const run = {
       ...emptyRun('chat-1', 'run-1'),
       thinking: 'weighing the options',
       text: 'Yes.',
-      status: 'running',
-    });
+      status: 'running' as const,
+    };
+    screen.onRun(run);
+    screen.onIdle({ ...run, status: 'done' });
     await flush();
 
-    expect(plain()).not.toContain('weighing the options');
+    writes.length = 0;
+    repaint();
+    await flush();
+    expect(plain()).toContain('weighing the options');
     expect(plain()).toContain('Yes.');
+  });
+
+  it('starts hidden from the saved preference and toggles all segments immediately', async () => {
+    const changed = vi.fn();
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal, vi.fn(), {
+      thinkingShown: false,
+      onThinkingShownChange: changed,
+    });
+    screen.start();
+    const first = {
+      ...emptyRun('chat-1', 'run-1'),
+      thinking: 'reasoning before steering',
+      text: 'First.',
+      status: 'running' as const,
+    };
+    screen.onRun(first);
+    screen.onSteering();
+    const second = { ...first, thinking: 'reasoning after steering', text: 'Second.' };
+    screen.onRun(second);
+    screen.onIdle({ ...second, status: 'done' });
+    await flush();
+
+    writes.length = 0;
+    repaint();
+    await flush();
+    expect(plain()).not.toContain('reasoning before steering');
+    expect(plain()).not.toContain('reasoning after steering');
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/think');
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(plain()).toContain('reasoning before steering');
+    expect(plain()).toContain('reasoning after steering');
+    expect(changed).toHaveBeenCalledWith(true);
   });
 });

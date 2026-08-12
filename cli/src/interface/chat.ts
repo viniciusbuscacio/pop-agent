@@ -110,6 +110,8 @@ export async function chat(
   const screen = new ChatScreen({
     session,
     server: profile.url,
+    thinkingShown: context.preferences.showThinking,
+    onThinkingShownChange: (shown) => context.preferences.setShowThinking(shown),
   });
   if (options.chatId !== undefined) session.open(options.chatId);
 

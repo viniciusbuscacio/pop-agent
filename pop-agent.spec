@@ -947,8 +947,12 @@ events from stale runs.
   is a locally animated Braille spinner plus “Working…”, and `done`/`error`
   removes it. Text, thinking and tool cards never replace this line; tool
   spinners describe one call, while `run-status` describes the whole run. The
-  clients animate locally -- SSE never carries presentation frames. The
-  **pending-input FIFO is
+  clients animate locally -- SSE never carries presentation frames. Thinking
+  is visible by default in both clients. The web stores that choice in device
+  localStorage; the CLI stores it in its separate device-local preferences
+  file. `/think` redraws live, settled, historical and pre-steering assistant
+  segments immediately, and settlement never discards reasoning already shown.
+  The **pending-input FIFO is
   server-owned**: ordered SQLite rows survive restart, while the current head is
   returned with the message snapshot and broadcast by SSE so phone, desktop and
   tabs agree on what comes next. A POST racing an active run appends atomically;

@@ -7,6 +7,10 @@ normative history.
 
 ### Changed
 
+- **CLI reasoning now matches the web.** It is visible by default, stays in the
+  transcript after an answer settles, survives steering boundaries, and
+  `/think` redraws both live and historical answers immediately. The choice is
+  remembered in a device-local preferences file separate from login tokens.
 - **The built-in skills got a review: 17 became 7.** The generic ones
   (writing, summarizing, translating, explaining, brainstorming, math,
   planning) are gone -- any current model does that natively, and each one

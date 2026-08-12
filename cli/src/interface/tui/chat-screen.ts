@@ -69,6 +69,10 @@ export interface ScreenOptions {
   /** Shown in the header, so two terminals on two servers are told apart. */
   server: string;
   title?: string;
+  /** Device preference, visible by default just like the web client. */
+  thinkingShown?: boolean;
+  /** Persists `/think` without coupling the screen to the filesystem. */
+  onThinkingShownChange?: (shown: boolean) => void;
   /**
    * Injected so the screen can be driven without a real terminal. Everything
    * else in this client already takes its I/O as a parameter; the screen was
@@ -86,6 +90,66 @@ export interface ScreenOptions {
   onChatOpened?: (chatId: string) => void;
 }
 
+type AssistantContent = Pick<RunState, 'text' | 'thinking' | 'tools'>;
+
+/** One assistant segment that can change while streaming and survive settlement. */
+class AssistantSegment extends Container {
+  private content: AssistantContent;
+  private settled = false;
+
+  constructor(content: AssistantContent, private thinkingShown: boolean, settled = false) {
+    super();
+    this.content = content;
+    this.settled = settled;
+    this.rebuild();
+  }
+
+  update(content: AssistantContent): void {
+    this.content = content;
+    this.rebuild();
+  }
+
+  settle(content: AssistantContent = this.content): void {
+    this.content = content;
+    this.settled = true;
+    this.rebuild();
+  }
+
+  setThinkingShown(shown: boolean): void {
+    this.thinkingShown = shown;
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    this.clear();
+    let hasBlock = false;
+    const add = (component: Component): void => {
+      if (hasBlock) this.addChild(new Spacer(1));
+      this.addChild(component);
+      hasBlock = true;
+    };
+
+    if (this.thinkingShown && this.content.thinking.trim().length > 0) {
+      add(new Markdown(this.content.thinking, 0, 0, markdownTheme, {
+        color: paint.dim,
+        italic: true,
+      }));
+    }
+    if (this.content.tools.length > 0) {
+      add(new Text(
+        this.content.tools.map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`)).join('\n'),
+        0,
+        0,
+      ));
+    }
+    if (this.content.text.length > 0) {
+      add(this.settled
+        ? new Markdown(this.content.text, 0, 0, markdownTheme)
+        : new Text(this.content.text, 0, 0));
+    }
+  }
+}
+
 export class ChatScreen {
   private readonly tui: TUI;
   private readonly editor: Editor;
@@ -96,15 +160,17 @@ export class ChatScreen {
   private picker: OverlayHandle | undefined;
   /** Prevents repeated /chats submissions from racing before the list arrives. */
   private pickerOpening = false;
-  /** The answer being streamed. Replaced by Markdown once it settles. */
-  private streaming: Text | undefined;
+  /** Current assistant segment; earlier steering segments remain in history. */
+  private streaming: AssistantSegment | undefined;
+  /** Every visible segment, including stored history, so `/think` redraws all. */
+  private assistantSegments: AssistantSegment[] = [];
   /** Run-level state kept immediately above the editor, separate from output. */
   private runStatus: Text | undefined;
   private runStatusKind: RunState['status'] | undefined;
   private runStatusTimer: ReturnType<typeof setInterval> | undefined;
   private disconnectQuitTimer: ReturnType<typeof setTimeout> | undefined;
   private workingFrame = 0;
-  private thinkingShown = false;
+  private thinkingShown: boolean;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
   private spoken = false;
   private title: string;
@@ -112,6 +178,7 @@ export class ChatScreen {
   constructor(private readonly options: ScreenOptions) {
     this.tui = new TUI(options.terminal ?? new ProcessTerminal());
     this.title = options.title ?? 'New conversation';
+    this.thinkingShown = options.thinkingShown ?? true;
     this.header = new Text('', 0, 0);
     this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
     // Typing `/` now opens the menu, with Tab completing. The base path is the
@@ -180,10 +247,6 @@ export class ChatScreen {
     this.append(new Text(text, 0, 0));
   }
 
-  private markdown(text: string): void {
-    this.append(new Markdown(text, 0, 0, markdownTheme));
-  }
-
   /** Adds a component to the replaceable history above the fixed editor. */
   private append(component: Component): void {
     // History lives in its own container. That keeps the fixed tail below it
@@ -208,6 +271,7 @@ export class ChatScreen {
   onChatLoaded(chat: ChatDTO, response: MessagesResponse): void {
     this.clearRunStatus(false);
     this.streaming = undefined;
+    this.assistantSegments = [];
     this.transcript.clear();
     this.spoken = false;
     this.setTitle(chat.title.length === 0 ? 'Untitled conversation' : chat.title);
@@ -244,17 +308,13 @@ export class ChatScreen {
     // A history page can technically begin with an assistant turn when older
     // messages are outside the server's 50-message window.
     this.spoken = true;
-    if (this.thinkingShown && message.thinking.length > 0) {
-      this.say(paint.dim(message.thinking));
-    }
-    if (message.tools.length > 0) {
-      this.say(
-        message.tools
-          .map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`))
-          .join('\n'),
-      );
-    }
-    if (message.content.length > 0) this.markdown(message.content);
+    const segment = new AssistantSegment(
+      { text: message.content, thinking: message.thinking, tools: message.tools },
+      this.thinkingShown,
+      true,
+    );
+    this.assistantSegments.push(segment);
+    this.append(segment);
   }
 
   /** Fetch and display the server's canonical list of open conversations. */
@@ -316,18 +376,14 @@ export class ChatScreen {
 
   /** The run moved: repaint its output and its independent lifecycle line. */
   onRun(state: RunState): void {
-    const body = this.thinkingShown && state.thinking.length > 0
-      ? `${paint.dim(state.thinking)}\n\n${state.text}`
-      : state.text;
-    const tools = state.tools.map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`)).join('\n');
-    const shown = [tools, body].filter((part) => part.length > 0).join('\n');
-
-    if (shown.length > 0) {
+    const hasOutput = state.text.length > 0 || state.thinking.length > 0 || state.tools.length > 0;
+    if (hasOutput) {
       if (this.streaming === undefined) {
-        this.streaming = new Text(shown, 0, 0);
+        this.streaming = new AssistantSegment(state, this.thinkingShown);
+        this.assistantSegments.push(this.streaming);
         this.append(this.streaming);
       } else {
-        this.streaming.setText(shown);
+        this.streaming.update(state);
         this.tui.requestRender();
       }
     }
@@ -335,22 +391,22 @@ export class ChatScreen {
     this.setRunStatus(state.status);
   }
 
-  /**
-   * The run ended. The streamed plain text is swapped for the same words
-   * rendered as markdown -- headings, lists and code blocks only make sense
-   * once the text stops arriving mid-token.
-   */
+  /** Finalize the live segment in place, preserving its reasoning and position. */
   onIdle(state: RunState): void {
     this.clearRunStatus(true);
+    const hasOutput = state.text.length > 0 || state.thinking.length > 0 || state.tools.length > 0;
     if (this.streaming !== undefined) {
-      this.transcript.removeChild(this.streaming);
+      this.streaming.settle(state);
       this.streaming = undefined;
+      this.tui.requestRender();
+    } else if (hasOutput) {
+      const segment = new AssistantSegment(state, this.thinkingShown, true);
+      this.assistantSegments.push(segment);
+      this.append(segment);
     }
     if (state.status === 'error') {
       this.say(paint.red(`The run failed: ${state.errorCode ?? 'unknown'}`));
-      return;
     }
-    if (state.text.length > 0) this.markdown(state.text);
   }
 
   onQueued(_text: string): void {
@@ -370,7 +426,9 @@ export class ChatScreen {
    * the guidance: this TUI is append-only and deliberately has no insertion.
    */
   onSteering(): void {
+    this.streaming?.settle();
     this.streaming = undefined;
+    this.tui.requestRender();
   }
 
   onStreamEnd(): void {
@@ -485,6 +543,8 @@ export class ChatScreen {
         return;
       case '/think':
         this.thinkingShown = !this.thinkingShown;
+        for (const segment of this.assistantSegments) segment.setThinkingShown(this.thinkingShown);
+        this.options.onThinkingShownChange?.(this.thinkingShown);
         this.say(paint.dim(this.thinkingShown ? 'Reasoning shown.' : 'Reasoning hidden.'));
         return;
       case '/new':

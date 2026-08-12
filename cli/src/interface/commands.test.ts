@@ -1,6 +1,7 @@
 import { LOCAL_CONNECTION_HEADER } from '@pop-agent/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
+import { Preferences, type CliPreferences, type PreferenceStore } from '../application/preferences.js';
 import { PopAgentApi } from '../infrastructure/api.js';
 import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './commands.js';
 
@@ -16,6 +17,16 @@ class MemoryStore implements ProfileStore {
   }
   write(profiles: Record<string, Profile>): void {
     this.profiles = profiles;
+  }
+}
+
+class MemoryPreferenceStore implements PreferenceStore {
+  private preferences: Partial<CliPreferences> = {};
+  read(): Partial<CliPreferences> {
+    return this.preferences;
+  }
+  write(preferences: CliPreferences): void {
+    this.preferences = preferences;
   }
 }
 
@@ -54,6 +65,7 @@ function contextWith(
 ): Context {
   return {
     profiles,
+    preferences: new Preferences(new MemoryPreferenceStore()),
     terminal,
     profile: 'default',
     api: (options) =>

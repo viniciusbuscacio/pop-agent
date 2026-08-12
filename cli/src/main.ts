@@ -2,7 +2,9 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
+import { Preferences } from './application/preferences.js';
 import { PopAgentApi } from './infrastructure/api.js';
+import { FilePreferenceStore } from './infrastructure/preference-file.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
 import { LocalAccess } from './infrastructure/local-access.js';
 import { installCli } from './infrastructure/installer.js';
@@ -57,6 +59,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
   const profiles = new Profiles(new FileProfileStore());
   const context: Context = {
     profiles,
+    preferences: new Preferences(new FilePreferenceStore()),
     terminal,
     profile,
     // Every call can hand back a fresher token; storing it here is what keeps
