@@ -1,31 +1,32 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { Composer } from './composer';
 
-function queued(deliveryMode: QueuedMessageDTO['deliveryMode']): QueuedMessageDTO {
-  return {
-    id: 'queued-1',
-    chatId: 'chat-1',
-    text: 'Change course',
-    deliveryMode,
-    attachments: [],
-    filePaths: [],
-    createdAt: '',
-    updatedAt: '',
-  };
-}
+const pending: QueuedMessageDTO = {
+  id: 'queued-1',
+  chatId: 'chat-1',
+  text: 'Change course',
+  deliveryMode: 'steer',
+  attachments: [],
+  filePaths: [],
+  createdAt: '',
+  updatedAt: '',
+};
 
-function renderComposer(queuedMessage: QueuedMessageDTO) {
-  return render(
+function renderComposer(props: { editRequest?: QueuedMessageDTO } = {}) {
+  const onSend = vi.fn().mockResolvedValue(undefined);
+  const onUpdateQueued = vi.fn().mockResolvedValue(undefined);
+  const onEditingDone = vi.fn();
+  render(
     <Composer
       chatId="chat-1"
       busy
-      queuedMessage={queuedMessage}
-      onSend={vi.fn()}
-      onUpdateQueued={vi.fn()}
-      onCancelQueued={vi.fn()}
+      {...props}
+      onSend={onSend}
+      onUpdateQueued={onUpdateQueued}
+      onEditingDone={onEditingDone}
       onStop={vi.fn()}
       onNewChat={vi.fn()}
       models={[]}
@@ -34,6 +35,7 @@ function renderComposer(queuedMessage: QueuedMessageDTO) {
       onSetModel={vi.fn()}
     />,
   );
+  return { onSend, onUpdateQueued, onEditingDone };
 }
 
 afterEach(() => {
@@ -41,19 +43,26 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('pending message presentation', () => {
-  it('does not show a steering status above the composer', () => {
-    renderComposer(queued('steer'));
+describe('pending message composition', () => {
+  it('keeps sending enabled while a run is busy so several inputs can queue', async () => {
+    const { onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: 'another direction' } });
+    fireEvent.click(screen.getByTestId('composer-send'));
 
-    expect(screen.queryByTestId('composer-queued')).toBeNull();
-    expect(screen.queryByText(/Guiding this run/i)).toBeNull();
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('another direction', [], [], 'steer'));
   });
 
-  it('keeps the explicit follow-up queue controls', () => {
-    renderComposer(queued('follow_up'));
+  it('edits the pending item identified by the request', async () => {
+    const { onUpdateQueued, onEditingDone } = renderComposer({ editRequest: pending });
+    const area = screen.getByRole('textbox');
+    await waitFor(() => expect((area as HTMLTextAreaElement).value).toBe('Change course'));
+    fireEvent.change(area, { target: { value: 'Edited direction' } });
+    fireEvent.click(screen.getByTestId('composer-send'));
 
-    expect(screen.getByTestId('composer-queued').textContent).toContain('Queued: Change course');
-    expect(screen.getByTestId('queue-edit')).toBeTruthy();
-    expect(screen.getByTestId('queue-cancel')).toBeTruthy();
+    await waitFor(() =>
+      expect(onUpdateQueued).toHaveBeenCalledWith(pending.id, 'Edited direction', [], []),
+    );
+    expect(onEditingDone).toHaveBeenCalled();
   });
 });

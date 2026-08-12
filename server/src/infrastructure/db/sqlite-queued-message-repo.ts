@@ -29,16 +29,26 @@ export class SqliteQueuedMessageRepo implements QueuedMessageRepo {
     return row === undefined ? undefined : toMessage(row);
   }
 
+  getById(chatId: string, id: string): QueuedMessage | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM queued_messages WHERE chat_id = ? AND id = ?')
+      .get(chatId, id) as QueueRow | undefined;
+    return row === undefined ? undefined : toMessage(row);
+  }
+
   count(chatId: string): number {
     return (this.db
       .prepare('SELECT COUNT(*) AS count FROM queued_messages WHERE chat_id = ?')
       .get(chatId) as { count: number }).count;
   }
 
-  list(): QueuedMessage[] {
-    return (this.db
-      .prepare('SELECT * FROM queued_messages ORDER BY created_at, rowid')
-      .all() as QueueRow[]).map(toMessage);
+  list(chatId?: string): QueuedMessage[] {
+    const rows = chatId === undefined
+      ? this.db.prepare('SELECT * FROM queued_messages ORDER BY created_at, rowid').all()
+      : this.db
+          .prepare('SELECT * FROM queued_messages WHERE chat_id = ? ORDER BY created_at, rowid')
+          .all(chatId);
+    return (rows as QueueRow[]).map(toMessage);
   }
 
   create(message: QueuedMessage): boolean {

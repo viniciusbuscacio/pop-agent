@@ -67,6 +67,8 @@ describe('sqlite queued messages', () => {
     expect(repo.create({ ...message, id: 'queued-two', text: 'second' })).toBe(true);
     expect(repo.count(CHAT.id)).toBe(2);
     expect(repo.get(CHAT.id)?.text).toBe('first');
+    expect(repo.getById(CHAT.id, 'queued-two')?.text).toBe('second');
+    expect(repo.list(CHAT.id).map((item) => item.text)).toEqual(['first', 'second']);
     expect(repo.delete('queued-one')).toBe(true);
     expect(repo.get(CHAT.id)?.text).toBe('second');
     db.close();

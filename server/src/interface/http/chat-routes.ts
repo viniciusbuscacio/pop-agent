@@ -232,10 +232,12 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     // A client mounting mid-run gets what already streamed, not a blank
     // bubble; only the first page carries it -- history pages have no "now".
     const live = before === undefined ? deps.runs.liveRun(chatId) : undefined;
-    const queued = before === undefined ? deps.queuedMessages.get(chatId) : undefined;
+    const pending = before === undefined ? deps.queuedMessages.list(chatId) : [];
+    const queued = pending[0];
     return c.json({
       messages: messages.map(toMessageDto),
       ...(live === undefined ? {} : { live }),
+      ...(pending.length === 0 ? {} : { pending: pending.map(toQueuedMessageDto) }),
       ...(queued === undefined ? {} : { queued: toQueuedMessageDto(queued) }),
     });
   });
@@ -318,7 +320,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json({ runId: result.runId, userMessageId: result.userMessageId }, 202);
   });
 
-  routes.put('/chats/:id/queue', async (c) => {
+  const updateQueued = async (c: Context) => {
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
     const parsed = sendSchema.safeParse(body);
@@ -337,7 +339,16 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     if (!selected.ok) {
       return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
     }
-    const updated = deps.queuedMessages.update(c.req.param('id'), {
+    const chatId = c.req.param('id');
+    if (chatId === undefined) return chatNotFound(c);
+    const requestedId = c.req.param('messageId');
+    const messageId = requestedId === undefined || requestedId.length === 0
+      ? deps.queuedMessages.get(chatId)?.id
+      : requestedId;
+    if (messageId === undefined) {
+      return apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
+    }
+    const updated = deps.queuedMessages.update(chatId, messageId, {
       text: parsed.data.text,
       attachments: parsed.data.attachments ?? [],
       filePaths: parsed.data.filePaths ?? [],
@@ -350,17 +361,30 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
         : apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
     }
     return c.json({ message: toQueuedMessageDto(updated.message) });
-  });
+  };
+  routes.put('/chats/:id/queue', updateQueued);
+  routes.put('/chats/:id/queue/:messageId', updateQueued);
 
-  routes.delete('/chats/:id/queue', (c) => {
-    const removed = deps.queuedMessages.cancel(c.req.param('id'));
+  const cancelQueued = (c: Context) => {
+    const chatId = c.req.param('id');
+    if (chatId === undefined) return chatNotFound(c);
+    const requestedId = c.req.param('messageId');
+    const messageId = requestedId === undefined || requestedId.length === 0
+      ? deps.queuedMessages.get(chatId)?.id
+      : requestedId;
+    if (messageId === undefined) {
+      return apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
+    }
+    const removed = deps.queuedMessages.cancel(chatId, messageId);
     if (!removed.ok) {
       return removed.reason === 'chat_not_found'
         ? chatNotFound(c)
         : apiError(c, 404, 'queue_not_found', 'This chat has no queued message.');
     }
     return c.body(null, 204);
-  });
+  };
+  routes.delete('/chats/:id/queue', cancelQueued);
+  routes.delete('/chats/:id/queue/:messageId', cancelQueued);
 
   routes.post('/chats/:id/stop', (c) => {
     const id = c.req.param('id');

@@ -34,11 +34,13 @@ web                        server
   FIFO head at a time, inheriting pi's default `one-at-a-time` semantics. If the
   run has not reached pi, comes from a different local connection, or ends first,
   the head remains a normal follow-up. The persisted `delivery_mode` keeps
-  `/queue` explicit across edits and reconnects. `PUT /v1/chats/:id/queue`
-  edits the head; `DELETE` cancels the head before delivery.
+  `/queue` explicit across edits and reconnects. ID-addressed `PUT` and
+  `DELETE` routes edit or cancel any pending item; the legacy routes continue
+  to target the head.
 - Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
-  the shared FIFO head when created/edited/advanced, nothing when empty, and a `started`
-  user-message identity when consumed as a new run. `steering-delivered` closes
+  an incremental `upsert` or `remove`, plus the shared FIFO head for older
+  clients, and a `started` user-message identity when consumed as a new run.
+  `steering-delivered` closes
   the current assistant segment, inserts the steering user message and resets
   the live buffer while preserving the same run id. The frontend keeps a **runId registry**:
   stale run fragments are dropped while queue changes still reach every tab.
@@ -125,10 +127,13 @@ GET /v1/events            EventSink port            pi events → AgentEvent
   `runId`/`messageId` — never duplicate a message that both paths deliver
   (aw's streaming machine, spec §14).
 - Send path: POST first, then append the accepted user message or the server's
-  durable FIFO item. `GET .../messages` reconciles both `live` and the FIFO head;
-  SSE keeps other devices current. An item is not deleted merely because pi
-  accepted it: only pi's user-message event consumes it, advances the head and
-  offers the next steering item. `steering-delivered` persists the assistant
+  durable FIFO item. `GET .../messages` reconciles both `live` and the entire
+  pending FIFO; SSE incrementally adds, edits or removes exact items on other
+  devices. Pending items remain visible and editable by id, and the composer
+  stays available for more input up to the defensive cap. An item is not
+  deleted merely because pi accepted it: only pi's user-message event consumes
+  it, advances the head and offers the next steering item. `steering-delivered`
+  persists the assistant
   segment before it, inserts the user message, and continues the same run with
   an empty live buffer. If it was not delivered, run settlement starts it
   normally and broadcasts `queue.started`. Old on-device queue keys are

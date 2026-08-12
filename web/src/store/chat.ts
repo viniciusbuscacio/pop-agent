@@ -41,8 +41,8 @@ interface ChatState {
   archived: ChatDTO[];
   messages: Record<string, MessageDTO[]>;
   live: Record<string, LiveRun>;
-  /** One message per chat may wait for the current run to finish. */
-  queued: Record<string, QueuedMessageDTO>;
+  /** Server-owned pending-input FIFO for each chat. */
+  pending: Record<string, QueuedMessageDTO[]>;
   failures: Record<string, string>;
 
   /** A risky action paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
@@ -59,8 +59,8 @@ interface ChatState {
     filePaths?: string[],
     delivery?: MessageDelivery,
   ) => Promise<void>;
-  updateQueued: (chatId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
-  cancelQueued: (chatId: string) => Promise<void>;
+  updateQueued: (chatId: string, messageId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  cancelQueued: (chatId: string, messageId: string) => Promise<void>;
   stop: (chatId: string) => Promise<void>;
   respondConfirm: (chatId: string, runId: string, allow: boolean) => Promise<void>;
   rename: (chatId: string, title: string) => Promise<void>;
@@ -99,7 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   archived: [],
   messages: {},
   live: {},
-  queued: {},
+  pending: {},
   failures: {},
   confirms: {},
 
@@ -130,13 +130,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * older than the snapshot's `seq` are dropped in {@link apply}.
    */
   async openChat(chatId) {
-    const { messages, live, queued } = await chatsService.messages(chatId);
+    const { messages, live, queued, pending: snapshot } = await chatsService.messages(chatId);
+    const pending = snapshot ?? (queued === undefined ? [] : [queued]);
     const legacy = readQueuedMessage(chatId);
     // Another upgraded tab may already have uploaded this exact legacy row.
     // Delete only that duplicate. If the server slot contains different text,
     // keep the older local row until the slot frees instead of silently eating
     // what this device had queued before the upgrade.
-    if (queued !== undefined && legacy !== undefined && sameQueuedPayload(legacy, queued)) {
+    if (legacy !== undefined && pending.some((item) => sameQueuedPayload(legacy, item))) {
       deleteQueuedMessage(chatId);
     }
     set((state) => ({
@@ -151,15 +152,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         live !== undefined && !finished.has(live.runId)
           ? { ...state.live, [chatId]: live }
           : without(state.live, chatId),
-      queued:
-        queued === undefined
-          ? without(state.queued, chatId)
-          : { ...state.queued, [chatId]: queued },
+      pending:
+        pending.length === 0
+          ? without(state.pending, chatId)
+          : { ...state.pending, [chatId]: pending },
     }));
     // One-time upgrade path from the former localStorage queue. The ordinary
     // send endpoint decides atomically whether this starts now or occupies the
     // server slot, then the old browser copy can be removed.
-    if (queued === undefined && legacy !== undefined) {
+    if (pending.length === 0 && legacy !== undefined) {
       try {
         await get().send(chatId, legacy.text, legacy.attachments, legacy.filePaths);
         deleteQueuedMessage(chatId);
@@ -172,13 +173,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async send(chatId, text, attachments = [], filePaths = [], delivery = 'steer') {
     // The server owns the race: this tab may believe the chat is idle while a
-    // phone has just started a run. POST either starts now or fills the one
-    // durable slot, never returning a transient run_in_progress to the client.
+    // phone has just started a run. POST either starts now or appends to the
+    // durable FIFO, never returning a transient run_in_progress to the client.
     const response = await chatsService.send(chatId, text, attachments, filePaths, delivery);
     if (response.queued === true) {
       deleteQueuedMessage(chatId);
       set((current) => ({
-        queued: { ...current.queued, [chatId]: response.head ?? response.message },
+        pending: {
+          ...current.pending,
+          [chatId]: upsertPending(current.pending[chatId] ?? [], response.message),
+        },
         failures: without(current.failures, chatId),
       }));
       return;
@@ -216,14 +220,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  async updateQueued(chatId, text, attachments = [], filePaths = []) {
-    const { message } = await chatsService.updateQueue(chatId, text, attachments, filePaths);
-    set((state) => ({ queued: { ...state.queued, [chatId]: message } }));
+  async updateQueued(chatId, messageId, text, attachments = [], filePaths = []) {
+    const { message } = await chatsService.updateQueue(chatId, messageId, text, attachments, filePaths);
+    set((state) => ({
+      pending: {
+        ...state.pending,
+        [chatId]: upsertPending(state.pending[chatId] ?? [], message),
+      },
+    }));
   },
 
-  async cancelQueued(chatId) {
-    await chatsService.cancelQueue(chatId);
-    set((state) => ({ queued: without(state.queued, chatId) }));
+  async cancelQueued(chatId, messageId) {
+    await chatsService.cancelQueue(chatId, messageId);
+    set((state) => ({ pending: removePending(state.pending, chatId, messageId) }));
   },
 
   async stop(chatId) {
@@ -305,7 +314,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return {
         messages: strip(state.messages),
         live: strip(state.live),
-        queued: strip(state.queued),
+        pending: strip(state.pending),
       };
     });
     return deleted;
@@ -329,7 +338,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         archived: [],
         messages: strip(state.messages),
         live: strip(state.live),
-        queued: strip(state.queued),
+        pending: strip(state.pending),
       };
     });
   },
@@ -352,7 +361,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       archived: state.archived.filter((chat) => chat.id !== chatId),
       messages: without(state.messages, chatId),
       live: without(state.live, chatId),
-      queued: without(state.queued, chatId),
+      pending: without(state.pending, chatId),
     }));
   },
 
@@ -408,7 +417,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...state.live,
             [event.chatId]: { ...emptyRun(event.runId, 'running'), seq: event.seq },
           },
-          queued: without(state.queued, event.chatId),
           failures: without(state.failures, event.chatId),
         };
       });
@@ -430,11 +438,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     if (event.kind === 'queue') {
       set((state) => {
-        const queued =
-          event.message === undefined
-            ? without(state.queued, event.chatId)
-            : { ...state.queued, [event.chatId]: event.message };
-        if (event.started === undefined) return { queued };
+        const pending = applyQueueChange(state.pending, event);
+        if (event.started === undefined) return { pending };
 
         const known = state.messages[event.chatId] ?? [];
         const messages = known.some((message) => message.id === event.started?.userMessageId)
@@ -457,7 +462,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             };
         const current = state.live[event.chatId];
         return {
-          queued,
+          pending,
           messages,
           live: {
             ...state.live,
@@ -605,12 +610,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
       archived: [],
       messages: {},
       live: {},
-      queued: {},
+      pending: {},
       failures: {},
       confirms: {},
     });
   },
 }));
+
+function upsertPending(items: QueuedMessageDTO[], message: QueuedMessageDTO): QueuedMessageDTO[] {
+  const index = items.findIndex((item) => item.id === message.id);
+  if (index < 0) return [...items, message];
+  return items.map((item, at) => (at === index ? message : item));
+}
+
+function removePending(
+  pending: Record<string, QueuedMessageDTO[]>,
+  chatId: string,
+  messageId: string,
+): Record<string, QueuedMessageDTO[]> {
+  const items = (pending[chatId] ?? []).filter((item) => item.id !== messageId);
+  return items.length === 0 ? without(pending, chatId) : { ...pending, [chatId]: items };
+}
+
+function applyQueueChange(
+  pending: Record<string, QueuedMessageDTO[]>,
+  event: Extract<StreamEvent, { kind: 'queue' }>,
+): Record<string, QueuedMessageDTO[]> {
+  if (event.change?.kind === 'upsert') {
+    return {
+      ...pending,
+      [event.chatId]: upsertPending(pending[event.chatId] ?? [], event.change.message),
+    };
+  }
+  if (event.change?.kind === 'remove') return removePending(pending, event.chatId, event.change.id);
+  // Compatibility with servers that only broadcast the current head.
+  return event.message === undefined
+    ? without(pending, event.chatId)
+    : { ...pending, [event.chatId]: [event.message] };
+}
 
 interface LegacyQueuedMessage {
   text: string;

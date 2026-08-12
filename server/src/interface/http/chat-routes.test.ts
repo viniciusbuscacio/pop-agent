@@ -349,6 +349,50 @@ describe('sending a message', () => {
     ).toEqual(['two', 'three']);
   });
 
+  it('returns the complete FIFO and edits or cancels an exact pending item', async () => {
+    const chat = await newChat();
+    const first = fixture.queuedMessages.enqueue(chat.id, {
+      text: 'first pending',
+      attachments: [],
+      filePaths: [],
+    });
+    const second = fixture.queuedMessages.enqueue(chat.id, {
+      text: 'second pending',
+      attachments: [],
+      filePaths: [],
+    });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    const snapshot = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      pending: { id: string; text: string }[];
+      queued: { id: string; text: string };
+    };
+    expect(snapshot.pending.map((message) => message.text)).toEqual([
+      'first pending',
+      'second pending',
+    ]);
+    expect(snapshot.queued.id).toBe(first.message.id);
+
+    const updated = await api(`/v1/chats/${chat.id}/queue/${second.message.id}`, {
+      method: 'PUT',
+      body: { text: 'edited second' },
+    });
+    expect(updated.status).toBe(200);
+    expect(fixture.queuedMessages.list(chat.id).map((message) => message.text)).toEqual([
+      'first pending',
+      'edited second',
+    ]);
+
+    const removed = await api(`/v1/chats/${chat.id}/queue/${second.message.id}`, {
+      method: 'DELETE',
+    });
+    expect(removed.status).toBe(204);
+    expect(fixture.queuedMessages.list(chat.id).map((message) => message.text)).toEqual([
+      'first pending',
+    ]);
+  });
+
   it('keeps a defensive 1,024-item cap for broken clients', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
@@ -370,7 +414,7 @@ describe('sending a message', () => {
     expect(((await overflow.json()) as { error: { code: string } }).error.code).toBe('queue_full');
 
     for (let index = 0; index < MAX_PENDING_MESSAGES_PER_CHAT; index += 1) {
-      expect(fixture.queuedMessages.cancel(chat.id).ok).toBe(true);
+      expect(fixture.queuedMessages.cancel(chat.id, fixture.queuedMessages.get(chat.id)?.id ?? '').ok).toBe(true);
     }
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();

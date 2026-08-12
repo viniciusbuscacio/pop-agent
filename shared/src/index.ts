@@ -631,7 +631,9 @@ export interface MessagesResponse {
   messages: MessageDTO[];
   /** Present while this chat has a run in flight. */
   live?: LiveRunDTO;
-  /** Oldest item in the server-owned pending-input FIFO, shared by every client. */
+  /** Entire server-owned pending-input FIFO in delivery order. */
+  pending?: QueuedMessageDTO[];
+  /** Oldest item, retained for compatibility with older clients. */
   queued?: QueuedMessageDTO;
 }
 
@@ -1002,6 +1004,8 @@ export type StreamEvent =
       kind: 'queue';
       chatId: string;
       message?: QueuedMessageDTO;
+      /** Incremental FIFO change; `message` remains the current head for older clients. */
+      change?: { kind: 'upsert'; message: QueuedMessageDTO } | { kind: 'remove'; id: string };
       started?: { runId: string; userMessageId: string; text: string; attachments: AttachmentDTO[]; createdAt: string };
     }
   | { kind: 'update'; status: 'available' | 'installing' | 'done' | 'error' };

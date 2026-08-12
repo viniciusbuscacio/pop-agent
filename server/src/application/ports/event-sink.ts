@@ -43,6 +43,7 @@ export type RunEvent =
       kind: 'queue';
       chatId: string;
       message?: QueuedMessage;
+      change?: { kind: 'upsert'; message: QueuedMessage } | { kind: 'remove'; id: string };
       started?: {
         runId: string;
         userMessageId: string;

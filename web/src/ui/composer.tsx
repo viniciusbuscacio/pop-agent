@@ -33,10 +33,10 @@ const MAX_ATTACHMENTS = 8;
 export function Composer({
   chatId,
   busy,
-  queuedMessage,
+  editRequest,
   onSend,
   onUpdateQueued,
-  onCancelQueued,
+  onEditingDone,
   onStop,
   onNewChat,
   models,
@@ -47,15 +47,15 @@ export function Composer({
 }: {
   chatId: string;
   busy: boolean;
-  queuedMessage?: QueuedMessageDTO;
+  editRequest?: QueuedMessageDTO;
   onSend: (
     text: string,
     attachments: AttachmentDTO[],
     filePaths?: string[],
     delivery?: MessageDelivery,
   ) => Promise<void>;
-  onUpdateQueued: (text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
-  onCancelQueued: () => Promise<void>;
+  onUpdateQueued: (messageId: string, text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
+  onEditingDone: () => void;
   onStop: () => void;
   onNewChat: () => void;
   models: ModelChoice[];
@@ -69,7 +69,7 @@ export function Composer({
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [sending, setSending] = useState(false);
-  const [editingQueued, setEditingQueued] = useState(false);
+  const [editingQueuedId, setEditingQueuedId] = useState<string | undefined>(undefined);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
   const notify = useNotificationsStore((state) => state.notify);
@@ -115,8 +115,22 @@ export function Composer({
     setSlashQuery(undefined);
     setSlashMode('commands');
     setNotice(undefined);
-    setEditingQueued(false);
+    setEditingQueuedId(undefined);
   }, [storageKey]);
+
+  useEffect(() => {
+    if (editRequest === undefined) {
+      setEditingQueuedId(undefined);
+      return;
+    }
+    persist(editRequest.text);
+    setAttachments(editRequest.attachments);
+    setMentions(
+      editRequest.filePaths.map((path) => ({ path, name: path.split('/').at(-1) ?? path })),
+    );
+    setEditingQueuedId(editRequest.id);
+    queueMicrotask(() => area.current?.focus());
+  }, [editRequest]);
 
   useEffect(() => {
     const element = area.current;
@@ -359,55 +373,27 @@ export function Composer({
       autoSendRef.current = true;
       return;
     }
-    // One follow-up is already safe in the durable queue. Keep a third message
-    // as the draft until that slot moves into a live run.
-    if (!canSend || sending || (busy && queuedMessage !== undefined && !editingQueued)) return;
+    if (!canSend || sending) return;
     setSending(true);
     setNotice(undefined);
     try {
       const filePaths = mentions.map((mention) => mention.path);
       const outgoing = parseComposerDelivery(text);
       if (outgoing.text.length === 0) return;
-      if (editingQueued) await onUpdateQueued(outgoing.text, attachments, filePaths);
-      else await onSend(outgoing.text, attachments, filePaths, outgoing.delivery);
+      if (editingQueuedId !== undefined) {
+        await onUpdateQueued(editingQueuedId, outgoing.text, attachments, filePaths);
+      } else {
+        await onSend(outgoing.text, attachments, filePaths, outgoing.delivery);
+      }
       persist('');
       setAttachments([]);
       setMentions([]);
-      setEditingQueued(false);
+      setEditingQueuedId(undefined);
+      onEditingDone();
     } catch {
       // Most importantly, do not clear anything: the exact draft and its files
       // remain available for another tap.
       setNotice(t('chat.sendFailed'));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function editQueued(): void {
-    if (queuedMessage === undefined) return;
-    persist(queuedMessage.text);
-    setAttachments(queuedMessage.attachments);
-    setMentions(
-      queuedMessage.filePaths.map((path) => ({ path, name: path.split('/').at(-1) ?? path })),
-    );
-    setEditingQueued(true);
-    queueMicrotask(() => area.current?.focus());
-  }
-
-  async function cancelQueued(): Promise<void> {
-    if (sending) return;
-    setSending(true);
-    setNotice(undefined);
-    try {
-      await onCancelQueued();
-      if (editingQueued) {
-        persist('');
-        setAttachments([]);
-        setMentions([]);
-        setEditingQueued(false);
-      }
-    } catch {
-      setNotice(t('chat.queueCancelFailed'));
     } finally {
       setSending(false);
     }
@@ -492,35 +478,6 @@ export function Composer({
         addFiles(event.dataTransfer.files);
       }}
     >
-      {queuedMessage?.deliveryMode === 'follow_up' ? (
-        <div
-          data-testid="composer-queued"
-          className="mb-2 flex items-center gap-2 rounded bg-[var(--panel-bg)] px-2 py-1.5 text-xs text-[var(--muted)]"
-        >
-          <span className="min-w-0 flex-1 truncate">
-            {t('chat.queued', { text: queuedMessage.text })}
-          </span>
-          <button
-            type="button"
-            data-testid="queue-edit"
-            onClick={editQueued}
-            disabled={sending}
-            className="text-[var(--accent)] disabled:opacity-50"
-          >
-            {t('common.edit')}
-          </button>
-          <button
-            type="button"
-            data-testid="queue-cancel"
-            onClick={() => void cancelQueued()}
-            disabled={sending}
-            className="text-[var(--danger)] disabled:opacity-50"
-          >
-            {t('common.cancel')}
-          </button>
-        </div>
-      ) : null}
-
       {notice !== undefined ? (
         <p role="alert" className="mb-2 text-xs text-[var(--danger)]">
           {notice}
@@ -721,9 +678,9 @@ export function Composer({
         ) : (
           <IconButton
             testId="composer-send"
-            label={editingQueued ? t('chat.queueSave') : busy ? t('chat.queue') : t('chat.send')}
+            label={editingQueuedId !== undefined ? t('chat.queueSave') : busy ? t('chat.queue') : t('chat.send')}
             primary
-            disabled={!canSend || sending || (busy && queuedMessage !== undefined && !editingQueued)}
+            disabled={!canSend || sending}
             onClick={() => void submit()}
           >
             <SendIcon />

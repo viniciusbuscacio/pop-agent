@@ -211,25 +211,39 @@ describe('chat transcript', () => {
           tools: [],
         },
       },
-      queued: {
-        [chat.id]: {
-          id: 'steer-1',
-          chatId: chat.id,
-          text: 'Change course',
-          deliveryMode: 'steer',
-          attachments: [],
-          filePaths: [],
-          createdAt: '',
-          updatedAt: '',
-        },
+      pending: {
+        [chat.id]: [
+          {
+            id: 'steer-1',
+            chatId: chat.id,
+            text: 'Change course',
+            deliveryMode: 'steer',
+            attachments: [],
+            filePaths: [],
+            createdAt: '',
+            updatedAt: '',
+          },
+          {
+            id: 'steer-2',
+            chatId: chat.id,
+            text: 'Then summarize',
+            deliveryMode: 'steer',
+            attachments: [],
+            filePaths: [],
+            createdAt: '',
+            updatedAt: '',
+          },
+        ],
       },
     });
 
-    await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(3));
     expect(screen.getByTestId('message-sending').textContent).toContain('Sending:');
+    expect(screen.getByTestId('message-waiting').textContent).toContain('Waiting:');
     expect(screen.getAllByTestId('chat-message').map((message) => message.textContent)).toEqual([
       'Answer in progress',
       'Change course',
+      'Then summarize',
     ]);
   });
 });

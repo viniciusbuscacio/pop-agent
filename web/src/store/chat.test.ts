@@ -17,8 +17,10 @@ vi.mock('../services/chats', () => ({
   chatsService: {
     send: (chatId: string, text: string) => send(chatId, text) as Promise<unknown>,
     stop: (chatId: string) => stop(chatId) as Promise<unknown>,
-    updateQueue: (chatId: string, text: string) => updateQueue(chatId, text) as Promise<unknown>,
-    cancelQueue: (chatId: string) => cancelQueue(chatId) as Promise<unknown>,
+    updateQueue: (chatId: string, messageId: string, text: string) =>
+      updateQueue(chatId, messageId, text) as Promise<unknown>,
+    cancelQueue: (chatId: string, messageId: string) =>
+      cancelQueue(chatId, messageId) as Promise<unknown>,
     patch: (chatId: string, body: unknown) => patch(chatId, body) as Promise<unknown>,
     archiveOthers: (keepChatId: string) => archiveOthers(keepChatId) as Promise<unknown>,
     list: (archived = false) =>
@@ -42,9 +44,9 @@ function messages() {
   return useChatStore.getState().messages[CHAT] ?? [];
 }
 
-function queuedMessage(text: string) {
+function queuedMessage(text: string, id = 'queued-00000000001') {
   return {
-    id: 'queued-00000000001',
+    id,
     chatId: CHAT,
     text,
     deliveryMode: 'steer' as const,
@@ -312,44 +314,65 @@ describe('a run started somewhere else', () => {
 });
 
 describe('the server-side queue', () => {
-  it('accepts the server decision to queue instead of posting again after done', async () => {
+  it('appends every accepted pending message in FIFO order', async () => {
     await useChatStore.getState().send(CHAT, 'first');
-    send.mockResolvedValueOnce({ queued: true, message: queuedMessage('second') });
+    send.mockResolvedValueOnce({ queued: true, message: queuedMessage('second', 'queued-2') });
+    send.mockResolvedValueOnce({ queued: true, message: queuedMessage('third', 'queued-3') });
 
     await useChatStore.getState().send(CHAT, 'second');
-    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-answer' });
-    await Promise.resolve();
+    await useChatStore.getState().send(CHAT, 'third');
 
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('second');
+    expect(useChatStore.getState().pending[CHAT]?.map((item) => item.text)).toEqual([
+      'second',
+      'third',
+    ]);
   });
 
-  it('loads the authoritative queue with the chat snapshot on another device', async () => {
+  it('loads the authoritative FIFO with the chat snapshot on another device', async () => {
     messagesBody.value = {
       messages: [],
       live: { runId: RUN, status: 'running', seq: 0, content: '', thinking: '', tools: [] },
-      queued: queuedMessage('from the phone'),
+      pending: [queuedMessage('from phone', 'queued-1'), queuedMessage('then this', 'queued-2')],
     };
 
     await useChatStore.getState().openChat(CHAT);
 
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('from the phone');
+    expect(useChatStore.getState().pending[CHAT]?.map((item) => item.text)).toEqual([
+      'from phone',
+      'then this',
+    ]);
   });
 
-  it('synchronizes queue edits and consumption over SSE', () => {
-    apply({ kind: 'queue', chatId: CHAT, message: queuedMessage('edited elsewhere') });
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('edited elsewhere');
+  it('synchronizes incremental queue additions, edits and removals over SSE', () => {
+    const first = queuedMessage('first', 'queued-1');
+    const second = queuedMessage('second', 'queued-2');
+    apply({ kind: 'queue', chatId: CHAT, message: first, change: { kind: 'upsert', message: first } });
+    apply({ kind: 'queue', chatId: CHAT, message: first, change: { kind: 'upsert', message: second } });
+    apply({
+      kind: 'queue',
+      chatId: CHAT,
+      message: first,
+      change: { kind: 'upsert', message: { ...second, text: 'edited elsewhere' } },
+    });
+    expect(useChatStore.getState().pending[CHAT]?.map((item) => item.text)).toEqual([
+      'first',
+      'edited elsewhere',
+    ]);
 
-    apply({ kind: 'queue', chatId: CHAT });
-    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    apply({ kind: 'queue', chatId: CHAT, message: second, change: { kind: 'remove', id: first.id } });
+    expect(useChatStore.getState().pending[CHAT]?.map((item) => item.id)).toEqual([second.id]);
   });
 
-  it('shows the queued user bubble when the server starts it', () => {
-    useChatStore.setState({ queued: { [CHAT]: queuedMessage('second') } });
+  it('shows the queued user bubble when the server starts it and keeps the next item', () => {
+    const first = queuedMessage('second', 'queued-2');
+    const next = queuedMessage('third', 'queued-3');
+    useChatStore.setState({ pending: { [CHAT]: [first, next] } });
 
     apply({
       kind: 'queue',
       chatId: CHAT,
+      message: next,
+      change: { kind: 'remove', id: first.id },
       started: {
         runId: 'run-second',
         userMessageId: 'message-second',
@@ -359,15 +382,16 @@ describe('the server-side queue', () => {
       },
     });
 
-    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    expect(useChatStore.getState().pending[CHAT]?.map((item) => item.id)).toEqual([next.id]);
     expect(messages().at(-1)).toMatchObject({ id: 'message-second', content: 'second' });
     expect(live()?.runId).toBe('run-second');
   });
 
-  it('splits the live assistant bubble when pi consumes a steering message', async () => {
+  it('does not hide the next item when steering is delivered', async () => {
     await useChatStore.getState().send(CHAT, 'first');
     apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'before' });
-    useChatStore.setState({ queued: { [CHAT]: queuedMessage('change course') } });
+    const next = queuedMessage('next direction', 'queued-next');
+    useChatStore.setState({ pending: { [CHAT]: [next] } });
 
     apply({
       kind: 'steering-delivered',
@@ -375,58 +399,43 @@ describe('the server-side queue', () => {
       runId: RUN,
       seq: 1,
       assistant: {
-        id: 'assistant-before',
-        chatId: CHAT,
-        role: 'assistant',
-        content: 'before',
-        thinking: '',
-        tools: [],
-        attachments: [],
-        createdAt: '2026-08-09T00:00:01.000Z',
+        id: 'assistant-before', chatId: CHAT, role: 'assistant', content: 'before',
+        thinking: '', tools: [], attachments: [], createdAt: '2026-08-09T00:00:01.000Z',
       },
       user: {
-        id: 'user-steering',
-        chatId: CHAT,
-        role: 'user',
-        content: 'change course',
-        thinking: '',
-        tools: [],
-        attachments: [],
-        createdAt: '2026-08-09T00:00:01.000Z',
+        id: 'user-steering', chatId: CHAT, role: 'user', content: 'change course',
+        thinking: '', tools: [], attachments: [], createdAt: '2026-08-09T00:00:01.000Z',
       },
     });
-    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 2, text: 'after' });
 
-    expect(messages().slice(-2).map((message) => message.content)).toEqual([
-      'before',
-      'change course',
-    ]);
-    expect(live()).toMatchObject({ runId: RUN, seq: 2, content: 'after' });
-    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    expect(useChatStore.getState().pending[CHAT]).toEqual([next]);
+    expect(messages().slice(-2).map((message) => message.content)).toEqual(['before', 'change course']);
   });
 
-  it('edits and cancels through server endpoints', async () => {
-    useChatStore.setState({ queued: { [CHAT]: queuedMessage('old') } });
+  it('edits and cancels a specific pending item through server endpoints', async () => {
+    const original = queuedMessage('old', 'queued-2');
+    useChatStore.setState({ pending: { [CHAT]: [original] } });
+    updateQueue.mockResolvedValueOnce({ message: { ...original, text: 'edited' } });
 
-    await useChatStore.getState().updateQueued(CHAT, 'edited');
-    expect(updateQueue).toHaveBeenCalledWith(CHAT, 'edited');
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('edited');
+    await useChatStore.getState().updateQueued(CHAT, original.id, 'edited');
+    expect(updateQueue).toHaveBeenCalledWith(CHAT, original.id, 'edited');
+    expect(useChatStore.getState().pending[CHAT]?.[0]?.text).toBe('edited');
 
-    await useChatStore.getState().cancelQueued(CHAT);
-    expect(cancelQueue).toHaveBeenCalledWith(CHAT);
-    expect(useChatStore.getState().queued[CHAT]).toBeUndefined();
+    await useChatStore.getState().cancelQueued(CHAT, original.id);
+    expect(cancelQueue).toHaveBeenCalledWith(CHAT, original.id);
+    expect(useChatStore.getState().pending[CHAT]).toBeUndefined();
   });
 
-  it('does not discard a different legacy message when the server slot is occupied', async () => {
+  it('does not discard a different legacy message when the FIFO is occupied', async () => {
     localStorage.setItem(
       `pop-agent.queued.${CHAT}`,
       JSON.stringify({ text: 'older local message', attachments: [], filePaths: [] }),
     );
-    messagesBody.value = { messages: [], queued: queuedMessage('already on server') };
+    messagesBody.value = { messages: [], pending: [queuedMessage('already on server')] };
 
     await useChatStore.getState().openChat(CHAT);
 
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('already on server');
+    expect(useChatStore.getState().pending[CHAT]?.[0]?.text).toBe('already on server');
     expect(localStorage.getItem(`pop-agent.queued.${CHAT}`)).toContain('older local message');
     expect(send).not.toHaveBeenCalled();
   });
@@ -445,7 +454,7 @@ describe('the server-side queue', () => {
     await useChatStore.getState().openChat(CHAT);
 
     expect(send).toHaveBeenCalledTimes(1);
-    expect(useChatStore.getState().queued[CHAT]?.text).toBe('legacy');
+    expect(useChatStore.getState().pending[CHAT]?.[0]?.text).toBe('legacy');
     expect(localStorage.getItem(`pop-agent.queued.${CHAT}`)).toBeNull();
   });
 });

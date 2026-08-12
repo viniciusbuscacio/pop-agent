@@ -47,6 +47,10 @@ export class QueuedMessageService {
     return this.deps.repo.get(chatId);
   }
 
+  list(chatId: string): QueuedMessage[] {
+    return this.deps.repo.list(chatId);
+  }
+
   enqueue(chatId: string, input: QueueInput): QueueWriteResult {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
     if (this.deps.repo.count(chatId) >= MAX_PENDING_MESSAGES_PER_CHAT) {
@@ -66,14 +70,14 @@ export class QueuedMessageService {
     // as full rather than silently losing an accepted input.
     if (!this.deps.repo.create(message)) return { ok: false, reason: 'queue_full' };
     const head = this.deps.repo.get(chatId) ?? message;
-    this.announce(head);
+    this.announce(head, chatId, undefined, { kind: 'upsert', message });
     this.offerSteering(chatId);
     return { ok: true, message, head };
   }
 
-  update(chatId: string, input: QueueInput): QueueWriteResult {
+  update(chatId: string, messageId: string, input: QueueInput): QueueWriteResult {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
-    const current = this.deps.repo.get(chatId);
+    const current = this.deps.repo.getById(chatId, messageId);
     if (current === undefined) return { ok: false, reason: 'queue_not_found' };
     const message: QueuedMessage = {
       ...current,
@@ -82,24 +86,27 @@ export class QueuedMessageService {
       deliveryMode: current.deliveryMode,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
-    this.deps.runs.cancelSteering(chatId, current.id);
+    const wasHead = this.deps.repo.get(chatId)?.id === current.id;
+    if (wasHead) this.deps.runs.cancelSteering(chatId, current.id);
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
-    this.announce(message);
-    if (message.deliveryMode === 'steer') this.offerSteering(chatId);
-    return { ok: true, message, head: message };
+    const head = this.deps.repo.get(chatId) ?? message;
+    this.announce(head, chatId, undefined, { kind: 'upsert', message });
+    if (wasHead && message.deliveryMode === 'steer') this.offerSteering(chatId);
+    return { ok: true, message, head };
   }
 
-  cancel(chatId: string): QueueWriteResult {
+  cancel(chatId: string, messageId: string): QueueWriteResult {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
-    const current = this.deps.repo.get(chatId);
+    const current = this.deps.repo.getById(chatId, messageId);
     if (current === undefined) return { ok: false, reason: 'queue_not_found' };
-    this.deps.runs.cancelSteering(chatId, current.id);
+    const wasHead = this.deps.repo.get(chatId)?.id === current.id;
+    if (wasHead) this.deps.runs.cancelSteering(chatId, current.id);
     if (!this.deps.repo.delete(current.id)) {
       return { ok: false, reason: 'queue_not_found' };
     }
     const head = this.deps.repo.get(chatId);
-    this.announce(head, chatId);
-    this.offerSteering(chatId);
+    this.announce(head, chatId, undefined, { kind: 'remove', id: current.id });
+    if (wasHead) this.offerSteering(chatId);
     return { ok: true, message: current, head: head ?? current };
   }
 
@@ -132,7 +139,7 @@ export class QueuedMessageService {
     if (queued === undefined || queued.id !== steeringId || !this.deps.repo.delete(steeringId)) {
       return false;
     }
-    this.announce(this.deps.repo.get(chatId), chatId);
+    this.announce(this.deps.repo.get(chatId), chatId, undefined, { kind: 'remove', id: steeringId });
     // Pi's default one-at-a-time mode has just consumed the former head. Offer
     // the next item now so it can steer the following assistant turn.
     this.offerSteering(chatId);
@@ -169,7 +176,7 @@ export class QueuedMessageService {
     if (!started.ok) {
       if (started.reason === 'chat_not_found') {
         this.deps.repo.delete(queued.id);
-        this.announce(this.deps.repo.get(chatId), chatId);
+        this.announce(this.deps.repo.get(chatId), chatId, undefined, { kind: 'remove', id: queued.id });
       }
       return false;
     }
@@ -183,7 +190,7 @@ export class QueuedMessageService {
       text: queued.text,
       attachments: [...queued.attachments, ...referenced],
       createdAt: new Date(this.deps.clock.now()).toISOString(),
-    });
+    }, { kind: 'remove', id: queued.id });
     return true;
   }
 
@@ -212,6 +219,7 @@ export class QueuedMessageService {
       attachments: Attachment[];
       createdAt: string;
     },
+    change?: { kind: 'upsert'; message: QueuedMessage } | { kind: 'remove'; id: string },
   ): void {
     if (chatId === undefined) return;
     this.deps.sink.emit({
@@ -219,6 +227,7 @@ export class QueuedMessageService {
       chatId,
       ...(message === undefined ? {} : { message }),
       ...(started === undefined ? {} : { started }),
+      ...(change === undefined ? {} : { change }),
     });
   }
 }

@@ -21,8 +21,9 @@ export interface QueuedMessage {
 export interface QueuedMessageRepo {
   /** Oldest pending item for a chat. */
   get(chatId: string): QueuedMessage | undefined;
+  getById(chatId: string, id: string): QueuedMessage | undefined;
   count(chatId: string): number;
-  list(): QueuedMessage[];
+  list(chatId?: string): QueuedMessage[];
   create(message: QueuedMessage): boolean;
   update(message: QueuedMessage): boolean;
   /** Deletes exactly one item, never the rest of its chat's FIFO. */

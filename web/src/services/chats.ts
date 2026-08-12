@@ -76,11 +76,12 @@ export const chatsService = {
 
   updateQueue(
     id: string,
+    messageId: string,
     text: string,
     attachments: AttachmentDTO[] = [],
     filePaths: string[] = [],
   ): Promise<{ message: QueuedMessageDTO }> {
-    return apiRequest<{ message: QueuedMessageDTO }>(`/chats/${id}/queue`, {
+    return apiRequest<{ message: QueuedMessageDTO }>(`/chats/${id}/queue/${messageId}`, {
       method: 'PUT',
       body: {
         text,
@@ -90,8 +91,8 @@ export const chatsService = {
     });
   },
 
-  cancelQueue(id: string): Promise<void> {
-    return apiRequest<void>(`/chats/${id}/queue`, { method: 'DELETE' });
+  cancelQueue(id: string, messageId: string): Promise<void> {
+    return apiRequest<void>(`/chats/${id}/queue/${messageId}`, { method: 'DELETE' });
   },
 
   stop(id: string): Promise<StopRunResponse> {

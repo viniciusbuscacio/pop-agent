@@ -130,17 +130,18 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         ...(event.message === undefined
           ? {}
           : {
-              message: {
-                id: event.message.id,
-                chatId: event.message.chatId,
-                text: event.message.text,
-                deliveryMode: event.message.deliveryMode,
-                attachments: event.message.attachments,
-                filePaths: event.message.filePaths,
-                createdAt: event.message.createdAt,
-                updatedAt: event.message.updatedAt,
-              },
+              message: toWireQueuedMessage(event.message),
             }),
+        ...(event.change === undefined
+          ? {}
+          : event.change.kind === 'remove'
+            ? { change: event.change }
+            : {
+                change: {
+                  kind: 'upsert' as const,
+                  message: toWireQueuedMessage(event.change.message),
+                },
+              }),
         ...(event.started === undefined ? {} : { started: event.started }),
       };
   }
@@ -157,5 +158,18 @@ function toWireMessage(message: import('../../domain/chat/chat.js').Message) {
     attachments: message.attachments,
     createdAt: message.createdAt,
     ...(message.notice === undefined ? {} : { notice: message.notice }),
+  };
+}
+
+function toWireQueuedMessage(message: import('../../application/ports/queued-message-repo.js').QueuedMessage) {
+  return {
+    id: message.id,
+    chatId: message.chatId,
+    text: message.text,
+    deliveryMode: message.deliveryMode,
+    attachments: message.attachments,
+    filePaths: message.filePaths,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
   };
 }

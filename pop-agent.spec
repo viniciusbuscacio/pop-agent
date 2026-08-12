@@ -953,10 +953,13 @@ events from stale runs.
   file. `/think` redraws live, settled, historical and pre-steering assistant
   segments immediately, and settlement never discards reasoning already shown.
   The **pending-input FIFO is
-  server-owned**: ordered SQLite rows survive restart, while the current head is
-  returned with the message snapshot and broadcast by SSE so phone, desktop and
-  tabs agree on what comes next. A POST racing an active run appends atomically;
-  the defensive ceiling is 1,024 pending inputs per chat, so only item 1,025 is
+  server-owned**: ordered SQLite rows survive restart. The complete FIFO is
+  returned with the message snapshot, while incremental add/edit/remove events
+  keep phone, desktop and tabs in sync; the current head remains on the wire for
+  older clients. Every pending input stays visible with edit/cancel controls,
+  and the composer remains available to append more. A POST racing an active
+  run appends atomically; the defensive ceiling is 1,024 pending inputs per
+  chat, so only item 1,025 is
   refused with `queue_full`. While pi is running with the same terminal local connection,
   Pop offers one head at a time through pi's native steering queue, inheriting
   its default `one-at-a-time` behavior: each enters after the current assistant
@@ -964,15 +967,16 @@ events from stale runs.
   explicit escape hatch to the old behavior: it persists
   `delivery_mode=follow_up` and is not offered to pi until the live run ends.
   Delivery persists the assistant segment before it, inserts the user bubble,
-  advances the FIFO and continues under the same run id. The pending steering
-  head is already painted in that transcript position as an ordinary user
-  bubble with the quiet status `Sending:`; it never adds a separate composer
-  strip such as “Guiding this run”. The explicit follow-up strip says `Queued:`
-  because that input waits for the current run to finish. Until pi emits that
+  advances the FIFO and continues under the same run id. Pending inputs are
+  painted in FIFO order as ordinary user bubbles: the steering head says
+  `Sending:`, later steering says `Waiting:`, and explicit follow-up says
+  `Queued:` because it waits for the current run to finish. No separate composer
+  strip exposes the internal steering vocabulary. Until pi emits that
   user-message event the SQLite row remains authoritative, so a restart or an
   unavailable steering channel degrades into the ordinary follow-up path instead
-  of losing input. PUT edits the head and DELETE cancels the head before delivery.
-  Text, uploads and Files references survive PWA reclamation and server restart.
+  of losing input. ID-addressed PUT and DELETE edit or cancel any pending item;
+  the legacy routes still target the head. Text, uploads and Files references
+  survive PWA reclamation and server restart.
   Legacy `pop-agent.queued.*` localStorage rows migrate on first open.
 - **Adoption**: an event for a chat with no live buffer starts one, so a run
   begun on another device streams into every open window. Runs that already

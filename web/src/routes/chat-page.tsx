@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { chatsService } from '../services/chats';
 import { eventStream } from '../services/events';
@@ -12,6 +13,8 @@ import { RunStatusLine } from '../ui/run-status-line';
 import { resendSource } from '../lib/resend';
 import { shouldResumeFollowing } from '../lib/chat-follow';
 
+const NO_PENDING_MESSAGES: QueuedMessageDTO[] = [];
+
 /** One conversation: history, whatever is streaming, and the composer. */
 export function ChatPage() {
   const { chatId = '' } = useParams();
@@ -20,7 +23,7 @@ export function ChatPage() {
   const chat = useChatStore((state) => state.chats.find((entry) => entry.id === chatId));
   const messages = useChatStore((state) => state.messages[chatId]);
   const live = useChatStore((state) => state.live[chatId]);
-  const queued = useChatStore((state) => state.queued[chatId]);
+  const pending = useChatStore((state) => state.pending[chatId]) ?? NO_PENDING_MESSAGES;
   const failure = useChatStore((state) => state.failures[chatId]);
   const confirm = useChatStore((state) => state.confirms[chatId]);
   const openChat = useChatStore((state) => state.openChat);
@@ -35,6 +38,9 @@ export function ChatPage() {
   const [unconfigured, setUnconfigured] = useState(false);
   const [resendingId, setResendingId] = useState<string | undefined>(undefined);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
+  const [editingPendingId, setEditingPendingId] = useState<string | undefined>(undefined);
+  const editRequest = pending.find((message) => message.id === editingPendingId);
+  const [queueActionError, setQueueActionError] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const lastScrollTop = useRef(0);
@@ -54,6 +60,8 @@ export function ChatPage() {
     void openChat(chatId);
     setMissed(0);
     setShowJump(false);
+    setEditingPendingId(undefined);
+    setQueueActionError(false);
     atBottom.current = true;
     lastScrollTop.current = 0;
   }, [chatId, openChat]);
@@ -133,7 +141,7 @@ export function ChatPage() {
       setMissed((count) => count + 1);
       setShowJump(true);
     }
-  }, [messages?.length, queued?.id, streamedLength]);
+  }, [messages?.length, pending.length, pending[0]?.id, streamedLength]);
 
   // "Is the reader at the bottom?" with aw's tolerance: generous enough that
   // a bounce or an address-bar resize keeps follow mode.
@@ -250,7 +258,7 @@ export function ChatPage() {
           className="relative min-h-0 flex-1 overflow-y-auto"
           style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         >
-          {messages?.length === 0 && live === undefined ? (
+          {messages?.length === 0 && live === undefined && pending.length === 0 ? (
           <div
             data-testid="empty-chat-icon"
             aria-hidden="true"
@@ -275,7 +283,7 @@ export function ChatPage() {
         <div className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
           {(messages ?? []).map((message, index, history) => {
             const source = resendSource(history, index);
-            const canResend = source !== undefined && live === undefined && queued === undefined;
+            const canResend = source !== undefined && live === undefined && pending.length === 0;
             return (
               <ChatMessage
                 key={message.id}
@@ -310,19 +318,61 @@ export function ChatPage() {
             />
           ) : null}
 
-          {queued?.deliveryMode === 'steer' ? (
-            <div className="flex flex-col items-end gap-1" data-testid="message-sending">
-              <span className="pr-1 text-xs text-[var(--muted)]">{t('chat.sending')}</span>
+          {pending.map((message, index) => (
+            <div
+              key={message.id}
+              className="flex flex-col items-end gap-1"
+              data-testid={index === 0 && message.deliveryMode === 'steer' ? 'message-sending' : 'message-waiting'}
+            >
+              <span className="pr-1 text-xs text-[var(--muted)]">
+                {message.deliveryMode === 'follow_up'
+                  ? t('chat.queuedLabel')
+                  : index === 0
+                    ? t('chat.sending')
+                    : t('chat.waiting')}
+              </span>
               <ChatMessage
                 message={{
                   role: 'user',
-                  content: queued.text,
+                  content: message.text,
                   thinking: '',
                   tools: [],
-                  attachments: queued.attachments,
+                  attachments: message.attachments,
                 }}
               />
+              <div className="flex gap-2 pr-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueueActionError(false);
+                    setEditingPendingId(message.id);
+                  }}
+                  className="text-[var(--accent)]"
+                >
+                  {t('common.edit')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueueActionError(false);
+                    void cancelQueued(chatId, message.id)
+                      .then(() => {
+                        if (editingPendingId === message.id) setEditingPendingId(undefined);
+                      })
+                      .catch(() => setQueueActionError(true));
+                  }}
+                  className="text-[var(--danger)]"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
             </div>
+          ))}
+
+          {queueActionError ? (
+            <p role="alert" className="text-sm text-[var(--danger)]">
+              {t('chat.queueCancelFailed')}
+            </p>
           ) : null}
 
           {confirm !== undefined ? (
@@ -404,14 +454,14 @@ export function ChatPage() {
       <Composer
         chatId={chatId}
         busy={live !== undefined}
-        {...(queued === undefined ? {} : { queuedMessage: queued })}
+        {...(editRequest === undefined ? {} : { editRequest })}
         onSend={(text, attachments, filePaths, delivery) =>
           send(chatId, text, attachments, filePaths, delivery)
         }
-        onUpdateQueued={(text, attachments, filePaths) =>
-          updateQueued(chatId, text, attachments, filePaths)
+        onUpdateQueued={(messageId, text, attachments, filePaths) =>
+          updateQueued(chatId, messageId, text, attachments, filePaths)
         }
-        onCancelQueued={() => cancelQueued(chatId)}
+        onEditingDone={() => setEditingPendingId(undefined)}
         onStop={() => void stop(chatId)}
         onNewChat={() => {
           void createChat().then((created) => navigate(`/chat/${created.id}`));
