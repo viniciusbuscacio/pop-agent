@@ -1,5 +1,5 @@
 import type { Attachment, MessageClient } from '../../domain/chat/chat.js';
-import { entityId } from '../../domain/ids.js';
+import { newQueuedMessageId } from '../../domain/ids.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
@@ -58,7 +58,7 @@ export class QueuedMessageService {
     }
     const now = new Date(this.deps.clock.now()).toISOString();
     const message: QueuedMessage = {
-      id: entityId('queued'),
+      id: newQueuedMessageId(),
       chatId,
       ...input,
       deliveryMode: input.deliveryMode ?? 'steer',
@@ -86,12 +86,11 @@ export class QueuedMessageService {
       deliveryMode: current.deliveryMode,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
-    const wasHead = this.deps.repo.get(chatId)?.id === current.id;
-    if (wasHead) this.deps.runs.cancelSteering(chatId, current.id);
+    this.deps.runs.clearSteering(chatId);
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
     const head = this.deps.repo.get(chatId) ?? message;
     this.announce(head, chatId, undefined, { kind: 'upsert', message });
-    if (wasHead && message.deliveryMode === 'steer') this.offerSteering(chatId);
+    if (message.deliveryMode === 'steer') this.offerSteering(chatId);
     return { ok: true, message, head };
   }
 
@@ -99,38 +98,44 @@ export class QueuedMessageService {
     if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
     const current = this.deps.repo.getById(chatId, messageId);
     if (current === undefined) return { ok: false, reason: 'queue_not_found' };
-    const wasHead = this.deps.repo.get(chatId)?.id === current.id;
-    if (wasHead) this.deps.runs.cancelSteering(chatId, current.id);
+    this.deps.runs.clearSteering(chatId);
     if (!this.deps.repo.delete(current.id)) {
       return { ok: false, reason: 'queue_not_found' };
     }
     const head = this.deps.repo.get(chatId);
     this.announce(head, chatId, undefined, { kind: 'remove', id: current.id });
-    if (wasHead) this.offerSteering(chatId);
+    this.offerSteering(chatId);
     return { ok: true, message: current, head: head ?? current };
   }
 
-  /** Offers the FIFO head to pi without deleting it until pi consumes it. */
+  /** Offers every contiguous steering item before the first explicit follow-up. */
   offerSteering(chatId: string): boolean {
-    const queued = this.deps.repo.get(chatId);
-    if (
-      queued === undefined ||
-      queued.deliveryMode !== 'steer' ||
-      !this.deps.runs.canSteer(chatId, queued.localConnectionId)
-    ) {
-      return false;
+    let offered = false;
+    for (const queued of this.deps.repo.list(chatId)) {
+      // `/queue` is a FIFO barrier: neither it nor later input may overtake the
+      // explicit follow-up while the current run is alive.
+      if (
+        queued.deliveryMode !== 'steer' ||
+        !this.deps.runs.canSteer(chatId, queued.localConnectionId)
+      ) {
+        break;
+      }
+      const referenced = this.resolveReferences(queued);
+      if (referenced === undefined) break;
+      if (!this.deps.runs.offerSteering(chatId, {
+        id: queued.id,
+        text: queued.text,
+        attachments: [...queued.attachments, ...referenced],
+        ...(queued.client === undefined ? {} : { client: queued.client }),
+        ...(queued.localConnectionId === undefined
+          ? {}
+          : { localConnectionId: queued.localConnectionId }),
+      })) {
+        break;
+      }
+      offered = true;
     }
-    const referenced = this.resolveReferences(queued);
-    if (referenced === undefined) return false;
-    return this.deps.runs.offerSteering(chatId, {
-      id: queued.id,
-      text: queued.text,
-      attachments: [...queued.attachments, ...referenced],
-      ...(queued.client === undefined ? {} : { client: queued.client }),
-      ...(queued.localConnectionId === undefined
-        ? {}
-        : { localConnectionId: queued.localConnectionId }),
-    });
+    return offered;
   }
 
   /** Advances the FIFO only after pi emits the corresponding user-message start. */
@@ -140,8 +145,8 @@ export class QueuedMessageService {
       return false;
     }
     this.announce(this.deps.repo.get(chatId), chatId, undefined, { kind: 'remove', id: steeringId });
-    // Pi's default one-at-a-time mode has just consumed the former head. Offer
-    // the next item now so it can steer the following assistant turn.
+    // Reconciliation is idempotent: if input arrived during delivery, offer
+    // every steering item not already held by the live run.
     this.offerSteering(chatId);
     return true;
   }

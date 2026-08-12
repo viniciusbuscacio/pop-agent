@@ -152,55 +152,108 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       return {};
     }
 
+    // Do not inherit pi's one-at-a-time default: Pop's durable FIFO may offer
+    // several interventions during this assistant turn, and all must enter
+    // before the next model call.
+    entry.session.setSteeringMode('all');
     let translator = new RunTranslator(onEvent);
-    const pendingSteering: { id: string; prompt: string }[] = [];
+    const pendingSteering: { id: string; prompt: string; images?: PiImage[] }[] = [];
+    const scheduledSteering = new Map<string, { cancelled: boolean }>();
+    let steeringOperations = Promise.resolve();
     let controlActive = true;
     let unsubscribe = entry.session.subscribe((event) => {
       const delivered = takeDeliveredSteering(event, pendingSteering);
       if (delivered !== undefined) {
+        scheduledSteering.delete(delivered);
         onEvent({ kind: 'steering-delivered', steeringId: delivered });
       }
       translator.handle(event);
     });
 
     request.onControlReady?.({
-      steer: async (input) => {
-        if (!controlActive || signal.aborted) return false;
-        const steeringRequest: AgentRunRequest = {
-          ...request,
-          prompt: input.prompt,
-          attachments: input.attachments,
-        };
-        const steeringPrompt = withRuntimeIdentity(
-          steeringRequest,
-          await this.withSkills(
-            this.withAttachments(steeringRequest),
-            steeringRequest.prompt,
-          ),
-        );
-        if (!controlActive || signal.aborted) return false;
-        pendingSteering.push({ id: input.id, prompt: steeringPrompt });
-        try {
-          await entry.session.steer(
-            steeringPrompt,
-            entry.session.supportsImages ? imagesFor(steeringRequest) : undefined,
+      steer: (input) => {
+        if (!controlActive || signal.aborted) return Promise.resolve(false);
+        if (scheduledSteering.has(input.id)) return Promise.resolve(true);
+        const scheduled = { cancelled: false };
+        scheduledSteering.set(input.id, scheduled);
+        const operation = steeringOperations.then(async () => {
+          if (
+            scheduled.cancelled ||
+            scheduledSteering.get(input.id) !== scheduled ||
+            !controlActive ||
+            signal.aborted
+          ) {
+            return false;
+          }
+          const steeringRequest: AgentRunRequest = {
+            ...request,
+            prompt: input.prompt,
+            attachments: input.attachments,
+          };
+          const steeringPrompt = withRuntimeIdentity(
+            steeringRequest,
+            await this.withSkills(
+              this.withAttachments(steeringRequest),
+              steeringRequest.prompt,
+            ),
           );
-          return true;
-        } catch {
-          const index = pendingSteering.findIndex((item) => item.id === input.id);
-          if (index >= 0) pendingSteering.splice(index, 1);
-          return false;
-        }
+          if (
+            scheduled.cancelled ||
+            scheduledSteering.get(input.id) !== scheduled ||
+            !controlActive ||
+            signal.aborted
+          ) {
+            return false;
+          }
+          const images = entry.session.supportsImages ? imagesFor(steeringRequest) : undefined;
+          pendingSteering.push({
+            id: input.id,
+            prompt: steeringPrompt,
+            ...(images === undefined ? {} : { images }),
+          });
+          try {
+            await entry.session.steer(steeringPrompt, images);
+            return true;
+          } catch {
+            const index = pendingSteering.findIndex((item) => item.id === input.id);
+            if (index >= 0) pendingSteering.splice(index, 1);
+            if (scheduledSteering.get(input.id) === scheduled) scheduledSteering.delete(input.id);
+            return false;
+          }
+        });
+        steeringOperations = operation.then(() => undefined, () => undefined);
+        return operation;
       },
       cancelSteering: (id) => {
-        const index = pendingSteering.findIndex((item) => item.id === id);
-        if (index < 0) return false;
-        // Pop Agent offers only the durable FIFO head to pi at a time. Clearing
-        // pi's queue therefore removes exactly that offered item; later inputs
-        // are still durable in SQLite and have not entered this bridge yet.
-        entry.session.clearQueue();
-        pendingSteering.splice(index, 1);
+        const scheduled = scheduledSteering.get(id);
+        if (scheduled === undefined) return false;
+        scheduled.cancelled = true;
+        scheduledSteering.delete(id);
+        steeringOperations = steeringOperations.then(async () => {
+          const remaining = pendingSteering.filter((item) => item.id !== id);
+          entry.session.clearQueue();
+          pendingSteering.length = 0;
+          for (const item of remaining) {
+            if (!scheduledSteering.has(item.id)) continue;
+            pendingSteering.push(item);
+            try {
+              await entry.session.steer(item.prompt, item.images);
+            } catch {
+              const failed = pendingSteering.findIndex((entry) => entry.id === item.id);
+              if (failed >= 0) pendingSteering.splice(failed, 1);
+              scheduledSteering.delete(item.id);
+            }
+          }
+        });
         return true;
+      },
+      clearSteering: () => {
+        for (const scheduled of scheduledSteering.values()) scheduled.cancelled = true;
+        scheduledSteering.clear();
+        steeringOperations = steeringOperations.then(() => {
+          entry.session.clearQueue();
+          pendingSteering.length = 0;
+        });
       },
     });
 
@@ -259,6 +312,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
         unsubscribe = entry.session.subscribe((event) => {
           const delivered = takeDeliveredSteering(event, pendingSteering);
           if (delivered !== undefined) {
+            scheduledSteering.delete(delivered);
             onEvent({ kind: 'steering-delivered', steeringId: delivered });
           }
           translator.handle(event);
@@ -278,6 +332,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       if (pendingSteering.length > 0) {
         entry.session.clearQueue();
         pendingSteering.length = 0;
+        scheduledSteering.clear();
       }
       entry.session.setGuard(undefined);
       unsubscribe();

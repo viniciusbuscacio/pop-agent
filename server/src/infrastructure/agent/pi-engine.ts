@@ -143,6 +143,8 @@ export interface PiSession {
   prompt(text: string, images?: PiImage[]): Promise<void>;
   /** Inserts a user input into the live agent loop before its next model call. */
   steer(text: string, images?: PiImage[]): Promise<void>;
+  /** Controls whether pi injects one or every queued steering input per turn. */
+  setSteeringMode(mode: 'all' | 'one-at-a-time'): void;
   /** Clears pi's in-memory queues; Pop Agent itself keeps pending input durable. */
   clearQueue(): { steering: string[]; followUp: string[] };
   /** Whether the current model accepts image input (pop-agent.spec §14, RF-014). */
@@ -422,6 +424,9 @@ export class SdkPiEngine implements PiEngine {
     // keeps a host ~/.pi settings file from leaking in.
     const settingsManager = sdk.SettingsManager.inMemory({
       compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
+      // Pop queues every live intervention durably, then pi injects the whole
+      // accepted batch before the next model call.
+      steeringMode: 'all',
     });
 
     const { session } = await sdk.createAgentSession({
@@ -434,6 +439,9 @@ export class SdkPiEngine implements PiEngine {
       resourceLoader,
       ...(customTools.length === 0 ? {} : { customTools }),
     });
+    // Explicit on every open/resume: all steering queued during the assistant
+    // turn enters the transcript before the next model call.
+    session.setSteeringMode('all');
 
     return new SdkPiSession(session, runtime, guardSlot, model.input.includes('image'));
   }
@@ -934,6 +942,10 @@ class SdkPiSession implements PiSession {
         mimeType: image.mimeType,
       })),
     );
+  }
+
+  setSteeringMode(mode: 'all' | 'one-at-a-time'): void {
+    this.session.setSteeringMode(mode);
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {

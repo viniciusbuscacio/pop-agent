@@ -961,10 +961,12 @@ events from stale runs.
   run appends atomically; the defensive ceiling is 1,024 pending inputs per
   chat, so only item 1,025 is
   refused with `queue_full`. While pi is running with the same terminal local connection,
-  Pop offers one head at a time through pi's native steering queue, inheriting
-  its default `one-at-a-time` behavior: each enters after the current assistant
-  turn and its tool calls, before the next model call. `/queue <message>` is the
-  explicit escape hatch to the old behavior: it persists
+  Pop offers every contiguous `steer` item through pi's native steering queue
+  and explicitly sets `steeringMode=all`: the whole accepted batch enters after
+  the current assistant turn and its tool calls, before the next model call.
+  Each item stays durable until pi emits its matching user-message event.
+  `/queue <message>` is a FIFO barrier and the explicit escape hatch to the old
+  behavior: it persists
   `delivery_mode=follow_up` and is not offered to pi until the live run ends.
   Delivery persists the assistant segment before it, inserts the user bubble,
   advances the FIFO and continues under the same run id. Pending inputs are

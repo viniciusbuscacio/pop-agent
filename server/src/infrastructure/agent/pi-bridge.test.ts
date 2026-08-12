@@ -179,9 +179,14 @@ class ScriptedSession implements PiSession {
   }
 
   readonly steering: string[] = [];
+  steeringMode: 'all' | 'one-at-a-time' = 'one-at-a-time';
   steer(text: string): Promise<void> {
     this.steering.push(text);
     return Promise.resolve();
+  }
+
+  setSteeringMode(mode: 'all' | 'one-at-a-time'): void {
+    this.steeringMode = mode;
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {
@@ -392,7 +397,11 @@ describe('mapping pi events', () => {
       await new Promise((resolve) => setImmediate(resolve));
     }
     expect(control).toBeDefined();
-    await control?.steer({ id: 'steer-one', prompt: 'change course', attachments: [] });
+    await control?.steer({
+      id: 'queued-A1b2C3d4E5f',
+      prompt: 'change course',
+      attachments: [],
+    });
     const prompt = engine.next.steering[0];
     expect(prompt).toContain('change course');
     engine.next.emit({
@@ -406,7 +415,66 @@ describe('mapping pi events', () => {
     release();
     await running;
 
-    expect(events).toContainEqual({ kind: 'steering-delivered', steeringId: 'steer-one' });
+    expect(events).toContainEqual({
+      kind: 'steering-delivered',
+      steeringId: 'queued-A1b2C3d4E5f',
+    });
+  });
+
+  it('queues several steering inputs in pi and reports each consumption in FIFO order', async () => {
+    let release: () => void = () => undefined;
+    engine.next.onPrompt = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    let control: AgentRunControl | undefined;
+    const { events, onEvent } = collect();
+    const running = bridge.run({
+      chatId: CHAT,
+      prompt: 'hello',
+      model: '',
+      attachments: [],
+      onEvent,
+      onControlReady: (ready) => {
+        control = ready;
+      },
+      signal: new AbortController().signal,
+    });
+    for (let attempt = 0; attempt < 20 && control === undefined; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    await Promise.all([
+      control?.steer({
+        id: 'queued-A1b2C3d4E5f',
+        prompt: 'first change',
+        attachments: [],
+      }),
+      control?.steer({
+        id: 'queued-F6g7H8i9J0k',
+        prompt: 'second change',
+        attachments: [],
+      }),
+    ]);
+    expect(engine.next.steeringMode).toBe('all');
+    expect(engine.next.steering).toHaveLength(2);
+    for (const prompt of engine.next.steering) {
+      engine.next.emit({
+        type: 'message_start',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: prompt }],
+          timestamp: Date.now(),
+        },
+      });
+    }
+    release();
+    await running;
+
+    expect(events.filter((event) => event.kind === 'steering-delivered')).toEqual([
+      { kind: 'steering-delivered', steeringId: 'queued-A1b2C3d4E5f' },
+      { kind: 'steering-delivered', steeringId: 'queued-F6g7H8i9J0k' },
+    ]);
   });
 
   it('marks a failed tool call as an error', async () => {

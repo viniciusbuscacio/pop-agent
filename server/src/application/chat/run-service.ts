@@ -165,8 +165,8 @@ interface PendingRun {
   localConnectionId: string | undefined;
   /** Controls the concrete bridge attempt currently using this run. */
   control: AgentRunControl | undefined;
-  /** The FIFO head currently offered to pi; later durable inputs stay in SQLite. */
-  steering: PendingSteering | undefined;
+  /** Durable steering inputs already offered to pi, keyed by queue id. */
+  steering: Map<string, PendingSteering>;
   started: boolean;
   /** Epoch ms when execution began; 0 while still queued. */
   startedAtMs: number;
@@ -358,7 +358,7 @@ export class RunService {
       notify: options.notify ?? true,
       localConnectionId: options.localConnectionId,
       control: undefined,
-      steering: undefined,
+      steering: new Map(),
       started: false,
       startedAtMs: 0,
       seq: 0,
@@ -581,12 +581,11 @@ export class RunService {
     return (
       run !== undefined &&
       run.started &&
-      run.steering === undefined &&
       run.localConnectionId === localConnectionId
     );
   }
 
-  /** Offers the current durable FIFO head to the bridge attempt in flight. */
+  /** Offers one durable FIFO item to the bridge; several may coexist by id. */
   offerSteering(chatId: string, input: SteeringInput): boolean {
     const runId = this.runIdByChat.get(chatId);
     const run = runId === undefined ? undefined : this.runs.get(runId);
@@ -598,8 +597,7 @@ export class RunService {
     ) {
       return false;
     }
-    if (run.steering !== undefined && run.steering.id !== input.id) return false;
-    if (run.steering?.id === input.id) run.control.cancelSteering(input.id);
+    if (run.steering.has(input.id)) return true;
 
     const previousClient = this.deps.chats.lastClientKind(chatId);
     const note = channelNote(input.client, previousClient);
@@ -607,15 +605,15 @@ export class RunService {
       ...input,
       prompt: note === undefined ? input.text : `${note}\n\n${input.text}`,
     };
-    run.steering = steering;
+    run.steering.set(input.id, steering);
     const control = run.control;
     void control
       .steer({ id: input.id, prompt: steering.prompt, attachments: input.attachments })
       .then((accepted) => {
-        if (!accepted && run.steering?.id === input.id) run.steering = undefined;
+        if (!accepted) run.steering.delete(input.id);
       })
       .catch(() => {
-        if (run.steering?.id === input.id) run.steering = undefined;
+        run.steering.delete(input.id);
       });
     return true;
   }
@@ -624,9 +622,19 @@ export class RunService {
   cancelSteering(chatId: string, steeringId: string): boolean {
     const runId = this.runIdByChat.get(chatId);
     const run = runId === undefined ? undefined : this.runs.get(runId);
-    if (run?.steering?.id !== steeringId) return false;
+    if (run === undefined || !run.steering.has(steeringId)) return false;
     run.control?.cancelSteering(steeringId);
-    run.steering = undefined;
+    run.steering.delete(steeringId);
+    return true;
+  }
+
+  /** Clears pi's live steering queue so SQLite can rebuild the exact FIFO. */
+  clearSteering(chatId: string): boolean {
+    const runId = this.runIdByChat.get(chatId);
+    const run = runId === undefined ? undefined : this.runs.get(runId);
+    if (run === undefined || run.steering.size === 0) return false;
+    run.control?.clearSteering();
+    run.steering.clear();
     return true;
   }
 
@@ -802,8 +810,8 @@ export class RunService {
 
   /** Splits the persisted/UI transcript exactly where pi inserts a steering user turn. */
   private acceptDeliveredSteering(run: PendingRun, steeringId: string): void {
-    const steering = run.steering;
-    if (steering === undefined || steering.id !== steeringId) return;
+    const steering = run.steering.get(steeringId);
+    if (steering === undefined) return;
 
     const createdAt = new Date(this.deps.clock.now()).toISOString();
     const hasAssistant =
@@ -836,7 +844,7 @@ export class RunService {
     run.content = '';
     run.thinking = '';
     run.tools = [];
-    run.steering = undefined;
+    run.steering.delete(steeringId);
     this.deps.onSteeringDelivered?.(run.chatId, steeringId);
     this.deps.sink.emit({
       kind: 'steering-delivered',

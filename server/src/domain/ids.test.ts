@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { newChatId, newMessageId, newRunId, randomBase62, randomFileName } from './ids.js';
+import {
+  newChatId,
+  newMessageId,
+  newQueuedMessageId,
+  newRunId,
+  randomBase62,
+  randomFileName,
+} from './ids.js';
 
 const BASE62_11 = /^[A-Za-z0-9]{11}$/;
 
@@ -8,6 +15,7 @@ describe('identifiers', () => {
     expect(newChatId()).toMatch(/^chat-[A-Za-z0-9]{11}$/);
     expect(newMessageId()).toMatch(/^message-[A-Za-z0-9]{11}$/);
     expect(newRunId()).toMatch(/^run-[A-Za-z0-9]{11}$/);
+    expect(newQueuedMessageId()).toMatch(/^queued-[A-Za-z0-9]{11}$/);
   });
 
   it('do not repeat', () => {

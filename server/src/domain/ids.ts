@@ -29,6 +29,10 @@ export function newRunId(): string {
   return entityId('run');
 }
 
+export function newQueuedMessageId(): string {
+  return entityId('queued');
+}
+
 /** A `prefix-<11 base62>` entity id. */
 export function entityId(prefix: string): string {
   return `${prefix}-${randomBase62(ID_LENGTH)}`;

@@ -413,6 +413,7 @@ describe('steering a live run', () => {
           return true;
         },
         cancelSteering: () => true,
+        clearSteering: () => undefined,
       });
       await held;
     };
@@ -422,7 +423,7 @@ describe('steering a live run', () => {
     expect(runs.canSteer(chatId, undefined)).toBe(true);
     expect(
       runs.offerSteering(chatId, {
-        id: 'steering-one',
+        id: 'queued-A1b2C3d4E5f',
         text: 'change course',
         attachments: [],
       }),
@@ -445,6 +446,67 @@ describe('steering a live run', () => {
       assistant: { content: 'before' },
       user: { content: 'change course' },
     });
+  });
+
+  it('offers multiple steering inputs before the next model call and accepts each by id', async () => {
+    const chatId = newChat();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const offered: string[] = [];
+    let requestInFlight: AgentRunRequest | undefined;
+    bridge.script = async (request) => {
+      requestInFlight = request;
+      request.onControlReady?.({
+        steer: (input) => {
+          offered.push(input.id);
+          return Promise.resolve(true);
+        },
+        cancelSteering: () => true,
+        clearSteering: () => undefined,
+      });
+      await held;
+    };
+
+    runs.startRun(chatId, 'first');
+    expect(
+      runs.offerSteering(chatId, {
+        id: 'queued-A1b2C3d4E5f',
+        text: 'one',
+        attachments: [],
+      }),
+    ).toBe(true);
+    expect(
+      runs.offerSteering(chatId, {
+        id: 'queued-F6g7H8i9J0k',
+        text: 'two',
+        attachments: [],
+      }),
+    ).toBe(true);
+    expect(offered).toEqual(['queued-A1b2C3d4E5f', 'queued-F6g7H8i9J0k']);
+
+    requestInFlight?.onEvent({
+      kind: 'steering-delivered',
+      steeringId: 'queued-A1b2C3d4E5f',
+    });
+    requestInFlight?.onEvent({
+      kind: 'steering-delivered',
+      steeringId: 'queued-F6g7H8i9J0k',
+    });
+    release();
+    await runs.whenIdle();
+
+    expect(
+      repo.getMessages(chatId, { limit: 10 })
+        .filter((message) => message.role === 'user')
+        .map((message) => [message.role, message.content]),
+    ).toEqual([
+      ['user', 'first'],
+      ['user', 'one'],
+      ['user', 'two'],
+    ]);
+    expect(sink.of('steering-delivered').map((event) => event.user.content)).toEqual(['one', 'two']);
   });
 
   it('does not lend one terminal hands to an intervention from another client', async () => {

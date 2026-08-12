@@ -32,6 +32,8 @@ export interface AgentRunControl {
   steer(input: AgentSteeringInput): Promise<boolean>;
   /** Removes an input that pi has accepted but has not consumed yet. */
   cancelSteering(id: string): boolean;
+  /** Clears every accepted input so the durable FIFO can rebuild exact order. */
+  clearSteering(): void;
 }
 
 export interface AgentRunRequest {

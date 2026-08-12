@@ -30,10 +30,13 @@ web                        server
   refused with `queue_full`. The composer command `/queue <message>` sends
   `delivery: follow_up` and preserves the older behavior: do not offer that
   item to pi; wait for the run to settle. Pi inserts steering after the current
-  assistant turn and its tool calls, before the next model call. Pop offers one
-  FIFO head at a time, inheriting pi's default `one-at-a-time` semantics. If the
-  run has not reached pi, comes from a different local connection, or ends first,
-  the head remains a normal follow-up. The persisted `delivery_mode` keeps
+  assistant turn and its tool calls, before the next model call. Pop offers
+  every contiguous steering item and explicitly sets pi's `steeringMode` to
+  `all`, so the complete accepted batch enters before that model call. An
+  explicit follow-up is a FIFO barrier: neither it nor later input overtakes
+  the current run. If the run has not reached pi, comes from a different local
+  connection, or ends first, the durable head remains a normal follow-up. The
+  persisted `delivery_mode` keeps
   `/queue` explicit across edits and reconnects. ID-addressed `PUT` and
   `DELETE` routes edit or cancel any pending item; the legacy routes continue
   to target the head.
