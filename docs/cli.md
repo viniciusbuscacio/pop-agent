@@ -603,11 +603,13 @@ creates the selected profile; afterwards `pop` just opens.
 **Screen.** Thinking is visible by default and rendered dimmed as it streams,
 its output live underneath (it is running right there), and the answer
 arriving word by word. `/chats` opens the server's canonical unarchived list
-(pinned first, then recent) as a keyboard picker; arrows move, Enter replaces
-the visible transcript with the selected chat's latest history and live
-snapshot, and Escape cancels without stopping the run. `/think` immediately
-shows or hides reasoning in live and historical assistant segments, persists
-that choice for the machine, and reasoning remains visible after a run settles.
+(pinned first, then recent) as an inline keyboard picker immediately above the
+editor, pushing older transcript lines upward instead of covering them; arrows
+move, Enter replaces the visible transcript with the selected chat's latest
+history and live snapshot, and Escape cancels without stopping the run.
+`/think` immediately shows or hides reasoning in live and historical assistant
+segments, persists that choice for the machine, and reasoning remains visible
+after a run settles.
 A run-level line stays immediately above the editor:
 queued is the static `Waiting for a free slot…`; running is a locally animated
 Braille spinner plus `Working…`; settlement removes it. It is deliberately

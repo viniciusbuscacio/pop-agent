@@ -10,7 +10,6 @@ import {
   Text,
   TUI,
   type Component,
-  type OverlayHandle,
   type SlashCommand,
   type Terminal,
 } from '@earendil-works/pi-tui';
@@ -157,8 +156,8 @@ export class ChatScreen {
   private readonly header: Text;
   /** Replaceable history; the header and editor survive a chat switch. */
   private readonly transcript = new Container();
-  /** The chat picker is a focus-capturing pi-tui overlay. */
-  private picker: OverlayHandle | undefined;
+  /** Inline chat picker mounted immediately above the editor. */
+  private picker: SelectList | undefined;
   /** Prevents repeated /chats submissions from racing before the list arrives. */
   private pickerOpening = false;
   /** Current assistant segment; earlier steering segments remain in history. */
@@ -209,8 +208,8 @@ export class ChatScreen {
         this.quit();
         return { consume: true };
       }
-      // An overlay owns Escape before the screen does. Let SelectList receive
-      // it so cancelling /chats never also interrupts the current answer.
+      // The inline picker owns Escape before the screen does. Let SelectList
+      // receive it so cancelling /chats never also interrupts the current answer.
       if (matchesKey(data, 'escape') && this.picker !== undefined) return undefined;
       // Escape stops the run, not the program: the run is what a person wants
       // to interrupt, and Ctrl+C is already the way out.
@@ -270,8 +269,24 @@ export class ChatScreen {
     // and, unlike the former root-level append, lets a chat switch replace the
     // transcript without rebuilding the header, editor or TUI.
     this.transcript.addChild(component);
-    this.tui.setFocus(this.editor);
+    this.focusTail();
     this.tui.requestRender();
+  }
+
+  /** Keep status, picker and editor in a stable bottom-of-screen order. */
+  private layoutTail(): void {
+    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
+    if (this.picker !== undefined) this.tui.removeChild(this.picker);
+    this.tui.removeChild(this.editor);
+    if (this.runStatus !== undefined) this.tui.addChild(this.runStatus);
+    if (this.picker !== undefined) this.tui.addChild(this.picker);
+    this.tui.addChild(this.editor);
+    this.focusTail();
+    this.tui.requestRender();
+  }
+
+  private focusTail(): void {
+    this.tui.setFocus(this.picker ?? this.editor);
   }
 
   private paintHeader(): void {
@@ -362,9 +377,10 @@ export class ChatScreen {
       if (current >= 0) list.setSelectedIndex(current);
 
       const close = (): void => {
-        this.picker?.hide();
+        const picker = this.picker;
         this.picker = undefined;
-        this.tui.setFocus(this.editor);
+        if (picker !== undefined) this.tui.removeChild(picker);
+        this.layoutTail();
       };
       list.onCancel = close;
       list.onSelect = (item) => {
@@ -377,12 +393,11 @@ export class ChatScreen {
         });
       };
 
-      this.picker = this.tui.showOverlay(list, {
-        width: '80%',
-        maxHeight: '70%',
-        anchor: 'center',
-        margin: 1,
-      });
+      // Inline rather than overlaid: the list consumes rows immediately above
+      // the editor and pushes older transcript lines upward instead of painting
+      // over text the user is trying to read.
+      this.picker = list;
+      this.layoutTail();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The conversations did not load.';
       this.say(paint.red(message));
@@ -471,11 +486,7 @@ export class ChatScreen {
     this.runStatusKind = status;
     this.workingFrame = 0;
     this.runStatus = new Text(this.runStatusText(), 0, 0);
-    this.tui.removeChild(this.editor);
-    this.tui.addChild(this.runStatus);
-    this.tui.addChild(this.editor);
-    this.tui.setFocus(this.editor);
-    this.tui.requestRender();
+    this.layoutTail();
 
     if (status === 'running') {
       this.runStatusTimer = setInterval(() => {

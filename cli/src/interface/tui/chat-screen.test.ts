@@ -169,12 +169,43 @@ describe('ChatScreen', () => {
     await (screen as unknown as { submit(text: string): Promise<void> }).submit('/chats');
     await flush();
     expect(plain()).toContain('Conversation from the web');
+    const internals = screen as unknown as {
+      tui: { children: unknown[]; hasOverlay(): boolean };
+      transcript: unknown;
+      picker: unknown;
+      editor: unknown;
+    };
+    expect(internals.tui.hasOverlay()).toBe(false);
+    expect(internals.tui.children.indexOf(internals.transcript)).toBeLessThan(
+      internals.tui.children.indexOf(internals.picker),
+    );
+    expect(internals.tui.children.indexOf(internals.picker)).toBeLessThan(
+      internals.tui.children.indexOf(internals.editor),
+    );
 
     send('\r');
     await flush();
     expect(ports.loadChat).toHaveBeenCalledWith('chat-1');
     expect(plain()).toContain('Earlier question');
     expect(plain()).toContain('Earlier answer');
+  });
+
+  it('keeps the inline picker focused when live chat state changes behind it', async () => {
+    const { terminal, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    const second = { ...chatDto('chat-2'), title: 'Second conversation' };
+    vi.mocked(ports.listChats).mockResolvedValueOnce([chatDto(), second]);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/chats');
+    screen.onExternalUser('arrived while choosing');
+    screen.onRun({ ...emptyRun('chat-current', 'run-current'), status: 'running' });
+    await flush();
+    send('\u001b[B');
+    send('\r');
+    await flush();
+
+    expect(ports.loadChat).toHaveBeenCalledWith('chat-2');
   });
 
   it('lets the chat picker consume Escape without stopping the current run', async () => {
@@ -189,7 +220,9 @@ describe('ChatScreen', () => {
     await flush();
 
     expect(ports.stop).not.toHaveBeenCalled();
-    expect((screen as unknown as { tui: { hasOverlay(): boolean } }).tui.hasOverlay()).toBe(false);
+    const internals = screen as unknown as { picker?: unknown; tui: { hasOverlay(): boolean } };
+    expect(internals.picker).toBeUndefined();
+    expect(internals.tui.hasOverlay()).toBe(false);
   });
 
   it('replaces the old transcript when a loaded chat is painted', async () => {
