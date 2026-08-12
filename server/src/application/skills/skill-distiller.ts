@@ -102,6 +102,7 @@ export const DEDUP_THRESHOLD = 0.88;
  * wrong merge hides a good skill behind a diff against something else.
  */
 export const DEDUP_MIN_OVERLAP = 0.25;
+const AUTO_REVISION_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export interface SkillDistillerDeps {
   chats: ChatRepo;
@@ -453,11 +454,14 @@ export class SkillDistiller implements MaintenanceJob {
     const action = target === undefined ? 'new' as const : 'revision' as const;
     const finalCandidate = target === undefined ? candidate : { ...candidate, slug: target.slug };
     if (target !== undefined) {
+      const previousRevision = this.deps.revisions.get(target.slug);
+      const revisionCoolingDown = previousRevision !== undefined &&
+        this.deps.clock.now() - Date.parse(previousRevision.createdAt) < AUTO_REVISION_COOLDOWN_MS;
       const identical = skillVersionHash(finalCandidate) === skillVersionHash(target);
       const likelyRewording =
         vocabularyOverlap(finalCandidate.body, target.body) >= 0.45 &&
         finalCandidate.body.length <= target.body.length * 1.2;
-      if (identical || likelyRewording) {
+      if (revisionCoolingDown || identical || likelyRewording) {
         return { result: { slug: finalCandidate.slug, disposition: 'rejected', targetSlug: target.slug } };
       }
     }

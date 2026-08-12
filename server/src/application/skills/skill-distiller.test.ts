@@ -548,6 +548,24 @@ describe('SkillDistiller', () => {
     expect(world.marks.attempts()[0]?.results[0]).toMatchObject({ disposition: 'rejected' });
   });
 
+  it('allows at most one automatic revision per skill inside the cooldown', async () => {
+    world = harness({
+      skills: [{
+        slug: 'deploy-blog', name: 'Old name', description: 'old', whenToUse: 'old',
+        body: 'A fundamentally different old procedure with unrelated actions.', source: 'auto',
+      }],
+    });
+    world.revisions.saved.push({
+      slug: 'deploy-blog', name: 'Earlier', description: 'earlier', whenToUse: 'earlier',
+      body: 'Earlier body.', createdAt: LONG_AGO, similarity: 0.9,
+    });
+    await world.distiller.run();
+
+    expect(world.prompts).toHaveLength(1);
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.results[0]).toMatchObject({ disposition: 'rejected' });
+  });
+
   it('records no synthetic similarity on a slug collision', async () => {
     // The revision table is the dataset the dedup bars get retuned from, so
     // the only numbers allowed in it are measured ones. A collision with no

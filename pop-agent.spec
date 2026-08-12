@@ -359,8 +359,9 @@ selection is 100% local, no LLM call:
   including archived skills, remains comparison material. A match against `auto` proposes
   `revision`; a match against `builtin`/`user` ends as `protected_duplicate` without
   spending the reviewer call. Exact duplicates and likely rewordings (high body-vocabulary
-  overlap without substantial expansion) also terminate locally before review. Precision
-  beats aggressive merging or revision churn.
+  overlap without substantial expansion) also terminate locally before review. A published
+  automatic revision starts a 30-day per-slug cooldown before another may be reviewed.
+  Precision beats aggressive merging or revision churn.
 - **Review binding:** the SHA-256 `review_hash` covers normalized sanitized content, action
   (`new`/`revision`), target slug, target-version hash and nearest dedup neighbour. An
   approval for creation cannot authorize a revision, and a target changed after review fails.
