@@ -359,13 +359,9 @@ export function ChatPage() {
             </div>
           ) : null}
 
-          {failure !== undefined ? (
+          {failure !== undefined && failure !== 'aborted' && failure !== 'interrupted' ? (
             <p data-testid="run-error" role="alert" className="text-sm text-[var(--danger)]">
-              {failure === 'aborted'
-                ? t('chat.stopped')
-                : failure === 'interrupted'
-                  ? t('chat.interrupted')
-                  : t('chat.failed')}
+              {t('chat.failed')}
             </p>
           ) : null}
           </div>

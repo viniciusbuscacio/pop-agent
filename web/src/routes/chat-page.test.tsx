@@ -99,6 +99,46 @@ describe('chat transcript', () => {
     expect(screen.getByTestId('chat-message').textContent).toBe('Hello');
   });
 
+  it.each([
+    ['aborted', 'You stopped this answer.'],
+    ['interrupted', 'This answer was interrupted — the server may have restarted.'],
+  ])('shows a persisted %s notice only once', async (failure, content) => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    useChatStore.setState({
+      messages: {
+        [chat.id]: [
+          {
+            id: `message-${failure}`,
+            chatId: chat.id,
+            role: 'system',
+            content,
+            thinking: '',
+            tools: [],
+            attachments: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      failures: { [chat.id]: failure },
+    });
+
+    await waitFor(() => expect(screen.getAllByText(content)).toHaveLength(1));
+    expect(screen.queryByTestId('run-error')).toBeNull();
+  });
+
+  it('keeps the separate alert for other run failures', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    useChatStore.setState({ failures: { [chat.id]: 'provider_error' } });
+
+    expect((await screen.findByTestId('run-error')).textContent).toBe(
+      'That answer could not be finished.',
+    );
+  });
+
   it('stops following as soon as an iOS reading gesture starts', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
