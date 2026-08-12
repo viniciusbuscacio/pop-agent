@@ -294,6 +294,9 @@ describe('SkillDistiller', () => {
 
     expect(world.skills.written).toHaveLength(1);
     expect(world.skills.written[0]).toMatchObject({ slug: 'deploy-blog', source: 'auto' });
+    expect(world.marks.attempts()[0]?.results[0]?.reviewReasons).toEqual([
+      'evidence_confirmed', 'reusable', 'complete',
+    ]);
     expect(world.prompts).toHaveLength(2); // creator + isolated reviewer
   });
 

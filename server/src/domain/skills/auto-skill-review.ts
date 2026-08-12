@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import type { Message } from '../chat/chat.js';
 import type { SkillCandidate } from './distillation.js';
 
-export type PolicyReason = 'injection_pattern' | 'agent_override_language' | 'meta_agent_instruction';
+export type PolicyReason =
+  | 'injection_pattern'
+  | 'agent_override_language'
+  | 'meta_agent_instruction'
+  | 'self_restart_instruction';
 
 export interface PolicyGateResult {
   allowed: boolean;
@@ -19,6 +23,10 @@ const POLICY_RULES: readonly { reason: PolicyReason; pattern: RegExp }[] = [
   { reason: 'meta_agent_instruction', pattern: /\bwhen\s+the\s+user\s+asks\s+you\s+to\b/ },
   { reason: 'meta_agent_instruction', pattern: /\balways\s+respond\s+with\b/ },
   { reason: 'meta_agent_instruction', pattern: /\bfrom\s+now\s+on\s+you\s+must\b/ },
+  {
+    reason: 'self_restart_instruction',
+    pattern: /\b(?:systemctl\s+(?:--user\s+)?restart\s+pop|restart\s+(?:the\s+)?(?:pop(?: agent)?\s+)?server(?:\s+(?:service|process|unit))?)\b/,
+  },
 ];
 
 /** Canonical text used by deterministic gates; Unicode disguises do not survive it. */

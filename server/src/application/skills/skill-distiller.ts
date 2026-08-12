@@ -289,7 +289,7 @@ export class SkillDistiller implements MaintenanceJob {
             continue;
           }
           const published = this.publish(entry);
-          results.push(published.result);
+          results.push({ ...published.result, reviewReasons: decision.reasons });
           if (published.operationId.length > 0) stagedOperations.push(published.operationId);
         }
       }
