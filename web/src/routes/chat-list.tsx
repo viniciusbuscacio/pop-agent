@@ -62,6 +62,8 @@ export function ChatList() {
           ? 'mcp'
           : 'chats';
   const [filter, setFilter] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
   useDismiss(listMenu, () => setListMenu(false));
@@ -119,7 +121,17 @@ export function ChatList() {
   // hide everything for no reason.
   useEffect(() => {
     setFilter('');
+    setSearchOpen(false);
   }, [segment]);
+
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus();
+  }, [searchOpen]);
+
+  const closeSearch = (): void => {
+    setFilter('');
+    setSearchOpen(false);
+  };
 
   const searching = filter.trim().length > 0;
   const match = (chat: ChatDTO): boolean =>
@@ -201,7 +213,7 @@ export function ChatList() {
       <div className="flex flex-col gap-2 p-3">
         {/* The primary action and the list menu share one line: the ⋯ on a row
             of its own was a strip of empty sidebar above the button. */}
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-center gap-1">
           {segment === 'chats' ? (
             <Button
               type="button"
@@ -248,6 +260,25 @@ export function ChatList() {
             >
               New MCP
             </Button>
+          ) : null}
+
+          {segment === 'chats' ? (
+            <button
+              type="button"
+              data-testid="chat-search-toggle"
+              aria-label={t('shell.filter')}
+              aria-expanded={searchOpen}
+              aria-controls="chat-search"
+              onClick={() => {
+                if (searchOpen) closeSearch();
+                else setSearchOpen(true);
+              }}
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] ${
+                searchOpen ? 'bg-[var(--hover-overlay)]' : ''
+              }`}
+            >
+              <SearchIcon />
+            </button>
           ) : null}
 
           {segment === 'chats' ? (
@@ -324,15 +355,20 @@ export function ChatList() {
               : t('shell.deleteArchivedAll', { count: archived.length })}
           </button>
         ) : null}
-        {segment === 'chats' ? (
-        <input
-          data-testid="chat-filter"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={t('shell.filter')}
-          aria-label={t('shell.filter')}
-          className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
-        />
+        {segment === 'chats' && searchOpen ? (
+          <input
+            ref={searchInput}
+            id="chat-search"
+            data-testid="chat-filter"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') closeSearch();
+            }}
+            placeholder={t('shell.filter')}
+            aria-label={t('shell.filter')}
+            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+          />
         ) : null}
         {segment === 'tasks' || segment === 'skills' || segment === 'mcp' ? (
           <input
@@ -1181,6 +1217,24 @@ function ChatRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </svg>
   );
 }
 

@@ -133,6 +133,52 @@ describe('archive one chat', () => {
   });
 });
 
+describe('compact conversation search', () => {
+  it('keeps the field hidden until the search button opens and focuses it', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
+
+    const toggle = screen.getByTestId('chat-search-toggle');
+    expect(screen.queryByTestId('chat-filter')).toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    await userEvent.click(toggle);
+
+    const input = screen.getByTestId('chat-filter');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('clears the filter when the search button closes the field', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
+
+    const toggle = screen.getByTestId('chat-search-toggle');
+    await userEvent.click(toggle);
+    await userEvent.type(screen.getByTestId('chat-filter'), 'File');
+    expect(screen.getAllByTestId('chat-row')).toHaveLength(1);
+    expect(screen.getByText('File this chat')).toBeTruthy();
+
+    await userEvent.click(toggle);
+
+    expect(screen.queryByTestId('chat-filter')).toBeNull();
+    expect(screen.getAllByTestId('chat-row')).toHaveLength(2);
+  });
+
+  it('closes and clears the search with Escape', async () => {
+    renderList();
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
+
+    await userEvent.click(screen.getByTestId('chat-search-toggle'));
+    const input = screen.getByTestId('chat-filter');
+    await userEvent.type(input, 'File');
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByTestId('chat-filter')).toBeNull();
+    expect(screen.getAllByTestId('chat-row')).toHaveLength(2);
+  });
+});
+
 describe('archive all other chats', () => {
   it('uses the last open chat when the mobile list has no chat id in its route', async () => {
     localStorage.setItem('pop-agent.lastChat', 'chat-keep');
