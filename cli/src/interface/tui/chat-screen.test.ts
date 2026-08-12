@@ -562,30 +562,16 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('Naming things');
   });
 
-  it('does not pretend to be live once the stream is gone', async () => {
+  it('reports a dropped stream and immediately exits through the /quit path', async () => {
     const { terminal, plain } = recorder();
-    const { screen } = screenWith(terminal);
+    const { screen, onExit } = screenWith(terminal);
     screen.start();
     screen.onStreamEnd();
     await flush();
 
     expect(plain()).toContain('dropped');
-  });
-
-  it('quits in the background one hour after the stream drops', () => {
-    vi.useFakeTimers();
-    try {
-      const { terminal } = recorder();
-      const { screen, onExit } = screenWith(terminal);
-      screen.onStreamEnd();
-
-      vi.advanceTimersByTime(60 * 60 * 1_000 - 1);
-      expect(onExit).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(1);
-      expect(onExit).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(plain()).toContain('Bye!');
+    expect(onExit).toHaveBeenCalledOnce();
   });
 
   it('shows reasoning by default and preserves it after the run settles', async () => {

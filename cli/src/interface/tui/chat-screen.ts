@@ -61,7 +61,6 @@ const HELP = COMMANDS.map(
 /** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
 const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const WORKING_FRAME_MS = 140;
-const DISCONNECT_QUIT_MS = 60 * 60 * 1_000;
 
 export interface ScreenOptions {
   session: ChatSession;
@@ -168,7 +167,6 @@ export class ChatScreen {
   private runStatus: Text | undefined;
   private runStatusKind: RunState['status'] | undefined;
   private runStatusTimer: ReturnType<typeof setInterval> | undefined;
-  private disconnectQuitTimer: ReturnType<typeof setTimeout> | undefined;
   private workingFrame = 0;
   private thinkingShown: boolean;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
@@ -226,18 +224,18 @@ export class ChatScreen {
     this.say(paint.dim('Ask anything. /help for commands.'));
   }
 
-  quit(): void {
+  quit(notice?: string): void {
     if (this.exited) return;
     this.exited = true;
     this.clearRunStatus(false);
-    if (this.disconnectQuitTimer !== undefined) clearTimeout(this.disconnectQuitTimer);
-    this.disconnectQuitTimer = undefined;
     this.tui.stop();
 
-    // This belongs after TUI shutdown: a final differential repaint must not
-    // erase the command the user needs. A brand-new conversation has no
-    // server id until its first message, so in that case there is nothing to
-    // resume and the farewell stays short.
+    // These belong after TUI shutdown: a final differential repaint must not
+    // erase either the reason for an automatic exit or the command the user
+    // needs. A brand-new conversation has no server id until its first
+    // message, so in that case there is nothing to resume and the farewell
+    // stays short.
+    if (notice !== undefined) this.terminal.write(`${notice}\n`);
     const chatId = this.options.session.currentChatId;
     const farewell =
       chatId === undefined
@@ -464,15 +462,11 @@ export class ChatScreen {
   }
 
   onStreamEnd(): void {
-    this.clearRunStatus(true);
-    this.say(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
-    // A dead interactive terminal can otherwise remain open indefinitely.
-    // Give the user an hour to read/copy anything before doing the same clean
-    // shutdown as `/quit`; unref keeps this safety timer from prolonging a
-    // process that is already able to end on its own.
-    if (this.disconnectQuitTimer !== undefined) return;
-    this.disconnectQuitTimer = setTimeout(() => this.quit(), DISCONNECT_QUIT_MS);
-    this.disconnectQuitTimer.unref();
+    // The screen cannot recover this one-use event stream. Leave immediately
+    // through the same clean path as `/quit` instead of keeping a dead CLI in
+    // the foreground or as a hidden background process. Passing the notice to
+    // quit prints it after TUI shutdown, where a cancelled repaint cannot hide it.
+    this.quit(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
   }
 
   private setRunStatus(status: RunState['status']): void {
