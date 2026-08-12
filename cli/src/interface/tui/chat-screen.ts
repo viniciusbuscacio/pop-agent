@@ -240,11 +240,11 @@ export class ChatScreen {
     // server id until its first message, so in that case there is nothing to
     // resume and the farewell stays short.
     const chatId = this.options.session.currentChatId;
-    this.terminal.write(
+    const farewell =
       chatId === undefined
-        ? 'Bye!\n'
-        : `Bye!\nTo continue this chat, use:\npop --chat ${chatId}\n`,
-    );
+        ? 'Bye!'
+        : `Bye!\nTo continue this chat, use:\npop --chat ${chatId}`;
+    this.terminal.write(`${paint.grey(farewell)}\n`);
 
     if (this.options.onExit !== undefined) return this.options.onExit();
     process.exit(0);

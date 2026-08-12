@@ -250,8 +250,8 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('Stored answer');
   });
 
-  it('prints the command for continuing the current chat when it exits', async () => {
-    const { terminal, plain } = recorder();
+  it('prints the command for continuing the current chat in grey when it exits', async () => {
+    const { terminal, plain, writes } = recorder();
     const { screen, session, onExit } = screenWith(terminal);
     session.open('chat-bKZpiMZW96e');
     screen.start();
@@ -264,6 +264,9 @@ describe('ChatScreen', () => {
       'Bye!\nTo continue this chat, use:\npop --chat chat-bKZpiMZW96e\n',
     );
     expect(plain().split('To continue this chat, use:')).toHaveLength(2);
+    expect(writes.join('')).toContain(
+      '\u001b[90mBye!\nTo continue this chat, use:\npop --chat chat-bKZpiMZW96e\u001b[39m\n',
+    );
     expect(onExit).toHaveBeenCalledOnce();
   });
 

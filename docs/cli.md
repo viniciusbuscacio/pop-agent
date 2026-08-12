@@ -590,9 +590,10 @@ the hand expects. `-i` was rejected: it reads as *interactive*, the
 opposite of the scripting case it was proposed for.
 
 Leaving the interactive screen with Ctrl+C, `/quit`, or `/exit` prints the
-current chat id as a ready-to-paste `pop --chat <id>` command. A conversation
-that has not sent its first message has no server id yet, so it only says
-`Bye!`.
+current chat id as a ready-to-paste `pop --chat <id>` command. The farewell and
+continuation command are grey so they remain useful without competing with the
+transcript. A conversation that has not sent its first message has no server id
+yet, so it only says `Bye!`.
 
 **Profiles and preferences.** `~/.config/pop-agent/profiles.json` keeps one
 entry per server: URL + token. `preferences.json` is deliberately separate:
