@@ -947,7 +947,9 @@ events from stale runs.
   their own bounded horizontal scroll areas. **Run activity is a separate line immediately above the composer,
   in both web and CLI**: queued is a static “Waiting for a free slot…”, running
   is a locally animated Braille spinner plus “Working…”, and `done`/`error`
-  removes it. Text, thinking and tool cards never replace this line; tool
+  removes its content. The web permanently reserves the line's height so an
+  answer settling never shifts the transcript vertically. Text, thinking and
+  tool cards never replace this line; tool
   spinners describe one call, while `run-status` describes the whole run. The
   clients animate locally -- SSE never carries presentation frames. Thinking
   is visible by default in both clients. The web stores that choice in device

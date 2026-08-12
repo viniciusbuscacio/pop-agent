@@ -441,9 +441,11 @@ export function ChatPage() {
         </p>
       ) : null}
 
-      {live === undefined ? null : (
-        <RunStatusLine status={confirm === undefined ? live.status : 'approval'} />
-      )}
+      <div data-testid="run-status-slot" className="h-7 shrink-0">
+        {live === undefined ? null : (
+          <RunStatusLine status={confirm === undefined ? live.status : 'approval'} />
+        )}
+      </div>
 
       <Composer
         chatId={chatId}

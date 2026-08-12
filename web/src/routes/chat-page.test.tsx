@@ -240,9 +240,15 @@ describe('chat transcript', () => {
     expect(scroller.scrollTop).toBe(500);
   });
 
-  it('keeps the run status outside the transcript immediately above the composer', async () => {
+  it('reserves the run-status height before, during and after an answer', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    const slot = screen.getByTestId('run-status-slot');
+    const composer = screen.getByTestId('composer');
+    expect(slot.className).toContain('h-7');
+    expect(screen.queryByTestId('run-status-line')).toBeNull();
+    expect(slot.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 
     useChatStore.setState({
       live: {
@@ -258,10 +264,14 @@ describe('chat transcript', () => {
     });
 
     const status = await screen.findByTestId('run-status-line');
-    const composer = screen.getByTestId('composer');
     expect(status.textContent).toContain('Working…');
+    expect(slot.contains(status)).toBe(true);
     expect(screen.getByTestId('chat-scroller').contains(status)).toBe(false);
-    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    useChatStore.setState({ live: {} });
+    await waitFor(() => expect(screen.queryByTestId('run-status-line')).toBeNull());
+    expect(screen.getByTestId('run-status-slot')).toBe(slot);
+    expect(slot.className).toContain('h-7');
   });
 
   it('shows pending steering as an ordinary user message after the live answer', async () => {
