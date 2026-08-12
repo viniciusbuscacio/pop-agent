@@ -1537,7 +1537,7 @@ is set by hand and moves only when the wire changes.
 Pop Desktop is the existing PWA inside a separately installed, minimal macOS
 `WKWebView` host. The host loads this server's HTTPS origin directly: no copied
 React build, localhost proxy, native JavaScript bridge, Node, CLI or PLA. Its
-release version follows the global Pop Agent version (`0.2.10` here); normal PWA changes do not require a host
+release version follows the global Pop Agent version (`0.2.11` here); normal PWA changes do not require a host
 release, but the next native host change uses the then-current global version.
 
 The authenticated Manager-only contract is:

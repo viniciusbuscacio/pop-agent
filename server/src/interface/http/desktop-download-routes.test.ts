@@ -7,7 +7,7 @@ import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 
 describe('Pop Desktop distribution', () => {
   let pack: string;
-  const version = '0.2.10';
+  const version = '0.2.11';
   const file = `pop-desktop-${version}-darwin-arm64.zip`;
   const routes = () => createDesktopDownloadRoutes({ desktopPack: pack, desktopReleaseVersion: version });
 
@@ -59,7 +59,7 @@ describe('Pop Desktop distribution', () => {
   it('refuses a desktop package from a different global release', async () => {
     const mismatched = createDesktopDownloadRoutes({
       desktopPack: pack,
-      desktopReleaseVersion: '0.2.11',
+      desktopReleaseVersion: '0.2.12',
     });
     expect((await mismatched.request('/desktop/release')).status).toBe(404);
     expect((await mismatched.request(`/desktop/package/${file}`)).status).toBe(404);
