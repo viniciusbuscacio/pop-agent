@@ -396,14 +396,15 @@ describe('sending a message', () => {
   it('keeps a defensive 1,024-item cap for broken clients', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+    const pendingIds: string[] = [];
     for (let index = 0; index < MAX_PENDING_MESSAGES_PER_CHAT; index += 1) {
-      expect(
-        fixture.queuedMessages.enqueue(chat.id, {
-          text: `pending ${String(index)}`,
-          attachments: [],
-          filePaths: [],
-        }).ok,
-      ).toBe(true);
+      const queued = fixture.queuedMessages.enqueue(chat.id, {
+        text: `pending ${String(index)}`,
+        attachments: [],
+        filePaths: [],
+      });
+      expect(queued.ok).toBe(true);
+      if (queued.ok) pendingIds.push(queued.message.id);
     }
 
     const overflow = await api(`/v1/chats/${chat.id}/messages`, {
@@ -413,8 +414,8 @@ describe('sending a message', () => {
     expect(overflow.status).toBe(409);
     expect(((await overflow.json()) as { error: { code: string } }).error.code).toBe('queue_full');
 
-    for (let index = 0; index < MAX_PENDING_MESSAGES_PER_CHAT; index += 1) {
-      expect(fixture.queuedMessages.cancel(chat.id, fixture.queuedMessages.get(chat.id)?.id ?? '').ok).toBe(true);
+    for (const messageId of pendingIds) {
+      expect(fixture.queuedMessages.cancel(chat.id, messageId).ok).toBe(true);
     }
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
