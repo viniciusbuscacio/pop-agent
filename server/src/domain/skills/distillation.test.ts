@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '../chat/chat.js';
 import {
   buildDistillPrompt,
+  hasUsableRouting,
   parseDistillAnswer,
   scrubCandidate,
   slugify,
@@ -199,6 +200,13 @@ describe('scrubCandidate', () => {
 
   it('leaves an ordinary procedure alone', () => {
     expect(scrubCandidate(candidate()).body).toBe('Push to main.');
+  });
+
+  it('rejects a candidate whose routing metadata had to be redacted', () => {
+    const scrubbed = scrubCandidate(candidate({ whenToUse: 'api_key=actual-looking-value-1234567890' }));
+    expect(scrubbed.whenToUse).toBe('[redacted secret]');
+    expect(hasUsableRouting(scrubbed)).toBe(false);
+    expect(hasUsableRouting(candidate())).toBe(true);
   });
 
   it('redacts the token shapes that carry no label', () => {

@@ -299,9 +299,11 @@ const BARE_TOKEN = new RegExp(
   ].join('|'),
 );
 
+export const REDACTED_SECRET = '[redacted secret]';
+
 export function scrubCandidate(candidate: SkillCandidate): SkillCandidate {
   const scrubLine = (line: string): string =>
-    SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? '[redacted secret]' : line;
+    SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? REDACTED_SECRET : line;
   return {
     ...candidate,
     name: scrubLine(candidate.name),
@@ -309,6 +311,12 @@ export function scrubCandidate(candidate: SkillCandidate): SkillCandidate {
     whenToUse: scrubLine(candidate.whenToUse),
     body: candidate.body.split('\n').map(scrubLine).join('\n'),
   };
+}
+
+/** A scrubbed routing field cannot identify when the skill should be selected. */
+export function hasUsableRouting(candidate: SkillCandidate): boolean {
+  return [candidate.name, candidate.description, candidate.whenToUse]
+    .every((field) => field.trim().length > 0 && !field.includes(REDACTED_SECRET));
 }
 
 function toCandidate(entry: unknown): SkillCandidate | undefined {

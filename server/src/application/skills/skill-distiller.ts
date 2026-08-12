@@ -4,6 +4,7 @@ import { sanitize } from '../../domain/safety/sanitize.js';
 import {
   buildDistillPrompt,
   candidateRoutingText,
+  hasUsableRouting,
   parseDistillAnswer,
   scrubCandidate,
   type SkillCandidate,
@@ -263,6 +264,10 @@ export class SkillDistiller implements MaintenanceJob {
           continue;
         }
         const candidate = scrubCandidate(raw);
+        if (!hasUsableRouting(candidate)) {
+          results.push({ slug: candidate.slug, disposition: 'contract_rejected' });
+          continue;
+        }
         const next = await this.prepare(candidate);
         if ('result' in next) results.push(next.result);
         else prepared.push(next);
