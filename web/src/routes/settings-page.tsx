@@ -1,15 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type {
-  AboutResponse,
-  DistillerStatusDTO,
-  ModelCatalogSource,
-  ModelDTO,
-  ServerInfoResponse,
-  SettingsDTO,
-  SkillDTO,
-  StorageResponse,
-  UsageResponse,
+import {
+  compareVersions,
+  type AboutResponse,
+  type DistillerStatusDTO,
+  type ModelCatalogSource,
+  type ModelDTO,
+  type ServerInfoResponse,
+  type SettingsDTO,
+  type SkillDTO,
+  type StorageResponse,
+  type UsageResponse,
 } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ProvidersSection } from './providers-section';
@@ -1486,8 +1487,10 @@ function UpdatesSection() {
   }, []);
 
   const popAgentOutdated =
-    update?.popAgent.latest !== undefined && update.popAgent.latest !== update.popAgent.current;
-  const piOutdated = update?.pi.latest !== undefined && update.pi.latest !== update.pi.current;
+    update?.popAgent.latest !== undefined &&
+    compareVersions(update.popAgent.latest, update.popAgent.current) > 0;
+  const piOutdated =
+    update?.pi.latest !== undefined && compareVersions(update.pi.latest, update.pi.current) > 0;
   const deployment = update?.deployment;
   const deploymentBusy =
     deployment?.phase === 'waiting-idle' ||
