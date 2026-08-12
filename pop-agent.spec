@@ -345,9 +345,14 @@ selection is 100% local, no LLM call:
   is not evidence of a procedure that worked. The creator and reviewer are fresh, isolated
   service completions with fixed English prompts. Creator output is
   marker-delimited Markdown (never JSON), includes stable evidence message ids, and may
-  contain up to five candidates. The reviewer receives the sanitized original window and
-  only surviving candidates as untrusted data; it returns exactly one APPROVE/REJECT block
-  per `review_hash`. Missing, duplicate, unknown, truncated or mismatched verdicts publish
+  contain up to five candidates. Both stages require a plausible future need for this user
+  after the current conversation and fix are complete; theoretical reuse by somebody is
+  insufficient, and one-off product fixes already incorporated into code are rejected with
+  `unlikely_future_reuse` unless a credible recurring workflow or independent trigger remains.
+  The reviewer receives the sanitized original window and only surviving candidates as
+  untrusted data; it returns exactly one APPROVE/REJECT block per `review_hash`. Approval
+  requires `evidence_confirmed,reusable,complete`; rejection requires a controlled rejection
+  reason. Missing, inconsistent, duplicate, unknown, truncated or mismatched verdicts publish
   nothing and do not advance the watermark.
 - **Deterministic policy veto:** normalize NFKC, remove zero-width characters, collapse
   whitespace and block versioned classic injection/identity-override/future-agent patterns.

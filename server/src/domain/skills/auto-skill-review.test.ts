@@ -71,10 +71,13 @@ describe('review envelope binding', () => {
     expect(newHash).not.toBe(revisionHash);
   });
 
-  it('tells the reviewer the exact controlled reason vocabulary', () => {
+  it('requires plausible future reuse by this user with a controlled rejection reason', () => {
     const prompt = buildReviewPrompt([], [envelope]);
     expect(prompt).toContain('Allowed reasons (use only these exact tokens):');
     expect(prompt).toContain('evidence_confirmed,reusable,complete');
+    expect(prompt).toContain('plausible future need');
+    expect(prompt).toContain('product fix already incorporated into the code');
+    expect(prompt).toContain('unlikely_future_reuse');
   });
 
   it('shows the bound existing content and requires a material revision', () => {
@@ -104,11 +107,26 @@ describe('review envelope binding', () => {
     ]);
   });
 
+  it('accepts unlikely future reuse as a controlled rejection', () => {
+    const hash = reviewHash(envelope);
+    expect(parseReviewAnswer([
+      '=== REVIEW ===',
+      `review_hash: ${hash}`,
+      'verdict: REJECT',
+      'reasons: unlikely_future_reuse',
+      '=== END ===',
+    ].join('\n'), new Set([hash]))).toEqual([
+      { reviewHash: hash, verdict: 'REJECT', reasons: ['unlikely_future_reuse'] },
+    ]);
+  });
+
   it.each([
     'review_hash: sha256:wrong\nverdict: APPROVE\nreasons: complete',
     `review_hash: ${reviewHash(envelope)}\nverdict: MAYBE\nreasons: complete`,
     `review_hash: ${reviewHash(envelope)}\nverdict: APPROVE\nreasons: invented_reason`,
-  ])('fails closed on an invalid review', (inside) => {
+    `review_hash: ${reviewHash(envelope)}\nverdict: APPROVE\nreasons: evidence_confirmed,reusable,complete,unlikely_future_reuse`,
+    `review_hash: ${reviewHash(envelope)}\nverdict: REJECT\nreasons: evidence_confirmed,reusable,complete`,
+  ])('fails closed on an invalid or verdict-inconsistent review', (inside) => {
     expect(parseReviewAnswer(`=== REVIEW ===\n${inside}\n=== END ===`, new Set([reviewHash(envelope)]))).toBeUndefined();
   });
 });

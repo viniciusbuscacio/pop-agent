@@ -83,10 +83,12 @@ describe('buildDistillPrompt', () => {
     expect(prompt).toContain('=== END ===');
   });
 
-  it('promises the body needs no escaping, which is why the format changed', () => {
+  it('requires proven success and plausible future reuse by this user', () => {
     const prompt = buildDistillPrompt([message('user', 'hello')], []);
     expect(prompt).toMatch(/Nothing needs escaping/);
     expect(prompt).toContain('A failed/interrupted attempt is never success');
+    expect(prompt).toContain('this user has a plausible need to reuse');
+    expect(prompt).toContain('product fixes already incorporated into code');
   });
 
   it('lists what already exists, so it does not propose a duplicate', () => {
