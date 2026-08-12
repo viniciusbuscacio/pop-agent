@@ -23,15 +23,10 @@ import type { SkillArchiveRepo, SkillsRepo } from '../ports/skills-repo.js';
  * was edited became `user` by that act (§8): the promotion is what takes it out
  * of this job's reach forever. Built-ins are the app's. So the collector can
  * only ever retire something Pop Agent itself wrote and the user never touched.
- *
- * **Pending skills are left alone.** One waiting for approval has had no chance
- * to be used, so by this job's own metric it always looks like the worst skill
- * in the vault. Archiving the queue the user has not read yet would be the
- * collector eating the distiller's output before anyone saw it.
  */
 
 /** How many auto-skills may live in the router at once. */
-export const AUTO_SKILL_CAP = 50;
+export const AUTO_SKILL_CAP = 1000;
 
 /** Once an hour: the cap is a ceiling, not a deadline. */
 const EVERY_MS = 60 * 60_000;
@@ -55,7 +50,7 @@ export class SkillCollector implements MaintenanceJob {
     const cap = this.deps.cap ?? AUTO_SKILL_CAP;
     const managed = this.deps.skills
       .all()
-      .filter((skill) => skill.source === 'auto' && skill.pending !== true);
+      .filter((skill) => skill.source === 'auto');
     if (managed.length <= cap) return;
 
     const usage = new Map((this.deps.usage?.all() ?? []).map((entry) => [entry.slug, entry]));

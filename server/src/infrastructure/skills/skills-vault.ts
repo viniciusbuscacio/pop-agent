@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
+  copyFileSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -10,6 +14,8 @@ import {
 } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import type { Skill, SkillSource } from '../../domain/skills/skill.js';
+import { entityId } from '../../domain/ids.js';
+import type { AutoSkillPublicationRepo } from '../../application/ports/auto-skill-publication-repo.js';
 import {
   SkillsError,
   type SkillArchiveRepo,
@@ -62,8 +68,14 @@ const PINNED_DEFAULTS = new Set(
 );
 
 export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
-  constructor(private readonly root: string) {
+  private readonly preparedSlugs = new Set<string>();
+
+  constructor(
+    private readonly root: string,
+    private readonly publications?: AutoSkillPublicationRepo,
+  ) {
     mkdirSync(root, { recursive: true });
+    this.recoverPublications();
     this.seedDefaults();
     this.sweepStaleBuiltins();
   }
@@ -78,11 +90,13 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       .filter(({ slug }) => !taken.has(slug))
       .map(({ slug, path }) => this.readFolderSkill(slug, path))
       .filter((skill): skill is Skill => skill !== undefined);
-    return [...flat, ...foldered].sort((left, right) => left.name.localeCompare(right.name));
+    return [...flat, ...foldered]
+      .filter((skill) => !this.preparedSlugs.has(skill.slug))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   get(slug: string): Skill | undefined {
-    if (!SLUG.test(slug)) return undefined;
+    if (!SLUG.test(slug) || this.preparedSlugs.has(slug)) return undefined;
     const flat = this.readFile(slug);
     if (flat !== undefined) return flat;
     const found = this.discoverFolderSkills().find((entry) => entry.slug === slug);
@@ -154,25 +168,72 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
     return skill;
   }
 
-  /**
-   * Accepts a pending skill (pop-agent.spec §8). `source` is passed back explicitly
-   * so the auto -> user promotion in `write` does not fire: the user said yes,
-   * which is not the same as having edited it, and an auto skill that was
-   * merely approved is still the collector's to manage.
-   */
-  approve(slug: string): Skill | undefined {
-    const skill = this.get(slug);
-    if (skill === undefined || skill.pending !== true) return skill;
-    return this.write({
-      slug: skill.slug,
-      name: skill.name,
-      description: skill.description,
-      whenToUse: skill.whenToUse,
-      body: skill.body,
-      source: skill.source,
-      ...(skill.pinned === true ? { pinned: true } : {}),
-      pending: false,
+  publishReviewed(
+    input: SkillInput,
+    review: { reviewHash: string; action: 'new' | 'revision'; at: string },
+  ): { skill: Skill; operationId: string } {
+    if (this.publications === undefined) return { skill: this.write(input), operationId: '' };
+    if (!SLUG.test(input.slug) || input.source !== 'auto') throw new SkillsError('Invalid reviewed Auto-Skill publication.');
+
+    const current = this.get(input.slug);
+    const folder = this.discoverFolderSkills().find((entry) => entry.slug === input.slug);
+    const flat = join(this.root, `${input.slug}.md`);
+    const destination = existsSync(flat)
+      ? flat
+      : folder?.path ?? join(this.root, AUTO_DIR, input.slug, 'SKILL.md');
+    mkdirSync(dirname(destination), { recursive: true });
+    const operationId = entityId('skill-publication');
+    const tempPath = `${destination}.${operationId}.tmp`;
+    const backupPath = current === undefined ? undefined : `${destination}.${operationId}.bak`;
+    const content = serialize({ ...input, source: 'auto' });
+    durableWrite(tempPath, content);
+    if (backupPath !== undefined && existsSync(destination)) {
+      copyFileSync(destination, backupPath);
+      durableFsync(backupPath);
+    }
+    this.publications.prepare({
+      id: operationId,
+      slug: input.slug,
+      action: review.action,
+      reviewHash: review.reviewHash,
+      tempPath,
+      destination,
+      ...(backupPath === undefined ? {} : { backupPath }),
+      state: 'prepared',
+      preparedAt: review.at,
     });
+    this.preparedSlugs.add(input.slug);
+    renameSync(tempPath, destination);
+    durableFsync(dirname(destination));
+    const skill = this.readFolderSkill(input.slug, destination) ?? this.readFile(input.slug);
+    if (skill === undefined) throw new SkillsError('The reviewed skill could not be staged.');
+    return { skill, operationId };
+  }
+
+  commitReviewed(operationId: string, at: string): void {
+    if (this.publications === undefined || operationId.length === 0) return;
+    const operation = this.publications.open().find((entry) => entry.id === operationId);
+    if (operation === undefined) throw new SkillsError('The reviewed publication journal is missing.');
+    this.publications.commit(operationId, at);
+    if (operation.backupPath !== undefined) rmSync(operation.backupPath, { force: true });
+    rmSync(operation.tempPath, { force: true });
+    this.publications.delete(operationId);
+    this.preparedSlugs.delete(operation.slug);
+  }
+
+  abortReviewed(operationId: string): void {
+    if (this.publications === undefined || operationId.length === 0) return;
+    const operation = this.publications.open().find((entry) => entry.id === operationId);
+    if (operation === undefined) return;
+    if (operation.backupPath !== undefined && existsSync(operation.backupPath)) {
+      renameSync(operation.backupPath, operation.destination);
+      durableFsync(dirname(operation.destination));
+    } else {
+      rmSync(operation.destination, { force: true });
+    }
+    rmSync(operation.tempPath, { force: true });
+    this.publications.delete(operationId);
+    this.preparedSlugs.delete(operation.slug);
   }
 
   delete(slug: string): boolean {
@@ -200,7 +261,6 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       body: skill.body,
       source: skill.source,
       ...(skill.pinned === true ? { pinned: true } : {}),
-      ...(skill.pending === true ? { pending: true } : {}),
       enabled,
     });
     return true;
@@ -262,10 +322,27 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       body: stored.body,
       source: stored.source,
       ...(stored.pinned === true ? { pinned: true } : {}),
-      ...(stored.pending === true ? { pending: true } : {}),
     });
     rmSync(join(this.root, ARCHIVE_DIR, slug), { recursive: true, force: true });
     return restored;
+  }
+
+  /** Rolls back prepared work and finishes cleanup from a committed crash. */
+  private recoverPublications(): void {
+    for (const operation of this.publications?.open() ?? []) {
+      if (operation.state === 'prepared') {
+        if (operation.backupPath !== undefined && existsSync(operation.backupPath)) {
+          mkdirSync(dirname(operation.destination), { recursive: true });
+          renameSync(operation.backupPath, operation.destination);
+          durableFsync(dirname(operation.destination));
+        } else {
+          rmSync(operation.destination, { force: true });
+        }
+      }
+      rmSync(operation.tempPath, { force: true });
+      if (operation.backupPath !== undefined) rmSync(operation.backupPath, { force: true });
+      this.publications?.delete(operation.id);
+    }
   }
 
   /**
@@ -310,7 +387,6 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       body: parsed.body,
       source,
       ...(parsed.pinned ? { pinned: true } : {}),
-      ...(parsed.pending ? { pending: true } : {}),
       ...(parsed.enabled === false ? { enabled: false } : {}),
     };
   }
@@ -338,7 +414,6 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
       body: parsed.body,
       source: parsed.source ?? 'user',
       ...(pinned ? { pinned: true } : {}),
-      ...(parsed.pending ? { pending: true } : {}),
       ...(parsed.enabled === false ? { enabled: false } : {}),
     };
   }
@@ -407,10 +482,23 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
           body: parsed.body,
           source: 'user',
           ...(parsed.pinned ? { pinned: true } : {}),
-          ...(parsed.pending ? { pending: true } : {}),
         }),
       );
     }
+  }
+}
+
+function durableWrite(path: string, content: string): void {
+  writeFileSync(path, content);
+  durableFsync(path);
+}
+
+function durableFsync(path: string): void {
+  const descriptor = openSync(path, 'r');
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
   }
 }
 
@@ -435,7 +523,6 @@ interface Parsed {
   /** Absent when the file never said; the caller decides from the path. */
   source?: SkillSource;
   pinned: boolean;
-  pending: boolean;
   /** Absent means enabled; only `false` is stored on disk (§8). */
   enabled?: boolean;
   /** The seed marker written by seedDefaults; absent on user files and edits. */
@@ -448,7 +535,7 @@ const SOURCES = new Set<string>(['builtin', 'auto', 'user']);
 export function parse(raw: string): Parsed {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
   if (match === null) {
-    return { name: '', description: '', whenToUse: '', body: raw.trim(), pinned: false, pending: false };
+    return { name: '', description: '', whenToUse: '', body: raw.trim(), pinned: false };
   }
   const meta = new Map<string, string>();
   for (const line of (match[1] ?? '').split('\n')) {
@@ -472,7 +559,6 @@ export function parse(raw: string): Parsed {
     body: (match[2] ?? '').trim(),
     ...(source === undefined ? {} : { source }),
     pinned: meta.get('pinned') === 'true',
-    pending: meta.get('pending') === 'true',
     ...(meta.get('enabled') === 'false' ? { enabled: false as const } : {}),
     ...(seed === undefined ? {} : { seed }),
   };
@@ -485,7 +571,6 @@ function serialize(input: {
   body: string;
   source?: SkillSource;
   pinned?: boolean;
-  pending?: boolean;
   enabled?: boolean;
   seed?: string;
 }): string {
@@ -503,7 +588,6 @@ function serialize(input: {
     // editing an auto skill never actually took it away from the collector.
     ...(input.source === undefined ? [] : [`source: ${input.source}`]),
     ...(input.pinned ? ['pinned: true'] : []),
-    ...(input.pending ? ['pending: true'] : []),
     ...(input.enabled === false ? ['enabled: false'] : []),
     ...(input.seed === undefined ? [] : [`seed: ${input.seed}`]),
     '---',

@@ -98,6 +98,10 @@ function DistillationActivity() {
 
   const routine = attempts?.filter(isRoutineAttempt) ?? [];
   const visible = attempts?.filter((attempt) => showRoutine || !isRoutineAttempt(attempt)) ?? [];
+  const candidateResults = attempts?.flatMap((attempt) => attempt.results) ?? [];
+  const systematicBlocking =
+    candidateResults.length >= 20 &&
+    candidateResults.every((result) => result.disposition === 'policy_rejected');
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4" data-testid="distillation-activity">
@@ -105,6 +109,11 @@ function DistillationActivity() {
         <h1 className="text-lg font-semibold">{t('skills.activity.title')}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">{t('skills.activity.body')}</p>
       </div>
+      {systematicBlocking ? (
+        <Card><p className="text-sm text-[var(--danger)]" data-testid="auto-skill-systematic-blocking">
+          {t('skills.activity.systematicBlocking')}
+        </p></Card>
+      ) : null}
       {attempts === undefined ? null : attempts.length === 0 ? (
         <Card><p className="text-sm text-[var(--muted)]">{t('skills.activity.empty')}</p></Card>
       ) : (
@@ -197,21 +206,18 @@ function attemptExplanation(attempt: SkillDistillationAttemptDTO): string {
 }
 
 function resultExplanation(result: SkillDistillationResultDTO): string {
-  if (result.disposition === 'revision') {
-    const score = result.similarity === undefined ? '' : ` · cos ${result.similarity.toFixed(2)}`;
-    const overlap = result.overlap === undefined ? '' : ` · voc ${result.overlap.toFixed(2)}`;
-    const reason = result.reason === 'slug_collision'
-      ? t('skills.activity.slugCollision')
-      : t('skills.activity.dedupMatch');
-    return `${t('skills.activity.result.revision', { target: result.targetSlug ?? result.slug })} · ${reason}${score}${overlap}`;
-  }
+  const score = result.similarity === undefined ? '' : ` · cos ${result.similarity.toFixed(2)}`;
+  const overlap = result.overlap === undefined ? '' : ` · voc ${result.overlap.toFixed(2)}`;
+  const reasons = [...(result.policyReasons ?? []), ...(result.reviewReasons ?? [])];
+  const detail = reasons.length === 0 ? '' : ` · ${reasons.join(', ')}`;
   switch (result.disposition) {
-    case 'pending': return t('skills.activity.result.pending');
-    case 'live': return t('skills.activity.result.live');
-    case 'updated': return t('skills.activity.result.updated');
+    case 'published_new': return `${t('skills.activity.result.live')}${score}${overlap}`;
+    case 'published_revision': return `${t('skills.activity.result.updated')}${score}${overlap}`;
+    case 'protected_duplicate': return `${t('skills.activity.result.protectedDuplicate', { target: result.targetSlug ?? result.slug })}${score}${overlap}`;
+    case 'policy_rejected': return `${t('skills.activity.result.policyRejected')}${detail}`;
+    case 'contract_rejected': return t('skills.activity.result.contractRejected');
+    case 'evidence_rejected': return t('skills.activity.result.evidenceRejected');
+    case 'review_rejected': return `${t('skills.activity.result.reviewRejected')}${detail}`;
     case 'rejected': return t('skills.activity.result.rejected');
-    case 'skipped_user': return t('skills.activity.result.skipped_user');
-    case 'skipped_builtin': return t('skills.activity.result.skipped_builtin');
-    case 'gone': return t('skills.activity.result.gone');
   }
 }

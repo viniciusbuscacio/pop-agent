@@ -28,8 +28,7 @@ describe('settings service', () => {
       voiceModel: 'small',
       voiceCleanup: true,
       voiceCleanupModel: 'openai/gpt-5-mini',
-      autoSkillMode: 'full' as const,
-      distillIntervalMinutes: 30,
+      autoSkillsEnabled: true,
       autoActivatePreparedUpdates: true,
       autoRestartIdleMinutes: 15,
     };
@@ -47,17 +46,15 @@ describe('settings service', () => {
     expect(new SettingsService(repo).read()).toEqual(DEFAULT_SETTINGS);
   });
 
-  it('maps the two legacy booleans onto the three modes without changing policy', () => {
+  it('maps every formerly enabled policy to the one enabled state', () => {
     const disabled = new MemorySettings();
-    disabled.set('app', { distillSkills: false, autoApproveSkills: true });
-    expect(new SettingsService(disabled).read().autoSkillMode).toBe('disabled');
+    disabled.set('app', { autoSkillMode: 'disabled' });
+    expect(new SettingsService(disabled).read().autoSkillsEnabled).toBe(false);
 
-    const medium = new MemorySettings();
-    medium.set('app', { distillSkills: true, autoApproveSkills: false });
-    expect(new SettingsService(medium).read().autoSkillMode).toBe('medium');
-
-    const full = new MemorySettings();
-    full.set('app', { distillSkills: true, autoApproveSkills: true });
-    expect(new SettingsService(full).read().autoSkillMode).toBe('full');
+    for (const autoSkillMode of ['medium', 'full']) {
+      const enabled = new MemorySettings();
+      enabled.set('app', { autoSkillMode });
+      expect(new SettingsService(enabled).read().autoSkillsEnabled).toBe(true);
+    }
   });
 });

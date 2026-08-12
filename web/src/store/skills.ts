@@ -3,7 +3,7 @@ import type { SkillDTO } from '@pop-agent/shared';
 import { skillsService } from '../services/skills';
 
 /** Which slice of the roster the sidebar list shows. Persisted in the store, not the URL. */
-export type SkillSourceFilter = 'all' | 'personal' | 'auto' | 'pending' | 'builtin';
+export type SkillSourceFilter = 'all' | 'personal' | 'auto' | 'builtin';
 
 /** Absent means enabled; only an explicit `false` switches a skill off (§8). */
 export function skillEnabled(skill: SkillDTO): boolean {
@@ -17,9 +17,7 @@ export function matchesSourceFilter(skill: SkillDTO, filter: SkillSourceFilter):
     case 'personal':
       return skill.source === 'user';
     case 'auto':
-      return skill.source === 'auto' && skill.pending !== true;
-    case 'pending':
-      return skill.pending === true;
+      return skill.source === 'auto';
     case 'builtin':
       return skill.source === 'builtin';
   }

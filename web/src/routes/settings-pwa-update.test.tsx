@@ -22,8 +22,7 @@ const SETTINGS: SettingsDTO = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoSkillMode: 'disabled',
-  distillIntervalMinutes: 10,
+  autoSkillsEnabled: false,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };

@@ -40,8 +40,7 @@ const DEFAULT_DOC = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoSkillMode: 'disabled',
-  distillIntervalMinutes: 10,
+  autoSkillsEnabled: true,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };
@@ -87,21 +86,21 @@ describe('PUT /v1/settings', () => {
     expect((await res.json()).error.code).toBe('invalid_field');
   });
 
-  it('accepts each auto-skill mode', async () => {
-    for (const autoSkillMode of ['disabled', 'medium', 'full']) {
+  it('accepts both Auto-Skill states', async () => {
+    for (const autoSkillsEnabled of [false, true]) {
       const res = await authed('/v1/settings', {
         method: 'PUT',
-        body: JSON.stringify({ ...DEFAULT_DOC, autoSkillMode }),
+        body: JSON.stringify({ ...DEFAULT_DOC, autoSkillsEnabled }),
       });
       expect(res.status).toBe(200);
-      expect((await res.json()).autoSkillMode).toBe(autoSkillMode);
+      expect((await res.json()).autoSkillsEnabled).toBe(autoSkillsEnabled);
     }
   });
 
-  it('rejects an unsupported auto-skill mode', async () => {
+  it('rejects a non-boolean Auto-Skill state', async () => {
     const res = await authed('/v1/settings', {
       method: 'PUT',
-      body: JSON.stringify({ ...DEFAULT_DOC, autoSkillMode: 'unsafe' }),
+      body: JSON.stringify({ ...DEFAULT_DOC, autoSkillsEnabled: 'yes' }),
     });
     expect(res.status).toBe(400);
   });

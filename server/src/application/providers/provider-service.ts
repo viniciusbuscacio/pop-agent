@@ -597,7 +597,7 @@ export class ProviderService {
    */
   async completeAsService(
     request: { prompt: string; maxTokens: number },
-    context: { provider?: string; model?: string } = {},
+    context: { provider?: string; model?: string; purpose?: string } = {},
   ): Promise<{ text: string; providerId: string; modelId: string }> {
     const resolved = this.resolveServiceChain(context);
     // A caller-named model (the voice-cleanup override in Settings) replaces
@@ -640,7 +640,7 @@ export class ProviderService {
               maxTokens: request.maxTokens,
             });
         this.deps.cooldown?.clear(ref.providerId);
-        this.book(answer, ref);
+        this.book(answer, ref, context.purpose);
         return { text: answer.text, providerId: ref.providerId, modelId: ref.modelId };
       } catch (error) {
         this.deps.cooldown?.penalize(ref.providerId);
@@ -661,6 +661,7 @@ export class ProviderService {
   private book(
     answer: { usage?: RunUsage },
     ref: { providerId: string; modelId: string },
+    purpose?: string,
   ): void {
     if (answer.usage === undefined || this.deps.llmRuns === undefined) return;
     this.deps.llmRuns.record({
@@ -674,6 +675,7 @@ export class ProviderService {
       cost: billsPerToken(ref.providerId) ? answer.usage.cost : 0,
       createdAt: new Date(this.deps.clock.now()).toISOString(),
       kind: 'service',
+      ...(purpose === undefined ? {} : { purpose }),
     });
   }
 

@@ -141,7 +141,7 @@ const mcp = new McpService({
 // The agent's own notes vault (pop-agent.spec §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
 // The skills vault (pop-agent.spec §8): seeds the defaults on first boot.
-const skillsVault = new SkillsVault(join(context.dataDir, 'skills'));
+const skillsVault = new SkillsVault(join(context.dataDir, 'skills'), context.autoSkillPublications);
 
 // Local embeddings power semantic memory and skill routing (pop-agent.spec §7, §8).
 // Built only for the real agent -- the fake bridge never embeds anything -- and
@@ -274,7 +274,7 @@ function piBridge(): PiAgentBridge {
       userMemory: context.userMemory,
       files,
       skills: skillsVault,
-      autoSkillMode: () => settings.read().autoSkillMode,
+      autoSkillsEnabled: () => settings.read().autoSkillsEnabled,
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: `mcp_${server.id.replace(/[^a-zA-Z0-9]/g, '_')}_${capability.name.replace(/[^a-zA-Z0-9_]/g, '_')}`,
         label: `${server.name}: ${capability.name}`,
@@ -471,10 +471,14 @@ const taskScheduler = new TaskScheduler({
       // The provider is inherited from the chat being distilled; a job with no
       // parent chat would fall through to the default. Same failover chain as
       // a run (pop-agent.spec §15).
-      complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
+      complete: async (request, ctx) =>
+        (await providers.completeAsService(request, {
+          ...(ctx.provider === undefined ? {} : { provider: ctx.provider }),
+          purpose: ctx.purpose,
+        })).text,
       clock: systemClock,
-      mode: () => settings.read().autoSkillMode,
-      everyMs: () => settings.read().distillIntervalMinutes * 60_000,
+      enabled: () => settings.read().autoSkillsEnabled,
+      everyMs: () => 10 * 60_000,
       onJournal: (line) => console.log(line),
     }),
     new SkillCollector({
@@ -582,7 +586,7 @@ const app = createApp({
   skillRevisions: context.skillRevisions,
   skillArchive: skillsVault,
   distillation: context.distillation,
-  distillerEnabled: () => settings.read().autoSkillMode !== 'disabled',
+  distillerEnabled: () => settings.read().autoSkillsEnabled,
   mcp,
   usage: context.usage,
   localConnections,

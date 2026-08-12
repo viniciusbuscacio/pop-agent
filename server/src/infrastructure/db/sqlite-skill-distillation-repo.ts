@@ -81,8 +81,9 @@ export class SqliteDistillationRepo implements DistillationRepo {
   finishAttempt(id: string, finish: FinishDistillationAttempt): void {
     const saveResult = this.db.prepare(
       `INSERT INTO skill_distillation_results
-         (attempt_id, position, slug, disposition, target_slug, reason, similarity, overlap)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (attempt_id, position, slug, disposition, target_slug, reason, similarity, overlap,
+          policy_reasons_json, review_reasons_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM skill_distillation_results WHERE attempt_id = ?').run(id);
@@ -96,6 +97,8 @@ export class SqliteDistillationRepo implements DistillationRepo {
           result.reason ?? null,
           result.similarity ?? null,
           result.overlap ?? null,
+          JSON.stringify(result.policyReasons ?? []),
+          JSON.stringify(result.reviewReasons ?? []),
         );
       }
       this.db
@@ -168,7 +171,8 @@ export class SqliteDistillationRepo implements DistillationRepo {
   private toAttempt(row: AttemptRow): DistillationAttempt {
     const results = this.db
       .prepare(
-        `SELECT slug, disposition, target_slug AS targetSlug, reason, similarity, overlap
+        `SELECT slug, disposition, target_slug AS targetSlug, reason, similarity, overlap,
+                policy_reasons_json AS policyReasonsJson, review_reasons_json AS reviewReasonsJson
            FROM skill_distillation_results WHERE attempt_id = ? ORDER BY position`,
       )
       .all(row.id) as ResultRow[];
@@ -225,6 +229,8 @@ type ResultRow = DistillationResult & {
   reason: DistillationResult['reason'] | null;
   similarity: number | null;
   overlap: number | null;
+  policyReasonsJson: string;
+  reviewReasonsJson: string;
 };
 
 function toResult(row: ResultRow): DistillationResult {
@@ -235,6 +241,8 @@ function toResult(row: ResultRow): DistillationResult {
     ...(row.reason === null ? {} : { reason: row.reason }),
     ...(row.similarity === null ? {} : { similarity: row.similarity }),
     ...(row.overlap === null ? {} : { overlap: row.overlap }),
+    policyReasons: readWarnings(row.policyReasonsJson),
+    reviewReasons: readWarnings(row.reviewReasonsJson),
   };
 }
 

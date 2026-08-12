@@ -75,7 +75,7 @@ describe('SqliteDistillationRepo', () => {
       finishedAt: '2026-08-07T18:01:00.000Z',
       results: [{
         slug: 'deploy-site',
-        disposition: 'revision',
+        disposition: 'published_revision',
         targetSlug: 'deploy',
         reason: 'dedup_match',
         similarity: 0.91,
@@ -86,7 +86,7 @@ describe('SqliteDistillationRepo', () => {
     expect(marks.attempt('distillation-one')).toMatchObject({
       chatTitle: 'Deploy the site',
       outcome: 'produced',
-      results: [{ disposition: 'revision', similarity: 0.91, overlap: 0.42 }],
+      results: [{ disposition: 'published_revision', similarity: 0.91, overlap: 0.42 }],
     });
   });
 

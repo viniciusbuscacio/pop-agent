@@ -19,6 +19,7 @@ import type { UsageRepo } from '../application/ports/usage-repo.js';
 import type { StorageRepo } from '../application/ports/storage-repo.js';
 import type { UserMemoryRepo } from '../application/ports/user-memory-repo.js';
 import type { FileProvenanceRepo } from '../application/ports/file-provenance-repo.js';
+import type { AutoSkillPublicationRepo } from '../application/ports/auto-skill-publication-repo.js';
 import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, ensureFilesDir, resolveDataDir, resolveArtifactsDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
@@ -44,6 +45,7 @@ import { SqliteSkillVectorsRepo } from './db/sqlite-skill-vectors-repo.js';
 import { SqliteTaskRepo } from './db/sqlite-task-repo.js';
 import { SqliteMcpRepo } from './db/sqlite-mcp-repo.js';
 import { SqliteFileProvenanceRepo } from './db/sqlite-file-provenance-repo.js';
+import { SqliteAutoSkillPublicationRepo } from './db/sqlite-auto-skill-publication-repo.js';
 import { readLegacyCatalog, writeLegacyFiles } from './db/legacy-files-export.js';
 
 /** Everything the boot sequence produces for the composition root to wire. */
@@ -67,8 +69,10 @@ export interface AppContext {
   skillUsage: SkillUsageRepo;
   /** How far the background distiller has read each conversation (§8, fase c). */
   distillation: DistillationRepo;
-  /** Rewrites it proposed for skills that already exist, waiting on the user. */
+  /** One-level previous versions for automatic rewrites. */
   skillRevisions: SkillRevisionsRepo;
+  /** Crash journal for reviewed filesystem publications. */
+  autoSkillPublications: AutoSkillPublicationRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
   /** What the database can say about its own weight (pop-agent.spec §14). */
@@ -115,6 +119,7 @@ export function bootstrap(): AppContext {
     skillUsage: new SqliteSkillUsageRepo(db),
     distillation: new SqliteDistillationRepo(db),
     skillRevisions: new SqliteSkillRevisionsRepo(db),
+    autoSkillPublications: new SqliteAutoSkillPublicationRepo(db),
     userMemory: new SqliteUserMemoryRepo(db),
     usage: new SqliteUsageRepo(db),
     storage: new SqliteStorageRepo(db),

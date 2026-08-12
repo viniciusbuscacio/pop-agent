@@ -114,7 +114,7 @@ describe('/v1/skills', () => {
     });
   });
 
-  it('holds a pending skill out of the list until it is accepted', async () => {
+  it('creates Personal skills without any retired approval state', async () => {
     await authed('/v1/skills/learned', {
       method: 'PUT',
       body: JSON.stringify({
@@ -126,20 +126,14 @@ describe('/v1/skills', () => {
       }),
     });
 
-    // The CRUD cannot create a pending skill (only the distiller does), so this
-    // asserts the shape the screen reads: source and the absence of `pending`.
+    // User CRUD always creates Personal ownership and never exposes `pending`.
     const list = (await (await authed('/v1/skills')).json()) as SkillsResponse;
     const learned = list.skills.find((s) => s.slug === 'learned');
     expect(learned?.source).toBe('user');
-    expect(learned?.pending).toBeUndefined();
+    expect(learned === undefined ? false : 'pending' in learned).toBe(false);
   });
 
-  it('404s when accepting a skill that does not exist', async () => {
-    const res = await authed('/v1/skills/nope/approve', { method: 'POST' });
-    expect(res.status).toBe(404);
-  });
-
-  it('accepts a pending skill and returns it live', async () => {
+  it('does not expose the retired manual approval endpoint', async () => {
     // Written straight through the vault, the way the agent's tool does it.
     fixture.skills.write({
       slug: 'from-a-chat',
@@ -148,14 +142,10 @@ describe('/v1/skills', () => {
       whenToUse: 'w',
       body: 'b',
       source: 'auto',
-      pending: true,
     });
 
     const res = await authed('/v1/skills/from-a-chat/approve', { method: 'POST' });
-    expect(res.status).toBe(200);
-    const dto = (await res.json()) as SkillDTO;
-    expect(dto.pending).toBeUndefined();
-    expect(dto.source).toBe('auto');
+    expect(res.status).toBe(404);
   });
 });
 
@@ -181,7 +171,7 @@ describe('the distiller queue on /v1/skills', () => {
     });
   }
 
-  it('shows a proposed rewrite beside the skill it would replace', async () => {
+  it('keeps rollback versions out of the public skill DTO', async () => {
     plant();
     fixture.skillRevisions.save(REVISION);
 
@@ -191,33 +181,24 @@ describe('the distiller queue on /v1/skills', () => {
     // The skill still says what it always said: the proposal is beside it,
     // never in it, which is the whole point of holding it out of the vault.
     expect(skill?.body).toBe('The original procedure.');
-    expect(skill?.proposedRevision).toMatchObject({
-      body: 'The rewritten procedure.',
-      similarity: 0.94,
-    });
+    expect(skill === undefined ? false : 'proposedRevision' in skill).toBe(false);
   });
 
-  it('applies a rewrite that was accepted', async () => {
+  it('does not expose the retired revision approval endpoint', async () => {
     plant();
     fixture.skillRevisions.save(REVISION);
 
     const res = await authed('/v1/skills/planted/revision/approve', { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect((await res.json() as SkillDTO).body).toBe('The rewritten procedure.');
-
-    // Accepting is not editing: the skill stays `auto`, so the collector still
-    // manages it. Only a human edit promotes one to `user`.
-    expect(fixture.skills.get('planted')?.source).toBe('auto');
-    expect(fixture.skillRevisions.get('planted')).toBeUndefined();
+    expect(res.status).toBe(404);
+    expect(fixture.skills.get('planted')?.body).toBe('The original procedure.');
   });
 
-  it('keeps the current version when the rewrite is declined', async () => {
+  it('does not expose the retired revision discard endpoint', async () => {
     plant();
     fixture.skillRevisions.save(REVISION);
 
-    expect((await authed('/v1/skills/planted/revision', { method: 'DELETE' })).status).toBe(204);
+    expect((await authed('/v1/skills/planted/revision', { method: 'DELETE' })).status).toBe(404);
     expect(fixture.skills.get('planted')?.body).toBe('The original procedure.');
-    expect(fixture.skillRevisions.get('planted')).toBeUndefined();
   });
 
   it('answers 404 for a rewrite nobody proposed', async () => {
@@ -226,7 +207,7 @@ describe('the distiller queue on /v1/skills', () => {
     expect((await authed('/v1/skills/planted/revision', { method: 'DELETE' })).status).toBe(404);
   });
 
-  it('drops a pending rewrite with the skill it belonged to', async () => {
+  it('drops rollback history with the skill it belonged to', async () => {
     plant();
     fixture.skillRevisions.save(REVISION);
 
@@ -259,7 +240,6 @@ describe('the distiller queue on /v1/skills', () => {
       whenToUse: 'w',
       body: 'b',
       source: 'auto',
-      pending: true,
     });
     fixture.skillRevisions.save(REVISION);
     fixture.distillation.set('chat-1', 'm1', '2026-08-07T20:00:00.000Z');
@@ -268,15 +248,18 @@ describe('the distiller queue on /v1/skills', () => {
     expect(body.distiller).toEqual({
       enabled: true,
       lastRunAt: '2026-08-07T20:00:00.000Z',
-      pending: 1,
-      revisions: 1,
+      candidates: 0,
+      published: 0,
+      policyRejected: 0,
+      reviewRejected: 0,
+      systematicBlocking: false,
     });
   });
 
   it('says it has never looked before its first round', async () => {
     const body = (await (await authed('/v1/skills')).json()) as SkillsResponse;
     expect(body.distiller.lastRunAt).toBeUndefined();
-    expect(body.distiller).toMatchObject({ enabled: true, pending: 0, revisions: 0 });
+    expect(body.distiller).toMatchObject({ enabled: true, candidates: 0, published: 0, policyRejected: 0, reviewRejected: 0, systematicBlocking: false });
   });
 
   it('lists a routine nothing result without presenting it as retryable work', async () => {

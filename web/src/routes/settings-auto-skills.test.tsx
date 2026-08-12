@@ -29,8 +29,7 @@ const SETTINGS: SettingsDTO = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoSkillMode: 'disabled',
-  distillIntervalMinutes: 10,
+  autoSkillsEnabled: false,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };
@@ -44,25 +43,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Settings auto-skills section', () => {
-  it('starts disabled and hides cadence while no background process runs', async () => {
+  it('starts disabled with one product control', async () => {
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
     await waitFor(() => {
-      expect((screen.getByTestId('settings-auto-skill-mode') as HTMLSelectElement).value).toBe('disabled');
+      expect((screen.getByTestId('settings-auto-skills-enabled') as HTMLInputElement).checked).toBe(false);
     });
     expect(screen.queryByTestId('skills-distill-interval')).toBeNull();
   });
 
-  it('saves medium mode and then exposes the cadence', async () => {
+  it('enables the reviewed pipeline', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    const mode = await screen.findByTestId('settings-auto-skill-mode');
-    await user.selectOptions(mode, 'medium');
+    await user.click(await screen.findByTestId('settings-auto-skills-enabled'));
 
     await waitFor(() => {
-      expect(write).toHaveBeenCalledWith({ ...SETTINGS, autoSkillMode: 'medium' });
-      expect(screen.getByTestId('skills-distill-interval')).toBeTruthy();
+      expect(write).toHaveBeenCalledWith({ ...SETTINGS, autoSkillsEnabled: true });
+      expect(screen.queryByTestId('skills-distill-interval')).toBeNull();
     });
   });
 });

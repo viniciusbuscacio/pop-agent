@@ -9,7 +9,15 @@ import {
   type SkillCandidate,
 } from '../../domain/skills/distillation.js';
 import { vocabularyOverlap } from '../../domain/skills/skill-router.js';
-import { autoApproveSkill, type AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
+import {
+  buildReviewPrompt,
+  parseReviewAnswer,
+  reviewHash,
+  runPolicyGate,
+  satisfiesEnglishContract,
+  skillVersionHash,
+  type ReviewEnvelope,
+} from '../../domain/skills/auto-skill-review.js';
 import { asksForSkill } from '../../domain/skills/skill-request.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -48,10 +56,9 @@ import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
  * `skill_write` mid-turn, but nothing guards a turn that already ended, and a
  * skill is the one artefact that outlives its turn. This is that guard.
  *
- * **A match against an existing skill becomes a revision, not an overwrite.**
- * The proposal waits in its own table while the approved version keeps serving
- * the router (§8). Without that, the pending flag on new skills would guard the
- * front door while the update path stood open.
+ * **A match against an existing Auto-Skill becomes a reviewed revision.**
+ * The old file is durably backed up before the prepared replacement appears;
+ * Built-in and Personal matches terminate as protected duplicates.
  */
 
 /** A conversation the distiller has decided to read, and why. */
@@ -102,14 +109,14 @@ export interface SkillDistillerDeps {
   /** Without an embedder the dedup leg is off and only a slug collision is an update. */
   embedder?: Embedder;
   vectors?: SkillVectorsRepo;
-  /** One completion on the service model of the provider this chat runs on. */
+  /** Creator and reviewer are separate service completions with fresh contexts. */
   complete: (
     request: { prompt: string; maxTokens: number },
-    context: { provider?: string },
+    context: { provider?: string; purpose: 'auto_skill_creator' | 'auto_skill_reviewer' },
   ) => Promise<string>;
   clock: Clock;
   /** Read per tick, so Settings takes effect on the next one, not the next boot. */
-  mode: () => AutoSkillMode;
+  enabled: () => boolean;
   everyMs: () => number;
   idleMs?: number;
   onJournal?: (line: string) => void;
@@ -141,8 +148,7 @@ export class SkillDistiller implements MaintenanceJob {
   }
 
   async run(): Promise<void> {
-    const mode = this.deps.mode();
-    if (mode === 'disabled') return;
+    if (!this.deps.enabled()) return;
 
     const chats = [
       ...this.deps.chats.list({ archived: false }),
@@ -178,7 +184,6 @@ export class SkillDistiller implements MaintenanceJob {
     // and the whole conversation is skipped, permanently. Store only warning
     // labels, never the hostile source text that produced them.
     const externalContent = window.map((message) => externalContentOf(message)).join('\n');
-    const hasExternalContent = externalContent.trim().length > 0;
     const verdict = sanitize(externalContent);
     if (verdict.riskLevel !== 'low') {
       this.advanceTarget(target, lastId);
@@ -204,7 +209,7 @@ export class SkillDistiller implements MaintenanceJob {
           ),
           maxTokens: MAX_ANSWER_TOKENS,
         },
-        { provider: chat.provider },
+        { provider: chat.provider, purpose: 'auto_skill_creator' },
       );
     } catch (error) {
       const message = safeError(error);
@@ -221,17 +226,15 @@ export class SkillDistiller implements MaintenanceJob {
         journal(`chat=${chat.id} answer truncated, nothing salvaged; will retry`);
         return;
       }
-      const invalid = parsed.invalidBlocks > 0 || !parsed.explicitEmpty || requested;
+      const invalid = parsed.invalidBlocks > 0 || !parsed.explicitEmpty;
       this.advanceTarget(target, lastId);
       finish({
         state: 'completed',
         outcome: invalid ? 'invalid_output' : 'nothing',
         ...(invalid
           ? {
-              errorCode: requested ? 'requested_empty' : 'invalid_answer',
-              errorMessage: requested
-                ? 'The model returned no skill after an explicit request.'
-                : 'The model answer contained no complete valid skill.',
+              errorCode: 'invalid_answer',
+              errorMessage: 'The model answer contained no complete valid skill.',
             }
           : {}),
         finishedAt: now(),
@@ -240,17 +243,66 @@ export class SkillDistiller implements MaintenanceJob {
       return;
     }
 
+    const stagedOperations: string[] = [];
     try {
+      const evidenceIds = new Set(window.map((message) => message.id));
       const results: DistillationResult[] = [];
-      for (const candidate of parsed.candidates) {
-        results.push(await this.land(scrubCandidate(candidate), mode, hasExternalContent));
+      const prepared: PreparedCandidate[] = [];
+      for (const raw of parsed.candidates) {
+        if (!satisfiesEnglishContract(raw)) {
+          results.push({ slug: raw.slug, disposition: 'contract_rejected' });
+          continue;
+        }
+        if ((raw.evidence ?? []).length === 0 || raw.evidence?.some((id) => !evidenceIds.has(id))) {
+          results.push({ slug: raw.slug, disposition: 'evidence_rejected' });
+          continue;
+        }
+        const policy = runPolicyGate(raw);
+        if (!policy.allowed) {
+          results.push({ slug: raw.slug, disposition: 'policy_rejected', policyReasons: policy.reasons });
+          continue;
+        }
+        const candidate = scrubCandidate(raw);
+        const next = await this.prepare(candidate);
+        if ('result' in next) results.push(next.result);
+        else prepared.push(next);
       }
+
+      if (prepared.length > 0) {
+        let reviewAnswer: string;
+        try {
+          reviewAnswer = await this.deps.complete(
+            { prompt: buildReviewPrompt(window, prepared.map((entry) => entry.envelope)), maxTokens: 2_000 },
+            { provider: chat.provider, purpose: 'auto_skill_reviewer' },
+          );
+        } catch (error) {
+          throw new ReviewFailure('reviewer_failure', safeError(error));
+        }
+        const expected = new Set(prepared.map((entry) => entry.hash));
+        const decisions = parseReviewAnswer(reviewAnswer, expected);
+        if (decisions === undefined) throw new ReviewFailure('invalid_review', 'The reviewer returned an incomplete or invalid verdict.');
+        const byHash = new Map(decisions.map((decision) => [decision.reviewHash, decision]));
+        for (const entry of prepared) {
+          const decision = byHash.get(entry.hash);
+          if (decision?.verdict !== 'APPROVE') {
+            results.push({ slug: entry.candidate.slug, disposition: 'review_rejected', reviewReasons: decision?.reasons ?? [] });
+            continue;
+          }
+          const published = this.publish(entry);
+          results.push(published.result);
+          if (published.operationId.length > 0) stagedOperations.push(published.operationId);
+        }
+      }
+
+      for (const operationId of stagedOperations) this.deps.skills.commitReviewed?.(operationId, now());
       this.advanceTarget(target, lastId);
       finish({ state: 'completed', outcome: 'produced', results, finishedAt: now() });
       journal(`chat=${chat.id} ${results.map(resultLabel).join(' ')}`);
     } catch (error) {
+      for (const operationId of stagedOperations) this.deps.skills.abortReviewed?.(operationId);
       const message = safeError(error);
-      finish({ state: 'failed', outcome: 'failed', errorCode: 'landing_failure', errorMessage: message, finishedAt: now() });
+      const code = error instanceof ReviewFailure ? error.code : 'landing_failure';
+      finish({ state: 'failed', outcome: 'failed', errorCode: code, errorMessage: message, finishedAt: now() });
       journal(`chat=${chat.id} failed while saving (${message})`);
     }
   }
@@ -356,169 +408,107 @@ export class SkillDistiller implements MaintenanceJob {
     return window.length === 0 ? undefined : window;
   }
 
-  /**
-   * Where one candidate ends up: live, held for approval, proposed as a revision,
-   * or rejected. The slug decides before the vectors,
-   * because two skills sharing an id is not a similarity question -- but the
-   * candidate is measured FIRST anyway: the revision table is the dataset the
-   * dedup bars get retuned from, and the cosine is real or it is not written.
-   * What a slug collision used to record there was a hardcoded 1, a perfect
-   * score no measurement ever produced, in exactly the column that must stay
-   * honest.
-   */
-  private async land(
-    candidate: SkillCandidate,
-    mode: AutoSkillMode,
-    hasExternalContent: boolean,
-  ): Promise<DistillationResult> {
+  /** Classifies a baseline-safe candidate before the independent review call. */
+  private async prepare(candidate: SkillCandidate): Promise<PreparedCandidate | { result: DistillationResult }> {
     const existing = this.deps.skills.get(candidate.slug);
     const measured = await this.measure(candidate, existing?.slug);
-    if (existing !== undefined) {
-      return this.propose(
-        candidate,
-        existing.slug,
-        measured.against,
-        measured.againstOverlap,
-        'slug_collision',
-        mode,
-        hasExternalContent,
-      );
+    const target = existing ?? (measured.best === undefined ? undefined : this.deps.skills.get(measured.best.slug));
+
+    if (target !== undefined && target.source !== 'auto') {
+      return {
+        result: {
+          slug: candidate.slug,
+          disposition: 'protected_duplicate',
+          targetSlug: target.slug,
+          reason: existing !== undefined ? 'slug_collision' : 'dedup_match',
+          ...(measured.best?.score === undefined && measured.against === undefined
+            ? {}
+            : { similarity: measured.best?.score ?? measured.against }),
+          ...(measured.best?.overlap === undefined && measured.againstOverlap === undefined
+            ? {}
+            : { overlap: measured.best?.overlap ?? measured.againstOverlap }),
+        },
+      };
     }
 
-    // Already filtered on both bars; anything that came back is a match.
-    const match = measured.best;
-    if (match !== undefined) {
-      return this.propose(
-        { ...candidate, slug: match.slug },
-        match.slug,
-        match.score,
-        match.overlap,
-        'dedup_match',
-        mode,
-        hasExternalContent,
-      );
-    }
+    const action = target === undefined ? 'new' as const : 'revision' as const;
+    const finalCandidate = target === undefined ? candidate : { ...candidate, slug: target.slug };
+    const neighbour = measured.nearest === undefined
+      ? undefined
+      : { slug: measured.nearest.slug, similarity: measured.nearest.score, overlap: measured.nearest.overlap };
+    const envelope: ReviewEnvelope = {
+      candidate: finalCandidate,
+      action,
+      ...(target === undefined ? {} : { targetSlug: target.slug, targetVersionHash: skillVersionHash(target) }),
+      ...(neighbour === undefined ? {} : { neighbour }),
+    };
+    return { candidate: finalCandidate, envelope, hash: reviewHash(envelope), measured };
+  }
 
-    const live = autoApproveSkill(mode, { candidate, hasExternalContent, revision: false });
+  /** Writes only content whose exact review envelope was approved. */
+  private publish(entry: PreparedCandidate): { result: DistillationResult; operationId: string } {
+    const { candidate, envelope, measured } = entry;
+    const policy = runPolicyGate(candidate);
+    if (!policy.allowed || reviewHash(envelope) !== entry.hash) {
+      throw new ReviewFailure('final_validation_failed', 'The approved candidate changed before publication.');
+    }
+    const current = envelope.action === 'revision' && envelope.targetSlug !== undefined
+      ? this.deps.skills.get(envelope.targetSlug)
+      : undefined;
+    if (envelope.action === 'revision') {
+      if (current === undefined || current.source !== 'auto' || skillVersionHash(current) !== envelope.targetVersionHash) {
+        throw new ReviewFailure('revision_changed', 'The Auto-Skill changed after review.');
+      }
+      // Keep the previous version durably recoverable. This table is no longer an
+      // approval inbox; it is the one-level rollback record for automatic rewrites.
+      this.deps.revisions.save({
+        slug: current.slug,
+        name: current.name,
+        description: current.description,
+        whenToUse: current.whenToUse,
+        body: current.body,
+        createdAt: new Date(this.deps.clock.now()).toISOString(),
+        ...(measured.against === undefined ? {} : { similarity: measured.against }),
+      });
+    }
+    let operationId = '';
     try {
-      this.deps.skills.write({
+      const input = {
         slug: candidate.slug,
         name: candidate.name,
         description: candidate.description,
         whenToUse: candidate.whenToUse,
         body: candidate.body,
-        source: 'auto',
-        pending: !live,
+        source: 'auto' as const,
+        ...(current?.pinned === true ? { pinned: true } : {}),
+      };
+      const published = this.deps.skills.publishReviewed?.(input, {
+        reviewHash: entry.hash,
+        action: envelope.action,
+        at: new Date(this.deps.clock.now()).toISOString(),
       });
+      if (published === undefined) this.deps.skills.write(input);
+      operationId = published?.operationId ?? '';
     } catch (error) {
-      if (error instanceof SkillsError) return { slug: candidate.slug, disposition: 'rejected' };
+      if (error instanceof SkillsError) return { result: { slug: candidate.slug, disposition: 'rejected' }, operationId: '' };
       throw error;
     }
-    // The vector the dedup just computed is the vector the router would compute
-    // -- `candidateRoutingText` and the router's `routingText` are the same
-    // string -- so it is stored now rather than on some later message. Waiting
-    // is what let a distiller running every ten minutes compare each candidate
-    // against a table its own recent work was missing from.
-    if (measured.vector !== undefined) {
-      this.deps.vectors?.save(candidate.slug, candidateRoutingText(candidate), measured.vector);
+    try {
+      if (measured.vector !== undefined) {
+        this.deps.vectors?.save(candidate.slug, candidateRoutingText(candidate), measured.vector);
+      }
+    } catch (error) {
+      if (operationId.length > 0) this.deps.skills.abortReviewed?.(operationId);
+      throw error;
     }
-    return {
+    return { result: {
       slug: candidate.slug,
-      disposition: live ? 'live' : 'pending',
-      ...(measured.nearest === undefined
-        ? {}
-        : {
-            targetSlug: measured.nearest.slug,
-            similarity: measured.nearest.score,
-            overlap: measured.nearest.overlap,
-          }),
-    };
+      disposition: envelope.action === 'new' ? 'published_new' : 'published_revision',
+      ...(envelope.targetSlug === undefined ? {} : { targetSlug: envelope.targetSlug }),
+      ...(measured.nearest === undefined ? {} : { similarity: measured.nearest.score, overlap: measured.nearest.overlap }),
+    }, operationId };
   }
 
-  /**
-   * A revision proposal -- or, in full mode, the edit itself. `source` is
-   * passed through explicitly so applying a revision does
-   * not read as a human edit: the vault promotes an auto skill to `user` when
-   * it is edited, and the distiller rewriting its own work is not that.
-   * `similarity` is written only when actually measured (never a constant).
-   */
-  private propose(
-    candidate: SkillCandidate,
-    slug: string,
-    similarity: number | undefined,
-    overlap: number | undefined,
-    reason: 'slug_collision' | 'dedup_match',
-    mode: AutoSkillMode,
-    hasExternalContent: boolean,
-  ): DistillationResult {
-    const current = this.deps.skills.get(slug);
-    if (current === undefined) return { slug, disposition: 'gone' };
-    // The distiller may rewrite its own work and nothing else. A `builtin`
-    // ships with the app; a `user` skill is the user's, or an auto skill they
-    // edited, and either way a machine proposing to replace it is proposing to
-    // undo a decision a person made. The first real collision was exactly this
-    // shape -- a distilled "Restart Pop Agent service" offered as the new text of
-    // `self-change` -- and the damage was not the bad similarity score but that
-    // a wrong target was reachable at all.
-    if (current.source !== 'auto') {
-      return {
-        slug: candidate.slug,
-        disposition: current.source === 'builtin' ? 'skipped_builtin' : 'skipped_user',
-        targetSlug: slug,
-        reason,
-        ...(similarity === undefined ? {} : { similarity }),
-        ...(overlap === undefined ? {} : { overlap }),
-      };
-    }
-
-    if (autoApproveSkill(mode, { candidate, hasExternalContent, revision: true })) {
-      this.deps.skills.write({
-        slug,
-        name: candidate.name,
-        description: candidate.description,
-        whenToUse: candidate.whenToUse,
-        body: candidate.body,
-        source: current.source,
-        ...(current.pinned === true ? { pinned: true } : {}),
-        pending: false,
-      });
-      return {
-        slug,
-        disposition: 'updated',
-        targetSlug: slug,
-        reason,
-        ...(similarity === undefined ? {} : { similarity }),
-        ...(overlap === undefined ? {} : { overlap }),
-      };
-    }
-
-    this.deps.revisions.save({
-      slug,
-      name: candidate.name,
-      description: candidate.description,
-      whenToUse: candidate.whenToUse,
-      body: candidate.body,
-      createdAt: new Date(this.deps.clock.now()).toISOString(),
-      ...(similarity === undefined ? {} : { similarity }),
-    });
-    return {
-      slug,
-      disposition: 'revision',
-      targetSlug: slug,
-      reason,
-      ...(similarity === undefined ? {} : { similarity }),
-      ...(overlap === undefined ? {} : { overlap }),
-    };
-  }
-
-  /**
-   * The candidate's own vector, and the closest existing skill to it. Both come
-   * back because the vector is worth keeping whether or not it matched anything:
-   * an empty table used to return early, so the first skill of a fresh install
-   * was never stored and the second could not be compared to it. `alsoAgainst`
-   * asks for the cosine against one specific slug -- the skill whose id the
-   * candidate collided with -- so that path records a real number too.
-   */
   private async measure(candidate: SkillCandidate, alsoAgainst?: string): Promise<Measured> {
     const embedder = this.deps.embedder;
     if (embedder === undefined) return {};
@@ -577,6 +567,20 @@ export class SkillDistiller implements MaintenanceJob {
   }
 }
 
+interface PreparedCandidate {
+  candidate: SkillCandidate;
+  envelope: ReviewEnvelope;
+  hash: string;
+  measured: Measured;
+}
+
+class ReviewFailure extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = 'ReviewFailure';
+  }
+}
+
 /** An existing skill, measured against the candidate on both signals. */
 interface Neighbour {
   slug: string;
@@ -630,8 +634,6 @@ function externalContentOf(message: Message): string {
 }
 
 function resultLabel(result: DistillationResult): string {
-  if (result.disposition === 'skipped_user') return `${result.slug}=user,skipped`;
-  if (result.disposition === 'skipped_builtin') return `${result.slug}=builtin,skipped`;
   const measured =
     result.similarity === undefined
       ? ''

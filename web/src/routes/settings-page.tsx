@@ -687,10 +687,6 @@ export function SkillsSection() {
     }
   }
 
-  async function approve(skill: SkillDTO): Promise<void> {
-    await act(() => skillsService.approve(skill.slug));
-  }
-
   async function remove(skill: SkillDTO): Promise<void> {
     await act(() => skillsService.remove(skill.slug));
   }
@@ -743,32 +739,15 @@ export function SkillsSection() {
                     {t('skills.auto')}
                   </span>
                 ) : null}
-                {skill.pending === true ? (
-                  <span
-                    data-testid="skill-pending-badge"
-                    className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs"
-                  >
-                    {t('skills.pending')}
-                  </span>
-                ) : null}
               </div>
               <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
-              {skill.pending === true ? (
-                <p className="mt-1 text-xs text-[var(--muted)]">{t('skills.pendingNote')}</p>
-              ) : (
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  {skill.useCount === undefined || skill.useCount === 0
-                    ? t('skills.neverUsed')
-                    : t('skills.used', { count: skill.useCount })}
-                </p>
-              )}
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {skill.useCount === undefined || skill.useCount === 0
+                  ? t('skills.neverUsed')
+                  : t('skills.used', { count: skill.useCount })}
+              </p>
             </div>
             <div className="flex flex-none flex-wrap gap-1">
-              {skill.pending === true ? (
-                <Button type="button" data-testid="skill-approve" onClick={() => void approve(skill)}>
-                  {t('skills.approve')}
-                </Button>
-              ) : null}
               <Button type="button" variant="ghost" onClick={() => setEditing(skill)}>
                 {t('skills.edit')}
               </Button>
@@ -778,41 +757,6 @@ export function SkillsSection() {
                 </Button>
               )}
             </div>
-            {skill.proposedRevision === undefined ? null : (
-              <div
-                data-testid="skill-revision"
-                className="w-full rounded border border-[var(--border)] p-3"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs">
-                    {t('skills.revision')}
-                  </span>
-                  <span className="truncate text-sm">{skill.proposedRevision.description}</span>
-                </div>
-                <p className="mt-1 text-xs text-[var(--muted)]">{t('skills.revisionNote')}</p>
-                {/* The proposal in full, because "accept" is not a decision
-                    anyone can make from a summary. */}
-                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs text-[var(--muted)]">
-                  {skill.proposedRevision.body}
-                </pre>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <Button
-                    type="button"
-                    data-testid="skill-revision-approve"
-                    onClick={() => void act(() => skillsService.approveRevision(skill.slug))}
-                  >
-                    {t('skills.revisionApprove')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void act(() => skillsService.discardRevision(skill.slug))}
-                  >
-                    {t('skills.revisionDiscard')}
-                  </Button>
-                </div>
-              </div>
-            )}
           </Card>
         ))}
       </div>
@@ -854,12 +798,9 @@ export function SkillsSection() {
 function distillerLine(status: DistillerStatusDTO): string {
   if (!status.enabled) return t('skills.distiller.off');
 
-  const waiting = status.pending + status.revisions;
-  const when =
-    status.lastRunAt === undefined
-      ? t('skills.distiller.never')
-      : t('skills.distiller.lastRun', { when: relativeTime(status.lastRunAt) });
-  return waiting === 0 ? when : `${when} · ${t('skills.distiller.waiting', { count: waiting })}`;
+  return status.lastRunAt === undefined
+    ? t('skills.distiller.never')
+    : t('skills.distiller.lastRun', { when: relativeTime(status.lastRunAt) });
 }
 
 /** How fresh the catalog is, said plainly (aw's source label). */
@@ -929,7 +870,7 @@ function AudioSection() {
  * (decision of 31/07): the raw text lands in the composer in whisper time;
  * turning this on trades ~10s+ per note for punctuation fixes.
  */
-/** The three background-learning policies live in Settings, not in the inbox they fill. */
+/** Background learning has one honest switch; safety is never optional. */
 function AutoSkillsSection() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
 
@@ -951,60 +892,23 @@ function AutoSkillsSection() {
       .catch(() => undefined);
   }
 
-  const modeHint =
-    settings.autoSkillMode === 'disabled'
-      ? t('settings.autoSkills.disabledHint')
-      : settings.autoSkillMode === 'medium'
-        ? t('settings.autoSkills.mediumHint')
-        : t('settings.autoSkills.fullHint');
-
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4">
-        <Select
-          id="settings-auto-skill-mode"
-          data-testid="settings-auto-skill-mode"
-          label={t('settings.autoSkills.mode')}
-          hint={modeHint}
-          className="w-full max-w-md"
-          value={settings.autoSkillMode}
-          onChange={(event) => save({
-            autoSkillMode: event.target.value as SettingsDTO['autoSkillMode'],
-          })}
-        >
-          <option value="disabled">{t('settings.autoSkills.disabled')}</option>
-          <option value="medium">{t('settings.autoSkills.medium')}</option>
-          <option value="full">{t('settings.autoSkills.full')}</option>
-        </Select>
+        <CheckField
+          id="settings-auto-skills-enabled"
+          testId="settings-auto-skills-enabled"
+          label={t('settings.autoSkills.enabled')}
+          hint={t('settings.autoSkills.enabledHint')}
+          checked={settings.autoSkillsEnabled}
+          onChange={(autoSkillsEnabled) => save({ autoSkillsEnabled })}
+        />
 
         <p className="text-sm text-[var(--muted)]">{t('settings.autoSkills.protections')}</p>
       </Card>
-
-      {settings.autoSkillMode === 'disabled' ? null : (
-        <Card>
-          <Select
-            id="skills-distill-interval"
-            data-testid="skills-distill-interval"
-            label={t('skills.distillInterval')}
-            hint={t('skills.distillIntervalNote')}
-            className="w-48"
-            value={String(settings.distillIntervalMinutes)}
-            onChange={(event) => save({ distillIntervalMinutes: Number(event.target.value) })}
-          >
-            {DISTILL_INTERVALS.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {t('skills.distillEvery', { minutes })}
-              </option>
-            ))}
-          </Select>
-        </Card>
-      )}
     </div>
   );
 }
-
-/** How often the distiller may look. One conversation per tick, so this is the bill. */
-const DISTILL_INTERVALS = [10, 30, 60, 360, 1440];
 
 function VoiceCleanupCard() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);

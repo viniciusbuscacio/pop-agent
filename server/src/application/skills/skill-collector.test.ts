@@ -4,7 +4,7 @@ import type { SkillUsage, SkillUsageRepo } from '../ports/skill-usage-repo.js';
 import { SkillsError, type SkillArchiveRepo, type SkillsRepo } from '../ports/skills-repo.js';
 import { SkillCollector } from './skill-collector.js';
 
-function skill(slug: string, source: Skill['source'] = 'auto', pending = false): Skill {
+function skill(slug: string, source: Skill['source'] = 'auto'): Skill {
   return {
     slug,
     name: slug,
@@ -12,7 +12,6 @@ function skill(slug: string, source: Skill['source'] = 'auto', pending = false):
     whenToUse: slug,
     body: slug,
     source,
-    ...(pending ? { pending: true } : {}),
   };
 }
 
@@ -21,7 +20,6 @@ function repo(skills: Skill[]): SkillsRepo {
     all: () => skills,
     get: (slug) => skills.find((entry) => entry.slug === slug),
     write: () => skills[0]!,
-    approve: (slug) => skills.find((entry) => entry.slug === slug),
     delete: () => true,
     setEnabled: () => true,
   };
@@ -110,19 +108,6 @@ describe('SkillCollector', () => {
     }).run();
 
     expect(archive.archived).toEqual(['auto1']);
-  });
-
-  it('leaves the approval queue alone', () => {
-    // A pending skill has had no chance to be used, so by use count it always
-    // looks like the worst skill in the vault.
-    const archive = archiveRepo();
-    new SkillCollector({
-      skills: repo([skill('waiting', 'auto', true), skill('live')]),
-      archive,
-      cap: 1,
-    }).run();
-
-    expect(archive.archived).toEqual([]);
   });
 
   it('carries on when one skill will not move', () => {

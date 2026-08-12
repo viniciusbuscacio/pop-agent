@@ -307,18 +307,11 @@ export const en = {
   'skills.approve': 'Accept',
   'skills.used': 'used {count}x',
   'skills.neverUsed': 'never used yet',
-  'settings.autoSkills.mode': 'Auto-skill mode',
-  'settings.autoSkills.disabled': 'Disabled',
-  'settings.autoSkills.medium': 'Enabled — Medium',
-  'settings.autoSkills.full': 'Enabled — Full',
-  'settings.autoSkills.disabledHint':
-    'Default. Pop Agent does not run the background process or create new auto-skills.',
-  'settings.autoSkills.mediumHint':
-    'Low-risk first-party skills activate automatically. External, operational, and revision candidates wait for your approval.',
-  'settings.autoSkills.fullHint':
-    'Every valid candidate activates automatically after the mandatory safety checks.',
+  'settings.autoSkills.enabled': 'Enable Auto-skills',
+  'settings.autoSkills.enabledHint':
+    'On by default. Reviewed candidates activate automatically; turning this off stops new learning without disabling skills already active.',
   'settings.autoSkills.protections':
-    'Safety checks always remain active: suspicious external content is refused, secrets are scrubbed, candidates are validated, and custom or built-in skills cannot be replaced.',
+    'Mandatory checks always remain active: suspicious external content is refused, known injection patterns are blocked, secrets are scrubbed, an independent reviewer must approve, and Personal or Built-in skills cannot be replaced.',
   'skills.distillInterval': 'How often to look',
   'skills.distillIntervalNote': 'One conversation each time, so this is what it can cost.',
   'skills.distillEvery': 'every {minutes} min',
@@ -339,6 +332,7 @@ export const en = {
   'skills.activity.body': 'Skills, rewrites, and failures that may deserve attention.',
   'skills.activity.empty': 'No conversation has been inspected yet.',
   'skills.activity.noImportant': 'No learning activity needs your attention.',
+  'skills.activity.systematicBlocking': 'The deterministic policy blocked every candidate in a significant recent sample. Auto-Skills may be effectively inoperable; review the rule codes before changing any protection.',
   'skills.activity.routineSummary': '{count} routine result(s) hidden — nothing learned or external content safely refused.',
   'skills.activity.showRoutine': 'Show routine activity',
   'skills.activity.hideRoutine': 'Hide routine activity',
@@ -363,6 +357,11 @@ export const en = {
   'skills.activity.result.revision': 'rewrite proposed for {target}',
   'skills.activity.result.updated': 'existing learned skill updated automatically',
   'skills.activity.result.rejected': 'candidate rejected by validation',
+  'skills.activity.result.protectedDuplicate': 'duplicates protected skill {target}; stopped locally',
+  'skills.activity.result.policyRejected': 'blocked by the deterministic injection policy',
+  'skills.activity.result.contractRejected': 'blocked because the candidate did not satisfy the English contract',
+  'skills.activity.result.evidenceRejected': 'blocked because its evidence was absent or invalid',
+  'skills.activity.result.reviewRejected': 'rejected by the independent reviewer',
   'skills.activity.result.skipped_user': 'matched a custom skill, so it was not changed',
   'skills.activity.result.skipped_builtin': 'matched a built-in skill, so it was not changed',
   'skills.activity.result.gone': 'the matched skill no longer exists',

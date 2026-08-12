@@ -24,6 +24,8 @@ export interface LlmRun {
   createdAt: string;
   /** Chat runs default to `chat`; titles/summaries/voice cleanup use `service`. */
   kind?: 'chat' | 'service';
+  /** Stable service function for diagnostics and cost attribution. */
+  purpose?: string;
 }
 
 export interface LlmRunsRepo {

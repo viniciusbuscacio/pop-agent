@@ -28,14 +28,14 @@ export type DistillationTrigger = 'automatic' | 'explicit_request' | 'manual_ret
 export type DistillationState = 'queued' | 'running' | 'completed' | 'failed';
 export type DistillationOutcome = 'produced' | 'nothing' | 'tainted' | 'failed' | 'invalid_output';
 export type DistillationDisposition =
-  | 'pending'
-  | 'live'
-  | 'revision'
-  | 'updated'
-  | 'rejected'
-  | 'skipped_user'
-  | 'skipped_builtin'
-  | 'gone';
+  | 'published_new'
+  | 'published_revision'
+  | 'policy_rejected'
+  | 'contract_rejected'
+  | 'evidence_rejected'
+  | 'review_rejected'
+  | 'protected_duplicate'
+  | 'rejected';
 
 export interface DistillationResult {
   slug: string;
@@ -44,6 +44,8 @@ export interface DistillationResult {
   reason?: 'slug_collision' | 'dedup_match';
   similarity?: number;
   overlap?: number;
+  policyReasons?: string[];
+  reviewReasons?: string[];
 }
 
 /** One durable account of one bounded conversation window. */

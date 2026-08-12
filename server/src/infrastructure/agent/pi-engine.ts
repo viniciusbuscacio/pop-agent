@@ -30,7 +30,6 @@ import { buildNoteTools } from '../notes/note-tools.js';
 import { buildTaskTools } from './task-tools.js';
 import { buildSkillTools } from '../skills/skill-tools.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
-import type { AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
 
@@ -91,14 +90,10 @@ export const SYSTEM_PROMPT = [
   'repository state before saying that tests or the commit were completed.',
 ].join(' ');
 
-export function autoSkillModeInstruction(mode: AutoSkillMode): string {
-  if (mode === 'disabled') {
-    return 'Auto-skills are disabled. If the user asks for one, say they can enable auto-skills in Settings.';
-  }
-  if (mode === 'full') {
-    return 'Auto-skills are fully enabled. If the user explicitly asks for one, say it will be picked up shortly and activated automatically after the baseline safety checks.';
-  }
-  return 'Auto-skills are enabled in Medium mode. If the user explicitly asks for one, say it will be picked up shortly; low-risk skills activate automatically and others wait on the Skills screen.';
+export function autoSkillsInstruction(enabled: boolean): string {
+  return enabled
+    ? 'Auto-skills are enabled. If the user explicitly asks for one, say it will be picked up shortly and activated automatically after the mandatory safety and independent review checks.'
+    : 'Auto-skills are disabled. If the user asks for one, say they can enable Auto-skills in Settings.';
 }
 
 export type PiEngineErrorCode = 'provider_not_configured' | 'model_not_available';
@@ -270,7 +265,7 @@ export interface SdkPiEngineOptions {
    */
   skills?: SkillsRepo;
   /** Current background auto-skill policy, read whenever a session opens (§8). */
-  autoSkillMode?: () => AutoSkillMode;
+  autoSkillsEnabled?: () => boolean;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
   /**
@@ -356,7 +351,7 @@ export class SdkPiEngine implements PiEngine {
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPrompt: `${SYSTEM_PROMPT} ${autoSkillModeInstruction(this.options.autoSkillMode?.() ?? 'disabled')}`,
+      systemPrompt: `${SYSTEM_PROMPT} ${autoSkillsInstruction(this.options.autoSkillsEnabled?.() ?? true)}`,
       extensionFactories: [
         (pi: ExtensionAPI) => {
           const onToolCall = async (event: ToolCallEvent): Promise<ToolCallEventResult> => {

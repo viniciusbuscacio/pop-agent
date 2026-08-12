@@ -112,25 +112,6 @@ describe('SkillsVault', () => {
     expect(parse(readFileSync(path, 'utf8')).seed).toBeDefined();
   });
 
-  it('accepts a pending skill without promoting it out of the collector reach', () => {
-    vault.write({
-      slug: 'learned',
-      name: 'Learned',
-      description: 'd',
-      whenToUse: 'w',
-      body: 'b',
-      source: 'auto',
-      pending: true,
-    });
-    expect(vault.get('learned')?.pending).toBe(true);
-
-    const approved = vault.approve('learned');
-    // Saying yes is not editing: it stays `auto`, so the collector still owns it.
-    expect(approved?.pending).toBeUndefined();
-    expect(approved?.source).toBe('auto');
-    expect(new SkillsVault(root).get('learned')?.pending).toBeUndefined();
-  });
-
   it('promotes an auto skill to user when the user actually edits it', () => {
     vault.write({
       slug: 'learned',
@@ -142,12 +123,6 @@ describe('SkillsVault', () => {
     });
     vault.write({ slug: 'learned', name: 'Mine now', description: 'd', whenToUse: 'w', body: 'b2' });
     expect(vault.get('learned')?.source).toBe('user');
-  });
-
-  it('leaves a skill that was never pending alone', () => {
-    const before = vault.get('note-taking');
-    expect(vault.approve('note-taking')).toEqual(before);
-    expect(vault.approve('nope')).toBeUndefined();
   });
 
   it('keeps a user edit to a default skill across reboot', () => {

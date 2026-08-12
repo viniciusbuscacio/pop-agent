@@ -66,7 +66,6 @@ const SKILLS: SkillsResponse = {
       whenToUse: 'when waiting',
       body: 'body',
       source: 'auto',
-      pending: true,
     },
     {
       slug: 'core',
@@ -78,7 +77,7 @@ const SKILLS: SkillsResponse = {
     },
   ],
   archived: [],
-  distiller: { enabled: true, pending: 1, revisions: 0 },
+  distiller: { enabled: true, candidates: 0, published: 0, policyRejected: 0, reviewRejected: 0, systematicBlocking: false },
 };
 
 function renderSkillsList() {
@@ -105,12 +104,12 @@ describe('the skills sidebar filter', () => {
     });
 
     await userEvent.click(screen.getByTestId('skills-source-filter'));
-    await userEvent.click(screen.getByTestId('skills-source-filter-pending'));
+    await userEvent.click(screen.getByTestId('skills-source-filter-auto'));
 
     await waitFor(() => {
-      expect(screen.getAllByTestId('skill-row')).toHaveLength(1);
+      expect(screen.getAllByTestId('skill-row')).toHaveLength(2);
     });
-    expect(screen.getByText('Waiting skill')).toBeDefined();
+    expect(screen.getByText('Learned skill')).toBeDefined();
   });
 
   it('composes the source filter with text search', async () => {
@@ -132,16 +131,11 @@ describe('the skills sidebar filter', () => {
     });
   });
 
-  it('shows the pending count on the filter button from any filter', async () => {
+  it('has no manual-approval filter', async () => {
     renderSkillsList();
-    await waitFor(() => {
-      expect(screen.getByTestId('skills-source-filter').textContent).toContain('1 pending');
-    });
+    await waitFor(() => expect(screen.getByTestId('skills-source-filter')).toBeTruthy());
 
     await userEvent.click(screen.getByTestId('skills-source-filter'));
-    await userEvent.click(screen.getByTestId('skills-source-filter-personal'));
-
-    expect(screen.getByTestId('skills-source-filter').textContent).toContain('1 pending');
-    expect(screen.getByTestId('skills-source-filter').textContent).toContain('Custom');
+    expect(screen.queryByTestId('skills-source-filter-pending')).toBeNull();
   });
 });

@@ -25,8 +25,6 @@ export interface SkillInput {
    * is", except for an auto skill, which the edit promotes to user (§8).
    */
   source?: SkillSource;
-  /** Held outside the router until the user accepts it (§8, auto-skill). */
-  pending?: boolean;
   /** Switched off by the user. Absent means enabled. */
   enabled?: boolean;
 }
@@ -49,16 +47,22 @@ export interface SkillArchiveRepo {
   restore(slug: string): Skill | undefined;
 }
 
+export interface ReviewedPublication {
+  skill: Skill;
+  operationId: string;
+}
+
 export interface SkillsRepo {
   all(): Skill[];
   get(slug: string): Skill | undefined;
   write(input: SkillInput): Skill;
-  /**
-   * Accepts a pending skill into the router (pop-agent.spec §8). Separate from
-   * `write` because approving is not editing: an edit promotes an auto skill to
-   * `user`, and merely saying yes to one must not.
-   */
-  approve(slug: string): Skill | undefined;
+  /** Crash-recoverable publication; prepared rows stay invisible until commit. */
+  publishReviewed?(
+    input: SkillInput,
+    review: { reviewHash: string; action: 'new' | 'revision'; at: string },
+  ): ReviewedPublication;
+  commitReviewed?(operationId: string, at: string): void;
+  abortReviewed?(operationId: string): void;
   delete(slug: string): boolean;
   /** Toggle whether a skill may route or pin. Returns false for unknown slugs. */
   setEnabled(slug: string, enabled: boolean): boolean;

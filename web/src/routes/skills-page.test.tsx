@@ -53,7 +53,7 @@ function skill(slug: string, name: string, body: string) {
 const SKILLS: SkillsResponse = {
   skills: [skill('alpha', 'Alpha', 'The alpha procedure.'), skill('beta', 'Beta', 'The beta procedure.')],
   archived: [],
-  distiller: { enabled: true, pending: 0, revisions: 0 },
+  distiller: { enabled: true, candidates: 0, published: 0, policyRejected: 0, reviewRejected: 0, systematicBlocking: false },
 };
 
 /** A link beside the pane, so the second skill is reached by navigating. */

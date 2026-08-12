@@ -17,7 +17,6 @@ import type { SkillUsage, SkillUsageRepo } from '../../application/ports/skill-u
 import type {
   DistillationAttempt,
   DistillationRepo,
-  SkillRevision,
   SkillRevisionsRepo,
 } from '../../application/ports/skill-distillation-repo.js';
 import { badBody, readJson, schemaError } from './body.js';
@@ -28,11 +27,8 @@ import { apiError } from './errors.js';
  * write their own and edit any, and delete their own. The Skill Router reads
  * the same vault to decide which fire per turn.
  *
- * Since fase (c) the screen is also the distiller's inbox. Two things wait
- * here for a yes: a new skill, held out of the router by its `pending` flag,
- * and a rewrite of a skill that already works, held out by living in its own
- * table. Both are approved with a POST that carries no body, because the only
- * thing being said is yes.
+ * Auto-Skills that pass every mandatory gate are already active; this surface
+ * is observability and ordinary CRUD, never an approval inbox.
  */
 
 const saveSchema = z
@@ -69,16 +65,24 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
 
   const listing = (): SkillsResponse => {
     const usage = new Map((deps.usage?.all() ?? []).map((entry) => [entry.slug, entry]));
-    const revisions = new Map((deps.revisions?.all() ?? []).map((entry) => [entry.slug, entry]));
     const skills = deps.skills
       .all()
-      .map((skill) => toDto(skill, usage.get(skill.slug), revisions.get(skill.slug)));
+      .map((skill) => toDto(skill, usage.get(skill.slug)));
     const lastRunAt = deps.distillation?.lastRunAt();
+    const recentResults = (deps.distillation?.attempts(100) ?? []).flatMap((attempt) => attempt.results);
+    const published = recentResults.filter((result) =>
+      result.disposition === 'published_new' || result.disposition === 'published_revision'
+    ).length;
+    const policyRejected = recentResults.filter((result) => result.disposition === 'policy_rejected').length;
+    const reviewRejected = recentResults.filter((result) => result.disposition === 'review_rejected').length;
     const status: DistillerStatusDTO = {
       enabled: deps.distillerEnabled?.() ?? false,
       ...(lastRunAt === undefined ? {} : { lastRunAt }),
-      pending: skills.filter((skill) => skill.pending === true).length,
-      revisions: revisions.size,
+      candidates: recentResults.length,
+      published,
+      policyRejected,
+      reviewRejected,
+      systematicBlocking: recentResults.length >= 20 && policyRejected === recentResults.length,
     };
     return {
       skills,
@@ -103,51 +107,6 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
     return retry === undefined
       ? apiError(c, 409, 'operation_error', 'That distillation cannot be retried.')
       : c.json(toAttemptDto(retry), 202);
-  });
-
-  // Accepting a pending skill (pop-agent.spec §8). A POST with no body: the only
-  // thing being said is "yes", and there is nothing else to send.
-  routes.post('/skills/:slug/approve', (c) => {
-    const skill = deps.skills.approve(c.req.param('slug'));
-    return skill === undefined
-      ? apiError(c, 404, 'not_found', 'No such skill.')
-      : c.json(toDto(skill));
-  });
-
-  /**
-   * Accepting a proposed rewrite. `source` is passed back explicitly so this
-   * does not read as a human edit: the vault promotes an auto skill to `user`
-   * when it is edited, and saying yes to the distiller's rewrite is not that.
-   */
-  routes.post('/skills/:slug/revision/approve', (c) => {
-    const slug = c.req.param('slug');
-    const revision = deps.revisions?.get(slug);
-    const current = deps.skills.get(slug);
-    if (revision === undefined || current === undefined) {
-      return apiError(c, 404, 'not_found', 'No revision is waiting for that skill.');
-    }
-    const saved = deps.skills.write({
-      slug,
-      name: revision.name,
-      description: revision.description,
-      whenToUse: revision.whenToUse,
-      body: revision.body,
-      source: current.source,
-      ...(current.pinned === true ? { pinned: true } : {}),
-      pending: false,
-    });
-    deps.revisions?.delete(slug);
-    return c.json(toDto(saved));
-  });
-
-  /** Declining one. The skill keeps the version it had; nothing else changes. */
-  routes.delete('/skills/:slug/revision', (c) => {
-    const slug = c.req.param('slug');
-    if (deps.revisions?.get(slug) === undefined) {
-      return apiError(c, 404, 'not_found', 'No revision is waiting for that skill.');
-    }
-    deps.revisions.delete(slug);
-    return c.body(null, 204);
   });
 
   /** Out of the archive and back into the router (pop-agent.spec §8). */
@@ -236,7 +195,7 @@ function toAttemptDto(attempt: DistillationAttempt): SkillDistillationAttemptDTO
   };
 }
 
-function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): SkillDTO {
+function toDto(skill: Skill, usage?: SkillUsage): SkillDTO {
   return {
     slug: skill.slug,
     name: skill.name,
@@ -245,20 +204,7 @@ function toDto(skill: Skill, usage?: SkillUsage, revision?: SkillRevision): Skil
     body: skill.body,
     source: skill.source,
     ...(skill.pinned === true ? { pinned: true } : {}),
-    ...(skill.pending === true ? { pending: true } : {}),
     ...(skill.enabled === false ? { enabled: false } : {}),
     ...(usage === undefined ? {} : { useCount: usage.useCount, lastUsedAt: usage.lastUsedAt }),
-    ...(revision === undefined
-      ? {}
-      : {
-          proposedRevision: {
-            name: revision.name,
-            description: revision.description,
-            whenToUse: revision.whenToUse,
-            body: revision.body,
-            createdAt: revision.createdAt,
-            ...(revision.similarity === undefined ? {} : { similarity: revision.similarity }),
-          },
-        }),
   };
 }

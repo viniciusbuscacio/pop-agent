@@ -195,14 +195,17 @@ async function main(): Promise<void> {
     // about Pop Agent.
     complete: async (request, ctx) => {
       spent += 1;
-      const result = await providers.completeAsService(request, ctx);
+      const result = await providers.completeAsService(request, {
+        ...(ctx.provider === undefined ? {} : { provider: ctx.provider }),
+        purpose: ctx.purpose,
+      });
       console.log(`  --- answered by ${result.providerId} / ${result.modelId} ---`);
       for (const line of result.text.split('\n')) console.log(`  | ${line}`);
       console.log(`  --- end (${String(result.text.length)} chars) ---`);
       return result.text;
     },
     clock: { now: () => Date.now() },
-    mode: () => 'medium',
+    enabled: () => true,
     everyMs: () => 600_000,
     idleMs: 0,
     onJournal: (line) => console.log(`  ${line}`),
@@ -221,22 +224,14 @@ async function main(): Promise<void> {
 
   for (const skill of learned) {
     console.log(`\n  slug        ${skill.slug}`);
-    console.log(`  source      ${skill.source}   pending: ${String(skill.pending === true)}`);
+    console.log(`  source      ${skill.source}   reviewed and published`);
     console.log(`  name        ${skill.name}`);
     console.log(`  description ${skill.description}`);
     console.log(`  whenToUse   ${skill.whenToUse}`);
     console.log(`  body\n${skill.body.split('\n').map((line) => `    | ${line}`).join('\n')}`);
   }
 
-  console.log('\n--- the promise: a pending skill is NOT routed ---');
-  const router = new SkillRouterService({ skills: vault, embedder, vectors, usage, clock: { now: () => Date.now() } });
-  const beforeApproval = await router.route(FUTURE_QUESTION);
-  const leaked = learned.filter((skill) => beforeApproval.includes(skill.body));
-  console.log(`  routed ${String(beforeApproval.length)} skill(s); the new one is ${leaked.length === 0 ? 'correctly absent' : 'LEAKING'}`);
-
-  console.log('\n--- fase (b) + router: approve it, then ask a different question ---');
-  for (const skill of learned) vault.approve(skill.slug);
-
+  console.log('\n--- reviewed publication + router: ask a different question ---');
   const routed = new SkillRouterService({
     skills: vault,
     embedder,

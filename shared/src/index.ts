@@ -186,10 +186,8 @@ export interface SettingsDTO {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
-  /** Background auto-skill policy: off, selective automatic approval, or full automatic approval (§8). */
-  autoSkillMode: 'disabled' | 'medium' | 'full';
-  /** Minutes between its ticks; one conversation per tick is the cost ceiling. */
-  distillIntervalMinutes: number;
+  /** Whether the reviewed background Auto-Skill pipeline is enabled (§8). */
+  autoSkillsEnabled: boolean;
   /** Activate a gate-verified local commit automatically after work drains. */
   autoActivatePreparedUpdates: boolean;
   /** Minutes of total inactivity (no runs or tasks) before an automatic restart triggers. */
@@ -265,35 +263,13 @@ export interface SkillDTO {
   source: "builtin" | "auto" | "user";
   /** A pinned skill sits in the session system prompt; the router skips it. */
   pinned?: boolean;
-  /** Waiting for the user to accept it; not routed until then (§8). */
-  pending?: boolean;
+
   /** Switched off by the user; absent means enabled. Built-ins can be disabled, not deleted. */
   enabled?: boolean;
   /** How many times the router has put this skill in front of the model (§8). */
   useCount?: number;
   /** ISO-8601 of the last time it did. Absent means never. */
   lastUsedAt?: string;
-  /**
-   * A rewrite the background distiller proposed for this skill, waiting on the
-   * user (pop-agent.spec §8, fase c). While it waits, the skill above is what the
-   * router still uses -- that is the point of holding it out here instead of
-   * writing it in.
-   */
-  proposedRevision?: SkillRevisionDTO;
-}
-
-/** The distiller's proposed new version of an existing skill. */
-export interface SkillRevisionDTO {
-  name: string;
-  description: string;
-  whenToUse: string;
-  body: string;
-  createdAt: string;
-  /**
-   * The measured cosine against the skill it would replace. Absent when nothing
-   * was measured (a slug collision with no embedder): never a placeholder.
-   */
-  similarity?: number;
 }
 
 export interface SkillsResponse {
@@ -307,18 +283,20 @@ export interface SkillsResponse {
 export interface SkillDistillationResultDTO {
   slug: string;
   disposition:
-    | 'pending'
-    | 'live'
-    | 'revision'
-    | 'updated'
-    | 'rejected'
-    | 'skipped_user'
-    | 'skipped_builtin'
-    | 'gone';
+    | 'published_new'
+    | 'published_revision'
+    | 'policy_rejected'
+    | 'contract_rejected'
+    | 'evidence_rejected'
+    | 'review_rejected'
+    | 'protected_duplicate'
+    | 'rejected';
   targetSlug?: string;
   reason?: 'slug_collision' | 'dedup_match';
   similarity?: number;
   overlap?: number;
+  policyReasons?: string[];
+  reviewReasons?: string[];
 }
 
 /** One attempt to learn from one bounded window of a conversation. */
@@ -353,10 +331,12 @@ export interface DistillerStatusDTO {
   enabled: boolean;
   /** ISO-8601 of the last conversation it finished. Absent means it never has. */
   lastRunAt?: string;
-  /** New skills waiting for approval. */
-  pending: number;
-  /** Existing skills with a rewrite waiting for approval. */
-  revisions: number;
+  candidates: number;
+  published: number;
+  policyRejected: number;
+  reviewRejected: number;
+  /** Enough real candidates were observed and every one died at the deterministic gate. */
+  systematicBlocking: boolean;
 }
 
 // ---- Files as a plain folder (pop-agent.spec §14, spec 1.58) ----

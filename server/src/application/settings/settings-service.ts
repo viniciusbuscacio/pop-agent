@@ -1,4 +1,3 @@
-import type { AutoSkillMode } from '../../domain/skills/auto-skill-policy.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
 import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
@@ -25,14 +24,8 @@ export interface AppSettings {
   voiceCleanup: boolean;
   /** Model for that pass; empty means the service model. */
   voiceCleanupModel: string;
-  /** Background learning and how far a baseline-safe candidate may go (§8). */
-  autoSkillMode: AutoSkillMode;
-  /**
-   * Minutes between its ticks. One conversation per tick is the cost ceiling,
-   * so this is the dial that sets it. Ten while the feature is new; the
-   * intended factory setting once it has been watched for a while is thirty.
-   */
-  distillIntervalMinutes: number;
+  /** Whether background learning may create or update Auto-Skills (§8). */
+  autoSkillsEnabled: boolean;
   /** Activate a gate-verified committed checkout once conversations and tasks are idle. */
   autoActivatePreparedUpdates: boolean;
   /** Quiet period required before an automatic activation may begin. */
@@ -47,8 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voiceModel: 'base',
   voiceCleanup: false,
   voiceCleanupModel: '',
-  autoSkillMode: 'disabled',
-  distillIntervalMinutes: 10,
+  autoSkillsEnabled: true,
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };
@@ -56,25 +48,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
 const SETTINGS_KEY = 'app';
 
 interface LegacySkillSettings {
+  autoSkillMode?: 'disabled' | 'medium' | 'full';
   autoApproveSkills?: boolean;
   distillSkills?: boolean;
+  distillIntervalMinutes?: number;
 }
 
-function isAutoSkillMode(value: unknown): value is AutoSkillMode {
-  return value === 'disabled' || value === 'medium' || value === 'full';
-}
-
-function legacyAutoSkillMode(settings: LegacySkillSettings): AutoSkillMode {
-  if (settings.distillSkills !== true) return 'disabled';
-  return settings.autoApproveSkills === true ? 'full' : 'medium';
+function migratedAutoSkillsEnabled(settings: LegacySkillSettings): boolean {
+  if (settings.autoSkillMode !== undefined) return settings.autoSkillMode !== 'disabled';
+  if (settings.distillSkills !== undefined) return settings.distillSkills;
+  return DEFAULT_SETTINGS.autoSkillsEnabled;
 }
 
 function withoutLegacyFields(
   settings: Partial<AppSettings> & LegacySkillSettings,
 ): Partial<AppSettings> {
   const current = { ...settings } as Record<string, unknown>;
+  delete current.autoSkillMode;
   delete current.autoApproveSkills;
   delete current.distillSkills;
+  delete current.distillIntervalMinutes;
   return current as Partial<AppSettings>;
 }
 
@@ -83,15 +76,16 @@ export class SettingsService {
 
   read(): AppSettings {
     // Spread over the defaults: a document saved before a field existed still
-    // answers with every field. The two legacy booleans map losslessly onto the
-    // three modes, so upgrading never changes an existing owner's policy.
+    // answers with every field. Every formerly enabled mode maps to enabled;
+    // only the old disabled state remains disabled.
     const stored = this.repo.get<Partial<AppSettings> & LegacySkillSettings>(SETTINGS_KEY);
     if (stored === undefined) return DEFAULT_SETTINGS;
 
-    const autoSkillMode = isAutoSkillMode(stored.autoSkillMode)
-      ? stored.autoSkillMode
-      : legacyAutoSkillMode(stored);
-    return { ...DEFAULT_SETTINGS, ...withoutLegacyFields(stored), autoSkillMode };
+    const autoSkillsEnabled =
+      typeof stored.autoSkillsEnabled === 'boolean'
+        ? stored.autoSkillsEnabled
+        : migratedAutoSkillsEnabled(stored);
+    return { ...DEFAULT_SETTINGS, ...withoutLegacyFields(stored), autoSkillsEnabled };
   }
 
   /** Full replace: callers send the whole object, so there is no merge to reason about. */

@@ -31,6 +31,8 @@ export interface SkillCandidate {
   description: string;
   whenToUse: string;
   body: string;
+  /** Stable ids of original messages that support this exact procedure. */
+  evidence?: string[];
 }
 
 /** How much of the window the model sees. A tick is one small call, not a batch. */
@@ -44,7 +46,7 @@ const MAX_BODY = 8_000;
 export const MAX_CANDIDATES = 5;
 
 /** Opens each skill; the body runs to the next marker. */
-const SKILL_MARKER = '=== SKILL ===';
+const SKILL_MARKER = '=== CANDIDATE ===';
 /** Separates the routed fields from the procedure. */
 const BODY_MARKER = '--- body ---';
 /** The model's way of saying it finished; its absence is how truncation is seen. */
@@ -60,7 +62,7 @@ const END_MARKER = '=== END ===';
  * matters, which is that the line consists of the fence character and the
  * keyword and nothing else, so it can never collide with a line of prose.
  */
-const SKILL_LINE = /^=+\s*skill\s*=*$/i;
+const SKILL_LINE = /^=+\s*(?:candidate|skill)\s*=*$/i;
 const BODY_LINE = /^-+\s*body\s*-*$/i;
 const END_LINE = /^=+\s*end\s*=*$/i;
 
@@ -78,7 +80,7 @@ export function buildDistillPrompt(
   const transcript = messages
     .slice(-MAX_MESSAGES)
     .filter((message) => message.content.trim().length > 0)
-    .map((message) => `${message.role}: ${clip(message.content.trim())}`)
+    .map((message) => `[${message.id}] ${message.role}: ${clip(message.content.trim())}`)
     .join('\n');
 
   const known =
@@ -88,10 +90,9 @@ export function buildDistillPrompt(
 
   const mandate = requested
     ? [
-        'IMPORTANT: in this conversation the user explicitly asked for a skill to be written.',
-        'That is an instruction, not a hint. Write at least one skill. The "nothing to learn"',
-        'answer is not available here -- if the procedure looks thin, write the best skill the',
-        'conversation supports rather than none.',
+        'IMPORTANT: the user explicitly requested a skill, so inspect this conversation first.',
+        'The request grants priority only. Never invent missing steps or evidence; return an',
+        'empty result when no complete reusable procedure is supported.',
         '',
       ]
     : [];
@@ -130,6 +131,7 @@ export function buildDistillPrompt(
     'name: Short name',
     'description: One line saying what this skill does',
     'whenToUse: The situations that should bring it back',
+    'evidence: message-id-1,message-id-2',
     BODY_MARKER,
     'The procedure itself, as markdown. Any characters at all are fine here:',
     'quotes, braces, backticks, shell commands, newlines. Nothing needs escaping.',
@@ -207,6 +209,7 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
       name: open.get('name') ?? '',
       description: open.get('description') ?? '',
       whenToUse: open.get('whenToUse') ?? '',
+      evidence: open.get('evidence') ?? '',
       body: (text ?? []).join('\n').trim(),
     });
     if (candidate === undefined) {
@@ -242,7 +245,7 @@ export function parseDistillAnswer(answer: string): DistillAnswer {
       body = [];
       continue;
     }
-    const match = /^(slug|name|description|whentouse)\s*:\s*(.*)$/i.exec(trimmed);
+    const match = /^(slug|name|description|whentouse|evidence)\s*:\s*(.*)$/i.exec(trimmed);
     if (match?.[1] !== undefined) {
       fields.set(normaliseKey(match[1]), (match[2] ?? '').trim());
     }
@@ -297,12 +300,14 @@ const BARE_TOKEN = new RegExp(
 );
 
 export function scrubCandidate(candidate: SkillCandidate): SkillCandidate {
+  const scrubLine = (line: string): string =>
+    SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? '[redacted secret]' : line;
   return {
     ...candidate,
-    body: candidate.body
-      .split('\n')
-      .map((line) => (SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? '[redacted secret]' : line))
-      .join('\n'),
+    name: scrubLine(candidate.name),
+    description: scrubLine(candidate.description),
+    whenToUse: scrubLine(candidate.whenToUse),
+    body: candidate.body.split('\n').map(scrubLine).join('\n'),
   };
 }
 
@@ -315,13 +320,25 @@ function toCandidate(entry: unknown): SkillCandidate | undefined {
   const description = read(record, 'description').slice(0, MAX_LINE);
   const whenToUse = read(record, 'whenToUse').slice(0, MAX_LINE);
   const body = read(record, 'body').slice(0, MAX_BODY);
+  const evidence = read(record, 'evidence')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(value))
+    .slice(0, 20);
 
   if (slug.length === 0 || name.length === 0 || description.length === 0 || body.length === 0) {
     return undefined;
   }
   // An empty whenToUse falls back to the description, exactly as the vault does
   // for an Agent Skills file that only carries the standard's two fields.
-  return { slug, name, description, whenToUse: whenToUse.length > 0 ? whenToUse : description, body };
+  return {
+    slug,
+    name,
+    description,
+    whenToUse: whenToUse.length > 0 ? whenToUse : description,
+    body,
+    ...(evidence.length === 0 ? {} : { evidence }),
+  };
 }
 
 function read(record: Record<string, unknown>, key: string): string {

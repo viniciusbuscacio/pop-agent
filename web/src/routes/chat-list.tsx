@@ -665,15 +665,14 @@ const SKILL_FILTER_OPTIONS: { value: SkillSourceFilter; labelKey: Parameters<typ
   { value: 'all', labelKey: 'skills.filter.all' },
   { value: 'personal', labelKey: 'skills.filter.personal' },
   { value: 'auto', labelKey: 'skills.filter.auto' },
-  { value: 'pending', labelKey: 'skills.filter.pending' },
   { value: 'builtin', labelKey: 'skills.filter.builtin' },
 ];
 
 const SKILL_FIELD_CLASS =
   'w-full truncate text-left rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]';
 
-/** Source filter dropdown, model-picker style, with a pending count on the button. */
-function SkillsSourceFilter({ pendingCount }: { pendingCount: number }) {
+/** Source filter dropdown, model-picker style. */
+function SkillsSourceFilter() {
   const sourceFilter = useSkillsStore((state) => state.sourceFilter);
   const setSourceFilter = useSkillsStore((state) => state.setSourceFilter);
   const [open, setOpen] = useState(false);
@@ -692,8 +691,7 @@ function SkillsSourceFilter({ pendingCount }: { pendingCount: number }) {
     SKILL_FILTER_OPTIONS.find((option) => option.value === sourceFilter)?.labelKey ??
       'skills.filter.all',
   );
-  const buttonLabel =
-    pendingCount > 0 ? `${baseLabel} · ${t('skills.filter.pendingCount', { count: pendingCount })}` : baseLabel;
+  const buttonLabel = baseLabel;
 
   return (
     <div ref={root} className="relative min-w-0 px-3 pb-2">
@@ -773,7 +771,6 @@ function SkillsList({ filter }: { filter: string }) {
 
   if (skills === undefined) return <div className="flex-1" />;
 
-  const pendingCount = skills.filter((skill) => skill.pending === true).length;
   const query = filter.trim().toLowerCase();
   const shown = skills.filter((skill) => {
     if (!matchesSourceFilter(skill, sourceFilter)) return false;
@@ -793,7 +790,7 @@ function SkillsList({ filter }: { filter: string }) {
       >
         {t('skills.activity.title')}
       </button>
-      <SkillsSourceFilter pendingCount={pendingCount} />
+      <SkillsSourceFilter />
       <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
       {shown.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('skills.none')}</p>
@@ -821,11 +818,6 @@ function SkillsList({ filter }: { filter: string }) {
                     {skill.source === 'builtin' ? (
                       <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px] text-[var(--muted)]">
                         {t('skills.builtin')}
-                      </span>
-                    ) : null}
-                    {skill.pending === true ? (
-                      <span className="shrink-0 rounded border border-[var(--border)] px-1 text-[10px]">
-                        {t('skills.pending')}
                       </span>
                     ) : null}
                     {!skillEnabled(skill) ? (

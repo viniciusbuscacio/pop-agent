@@ -19,7 +19,6 @@ function repo(skills: Skill[]): SkillsRepo {
     all: () => skills,
     get: (slug) => skills.find((s) => s.slug === slug),
     write: () => skills[0]!,
-    approve: (slug) => skills.find((s) => s.slug === slug),
     delete: () => true,
     setEnabled: () => true,
   };
@@ -52,41 +51,6 @@ class FakeVectors implements SkillVectorsRepo {
 }
 
 describe('SkillRouterService', () => {
-  it('indexes a pending skill it will not route', async () => {
-    // The vector table is also what the distiller dedups against, so indexing
-    // and routing answer different questions: everything in the vault gets a
-    // vector, and only the routable compete for a slot. Filtering before the
-    // index is what let nine copies of one skill into the approval queue.
-    const skills = [SKILLS[0]!, { ...SKILLS[1]!, pending: true }];
-    const store = new FakeVectors();
-    const embedder = new StubEmbedder(() => [1, 0]);
-    const service = new SkillRouterService({ skills: repo(skills), embedder, vectors: store });
-
-    const bodies = await service.route('what git branches exist?');
-
-    expect(bodies).not.toContain('body-git');
-    expect(store.rows.has('git')).toBe(true);
-  });
-
-  it('keeps the stored vector of a pending skill instead of pruning it', async () => {
-    // `hydrate` drops the vectors of skills that are gone. A pending skill is
-    // not gone, and losing its vector on the next message would undo the fix
-    // above on the first turn after a restart.
-    const skills = [SKILLS[0]!, { ...SKILLS[1]!, pending: true }];
-    const store = new FakeVectors();
-    store.save('git', 'Git. Git. when the user asks about commits or branches', Float32Array.from([1, 0]));
-    store.save('deleted', 'gone', Float32Array.from([0, 1]));
-    const service = new SkillRouterService({
-      skills: repo(skills),
-      embedder: new StubEmbedder(() => [1, 0]),
-      vectors: store,
-    });
-
-    await service.route('what git branches exist?');
-
-    expect(store.rows.has('git')).toBe(true);
-    expect(store.rows.has('deleted')).toBe(false);
-  });
 
   it('routes lexically without an embedder', async () => {
     const service = new SkillRouterService({ skills: repo(SKILLS) });
@@ -123,15 +87,6 @@ describe('SkillRouterService', () => {
       entry.slug === 'git' ? { ...entry, pinned: true } : entry,
     );
     const service = new SkillRouterService({ skills: repo(pinned) });
-    expect(await service.route('what git branches exist?')).toEqual([]);
-  });
-
-  it('never routes a skill the user has not accepted', async () => {
-    const waiting = SKILLS.map((entry) =>
-      entry.slug === 'git' ? { ...entry, pending: true } : entry,
-    );
-    const service = new SkillRouterService({ skills: repo(waiting) });
-    // The lexical match is perfect; the approval is what is missing.
     expect(await service.route('what git branches exist?')).toEqual([]);
   });
 

@@ -320,230 +320,59 @@ selection is 100% local, no LLM call:
   so Pop Agent adopts it in her own scanner rather than patching/translating
   pi (a patch would break on every pi update). New self-authored skills
   prefer the folder shape; both shapes route identically.
-### Auto-skill: conversations become skills (§8, built 07/08 — fase b)
+### Auto-Skills: reviewed background learning (12/08/2026)
 
-- **Three sources.** `source: builtin | auto | user` in the front matter.
-  `builtin` ships with the app and cannot be deleted; `auto` was distilled
-  from a conversation and is the collector's to archive; `user` is the
-  user's own and is never touched automatically. **Editing an auto skill
-  promotes it to `user`** — it proved its worth, so the collector stops
-  looking at it. Approving one does not: saying yes is not editing.
-  Compatibility: a file written before 07/08 says `builtin: true`, and the
-  parser still reads that as `source: builtin` — no migration pass.
-- **Built-ins can be disabled, never deleted** (1.74): `enabled: false` in
-  the front matter (absent means enabled) takes a skill out of the router
-  AND out of the pinned set that reaches the session prompt — the user's
-  veto over a built-in that routes badly, without destroying the app's copy.
-  The roster is swept on boot (1.74): a built-in file whose slug left the
-  shipped roster is deleted when pristine (seed marker still matches its
-  content) and promoted to `user` when edited — the user's words are never
-  destroyed.
-- **The built-in roster is deliberately small** (1.74): 17 became 7. Generic
-  text skills (writing, summarizing, translating, explaining, brainstorming,
-  math, planning) were cut — modern models do them natively, and every
-  generic candidate is routing noise against the user's own skills. What
-  survives teaches what the model cannot guess: the app's tools, its data
-  layout, its safety rules. The manual is `pop-agent-manual` (pinned; was
-  `know-thyself`), the self-map `pop-agent-codebase` (was
-  `self-architecture`); `web-research` merged browsing + research, and
-  `code-work` merged debugging + review, both rewritten against the real
-  tools. The sidebar filters the list by source (1.74): All Skills /
-  Custom / Auto / Pending / Built-in, with the pending count on the filter
-  itself so approvals never hide. `Custom` is the honest UI name for source
-  `user`: it includes local operational skills written by Pop Agent as well as
-  anything the user uploaded or edited; it does not imply the user personally
-  created every item.
-- **Skills are invisible in the conversation** (1.66, decided by Vinicius
-  after reading a transcript). Pop Agent never mentions a skill unless asked a
-  question about skills. It does not announce that it is writing one,
-  considering one, or declining to write one. Creation belongs entirely to
-  the background distiller.
-  This replaces fase (b), which put the decision in the turn. What that cost,
-  measured on a real conversation about choosing a name for Pop Agent: the
-  `skill-creator` skill was routed into **nine of sixteen turns**, every one
-  of them with `lex=0.00` — no lexical evidence at all, because the user
-  never wrote the word "skill" — on cosines of 0.79–0.84, which is inside the
-  documented e5 noise band (0.70–0.84, p90 0.80). And once in the prompt, its
-  procedure said to *say so* when there was nothing to write, so the user got
-  a paragraph about skills on turn after turn of a conversation about names.
-  Two defects, one visible symptom: a skill that routes on meaning when its
-  real trigger is a sentence, and a procedure that narrates an internal
-  decision.
-- **An explicit request is a separate path, not a score** (decided 08/08).
-  A ranking can lose narrowly; an instruction must not lose at all. So
-  "vira skill" is matched by phrase — `asksForSkill`, a fixed list in
-  Portuguese, English, Spanish and French, folded for case and accents — and
-  the answer is yes or no. The list is phrases, never the bare word "skill",
-  because asking *about* skills is a question to answer and the word alone
-  cannot tell the two apart; every phrase carries the verb that makes it an
-  order. It is matched **on the user's own messages only**, never on tool
-  output, which is where an injection would put the sentence. A phrase
-  preceded by a negation word ("não", "don't", "never"…) does not count
-  (1.72): substring matching hears the order inside "não cria uma skill",
-  and a refusal must not read as a request.
-- **What the request buys** is priority, not a live write. The distiller
-  matches the phrase in the window it was already going to read — so this
-  costs no table, no column and no hook on the chat path — and the chat that
-  contains it **jumps the queue and skips the idle wait**. Oldest-first and
-  wait-for-quiet both exist to keep the distiller out of conversations nobody
-  invited it into, and asking is an invitation. The prompt then says the
-  empty answer is not available for that conversation: a request the
-  distiller talked itself out of would be a request the user never learns was
-  dropped, and no screen could show it. The delay is bounded by the tick, so
-  the honest thing to say in chat is "it will be on the Skills screen
-  shortly" — which the system prompt instructs, because a model asked for a
-  skill and holding no tool for it will otherwise claim it saved one.
-- **The hand is `skills_list`, and only that.** `skill_write` is gone (1.66):
-  the agent cannot write a skill during a turn, so there is no argument to
-  validate and no turn to guard. The taint guard's block on the name stays —
-  it is the only rule there keyed on a tool NAME rather than an argument
-  pattern, and it costs nothing to keep pointing at a door that is now
-  bricked up. Reading is not a consolation prize: "which skills do you have?"
-  is an ordinary question, and answering it changes nothing.
-  No argument could make that safe.
-- **Auto-skill policy is one setting**, `autoSkillMode`, in **Settings →
-  Auto-skills**. It has three values: `disabled` (factory default: the
-  distiller does not run and creates nothing), `medium` (low-impact candidates
-  from a window with no external tool content go live; external, operational
-  and revision candidates wait for approval), and `full` (every candidate
-  that cleared the mandatory barrier goes live). Full means full automation,
-  never no safety: taint refusal, secret scrubbing, candidate validation,
-  duplicate handling, the ban on replacing `user`/`builtin` skills, router
-  relevance and the collector cap apply to both enabled modes. The router
-  filters `pending`; without that filter medium mode would say "waiting" about
-  a skill already in use. Existing two-boolean documents migrate losslessly:
-  distillation off → disabled, on plus manual approval → medium, and on plus
-  automatic approval → full.
-- **Endpoint**: `POST /v1/skills/:slug/approve` — a POST with no body,
-  because the only thing being said is yes.
-- **The background distiller** (fase c, built 1.61) reads what nobody
-  thought to say "vira skill" about. It is a maintenance job on the task
-  scheduler's tick (§21), so nothing in the process owns a second timer,
-  and its interval is a getter over `distillIntervalMinutes` — changing it
-  in Settings takes effect on the next tick, not the next restart.
-  **One conversation per tick** is the whole cost model: a tick with nothing
-  idle and unread makes no provider call at all, so the bill follows use and
-  disappears with it, and when there is something it is exactly one small
-  completion on that chat's Service Model (§15).
-- **The watermark is a mark, not a flag.** `skill_distillation` records the
-  last message id considered per chat, so a conversation that is read and
-  then continued comes back with only its new messages. It advances on every
-  outcome — tainted, empty, or three skills written — **except a provider
-  failure**, which leaves it behind so the next tick retries for free. A mark
-  that advanced on failure would silently skip conversations whenever a
-  provider had a bad minute. The tick's "anything new anywhere?" is **one
-  query** — `ChatRepo.lastMessageIds` against the watermarks (1.72) — not
-  one tail-read per chat, which is what the idle install would otherwise
-  pay every interval forever.
-- **A tainted window is never distilled.** `sanitize` — the same function
-  the live taint guard uses — runs over the window before the model sees it,
-  and anything above `low` skips the whole conversation, not just the part
-  that read badly. Fase (b) is guarded by the taint guard refusing
-  `skill_write` mid-turn; nothing guarded a turn that had already ended, and
-  a skill is the one artefact that outlives its turn. This is that guard.
-- **Two signals decide a duplicate, because one cannot** (1.68, measured).
-  A candidate is the same skill as an existing one when the cosine of their
-  routing texts is at least `0.88` **and** they share at least `0.25` of
-  their content words (`vocabularyOverlap`, Jaccard over the router's own
-  tokenizer). Cosine alone was tried and is not separable: over the real
-  vault — 406 pairs of distinct skills against 36 pairs of known duplicates,
-  the nine re-distillations the broken index let through — the two
-  distributions overlap from 0.895 to 0.936. `brainstorm` and `planning`
-  score 0.936 being different things; two copies of one procedure score
-  0.895 being the same one. The overlap is not academic: at `0.90` a good
-  "Restart Pop Agent service" skill was filed as a revision of `self-change` at
-  0.9017, where accepting it would have replaced an unrelated skill and
-  refusing it left the new one buried in a table.
-  Vocabulary separates them because two skills in one domain share the
-  domain while two copies of one skill share the thing itself. At
-  `0.88 / 0.25` the bars catch 32 of the 36 duplicates and merge **none** of
-  the 406 distinct pairs; `0.90` alone caught 35 and merged 27. `0.92 / 0.20`
-  scores the same 32 but sits 0.003 from its nearest false merge, against
-  0.028 for the chosen point — margin decided it. Precision first: a missed
-  duplicate is one extra card to say no to, a wrong merge hides a good skill
-  behind a diff against something else.
-  `tools/skill-dedup-calibrate.ts` is the measurement, with the nine
-  duplicates carried as a fixture, so the next reading of these bars is a
-  reading and not a guess. **The nearest neighbour is logged whether or not
-  it qualifies** — `near=slug(cos=0.84,voc=0.11)` — because that is the
-  distribution the bars get retuned from.
-- **The distiller may only revise its own work** (1.68). A revision is
-  proposed for an `auto` skill and nothing else: a `builtin` ships with the
-  app, and a `user` skill is the user's — or an auto skill they edited, which
-  is the same statement. A machine proposing to replace either is proposing
-  to undo a decision a person made. The `self-change` collision was that
-  shape, and the defect was not the score that reached the wrong target but
-  that the wrong target was reachable.
-- **A match becomes a revision, never an overwrite.** A candidate whose slug
-  collides, or which clears both bars above, is written to `skill_revisions`
-  instead of the vault, and the approved version keeps serving the router
-  until the user accepts the new one
-  (`POST /v1/skills/:slug/revision/approve`, `DELETE .../revision`).
-  The selected auto-skill mode governs this path too. Medium holds every
-  revision for approval; full may update only an existing `auto` skill after
-  the same mandatory barrier. Without that rule the pending flag would guard
-  the front door while the update path stood open. The similarity is stored because 0.90 was chosen without
-  data and that column is the data that will retune it. The number written
-  is **measured or absent** (1.72): a slug collision used to record a
-  hardcoded 1 — a perfect score no measurement produced, in exactly the
-  column that must stay honest. The distiller now embeds the candidate
-  against that slug and stores the real cosine, or NULL when there is
-  nothing to measure with (migration 031 makes the column nullable).
-  Scrubbing covers **bare tokens** too (1.72): a pasted `sk-…`, `ghp_…`,
-  `AKIA…` carries no "key =" for the labelled rule, so the shapes
-  recognizable by form alone are redacted whole-line as well.
-- **The answer format is markers, not JSON** (1.64, forced by live runs).
-  Each skill is a `=== SKILL ===` block of `key: value` lines, a `--- body ---`
-  fence and then the procedure verbatim; `=== END ===` closes the answer.
-  Nothing is escaped, because asking for a markdown procedure inside a JSON
-  string means every quote, brace and backtick in the payload has to survive an
-  escaping pass, and procedures are made of exactly those characters. A real
-  answer whose body carried a `curl` line with `--data '{"purge_all":true}'`
-  was complete, plausible and invalid, and the skill was thrown away for it.
-  The markers are read loosely -- `--- body` with no closing dashes is a body
-  fence, and so is `== end` -- because an exact-match parser threw away a
-  well-formed skill over the punctuation of a fence. The rule that matters is
-  that the line is fence characters plus the keyword and nothing else, so it
-  cannot collide with prose.
-- **A cut-off answer is not an empty one** (1.63, found by the first live
-  run). The parser scans complete `{...}` objects out of the array instead of
-  `JSON.parse`-ing the whole thing, so a reply that stopped mid-field keeps
-  the skills that finished; `truncated` says whether the rest is worth coming
-  back for. When it is truncated and nothing survived, the watermark **stays**
-  and the next tick asks again — the same treatment a provider failure gets.
-  Reading truncation as "nothing to learn" is how the first live run wrote a
-  genuinely useful procedure and then threw it away in silence. The answer
-  ceiling is 6000 tokens for the same reason: it has to cover a reasoning
-  model's thinking as well as its answer.
-- **One conversation may yield several skills**, one per distinct procedure,
-  capped at five. A distiller forced to produce one skill per conversation
-  produces noise per conversation; the empty answer is a first-class
-  outcome.
-- **The archiving collector** (built 1.61) is a cap, not an expiry: at most
-  50 auto-skills, and the least earned are moved to `skills/_archive/`,
-  never deleted. `use_count` orders them and `last_used_at` breaks ties. The
-  obvious alternative — retire anything idle for ninety days — destroys the
-  skill that justifies keeping procedures at all: the annual one, unused for
-  eleven months and then the most valuable thing in the vault. It touches
-  only `auto` skills that are not pending: a `user` skill is the user's, an
-  edited auto skill became `user` by that act, and a skill waiting for
-  approval has had no chance to be used. `POST /v1/skills/:slug/restore`
-  brings one back.
-- **The Skills screen is the inbox**: badges for source, the two queues, and
-  one discreet status line — when Pop Agent last looked, how much waits on the
-  reader. No push (decided 07/08): the distiller runs every ten minutes, so a
-  notification per skill would be noise, and the cost already has a home in
-  Settings → Usage. **Learning activity is an explicit destination, never the
-  empty Skills pane** (09/08): one row per bounded conversation window says
-  whether it produced pending skills, revisions, nothing, a taint refusal or a
-  failure. This is structured SQLite history, not a reading of journal prose;
-  it stores warning codes and measurements but never copies the transcript,
-  provider answer or hostile source text. The default view shows only produced,
-  invalid and failed work; routine `nothing` and `tainted` outcomes are folded
-  into one summary and expand only on request. Only failures and invalid model
-  output can queue an exact retry. A normal empty decision, a taint refusal or a
-  successful write cannot be retried in place: unchanged input would create
-  noise, bypass a safety decision, or manufacture duplicates.
+- **Exactly three sources:** `builtin` (ships with the app), `user` (Personal,
+  controlled by the owner), and `auto` (published by this pipeline). Editing an
+  Auto-Skill promotes it to `user`. Automatic work may revise only `auto`; a
+  Built-in or Personal match is a `protected_duplicate` and stops locally.
+- **One setting:** `autoSkillsEnabled: boolean`, factory default `true`. The old
+  `disabled | medium | full` values migrate as disabled → false and either enabled
+  mode → true. Disabled stops new learning but does not disable existing skills.
+  There is no pending state, approval endpoint, approval filter or revision inbox.
+- **Invisible background process.** The chat agent cannot write skills or narrate
+  internal decisions. An explicit multilingual request only prioritises that chat and
+  skips the idle wait; it never bypasses a safety gate.
+- **Canonical fail-closed pipeline:**
+
+  `eligibility → taint → creator → parse/schema/English contract → policy gate →
+  secret scrub → normalization → dedup → review envelope + review_hash → reviewer →
+  final validation → recoverable publication + immediate indexing`.
+
+  A tainted window advances its watermark without any LLM call. The creator and reviewer
+  are fresh, isolated service completions with fixed English prompts. Creator output is
+  marker-delimited Markdown (never JSON), includes stable evidence message ids, and may
+  contain up to five candidates. The reviewer receives the sanitized original window and
+  only surviving candidates as untrusted data; it returns exactly one APPROVE/REJECT block
+  per `review_hash`. Missing, duplicate, unknown, truncated or mismatched verdicts publish
+  nothing and do not advance the watermark.
+- **Deterministic policy veto:** normalize NFKC, remove zero-width characters, collapse
+  whitespace and block versioned classic injection/identity-override/future-agent patterns.
+  A match is never rewritten or rescued. False positives are accepted unless real use shows
+  systematic blocking that makes the feature inoperable; no minimum publication rate exists.
+  Secret scrubbing, schema/size limits, source protection and final revalidation are likewise
+  mandatory outside model judgment.
+- **Dedup remains measured:** cosine ≥ 0.88 AND vocabulary overlap ≥ 0.25. The full vault,
+  including archived skills, remains comparison material. A match against `auto` proposes
+  `revision`; a match against `builtin`/`user` ends as `protected_duplicate` without
+  spending the reviewer call. Precision beats aggressive merging.
+- **Review binding:** the SHA-256 `review_hash` covers normalized sanitized content, action
+  (`new`/`revision`), target slug, target-version hash and nearest dedup neighbour. An
+  approval for creation cannot authorize a revision, and a target changed after review fails.
+- **Recoverable publication:** the vault writes a same-volume temporary file, fsyncs a durable
+  backup for a revision, persists a SQLite `prepared` journal row, atomically renames, updates
+  vectors/history/watermark, then commits and cleans up. Prepared slugs stay invisible to the
+  router. Boot reconciliation rolls back prepared work or finishes committed cleanup. The
+  previous revision remains as one-level rollback history.
+- **Watermark:** advances on taint, valid empty output, deterministic/reviewer rejection,
+  protected duplicate and successful publication. Provider, parser, reviewer/hash, write or
+  transaction failure does not advance and is retryable. One conversation per scheduler tick
+  remains the cost ceiling; creator/reviewer service runs are booked with distinct purposes.
+- **Retention and visibility:** at most 1000 active Auto-Skills; least-used overflow is archived,
+  never deleted. Archived entries leave routing but remain recoverable and deduplicable. The
+  Skills screen shows activity outcomes/reason codes/costs, not an approval queue. Existing
+  router selection remains local and injects only its small top-N, so vault size does not equal
+  prompt size.
 
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end
@@ -585,15 +414,13 @@ selection is 100% local, no LLM call:
 - **The index covers the vault; the filter is on the selection** (1.65,
   found in production). `skill_embeddings` answers two questions, not one:
   which skills may take a slot this turn, and what the distiller's dedup
-  compares a candidate against. Routing excludes pinned and pending skills;
-  **indexing excludes nothing.** The router filtered before it indexed, so a
-  pending skill never got a vector, and the distiller — whose whole dedup
-  leg reads this table — compared every candidate against a set its own
-  recent work was missing from. A background task opening a fresh chat every
-  hour turned that into **nine copies of one procedure in the approval
-  queue**, each under a slug the model had just invented, none of them
-  visible to the next. Two failure surfaces, one hole: `hydrate` also pruned
-  as dead any stored vector whose skill was not routable.
+  compares a candidate against. Routing excludes pinned and disabled skills;
+  **indexing excludes nothing.** Historically the router filtered before it
+  indexed, so a then-pending skill never got a vector, and the distiller — whose
+  whole dedup leg reads this table — compared every candidate against a set its
+  own recent work was missing from. A background task opening a fresh chat every
+  hour turned that into nine copies of one procedure. The reviewed pipeline has
+  no pending state, but the full-vault indexing invariant remains.
 - **The distiller stores the vector of the skill it writes** (1.65), rather
   than leaving it for the next user message: `candidateRoutingText` and the
   router's `routingText` are the same string, so the vector the dedup just
@@ -608,8 +435,8 @@ selection is 100% local, no LLM call:
   router records every skill it injects. A counter and a stamp, not a
   boolean — a skill used twice a year must be distinguishable from one used
   never, which is what a fixed "90 days idle" rule cannot do. This is the
-  evidence the archiving collector will read; the collector itself is not
-  built yet.
+  evidence the archiving collector reads when the 1000-Auto-Skill safety cap
+  is exceeded.
 - Verify while coding: whether the SDK can scope which skills pi exposes
   per session/turn; if not, Pop Agent injects the selected skills as its own
   context and disables pi's native listing.

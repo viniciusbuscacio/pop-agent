@@ -25,8 +25,7 @@ const settingsSchema = z
     voiceModel: z.string().min(1).max(60),
     voiceCleanup: z.boolean(),
     voiceCleanupModel: z.string().max(200),
-    autoSkillMode: z.enum(['disabled', 'medium', 'full']),
-    distillIntervalMinutes: z.number().int().min(1).max(1440),
+    autoSkillsEnabled: z.boolean(),
     autoActivatePreparedUpdates: z.boolean(),
     autoRestartIdleMinutes: z.number().int().min(1).max(1440),
   })
@@ -67,8 +66,7 @@ function toDto(settings: AppSettings): SettingsDTO {
     voiceModel: settings.voiceModel,
     voiceCleanup: settings.voiceCleanup,
     voiceCleanupModel: settings.voiceCleanupModel,
-    autoSkillMode: settings.autoSkillMode,
-    distillIntervalMinutes: settings.distillIntervalMinutes,
+    autoSkillsEnabled: settings.autoSkillsEnabled,
     autoActivatePreparedUpdates: settings.autoActivatePreparedUpdates,
     autoRestartIdleMinutes: settings.autoRestartIdleMinutes,
   };
