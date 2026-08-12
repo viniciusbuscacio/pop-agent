@@ -490,6 +490,27 @@ describe('SkillDistiller', () => {
     expect(world.revisions.saved[0]).toMatchObject({ slug: 'deploy-blog', body: 'The old procedure.' });
   });
 
+  it('terminates an identical Auto-Skill revision before spending the reviewer call', async () => {
+    world = harness({
+      skills: [{
+        slug: 'deploy-blog',
+        name: 'Deploy the blog',
+        description: 'How to publish a post',
+        whenToUse: 'when the user wants to publish',
+        body: 'Push to main.',
+        source: 'auto',
+      }],
+    });
+    await world.distiller.run();
+
+    expect(world.prompts).toHaveLength(1);
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.revisions.saved).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.results[0]).toMatchObject({
+      slug: 'deploy-blog', disposition: 'rejected', targetSlug: 'deploy-blog',
+    });
+  });
+
   it('records no synthetic similarity on a slug collision', async () => {
     // The revision table is the dataset the dedup bars get retuned from, so
     // the only numbers allowed in it are measured ones. A collision with no
@@ -654,7 +675,7 @@ describe('SkillDistiller', () => {
     });
   });
 
-  it('recognises on the second tick what it wrote on the first', async () => {
+  it('recognises and drops on the second tick what it wrote on the first', async () => {
     // The historical production failure, in miniature: a task that opened a fresh
     // chat every hour fed the distiller the same procedure, while newly learned
     // skills were missing from the dedup vector table. Nine copies followed.
@@ -678,9 +699,11 @@ describe('SkillDistiller', () => {
     await world.distiller.run();
 
     expect(call).toBe(2);
-    expect(world.skills.written).toHaveLength(2);
-    expect(world.skills.written[1]).toMatchObject({ slug: 'deploy-blog', source: 'auto' });
-    expect(world.revisions.saved[0]).toMatchObject({ slug: 'deploy-blog', body: 'Push to main.' });
+    expect(world.skills.written).toHaveLength(1);
+    expect(world.revisions.saved).toHaveLength(0);
+    expect(world.marks.attempts()[1]?.results[0]).toMatchObject({
+      slug: 'deploy-blog', disposition: 'rejected', targetSlug: 'deploy-blog',
+    });
   });
 
   it('reads the chat where the user asked first, and without waiting for it to go quiet', async () => {

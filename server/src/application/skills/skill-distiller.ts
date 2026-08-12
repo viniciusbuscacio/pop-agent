@@ -438,13 +438,20 @@ export class SkillDistiller implements MaintenanceJob {
 
     const action = target === undefined ? 'new' as const : 'revision' as const;
     const finalCandidate = target === undefined ? candidate : { ...candidate, slug: target.slug };
+    if (target !== undefined && skillVersionHash(finalCandidate) === skillVersionHash(target)) {
+      return { result: { slug: finalCandidate.slug, disposition: 'rejected', targetSlug: target.slug } };
+    }
     const neighbour = measured.nearest === undefined
       ? undefined
       : { slug: measured.nearest.slug, similarity: measured.nearest.score, overlap: measured.nearest.overlap };
     const envelope: ReviewEnvelope = {
       candidate: finalCandidate,
       action,
-      ...(target === undefined ? {} : { targetSlug: target.slug, targetVersionHash: skillVersionHash(target) }),
+      ...(target === undefined ? {} : {
+        targetSlug: target.slug,
+        targetVersionHash: skillVersionHash(target),
+        targetVersion: target,
+      }),
       ...(neighbour === undefined ? {} : { neighbour }),
     };
     return { candidate: finalCandidate, envelope, hash: reviewHash(envelope), measured };
