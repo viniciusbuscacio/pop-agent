@@ -455,9 +455,13 @@ export function ChatPage() {
         chatId={chatId}
         busy={live !== undefined}
         {...(editRequest === undefined ? {} : { editRequest })}
-        onSend={(text, attachments, filePaths, delivery) =>
-          send(chatId, text, attachments, filePaths, delivery)
-        }
+        onSend={(text, attachments, filePaths, delivery) => {
+          // Sending is an explicit return to the live conversation. Re-arm
+          // following before the request so the user's bubble and the first
+          // streamed chunk both stay visible, even if the reader was above.
+          jumpToLatest();
+          return send(chatId, text, attachments, filePaths, delivery);
+        }}
         onUpdateQueued={(messageId, text, attachments, filePaths) =>
           updateQueued(chatId, messageId, text, attachments, filePaths)
         }

@@ -26,7 +26,11 @@ vi.mock('../services/events', () => ({
 }));
 
 vi.mock('../ui/composer', () => ({
-  Composer: () => <div data-testid="composer" />,
+  Composer: ({ onSend }: { onSend: (text: string, attachments: []) => Promise<void> }) => (
+    <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
+      Send
+    </button>
+  ),
 }));
 
 vi.mock('../ui/chat-message', () => ({
@@ -137,6 +141,43 @@ describe('chat transcript', () => {
     expect((await screen.findByTestId('run-error')).textContent).toBe(
       'That answer could not be finished.',
     );
+  });
+
+  it('returns to the bottom when the reader sends a new message', async () => {
+    const send = vi.fn(async () => undefined);
+    useChatStore.setState({ send });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    const scroller = screen.getByTestId('chat-scroller');
+    Object.defineProperties(scroller, {
+      scrollHeight: { value: 1_000, configurable: true },
+      clientHeight: { value: 500, configurable: true },
+      scrollTop: { value: 500, writable: true, configurable: true },
+    });
+
+    fireEvent.touchStart(scroller, { touches: [{ clientY: 100 }] });
+    fireEvent.touchMove(scroller, { touches: [{ clientY: 110 }] });
+    useChatStore.setState({
+      live: {
+        [chat.id]: {
+          runId: 'run-1',
+          status: 'running',
+          seq: 1,
+          content: 'Streaming chunk',
+          thinking: '',
+          tools: [],
+        },
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId('jump-to-latest')).toBeTruthy());
+
+    scroller.scrollTop = 200;
+    fireEvent.click(screen.getByTestId('composer'));
+
+    expect(scroller.scrollTop).toBe(1_000);
+    await waitFor(() => expect(screen.queryByTestId('jump-to-latest')).toBeNull());
+    expect(send).toHaveBeenCalledWith(chat.id, 'New message', [], undefined, undefined);
   });
 
   it('stops following as soon as an iOS reading gesture starts', async () => {
