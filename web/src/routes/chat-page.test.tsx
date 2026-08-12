@@ -177,6 +177,21 @@ describe('chat transcript', () => {
 
     expect(scroller.scrollTop).toBe(1_000);
     await waitFor(() => expect(screen.queryByTestId('jump-to-latest')).toBeNull());
+
+    // Adding the run-status line outside the transcript reduces the scroller's
+    // height. Safari may report that layout adjustment as a smaller scrollTop;
+    // it is not reader intent and must not suspend following.
+    scroller.scrollTop = 960;
+    fireEvent.scroll(scroller);
+    expect(screen.queryByTestId('jump-to-latest')).toBeNull();
+
+    useChatStore.setState((state) => ({
+      live: {
+        ...state.live,
+        [chat.id]: { ...state.live[chat.id]!, content: 'A longer streaming chunk' },
+      },
+    }));
+    await waitFor(() => expect(scroller.scrollTop).toBe(1_000));
     expect(send).toHaveBeenCalledWith(chat.id, 'New message', [], undefined, undefined);
   });
 

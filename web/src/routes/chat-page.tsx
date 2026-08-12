@@ -199,9 +199,9 @@ export function ChatPage() {
     };
   }, [chatId]);
 
-  // Scroll direction is also a fallback for keyboard, scrollbar and any input
-  // method without wheel/touch intent events. Following resumes only after the
-  // reader moves toward the latest content and reaches the bottom.
+  // scroll events alone do not reveal intent: inserting the run-status line or
+  // resizing Safari can reduce scrollTop too. Wheel and passive touch listeners
+  // suspend following; scrolling toward and reaching the end resumes it.
   function onScroll(): void {
     const element = scroller.current;
     if (element === null) return;
@@ -209,12 +209,6 @@ export function ChatPage() {
     const current = element.scrollTop;
     const distance = distanceFromBottom();
     lastScrollTop.current = current;
-
-    if (current < previous) {
-      atBottom.current = false;
-      setShowJump(true);
-      return;
-    }
 
     if (!atBottom.current && shouldResumeFollowing(previous, current, distance, BOTTOM_TOLERANCE_PX)) {
       atBottom.current = true;
