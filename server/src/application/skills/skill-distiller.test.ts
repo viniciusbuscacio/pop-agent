@@ -19,12 +19,14 @@ import { SkillDistiller } from './skill-distiller.js';
 const NOW = Date.parse('2026-08-07T20:00:00.000Z');
 const LONG_AGO = '2026-08-07T18:00:00.000Z';
 
-function message(id: string, content: string, tools: Message['tools'] = []): Message {
+function message(id: string, content: string, tools: Message['tools'] = [], padInitial = true): Message {
   return {
     id,
     chatId: 'c1',
     role: 'user',
-    content,
+    // Most tests exercise gates after initial eligibility. Trailing raw padding keeps those
+    // fixtures realistic without changing the trimmed transcript shown to either model.
+    content: padInitial ? content.padEnd(500, ' ') : content,
     thinking: '',
     tools,
     attachments: [],
@@ -312,6 +314,31 @@ describe('SkillDistiller', () => {
     await world.distiller.run();
 
     expect(world.skills.written[0]).toMatchObject({ slug: 'banana-farofa', source: 'auto' });
+  });
+
+  it('skips an initial chat below 500 raw characters before either LLM call', async () => {
+    world = harness({ messages: { c1: [message('tiny', 'hello', [], false)] } });
+    await world.distiller.run();
+
+    expect(world.prompts).toHaveLength(0);
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.get('c1')?.messageId).toBe('tiny');
+    expect(world.marks.attempts()[0]).toMatchObject({
+      outcome: 'nothing', errorCode: 'below_minimum_content',
+    });
+  });
+
+  it('keeps a short increment eligible after the chat has already been considered', async () => {
+    world = harness({ messages: { c1: [
+      message('old', 'old boundary'),
+      message('m1', 'use pnpm', [], false),
+    ] } });
+    world.marks.set('c1', 'old', LONG_AGO);
+    await world.distiller.run();
+
+    expect(world.prompts).toHaveLength(2);
+    expect(world.skills.written).toHaveLength(1);
+    expect(world.marks.get('c1')?.messageId).toBe('m1');
   });
 
   it('stops an unresolved failed implementation before spending either LLM call', async () => {

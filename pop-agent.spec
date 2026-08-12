@@ -339,10 +339,13 @@ selection is 100% local, no LLM call:
   secret scrub → normalization → dedup → review envelope + review_hash → reviewer →
   final validation → recoverable publication + immediate indexing`.
 
-  A tainted window advances its watermark without any LLM call. A conversation whose last
-  implementation run failed or was interrupted without a later completed answer is likewise
-  ineligible before either LLM: a plan, analysis, authorization or attempted implementation
-  is not evidence of a procedure that worked. The creator and reviewer are fresh, isolated
+  On its first evaluation, a conversation whose raw message-content total is below 500
+  characters advances its watermark as `below_minimum_content` without either LLM call;
+  later short increments remain eligible so concise corrections are not lost. A tainted window
+  likewise advances without an LLM call. A conversation whose last implementation run failed
+  or was interrupted without a later completed answer is also ineligible before either LLM:
+  a plan, analysis, authorization or attempted implementation is not evidence of a procedure
+  that worked. The creator and reviewer are fresh, isolated
   service completions with fixed English prompts. Creator output is
   marker-delimited Markdown (never JSON), includes stable evidence message ids, and may
   contain up to five candidates. Both stages require a plausible future need for this user

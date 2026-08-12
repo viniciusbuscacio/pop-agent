@@ -80,6 +80,8 @@ const DEFAULT_IDLE_MS = 5 * 60_000;
 
 /** The window handed to the model; the tail of the conversation after the mark. */
 const WINDOW = 60;
+/** Obvious first-turn noise is not worth either service-model call. */
+export const MIN_INITIAL_CONTENT_CHARS = 500;
 
 /**
  * Cosine above which a candidate is judged to be the same skill as one that
@@ -182,6 +184,22 @@ export class SkillDistiller implements MaintenanceJob {
     const finish = (
       value: Parameters<DistillationRepo['finishAttempt']>[1],
     ): void => this.deps.marks.finishAttempt(attemptId, value);
+
+    // Apply the cheap raw-size cut only once. A short correction added to an established
+    // chat can be valuable, while an entire first window below this floor is obvious noise.
+    const rawCharacters = window.reduce((total, message) => total + message.content.length, 0);
+    if (target.fromMessageId === undefined && rawCharacters < MIN_INITIAL_CONTENT_CHARS) {
+      this.advanceTarget(target, lastId);
+      finish({
+        state: 'completed',
+        outcome: 'nothing',
+        errorCode: 'below_minimum_content',
+        errorMessage: `The initial conversation contained fewer than ${String(MIN_INITIAL_CONTENT_CHARS)} characters.`,
+        finishedAt: now(),
+      });
+      journal(`chat=${chat.id} skipped (${String(rawCharacters)} raw characters)`);
+      return;
+    }
 
     // Conservative by design: one suspicious tool result anywhere in the window
     // and the whole conversation is skipped, permanently. Store only warning
