@@ -167,7 +167,10 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createAuthRoutes(deps)),
       sessionGuarded(createWebAuthnRoutes(deps)),
       sessionGuarded(createSettingsRoutes(deps)),
-      sessionGuarded(createDesktopDownloadRoutes(deps)),
+      sessionGuarded(createDesktopDownloadRoutes({
+        desktopPack: deps.desktopPack,
+        desktopReleaseVersion: deps.versions.popAgentVersion,
+      })),
       sessionGuarded(createServerRoutes(deps)),
       sessionGuarded(createProviderRoutes(deps)),
       sessionGuarded(createMemoryRoutes(deps)),

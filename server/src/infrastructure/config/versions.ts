@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
  * the same depth below the server workspace.
  */
 const SERVER_PACKAGE = new URL('../../../package.json', import.meta.url);
-const ROOT_PACKAGE = new URL('../../../../package.json', import.meta.url);
+const GLOBAL_VERSION = new URL('../../../../VERSION', import.meta.url);
 const PI_PACKAGE = '@earendil-works/pi-coding-agent';
 
 export interface Versions {
@@ -23,7 +23,7 @@ export interface Versions {
 
 export function readVersions(): Versions {
   return {
-    popAgentVersion: packageJson(ROOT_PACKAGE).version ?? 'unknown',
+    popAgentVersion: globalVersion(),
     nodeVersion: process.version,
     piVersion: pinnedVersion(packageJson(SERVER_PACKAGE).dependencies?.[PI_PACKAGE]),
   };
@@ -32,6 +32,14 @@ export function readVersions(): Versions {
 interface PackageJson {
   version?: string;
   dependencies?: Record<string, string>;
+}
+
+function globalVersion(): string {
+  try {
+    return readFileSync(GLOBAL_VERSION, 'utf8').trim() || 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 function packageJson(url: URL): PackageJson {

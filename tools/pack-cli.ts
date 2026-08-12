@@ -51,9 +51,8 @@ interface PackageJson {
 const read = (path: string): PackageJson => JSON.parse(readFileSync(path, 'utf8')) as PackageJson;
 
 async function main(): Promise<void> {
-  const rootPkg = read(join(root, 'package.json'));
   const cliPkg = read(join(cli, 'package.json'));
-  const version = rootPkg.version;
+  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
 
   // The published version is the SERVER's, because the whole point is that a
   // client cannot be paired with a server it did not come from.

@@ -1517,7 +1517,16 @@ out, and prints a new recovery key once.
 `access-list` is named in §18 and **not built**: there is no IP access
 list to manage yet. `popman access-list` says so rather than pretending.
 
-**Client/server versions.** The server holds its own version and the
+**Client/server versions.** Root `VERSION` is the single manually edited global
+release version. A TypeScript consistency check runs before typecheck, build and
+the full gate; it rejects drift in package manifests, lockfile workspace entries,
+the CLI handshake, packed CLI metadata and any published Pop Desktop manifest.
+The macOS native repository must receive this same file through
+`POP_AGENT_VERSION_FILE`; its build and packaging stop when the local version
+differs. The desktop download route also refuses a manifest whose version differs
+from the running server's global version.
+
+The server holds its own version and the
 oldest client it accepts; the local-tools attach compares them.
 Compatible is silent, merely behind prints one line with the install
 command, and below the minimum is refused with that command. The minimum

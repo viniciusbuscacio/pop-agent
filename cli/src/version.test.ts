@@ -8,12 +8,13 @@ interface PackageJson {
 
 const readPackage = (relativePath: string): PackageJson =>
   JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8')) as PackageJson;
+const globalVersion = readFileSync(new URL('../../VERSION', import.meta.url), 'utf8').trim();
 
 describe('release version', () => {
   it('keeps every package and the bundled CLI handshake on one version', () => {
-    const root = readPackage('../../package.json').version;
     const versions = [
-      root,
+      globalVersion,
+      readPackage('../../package.json').version,
       readPackage('../package.json').version,
       readPackage('../../shared/package.json').version,
       readPackage('../../server/package.json').version,
@@ -22,6 +23,6 @@ describe('release version', () => {
       VERSION,
     ];
 
-    expect(new Set(versions)).toEqual(new Set([root]));
+    expect(new Set(versions)).toEqual(new Set([globalVersion]));
   });
 });

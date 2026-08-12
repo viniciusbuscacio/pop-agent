@@ -13,18 +13,22 @@
     "cli"
   ],
   "scripts": {
+    "predev": "npm run version:check",
     "dev": "npm run build -w shared && tsx watch server/src/main.ts",
     "lint": "eslint .",
+    "version:check": "tsx tools/check-version-consistency.ts",
+    "pretypecheck": "npm run version:check",
     "typecheck": "tsc -b && npm run typecheck -w @pop-agent/web && tsc --noEmit -p tools",
     "test": "vitest run",
+    "prebuild": "npm run version:check",
     "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @pop-agent/web",
-    "gate": "tsx tools/gate-receipt.ts begin && npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
+    "gate": "tsx tools/gate-receipt.ts begin && npm run version:check && npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",
     "selfmap:check": "tsx tools/generate-self-map.ts --check",
     "safety:scan": "tsx tools/safety-scan.ts .",
     "smoke": "tsx tools/smoke.ts",
-    "pack:cli": "tsx tools/pack-cli.ts"
+    "pack:cli": "npm run version:check && tsx tools/pack-cli.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
