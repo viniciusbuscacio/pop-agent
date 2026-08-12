@@ -367,6 +367,7 @@ export function createTestApp(
     chats: chatRepo,
     clock,
     runs,
+    sink: hub,
     purger: new FsChatPurger({ workspace, forgetSession: () => undefined }),
   });
 

@@ -55,6 +55,20 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
+  it('broadcasts durable creation and deletion to connected clients', async () => {
+    const events: StreamEvent[] = [];
+    const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
+
+    const created = await newChat();
+    expect((await api(`/v1/chats/${created.id}`, { method: 'DELETE' })).status).toBe(204);
+    unsubscribe();
+
+    expect(events).toEqual([
+      { kind: 'chat-created', chatId: created.id, chat: created },
+      { kind: 'chat-deleted', chatId: created.id },
+    ]);
+  });
+
   it('archives every open chat except the active one and pinned chats', async () => {
     const keep = await newChat();
     const pinned = await newChat();

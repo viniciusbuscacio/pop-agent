@@ -95,6 +95,15 @@ function emptyRun(runId: string, status: LiveRun['status']): LiveRun {
   return { runId, status, seq: 0, content: '', thinking: '', tools: [] };
 }
 
+/** Mirrors the server's pinned-first, newest-first sidebar ordering. */
+function upsertChat(chats: ChatDTO[], chat: ChatDTO): ChatDTO[] {
+  return [...chats.filter((entry) => entry.id !== chat.id), chat].sort((left, right) => {
+    if (left.pinned !== right.pinned) return left.pinned ? -1 : 1;
+    const updated = right.updatedAt.localeCompare(left.updatedAt);
+    return updated !== 0 ? updated : right.id.localeCompare(left.id);
+  });
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   chats: [],
   archived: [],
@@ -116,7 +125,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async createChat() {
     const chat = await chatsService.create();
-    set((state) => ({ chats: [chat, ...state.chats] }));
+    // SSE can beat the POST response, so creation is an upsert rather than an
+    // append. The initiating client and every other client use the same path.
+    set((state) => ({ chats: upsertChat(state.chats, chat) }));
     return chat;
   },
 
@@ -368,9 +379,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (error) {
       // 404 means the goal is already true: the chat is gone on the server
       // and only this device still shows it. Deleting on the web never
-      // notifies the phone (there is no chat-deleted event on the stream),
-      // so a stale list swipes DELETE at a ghost, gets 404, and -- before
-      // this -- swallowed it, leaving a chat that could never be deleted
+      // may not have notified a sleeping phone, so a stale list can swipe
+      // DELETE at a ghost and get 404; without this fallback it would remain
+      // in the list as a conversation that could never be deleted
       // (Vinicius, 05/08). Everything else is a real failure and rethrows.
       if (!(error instanceof ApiError) || error.code !== 'not_found') throw error;
     }
@@ -382,10 +393,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: without(state.messages, chatId),
       live: without(state.live, chatId),
       pending: without(state.pending, chatId),
+      failures: without(state.failures, chatId),
+      confirms: without(state.confirms, chatId),
     }));
   },
 
   apply(event) {
+    if (event.kind === 'chat-created') {
+      set((state) => ({
+        chats: upsertChat(state.chats, event.chat),
+        archived: state.archived.filter((chat) => chat.id !== event.chatId),
+      }));
+      return;
+    }
+    if (event.kind === 'chat-deleted') {
+      deleteQueuedMessage(event.chatId);
+      void chatCache.remove(event.chatId);
+      set((state) => ({
+        chats: state.chats.filter((chat) => chat.id !== event.chatId),
+        archived: state.archived.filter((chat) => chat.id !== event.chatId),
+        messages: without(state.messages, event.chatId),
+        live: without(state.live, event.chatId),
+        pending: without(state.pending, event.chatId),
+        failures: without(state.failures, event.chatId),
+        confirms: without(state.confirms, event.chatId),
+      }));
+      return;
+    }
     if (event.kind === 'title') {
       set((state) => ({
         chats: state.chats.map((chat) =>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, useMatch } from 'react-router-dom';
+import { Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
@@ -16,6 +16,7 @@ import { ChatList } from './chat-list';
  */
 export function ChatLayout() {
   const apply = useChatStore((state) => state.apply);
+  const navigate = useNavigate();
   const openChat = useMatch('/chat/:chatId');
   // /files/* covers the root and any folder path, however deep.
   const filesOpen = useMatch('/files/*');
@@ -43,6 +44,17 @@ export function ChatLayout() {
       eventStream.stop();
     };
   }, [apply]);
+
+  useEffect(() => {
+    // The store owns lifecycle data; the shell owns routing. If another client
+    // deletes the selected conversation, replace that now-invalid history row
+    // with the list instead of leaving an empty conversation pane behind.
+    return eventStream.subscribe((event) => {
+      if (event.kind === 'chat-deleted' && event.chatId === openChat?.params.chatId) {
+        navigate('/', { replace: true });
+      }
+    });
+  }, [navigate, openChat?.params.chatId]);
 
   return (
     <div className="flex h-dvh overflow-hidden">

@@ -30,6 +30,7 @@ class SilentSink implements EventSink {
   readonly events: RunEvent[] = [];
   emit(event: RunEvent): void {
     this.events.push(event);
+    if (event.kind === 'chat-deleted') log.push('notify');
   }
 }
 
@@ -91,6 +92,7 @@ let bridge: HangingBridge;
 let runs: RunService;
 let chats: ChatService;
 let purged: string[];
+let sink: SilentSink;
 
 beforeEach(() => {
   db = new Database(':memory:');
@@ -109,8 +111,9 @@ beforeEach(() => {
   };
 
   bridge = new HangingBridge();
+  sink = new SilentSink();
   runs = new RunService({ chats: repo, bridge, sink: new SilentSink(), clock: new FixedClock() });
-  chats = new ChatService({ chats: repo, clock: new FixedClock(), runs, purger });
+  chats = new ChatService({ chats: repo, clock: new FixedClock(), runs, purger, sink });
 });
 
 describe('deleting a chat with a run in flight', () => {
@@ -122,7 +125,7 @@ describe('deleting a chat with a run in flight', () => {
 
     expect(chats.delete(chat.id)).toBe(true);
 
-    expect(log).toEqual(['abort', 'delete', 'purge']);
+    expect(log).toEqual(['abort', 'delete', 'notify', 'purge']);
     expect(purged).toEqual([chat.id]);
 
     // The aborted run unwinds afterwards and must not write into rows that no
@@ -161,7 +164,25 @@ describe('deleting a chat with a run in flight', () => {
     const chat = chats.create();
 
     expect(chats.delete(chat.id)).toBe(true);
-    expect(log).toEqual(['delete', 'purge']);
+    expect(log).toEqual(['delete', 'notify', 'purge']);
     expect(chats.delete(chat.id)).toBe(false);
+  });
+
+  it('broadcasts the complete durable chat when it is created', () => {
+    const chat = chats.create();
+
+    expect(sink.events.at(-1)).toEqual({ kind: 'chat-created', chatId: chat.id, chat });
+  });
+
+  it('broadcasts a later manual or task title for the newly created chat', () => {
+    const chat = chats.create();
+
+    chats.rename(chat.id, 'Morning briefing');
+
+    expect(sink.events.at(-1)).toEqual({
+      kind: 'title',
+      chatId: chat.id,
+      title: 'Morning briefing',
+    });
   });
 });

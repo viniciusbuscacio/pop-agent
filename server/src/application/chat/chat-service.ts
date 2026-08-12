@@ -4,6 +4,7 @@ import { newChatId } from '../../domain/ids.js';
 import type { ChatPurger } from '../ports/chat-purger.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
+import type { EventSink } from '../ports/event-sink.js';
 
 /** Everything about conversations that does not involve running the agent. */
 
@@ -22,6 +23,8 @@ export interface ChatDeps {
    * should depend on by name.
    */
   runs?: { discardChat(chatId: string): boolean };
+  /** Broadcasts durable chat lifecycle changes to every connected client. */
+  sink?: EventSink;
 }
 
 export class ChatService {
@@ -32,7 +35,7 @@ export class ChatService {
     // The deterministic starter (pop-agent.spec §14): "Chat N", lowest free N
     // among the living chats, so a brand-new sidebar is already readable.
     const starter = nextChatTitle(this.deps.chats.list({ archived: false }).map((c) => c.title));
-    return this.deps.chats.create({
+    const chat = this.deps.chats.create({
       id: newChatId(),
       title: starter,
       model: '',
@@ -45,6 +48,8 @@ export class ChatService {
       createdAt: now,
       updatedAt: now,
     });
+    this.deps.sink?.emit({ kind: 'chat-created', chatId: chat.id, chat });
+    return chat;
   }
 
   list(options: { archived: boolean }): ChatSummary[] {
@@ -71,6 +76,7 @@ export class ChatService {
       source: 'manual',
       createdAt: new Date().toISOString(),
     });
+    this.deps.sink?.emit({ kind: 'title', chatId: id, title: chosen });
     return this.deps.chats.get(id);
   }
 
@@ -118,7 +124,7 @@ export class ChatService {
 
   /**
    * Deleting a conversation kills its work first (pop-agent.spec §6). The order
-   * matters and is the whole point: abort, then delete, then purge. A run
+   * matters and is the whole point: abort, then delete, notify, then purge. A run
    * still streaming into rows that are about to disappear would keep a pi
    * process group alive, keep spending the user's credit, and end by failing
    * a foreign key -- so the run is stopped and its queued siblings dropped
@@ -131,6 +137,7 @@ export class ChatService {
     // Read the chat before the rows go, so the purger still knows where pi
     // kept the session (pop-agent.spec §6): SQLite by cascade, the rest by hand.
     this.deps.chats.delete(id);
+    this.deps.sink?.emit({ kind: 'chat-deleted', chatId: id });
     this.deps.purger?.purge(chat);
     return true;
   }

@@ -471,6 +471,60 @@ describe('run status', () => {
   });
 });
 
+describe('chat lifecycle events', () => {
+  const created = {
+    id: 'chat-created-elsewhere',
+    title: 'Scheduled report',
+    model: '',
+    provider: '',
+    archived: false,
+    pinned: false,
+    createdAt: '2026-08-10T12:00:00.000Z',
+    updatedAt: '2026-08-10T12:00:00.000Z',
+    preview: '',
+  };
+
+  it('upserts a remotely created chat without duplicating the SSE echo', () => {
+    apply({ kind: 'chat-created', chatId: created.id, chat: created });
+    apply({ kind: 'chat-created', chatId: created.id, chat: created });
+
+    expect(useChatStore.getState().chats).toEqual([created]);
+  });
+
+  it('keeps pinned chats ahead of a newly created chat', () => {
+    const pinned = { ...created, id: 'chat-pinned', title: 'Pinned', pinned: true };
+    useChatStore.setState({ chats: [pinned] });
+
+    apply({ kind: 'chat-created', chatId: created.id, chat: created });
+
+    expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([pinned.id, created.id]);
+  });
+
+  it('removes every local remnant of a deleted chat idempotently', () => {
+    useChatStore.setState({
+      chats: [created],
+      archived: [{ ...created, archived: true }],
+      messages: { [created.id]: [] },
+      live: { [created.id]: { runId: RUN, status: 'running', seq: 0, content: '', thinking: '', tools: [] } },
+      pending: { [created.id]: [queuedMessage('later')] },
+      failures: { [created.id]: 'failed' },
+      confirms: { [created.id]: { runId: RUN, action: 'bash', detail: 'rm file' } },
+    });
+
+    apply({ kind: 'chat-deleted', chatId: created.id });
+    apply({ kind: 'chat-deleted', chatId: created.id });
+
+    const state = useChatStore.getState();
+    expect(state.chats).toEqual([]);
+    expect(state.archived).toEqual([]);
+    expect(state.messages[created.id]).toBeUndefined();
+    expect(state.live[created.id]).toBeUndefined();
+    expect(state.pending[created.id]).toBeUndefined();
+    expect(state.failures[created.id]).toBeUndefined();
+    expect(state.confirms[created.id]).toBeUndefined();
+  });
+});
+
 describe('titles', () => {
   it('renames the chat in the list when the server names it', () => {
     useChatStore.setState({

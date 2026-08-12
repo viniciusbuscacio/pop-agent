@@ -1,4 +1,4 @@
-import type { Message, ToolStatus } from '../../domain/chat/chat.js';
+import type { Chat, Message, ToolStatus } from '../../domain/chat/chat.js';
 import type { QueuedMessage } from './queued-message-repo.js';
 
 /**
@@ -7,6 +7,10 @@ import type { QueuedMessage } from './queued-message-repo.js';
  * wire DTOs, so the application never learns that HTTP exists.
  */
 export type RunEvent =
+  /** A conversation was durably created, whichever client or task opened it. */
+  | { kind: 'chat-created'; chatId: string; chat: Chat }
+  /** A conversation was durably deleted and must disappear from every client. */
+  | { kind: 'chat-deleted'; chatId: string }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

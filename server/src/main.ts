@@ -418,6 +418,7 @@ const chats = new ChatService({
   clock: systemClock,
   purger,
   runs,
+  sink: hub,
 });
 const queuedMessages = new QueuedMessageService({
   repo: context.queuedMessages,

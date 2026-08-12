@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useTrashUndo } from '../lib/trash-undo';
 import { ApiError } from '../services/api';
+import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
 import { FolderIcon } from './files-page';
 import { ShellFooter } from './shell-header';
@@ -92,23 +93,14 @@ export function ChatList() {
     void loadArchived();
   }, [loadChats, loadArchived]);
 
-  // A resumed PWA shows the list it froze with, and nothing on the stream
-  // says "a chat was deleted elsewhere" -- so a phone could carry ghosts
-  // until a full reload (Vinicius, 05/08). Ask again whenever the app comes
-  // back to the foreground. pageshow rides along because Safari restoring a
-  // frozen page does not always fire visibilitychange (see services/health).
+  // Lifecycle events update connected clients immediately. A sleeping PWA or
+  // disconnected desktop can still miss them, so reconcile with the canonical
+  // lists whenever the shared stream resumes or reconnects.
   useEffect(() => {
-    const refresh = (): void => {
-      if (document.visibilityState !== 'visible') return;
+    return eventStream.onResume(() => {
       void loadChats();
       void loadArchived();
-    };
-    document.addEventListener('visibilitychange', refresh);
-    window.addEventListener('pageshow', refresh);
-    return () => {
-      document.removeEventListener('visibilitychange', refresh);
-      window.removeEventListener('pageshow', refresh);
-    };
+    });
   }, [loadChats, loadArchived]);
 
   // Both lists, because the archived one is a click away and a stale count in

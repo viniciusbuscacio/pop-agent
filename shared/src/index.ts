@@ -968,6 +968,8 @@ export interface EventTicketResponse {
  * live snapshot can drop what the snapshot already contains.
  */
 export type StreamEvent =
+  | { kind: 'chat-created'; chatId: string; chat: ChatDTO }
+  | { kind: 'chat-deleted'; chatId: string }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {
