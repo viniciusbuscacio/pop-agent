@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.83 — 2026-08-12.
+Version 1.84 — 2026-08-12.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -942,7 +942,9 @@ events from stale runs.
   floating control must not resize the scroller or interfere with native pan.
   Streaming must not pull the viewport back to the bottom. Following resumes
   only when the reader moves back to the latest content or taps "jump to
-  latest". **Run activity is a separate line immediately above the composer,
+  latest". The transcript itself never scrolls horizontally: ordinary text,
+  paths and long tokens wrap within the column, while code and tables retain
+  their own bounded horizontal scroll areas. **Run activity is a separate line immediately above the composer,
   in both web and CLI**: queued is a static “Waiting for a free slot…”, running
   is a locally animated Braille spinner plus “Working…”, and `done`/`error`
   removes it. Text, thinking and tool cards never replace this line; tool
@@ -1711,6 +1713,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.84 (2026-08-12): **Horizontal overflow stays inside its content (§14).**
+  The chat transcript now clips its horizontal axis and constrains every flex
+  layer; ordinary long tokens wrap, while code and tables keep bounded local
+  horizontal scrolling. Native vertical touch scrolling is unchanged.
 - 1.83 (2026-08-12): **The CLI farewell is quiet grey (§17).** The complete
   `Bye!` and continuation-command block now uses the terminal's grey ANSI
   colour. The changed package ships as 0.2.9.

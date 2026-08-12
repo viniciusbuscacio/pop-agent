@@ -180,6 +180,18 @@ describe('chat transcript', () => {
     expect(send).toHaveBeenCalledWith(chat.id, 'New message', [], undefined, undefined);
   });
 
+  it('contains horizontal overflow without changing native vertical touch scrolling', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    const scroller = screen.getByTestId('chat-scroller');
+    expect(scroller.className).toContain('overflow-x-hidden');
+    expect(scroller.className).toContain('overflow-y-auto');
+    expect(screen.getByTestId('chat-transcript').className).toContain('w-full');
+    expect(screen.getByTestId('chat-transcript').className).toContain('min-w-0');
+    expect(scroller.style.touchAction).toBe('pan-y');
+  });
+
   it('stops following as soon as an iOS reading gesture starts', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());

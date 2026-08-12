@@ -31,6 +31,24 @@ function markDecoded(image: HTMLImageElement): void {
   });
 }
 
+describe('horizontal overflow containment', () => {
+  it('wraps ordinary tokens but keeps code and tables in local scroll areas', () => {
+    const { container } = render(
+      <Markdown text={`A${'x'.repeat(2_000)}\n\n\`\`\`text\n${'y'.repeat(2_000)}\n\`\`\`\n\n| ${'z'.repeat(200)} |\n| --- |\n| value |`} />,
+    );
+
+    const root = container.querySelector('.markdown');
+    const code = container.querySelector('pre');
+    const table = container.querySelector('table');
+    expect(root?.className).toContain('min-w-0');
+    expect(root?.className).toContain('[overflow-wrap:anywhere]');
+    expect(code?.className).toContain('max-w-full');
+    expect(code?.className).toContain('overflow-x-auto');
+    expect(table?.parentElement?.className).toContain('max-w-full');
+    expect(table?.parentElement?.className).toContain('overflow-x-auto');
+  });
+});
+
 describe('generated images in markdown', () => {
   it('resolves an attachment reference into a fresh inline Files link', async () => {
     link.mockResolvedValue('/files/download?path=previews%2Fchart.png&expires=2&sig=fresh');

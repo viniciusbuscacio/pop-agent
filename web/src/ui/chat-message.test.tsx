@@ -8,6 +8,43 @@ afterEach(cleanup);
 
 const base = { role: 'system' as const, content: '', thinking: '', tools: [], attachments: [] };
 
+describe('horizontal overflow containment', () => {
+  it('wraps an unbroken user message inside its bubble', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'user',
+          content: 'x'.repeat(2_000),
+        }}
+      />,
+    );
+
+    const message = screen.getByTestId('message-user');
+    expect(message.className).toContain('min-w-0');
+    expect(message.firstElementChild?.className).toContain('[overflow-wrap:anywhere]');
+  });
+
+  it('constrains tool output while retaining its local overflow area', async () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'long-tool-name'.repeat(100), status: 'done', detail: 'x'.repeat(2_000) }],
+        }}
+      />,
+    );
+
+    await userEvent.click(screen.getByTestId('tool-toggle'));
+    const output = screen.getByTestId('tool-output');
+    expect(screen.getByTestId('message-assistant').className).toContain('min-w-0');
+    expect(output.className).toContain('max-w-full');
+    expect(output.className).toContain('overflow-x-auto');
+    expect(output.className).toContain('[overflow-wrap:anywhere]');
+  });
+});
+
 describe('provider fallback notices', () => {
   it('shows both model pairs and opens model selection', async () => {
     const changeModel = vi.fn();

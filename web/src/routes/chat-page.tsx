@@ -255,7 +255,7 @@ export function ChatPage() {
           onScroll={onScroll}
           onWheel={onWheel}
           data-testid="chat-scroller"
-          className="relative min-h-0 flex-1 overflow-y-auto"
+          className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         >
           {messages?.length === 0 && live === undefined && pending.length === 0 ? (
@@ -280,7 +280,7 @@ export function ChatPage() {
           </div>
         ) : null}
 
-        <div className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
+        <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 p-4">
           {(messages ?? []).map((message, index, history) => {
             const source = resendSource(history, index);
             const canResend = source !== undefined && live === undefined && pending.length === 0;
@@ -384,7 +384,7 @@ export function ChatPage() {
               <p className="text-sm font-medium text-[var(--screen-fg)]">
                 {t('chat.confirm.title', { action: confirm.action })}
               </p>
-              <pre className="mt-2 overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap">
+              <pre className="mt-2 max-w-full overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {confirm.detail}
               </pre>
               <p className="mt-2 text-xs text-[var(--muted)]">{t('chat.confirm.why')}</p>

@@ -15,7 +15,7 @@ import { filesService } from '../services/artifacts';
  */
 export function Markdown({ text }: { text: string }) {
   return (
-    <div className="markdown flex flex-col gap-3 leading-relaxed break-words">
+    <div className="markdown flex min-w-0 flex-col gap-3 leading-relaxed break-words [overflow-wrap:anywhere]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={markdownUrlTransform}
@@ -47,7 +47,7 @@ export function Markdown({ text }: { text: string }) {
           },
           img: MarkdownImage,
           table: ({ children }) => (
-            <div className="overflow-x-auto">
+            <div className="max-w-full overflow-x-auto">
               <table className="w-full border-collapse text-sm">{children}</table>
             </div>
           ),
@@ -261,9 +261,9 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-      <div className="flex items-center justify-between bg-[var(--input-bg)] px-3 py-1 text-xs text-[var(--muted)]">
-        <span>{language}</span>
+    <div className="min-w-0 overflow-hidden rounded-lg border border-[var(--border)]">
+      <div className="flex min-w-0 items-center justify-between bg-[var(--input-bg)] px-3 py-1 text-xs text-[var(--muted)]">
+        <span className="min-w-0 truncate">{language}</span>
         <button
           type="button"
           data-testid="code-copy"
@@ -274,11 +274,11 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         </button>
       </div>
       {html === undefined ? (
-        <pre className="overflow-x-auto bg-[var(--input-bg)] p-3 font-mono text-sm">
+        <pre className="max-w-full overflow-x-auto bg-[var(--input-bg)] p-3 font-mono text-sm">
           <code>{code}</code>
         </pre>
       ) : (
-        <div className="code-shiki overflow-x-auto text-sm" dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="code-shiki max-w-full overflow-x-auto text-sm" dangerouslySetInnerHTML={{ __html: html }} />
       )}
     </div>
   );

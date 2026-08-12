@@ -56,9 +56,9 @@ export function ChatMessage({
     return (
       <div
         data-testid="message-system"
-        className="flex flex-wrap items-center justify-center gap-2 text-center text-xs text-[var(--danger)]"
+        className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-center text-xs text-[var(--danger)]"
       >
-        <span>{message.content}</span>
+        <span className="[overflow-wrap:anywhere]">{message.content}</span>
         {onResend === undefined ? null : (
           <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
             <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
@@ -71,9 +71,9 @@ export function ChatMessage({
 
   if (message.role === 'user') {
     return (
-      <div className="flex flex-col items-end gap-2" data-testid="message-user">
+      <div className="flex min-w-0 flex-col items-end gap-2" data-testid="message-user">
         {message.content.length > 0 ? (
-          <div className="user-bubble max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap">
+          <div className="user-bubble max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap [overflow-wrap:anywhere]">
             {message.content}
           </div>
         ) : null}
@@ -83,7 +83,7 @@ export function ChatMessage({
   }
 
   return (
-    <div className="flex flex-col gap-3" data-testid="message-assistant">
+    <div className="flex min-w-0 flex-col gap-3" data-testid="message-assistant">
       {showThinking && message.thinking.length > 0 ? (
         <ThinkingCard text={message.thinking} answered={message.content.length > 0} />
       ) : null}
@@ -138,7 +138,7 @@ function SystemNoticeCard({
     <div
       data-testid={testId}
       role={danger ? 'alert' : 'status'}
-      className={`rounded-lg border bg-[var(--panel-bg)] p-3 ${
+      className={`min-w-0 rounded-lg border bg-[var(--panel-bg)] p-3 [overflow-wrap:anywhere] ${
         danger ? 'border-[var(--danger)]' : 'border-[var(--border)]'
       }`}
     >
@@ -197,7 +197,7 @@ function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }
   const files = attachments.filter((entry) => !entry.type.startsWith('image/'));
 
   return (
-    <div className="flex max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">
+    <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">
       {images.map((image, index) => (
         <img
           key={`${image.name}-${String(index)}`}
@@ -236,7 +236,7 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
   }, [answered, pinned]);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="thinking-card">
+    <div className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="thinking-card">
       <button
         type="button"
         data-testid="thinking-toggle"
@@ -253,7 +253,7 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
       {open ? (
         <p
           data-testid="thinking-text"
-          className="px-3 pb-3 text-sm whitespace-pre-wrap text-[var(--muted)] italic"
+          className="px-3 pb-3 text-sm whitespace-pre-wrap text-[var(--muted)] italic [overflow-wrap:anywhere]"
         >
           {text}
         </p>
@@ -268,7 +268,7 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
   const grouped = tools.length > 1;
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="tool-card">
+    <div className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="tool-card">
       <button
         type="button"
         data-testid="tool-toggle"
@@ -284,13 +284,13 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
       </button>
 
       {open ? (
-        <div className="flex flex-col gap-2 px-3 pb-3">
+        <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">
           {tools.map((tool, index) => (
-            <div key={`${tool.name}-${String(index)}`} className="flex flex-col gap-1">
-              <span className="font-mono text-xs text-[var(--muted)]">{tool.name}</span>
+            <div key={`${tool.name}-${String(index)}`} className="flex min-w-0 flex-col gap-1">
+              <span className="font-mono text-xs text-[var(--muted)] [overflow-wrap:anywhere]">{tool.name}</span>
               <pre
                 data-testid="tool-output"
-                className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap"
+                className="max-w-full overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]"
               >
                 {tool.detail}
               </pre>
