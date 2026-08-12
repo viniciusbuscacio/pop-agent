@@ -11,6 +11,8 @@ export type RunEvent =
   | { kind: 'chat-created'; chatId: string; chat: Chat }
   /** A conversation was durably deleted and must disappear from every client. */
   | { kind: 'chat-deleted'; chatId: string }
+  /** A conversation's durable pinned state changed. */
+  | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

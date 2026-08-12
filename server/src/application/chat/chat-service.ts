@@ -89,7 +89,10 @@ export class ChatService {
   setPinned(id: string, pinned: boolean): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setPinned(id, pinned);
-    return this.deps.chats.get(id);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({ kind: 'chat-pin-changed', chatId: id, pinned: chat.pinned });
+    return chat;
   }
 
   /** Archives every open conversation except the active one and pinned chats. */

@@ -185,4 +185,24 @@ describe('deleting a chat with a run in flight', () => {
       title: 'Morning briefing',
     });
   });
+
+  it('persists pin and unpin before broadcasting the resulting state', () => {
+    const chat = chats.create();
+
+    expect(chats.setPinned(chat.id, true)?.pinned).toBe(true);
+    expect(repo.get(chat.id)?.pinned).toBe(true);
+    expect(sink.events.at(-1)).toEqual({
+      kind: 'chat-pin-changed',
+      chatId: chat.id,
+      pinned: true,
+    });
+
+    expect(chats.setPinned(chat.id, false)?.pinned).toBe(false);
+    expect(repo.get(chat.id)?.pinned).toBe(false);
+    expect(sink.events.at(-1)).toEqual({
+      kind: 'chat-pin-changed',
+      chatId: chat.id,
+      pinned: false,
+    });
+  });
 });

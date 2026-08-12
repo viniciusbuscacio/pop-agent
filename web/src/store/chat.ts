@@ -104,6 +104,12 @@ function upsertChat(chats: ChatDTO[], chat: ChatDTO): ChatDTO[] {
   });
 }
 
+/** Updates and reorders whichever open or archived list already owns the chat. */
+function setChatPinned(chats: ChatDTO[], chatId: string, pinned: boolean): ChatDTO[] {
+  const chat = chats.find((entry) => entry.id === chatId);
+  return chat === undefined ? chats : upsertChat(chats, { ...chat, pinned });
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   chats: [],
   archived: [],
@@ -307,9 +313,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async setPinned(chatId, pinned) {
-    await chatsService.patch(chatId, { pinned });
-    // Pinning changes list order; ask the server for the canonical ordering.
-    await Promise.all([get().loadChats(), get().loadArchived()]);
+    const updated = await chatsService.patch(chatId, { pinned });
+    // SSE may beat the PATCH response. Both paths are idempotent and use the
+    // same pinned-first ordering, so the initiating device needs no refetch.
+    set((state) => ({
+      chats: setChatPinned(state.chats, chatId, updated.pinned),
+      archived: setChatPinned(state.archived, chatId, updated.pinned),
+    }));
   },
 
   async archiveOthers(keepChatId) {
@@ -417,6 +427,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         pending: without(state.pending, event.chatId),
         failures: without(state.failures, event.chatId),
         confirms: without(state.confirms, event.chatId),
+      }));
+      return;
+    }
+    if (event.kind === 'chat-pin-changed') {
+      set((state) => ({
+        chats: setChatPinned(state.chats, event.chatId, event.pinned),
+        archived: setChatPinned(state.archived, event.chatId, event.pinned),
       }));
       return;
     }

@@ -41,4 +41,12 @@ describe('chat lifecycle events on the SSE wire', () => {
       chatId: chat.id,
     });
   });
+
+  it('sends both pin and unpin state', () => {
+    expect(toStreamEvent({ kind: 'chat-pin-changed', chatId: chat.id, pinned: true })).toEqual({
+      kind: 'chat-pin-changed',
+      chatId: chat.id,
+      pinned: true,
+    });
+  });
 });

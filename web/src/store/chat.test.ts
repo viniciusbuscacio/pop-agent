@@ -500,6 +500,46 @@ describe('chat lifecycle events', () => {
     expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([pinned.id, created.id]);
   });
 
+  it('applies remote pin and unpin to open and archived lists idempotently', () => {
+    const newer = {
+      ...created,
+      id: 'chat-newer',
+      title: 'Newer',
+      updatedAt: '2026-08-11T12:00:00.000Z',
+    };
+    const archived = { ...created, id: 'chat-archived', archived: true };
+    useChatStore.setState({ chats: [newer, created], archived: [archived] });
+
+    apply({ kind: 'chat-pin-changed', chatId: created.id, pinned: true });
+    apply({ kind: 'chat-pin-changed', chatId: created.id, pinned: true });
+    apply({ kind: 'chat-pin-changed', chatId: archived.id, pinned: true });
+
+    expect(useChatStore.getState().chats.map((chat) => [chat.id, chat.pinned])).toEqual([
+      [created.id, true],
+      [newer.id, false],
+    ]);
+    expect(useChatStore.getState().archived[0]?.pinned).toBe(true);
+
+    apply({ kind: 'chat-pin-changed', chatId: created.id, pinned: false });
+    expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([newer.id, created.id]);
+  });
+
+  it('uses the PATCH result to update and reorder the initiating device', async () => {
+    const newer = {
+      ...created,
+      id: 'chat-newer',
+      title: 'Newer',
+      updatedAt: '2026-08-11T12:00:00.000Z',
+    };
+    useChatStore.setState({ chats: [newer, created] });
+    patch.mockResolvedValue({ ...created, pinned: true });
+
+    await useChatStore.getState().setPinned(created.id, true);
+
+    expect(patch).toHaveBeenCalledWith(created.id, { pinned: true });
+    expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([created.id, newer.id]);
+  });
+
   it('removes every local remnant of a deleted chat idempotently', () => {
     useChatStore.setState({
       chats: [created],

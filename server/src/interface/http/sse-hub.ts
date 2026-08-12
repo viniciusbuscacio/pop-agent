@@ -65,6 +65,8 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
       };
     case 'chat-deleted':
       return { kind: 'chat-deleted', chatId: event.chatId };
+    case 'chat-pin-changed':
+      return { kind: 'chat-pin-changed', chatId: event.chatId, pinned: event.pinned };
     case 'delta':
       return {
         kind: 'delta',
