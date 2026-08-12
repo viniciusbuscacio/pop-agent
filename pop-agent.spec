@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.81 — 2026-08-11.
+Version 1.82 — 2026-08-12.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1481,7 +1481,13 @@ epoch change and token expiry close attached local access.
 
     pop | pop "question" | pop -p "…"
     pop login | logout | servers | chats | update
+    pop --chat <id>
     pop --version
+
+Leaving the interactive client through Ctrl+C, `/quit` or `/exit` prints
+`Bye!` and, when the conversation has a server id, a ready-to-paste
+`pop --chat <id>` continuation command. Before the first message creates the
+chat, only `Bye!` is printed.
 
 `pop --version` is entirely offline: it prints only the installed semantic
 version and exits without reading a profile, opening PLA, contacting a server
@@ -1705,6 +1711,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.82 (2026-08-12): **The CLI leaves a continuation command (§17).** Ctrl+C,
+  `/quit` and `/exit` now print the current `pop --chat <id>` command after the
+  TUI closes; a not-yet-created conversation only says goodbye. The CLI ships
+  this as 0.2.8.
 - 1.81 (2026-08-11): **Pop Local Access replaces the user-facing hands concept (§17).**
   CLI and Desktop share one internal TypeScript executor. WSS `/v1/local-tools`
   has an authenticated HTTPS long-poll fallback, managed-default routing makes

@@ -250,6 +250,47 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('Stored answer');
   });
 
+  it('prints the command for continuing the current chat when it exits', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, onExit } = screenWith(terminal);
+    session.open('chat-bKZpiMZW96e');
+    screen.start();
+
+    screen.quit();
+    screen.quit();
+    await flush();
+
+    expect(plain()).toContain(
+      'Bye!\nTo continue this chat, use:\npop --chat chat-bKZpiMZW96e\n',
+    );
+    expect(plain().split('To continue this chat, use:')).toHaveLength(2);
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it('only says goodbye when a new conversation has no chat id yet', async () => {
+    const { terminal, plain } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    screen.quit();
+    await flush();
+
+    expect(plain()).toContain('Bye!\n');
+    expect(plain()).not.toContain('To continue this chat');
+  });
+
+  it('offers the id assigned by the server after the first message', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session } = screenWith(terminal);
+    screen.start();
+    await session.ask('hello');
+
+    screen.quit();
+    await flush();
+
+    expect(plain()).toContain('pop --chat chat-1');
+  });
+
   it('keeps one working line below the answer until the run settles', async () => {
     const { terminal, plain, writes, repaint } = recorder();
     const { screen } = screenWith(terminal);

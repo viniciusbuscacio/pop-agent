@@ -152,6 +152,7 @@ class AssistantSegment extends Container {
 
 export class ChatScreen {
   private readonly tui: TUI;
+  private readonly terminal: Terminal;
   private readonly editor: Editor;
   private readonly header: Text;
   /** Replaceable history; the header and editor survive a chat switch. */
@@ -173,10 +174,12 @@ export class ChatScreen {
   private thinkingShown: boolean;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
   private spoken = false;
+  private exited = false;
   private title: string;
 
   constructor(private readonly options: ScreenOptions) {
-    this.tui = new TUI(options.terminal ?? new ProcessTerminal());
+    this.terminal = options.terminal ?? new ProcessTerminal();
+    this.tui = new TUI(this.terminal);
     this.title = options.title ?? 'New conversation';
     this.thinkingShown = options.thinkingShown ?? true;
     this.header = new Text('', 0, 0);
@@ -225,10 +228,24 @@ export class ChatScreen {
   }
 
   quit(): void {
+    if (this.exited) return;
+    this.exited = true;
     this.clearRunStatus(false);
     if (this.disconnectQuitTimer !== undefined) clearTimeout(this.disconnectQuitTimer);
     this.disconnectQuitTimer = undefined;
     this.tui.stop();
+
+    // This belongs after TUI shutdown: a final differential repaint must not
+    // erase the command the user needs. A brand-new conversation has no
+    // server id until its first message, so in that case there is nothing to
+    // resume and the farewell stays short.
+    const chatId = this.options.session.currentChatId;
+    this.terminal.write(
+      chatId === undefined
+        ? 'Bye!\n'
+        : `Bye!\nTo continue this chat, use:\npop --chat ${chatId}\n`,
+    );
+
     if (this.options.onExit !== undefined) return this.options.onExit();
     process.exit(0);
   }
