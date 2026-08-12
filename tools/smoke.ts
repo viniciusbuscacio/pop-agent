@@ -313,9 +313,10 @@ async function run(base: string): Promise<void> {
   await watcher.waitFor((event) => event.kind === 'done', 'the run to finish');
 
   const kinds = watcher.events.map((event) => event.kind);
-  for (const expected of ['title', 'run-status', 'thinking', 'tool', 'delta', 'done']) {
+  for (const expected of ['run-status', 'thinking', 'tool', 'delta', 'done']) {
     expect(kinds.includes(expected), 'run events', `no ${expected} event arrived (saw ${kinds.join(', ')})`);
   }
+  expect(!kinds.includes('title'), 'run events', 'the first message renamed the chat');
   const toolStatuses = watcher.events
     .filter((event) => event.kind === 'tool')
     .map((event) => String(event['status']));

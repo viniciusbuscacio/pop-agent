@@ -1,23 +1,22 @@
 import type { Message } from '../../domain/chat/chat.js';
-import { fallbackTitle, isGenericTitle, uniqueTitle } from '../../domain/chat/title.js';
+import { isGenericTitle, uniqueTitle } from '../../domain/chat/title.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { EventSink } from '../ports/event-sink.js';
 
 /**
- * Titles and summaries written by the service model (pop-agent.spec §14-§15, aw's
- * concept ported). The word-picking fallback names a chat at its first
- * message; this replaces that name once the conversation has a shape -- at the
- * user's third turn, then every tenth -- and writes the summary Phase 4's
- * memory will read.
+ * Titles and summaries written by the service model (pop-agent.spec §14-§15).
+ * A chat keeps its deterministic "Chat N" starter through the first two user
+ * turns. Once the third run finishes, one background completion names the
+ * conversation and writes the summary Phase 4's memory will read.
  *
  * Everything here fails silently into the status quo: no key, a refused
- * request, an unparseable answer -- the chat keeps the title it had. A rename
- * by hand turns the whole thing off for that chat.
+ * request, or an unparseable answer leaves "Chat N" untouched. A rename by
+ * hand turns the whole thing off for that chat, and a successful automatic
+ * title makes the chat ineligible for another pass.
  */
 
-/** User turns that trigger a rewrite: the 3rd, then every 10th after it. */
-const FIRST_TURN = 3;
-const EVERY = 10;
+/** The one user turn that triggers automatic naming. */
+const TITLE_TURN = 3;
 
 /** How much of the conversation the model sees. */
 const MAX_MESSAGES = 12;
@@ -65,11 +64,10 @@ export class TitleService {
     const chat = this.deps.chats.get(chatId);
     if (chat === undefined) return skip('chat-gone');
     if (!chat.autoTitle) return skip('manual-rename');
+    if (!isGenericTitle(chat.title)) return skip('already-titled');
 
     const turns = this.deps.chats.countUserMessages(chatId);
-    if (turns < FIRST_TURN || (turns - FIRST_TURN) % EVERY !== 0) {
-      return skip(`cadence (turn ${String(turns)})`);
-    }
+    if (turns !== TITLE_TURN) return skip(`cadence (turn ${String(turns)})`);
 
     const messages = this.deps.chats.getMessages(chatId, { limit: MAX_MESSAGES });
     if (messages.length === 0) return skip('no-messages');
@@ -84,14 +82,12 @@ export class TitleService {
       this.deps.onFailure?.(
         `auto-title failed for ${chatId}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
-      this.fallback(chatId, chat.title, messages, 'llm-error');
       return;
     }
 
     const parsed = parseTitleAnswer(answer);
     if (parsed.title === undefined) {
       this.deps.onFailure?.(`auto-title ${chatId}: unparseable answer`);
-      this.fallback(chatId, chat.title, messages, 'parse-failed');
     } else if (parsed.title.toLowerCase() === chat.title.toLowerCase()) {
       skip('same-title');
     } else {
@@ -112,27 +108,6 @@ export class TitleService {
     if (parsed.summary !== undefined) {
       this.deps.chats.setSummary(chatId, parsed.summary);
     }
-  }
-
-  /**
-   * The LLM is out (no key, refused, gibberish): a chat still carrying a
-   * starter name gets the deterministic one instead -- a title always exists.
-   */
-  private fallback(chatId: string, currentTitle: string, messages: Message[], why: string): void {
-    if (!isGenericTitle(currentTitle)) return;
-    const firstUser = messages.find((message) => message.role === 'user' && message.content.length > 0);
-    if (firstUser === undefined) return;
-    const title = fallbackTitle(firstUser.content, this.deps.chats.titles());
-    this.deps.chats.rename(chatId, title);
-    this.deps.chats.recordTitle({
-      chatId,
-      title,
-      turn: this.deps.chats.countUserMessages(chatId),
-      source: 'auto',
-      createdAt: new Date().toISOString(),
-    });
-    this.deps.sink.emit({ kind: 'title', chatId, title });
-    this.deps.onFailure?.(`auto-title ${chatId}: deterministic fallback (${why})`);
   }
 }
 

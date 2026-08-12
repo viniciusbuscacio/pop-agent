@@ -5,7 +5,6 @@ import {
   type ToolRecord,
 } from '../../domain/chat/chat.js';
 import { newMessageId, newRunId } from '../../domain/ids.js';
-import { fallbackTitle, isGenericTitle } from '../../domain/chat/title.js';
 import type {
   AgentBridge,
   AgentRunControl,
@@ -275,7 +274,6 @@ export class RunService {
     this.deps.onActivity?.();
 
     const now = new Date(this.deps.clock.now()).toISOString();
-    const isFirstMessage = this.deps.chats.countMessages(chatId) === 0;
 
     // Refused, but not silently: the user's words and the reason nothing
     // answered are both history now (the flag is deliberate, not a crash).
@@ -322,26 +320,6 @@ export class RunService {
       ...(options.client === undefined ? {} : { client: options.client }),
     });
     this.deps.chats.touch(chatId, now);
-
-    // A sidebar full of "New chat" is a sidebar you cannot read. Phase 3 lets
-    // a model write this; until then the first message names the chat.
-    //
-    // `autoTitle` is the same veto the service model respects (pop-agent.spec §14):
-    // a name chosen by hand is not the machine's to improve on, and a
-    // background task's chat is named after the task before its first message
-    // ever arrives (§21) -- even when the task is called "Chat 4".
-    if (isFirstMessage && chat.autoTitle && isGenericTitle(chat.title)) {
-      const title = fallbackTitle(text, this.deps.chats.titles());
-      this.deps.chats.rename(chatId, title);
-      this.deps.chats.recordTitle({
-        chatId,
-        title,
-        turn: 1,
-        source: 'auto',
-        createdAt: now,
-      });
-      this.deps.sink.emit({ kind: 'title', chatId, title });
-    }
 
     const note = channelNote(options.client, previousClient);
 

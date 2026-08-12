@@ -997,21 +997,19 @@ events from stale runs.
   real-time output; consecutive calls group. Sensitive-action confirmation
   renders inline in the chat (§10).
 - Chat titles: a chat is born with the deterministic starter **"Chat N"**
-  (lowest free N among the living chats). The first user message renames a
-  still-generic chat immediately, with no model involved (stop-word scheme,
-  PT/EN, title-cased, de-duplicated case-insensitively with " 2", " 3"…).
-  The fallback is also what runs when the provider is down, out of credit or
-  not configured. Once a provider exists the LLM title takes over on top of
-  it:
-- Auto-title (LLM): aw's scheme — ONE call writes TITLE (≤40 chars) +
-  SUMMARY together; first title at the 3rd user turn, regenerate every 10
-  turns, service model, prompt in the conversation's language, tolerant
-  parse (<2 chars = failure), LLM-less fallback (4 words, PT/EN stop-words),
-  manual rename disables auto forever (a rename by the agent does NOT).
-  Every skip logs its reason (manual-rename, cadence, same-title…) so "why
-  didn't it rename?" is one log line. The summary lands on the chat row and
-  feeds the recent-chats catalog (§7.1) — infinite chats stay indexed.
-  `chat_titles` is append-only: every title, its user turn, auto|manual.
+  (lowest free N among the living chats) and keeps it through the user's first
+  two messages. There is no first-message word-picking rename.
+- Auto-title (LLM): ONE background call after the 3rd user turn writes TITLE
+  (≤40 chars, at most six words) + SUMMARY together, using the chat provider's
+  service model and the conversation's language. It is a one-time naming pass,
+  not a periodic rewrite. A refused request, unavailable provider or unusable
+  parse (<2 chars = failure) leaves **"Chat N"** untouched. Manual rename
+  disables auto forever, and a successfully titled chat is not revisited.
+  Every skip logs its reason (manual-rename, cadence, already-titled,
+  same-title…) so "why didn't it rename?" is one log line. The summary lands on
+  the chat row and feeds the recent-chats catalog (§7.1) — infinite chats stay
+  indexed. `chat_titles` is append-only: every title, its user turn,
+  auto|manual.
 - **Usage dashboard** (Settings → Usage): full cost control from
   `llm_runs` — per day, per provider, per model, per conversation.
 - Files the agent creates: download link in chat when a tool reports a
@@ -1645,9 +1643,9 @@ Different bytes require a new host semver and URL.
   a personal server falls over. The global run ceiling would not help — it
   counts chats, and every task run opens a new one.
 - Each run: open a fresh chat, **rename it to the task's title through the
-  manual-rename path** (which switches `auto_title` off, so neither the
-  deterministic first-message fallback nor the service model will ever
-  rewrite a name the user chose — §14), post the prompt as a user message,
+  manual-rename path** (which switches `auto_title` off, so the service model
+  will never rewrite a name chosen for the task — §14), post the prompt as a
+  user message,
   and run it through the normal `RunService`. Failover, context compaction,
   usage accounting and persisted error messages all apply, and the result is
   readable as an ordinary conversation.
@@ -1717,6 +1715,11 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.86 (2026-08-12): **Chat titles wait for the conversation (§14).** A new
+  conversation keeps its deterministic `Chat N` name through the first two
+  user messages. After the third, one service-model call creates a short title
+  and summary; there is no first-message word picker, periodic regeneration or
+  deterministic rename when the LLM is unavailable.
 - 1.85 (2026-08-12): **The app viewport cannot become a horizontal scroller
   (§14).** Horizontal containment now reaches `html`, `body` and `#root`, not
   only the transcript, closing the outer overflow that focus could shift out of

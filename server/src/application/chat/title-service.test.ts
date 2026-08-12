@@ -58,7 +58,7 @@ beforeEach(() => {
   chats = new SqliteChatRepo(db);
   chats.create({
     id: CHAT,
-    title: 'Question 1',
+    title: 'Chat 1',
     model: '',
     provider: '',
     archived: false,
@@ -93,7 +93,7 @@ describe('when the title job runs', () => {
     await service.maybeRetitle(CHAT);
 
     expect(gateway.requests).toHaveLength(0);
-    expect(chats.get(CHAT)?.title).toBe('Question 1');
+    expect(chats.get(CHAT)?.title).toBe('Chat 1');
   });
 
   it('renames at the third user turn and stores the summary', async () => {
@@ -108,20 +108,24 @@ describe('when the title job runs', () => {
     expect(events).toEqual([{ kind: 'title', chatId: CHAT, title: 'Kimi pricing' }]);
   });
 
-  it('runs again every tenth turn after the third', async () => {
+  it('does not regenerate a title after the third user turn', async () => {
     seedTurns(13);
 
     await service.maybeRetitle(CHAT);
 
-    expect(gateway.requests).toHaveLength(1);
+    expect(gateway.requests).toHaveLength(0);
+    expect(chats.get(CHAT)?.title).toBe('Chat 1');
   });
 
-  it('rests between the scheduled turns', async () => {
-    seedTurns(7);
+  it('does not revisit a chat the model already named', async () => {
+    seedTurns(3);
+    await service.maybeRetitle(CHAT);
+    seedTurns(10);
 
     await service.maybeRetitle(CHAT);
 
-    expect(gateway.requests).toHaveLength(0);
+    expect(gateway.requests).toHaveLength(1);
+    expect(chats.get(CHAT)?.title).toBe('Kimi pricing');
   });
 
   it('stays away from a chat renamed by hand', async () => {
@@ -161,21 +165,20 @@ describe('when the title job runs', () => {
 
     await service.maybeRetitle(CHAT);
 
-    expect(chats.get(CHAT)?.title).toBe('Question 1');
+    expect(chats.get(CHAT)?.title).toBe('Chat 1');
     expect(events).toEqual([]);
     expect(failures).toHaveLength(1);
   });
 
-  it('falls back to a deterministic title when a generic chat has no key', async () => {
-    chats.rename(CHAT, 'Chat 7'); // the starter name nobody chose
+  it('keeps the starter title when the LLM is unavailable', async () => {
+    chats.rename(CHAT, 'Chat 7');
     apiKey = undefined;
     seedTurns(3);
 
     await service.maybeRetitle(CHAT);
 
     expect(gateway.requests).toHaveLength(0);
-    expect(chats.get(CHAT)?.title).toBe('Question 1 2'.slice(0, 0) || 'Question 1'); // from the first user words
-    expect(chats.get(CHAT)?.title).not.toBe('Chat 7');
+    expect(chats.get(CHAT)?.title).toBe('Chat 7');
   });
 
   it('names a colliding title uniquely, case-insensitive', async () => {
@@ -228,7 +231,7 @@ describe('when the title job runs', () => {
 
     failures.length = 0;
     seedTurns(1); // turn 3 now
-    gateway.answer = `TITLE: Question 1\nSUMMARY: same as before`;
+    gateway.answer = `TITLE: Chat 1\nSUMMARY: same as before`;
     await service.maybeRetitle(CHAT);
     expect(failures[0]).toContain('same-title');
   });
@@ -239,7 +242,7 @@ describe('when the title job runs', () => {
 
     await service.maybeRetitle(CHAT);
 
-    expect(chats.get(CHAT)?.title).toBe('Question 1');
+    expect(chats.get(CHAT)?.title).toBe('Chat 1');
   });
 });
 

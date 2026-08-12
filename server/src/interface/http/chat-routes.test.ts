@@ -513,7 +513,7 @@ describe('sending a message', () => {
     ).toBe(400);
   });
 
-  it('names the chat after the first message', async () => {
+  it('keeps the starter title after the first message', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST',
@@ -522,7 +522,7 @@ describe('sending a message', () => {
     await fixture.runs.whenIdle();
 
     const { chats } = (await (await api('/v1/chats')).json()) as { chats: ChatDTO[] };
-    expect(chats[0]?.title).toBe('Help Plan Grocery Shopping');
+    expect(chats[0]?.title).toBe('Chat 1');
     expect(chats[0]?.preview.length).toBeGreaterThan(0);
   });
 });
@@ -596,7 +596,7 @@ describe('the event stream', () => {
     await reader.cancel();
     await fixture.runs.whenIdle();
 
-    expect(kinds).toContain('title');
+    expect(kinds).not.toContain('title');
     expect(kinds).toContain('run-status');
     expect(kinds).toContain('thinking');
     expect(kinds).toContain('tool');

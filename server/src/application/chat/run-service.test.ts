@@ -213,14 +213,7 @@ describe('finishing a run', () => {
     runs.startRun(newChat(), 'question');
     await runs.whenIdle();
 
-    expect(sink.kinds()).toEqual([
-      'title',
-      'run-started',
-      'run-status',
-      'delta',
-      'delta',
-      'done',
-    ]);
+    expect(sink.kinds()).toEqual(['run-started', 'run-status', 'delta', 'delta', 'done']);
   });
 
   it('keeps the half-written answer when the run fails', async () => {
@@ -521,49 +514,17 @@ describe('steering a live run', () => {
 });
 
 describe('automatic titles', () => {
-  it('names a new chat after its first message', async () => {
+  it('keeps the Chat N starter through the first two user messages', async () => {
     const chatId = newChat();
+    const starter = repo.get(chatId)?.title;
 
     runs.startRun(chatId, 'help me plan the grocery shopping');
     await runs.whenIdle();
-
-    expect(repo.get(chatId)?.title).toBe('Help Plan Grocery Shopping');
-    expect(sink.of('title')[0]?.title).toBe('Help Plan Grocery Shopping');
-  });
-
-  it('only titles once', async () => {
-    const chatId = newChat();
-
-    runs.startRun(chatId, 'first message about deployment');
-    await runs.whenIdle();
-    runs.startRun(chatId, 'a completely different subject now');
+    runs.startRun(chatId, 'I need it for Saturday');
     await runs.whenIdle();
 
-    expect(sink.of('title')).toHaveLength(1);
-    expect(repo.get(chatId)?.title).toBe('First Message About Deployment');
-  });
-
-  it('leaves a title the user chose alone', async () => {
-    const chatId = newChat();
-    chats.rename(chatId, 'My own title');
-
-    runs.startRun(chatId, 'something else entirely');
-    await runs.whenIdle();
-
-    expect(repo.get(chatId)?.title).toBe('My own title');
+    expect(repo.get(chatId)?.title).toBe(starter);
     expect(sink.of('title')).toHaveLength(0);
-  });
-
-  it('does not produce two chats with the same name', async () => {
-    const first = newChat();
-    runs.startRun(first, 'deploy the server');
-    await runs.whenIdle();
-
-    const second = newChat();
-    runs.startRun(second, 'deploy the server');
-    await runs.whenIdle();
-
-    expect(repo.get(second)?.title).toBe('Deploy Server 2');
   });
 });
 

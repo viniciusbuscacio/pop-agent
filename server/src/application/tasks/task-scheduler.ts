@@ -155,8 +155,8 @@ export class TaskScheduler {
    *
    * The chat is renamed to the task's title through {@link ChatService.rename},
    * which is the *manual* rename path: it switches auto-titling off for that
-   * conversation, so neither the deterministic first-message fallback nor the
-   * service model will ever rewrite a name the user chose for the task.
+   * conversation, so the service model will never rewrite the name chosen for
+   * the task.
    */
   private async runTask(taskId: string, force: boolean): Promise<void> {
     const task = this.deps.tasks.get(taskId);
