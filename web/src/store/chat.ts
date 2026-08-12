@@ -9,6 +9,7 @@ import type {
   ToolCallDTO,
 } from '@pop-agent/shared';
 import { ApiError } from '../services/api';
+import { chatCache } from '../services/chat-cache';
 import { chatsService } from '../services/chats';
 
 /**
@@ -130,7 +131,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * older than the snapshot's `seq` are dropped in {@link apply}.
    */
   async openChat(chatId) {
-    const { messages, live, queued, pending: snapshot } = await chatsService.messages(chatId);
+    // Stale-while-revalidate: paint the cached tail first after a cold launch,
+    // then let the server response below reconcile history and all live state.
+    const cachedRequest = chatCache.get(chatId);
+    const serverRequest = chatsService.messages(chatId);
+    const cached = await cachedRequest;
+    if (cached !== undefined && get().messages[chatId] === undefined) {
+      set((state) => ({ messages: { ...state.messages, [chatId]: cached } }));
+    }
+
+    const { messages, live, queued, pending: snapshot } = await serverRequest;
     const pending = snapshot ?? (queued === undefined ? [] : [queued]);
     const legacy = readQueuedMessage(chatId);
     // Another upgraded tab may already have uploaded this exact legacy row.
@@ -141,7 +151,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       deleteQueuedMessage(chatId);
     }
     set((state) => ({
-      messages: { ...state.messages, [chatId]: messages },
+      messages: sameMessages(state.messages[chatId], messages)
+        ? state.messages
+        : { ...state.messages, [chatId]: messages },
       // The server is authoritative about what is in flight. It reports a run:
       // adopt its snapshot (a client that mounted mid-run starts from all that
       // already streamed). It reports none: drop any run this tab still
@@ -157,6 +169,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? without(state.pending, chatId)
           : { ...state.pending, [chatId]: pending },
     }));
+    void chatCache.put(chatId, messages);
     // One-time upgrade path from the former localStorage queue. The ordinary
     // send endpoint decides atomically whether this starts now or occupies the
     // server slot, then the old browser copy can be removed.
@@ -306,7 +319,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // another device may have pinned a chat since this sidebar last refreshed.
     const alive = new Set([...get().chats, ...get().archived].map((chat) => chat.id));
     for (const id of candidates) {
-      if (!alive.has(id)) deleteQueuedMessage(id);
+      if (!alive.has(id)) {
+        deleteQueuedMessage(id);
+        void chatCache.remove(id);
+      }
     }
     set((state) => {
       const strip = <V,>(record: Record<string, V>): Record<string, V> =>
@@ -331,7 +347,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       // Every archived chat's local leftovers go with it.
       const gone = new Set(state.archived.map((chat) => chat.id));
-      for (const id of gone) deleteQueuedMessage(id);
+      for (const id of gone) {
+        deleteQueuedMessage(id);
+        void chatCache.remove(id);
+      }
       const strip = <V,>(record: Record<string, V>): Record<string, V> =>
         Object.fromEntries(Object.entries(record).filter(([id]) => !gone.has(id)));
       return {
@@ -356,6 +375,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!(error instanceof ApiError) || error.code !== 'not_found') throw error;
     }
     deleteQueuedMessage(chatId);
+    void chatCache.remove(chatId);
     set((state) => ({
       chats: state.chats.filter((chat) => chat.id !== chatId),
       archived: state.archived.filter((chat) => chat.id !== chatId),
@@ -616,6 +636,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 }));
+
+function sameMessages(current: MessageDTO[] | undefined, fresh: MessageDTO[]): boolean {
+  if (current === undefined || current.length !== fresh.length) return false;
+  return current.every((message, index) => message.id === fresh[index]?.id);
+}
 
 function upsertPending(items: QueuedMessageDTO[], message: QueuedMessageDTO): QueuedMessageDTO[] {
   const index = items.findIndex((item) => item.id === message.id);

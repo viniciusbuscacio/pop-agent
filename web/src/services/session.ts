@@ -1,3 +1,5 @@
+import { chatCache } from './chat-cache';
+
 /**
  * Where the session token lives, and the only module that knows.
  *
@@ -56,5 +58,8 @@ export const session = {
     } catch {
       // nothing to clear
     }
+    // Cached transcripts belong to the authenticated session. Never let a
+    // later account on the same browser inherit the previous one's history.
+    chatCache.clear();
   },
 };
