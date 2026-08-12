@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.84 — 2026-08-12.
+Version 1.85 — 2026-08-12.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -944,7 +944,9 @@ events from stale runs.
   only when the reader moves back to the latest content or taps "jump to
   latest". The transcript itself never scrolls horizontally: ordinary text,
   paths and long tokens wrap within the column, while code and tables retain
-  their own bounded horizontal scroll areas. **Run activity is a separate line immediately above the composer,
+  their own bounded horizontal scroll areas. The document root is horizontally
+  contained too, so focusing the composer cannot merely shift an outer page
+  overflow out of sight. **Run activity is a separate line immediately above the composer,
   in both web and CLI**: queued is a static “Waiting for a free slot…”, running
   is a locally animated Braille spinner plus “Working…”, and `done`/`error`
   removes its content. The web permanently reserves the line's height so an
@@ -1715,6 +1717,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.85 (2026-08-12): **The app viewport cannot become a horizontal scroller
+  (§14).** Horizontal containment now reaches `html`, `body` and `#root`, not
+  only the transcript, closing the outer overflow that focus could shift out of
+  view while leaving bounded code and table scrolling intact.
 - 1.84 (2026-08-12): **Horizontal overflow stays inside its content (§14).**
   The chat transcript now clips its horizontal axis and constrains every flex
   layer; ordinary long tokens wrap, while code and tables keep bounded local

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatDTO } from '@pop-agent/shared';
 import { ChatList } from './chat-list';
@@ -43,7 +43,8 @@ vi.mock('../services/chats', () => ({
       Promise.resolve({ chats: archived ? archivedList : activeList }),
     archiveOthers: (keepChatId: string) => archiveOthers(keepChatId) as Promise<unknown>,
     deleteOthers: (keepChatId: string) => deleteOthers(keepChatId) as Promise<unknown>,
-    patch: (chatId: string, body: { pinned?: boolean }) => patch(chatId, body) as Promise<unknown>,
+    patch: (chatId: string, body: { archived?: boolean; pinned?: boolean }) =>
+      patch(chatId, body) as Promise<unknown>,
     messages: () => Promise.resolve({ messages: [] }),
   },
 }));
@@ -58,10 +59,16 @@ vi.mock('../services/health', () => {
   };
 });
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname}</span>;
+}
+
 function renderList(path = '/') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <ChatList />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -74,12 +81,25 @@ beforeEach(() => {
   archiveOthers.mockReset();
   deleteOthers.mockReset();
   patch.mockReset();
-  patch.mockImplementation((chatId: string, body: { pinned?: boolean }) => {
-    activeList = activeList
-      .map((chat) => (chat.id === chatId ? { ...chat, ...body } : chat))
-      .sort((left, right) => Number(right.pinned) - Number(left.pinned));
-    return Promise.resolve(activeList.find((chat) => chat.id === chatId));
-  });
+  patch.mockImplementation(
+    (chatId: string, body: { archived?: boolean; pinned?: boolean }) => {
+      const current = [...activeList, ...archivedList].find((chat) => chat.id === chatId);
+      if (current === undefined) return Promise.resolve(undefined);
+      const updated = { ...current, ...body };
+      if (body.archived === true) {
+        activeList = activeList.filter((chat) => chat.id !== chatId);
+        archivedList = [updated, ...archivedList.filter((chat) => chat.id !== chatId)];
+      } else if (body.archived === false) {
+        archivedList = archivedList.filter((chat) => chat.id !== chatId);
+        activeList = [updated, ...activeList.filter((chat) => chat.id !== chatId)];
+      } else {
+        activeList = activeList
+          .map((chat) => (chat.id === chatId ? updated : chat))
+          .sort((left, right) => Number(right.pinned) - Number(left.pinned));
+      }
+      return Promise.resolve(updated);
+    },
+  );
   archiveOthers.mockImplementation((keepChatId: string) => {
     const filed = activeList.filter((chat) => chat.id !== keepChatId && !chat.pinned);
     activeList = activeList.filter((chat) => chat.id === keepChatId || chat.pinned);
@@ -97,6 +117,20 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+describe('archive one chat', () => {
+  it('clears the detail route after archiving the open chat', async () => {
+    renderList('/chat/chat-other');
+    await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
+
+    await userEvent.click(screen.getAllByTestId('chat-menu')[1]!);
+    await userEvent.click(screen.getByTestId('chat-archive'));
+
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('chat-other', { archived: true }));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+    expect(screen.queryByText('File this chat')).toBeNull();
+  });
 });
 
 describe('archive all other chats', () => {

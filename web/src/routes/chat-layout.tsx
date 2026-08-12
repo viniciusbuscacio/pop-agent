@@ -3,6 +3,7 @@ import { Outlet, useMatch } from 'react-router-dom';
 import { t } from '../i18n';
 import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
+import { PopBubbleMark } from '../ui/pop-bubble-mark';
 import { ChatList } from './chat-list';
 
 /**
@@ -63,6 +64,7 @@ export function NoChatSelected() {
   return (
     <div className="flex flex-1 items-center justify-center p-8">
       <div className="max-w-sm text-center">
+        <PopBubbleMark className="mx-auto mb-5 h-24 w-24 select-none text-[var(--muted)] opacity-25" />
         <h1 className="text-lg font-semibold">{t('shell.empty.title')}</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">{t('shell.empty.body')}</p>
       </div>

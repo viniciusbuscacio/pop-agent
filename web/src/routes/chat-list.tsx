@@ -903,6 +903,8 @@ function ChatRow({
   /** Marks an archived row inside mixed search results. */
   badge?: boolean;
 }) {
+  const navigate = useNavigate();
+  const openChat = useMatch('/chat/:chatId');
   const rename = useChatStore((state) => state.rename);
   const setArchived = useChatStore((state) => state.setArchived);
   const setPinned = useChatStore((state) => state.setPinned);
@@ -931,6 +933,15 @@ function ChatRow({
     // contract), so the confirm must say this cannot be undone.
     if (!window.confirm(t('shell.deleteConfirm', { title: chat.title }))) return;
     void remove(chat.id);
+  }
+
+  async function toggleArchived(): Promise<void> {
+    const filing = !archived;
+    await setArchived(chat.id, filing);
+    // Archiving removes the selected row from the active conversation list,
+    // so its detail pane must leave with it. Replace the invalid selection in
+    // history; Back must not immediately reopen the chat that was just filed.
+    if (filing && openChat?.params.chatId === chat.id) navigate('/', { replace: true });
   }
 
   function onPointerDown(event: React.PointerEvent): void {
@@ -972,7 +983,7 @@ function ChatRow({
     if (!state.horizontal) return;
     swiped.current = true;
     if (deltaX >= SWIPE_TRIGGER_PX) confirmDelete();
-    else if (deltaX <= -SWIPE_TRIGGER_PX) void setArchived(chat.id, !archived);
+    else if (deltaX <= -SWIPE_TRIGGER_PX) void toggleArchived();
   }
 
   async function commitRename(): Promise<void> {
@@ -1155,7 +1166,7 @@ function ChatRow({
             label={archived ? t('shell.unarchive') : t('shell.archive')}
             onClick={() => {
               setMenuOpen(false);
-              void setArchived(chat.id, !archived);
+              void toggleArchived();
             }}
           />
           <MenuItem
