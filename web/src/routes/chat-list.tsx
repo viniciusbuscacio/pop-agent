@@ -273,7 +273,7 @@ export function ChatList() {
                 if (searchOpen) closeSearch();
                 else setSearchOpen(true);
               }}
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] ${
+              className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] ${
                 searchOpen ? 'bg-[var(--hover-overlay)]' : ''
               }`}
             >
