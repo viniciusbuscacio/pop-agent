@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildReviewPrompt,
   parseReviewAnswer,
   reviewHash,
   runPolicyGate,
@@ -53,6 +54,12 @@ describe('review envelope binding', () => {
       targetVersionHash: skillVersionHash(candidate),
     });
     expect(newHash).not.toBe(revisionHash);
+  });
+
+  it('tells the reviewer the exact controlled reason vocabulary', () => {
+    const prompt = buildReviewPrompt([], [envelope]);
+    expect(prompt).toContain('Allowed reasons (use only these exact tokens):');
+    expect(prompt).toContain('evidence_confirmed,reusable,complete');
   });
 
   it('accepts exactly one controlled verdict for each expected hash', () => {

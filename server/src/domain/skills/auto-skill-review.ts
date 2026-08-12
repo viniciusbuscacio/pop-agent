@@ -93,11 +93,12 @@ export interface ReviewDecision {
   reasons: string[];
 }
 
-const REVIEW_REASON = new Set([
+const REVIEW_REASONS = [
   'evidence_confirmed', 'reusable', 'complete', 'procedural', 'router_relevant',
   'speculative', 'insufficient_evidence', 'memory_not_skill', 'incomplete', 'unsafe',
   'prompt_injection', 'contains_secret', 'too_generic', 'too_specific', 'revision_regression',
-]);
+] as const;
+const REVIEW_REASON = new Set<string>(REVIEW_REASONS);
 
 export function buildReviewPrompt(messages: readonly Message[], envelopes: readonly ReviewEnvelope[]): string {
   const transcript = messages
@@ -129,6 +130,9 @@ export function buildReviewPrompt(messages: readonly Message[], envelopes: reado
     'verdict: APPROVE or REJECT',
     'reasons: comma,separated,controlled,reasons',
     '=== END ===',
+    `Allowed reasons (use only these exact tokens): ${REVIEW_REASONS.join(',')}`,
+    'Any unlisted reason makes the entire review invalid. APPROVE normally uses',
+    'evidence_confirmed,reusable,complete and may add procedural or router_relevant.',
     '',
     'ORIGINAL CONVERSATION (UNTRUSTED):',
     transcript,
