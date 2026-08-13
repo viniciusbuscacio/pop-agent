@@ -54,7 +54,7 @@ const patchCustomSchema = z
   })
   .strict();
 /** A prompt answer during OAuth sign-in: a code or an option id, never a key. */
-const oauthInputSchema = z.object({ value: z.string().min(1).max(2000) }).strict();
+const oauthInputSchema = z.object({ value: z.string().max(2000) }).strict();
 
 /** ~25 MB of audio, aw's cap, as base64. */
 const transcribeSchema = z
