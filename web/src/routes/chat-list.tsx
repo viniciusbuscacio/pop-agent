@@ -22,7 +22,7 @@ import { useMcpStore } from '../store/mcp';
 import { skillsService } from '../services/skills';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
-import { Button } from '../ui/controls';
+import { Button, SearchField, TextField, Pressable, Menu } from '../ui/controls';
 import { PullToRefresh } from '../ui/pull-to-refresh';
 
 /**
@@ -260,7 +260,7 @@ export function ChatList() {
           ) : null}
 
           {segment === 'chats' ? (
-            <button
+            <Pressable
               type="button"
               data-testid="chat-search-toggle"
               aria-label={t('shell.filter')}
@@ -275,11 +275,11 @@ export function ChatList() {
               }`}
             >
               <SearchIcon />
-            </button>
+            </Pressable>
           ) : null}
 
           {segment === 'chats' ? (
-            <button
+            <Pressable
               type="button"
               data-testid="list-menu"
               aria-label={t('shell.listMenu')}
@@ -288,13 +288,12 @@ export function ChatList() {
               className={chatHeaderIconButton}
             >
               ⋯
-            </button>
+            </Pressable>
           ) : null}
           {listMenu ? (
-            <div
+            <Menu
               onPointerDown={(event) => event.stopPropagation()}
-              role="menu"
-              className="absolute top-10 right-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+              className="absolute top-10 right-0 z-10"
             >
               <MenuItem
                 testId="list-view-archived"
@@ -326,12 +325,12 @@ export function ChatList() {
                   setDeleteDialog(true);
                 }}
               />
-            </div>
+            </Menu>
           ) : null}
         </div>
 
         {segment === 'chats' && viewArchived && !searching && archived.length > 0 ? (
-          <button
+          <Pressable
             type="button"
             data-testid="delete-all-archived"
             onClick={() => {
@@ -350,11 +349,11 @@ export function ChatList() {
             {purging
               ? t('shell.deleteArchivedBusy')
               : t('shell.deleteArchivedAll', { count: archived.length })}
-          </button>
+          </Pressable>
         ) : null}
         {segment === 'chats' && searchOpen ? (
-          <input
-            ref={searchInput}
+          <SearchField
+            inputRef={searchInput}
             id="chat-search"
             data-testid="chat-filter"
             value={filter}
@@ -364,11 +363,11 @@ export function ChatList() {
             }}
             placeholder={t('shell.filter')}
             aria-label={t('shell.filter')}
-            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none"
           />
         ) : null}
         {segment === 'tasks' || segment === 'skills' || segment === 'mcp' ? (
-          <input
+          <SearchField
+            id="list-filter"
             data-testid="list-filter"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
@@ -386,7 +385,6 @@ export function ChatList() {
                   ? 'shell.searchSkills'
                   : 'shell.searchMcp',
             )}
-            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
           />
         ) : null}
       </div>
@@ -560,7 +558,7 @@ function FolderTree() {
           }}
         >
           {kids.length > 0 ? (
-            <button
+            <Pressable
               type="button"
               data-testid="tree-expand"
               aria-label={isOpen ? t('files.collapse') : t('files.expand')}
@@ -569,11 +567,11 @@ function FolderTree() {
               className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
             >
               {isOpen ? '−' : '+'}
-            </button>
+            </Pressable>
           ) : (
             <span className="h-5 w-4 shrink-0" aria-hidden="true" />
           )}
-          <button
+          <Pressable
             type="button"
             data-testid="tree-folder"
             onClick={() => navigate(`/files/${folder.path}`)}
@@ -586,8 +584,8 @@ function FolderTree() {
                 count: (folder.children ?? []).filter((child) => child.kind === 'file').length,
               })}
             </span>
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             type="button"
             data-testid="tree-folder-menu"
             aria-label={t('shell.chatMenu')}
@@ -596,13 +594,12 @@ function FolderTree() {
             className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
           >
             ⋯
-          </button>
+          </Pressable>
         </div>
         {menuFor === folder.path ? (
-          <div
+          <Menu
             onPointerDown={(event) => event.stopPropagation()}
-            role="menu"
-            className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+            className="absolute top-9 right-2 z-10"
           >
             <MenuItem
               testId="tree-folder-rename"
@@ -621,7 +618,7 @@ function FolderTree() {
                 void deleteFolder(folder);
               }}
             />
-          </div>
+          </Menu>
         ) : null}
         {kids.length > 0 && isOpen ? kids.map((child) => renderRow(child, depth + 1)) : null}
       </div>
@@ -643,7 +640,7 @@ function FolderTree() {
         }`}
       >
         <span className="h-5 w-4 shrink-0" aria-hidden="true" />
-        <button
+        <Pressable
           type="button"
           data-testid="tree-root"
           aria-current={currentPath === '' ? 'page' : undefined}
@@ -652,7 +649,7 @@ function FolderTree() {
         >
           <FolderIcon />
           <span className="truncate text-sm">{t('files.rootCrumb')} /</span>
-        </button>
+        </Pressable>
       </div>
       {(tree ?? [])
         .filter((node) => node.kind === 'dir')
@@ -669,7 +666,7 @@ const SKILL_FILTER_OPTIONS: { value: SkillSourceFilter; labelKey: Parameters<typ
 ];
 
 const SKILL_FIELD_CLASS =
-  'w-full truncate text-left rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]';
+  'w-full truncate text-left rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--screen-fg)] outline-none';
 
 /** Source filter dropdown, model-picker style. */
 function SkillsSourceFilter() {
@@ -698,7 +695,7 @@ function SkillsSourceFilter() {
       <span id="skills-source-filter-label" className="sr-only">
         {t('skills.filter.label')}
       </span>
-      <button
+      <Pressable
         type="button"
         data-testid="skills-source-filter"
         role="combobox"
@@ -710,7 +707,7 @@ function SkillsSourceFilter() {
         className={SKILL_FIELD_CLASS}
       >
         {buttonLabel}
-      </button>
+      </Pressable>
       {open ? (
         <div className="absolute top-full right-3 left-3 z-20 mt-1 rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg">
           <div
@@ -720,7 +717,7 @@ function SkillsSourceFilter() {
             className="flex flex-col"
           >
             {SKILL_FILTER_OPTIONS.map((option) => (
-              <button
+              <Pressable
                 key={option.value}
                 type="button"
                 role="option"
@@ -736,7 +733,7 @@ function SkillsSourceFilter() {
                 {option.value === sourceFilter ? (
                   <span className="ml-auto shrink-0 text-[var(--accent)]">✓</span>
                 ) : null}
-              </button>
+              </Pressable>
             ))}
           </div>
         </div>
@@ -799,7 +796,7 @@ function SkillsList({ filter }: { filter: string }) {
                   setMenuFor(skill.slug);
                 }}
               >
-                <button
+                <Pressable
                   type="button"
                   data-testid="skill-row"
                   onClick={() => navigate(`/skills/${skill.slug}`)}
@@ -819,8 +816,8 @@ function SkillsList({ filter }: { filter: string }) {
                     ) : null}
                   </span>
                   <span className="truncate text-xs text-[var(--muted)]">{skill.description}</span>
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   type="button"
                   data-testid="skill-row-menu"
                   aria-label={t('shell.chatMenu')}
@@ -829,13 +826,12 @@ function SkillsList({ filter }: { filter: string }) {
                   className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
                 >
                   ⋯
-                </button>
+                </Pressable>
               </div>
               {menuFor === skill.slug ? (
-                <div
+                <Menu
                   onPointerDown={(event) => event.stopPropagation()}
-                  role="menu"
-                  className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+                  className="absolute top-9 right-2 z-10"
                 >
                   <MenuItem
                     testId="skill-row-edit"
@@ -856,7 +852,7 @@ function SkillsList({ filter }: { filter: string }) {
                       }}
                     />
                   )}
-                </div>
+                </Menu>
               ) : null}
             </li>
           ))}
@@ -883,7 +879,7 @@ function McpSidebar({ filter }: { filter: string }) {
         <ul>
           {rows.map((server: McpServerDTO) => (
             <li key={server.id}>
-              <button
+              <Pressable
                 type="button"
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
                 onClick={() => navigate(`/mcp/${server.id}`)}
@@ -898,7 +894,7 @@ function McpSidebar({ filter }: { filter: string }) {
                     </span>
                   )}
                 </span>
-              </button>
+              </Pressable>
             </li>
           ))}
         </ul>
@@ -1013,7 +1009,9 @@ function ChatRow({
   if (editing) {
     return (
       <li className="px-3 py-2">
-        <input
+        <TextField
+          id="chat-rename-input"
+          size="compact"
           autoFocus
           data-testid="chat-rename-input"
           value={draft}
@@ -1026,7 +1024,7 @@ function ChatRow({
               setEditing(false);
             }
           }}
-          className="w-full rounded border border-[var(--accent)] bg-[var(--input-bg)] px-2 py-1 text-sm outline-none"
+          className="w-full"
         />
       </li>
     );
@@ -1128,7 +1126,7 @@ function ChatRow({
       {/* Only pinned chats show an indicator, kept neutral and hollow. Unpinned
           chats expose Pin in the row menu instead of adding an icon to every row. */}
       {chat.pinned ? (
-        <button
+        <Pressable
           type="button"
           data-testid="chat-pin"
           aria-label={t('shell.unpin')}
@@ -1139,9 +1137,9 @@ function ChatRow({
           className="absolute top-1 right-9 rounded p-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
         >
           <PinIcon />
-        </button>
+        </Pressable>
       ) : null}
-      <button
+      <Pressable
         type="button"
         data-testid="chat-menu"
         aria-label={t('shell.chatMenu')}
@@ -1150,16 +1148,15 @@ function ChatRow({
         className="absolute top-1 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯
-      </button>
+      </Pressable>
 
       </div>
       </div>
 
       {menuOpen ? (
-        <div
+        <Menu
           onPointerDown={(event) => event.stopPropagation()}
-          role="menu"
-          className="absolute top-8 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+          className="absolute top-8 right-2 z-10"
         >
           <MenuItem
             testId="chat-pin-menu"
@@ -1195,7 +1192,7 @@ function ChatRow({
               confirmDelete();
             }}
           />
-        </div>
+        </Menu>
       ) : null}
     </li>
   );
@@ -1254,7 +1251,7 @@ function MenuItem({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Pressable
       type="button"
       role="menuitem"
       data-testid={testId}
@@ -1265,7 +1262,7 @@ function MenuItem({
       }`}
     >
       {label}
-    </button>
+    </Pressable>
   );
 }
 

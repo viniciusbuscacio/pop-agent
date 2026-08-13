@@ -1,4 +1,5 @@
 import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { Pressable } from './controls';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { t } from '../i18n';
@@ -137,13 +138,13 @@ function MarkdownImage({
             {t('chat.openImage')}
           </a>
         ) : (
-          <button
+          <Pressable
             type="button"
             className="text-[var(--accent)] underline underline-offset-2"
             onClick={() => saveFromLink(resolved.download)}
           >
             {t('chat.downloadImage')}
-          </button>
+          </Pressable>
         )}
       </span>
     );
@@ -267,14 +268,14 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     <div className="min-w-0 overflow-hidden rounded-lg border border-[var(--border)]">
       <div className="flex min-w-0 items-center justify-between bg-[var(--input-bg)] px-3 py-1 text-xs text-[var(--muted)]">
         <span className="min-w-0 truncate">{language}</span>
-        <button
+        <Pressable
           type="button"
           data-testid="code-copy"
           onClick={() => void copy()}
           className="rounded px-2 py-0.5 hover:bg-[var(--hover-overlay)]"
         >
           {copied ? t('common.copied') : t('common.copy')}
-        </button>
+        </Pressable>
       </div>
       {html === undefined ? (
         <pre className="max-w-full overflow-x-auto bg-[var(--input-bg)] p-3 font-mono text-sm">

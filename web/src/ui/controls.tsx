@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   ButtonHTMLAttributes,
+  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
@@ -13,12 +15,13 @@ import type {
  */
 
 type ButtonVariant = 'primary' | 'ghost' | 'danger';
+type IconButtonSize = 'sm' | 'md';
 
 // Not semibold: the app has exactly one heavy line, the Chat/Files/Agent
 // navigation, and a New chat button in the same weight right under it read as
 // a second title rather than an action (Vinicius, 03/08).
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
+  'inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
 
 /**
  * Size is a prop, never a `text-`/`px-` handed in through `className`: two
@@ -49,6 +52,21 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
     'bg-transparent text-[var(--danger)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
 };
 
+/**
+ * Semantic button foundation for bespoke controls (rows, disclosure headers,
+ * list options). It deliberately owns only interaction states; use Button or
+ * IconButton whenever their visual shape fits.
+ */
+export function Pressable({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      className={`disabled:cursor-default disabled:opacity-50 ${className}`}
+      {...props}
+    />
+  );
+}
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -74,19 +92,28 @@ export function Button({
  * happened to emit them in, not by the order they were written.
  */
 const FIELD_BASE =
-  'rounded-md border border-[var(--border)] bg-[var(--input-bg)] outline-none focus:border-[var(--accent)] disabled:opacity-50';
+  'border border-[var(--border)] bg-[var(--input-bg)] outline-none disabled:cursor-default disabled:opacity-50';
 
 const FIELD_SIZES = {
   /** A form field with a label above it. */
   md: 'px-3 py-2 text-[var(--screen-fg)]',
-  /** A control that lives in a toolbar next to icons, so it reads quieter. */
+  /** A control that lives in a dense picker, so it reads quieter. */
   sm: 'px-2 py-1 text-xs text-[var(--key-fg-dim)]',
+  /** Search in a sidebar or toolbar: compact without shrinking its label. */
+  search: 'px-3 py-1.5 text-sm text-[var(--screen-fg)]',
+  /** In-place editing inside a list row. */
+  compact: 'px-2 py-1 text-sm text-[var(--screen-fg)]',
+  /** The chat composer keeps a larger touch target and grows vertically. */
+  composer: 'px-4 py-2.5 text-[var(--screen-fg)]',
 } as const;
 
 export type FieldSize = keyof typeof FIELD_SIZES;
 
-function fieldClass(size: FieldSize, extra: string): string {
-  return `${FIELD_BASE} ${FIELD_SIZES[size]} ${extra}`.trim();
+function fieldClass(size: FieldSize, extra: string, shape: 'control' | 'composer' = 'control'): string {
+  const radius = shape === 'composer'
+    ? 'rounded-[var(--radius-composer)]'
+    : 'rounded-[var(--radius-control)]';
+  return `${FIELD_BASE} ${FIELD_SIZES[size]} ${radius} ${extra}`.trim();
 }
 
 /**
@@ -155,12 +182,26 @@ function wrap(
   );
 }
 
+export function SearchField({
+  id,
+  size = 'search',
+  inputRef,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'type'> & {
+  id: string;
+  size?: FieldSize;
+  inputRef?: Ref<HTMLInputElement> | undefined;
+}) {
+  return <TextField id={id} type="search" size={size} inputRef={inputRef} {...props} />;
+}
+
 export function TextField({
   label,
   hint,
   error,
   id,
   size = 'md',
+  inputRef,
   className = '',
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> & {
@@ -169,9 +210,11 @@ export function TextField({
   hint?: string | undefined;
   error?: string | undefined;
   size?: FieldSize;
+  inputRef?: Ref<HTMLInputElement> | undefined;
 }) {
   return wrap(
     <input
+      ref={inputRef}
       id={id}
       aria-describedby={describedBy(id, hint, error)}
       aria-invalid={error !== undefined}
@@ -311,7 +354,7 @@ export function ModelPicker({
       </button>
       {open ? (
         <div
-          className={`absolute z-20 rounded-md border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-lg ${
+          className={`absolute z-20 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)] ${
             layout === 'field'
               ? 'top-full right-0 left-0 mt-1 w-full'
               : 'right-0 bottom-full mb-1 w-72 max-w-[min(85vw,18rem)]'
@@ -361,6 +404,8 @@ export function TextArea({
   error,
   id,
   size = 'md',
+  shape = 'control',
+  inputRef,
   className = '',
   ...props
 }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'size'> & {
@@ -369,19 +414,142 @@ export function TextArea({
   hint?: string | undefined;
   error?: string | undefined;
   size?: FieldSize;
+  shape?: 'control' | 'composer';
+  inputRef?: Ref<HTMLTextAreaElement> | undefined;
 }) {
   return wrap(
     <textarea
+      ref={inputRef}
       id={id}
       aria-describedby={describedBy(id, hint, error)}
       aria-invalid={error !== undefined}
-      className={fieldClass(size, className)}
+      className={fieldClass(size, className, shape)}
       {...props}
     />,
     id,
     label,
     hint,
     error,
+  );
+}
+
+/** A standalone checkbox for selection rows whose visible text is elsewhere. */
+export function Checkbox({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      type="checkbox"
+      className={`h-4 w-4 shrink-0 accent-[var(--accent)] ${className}`}
+      {...props}
+    />
+  );
+}
+
+/** A hidden native file picker, activated by a styled Button or IconButton. */
+export function FileInput({
+  inputRef,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { inputRef?: Ref<HTMLInputElement> | undefined }) {
+  return <input ref={inputRef} type="file" {...props} />;
+}
+
+export function RadioGroup<T extends string>({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  legend: string;
+  name: string;
+  value: T;
+  options: readonly { value: T; label: string; hint?: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1 text-sm text-[var(--key-fg-dim)]">{legend}</legend>
+      {options.map((option) => (
+        <label key={option.value} className="flex cursor-pointer items-start gap-2.5 text-sm">
+          <input
+            type="radio"
+            name={name}
+            value={option.value}
+            checked={option.value === value}
+            onChange={() => onChange(option.value)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <span>
+            <span className="block text-[var(--screen-fg)]">{option.label}</span>
+            {option.hint === undefined ? null : (
+              <span className="block text-xs text-[var(--muted)]">{option.hint}</span>
+            )}
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+export function RangeField({
+  id,
+  label,
+  value,
+  className = '',
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value'> & {
+  id: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <Field id={id} label={label}>
+      <div className="flex items-center gap-3">
+        <input
+          id={id}
+          type="range"
+          value={value}
+          className={`min-w-0 flex-1 accent-[var(--accent)] ${className}`}
+          {...props}
+        />
+        <output htmlFor={id} className="min-w-10 text-right text-sm text-[var(--key-fg-dim)]">
+          {value}
+        </output>
+      </div>
+    </Field>
+  );
+}
+
+export function SwitchField({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-4 text-sm">
+      <span>
+        <span className="block text-[var(--screen-fg)]">{label}</span>
+        {hint === undefined ? null : <span className="block text-xs text-[var(--muted)]">{hint}</span>}
+      </span>
+      <span className={`relative h-5 w-9 shrink-0 rounded-full border border-[var(--border)] ${checked ? 'bg-[var(--accent)]' : 'bg-[var(--input-bg)]'}`}>
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="peer sr-only"
+        />
+        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-[var(--screen-fg)] transition-transform ${checked ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
+      </span>
+    </label>
   );
 }
 
@@ -427,10 +595,50 @@ export function CheckField({
   );
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
+const ICON_BUTTON_SIZES: Record<IconButtonSize, string> = {
+  sm: 'min-h-8 min-w-8 p-1',
+  md: 'min-h-10 min-w-10 p-2',
+};
+
+/** A square, accessible toolbar action. Its caller supplies the icon and name. */
+export function IconButton({
+  size = 'md',
+  className = '',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { size?: IconButtonSize }) {
+  return (
+    <button
+      type="button"
+      className={`inline-grid place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] disabled:cursor-default disabled:opacity-50 ${ICON_BUTTON_SIZES[size]} ${className}`}
+      {...props}
+    />
+  );
+}
+
+/** The shared visual shell for action menus; positioning remains the caller's layout concern. */
+export function Menu({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`rounded-xl border border-[var(--border)] bg-[var(--panel-bg)] p-6 ${className}`}
+      role="menu"
+      className={`flex flex-col rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-[var(--shadow-menu)] ${className}`}
+      {...props}
+    />
+  );
+}
+
+export function Card({
+  children,
+  variant = 'default',
+  className = '',
+}: {
+  children: ReactNode;
+  variant?: 'default' | 'danger';
+  className?: string;
+}) {
+  const border = variant === 'danger' ? 'border-[var(--danger)]' : 'border-[var(--border)]';
+  return (
+    <div
+      className={`rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] p-6 ${className}`}
     >
       {children}
     </div>
@@ -477,7 +685,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex max-w-full flex-wrap self-start overflow-hidden rounded-md border border-[var(--border)]"
+      className="inline-flex max-w-full flex-wrap self-start overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)]"
     >
       {options.map((option) => (
         <button

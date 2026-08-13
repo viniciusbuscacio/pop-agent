@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { OAuthStateResponse, ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
-import { Button } from '../ui/controls';
+import { Button, TextField } from '../ui/controls';
 
 /**
  * The subscription sign-in, inline in the provider's card (pop-agent.spec §15,
@@ -258,7 +258,7 @@ export function OAuthSection({
                 {pastePending ? t('provider.oauth.paste.label') : flow.pending.message}
               </label>
               <div className="flex flex-wrap items-center gap-2">
-                <input
+                <TextField
                   id={`oauth-answer-${provider.id}`}
                   data-testid={`provider-oauth-answer-${provider.id}`}
                   type={flow.pending.type === 'secret' ? 'password' : 'text'}
@@ -282,7 +282,7 @@ export function OAuthSection({
                     event.preventDefault();
                     void submit();
                   }}
-                  className={`w-full rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-[var(--screen-fg)] ${pastePending ? '' : 'max-w-xs'}`}
+                  className={`w-full ${pastePending ? '' : 'max-w-xs'}`}
                 />
                 <Button
                   type="button"

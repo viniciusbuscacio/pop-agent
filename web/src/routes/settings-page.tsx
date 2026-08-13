@@ -30,7 +30,7 @@ import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
-import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Segmented, Select, TextArea, TextField, Pressable } from '../ui/controls';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 
@@ -82,7 +82,7 @@ export function SettingsPage() {
   return (
     <div className="min-h-dvh">
       <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
-        <button
+        <Pressable
           type="button"
           data-testid="settings-back"
           aria-label={t('common.back')}
@@ -90,14 +90,14 @@ export function SettingsPage() {
           className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           ←
-        </button>
+        </Pressable>
         <h1 className="text-lg font-semibold">{t('settings.title')}</h1>
       </header>
 
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-4 md:w-[90%] md:max-w-none md:flex-row">
         <nav className="flex gap-1 overflow-x-auto md:w-48 md:shrink-0 md:flex-col">
           {SECTIONS.map((entry) => (
-            <button
+            <Pressable
               key={entry.id}
               type="button"
               data-testid={`settings-tab-${entry.id}`}
@@ -110,7 +110,7 @@ export function SettingsPage() {
               }
             >
               {t(entry.labelKey)}
-            </button>
+            </Pressable>
           ))}
         </nav>
 
@@ -1686,7 +1686,7 @@ function DangerZoneSection({ llmStopped: reported }: { llmStopped: boolean }) {
   const hint = (text: string) => <p className="text-xs text-[var(--muted)]">{text}</p>;
 
   return (
-    <Card className="flex flex-col gap-4 border-[var(--danger)]">
+    <Card variant="danger" className="flex flex-col gap-4">
       <h3 className="text-sm font-semibold text-[var(--danger)]">{t('settings.server.dangerZone')}</h3>
 
       <div className="flex flex-col gap-2">

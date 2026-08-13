@@ -1,0 +1,64 @@
+// @vitest-environment happy-dom
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  Button,
+  CheckField,
+  Checkbox,
+  FileInput,
+  IconButton,
+  Menu,
+  MenuItem,
+  RadioGroup,
+  RangeField,
+  SearchField,
+  Select,
+  SwitchField,
+  TextArea,
+  TextField,
+} from './controls';
+
+afterEach(cleanup);
+
+describe('UI design-system primitives', () => {
+  it('owns the neutral field skin and leaves focus to the global ring', () => {
+    render(
+      <>
+        <TextField id="name" label="Name" />
+        <SearchField id="search" aria-label="Search" />
+        <TextArea id="notes" label="Notes" />
+        <Select id="kind" label="Kind"><option>One</option></Select>
+      </>,
+    );
+    const controls = [
+      ...screen.getAllByRole('textbox'),
+      screen.getByRole('searchbox'),
+      screen.getByRole('combobox'),
+    ];
+    for (const control of controls) {
+      expect(control.className).toContain('border-[var(--border)]');
+      expect(control.className).not.toContain('focus:border-[var(--accent)]');
+    }
+  });
+
+  it('provides the standard choice, file and action families', () => {
+    render(
+      <>
+        <Checkbox aria-label="Select row" />
+        <CheckField id="check" label="Checkbox" checked={false} onChange={vi.fn()} />
+        <SwitchField id="switch" label="Switch" checked={false} onChange={vi.fn()} />
+        <RadioGroup legend="Radio" name="radio" value="a" options={[{ value: 'a', label: 'A' }]} onChange={vi.fn()} />
+        <RangeField id="range" label="Range" value={5} onChange={vi.fn()} />
+        <FileInput data-testid="file" hidden />
+        <Button>Button</Button>
+        <IconButton aria-label="Icon">+</IconButton>
+        <Menu><MenuItem testId="menu-item" label="Menu item" onClick={vi.fn()} /></Menu>
+      </>,
+    );
+    expect(screen.getByRole('switch')).toBeTruthy();
+    expect(screen.getByRole('radio')).toBeTruthy();
+    expect(screen.getByRole('slider')).toBeTruthy();
+    expect(screen.getByTestId('file').getAttribute('type')).toBe('file');
+    expect(screen.getByRole('menu')).toBeTruthy();
+  });
+});

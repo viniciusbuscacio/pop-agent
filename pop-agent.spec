@@ -887,6 +887,13 @@ events from stale runs.
     because it is the only name the tree will ever get.
   - Layout classes (widths, `flex-1`) still come through `className`; only
     the skin is owned by the primitive.
+  - `tools/check-ui-primitives.ts` parses production TSX before TypeScript and
+    rejects native `button`/`input`/`select`/`textarea` outside the primitive
+    implementation, hand-written menu shells, duplicate focus treatments,
+    literal component colors and private skins passed through `className`. A
+    new kind of control is added to `ui/controls.tsx` first; feature
+    code cannot create a private visual dialect. The maintained catalog and
+    usage rules live in `docs/ui-style-guide.md`.
 - Theme: follows the system (`prefers-color-scheme`) + manual
   System/Light/Dark override. **Never sent to the server** — it belongs to
   the device, lives in `localStorage`, and is applied by an inline script

@@ -16,6 +16,7 @@ import {
   ModelPicker,
   Select,
   TextField,
+  Pressable,
   type ModelPickerOption,
 } from '../ui/controls';
 import { OAuthSection } from './oauth-section';
@@ -191,7 +192,7 @@ function ProviderCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
-          <button
+          <Pressable
             type="button"
             data-testid="provider-toggle"
             aria-pressed={provider.enabled}
@@ -213,7 +214,7 @@ function ProviderCard({
                   : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
               }
             />
-          </button>
+          </Pressable>
           <div className="min-w-0">
             <p className="truncate font-semibold" data-testid="provider-card-name">
               {provider.name}
@@ -252,14 +253,14 @@ function ProviderCard({
         </span>
       </div>
       {authErrorAt === undefined ? null : (
-        <button
+        <Pressable
           type="button"
           data-testid="provider-sign-in-again"
           onClick={onEdit}
           className="self-start rounded-md border border-[var(--danger)] bg-[var(--danger)]/10 px-2 py-0.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/20"
         >
           {t('provider.signInAgain')}
-        </button>
+        </Pressable>
       )}
       {toggleError === undefined ? null : (
         <p className="text-sm text-[var(--danger)]" data-testid="provider-toggle-error">
@@ -421,7 +422,7 @@ async function remove(
 function StepHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <div className="flex items-center gap-1">
-      <button
+      <Pressable
         type="button"
         data-testid="provider-back"
         aria-label={t('common.back')}
@@ -429,7 +430,7 @@ function StepHeader({ title, onBack }: { title: string; onBack: () => void }) {
         className="-ml-2 rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
       >
         ←
-      </button>
+      </Pressable>
       <h2 className="min-w-0 truncate text-base font-semibold">{title}</h2>
     </div>
   );

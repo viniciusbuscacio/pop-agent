@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Pressable } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -263,7 +264,7 @@ export function ChatPage() {
   return (
     <>
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
-        <button
+        <Pressable
           type="button"
           data-testid="chat-back"
           aria-label={t('common.back')}
@@ -271,7 +272,7 @@ export function ChatPage() {
           className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
         >
           ←
-        </button>
+        </Pressable>
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
 
       </header>
@@ -333,7 +334,7 @@ export function ChatPage() {
                 }}
               />
               <div className="flex gap-2 pr-1 text-xs">
-                <button
+                <Pressable
                   type="button"
                   onClick={() => {
                     setQueueActionError(false);
@@ -342,8 +343,8 @@ export function ChatPage() {
                   className="text-[var(--accent)]"
                 >
                   {t('common.edit')}
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   type="button"
                   onClick={() => {
                     setQueueActionError(false);
@@ -356,7 +357,7 @@ export function ChatPage() {
                   className="text-[var(--danger)]"
                 >
                   {t('common.cancel')}
-                </button>
+                </Pressable>
               </div>
             </div>
           ))}
@@ -381,22 +382,22 @@ export function ChatPage() {
               </pre>
               <p className="mt-2 text-xs text-[var(--muted)]">{t('chat.confirm.why')}</p>
               <div className="mt-3 flex gap-2">
-                <button
+                <Pressable
                   type="button"
                   data-testid="confirm-allow"
                   onClick={() => void respondConfirm(chatId, confirm.runId, true)}
                   className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--hover-overlay)]"
                 >
                   {t('chat.confirm.allow')}
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   type="button"
                   data-testid="confirm-deny"
                   onClick={() => void respondConfirm(chatId, confirm.runId, false)}
                   className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-[var(--accent-fg)]"
                 >
                   {t('chat.confirm.deny')}
-                </button>
+                </Pressable>
               </div>
             </div>
           ) : null}
@@ -410,7 +411,7 @@ export function ChatPage() {
         </div>
 
         {showJump ? (
-          <button
+          <Pressable
             type="button"
             data-testid="jump-to-latest"
             onClick={jumpToLatest}
@@ -423,7 +424,7 @@ export function ChatPage() {
                 {t('chat.newMessages')}
               </span>
             ) : null}
-          </button>
+          </Pressable>
         ) : null}
       </div>
 

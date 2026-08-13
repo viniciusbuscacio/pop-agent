@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
+import { Pressable } from '../ui/controls';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
@@ -23,7 +24,7 @@ export function ShellHeader({
       className={`flex items-center justify-between gap-2 border-b border-[var(--border)] p-3 ${className}`}
     >
       <span className="font-semibold">{t('app.name')}</span>
-      <button
+      <Pressable
         type="button"
         data-testid={settingsTestId}
         aria-label={t('shell.settings')}
@@ -31,7 +32,7 @@ export function ShellHeader({
         className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
       >
         <GearIcon />
-      </button>
+      </Pressable>
     </header>
   );
 }
@@ -61,7 +62,7 @@ export function ShellFooter() {
       <span className="flex items-center gap-1">
         <HealthDot />
         <RefreshButton />
-        <button
+        <Pressable
           type="button"
           data-testid="shell-settings"
           aria-label={t('shell.settings')}
@@ -69,7 +70,7 @@ export function ShellFooter() {
           className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           <GearIcon />
-        </button>
+        </Pressable>
       </span>
     </footer>
   );
@@ -108,7 +109,7 @@ function RefreshButton() {
   }
 
   return (
-    <button
+    <Pressable
       type="button"
       data-testid="shell-refresh"
       aria-label={t('shell.refresh')}
@@ -119,7 +120,7 @@ function RefreshButton() {
       <span className={busy ? 'block motion-safe:animate-spin' : 'block'}>
         <RefreshIcon />
       </span>
-    </button>
+    </Pressable>
   );
 }
 
@@ -167,7 +168,7 @@ function HealthDot() {
 
   return (
     <span className="relative">
-      <button
+      <Pressable
         type="button"
         data-testid="health-dot"
         aria-label={t('shell.health.button')}

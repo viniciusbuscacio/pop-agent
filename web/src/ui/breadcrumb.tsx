@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
-import { MenuItem } from './controls';
+import { MenuItem, Pressable, Menu } from './controls';
 
 /**
  * Where you are, and the way back (pop-agent.spec §14).
@@ -49,7 +49,7 @@ export function Breadcrumb({
       className="relative flex items-center gap-1.5 text-base font-semibold text-[var(--screen-fg)]"
     >
       {collapsed.length > 0 ? (
-        <button
+        <Pressable
           type="button"
           data-testid="crumb-more"
           aria-label={t('files.crumbsAbove')}
@@ -59,7 +59,7 @@ export function Breadcrumb({
           className="rounded px-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
         >
           …
-        </button>
+        </Pressable>
       ) : null}
 
       {shown.map((crumb, index) => (
@@ -72,23 +72,22 @@ export function Breadcrumb({
               {crumb.name}
             </span>
           ) : (
-            <button
+            <Pressable
               type="button"
               data-testid="crumb-link"
               onClick={() => onOpen(crumb.id)}
               className="truncate hover:underline"
             >
               {crumb.name}
-            </button>
+            </Pressable>
           )}
         </span>
       ))}
 
       {menu ? (
-        <div
+        <Menu
           onPointerDown={(event) => event.stopPropagation()}
-          role="menu"
-          className="absolute top-8 left-0 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm font-normal shadow-lg"
+          className="absolute top-8 left-0 z-10 font-normal"
         >
           {collapsed.map((crumb) => (
             <MenuItem
@@ -101,7 +100,7 @@ export function Breadcrumb({
               }}
             />
           ))}
-        </div>
+        </Menu>
       ) : null}
     </nav>
   );

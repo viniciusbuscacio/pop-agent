@@ -27,6 +27,10 @@
   --backdrop: rgba(0, 0, 0, 0.65);
   --switch-stroke: rgba(255, 255, 255, 0.6);
   --scroll-thumb: rgba(255, 255, 255, 0.28);
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --radius-composer: 1rem;
+  --shadow-menu: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
 
 :root[data-theme='light'] {
@@ -48,4 +52,8 @@
   --backdrop: rgba(0, 0, 0, 0.45);
   --switch-stroke: rgba(0, 0, 0, 0.45);
   --scroll-thumb: rgba(0, 0, 0, 0.28);
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --radius-composer: 1rem;
+  --shadow-menu: 0 10px 24px rgba(0, 0, 0, 0.16);
 }

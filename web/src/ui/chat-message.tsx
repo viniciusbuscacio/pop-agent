@@ -1,4 +1,5 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
+import { Pressable } from './controls';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
@@ -178,7 +179,7 @@ function ActionButton({
   children: ReactNode;
 }) {
   return (
-    <button
+    <Pressable
       type="button"
       data-testid={testId}
       disabled={disabled}
@@ -186,7 +187,7 @@ function ActionButton({
       className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)] disabled:opacity-60"
     >
       {children}
-    </button>
+    </Pressable>
   );
 }
 
@@ -240,7 +241,7 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
 
   return (
     <div className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="thinking-card">
-      <button
+      <Pressable
         type="button"
         data-testid="thinking-toggle"
         aria-expanded={open}
@@ -252,7 +253,7 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
       >
         <span aria-hidden="true">{open ? '▾' : '▸'}</span>
         {t('chat.thinking')}
-      </button>
+      </Pressable>
       {open ? (
         <p
           data-testid="thinking-text"
@@ -272,7 +273,7 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
 
   return (
     <div className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="tool-card">
-      <button
+      <Pressable
         type="button"
         data-testid="tool-toggle"
         aria-expanded={open}
@@ -284,7 +285,7 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
           {grouped ? t('chat.ranTools', { count: tools.length }) : (tools[0]?.name ?? '')}
         </span>
         <ToolStatusMark tools={tools} />
-      </button>
+      </Pressable>
 
       {open ? (
         <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">

@@ -1,4 +1,5 @@
 import type { MessageDelivery } from '@pop-agent/shared';
+import { Pressable } from './controls';
 import { t } from '../i18n';
 
 /**
@@ -58,7 +59,7 @@ export function SlashMenu({
   return (
     <div data-testid="slash-menu" className={MENU_CLASS}>
       {options.map((command, index) => (
-        <button
+        <Pressable
           key={command.name}
           type="button"
           data-testid="slash-option"
@@ -67,7 +68,7 @@ export function SlashMenu({
         >
           <span>/{command.name}</span>
           <span className="truncate text-xs text-[var(--muted)]">{command.description}</span>
-        </button>
+        </Pressable>
       ))}
     </div>
   );
@@ -102,7 +103,7 @@ export function ModelMenu({
         const isCurrent =
           choice.provider === activeProvider && choice.model === activeModel;
         return (
-          <button
+          <Pressable
             key={choice.model === '' ? '__default' : `${choice.provider}/${choice.model}`}
             type="button"
             data-testid="slash-option"
@@ -114,7 +115,7 @@ export function ModelMenu({
             {isCurrent ? (
               <span className="ml-auto shrink-0 text-xs text-[var(--accent)]">✓</span>
             ) : null}
-          </button>
+          </Pressable>
         );
       })}
     </div>

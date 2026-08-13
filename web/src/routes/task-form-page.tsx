@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { tasksService } from '../services/tasks';
 import { useTasksStore } from '../store/tasks';
-import { Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Segmented, Select, TextArea, TextField, Pressable } from '../ui/controls';
 
 /**
  * Creating and editing a background task (pop-agent.spec §21) as a **full screen**
@@ -101,7 +101,7 @@ export function TaskFormPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
       <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
-        <button
+        <Pressable
           type="button"
           data-testid="task-form-back"
           aria-label={t('common.back')}
@@ -109,7 +109,7 @@ export function TaskFormPage() {
           className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           ←
-        </button>
+        </Pressable>
         <h1 className="text-lg font-semibold">
           {taskId === undefined ? t('tasks.form.newTitle') : t('tasks.form.editTitle')}
         </h1>

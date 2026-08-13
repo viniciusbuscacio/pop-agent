@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Pressable } from './controls';
 import { t } from '../i18n';
 import {
   applyUpdate,
@@ -56,7 +57,7 @@ export function UpdatePrompt() {
       ) : (
         <>
           <span>{t('update.available')}</span>
-          <button
+          <Pressable
             type="button"
             data-testid="update-reload"
             onClick={() => {
@@ -68,8 +69,8 @@ export function UpdatePrompt() {
             className="rounded bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-fg)]"
           >
             {t('update.reload')}
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             type="button"
             data-testid="update-dismiss"
             aria-label={t('update.later')}
@@ -77,7 +78,7 @@ export function UpdatePrompt() {
             className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
           >
             ✕
-          </button>
+          </Pressable>
         </>
       )}
       {reloading ? (

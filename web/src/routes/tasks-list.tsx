@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { shortDateTime } from '../lib/time';
 import { useTasksStore } from '../store/tasks';
-import { Button } from '../ui/controls';
+import { Button, Pressable, Menu } from '../ui/controls';
 
 /**
  * The background-task list (pop-agent.spec §21). It lives in the sidebar for the
@@ -93,7 +93,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
           The switch: aria-pressed rather than a checkbox, because it acts the
           moment it is pressed -- there is no form to submit.
         */}
-        <button
+        <Pressable
           type="button"
           data-testid="task-toggle"
           aria-pressed={task.enabled}
@@ -114,17 +114,17 @@ function TaskRow({ task }: { task: TaskDTO }) {
                 : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
             }
           />
-        </button>
+        </Pressable>
 
         <div className="min-w-0 flex-1">
-          <button
+          <Pressable
             type="button"
             data-testid="task-open"
             onClick={() => navigate(`/tasks/${task.id}`)}
             className="block w-full truncate text-left text-sm font-medium"
           >
             {task.title}
-          </button>
+          </Pressable>
           <p className="truncate text-xs text-[var(--muted)]">
             {describeSchedule(task)} · {describeNextRun(task)}
           </p>
@@ -132,7 +132,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
         </div>
       </div>
 
-      <button
+      <Pressable
         type="button"
         data-testid="task-menu"
         aria-label={t('tasks.menu')}
@@ -141,13 +141,12 @@ function TaskRow({ task }: { task: TaskDTO }) {
         className="absolute top-2 right-1 rounded px-2 py-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯
-      </button>
+      </Pressable>
 
       {menuOpen ? (
-        <div
+        <Menu
           onPointerDown={(event) => event.stopPropagation()}
-          role="menu"
-          className="absolute top-8 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+          className="absolute top-8 right-2 z-10"
         >
           <MenuItem
             testId="task-run-now"
@@ -175,7 +174,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
               confirmDelete();
             }}
           />
-        </div>
+        </Menu>
       ) : null}
     </li>
   );
@@ -220,7 +219,7 @@ function MenuItem({
   danger?: boolean;
 }) {
   return (
-    <button
+    <Pressable
       type="button"
       role="menuitem"
       data-testid={testId}
@@ -230,7 +229,7 @@ function MenuItem({
       }`}
     >
       {label}
-    </button>
+    </Pressable>
   );
 }
 

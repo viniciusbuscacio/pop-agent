@@ -5,7 +5,7 @@ import { ApiError } from '../services/api';
 import { skillsService } from '../services/skills';
 import { skillEnabled, useSkillsStore } from '../store/skills';
 import { useNotificationsStore } from '../store/notifications';
-import { Button, Card, TextArea, TextField } from '../ui/controls';
+import { Button, Card, TextArea, TextField, Pressable } from '../ui/controls';
 
 /**
  * The skill form, in its own module rather than inside the settings page.
@@ -96,18 +96,18 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
 
   return (
     <Card className="flex flex-col gap-4">
-      <button
+      <Pressable
         type="button"
         data-testid="skill-back"
         onClick={onDone}
         className="self-start text-sm text-[var(--accent)]"
       >
         ← {t('skills.back')}
-      </button>
+      </Pressable>
 
       {isNew ? null : (
         <div className="flex items-center gap-2.5">
-          <button
+          <Pressable
             type="button"
             data-testid="skill-enabled-toggle"
             aria-pressed={enabled}
@@ -129,7 +129,7 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
                   : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
               }
             />
-          </button>
+          </Pressable>
           <span className="text-sm">{t('skills.enabled')}</span>
         </div>
       )}

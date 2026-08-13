@@ -13,7 +13,7 @@ import {
   type ModelChoice,
   type SlashCommand,
 } from './slash-menu';
-import { ModelPicker } from './controls';
+import { FileInput, ModelPicker, TextArea, Pressable } from './controls';
 
 /**
  * The composer, in aw's shape: the textarea on the left, then attach, mic
@@ -494,7 +494,7 @@ export function Composer({
               className="inline-flex max-w-60 items-center gap-1.5 rounded-lg border border-[var(--accent)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--key-fg-dim)]"
             >
               <span className="truncate">@{mention.name}</span>
-              <button
+              <Pressable
                 type="button"
                 aria-label={t('chat.attachRemove', { name: mention.name })}
                 onClick={() =>
@@ -503,7 +503,7 @@ export function Composer({
                 className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
               >
                 ✕
-              </button>
+              </Pressable>
             </span>
           ))}
           {attachments.map((attachment, index) => (
@@ -521,7 +521,7 @@ export function Composer({
                 <FileIcon />
               )}
               <span className="truncate">{attachment.name}</span>
-              <button
+              <Pressable
                 type="button"
                 aria-label={t('chat.attachRemove', { name: attachment.name })}
                 onClick={() =>
@@ -530,16 +530,15 @@ export function Composer({
                 className="rounded p-0.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)] hover:text-[var(--screen-fg)]"
               >
                 <CloseIcon />
-              </button>
+              </Pressable>
             </span>
           ))}
         </div>
       ) : null}
 
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end">
-        <input
-          ref={picker}
-          type="file"
+        <FileInput
+          inputRef={picker}
           multiple
           className="hidden"
           data-testid="composer-file-input"
@@ -567,7 +566,7 @@ export function Composer({
               className="absolute bottom-full left-0 z-20 mb-1 flex max-h-56 w-72 flex-col overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
             >
               {mentionMatches.map((file) => (
-                <button
+                <Pressable
                   key={file.path}
                   type="button"
                   data-testid="mention-option"
@@ -575,12 +574,13 @@ export function Composer({
                   className="truncate px-3 py-1.5 text-left hover:bg-[var(--hover-overlay)]"
                 >
                   @{file.name}
-                </button>
+                </Pressable>
               ))}
             </div>
           ) : null}
-          <textarea
-            ref={area}
+          <TextArea
+            id="composer-input"
+            inputRef={area}
             data-testid="composer-input"
             rows={1}
             value={text}
@@ -595,7 +595,9 @@ export function Composer({
             // block (not inline-block): an inline textarea leaves baseline
             // descender space in the wrapper, and with the row's items-end the
             // buttons aligned to that phantom bottom, sitting ~7px too low.
-            className="block max-h-[33dvh] w-full resize-none overflow-x-hidden rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none"
+            size="composer"
+            shape="composer"
+            className="block max-h-[33dvh] w-full resize-none overflow-x-hidden"
           />
           </div>
         ) : (
@@ -696,7 +698,7 @@ export function Composer({
 /** The thinking visibility control sits beside the attachment action. */
 function ThinkingButton({ show, onToggle }: { show: boolean; onToggle: () => void }) {
   return (
-    <button
+    <Pressable
       type="button"
       data-testid="thinking-visibility"
       aria-pressed={show}
@@ -710,7 +712,7 @@ function ThinkingButton({ show, onToggle }: { show: boolean; onToggle: () => voi
       }`}
     >
       <span aria-hidden="true">T</span>
-    </button>
+    </Pressable>
   );
 }
 
@@ -739,7 +741,7 @@ function IconButton({
       : 'border-[var(--border)] text-[var(--key-fg-dim)] opacity-70 hover:bg-[var(--hover-overlay)] hover:opacity-100';
 
   return (
-    <button
+    <Pressable
       type="button"
       data-testid={testId}
       aria-label={label}
@@ -749,7 +751,7 @@ function IconButton({
       className={`grid h-10 w-10 flex-none place-items-center rounded-full border ${skin}`}
     >
       {children}
-    </button>
+    </Pressable>
   );
 }
 

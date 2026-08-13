@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Pressable } from './controls';
 import { t } from '../i18n';
 import { healthMonitor } from '../services/health';
 
@@ -70,14 +71,14 @@ export function ConnectionBanner() {
           <span className="text-[var(--muted)]">{detail(down ? state.kind : 'recovered')}</span>
         </span>
         {state.kind === 'offline' ? (
-          <button
+          <Pressable
             type="button"
             data-testid="connection-retry"
             onClick={healthMonitor.checkNow}
             className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--hover-overlay)]"
           >
             {t('connection.retry')}
-          </button>
+          </Pressable>
         ) : null}
       </div>
     </div>

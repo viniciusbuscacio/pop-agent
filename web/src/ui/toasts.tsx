@@ -1,4 +1,5 @@
 import { useNotificationsStore } from '../store/notifications';
+import { Pressable } from './controls';
 
 /**
  * In-app notifications, in the same corner and skin as the update prompt
@@ -22,16 +23,16 @@ export function Toasts() {
       data-testid="toasts"
       role="status"
     >
-      <button
+      <Pressable
         type="button"
         data-testid="toast"
         onClick={dismiss}
         className="min-w-0 px-4 py-2 text-left"
       >
         {toast.message}
-      </button>
+      </Pressable>
       {action === undefined ? null : (
-        <button
+        <Pressable
           type="button"
           data-testid="toast-action"
           className="shrink-0 px-4 py-2 font-medium text-[var(--accent)]"
@@ -41,7 +42,7 @@ export function Toasts() {
           }}
         >
           {action.label}
-        </button>
+        </Pressable>
       )}
     </div>
   );

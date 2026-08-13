@@ -19,7 +19,7 @@ import {
   useFilesStore,
 } from '../store/files';
 import { useNotificationsStore } from '../store/notifications';
-import { Button, MenuItem, Select } from '../ui/controls';
+import { Button, Checkbox, FileInput, MenuItem, SearchField, Select, Pressable, Menu } from '../ui/controls';
 import { Breadcrumb } from '../ui/breadcrumb';
 import { PullToRefresh } from '../ui/pull-to-refresh';
 import { FileViewer } from '../ui/file-viewer';
@@ -352,15 +352,14 @@ export function FilesPage() {
           {selecting ? (
             // Same as a file row: the folder's name is the only label the
             // checkbox can carry.
-            <input
-              type="checkbox"
+            <Checkbox
               data-testid="folder-check"
               aria-label={folder.name}
               checked={selectedFolders.has(folder.path)}
               onChange={() => toggleFolderSelected(folder.path)}
             />
           ) : null}
-          <button
+          <Pressable
             type="button"
             data-testid="folder-row"
             onClick={() => navigate(`/files/${folder.path}`)}
@@ -371,8 +370,8 @@ export function FilesPage() {
             <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
               {t('files.count', { count: fileCount(folder) })}
             </span>
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             type="button"
             data-testid="folder-row-menu"
             aria-label={t('shell.chatMenu')}
@@ -381,13 +380,12 @@ export function FilesPage() {
             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
           >
             ⋯
-          </button>
+          </Pressable>
         </div>
         {menuFor === folder.path ? (
-          <div
+          <Menu
             onPointerDown={(event) => event.stopPropagation()}
-            role="menu"
-            className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+            className="absolute top-9 right-2 z-10"
           >
             <MenuItem
               testId="folder-select"
@@ -414,7 +412,7 @@ export function FilesPage() {
                 void deleteFolder(folder);
               }}
             />
-          </div>
+          </Menu>
         ) : null}
       </li>
     );
@@ -424,10 +422,9 @@ export function FilesPage() {
   // results: the actions are the same wherever the file was found.
   function renderFileMenu(file: FileNodeDTO, inSearch: boolean) {
     return (
-      <div
+      <Menu
         onPointerDown={(event) => event.stopPropagation()}
-        role="menu"
-        className="absolute top-9 right-2 z-10 flex flex-col rounded-md border border-[var(--border)] bg-[var(--panel-bg)] py-1 text-sm shadow-lg"
+        className="absolute top-9 right-2 z-10"
       >
         <MenuItem
           testId="file-open"
@@ -475,7 +472,7 @@ export function FilesPage() {
             void deleteFile(file);
           }}
         />
-      </div>
+      </Menu>
     );
   }
 
@@ -511,9 +508,8 @@ export function FilesPage() {
             being squeezed into a sliver. It wraps onto its own full-width line
             below them instead; from `sm` up there is room to share one row. */}
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            ref={picker}
-            type="file"
+          <FileInput
+            inputRef={picker}
             multiple
             hidden
             data-testid="files-upload-input"
@@ -525,9 +521,8 @@ export function FilesPage() {
           {/* React has no prop for a directory picker, but the attribute is
               what makes the browser offer one; where it is not supported the
               input simply stays a file picker. */}
-          <input
-            ref={folderPicker}
-            type="file"
+          <FileInput
+            inputRef={folderPicker}
             multiple
             hidden
             data-testid="files-upload-folder-input"
@@ -577,13 +572,14 @@ export function FilesPage() {
           >
             <TrashIcon />
           </Button>
-          <input
+          <SearchField
+            id="files-filter"
             data-testid="files-filter"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder={t('shell.filterFiles')}
             aria-label={t('shell.filterFiles')}
-            className="w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
+            className="w-full min-w-0 sm:w-auto sm:flex-1"
           />
         </div>
       </div>
@@ -676,7 +672,7 @@ export function FilesPage() {
                 const node = findNode(tree ?? [], hit.path);
                 return (
                   <li key={`folder-${hit.path}`} className="relative">
-                    <button
+                    <Pressable
                       type="button"
                       data-testid="search-folder-row"
                       onClick={() => navigate(`/files/${hit.path}`)}
@@ -692,7 +688,7 @@ export function FilesPage() {
                           {t('files.count', { count: fileCount(node) })}
                         </span>
                       )}
-                    </button>
+                    </Pressable>
                   </li>
                 );
               })}
@@ -707,7 +703,7 @@ export function FilesPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{baseName(hit.path)}</span>
-                          <button
+                          <Pressable
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
@@ -716,7 +712,7 @@ export function FilesPage() {
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
-                          </button>
+                          </Pressable>
                         </div>
                         <span className="block truncate text-xs text-[var(--muted)]">{hit.path}</span>
                       </div>
@@ -764,8 +760,7 @@ export function FilesPage() {
                       {selecting ? (
                         // A row selector has no visible label of its own, so the
                         // file's name is the only name it can carry.
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           data-testid="file-check"
                           aria-label={file.name}
                           checked={selected.has(file.path)}
@@ -775,7 +770,7 @@ export function FilesPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">{file.name}</span>
-                          <button
+                          <Pressable
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
@@ -784,7 +779,7 @@ export function FilesPage() {
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
-                          </button>
+                          </Pressable>
                         </div>
                         <span className="block truncate text-xs text-[var(--muted)]">
                           {formatSize(file.size)} · {relativeTime(file.mtime)}
