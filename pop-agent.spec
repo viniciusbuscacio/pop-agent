@@ -1374,8 +1374,11 @@ the running global version, requires 64-bit Windows, accepts Node `>=22.19.0`,
 and installs Node LTS through `winget` only when necessary. It then invokes the
 Windows `npm.cmd` launcher directly, installs the immutable same-origin CLI
 tarball, verifies `pop --version`, and prints `pop login <server>`. It contains
-no session, credential or user data. CLI self-update likewise selects `npm.cmd`
-on Windows and `npm` elsewhere; neither path uses a shell.
+no session, credential or user data. CLI self-update runs npm's JavaScript
+entrypoint with the current `node.exe` on Windows and resolves `npm` normally
+elsewhere; neither path uses a shell. A `.cmd` wrapper cannot be passed directly
+to Node's shell-free `spawn` on Windows — it fails with `EINVAL` before npm
+starts.
 
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and
@@ -1608,6 +1611,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.90 (2026-08-13): **CLI self-update works on Windows (§17).** The updater
+  executes npm's JavaScript entrypoint through the current Node runtime instead
+  of spawning `npm.cmd`, which Node rejects with `EINVAL` without a shell. The
+  changed CLI ships as 0.2.18.
 - 1.89 (2026-08-13): **CLI local-run notices precede the answer (§17).** The
   `ran here: …` lines now live inside the assistant segment rather than being
   appended after it, so the final prose follows the commands that produced it.

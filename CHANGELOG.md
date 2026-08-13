@@ -30,6 +30,9 @@ normative history.
 
 ### Fixed
 
+- **`pop update` works on Windows.** It now runs npm's JavaScript entrypoint
+  through the current Node executable instead of asking `spawn` to execute the
+  `npm.cmd` shell wrapper, which failed with `EINVAL`.
 - **CLI answers no longer appear above their local command log.** `ran here: …`
   notices stay inside the active assistant block, before its prose, instead of
   accumulating below the completed response in Windows Terminal.

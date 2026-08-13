@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { npmExecutable } from './installer.js';
+import { npmInvocation } from './installer.js';
 
-describe('CLI installer executable', () => {
-  it('uses the cmd launcher on Windows', () => {
-    expect(npmExecutable('win32')).toBe('npm.cmd');
+describe('CLI installer invocation', () => {
+  it('runs npm JavaScript through Node on Windows instead of spawning npm.cmd', () => {
+    expect(npmInvocation('win32', String.raw`C:\Users\vini\nodejs\node.exe`)).toEqual({
+      command: String.raw`C:\Users\vini\nodejs\node.exe`,
+      args: [String.raw`C:\Users\vini\nodejs\node_modules\npm\bin\npm-cli.js`],
+    });
   });
 
   it('uses the executable name on Unix platforms', () => {
-    expect(npmExecutable('linux')).toBe('npm');
-    expect(npmExecutable('darwin')).toBe('npm');
+    expect(npmInvocation('linux', '/usr/bin/node')).toEqual({ command: 'npm', args: [] });
+    expect(npmInvocation('darwin', '/opt/node/bin/node')).toEqual({ command: 'npm', args: [] });
   });
 });
