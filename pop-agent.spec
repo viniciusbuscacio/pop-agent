@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.87 — 2026-08-12.
+Version 1.90 — 2026-08-13.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -766,8 +766,13 @@ events from stale runs.
   (waiting up to a minute would leave a send that did nothing unexplained)
   and any answer, a 500 included, clears it just as fast.
 - **Never a side drawer/panel for forms** (permanent veto). Settings is a
-  full-screen view: Server, General, Model, **Audio**, Memory, Usage,
-  Storage, Backup, Appearance, Updates, Security, About. Every Save has a
+  full-screen view: Server, General, **Installation guide**, Model, **Audio**,
+  Memory, Usage, Storage, Backup, Appearance, Updates, Security, About. The
+  installation guide derives the current personal server origin at runtime and
+  gives copyable access/setup instructions for web/PWA, CLI on Windows and
+  macOS/Linux, Pop Desktop on macOS, and the honest not-yet-available state of
+  the native Windows desktop app. It never hard-codes one deployment's URL.
+  Every Save has a
   Cancel. **Model means the model that answers you** -- the whisper model
   and the transcript cleanup moved out to Audio (Vinicius, 03/08), because
   under Model they sat beneath a heading about something else and anyone
@@ -1607,6 +1612,11 @@ Different bytes require a new host semver and URL.
   `ran here: …` lines now live inside the assistant segment rather than being
   appended after it, so the final prose follows the commands that produced it.
   The changed CLI ships as 0.2.17.
+- 1.90 (2026-08-13): **Settings carries a personal installation guide (§14, §17).**
+  Web/PWA, CLI, and desktop access instructions now live in one Settings section.
+  Commands derive the current server origin, include one-click copy, use the
+  Windows bootstrap installer, and distinguish the available macOS desktop host
+  from the not-yet-available native Windows app.
 - 1.88 (2026-08-13): **Windows can bootstrap the CLI from its own server (§17).**
   Public `GET /install.ps1` derives the personal server origin from the request,
   installs a compatible Node LTS through winget when absent, invokes `npm.cmd`,

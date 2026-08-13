@@ -177,6 +177,41 @@ export const en = {
   'provider.subscriptionUsage.plan': '{plan} plan',
   'settings.section.server': 'Server',
   'settings.section.general': 'General',
+  'settings.section.installation': 'Installation guide',
+  'settings.installation.addressTitle': 'Your Pop Agent address',
+  'settings.installation.intro':
+    'Use this address to open Pop Agent or connect another device. Sign in with your normal Pop Agent password.',
+  'settings.installation.webTitle': 'Web and installed PWA',
+  'settings.installation.webBody':
+    'Open the address above in any current browser. You can also install it as an app from the browser:',
+  'settings.installation.webWindows':
+    'Windows: in Edge or Chrome, open the browser menu and choose Install Pop Agent or Install app.',
+  'settings.installation.webMac':
+    'macOS: in Safari, choose File → Add to Dock; in Chrome, choose Install Pop Agent.',
+  'settings.installation.webIphone':
+    'iPhone or iPad: open in Safari, tap Share, then Add to Home Screen.',
+  'settings.installation.webAndroid':
+    'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
+  'settings.installation.cliTitle': 'Command-line app (Pop CLI)',
+  'settings.installation.cliBody':
+    'The CLI provides terminal chat and local tools from the computer where it runs.',
+  'settings.installation.cliWindows': 'Windows (PowerShell)',
+  'settings.installation.cliWindowsHint':
+    'Paste this in PowerShell. It installs a compatible Node.js when needed, installs Pop CLI, and prints the login command.',
+  'settings.installation.cliUnix': 'macOS or Linux (Terminal)',
+  'settings.installation.cliUnixHint':
+    'Requires Node.js 22.19 or newer. Run both commands, then enter your Pop Agent password.',
+  'settings.installation.desktopTitle': 'Desktop app',
+  'settings.installation.desktopBody':
+    'Pop Desktop opens the same Pop Agent interface in a dedicated native window.',
+  'settings.installation.desktopMac': 'macOS',
+  'settings.installation.desktopMacSteps':
+    'Install and open Pop Desktop Manager, connect it to the server address above, then choose Install Pop Desktop and Open Pop Desktop.',
+  'settings.installation.desktopMacRequirements':
+    'Currently available for macOS 14 or newer on Apple Silicon. The Manager also installs and supervises the CLI used for local tools.',
+  'settings.installation.desktopWindows': 'Windows',
+  'settings.installation.desktopWindowsBody':
+    'A native Windows desktop app is not available yet. Use the installed PWA in Edge or Chrome for an app window, and install Pop CLI with the PowerShell command above for terminal access and local tools.',
   'settings.server.cpu': 'CPU',
   'settings.server.load': 'Load (1/5/15 min)',
   'settings.server.memory': 'Memory (used / total)',

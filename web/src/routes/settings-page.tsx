@@ -13,6 +13,7 @@ import {
   type UsageResponse,
 } from '@pop-agent/shared';
 import { t } from '../i18n';
+import { InstallationSection } from './installation-section';
 import { ProvidersSection } from './providers-section';
 import { ApiError, clientEnvironment } from '../services/api';
 import { authService } from '../services/auth';
@@ -43,6 +44,7 @@ import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 type Section =
   | 'server'
   | 'general'
+  | 'installation'
   | 'model'
   | 'audio'
   | 'auto-skills'
@@ -58,6 +60,7 @@ type Section =
 const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
   { id: 'server', labelKey: 'settings.section.server' },
   { id: 'general', labelKey: 'settings.section.general' },
+  { id: 'installation', labelKey: 'settings.section.installation' },
   { id: 'model', labelKey: 'settings.section.model' },
   { id: 'audio', labelKey: 'settings.section.audio' },
   { id: 'auto-skills', labelKey: 'settings.section.autoSkills' },
@@ -126,6 +129,7 @@ export function SettingsPage() {
         <div className="min-w-0 flex-1">
           {section === 'server' ? <ServerSection /> : null}
           {section === 'general' ? <GeneralSection /> : null}
+          {section === 'installation' ? <InstallationSection /> : null}
           {section === 'model' ? <ProvidersSection /> : null}
           {section === 'audio' ? <AudioSection /> : null}
           {section === 'auto-skills' ? <AutoSkillsSection /> : null}
