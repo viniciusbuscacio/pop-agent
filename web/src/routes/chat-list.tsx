@@ -364,7 +364,7 @@ export function ChatList() {
             }}
             placeholder={t('shell.filter')}
             aria-label={t('shell.filter')}
-            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+            className="rounded-md border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm outline-none"
           />
         ) : null}
         {segment === 'tasks' || segment === 'skills' || segment === 'mcp' ? (

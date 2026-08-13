@@ -159,6 +159,7 @@ describe('compact conversation search', () => {
     const input = screen.getByTestId('chat-filter');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(document.activeElement).toBe(input);
+    expect(input.className).not.toContain('focus:border-[var(--accent)]');
   });
 
   it('clears the filter when the search button closes the field', async () => {
