@@ -52,6 +52,7 @@ describe('pending message composition', () => {
     expect(composer.className).toContain('min-w-0');
     expect(composer.className).toContain('overflow-x-hidden');
     expect(area.className).toContain('overflow-x-hidden');
+    expect(area.className).not.toContain('focus:border-[var(--accent)]');
 
     fireEvent.focus(area);
     expect(composer.className).toContain('overflow-x-hidden');

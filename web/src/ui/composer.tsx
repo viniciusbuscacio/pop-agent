@@ -595,7 +595,7 @@ export function Composer({
             // block (not inline-block): an inline textarea leaves baseline
             // descender space in the wrapper, and with the row's items-end the
             // buttons aligned to that phantom bottom, sitting ~7px too low.
-            className="block max-h-[33dvh] w-full resize-none overflow-x-hidden rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none focus:border-[var(--accent)]"
+            className="block max-h-[33dvh] w-full resize-none overflow-x-hidden rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 text-[var(--screen-fg)] outline-none"
           />
           </div>
         ) : (
