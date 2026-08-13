@@ -7,6 +7,10 @@ normative history.
 
 ### Changed
 
+- **Windows can install the CLI from one server-specific command.** The new
+  same-origin `install.ps1` bootstrap installs a compatible Node LTS when
+  needed, installs this server's exact CLI package, and prints the login
+  command. CLI self-update now invokes `npm.cmd` correctly on Windows.
 - **CLI reasoning now matches the web.** It is visible by default, stays in the
   transcript after an answer settles, survives steering boundaries, and
   `/think` redraws both live and historical answers immediately. The choice is

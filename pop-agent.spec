@@ -1354,6 +1354,19 @@ Before the first message creates the chat, only `Bye!` is printed.
 version and exits without reading a profile, opening PLA, contacting a server
 or creating a chat. Desktop managers may use it for safe discovery.
 
+A Windows machine can bootstrap from its own server without already having
+Node or knowing the current CLI version:
+
+    powershell -c "irm https://<server>/install.ps1 | iex"
+
+The public, `no-store` script derives `<server>` from its request origin, embeds
+the running global version, requires 64-bit Windows, accepts Node `>=22.19.0`,
+and installs Node LTS through `winget` only when necessary. It then invokes the
+Windows `npm.cmd` launcher directly, installs the immutable same-origin CLI
+tarball, verifies `pop --version`, and prints `pop login <server>`. It contains
+no session, credential or user data. CLI self-update likewise selects `npm.cmd`
+on Windows and `npm` elsewhere; neither path uses a shell.
+
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and
 the backups directory.
@@ -1585,6 +1598,12 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.88 (2026-08-13): **Windows can bootstrap the CLI from its own server (§17).**
+  Public `GET /install.ps1` derives the personal server origin from the request,
+  installs a compatible Node LTS through winget when absent, invokes `npm.cmd`,
+  installs the server's exact immutable CLI package and leaves the exact login
+  command. CLI self-update now also selects `npm.cmd` on Windows. The changed
+  server and CLI package ship as 0.2.16.
 - 1.87 (2026-08-12): **Composer focus never changes horizontal containment
   (§14).** The conversation pane and viewport now clip their horizontal axis,
   the composer constrains its flex chain, and its textarea explicitly suppresses

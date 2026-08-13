@@ -205,8 +205,23 @@ cannot make the call.
 ```
 brew install node                          # or apt, or whatever that machine uses
 npm i -g https://your-pop-agent.example/cli-0.2.0.tgz
-pop login
+pop login https://your-pop-agent.example
 ```
+
+Windows has a same-origin bootstrap for a machine that may not have Node yet:
+
+```powershell
+powershell -c "irm https://your-pop-agent.example/install.ps1 | iex"
+```
+
+`GET /install.ps1` is public for the same bootstrap reason as the tarball. The
+server derives its own origin from that request and emits its current immutable
+CLI package URL; no configured public URL or hard-coded owner's hostname exists.
+The script requires 64-bit Windows, accepts Node `>=22.19.0`, installs the LTS
+runtime through `winget` when necessary, invokes `npm.cmd` directly, verifies
+`pop --version`, and leaves the exact `pop login <origin>` command. It carries no
+password, token or user data. Because the generated package version changes with
+the server, the script is `no-store`; the versioned tarball remains immutable.
 
 Then `pop`. On the server the first line is already true — Pop Agent runs on
 Node there.

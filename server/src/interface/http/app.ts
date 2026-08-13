@@ -37,6 +37,7 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
 import { createCliDownloadRoutes } from './cli-download-routes.js';
+import { createCliInstallerRoutes } from './cli-installer-routes.js';
 import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 import { createFilesRoutes } from './files-routes.js';
 import { createFilesDownloadRoutes } from './files-download-routes.js';
@@ -161,6 +162,10 @@ export function createApp(deps: AppDeps): Hono {
       publicSurface(
         'npm cannot log in, so the client tarball must answer without a session (docs/cli.md, Distribution); it carries the client code and this server version, no secrets and no user data, and the version in the filename is compared before anything is read from disk',
         createCliDownloadRoutes(deps),
+      ),
+      publicSurface(
+        'the Windows bootstrap must run before a session or CLI exists; it contains only this request origin, the public CLI version and commands that install Node and the public tarball',
+        createCliInstallerRoutes(deps),
       ),
     ],
     guarded: [
