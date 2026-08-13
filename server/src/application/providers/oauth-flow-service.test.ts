@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProviderAuthInteraction } from '../ports/agent-bridge.js';
-import { OAuthFlowService } from './oauth-flow-service.js';
+import { OAuthCooldownError, OAuthFlowService } from './oauth-flow-service.js';
 
 /**
  * The flow is exercised with a scripted login: a fake engine that emits the
@@ -147,6 +147,83 @@ describe('OAuthFlowService', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('bars a fresh sign-in while the provider cools down from a 429', async () => {
+    const service = new OAuthFlowService({
+      login: () => Promise.reject(new Error('429 Too Many Requests: too many requests')),
+      rateLimitCooldownMs: 60_000,
+    });
+
+    service.start('github-copilot');
+    await flush();
+    expect(service.state()?.ok).toBe(false);
+
+    expect(() => service.start('github-copilot')).toThrow(OAuthCooldownError);
+  });
+
+  it('lets another provider sign in during one provider s cooldown', async () => {
+    const service = new OAuthFlowService({
+      login: (providerId) =>
+        providerId === 'github-copilot'
+          ? Promise.reject(new Error('429 too many requests'))
+          : new Promise<void>(() => undefined),
+      rateLimitCooldownMs: 60_000,
+    });
+
+    service.start('github-copilot');
+    await flush();
+
+    expect(() => service.start('openai-codex')).not.toThrow();
+  });
+
+  it('reopens the sign-in once the cooldown has elapsed', async () => {
+    vi.useFakeTimers();
+    try {
+      const service = new OAuthFlowService({
+        login: () => Promise.reject(new Error('429 too many requests')),
+        rateLimitCooldownMs: 1_000,
+      });
+
+      service.start('github-copilot');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(() => service.start('github-copilot')).toThrow(OAuthCooldownError);
+
+      vi.advanceTimersByTime(1_100);
+      expect(() => service.start('github-copilot')).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('collapses a provider HTTP error page instead of leaking it', async () => {
+    const htmlBody =
+      '503 Service Unavailable: <!DOCTYPE html>\n<html><head><title>Unicorn!</title>' +
+      '<style>body{color:#f1f1f1}</style></head><body><img src="data:image/png;base64,iVBOR"/>' +
+      '<p>No server is currently available to service your request.</p></body></html>';
+    const service = new OAuthFlowService({
+      login: () => Promise.reject(new Error(htmlBody)),
+    });
+
+    service.start('github-copilot');
+    await flush();
+
+    const state = service.state();
+    expect(state?.ok).toBe(false);
+    expect(state?.error).toBe('HTTP 503 Service Unavailable');
+    const wire = JSON.stringify(state);
+    expect(wire).not.toMatch(/<|DOCTYPE|base64|Unicorn/i);
+  });
+
+  it('keeps a plain failure message readable and tag-free', async () => {
+    const service = new OAuthFlowService({
+      login: () => Promise.reject(new Error('the device code expired')),
+    });
+
+    service.start('github-copilot');
+    await flush();
+
+    expect(service.state()?.error).toBe('the device code expired');
   });
 
   it('never lets token material into the transcript', async () => {

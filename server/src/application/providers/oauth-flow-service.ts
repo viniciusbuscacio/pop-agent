@@ -19,6 +19,33 @@ import { providerDefinition } from './provider-definitions.js';
 
 const FLOW_TIMEOUT_MS = 10 * 60 * 1000;
 
+/**
+ * How long a provider is barred from a fresh sign-in after its device flow
+ * answers with 429. Rapid retries are exactly what escalates GitHub's rate
+ * limit: a 10-minute abandoned flow polls the token endpoint the whole time,
+ * and two restarts seconds apart turn a transient "authorization_pending"
+ * into a hard 429 (Vinicius, 13/08). Barring a new flow for a cooldown lets
+ * the provider's window drain instead of feeding it.
+ */
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * Thrown by {@link OAuthFlowService.start} when the provider is still cooling
+ * down from a rate limit. The route turns it into HTTP 429 with Retry-After,
+ * so the browser shows the wait instead of hammering the provider again.
+ */
+export class OAuthCooldownError extends Error {
+  constructor(
+    public readonly providerId: string,
+    public readonly retryAfterSeconds: number,
+  ) {
+    super(
+      `Wait ${String(retryAfterSeconds)}s before signing in to "${providerId}" again -- the provider is rate-limiting the sign-in.`,
+    );
+    this.name = 'OAuthCooldownError';
+  }
+}
+
 /** The one question waiting for the user, shorn of everything else. */
 export interface PendingPrompt {
   type: 'text' | 'secret' | 'manual_code' | 'select';
@@ -45,6 +72,8 @@ export interface OAuthFlowServiceDeps {
   onSuccess?: (providerId: string) => void;
   /** Overridable so the timeout test does not wait ten minutes. */
   timeoutMs?: number;
+  /** Overridable so cooldown tests need not wait a real minute. */
+  rateLimitCooldownMs?: number;
 }
 
 interface Flow {
@@ -56,6 +85,8 @@ interface Flow {
 
 export class OAuthFlowService {
   private flow: Flow | undefined;
+  /** Per-provider earliest wall-clock time a fresh flow may start again. */
+  private readonly cooldownUntil = new Map<string, number>();
 
   constructor(private readonly deps: OAuthFlowServiceDeps) {}
 
@@ -65,6 +96,15 @@ export class OAuthFlowService {
     if (definition === undefined || definition.authType !== 'oauth') {
       throw new Error(`"${providerId}" is not an OAuth provider`);
     }
+    // A provider still cooling down from a 429 is refused before anything is
+    // torn down: the running flow (if any) survives, and the caller learns
+    // exactly how long to wait rather than feeding the provider's rate limit.
+    const now = Date.now();
+    const until = this.cooldownUntil.get(providerId);
+    if (until !== undefined && now < until) {
+      throw new OAuthCooldownError(providerId, Math.ceil((until - now) / 1000));
+    }
+    this.cooldownUntil.delete(providerId);
     this.cancel();
 
     const controller = new AbortController();
@@ -167,10 +207,20 @@ export class OAuthFlowService {
     flow.resolvePrompt = undefined;
     delete flow.state.pending;
     flow.state.done = true;
-    flow.state.ok = error === undefined;
-    if (error !== undefined) flow.state.error = error;
+    // pi surfaces a failed login with the provider's raw HTTP body attached --
+    // a GitHub 503 dragged its entire Unicorn HTML page into the transcript
+    // (Vinicius, 13/08). The wire only ever carries a short, tag-free line.
+    const clean = error === undefined ? undefined : sanitizeError(error);
+    flow.state.ok = clean === undefined;
+    if (clean !== undefined) flow.state.error = clean;
+    // A rate-limited sign-in arms a cooldown so the next attempt waits for the
+    // provider's window to drain instead of escalating the 429.
+    if (clean !== undefined && isRateLimit(clean)) {
+      const cooldown = this.deps.rateLimitCooldownMs ?? RATE_LIMIT_COOLDOWN_MS;
+      this.cooldownUntil.set(flow.state.providerId, Date.now() + cooldown);
+    }
     console.log(
-      `pop oauth: ${flow.state.providerId} finished ok=${flow.state.ok}${error === undefined ? '' : ` (${error})`}`,
+      `pop oauth: ${flow.state.providerId} finished ok=${flow.state.ok}${clean === undefined ? '' : ` (${clean})`}`,
     );
   }
 }
@@ -233,4 +283,37 @@ function sanitizePrompt(prompt: ProviderAuthPrompt): PendingPrompt {
 
 function messageOf(error: unknown): string | undefined {
   return error instanceof Error && error.message.length > 0 ? error.message : undefined;
+}
+
+/** A too-fast device-flow retry comes back as a bare 429 (GitHub Copilot). */
+function isRateLimit(message: string): boolean {
+  return /\b429\b|too many requests/i.test(message);
+}
+
+/** Cap on any error line that reaches the browser -- long enough to be useful. */
+const MAX_ERROR_LENGTH = 200;
+
+/**
+ * Collapses a login failure into one short, tag-free line fit for the UI.
+ *
+ * pi attaches the provider's raw HTTP response to the rejection, so a 503 or
+ * 502 arrives as `503 Service Unavailable: <!DOCTYPE html> ...` -- a whole
+ * error page, base64 logos and all. When the message opens with an HTTP
+ * status, only `HTTP <code> <reason>` survives and the body is dropped;
+ * otherwise any markup is stripped and the rest is clamped to a sane length.
+ */
+function sanitizeError(error: string): string {
+  const raw = error.trim();
+  const status = raw.match(/^(\d{3})\b[ \t]*([A-Za-z][A-Za-z .-]*)?/);
+  if (status !== null) {
+    const reason = (status[2] ?? '').trim();
+    return `HTTP ${status[1]}${reason.length > 0 ? ` ${reason}` : ''}`;
+  }
+  const stripped = raw
+    .replace(/<!doctype[^>]*>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (stripped.length === 0) return 'The sign-in failed.';
+  return stripped.length > MAX_ERROR_LENGTH ? `${stripped.slice(0, MAX_ERROR_LENGTH)}…` : stripped;
 }

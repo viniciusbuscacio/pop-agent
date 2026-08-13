@@ -11,7 +11,10 @@ import type {
   TestProviderResponse,
   TranscribeResponse,
 } from '@pop-agent/shared';
-import type { OAuthFlowService } from '../../application/providers/oauth-flow-service.js';
+import {
+  OAuthCooldownError,
+  type OAuthFlowService,
+} from '../../application/providers/oauth-flow-service.js';
 import {
   MAX_CUSTOM_PROVIDERS,
   type ProviderService,
@@ -271,7 +274,15 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     if (status.authType !== 'oauth') {
       return apiError(c, 404, 'not_found', `"${id}" does not sign in with OAuth.`);
     }
-    return c.json(deps.oauthFlows.start(id) satisfies OAuthStartResponse);
+    try {
+      return c.json(deps.oauthFlows.start(id) satisfies OAuthStartResponse);
+    } catch (error) {
+      if (error instanceof OAuthCooldownError) {
+        c.header('Retry-After', String(error.retryAfterSeconds));
+        return apiError(c, 429, 'rate_limited', error.message);
+      }
+      throw error;
+    }
   });
 
   routes.get('/providers/:id/oauth/state', (c) => {
