@@ -1,13 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { SkillDistillationAttemptDTO, SkillDistillationResultDTO } from '@pop-agent/shared';
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { SkillEditor } from './skill-editor';
 import { SidebarNav } from './sidebar-nav';
 import { useSkillsStore } from '../store/skills';
-import { skillsService } from '../services/skills';
-import { Button, Card } from '../ui/controls';
-import { relativeTime } from '../lib/time';
 
 /**
  * Skills as the right-hand pane of the shell (pop-agent.spec §8, §14), the explorer
@@ -27,15 +23,14 @@ export function SkillsPage() {
   }, [reload]);
 
   const isNew = slug === 'new';
-  const isActivity = slug === '_activity';
-  const skill = isNew || isActivity ? undefined : skills?.find((entry) => entry.slug === slug);
+  const skill = isNew ? undefined : skills?.find((entry) => entry.slug === slug);
 
   // A dead link (a deleted skill) falls back to the list once skills arrived.
   useEffect(() => {
-    if (!isNew && !isActivity && slug !== undefined && skills !== undefined && skill === undefined) {
+    if (!isNew && slug !== undefined && skills !== undefined && skill === undefined) {
       navigate('/skills', { replace: true });
     }
-  }, [isNew, isActivity, slug, skills, skill, navigate]);
+  }, [isNew, slug, skills, skill, navigate]);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -51,8 +46,6 @@ export function SkillsPage() {
             <p className="mt-2 text-sm text-[var(--muted)]">{t('skills.empty.body')}</p>
           </div>
         </div>
-      ) : isActivity ? (
-        <DistillationActivity />
       ) : isNew || skill !== undefined ? (
         <div className="mx-auto w-full max-w-3xl p-4">
           <SkillEditor
@@ -66,158 +59,4 @@ export function SkillsPage() {
       ) : null}
     </div>
   );
-}
-
-/** Durable reasons behind the auto-skill inbox, grouped by conversation window. */
-function DistillationActivity() {
-  const [attempts, setAttempts] = useState<SkillDistillationAttemptDTO[] | undefined>(undefined);
-  const [showRoutine, setShowRoutine] = useState(false);
-  const [retrying, setRetrying] = useState<string | undefined>(undefined);
-
-  async function reload(): Promise<void> {
-    try {
-      setAttempts((await skillsService.distillations(100)).attempts);
-    } catch {
-      setAttempts((current) => current ?? []);
-    }
-  }
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
-  async function retry(id: string): Promise<void> {
-    setRetrying(id);
-    try {
-      await skillsService.retryDistillation(id);
-      await reload();
-    } finally {
-      setRetrying(undefined);
-    }
-  }
-
-  const routine = attempts?.filter(isRoutineAttempt) ?? [];
-  const visible = attempts?.filter((attempt) => showRoutine || !isRoutineAttempt(attempt)) ?? [];
-  const candidateResults = attempts?.flatMap((attempt) => attempt.results) ?? [];
-  const systematicBlocking =
-    candidateResults.length >= 20 &&
-    candidateResults.every((result) => result.disposition === 'policy_rejected');
-
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4" data-testid="distillation-activity">
-      <div>
-        <h1 className="text-lg font-semibold">{t('skills.activity.title')}</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">{t('skills.activity.body')}</p>
-      </div>
-      {systematicBlocking ? (
-        <Card><p className="text-sm text-[var(--danger)]" data-testid="auto-skill-systematic-blocking">
-          {t('skills.activity.systematicBlocking')}
-        </p></Card>
-      ) : null}
-      {attempts === undefined ? null : attempts.length === 0 ? (
-        <Card><p className="text-sm text-[var(--muted)]">{t('skills.activity.empty')}</p></Card>
-      ) : (
-        <>
-          {routine.length > 0 ? (
-            <Card className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-[var(--muted)]" data-testid="routine-activity-summary">
-                {t('skills.activity.routineSummary', { count: routine.length })}
-              </p>
-              <Button type="button" variant="ghost" onClick={() => setShowRoutine((shown) => !shown)}>
-                {showRoutine ? t('skills.activity.hideRoutine') : t('skills.activity.showRoutine')}
-              </Button>
-            </Card>
-          ) : null}
-          {visible.length === 0 ? (
-            <Card><p className="text-sm text-[var(--muted)]">{t('skills.activity.noImportant')}</p></Card>
-          ) : visible.map((attempt) => (
-          <Card key={attempt.id} className="flex flex-col gap-2" data-testid="distillation-attempt">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <Link className="font-medium hover:underline" to={`/chat/${attempt.chatId}`}>
-                  {attempt.chatTitle}
-                </Link>
-                <p className="text-xs text-[var(--muted)]">{relativeTime(attempt.startedAt)}</p>
-              </div>
-              <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs">
-                {attemptLabel(attempt)}
-              </span>
-            </div>
-            <p className="text-sm text-[var(--muted)]">{attemptExplanation(attempt)}</p>
-            {attempt.results.length === 0 ? null : (
-              <div className="flex flex-col gap-1">
-                {attempt.results.map((result, index) => (
-                  <p key={`${result.slug}-${String(index)}`} className="text-xs">
-                    <span className="font-medium">{result.slug}</span>
-                    <span className="text-[var(--muted)]"> — {resultExplanation(result)}</span>
-                  </p>
-                ))}
-              </div>
-            )}
-            {attempt.warnings.length === 0 ? null : (
-              <p className="text-xs text-[var(--muted)]">{attempt.warnings.join(' · ')}</p>
-            )}
-            {attempt.retryable ? (
-              <div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={retrying === attempt.id}
-                  onClick={() => void retry(attempt.id)}
-                >
-                  {retrying === attempt.id ? t('skills.activity.queueing') : t('skills.activity.retry')}
-                </Button>
-              </div>
-            ) : null}
-          </Card>
-        ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-/** Nothing and taint are normal terminal decisions, not work waiting on the user. */
-function isRoutineAttempt(attempt: SkillDistillationAttemptDTO): boolean {
-  return attempt.outcome === 'nothing' || attempt.outcome === 'tainted';
-}
-
-function attemptLabel(attempt: SkillDistillationAttemptDTO): string {
-  if (attempt.state === 'queued') return t('skills.activity.queued');
-  if (attempt.state === 'running') return t('skills.activity.running');
-  switch (attempt.outcome) {
-    case 'produced': return t('skills.activity.produced');
-    case 'nothing': return t('skills.activity.nothing');
-    case 'tainted': return t('skills.activity.tainted');
-    case 'invalid_output': return t('skills.activity.invalid');
-    default: return t('skills.activity.failed');
-  }
-}
-
-function attemptExplanation(attempt: SkillDistillationAttemptDTO): string {
-  if (attempt.state === 'queued') return t('skills.activity.queuedNote');
-  if (attempt.state === 'running') return t('skills.activity.runningNote');
-  if (attempt.errorMessage !== undefined) return attempt.errorMessage;
-  if (attempt.outcome === 'nothing') return t('skills.activity.nothingNote');
-  if (attempt.outcome === 'tainted') {
-    return t('skills.activity.taintedNote', { level: attempt.riskLevel ?? 'suspicious' });
-  }
-  return t('skills.activity.producedNote', { count: attempt.results.length });
-}
-
-function resultExplanation(result: SkillDistillationResultDTO): string {
-  const score = result.similarity === undefined ? '' : ` · cos ${result.similarity.toFixed(2)}`;
-  const overlap = result.overlap === undefined ? '' : ` · voc ${result.overlap.toFixed(2)}`;
-  const reasons = [...(result.policyReasons ?? []), ...(result.reviewReasons ?? [])];
-  const detail = reasons.length === 0 ? '' : ` · ${reasons.join(', ')}`;
-  switch (result.disposition) {
-    case 'published_new': return `${t('skills.activity.result.live')}${score}${overlap}`;
-    case 'published_revision': return `${t('skills.activity.result.updated')}${score}${overlap}`;
-    case 'protected_duplicate': return `${t('skills.activity.result.protectedDuplicate', { target: result.targetSlug ?? result.slug })}${score}${overlap}`;
-    case 'policy_rejected': return `${t('skills.activity.result.policyRejected')}${detail}`;
-    case 'contract_rejected': return t('skills.activity.result.contractRejected');
-    case 'evidence_rejected': return t('skills.activity.result.evidenceRejected');
-    case 'review_rejected': return `${t('skills.activity.result.reviewRejected')}${detail}`;
-    case 'rejected': return t('skills.activity.result.rejected');
-  }
 }

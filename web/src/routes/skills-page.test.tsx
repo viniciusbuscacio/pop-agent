@@ -27,15 +27,11 @@ function valueOf(testId: string): string {
  */
 
 const list = vi.fn();
-const distillations = vi.fn();
-const retryDistillation = vi.fn();
 const setEnabled = vi.fn();
 
 vi.mock('../services/skills', () => ({
   skillsService: {
     list: () => list() as Promise<SkillsResponse>,
-    distillations: () => distillations() as Promise<{ attempts: unknown[] }>,
-    retryDistillation: (id: string) => retryDistillation(id) as Promise<unknown>,
     save: vi.fn(),
     approve: vi.fn(),
     approveRevision: vi.fn(),
@@ -77,10 +73,6 @@ function Harness() {
 
 beforeEach(() => {
   list.mockReset();
-  distillations.mockReset();
-  distillations.mockResolvedValue({ attempts: [] });
-  retryDistillation.mockReset();
-  retryDistillation.mockResolvedValue({});
   setEnabled.mockReset();
   useSkillsStore.setState({ skills: undefined, sourceFilter: 'all' });
   useNotificationsStore.setState({ toast: undefined });
@@ -92,7 +84,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the skills pane', () => {
-  it('keeps routine activity out of the default Skills pane', async () => {
+  it('shows the empty pane until a skill is selected', () => {
     render(
       <MemoryRouter initialEntries={['/skills']}>
         <Harness />
@@ -100,52 +92,6 @@ describe('the skills pane', () => {
     );
 
     expect(screen.getByText('Select a skill')).toBeDefined();
-    expect(distillations).not.toHaveBeenCalled();
-  });
-
-  it('summarizes routine activity and expands it only when requested', async () => {
-    distillations.mockResolvedValue({
-      attempts: [{
-        id: 'attempt-one', chatId: 'chat-one', chatTitle: 'Deploy conversation',
-        trigger: 'automatic', state: 'completed', outcome: 'nothing', warnings: [],
-        startedAt: '2026-08-07T20:00:00.000Z', finishedAt: '2026-08-07T20:01:00.000Z',
-        results: [], retryable: false,
-      }],
-    });
-
-    render(
-      <MemoryRouter initialEntries={['/skills/_activity']}>
-        <Harness />
-      </MemoryRouter>,
-    );
-    await waitFor(() => expect(screen.getByTestId('routine-activity-summary')).toBeDefined());
-    expect(screen.queryByText('Deploy conversation')).toBeNull();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Show routine activity' }));
-    expect(screen.getByText('Deploy conversation')).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
-  });
-
-  it('keeps retry for a real failed attempt', async () => {
-    distillations
-      .mockResolvedValueOnce({
-        attempts: [{
-          id: 'attempt-failed', chatId: 'chat-one', chatTitle: 'Failed conversation',
-          trigger: 'automatic', state: 'failed', outcome: 'failed', warnings: [],
-          errorMessage: 'Provider timed out.', startedAt: '2026-08-07T20:00:00.000Z',
-          finishedAt: '2026-08-07T20:01:00.000Z', results: [], retryable: true,
-        }],
-      })
-      .mockResolvedValueOnce({ attempts: [] });
-
-    render(
-      <MemoryRouter initialEntries={['/skills/_activity']}>
-        <Harness />
-      </MemoryRouter>,
-    );
-    await waitFor(() => expect(screen.getByText('Failed conversation')).toBeDefined());
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(retryDistillation).toHaveBeenCalledWith('attempt-failed'));
   });
 
   it('shows the skill in the route', async () => {

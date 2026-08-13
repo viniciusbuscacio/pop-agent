@@ -97,6 +97,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the skills sidebar filter', () => {
+  it('does not expose internal learning activity', async () => {
+    renderSkillsList();
+    await waitFor(() => expect(screen.getAllByTestId('skill-row')).toHaveLength(4));
+
+    expect(screen.queryByTestId('skills-activity-link')).toBeNull();
+  });
+
   it('filters the list by source', async () => {
     renderSkillsList();
     await waitFor(() => {

@@ -383,10 +383,10 @@ selection is 100% local, no LLM call:
   transaction failure does not advance and is retryable. One conversation per scheduler tick
   remains the cost ceiling; creator/reviewer service runs are booked with distinct purposes.
 - **Retention and visibility:** at most 1000 active Auto-Skills; least-used overflow is archived,
-  never deleted. Archived entries leave routing but remain recoverable and deduplicable. The
-  Skills screen shows activity outcomes/reason codes/costs, not an approval queue. Existing
-  router selection remains local and injects only its small top-N, so vault size does not equal
-  prompt size.
+  never deleted. Archived entries leave routing but remain recoverable and deduplicable. Learning
+  activity stays internal rather than appearing in the Skills navigation; failures that require
+  user action should surface as specific, actionable notices. Existing router selection remains
+  local and injects only its small top-N, so vault size does not equal prompt size.
 
 - **Skill language**: skills the agent writes for itself are English —
   name, slug, frontmatter, body — same rule as the repo. Skills the end

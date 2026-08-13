@@ -1,23 +1,9 @@
-import type {
-  SaveSkillRequest,
-  SkillDistillationAttemptDTO,
-  SkillDistillationsResponse,
-  SkillDTO,
-  SkillsResponse,
-} from '@pop-agent/shared';
+import type { SaveSkillRequest, SkillDTO, SkillsResponse } from '@pop-agent/shared';
 import { apiRequest } from './api';
 
 export const skillsService = {
   list(): Promise<SkillsResponse> {
     return apiRequest<SkillsResponse>('/skills');
-  },
-
-  distillations(limit = 30): Promise<SkillDistillationsResponse> {
-    return apiRequest<SkillDistillationsResponse>(`/skills/distillations?limit=${String(limit)}`);
-  },
-
-  retryDistillation(id: string): Promise<SkillDistillationAttemptDTO> {
-    return apiRequest<SkillDistillationAttemptDTO>(`/skills/distillations/${id}/retry`, { method: 'POST' });
   },
 
   save(skill: SaveSkillRequest): Promise<SkillDTO> {

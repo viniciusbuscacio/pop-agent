@@ -782,16 +782,6 @@ function SkillsList({ filter }: { filter: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <button
-        type="button"
-        data-testid="skills-activity-link"
-        onClick={() => navigate('/skills/_activity')}
-        className={`mx-2 mb-2 rounded px-2 py-2 text-left text-sm ${
-          slug === '_activity' ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
-        }`}
-      >
-        {t('skills.activity.title')}
-      </button>
       <SkillsSourceFilter />
       <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
       {shown.length === 0 ? (
