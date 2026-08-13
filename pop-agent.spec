@@ -1199,7 +1199,8 @@ reimplemented.
 - **Error classification is TYPED** (`shouldFailOver`, application
   layer): by code and HTTP status, never substring-only. Fail-forward:
   401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,
-  TLS, fetch failed…), `provider_not_configured`. Never: 400, the
+  TLS, fetch failed…), `provider_not_configured`, `model_not_available`.
+  Never: 400, the
   user's Stop (`aborted`), `turn_tainted`. Anything unclassifiable
   stays put. The bridge supplies the typing: it parses the status out
   of the code-shaped places providers put it and tags transport

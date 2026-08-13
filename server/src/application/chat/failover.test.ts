@@ -17,9 +17,10 @@ describe('shouldFailOver', () => {
     expect(shouldFailOver({ code: 'provider_error', status })).toBe(true);
   });
 
-  it('fails over on transport failures and on a provider with no credentials', () => {
+  it('fails over on transport, configuration, and missing-model failures', () => {
     expect(shouldFailOver({ code: 'network_error' })).toBe(true);
     expect(shouldFailOver({ code: 'provider_not_configured' })).toBe(true);
+    expect(shouldFailOver({ code: 'model_not_available' })).toBe(true);
   });
 
   it('never fails over on a 400: the request is wrong everywhere', () => {
@@ -39,6 +40,5 @@ describe('shouldFailOver', () => {
   it('stays put on an error nobody could classify', () => {
     expect(shouldFailOver({ code: 'provider_error' })).toBe(false);
     expect(shouldFailOver({ code: 'operation_error' })).toBe(false);
-    expect(shouldFailOver({ code: 'model_not_available' })).toBe(false);
   });
 });

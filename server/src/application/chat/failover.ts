@@ -30,6 +30,9 @@ const FAILOVER_STATUSES = new Set([401, 402, 403, 404, 408, 429]);
 const FAILOVER_CODES = new Set([
   'network_error',
   'provider_not_configured',
+  // The pair is invalid for this provider, but the same prompt can still be
+  // answered by a different provider with its own configured model.
+  'model_not_available',
   // An endpoint that accepted the connection and then said nothing. Distinct
   // from `aborted` on purpose: the user stopping must not fail over, but a
   // provider that never answers must, or one unreachable endpoint freezes

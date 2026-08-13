@@ -490,12 +490,21 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       cached = undefined;
     }
 
+    if (cached !== undefined && cached.providerId !== providerId && cached.busy === 0) {
+      // A provider switch must pass through engine.open again. setModel only
+      // changes pi's model object; it does not apply the new provider's key or
+      // lazily register a custom provider. Reopening the same JSONL keeps the
+      // conversation while authenticatedRuntime prepares the replacement.
+      cached.session.dispose();
+      this.sessions.delete(chatId);
+      cached = undefined;
+    }
+
     if (cached !== undefined) {
-      // A mid-chat switch keeps the conversation: only the model inside the
-      // session is swapped, the JSONL history is untouched (pop-agent.spec §15).
-      if (cached.providerId !== providerId || cached.modelId !== modelId) {
+      // A model switch inside one provider needs no new authentication. The
+      // JSONL history remains untouched (pop-agent.spec §15).
+      if (cached.modelId !== modelId) {
         await cached.session.setModel(providerId, modelId);
-        cached.providerId = providerId;
         cached.modelId = modelId;
       }
       cached.busy += 1;

@@ -718,14 +718,32 @@ describe('sessions', () => {
     expect(engine.opened[0]?.sessionFile).toBe('/data/sessions/older.jsonl');
   });
 
-  it('switches the model in place rather than starting over', async () => {
+  it('switches a model in place when the provider stays the same', async () => {
     const { onEvent } = collect();
 
-    await run(onEvent, { model: 'moonshotai/kimi-k3' });
-    await run(onEvent, { model: 'openai/gpt-5' });
+    await run(onEvent, { provider: 'openrouter', model: 'moonshotai/kimi-k3' });
+    await run(onEvent, { provider: 'openrouter', model: 'openai/gpt-5' });
 
     expect(engine.opened).toHaveLength(1);
     expect(engine.sessions[0]?.models).toEqual(['openai/gpt-5']);
+  });
+
+  it('reopens the saved conversation when fallback switches providers', async () => {
+    const { onEvent } = collect();
+
+    await run(onEvent, { provider: 'openrouter', model: 'moonshotai/kimi-k3' });
+    const first = engine.sessions[0];
+    engine.next = new ScriptedSession();
+    await run(onEvent, { provider: 'custom-mar', model: 'sabia-4' });
+
+    expect(first?.disposed).toBe(true);
+    expect(first?.models).toEqual([]);
+    expect(engine.opened).toHaveLength(2);
+    expect(engine.opened[1]).toMatchObject({
+      providerId: 'custom-mar',
+      modelId: 'sabia-4',
+      sessionFile: '/data/sessions/chat.jsonl',
+    });
   });
 
   it('hard-forgets a session even while busy', async () => {
