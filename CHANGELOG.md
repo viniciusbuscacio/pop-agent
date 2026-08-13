@@ -7,6 +7,9 @@ normative history.
 
 ### Changed
 
+- **CLI installation commands can stay current.** The stable, non-cacheable
+  `cli-latest.tgz` URL redirects to the server's exact immutable CLI package,
+  so setup instructions do not need a version edit after each update.
 - **Windows can install the CLI from one server-specific command.** The new
   same-origin `install.ps1` bootstrap installs a compatible Node LTS when
   needed, installs this server's exact CLI package, and prints the login

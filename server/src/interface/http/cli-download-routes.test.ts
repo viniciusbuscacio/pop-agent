@@ -26,6 +26,13 @@ describe('cli download', () => {
     rmSync(pack, { recursive: true, force: true });
   });
 
+  it('redirects the stable latest alias to the exact current package without caching it', async () => {
+    const response = await routes('0.2.0').request('/cli-latest.tgz', { redirect: 'manual' });
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('/cli-0.2.0.tgz');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('serves this server version, with no session', async () => {
     const response = await routes('0.2.0').request('/cli-0.2.0.tgz');
     expect(response.status).toBe(200);

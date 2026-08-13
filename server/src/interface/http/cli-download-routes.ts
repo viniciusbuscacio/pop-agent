@@ -6,7 +6,11 @@ import { Readable } from 'node:stream';
 /**
  * The server hands out its own client (docs/cli.md, Distribution):
  *
- *     npm i -g https://your-pop-agent.example/cli-0.2.0.tgz
+ *     npm i -g https://your-pop-agent.example/cli-latest.tgz
+ *
+ * The stable convenience URL redirects, without caching, to the server's exact
+ * immutable package URL. That keeps copied setup commands useful after an
+ * update without ever serving different tarball bytes from one cacheable URL.
  *
  * Unauthenticated, and it has to be: npm cannot log in. It fetches a URL with
  * no notion of a session, so a guarded route would simply fail with a 401
@@ -37,6 +41,12 @@ export interface CliDownloadDeps {
 
 export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
   const routes = new Hono();
+
+  routes.get('/cli-latest.tgz', (c) => {
+    const expected = `cli-${deps.versions.popAgentVersion}.tgz`;
+    c.header('cache-control', 'no-store');
+    return c.redirect(`/${expected}`, 307);
+  });
 
   routes.get('/:file{cli-[0-9A-Za-z.\\-]+\\.tgz}', (c) => {
     const expected = `cli-${deps.versions.popAgentVersion}.tgz`;

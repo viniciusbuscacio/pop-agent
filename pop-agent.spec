@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.90 — 2026-08-13.
+Version 1.92 — 2026-08-13.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1320,7 +1320,8 @@ with separate audiences, and the split is what keeps the everyday one
 installable. Full design in `docs/cli.md`.
 
 **`pop`** — the chat client. Ships as `@pop-agent/cli`, installs on any
-machine (`npm i -g <server>/cli-X.Y.Z.tgz`, served by the server itself),
+machine (`npm i -g <server>/cli-latest.tgz`, which redirects without caching to
+this server's immutable `cli-X.Y.Z.tgz` package),
 and carries no server code: no `better-sqlite3`, no `argon2`, nothing
 that knows where `secret.key` lives. The package also carries **Pop Local
 Access (PLA)**, an internal library shared by interactive CLI and the Pop
@@ -1611,6 +1612,15 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.92 (2026-08-13): **CLI setup has a stable latest URL (§17).** The public,
+  non-cacheable `cli-latest.tgz` alias redirects to this server's exact immutable
+  versioned tarball. Installation Guide uses the alias, so copied macOS/Linux
+  setup commands remain valid after server updates. This ships as 0.2.19.
+- 1.91 (2026-08-13): **Settings carries a personal installation guide (§14, §17).**
+  Web/PWA, CLI, and desktop access instructions now live in one Settings section.
+  Commands derive the current server origin, include one-click copy, use the
+  Windows bootstrap installer, and distinguish the available macOS desktop host
+  from the not-yet-available native Windows app.
 - 1.90 (2026-08-13): **CLI self-update works on Windows (§17).** The updater
   executes npm's JavaScript entrypoint through the current Node runtime instead
   of spawning `npm.cmd`, which Node rejects with `EINVAL` without a shell. The
@@ -1619,11 +1629,6 @@ Different bytes require a new host semver and URL.
   `ran here: …` lines now live inside the assistant segment rather than being
   appended after it, so the final prose follows the commands that produced it.
   The changed CLI ships as 0.2.17.
-- 1.90 (2026-08-13): **Settings carries a personal installation guide (§14, §17).**
-  Web/PWA, CLI, and desktop access instructions now live in one Settings section.
-  Commands derive the current server origin, include one-click copy, use the
-  Windows bootstrap installer, and distinguish the available macOS desktop host
-  from the not-yet-available native Windows app.
 - 1.88 (2026-08-13): **Windows can bootstrap the CLI from its own server (§17).**
   Public `GET /install.ps1` derives the personal server origin from the request,
   installs a compatible Node LTS through winget when absent, invokes `npm.cmd`,

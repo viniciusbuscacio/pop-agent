@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { t } from '../i18n';
-import { LOCAL_POP_AGENT_VERSION } from '../build-info';
-import { settingsService } from '../services/settings';
 import { Button, Card } from '../ui/controls';
 
 /**
@@ -10,17 +8,9 @@ import { Button, Card } from '../ui/controls';
  * the next device at somebody else's server instead of this one.
  */
 export function InstallationSection() {
-  const [serverVersion, setServerVersion] = useState(LOCAL_POP_AGENT_VERSION);
   const origin = window.location.origin.replace(/\/$/, '');
   const windowsCommand = `powershell -c "irm ${origin}/install.ps1 | iex"`;
-  const unixCommands = `npm i -g ${origin}/cli-${serverVersion}.tgz\npop login ${origin}`;
-
-  useEffect(() => {
-    settingsService
-      .about()
-      .then((about) => setServerVersion(about.popAgentVersion))
-      .catch(() => undefined);
-  }, []);
+  const unixCommands = `npm i -g ${origin}/cli-latest.tgz\npop login ${origin}`;
 
   return (
     <div className="flex flex-col gap-4">
