@@ -69,7 +69,7 @@ describe('Settings PWA update action', () => {
 
   it('does not advertise an older published server tag as an update', async () => {
     updateStatus.mockResolvedValue({
-      popAgent: { current: '0.2.14', latest: '0.2.0' },
+      popAgent: { current: '0.2.15', latest: '0.2.0' },
       pi: { current: '0.84.1', latest: '0.84.1' },
       node: 'v22.0.0',
       environment: [],
@@ -83,7 +83,7 @@ describe('Settings PWA update action', () => {
 
   it('advertises a strictly newer published server tag', async () => {
     updateStatus.mockResolvedValue({
-      popAgent: { current: '0.2.14', latest: '0.3.0' },
+      popAgent: { current: '0.2.15', latest: '0.3.0' },
       pi: { current: '0.84.1', latest: '0.84.1' },
       node: 'v22.0.0',
       environment: [],

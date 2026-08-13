@@ -7,7 +7,7 @@ import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 
 describe('Pop Desktop distribution', () => {
   let pack: string;
-  const version = '0.2.14';
+  const version = '0.2.15';
   const file = `pop-desktop-${version}-darwin-arm64.zip`;
   const routes = () => createDesktopDownloadRoutes({ desktopPack: pack, desktopReleaseVersion: version });
 

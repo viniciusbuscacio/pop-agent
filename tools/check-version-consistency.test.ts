@@ -42,7 +42,7 @@ describe('global version consistency', () => {
   it('reports package, lockfile, CLI and desktop release drift together', () => {
     const target = fixture();
     const cliPath = join(target, 'cli/src/version.ts');
-    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace('0.2.14', '0.2.9'));
+    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace('0.2.15', '0.2.9'));
 
     const rootPackagePath = join(target, 'package.json');
     const rootPackage = JSON.parse(readFileSync(rootPackagePath, 'utf8')) as { version: string };
@@ -65,11 +65,11 @@ describe('global version consistency', () => {
     );
 
     expect(versionConsistencyErrors(target)).toEqual(expect.arrayContaining([
-      'package.json version is "0.2.9"; expected 0.2.14',
-      'package-lock.json packages["cli"] version is "0.2.9"; expected 0.2.14',
-      'cli/src/version.ts VERSION is "0.2.9"; expected 0.2.14',
-      'desktop/pack/release.json version is "0.2.7"; expected 0.2.14',
-      'desktop/pack/release.json file is "pop-desktop-0.2.7-darwin-arm64.zip"; expected pop-desktop-0.2.14-darwin-arm64.zip',
+      'package.json version is "0.2.9"; expected 0.2.15',
+      'package-lock.json packages["cli"] version is "0.2.9"; expected 0.2.15',
+      'cli/src/version.ts VERSION is "0.2.9"; expected 0.2.15',
+      'desktop/pack/release.json version is "0.2.7"; expected 0.2.15',
+      'desktop/pack/release.json file is "pop-desktop-0.2.7-darwin-arm64.zip"; expected pop-desktop-0.2.15-darwin-arm64.zip',
     ]));
   });
 });

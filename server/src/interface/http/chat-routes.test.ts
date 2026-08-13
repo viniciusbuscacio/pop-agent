@@ -272,7 +272,7 @@ describe('sending a message', () => {
       id: 'local-managed',
       role: 'managed-default',
       machine: {
-        hostname: 'Mac', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.14',
+        hostname: 'Mac', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.15',
       },
       send: () => undefined,
       close: () => undefined,
