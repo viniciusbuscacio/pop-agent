@@ -58,9 +58,10 @@ export default defineConfig({
         // Adds the Web Push handlers (pop-agent.spec §14) to the generated worker.
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
-        // The API and the SSE stream are never served from the cache, and a
-        // navigation must never be answered with the shell in their place.
-        navigateFallbackDenylist: [/^\/v1\//, /^\/healthz$/],
+        // APIs, health checks and signed file views are never the app shell.
+        // In particular, intercepting /files/download replaced a Markdown
+        // preview with a second copy of the PWA inside its own viewer on iOS.
+        navigateFallbackDenylist: [/^\/v1\//, /^\/healthz$/, /^\/files\/download(?:\?|$)/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/v1/'),

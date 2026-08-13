@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { FileNodeDTO, GarbageEntryDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
-import { saveFromLink, viewFromLink } from '../lib/download';
+import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
@@ -22,6 +22,7 @@ import { useNotificationsStore } from '../store/notifications';
 import { Button, MenuItem, Select } from '../ui/controls';
 import { Breadcrumb } from '../ui/breadcrumb';
 import { PullToRefresh } from '../ui/pull-to-refresh';
+import { FileViewer } from '../ui/file-viewer';
 import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
 
@@ -58,6 +59,7 @@ export function FilesPage() {
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
+  const [viewing, setViewing] = useState<{ path: string; name: string }>();
   const picker = useRef<HTMLInputElement>(null);
   const folderPicker = useRef<HTMLInputElement>(null);
 
@@ -209,15 +211,9 @@ export function FilesPage() {
     saveFromLink(await filesService.link(path));
   }
 
-  /**
-   * Opens the file in a new tab and lets the browser show it: a PDF, image,
-   * text or video lands in the system's own viewer, and on a phone the share
-   * sheet from there is what hands it to a real app. A web page cannot launch
-   * the OS default program itself, so anything the browser will not display
-   * (a .docx, a .zip) downloads instead and the OS takes over from there.
-   */
-  function openFile(path: string): void {
-    viewFromLink(filesService.viewUrl(path));
+  /** Opens the file inside the PWA, including on iOS where popup tabs are blocked. */
+  function openFile(file: FileNodeDTO): void {
+    setViewing({ path: file.path, name: file.name });
   }
 
   async function renameFile(file: FileNodeDTO): Promise<void> {
@@ -438,7 +434,7 @@ export function FilesPage() {
           label={t('files.openFile')}
           onClick={() => {
             setMenuFor(undefined);
-            openFile(file.path);
+            openFile(file);
           }}
         />
         {/* No "Select file" in search: selection is a property of a folder's
@@ -810,6 +806,14 @@ export function FilesPage() {
       <div className="md:hidden">
         <ShellFooter />
       </div>
+
+      {viewing === undefined ? null : (
+        <FileViewer
+          path={viewing.path}
+          name={viewing.name}
+          onClose={() => setViewing(undefined)}
+        />
+      )}
     </div>
   );
 }

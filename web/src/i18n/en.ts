@@ -16,6 +16,7 @@ export const en = {
   'common.download': 'Download',
   'common.comingSoon': 'Coming soon',
   'common.edit': 'Edit',
+  'common.close': 'Close',
 
   'setup.welcome.title': 'Welcome to Pop Agent',
   'setup.welcome.body':
@@ -565,6 +566,7 @@ export const en = {
   'files.selectFile': 'Select file',
   'files.selectFolder': 'Select folder',
   'files.openFile': 'Open file',
+  'files.openFailed': 'This file could not be opened.',
   // The trash. Every row says how many days it has left: a bin that only says
   // "deleted" makes you guess whether it is safe to leave something in it.
   'trash.title': 'Trash',
