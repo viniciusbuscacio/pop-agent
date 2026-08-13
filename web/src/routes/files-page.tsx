@@ -505,7 +505,11 @@ export function FilesPage() {
       </div>
 
       <div className="flex flex-col gap-2 p-3 pb-2">
-        <Breadcrumb crumbs={trail()} limit={CRUMB_LIMIT} onOpen={openCrumb} />
+        {/* Match the title to the controls' text, not to their outside border:
+            the small buttons have 0.75rem horizontal padding plus a 1px border. */}
+        <div className="pl-[calc(0.75rem+1px)]">
+          <Breadcrumb crumbs={trail()} limit={CRUMB_LIMIT} onOpen={openCrumb} />
+        </div>
 
         {/* On a phone the buttons alone fill the line, so the search box was
             being squeezed into a sliver. It wraps onto its own full-width line
