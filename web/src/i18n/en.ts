@@ -332,7 +332,7 @@ export const en = {
   'skills.new': 'New skill',
   'skills.filter.label': 'Filter skills by source',
   'skills.filter.all': 'All Skills',
-  'skills.filter.personal': 'Custom',
+  'skills.filter.personal': 'Personal',
   'skills.filter.auto': 'Auto',
   'skills.filter.pending': 'Pending',
   'skills.filter.builtin': 'Built-in',

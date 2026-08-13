@@ -111,6 +111,7 @@ describe('the skills sidebar filter', () => {
     });
 
     await userEvent.click(screen.getByTestId('skills-source-filter'));
+    expect(screen.getByText('Personal')).toBeDefined();
     await userEvent.click(screen.getByTestId('skills-source-filter-auto'));
 
     await waitFor(() => {
