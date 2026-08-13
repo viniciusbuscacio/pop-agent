@@ -61,6 +61,8 @@ const HELP = COMMANDS.map(
 /** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
 const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const WORKING_FRAME_MS = 140;
+const localRunNotice = (command: string): string =>
+  `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
 export interface ScreenOptions {
   session: ChatSession;
@@ -94,6 +96,7 @@ type AssistantContent = Pick<RunState, 'text' | 'thinking' | 'tools'>;
 class AssistantSegment extends Container {
   private content: AssistantContent;
   private settled = false;
+  private readonly localRuns: string[] = [];
 
   constructor(content: AssistantContent, private thinkingShown: boolean, settled = false) {
     super();
@@ -118,6 +121,11 @@ class AssistantSegment extends Container {
     this.rebuild();
   }
 
+  addLocalRun(command: string): void {
+    this.localRuns.push(localRunNotice(command));
+    this.rebuild();
+  }
+
   private rebuild(): void {
     this.clear();
     let hasBlock = false;
@@ -139,6 +147,9 @@ class AssistantSegment extends Container {
         0,
         0,
       ));
+    }
+    if (this.localRuns.length > 0) {
+      add(new Text(paint.dim(this.localRuns.join('\n')), 0, 0));
     }
     if (this.content.text.length > 0) {
       add(this.settled
@@ -419,6 +430,16 @@ export class ChatScreen {
     }
 
     this.setRunStatus(state.status);
+  }
+
+  /** Keep local execution notices inside the answer block, before its prose. */
+  onLocalRun(command: string): void {
+    if (this.streaming === undefined) {
+      this.say(paint.dim(localRunNotice(command)));
+      return;
+    }
+    this.streaming.addLocalRun(command);
+    this.tui.requestRender();
   }
 
   /** Finalize the live segment in place, preserving its reasoning and position. */

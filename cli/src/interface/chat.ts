@@ -16,9 +16,6 @@ const outdatedLines = (client: string, minimum: string, install: string): string
   `This pop is ${client}; the server needs ${minimum} or newer, so the local tools are off.`,
   `  ${install}`,
 ];
-const ranHere = (command: string): string =>
-  `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
-
 /**
  * Wiring for the interactive screen: the profile, the ports the session needs,
  * and the screen that listens to it (docs/cli.md, step 4).
@@ -66,7 +63,7 @@ export async function chat(
       }
       // Said out loud, because it happened on YOUR machine and nothing else
       // on screen would show it.
-      if (event.kind === 'ran') screen.say(ranHere(event.command));
+      if (event.kind === 'ran') screen.onLocalRun(event.command);
     },
   });
 

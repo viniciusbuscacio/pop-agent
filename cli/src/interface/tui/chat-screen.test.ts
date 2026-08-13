@@ -376,6 +376,60 @@ describe('ChatScreen', () => {
     screen.onIdle({ ...queued, status: 'done' });
   });
 
+  it('keeps local command notices before the answer they helped produce', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    const running = {
+      ...emptyRun('chat-1', 'run-1'),
+      text: 'The repository needs a Windows port.',
+      status: 'running' as const,
+      tools: [{ name: 'local_bash', status: 'done' as const }],
+    };
+    screen.onRun(running);
+    screen.onLocalRun('go version');
+    screen.onIdle({ ...running, status: 'done' });
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    const frame = plain();
+    expect(frame).toContain('ran here: go version');
+    expect(frame.indexOf('ran here: go version')).toBeLessThan(
+      frame.indexOf('The repository needs a Windows port.'),
+    );
+  });
+
+  it('does not attach an early local command notice to the previous answer', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    const previous = {
+      ...emptyRun('chat-1', 'run-previous'),
+      text: 'Previous answer.',
+      status: 'done' as const,
+    };
+    screen.onIdle(previous);
+    screen.onRun(emptyRun('chat-1', 'run-current'));
+    screen.onLocalRun('early command');
+    screen.onRun({
+      ...emptyRun('chat-1', 'run-current'),
+      text: 'Current answer.',
+      status: 'running',
+    });
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    const frame = plain();
+    expect(frame.indexOf('Previous answer.')).toBeLessThan(frame.indexOf('ran here: early command'));
+    expect(frame.indexOf('ran here: early command')).toBeLessThan(frame.indexOf('Current answer.'));
+  });
+
   it('keeps working after a tool finishes and while the model continues', async () => {
     const { terminal, plain, writes, repaint } = recorder();
     const { screen } = screenWith(terminal);

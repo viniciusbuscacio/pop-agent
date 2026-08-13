@@ -1354,6 +1354,11 @@ Before the first message creates the chat, only `Bye!` is printed.
 version and exits without reading a profile, opening PLA, contacting a server
 or creating a chat. Desktop managers may use it for safe discovery.
 
+Local execution notices (`ran here: …`) belong to the live assistant segment,
+after its tool statuses and before its prose. They are never appended as later
+transcript rows: doing that leaves a finished answer above a long tail of local
+commands and makes the response hard to read, especially in Windows Terminal.
+
 A Windows machine can bootstrap from its own server without already having
 Node or knowing the current CLI version:
 
@@ -1598,6 +1603,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.89 (2026-08-13): **CLI local-run notices precede the answer (§17).** The
+  `ran here: …` lines now live inside the assistant segment rather than being
+  appended after it, so the final prose follows the commands that produced it.
+  The changed CLI ships as 0.2.17.
 - 1.88 (2026-08-13): **Windows can bootstrap the CLI from its own server (§17).**
   Public `GET /install.ps1` derives the personal server origin from the request,
   installs a compatible Node LTS through winget when absent, invokes `npm.cmd`,

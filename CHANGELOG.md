@@ -30,6 +30,9 @@ normative history.
 
 ### Fixed
 
+- **CLI answers no longer appear above their local command log.** `ran here: …`
+  notices stay inside the active assistant block, before its prose, instead of
+  accumulating below the completed response in Windows Terminal.
 - **The provider surface, end to end** (a review pass, nineteen findings):
   - Removing the provider that was answering no longer leaves the app pointed
     at nothing -- the head of the list is re-elected as the default the moment
