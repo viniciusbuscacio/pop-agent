@@ -705,13 +705,14 @@ describe('the failover chain (pop-agent.spec §15, fase 2)', () => {
     ]);
   });
 
-  it('skips a penalized provider while another can answer', () => {
+  it('moves a penalized provider behind one that can answer', () => {
     service.setKey(OPENROUTER, 'sk-or');
     service.setKey('anthropic', 'sk-ant');
     cooldown.penalize(OPENROUTER);
 
     expect(service.resolveChain()).toEqual([
       { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' },
+      { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
     ]);
   });
 

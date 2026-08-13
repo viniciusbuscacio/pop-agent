@@ -1211,9 +1211,10 @@ reimplemented.
   but still penalizes the provider; the run fails in place with the
   persisted system mark.
 - **Advisory cooldown** (`ProviderCooldown`, in-memory, escalating —
-  1.73): a penalized provider is skipped by the next chains — unless
-  every candidate is penalized, in which case the full chain is used
-  anyway. The wait lengthens with each consecutive strike (1 min →
+  1.73): a penalized provider moves behind healthy candidates in the next
+  chains, but remains as a last recovery path if those candidates also fail.
+  If every candidate is penalized, their original order is preserved. The wait
+  lengthens with each consecutive strike (1 min →
   5 → 15 → 60); a flat 5 minutes both forgave a provider that was
   down for an hour too early and kept punishing a hiccup too long.
   Saving a key, completing a sign-in, a green connection test or a

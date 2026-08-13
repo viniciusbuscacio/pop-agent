@@ -91,7 +91,7 @@ describe('ProviderCooldown', () => {
     expect(cooldown.isPenalized('anthropic')).toBe(true);
   });
 
-  it('filters the penalized out of a chain', () => {
+  it('moves a penalized provider behind healthy candidates without removing it', () => {
     const { cooldown } = build();
     cooldown.penalize('openrouter');
 
@@ -100,7 +100,10 @@ describe('ProviderCooldown', () => {
       { providerId: 'anthropic', modelId: 'b' },
     ];
 
-    expect(cooldown.admissible(chain)).toEqual([{ providerId: 'anthropic', modelId: 'b' }]);
+    expect(cooldown.admissible(chain)).toEqual([
+      { providerId: 'anthropic', modelId: 'b' },
+      { providerId: 'openrouter', modelId: 'a' },
+    ]);
   });
 
   it('is advisory: with everyone penalized, the full chain is used anyway', () => {

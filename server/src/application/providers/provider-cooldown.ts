@@ -11,9 +11,10 @@ import type { Clock } from '../ports/clock.js';
  * forever. `clear` resets the ladder: a fresh key, sign-in, or success is new
  * evidence and deserves a first try immediately.
  *
- * Advisory, never a hard block: when every candidate is penalized the full
- * chain is used anyway -- a wrong penalty must degrade to "we tried", not to
- * "nothing answered". In-memory on purpose; a restart forgives everyone.
+ * Advisory, never a hard block: penalized candidates move behind healthy ones
+ * instead of disappearing. If every healthy attempt fails during this run, an
+ * older penalty must degrade to "we tried last", not to "nothing answered".
+ * In-memory on purpose; a restart forgives everyone.
  */
 
 /** First-strike duration; kept so tests can name the ladder without magic. */
@@ -66,11 +67,16 @@ export class ProviderCooldown {
   }
 
   /**
-   * The candidates worth trying: the non-penalized subset -- or, when every
-   * one of them is penalized, the whole list unchanged (the advisory rule).
+   * Healthy candidates first, penalized candidates last. A penalty changes
+   * priority but never removes the final recovery path from a run whose healthy
+   * choices all fail after the chain was resolved.
    */
   admissible<T extends { providerId: string }>(candidates: T[]): T[] {
-    const open = candidates.filter((candidate) => !this.isPenalized(candidate.providerId));
-    return open.length > 0 ? open : candidates;
+    const open: T[] = [];
+    const penalized: T[] = [];
+    for (const candidate of candidates) {
+      (this.isPenalized(candidate.providerId) ? penalized : open).push(candidate);
+    }
+    return [...open, ...penalized];
   }
 }
