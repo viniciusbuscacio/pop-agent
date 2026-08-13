@@ -78,6 +78,24 @@ export const filesService = {
   },
 
   /**
+   * Reads a server-approved plain-text preview into the PWA itself. This keeps
+   * Markdown and other text on the app's theme and font scale instead of
+   * flashing Safari's separate white, monospace document viewer.
+   */
+  async textView(path: string): Promise<string> {
+    const response = await fetch(await filesService.viewUrl(path), {
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw new Error(`Preview failed (${String(response.status)})`);
+    const type = response.headers.get('content-type')?.toLowerCase() ?? '';
+    const disposition = response.headers.get('content-disposition')?.toLowerCase() ?? '';
+    if (!type.startsWith('text/plain') || !disposition.startsWith('inline')) {
+      throw new Error('The server did not approve this file as plain text.');
+    }
+    return response.text();
+  },
+
+  /**
    * Fetches a signed download link as bytes, with the filename the server put
    * in `Content-Disposition`.
    *

@@ -9,25 +9,39 @@ export interface FileViewerProps {
   onClose: () => void;
 }
 
+type Preview = { kind: 'text'; content: string } | { kind: 'frame'; url: string };
+
+/** Extensions the server maps to a safe plain-text inline response. */
+const TEXT_EXTENSIONS = new Set([
+  'css', 'csv', 'js', 'json', 'log', 'md', 'mjs', 'ts', 'txt', 'xml', 'yaml', 'yml',
+]);
+
+function isTextFile(name: string): boolean {
+  const extension = name.split('.').at(-1)?.toLowerCase();
+  return extension !== undefined && TEXT_EXTENSIONS.has(extension);
+}
+
 /**
  * Shows a safe, server-approved file inside the PWA.
  *
- * iOS standalone PWAs do not reliably honour `window.open`: depending on the
- * release they either block it or create an unreachable blank webview. Keeping
- * the viewer in our own full-screen dialog works there and also gives the user
- * an explicit way back instead of navigating the installed app to a raw file.
+ * Text is fetched and painted by React so it inherits the app's theme, font
+ * family and device font-size setting. Other browser-viewable formats retain
+ * the isolated frame they need (PDF, media and images).
  */
 export function FileViewer({ path, name, onClose }: FileViewerProps) {
-  const [url, setUrl] = useState<string>();
+  const [preview, setPreview] = useState<Preview>();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
-    setUrl(undefined);
+    setPreview(undefined);
     setFailed(false);
-    void filesService.viewUrl(path).then(
+    const pending: Promise<Preview> = isTextFile(name)
+      ? filesService.textView(path).then((content) => ({ kind: 'text', content }))
+      : filesService.viewUrl(path).then((url) => ({ kind: 'frame', url }));
+    void pending.then(
       (next) => {
-        if (live) setUrl(next);
+        if (live) setPreview(next);
       },
       () => {
         if (live) setFailed(true);
@@ -36,7 +50,7 @@ export function FileViewer({ path, name, onClose }: FileViewerProps) {
     return () => {
       live = false;
     };
-  }, [path]);
+  }, [name, path]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -47,7 +61,12 @@ export function FileViewer({ path, name, onClose }: FileViewerProps) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--screen-bg)]" role="dialog" aria-modal="true" aria-label={name}>
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={name}
+    >
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-bg)] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <strong className="min-w-0 flex-1 truncate text-sm">{name}</strong>
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
@@ -55,15 +74,32 @@ export function FileViewer({ path, name, onClose }: FileViewerProps) {
         </Button>
       </div>
       {failed ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--muted)]" role="alert">
+        <div
+          className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--muted)]"
+          role="alert"
+        >
           {t('files.openFailed')}
         </div>
-      ) : url === undefined ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-[var(--muted)]" role="status">
+      ) : preview === undefined ? (
+        <div
+          className="flex flex-1 items-center justify-center text-sm text-[var(--muted)]"
+          role="status"
+        >
           {t('app.loading')}
         </div>
+      ) : preview.kind === 'text' ? (
+        <pre
+          data-testid="file-text-preview"
+          className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-sans text-base leading-relaxed text-[var(--screen-fg)]"
+        >
+          {preview.content}
+        </pre>
       ) : (
-        <iframe className="min-h-0 flex-1 border-0 bg-white" src={url} title={name} />
+        <iframe
+          className="min-h-0 flex-1 border-0 bg-[var(--bg)]"
+          src={preview.url}
+          title={name}
+        />
       )}
     </div>
   );
