@@ -4,6 +4,8 @@ import type {
   ProviderAuthInteraction,
   ProviderAuthPrompt,
 } from '../ports/agent-bridge.js';
+import type { OAuthCooldownStore } from '../ports/oauth-cooldown-store.js';
+import { oauthFailureCode } from './oauth-diagnostic.js';
 import { providerDefinition } from './provider-definitions.js';
 
 /**
@@ -20,14 +22,11 @@ import { providerDefinition } from './provider-definitions.js';
 const FLOW_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * How long a provider is barred from a fresh sign-in after its device flow
- * answers with 429. Rapid retries are exactly what escalates GitHub's rate
- * limit: a 10-minute abandoned flow polls the token endpoint the whole time,
- * and two restarts seconds apart turn a transient "authorization_pending"
- * into a hard 429 (Vinicius, 13/08). Barring a new flow for a cooldown lets
- * the provider's window drain instead of feeding it.
+ * Fallback when a rate-limited provider gives no Retry-After. GitHub remained
+ * at 429 after retries tens of minutes apart, so one minute was not a real
+ * brake. The deadline is persisted: restarting Pop must not bypass it.
  */
-const RATE_LIMIT_COOLDOWN_MS = 60 * 1000;
+const RATE_LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
 
 /**
  * Thrown by {@link OAuthFlowService.start} when the provider is still cooling
@@ -70,9 +69,11 @@ export interface OAuthFlowServiceDeps {
   login: (providerId: string, interaction: ProviderAuthInteraction) => Promise<void>;
   /** Told when a sign-in lands, e.g. to forgive the provider's cooldown. */
   onSuccess?: (providerId: string) => void;
+  /** Persists rate-limit windows so restarting Pop cannot bypass the provider's brake. */
+  cooldownStore?: OAuthCooldownStore;
   /** Overridable so the timeout test does not wait ten minutes. */
   timeoutMs?: number;
-  /** Overridable so cooldown tests need not wait a real minute. */
+  /** Overridable so cooldown tests need not wait a real hour. */
   rateLimitCooldownMs?: number;
 }
 
@@ -81,6 +82,8 @@ interface Flow {
   controller: AbortController;
   timer: ReturnType<typeof setTimeout>;
   resolvePrompt: ((value: string) => void) | undefined;
+  startedAt: number;
+  stage: string;
 }
 
 export class OAuthFlowService {
@@ -100,11 +103,14 @@ export class OAuthFlowService {
     // torn down: the running flow (if any) survives, and the caller learns
     // exactly how long to wait rather than feeding the provider's rate limit.
     const now = Date.now();
-    const until = this.cooldownUntil.get(providerId);
-    if (until !== undefined && now < until) {
+    const until = Math.max(
+      this.cooldownUntil.get(providerId) ?? 0,
+      this.deps.cooldownStore?.get(providerId) ?? 0,
+    );
+    if (now < until) {
       throw new OAuthCooldownError(providerId, Math.ceil((until - now) / 1000));
     }
-    this.cooldownUntil.delete(providerId);
+    this.clearCooldown(providerId);
     this.cancel();
 
     const controller = new AbortController();
@@ -120,6 +126,8 @@ export class OAuthFlowService {
         this.abort(flow, 'The sign-in took too long and was abandoned.');
       }, this.deps.timeoutMs ?? FLOW_TIMEOUT_MS),
       resolvePrompt: undefined,
+      startedAt: now,
+      stage: 'started',
     };
     flow.timer.unref?.();
     this.flow = flow;
@@ -127,21 +135,23 @@ export class OAuthFlowService {
     const interaction: ProviderAuthInteraction = {
       signal: controller.signal,
       prompt: (prompt) => {
-        // The sign-in's own heartbeat, journaled: which question is up, when.
-        // The credential can land long before the login promise resolves, and
-        // only the journal says which side stopped talking (Vinicius, 08/08).
-        console.log(`pop oauth: ${providerId} asks ${prompt.type}`);
+        // Record the shape, never the prompt or answer: either may be secret.
+        this.markStage(flow, `prompt_${prompt.type}`);
         return this.ask(flow, prompt);
       },
       notify: (event) => {
-        if (!flow.state.done) flow.state.events.push(sanitizeEvent(event));
+        if (flow.state.done) return;
+        flow.state.events.push(sanitizeEvent(event));
+        // Event type is enough to distinguish device-code polling from model
+        // setup without journaling the user code, URL, or provider prose.
+        this.markStage(flow, `event_${event.type}`);
       },
     };
 
-    console.log(`pop oauth: ${providerId} flow started`);
+    this.log(flow, 'result=running');
     this.deps.login(providerId, interaction).then(
       () => {
-        console.log(`pop oauth: ${providerId} login resolved`);
+        this.markStage(flow, 'credential_saved');
         this.finish(flow, undefined);
         // Only a flow that really landed counts -- a cancel that raced the
         // login's own resolution keeps ok=false and stays penalized.
@@ -215,12 +225,34 @@ export class OAuthFlowService {
     if (clean !== undefined) flow.state.error = clean;
     // A rate-limited sign-in arms a cooldown so the next attempt waits for the
     // provider's window to drain instead of escalating the 429.
-    if (clean !== undefined && isRateLimit(clean)) {
-      const cooldown = this.deps.rateLimitCooldownMs ?? RATE_LIMIT_COOLDOWN_MS;
-      this.cooldownUntil.set(flow.state.providerId, Date.now() + cooldown);
+    if (error !== undefined && isRateLimit(error)) {
+      const fallback = this.deps.rateLimitCooldownMs ?? RATE_LIMIT_COOLDOWN_MS;
+      const until = Date.now() + (retryAfterMs(error) ?? fallback);
+      this.cooldownUntil.set(flow.state.providerId, until);
+      this.deps.cooldownStore?.set(flow.state.providerId, until);
     }
+    this.log(
+      flow,
+      clean === undefined ? 'result=ok' : `result=error error=${oauthFailureCode(error ?? clean)}`,
+    );
+  }
+
+  private clearCooldown(providerId: string): void {
+    this.cooldownUntil.delete(providerId);
+    this.deps.cooldownStore?.set(providerId, undefined);
+  }
+
+  private markStage(flow: Flow, stage: string): void {
+    if (flow.state.done) return;
+    flow.stage = stage;
+    this.log(flow, 'result=running');
+  }
+
+  /** One bounded, token-free line per transition. */
+  private log(flow: Flow, result: string): void {
+    const duration = Math.max(0, Date.now() - flow.startedAt);
     console.log(
-      `pop oauth: ${flow.state.providerId} finished ok=${flow.state.ok}${clean === undefined ? '' : ` (${clean})`}`,
+      `pop oauth: provider=${flow.state.providerId} flow=${flow.state.flowId.slice(0, 8)} stage=${flow.stage} ${result} duration_ms=${String(duration)}`,
     );
   }
 }
@@ -288,6 +320,17 @@ function messageOf(error: unknown): string | undefined {
 /** A too-fast device-flow retry comes back as a bare 429 (GitHub Copilot). */
 function isRateLimit(message: string): boolean {
   return /\b429\b|too many requests/i.test(message);
+}
+
+/** Honor a numeric Retry-After when an upstream adapter includes it. */
+function retryAfterMs(message: string): number | undefined {
+  const match = message.match(
+    /retry[- ]after(?:\s*[:=]|\s+)\s*(\d{1,6})(?:\s*(?:s|sec|seconds?))?/i,
+  );
+  if (match?.[1] === undefined) return undefined;
+  const seconds = Number(match[1]);
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return undefined;
+  return Math.min(seconds * 1000, 24 * 60 * 60 * 1000);
 }
 
 /** Cap on any error line that reaches the browser -- long enough to be useful. */

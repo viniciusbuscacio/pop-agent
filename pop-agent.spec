@@ -1107,7 +1107,12 @@ reimplemented.
   the transcript the browser polls (~2 s), `POST .../oauth/input`
   answers the flow's one pending question, `POST .../oauth/cancel`
   aborts, `POST .../oauth/logout` disconnects (pi `logout`). A flow
-  nobody finishes times out after 10 minutes.
+  nobody finishes times out after 10 minutes. A provider 429 persists a
+  per-provider cooldown deadline under the data directory, honoring numeric
+  `Retry-After` when available and otherwise waiting one hour; restarting the
+  service cannot bypass that brake. OAuth journal lines contain only provider,
+  short flow id, stage, result/status class and duration — never provider HTTP
+  bodies, prompt answers, device codes, URLs or credentials.
 - **No token material ever leaves the server**: the state carries only
   display events (info / auth_url / device_code / progress) and the
   pending prompt; credentials go from the flow straight into pi's

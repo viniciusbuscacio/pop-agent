@@ -15,6 +15,7 @@ import { HealthService } from './application/health/health-service.js';
 import type { AgentBridge, ProviderAuthBridge } from './application/ports/agent-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { OAuthFlowService } from './application/providers/oauth-flow-service.js';
+import { FileOAuthCooldownStore } from './infrastructure/providers/oauth-cooldown-file.js';
 import { ProviderCooldown } from './application/providers/provider-cooldown.js';
 import { ProviderService } from './application/providers/provider-service.js';
 import { billsPerToken } from './application/providers/provider-definitions.js';
@@ -236,6 +237,7 @@ providers.migrateLegacyCustom();
 // The one interactive sign-in at a time, driven through the bridge.
 const oauthFlows = new OAuthFlowService({
   login: (providerId, interaction) => bridge.providerLogin(providerId, interaction),
+  cooldownStore: new FileOAuthCooldownStore(join(context.dataDir, 'oauth-cooldowns.json')),
   // A fresh sign-in is new evidence: the provider's penalty is forgiven.
   onSuccess: (providerId) => {
     cooldown.clear(providerId);

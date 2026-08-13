@@ -31,6 +31,10 @@ Environment=PI_OFFLINE=1
 ExecStart=/usr/bin/node /home/vinicius/dev/pop-agent/node_modules/tsx/dist/cli.mjs server/src/main.ts
 Restart=on-failure
 RestartSec=2
+# Bound a pathological provider response or retry loop before journald's global
+# retention policy has to intervene. Normal Pop traffic is far below this.
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=500
 
 [Install]
 WantedBy=multi-user.target

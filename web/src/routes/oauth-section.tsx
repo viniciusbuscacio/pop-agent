@@ -183,8 +183,17 @@ export function OAuthSection({
     try {
       await providersService.oauthStart(provider.id);
       setFlow(await providersService.oauthState(provider.id));
-    } catch {
-      setFlow(undefined);
+    } catch (error) {
+      // A local cooldown is actionable news, not "nothing happened". Keep the
+      // server's bounded message visible so the user does not retry a 429 loop.
+      setFlow({
+        flowId: 'start-error',
+        providerId: provider.id,
+        events: [],
+        done: true,
+        ok: false,
+        error: error instanceof Error ? error.message : t('provider.oauth.lost'),
+      });
     } finally {
       setBusy(false);
     }

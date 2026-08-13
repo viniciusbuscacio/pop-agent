@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import type { CompletionRequest, ProviderGateway } from '../../application/ports/provider-gateway.js';
 import { TranscriberError } from '../../application/ports/transcriber.js';
-import { FakeTranscriber, createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import {
+  FakeProviderAuth,
+  FakeTranscriber,
+  createTestApp,
+  type TestApp,
+} from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -488,6 +493,46 @@ describe('subscription sign-in routes', () => {
       configured: true,
       source: 'oauth',
     });
+  });
+
+  it('carries an empty text answer through HTTP for github.com', async () => {
+    const providerAuth = new FakeProviderAuth();
+    let received: string | undefined;
+    providerAuth.login = (_providerId, interaction) =>
+      interaction
+        .prompt({
+          type: 'text',
+          message: 'GitHub Enterprise URL/domain (blank for github.com)',
+        })
+        .then((answer) => {
+          received = answer;
+          providerAuth.authed.add('github-copilot');
+        });
+    const local = createTestApp(undefined, { providerAuth });
+    const login = await local.app.request('/v1/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    const localToken = ((await login.json()) as { token: string }).token;
+
+    await local.app.request('/v1/providers/github-copilot/oauth/start', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localToken}` },
+    });
+    await flush();
+    const submitted = await local.app.request('/v1/providers/github-copilot/oauth/input', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${localToken}`,
+      },
+      body: JSON.stringify({ value: '' }),
+    });
+    await flush();
+
+    expect(submitted.status).toBe(200);
+    expect(received).toBe('');
   });
 
   it('carries the flow s refusal back, and never any token words', async () => {

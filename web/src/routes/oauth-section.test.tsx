@@ -200,6 +200,24 @@ describe('OAuthSection', () => {
     expect(screen.queryByTestId('provider-oauth-answer-openai-codex')).toBeNull();
   });
 
+  it('shows the cooldown instead of silently inviting another retry', async () => {
+    const user = userEvent.setup();
+    oauthState.mockRejectedValue(new Error('not_found'));
+    oauthStart.mockRejectedValue(
+      new Error('Wait 3600s before signing in to "github-copilot" again.'),
+    );
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+
+    await user.click(screen.getByTestId('provider-oauth-signin-openai-codex'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-oauth-error-openai-codex').textContent).toContain(
+        'Wait 3600s',
+      );
+    });
+    expect(oauthStart).toHaveBeenCalledTimes(1);
+  });
+
   it('does not show a leftover sign-in next to a connected status', async () => {
     // Two contradictory claims in one card ("Connected" plus "paste your
     // code") is what made this unreadable in the first place.

@@ -17,6 +17,7 @@ import type {
   RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
+import { oauthFailureCode } from '../../application/providers/oauth-diagnostic.js';
 import { providerDefinition } from '../../application/providers/provider-definitions.js';
 import { resumeOrCreate } from './session-file.js';
 import type { MemoryRepo } from '../../application/ports/memory-repo.js';
@@ -595,10 +596,11 @@ export class SdkPiEngine implements PiEngine {
     const before = this.readCredentialEntry(providerId);
     const login = runtime.login(providerId, 'oauth', interaction);
     void login.then(
-      () => console.log(`pop oauth: ${providerId} engine bookkeeping settled`),
+      () =>
+        console.log(`pop oauth: provider=${providerId} component=engine_bookkeeping result=ok`),
       (error: unknown) =>
         console.log(
-          `pop oauth: ${providerId} engine bookkeeping failed: ${error instanceof Error ? error.message : String(error)}`,
+          `pop oauth: provider=${providerId} component=engine_bookkeeping result=error error=${oauthFailureCode(error)}`,
         ),
     );
     const landed = this.watchCredential(providerId, before, interaction.signal);

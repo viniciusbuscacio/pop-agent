@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProviderAuthInteraction } from '../ports/agent-bridge.js';
+import type { OAuthCooldownStore } from '../ports/oauth-cooldown-store.js';
+import { oauthFailureCode } from './oauth-diagnostic.js';
 import { OAuthCooldownError, OAuthFlowService } from './oauth-flow-service.js';
 
 /**
@@ -162,6 +164,44 @@ describe('OAuthFlowService', () => {
     expect(() => service.start('github-copilot')).toThrow(OAuthCooldownError);
   });
 
+  it('persists the 429 brake across service restarts', async () => {
+    const deadlines = new Map<string, number>();
+    const store: OAuthCooldownStore = {
+      get: (providerId) => deadlines.get(providerId),
+      set: (providerId, until) => {
+        if (until === undefined) deadlines.delete(providerId);
+        else deadlines.set(providerId, until);
+      },
+    };
+    const first = new OAuthFlowService({
+      login: () => Promise.reject(new Error('429 Too Many Requests')),
+      cooldownStore: store,
+    });
+    first.start('github-copilot');
+    await flush();
+
+    const afterRestart = new OAuthFlowService({ login: scriptedLogin, cooldownStore: store });
+    expect(() => afterRestart.start('github-copilot')).toThrow(OAuthCooldownError);
+  });
+
+  it('honors an upstream Retry-After longer than the fallback', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const service = new OAuthFlowService({
+        login: () => Promise.reject(new Error('429 Too Many Requests; Retry-After: 7200 seconds')),
+      });
+      service.start('github-copilot');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(() => service.start('github-copilot')).toThrowError(
+        expect.objectContaining({ retryAfterSeconds: 7200 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('lets another provider sign in during one provider s cooldown', async () => {
     const service = new OAuthFlowService({
       login: (providerId) =>
@@ -224,6 +264,43 @@ describe('OAuthFlowService', () => {
     await flush();
 
     expect(service.state()?.error).toBe('the device code expired');
+  });
+
+  it('journals bounded stages and classifications, never provider bodies', async () => {
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((line: unknown) => {
+      logs.push(String(line));
+    });
+    try {
+      const service = new OAuthFlowService({
+        login: (_provider, interaction) => {
+          interaction.notify({
+            type: 'device_code',
+            userCode: 'SECRET-CODE',
+            verificationUri: 'https://github.com/login/device',
+          });
+          return Promise.reject(
+            new Error('503 Service Unavailable: <!DOCTYPE html><img src="data:image/png;base64,SECRET" />'),
+          );
+        },
+      });
+      service.start('github-copilot');
+      await flush();
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(logs.some((line) => line.includes('stage=event_device_code'))).toBe(true);
+    expect(logs.some((line) => line.includes('result=error error=http_503'))).toBe(true);
+    expect(logs.every((line) => line.length < 300)).toBe(true);
+    expect(logs.join('\n')).not.toMatch(/SECRET|DOCTYPE|base64|verificationUri/i);
+  });
+
+  it('classifies arbitrary failures without copying their contents', () => {
+    expect(oauthFailureCode(new Error('token=secret-account-data'))).toBe('provider_failure');
+    expect(oauthFailureCode(new Error('request failed with status code: 429; secret'))).toBe(
+      'http_429',
+    );
   });
 
   it('never lets token material into the transcript', async () => {
