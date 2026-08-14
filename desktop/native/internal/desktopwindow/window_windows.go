@@ -129,7 +129,7 @@ func stop() {
 	view := desktopView
 	viewMu.Unlock()
 	if view != nil {
-		view.Terminate()
+		view.Dispatch(view.Terminate)
 	}
 }
 func remove() {
