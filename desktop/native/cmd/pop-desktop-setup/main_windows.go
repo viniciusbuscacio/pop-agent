@@ -26,7 +26,7 @@ func main() {
 		show("Pop Desktop Setup", err.Error(), 0x10)
 		os.Exit(1)
 	}
-	show("Pop Desktop Setup", "Pop Desktop was installed for this Windows user and is starting.", 0x40)
+	show("Pop Desktop Setup", "Pop Desktop was installed for this Windows user and the tray is starting.", 0x40)
 }
 
 func install() error {
@@ -69,20 +69,12 @@ func install() error {
 		return fmt.Errorf("activate installation: %w", err)
 	}
 	_ = os.RemoveAll(backup)
-	for _, name := range []string{"Pop Desktop Manager.exe", "Pop Desktop.exe"} {
-		command := exec.Command(filepath.Join(destination, name))
-		command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
-		if err := command.Start(); err != nil {
-			return fmt.Errorf("start %s: %w", name, err)
-		}
-		if err := command.Process.Release(); err != nil {
-			return err
-		}
-		if name == "Pop Desktop Manager.exe" {
-			time.Sleep(750 * time.Millisecond)
-		}
+	command := exec.Command(filepath.Join(destination, "Pop Desktop Manager.exe"))
+	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("start tray: %w", err)
 	}
-	return nil
+	return command.Process.Release()
 }
 
 func stop(name string) {
