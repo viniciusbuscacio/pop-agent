@@ -13,6 +13,7 @@ void pop_setup_set_progress(const char *message);
 void pop_setup_finish_progress(void);
 void pop_setup_show_error(const char *message);
 int pop_setup_show_success(void);
+int pop_setup_paste_menu_ready_for_testing(void);
 */
 import "C"
 
@@ -50,3 +51,5 @@ func showError(message string) {
 }
 
 func showSuccess() bool { return C.pop_setup_show_success() == 1 }
+
+func pasteMenuReadyForTesting() bool { return C.pop_setup_paste_menu_ready_for_testing() == 1 }

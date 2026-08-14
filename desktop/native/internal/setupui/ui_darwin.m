@@ -13,9 +13,43 @@ static NSString *popSetupString(const char *value) {
     return [NSString stringWithUTF8String:value] ?: @"";
 }
 
+static void installMenus(void) {
+    if ([NSApp mainMenu] != nil) return;
+    NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@""];
+
+    NSMenuItem *appRoot = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Pop Desktop Setup"];
+    [appMenu addItemWithTitle:@"Quit Pop Desktop Setup" action:@selector(terminate:) keyEquivalent:@"q"];
+    [appRoot setSubmenu:appMenu];
+    [mainMenu addItem:appRoot];
+    [appMenu release];
+    [appRoot release];
+
+    // NSTextField routes standard shortcuts through the responder chain, but
+    // only when the application owns the matching Edit menu commands.
+    NSMenuItem *editRoot = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
+    NSMenuItem *redo = [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"Z"];
+    [redo setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [editMenu addItem:[NSMenuItem separatorItem]];
+    [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
+    [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+    [editRoot setSubmenu:editMenu];
+    [mainMenu addItem:editRoot];
+    [editMenu release];
+    [editRoot release];
+
+    [NSApp setMainMenu:mainMenu];
+    [mainMenu release];
+}
+
 static void prepareApplication(void) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    installMenus();
     [NSApp activateIgnoringOtherApps:YES];
 }
 
@@ -28,6 +62,16 @@ static NSTextField *label(NSString *text, NSRect frame) {
     [field setDrawsBackground:NO];
     [field setFont:[NSFont systemFontOfSize:12.0]];
     return field;
+}
+
+int pop_setup_paste_menu_ready_for_testing(void) {
+    prepareApplication();
+    for (NSMenuItem *root in [[NSApp mainMenu] itemArray]) {
+        for (NSMenuItem *item in [[root submenu] itemArray]) {
+            if ([item action] == @selector(paste:) && [[item keyEquivalent] isEqualToString:@"v"]) return 1;
+        }
+    }
+    return 0;
 }
 
 int pop_setup_welcome(void) {
