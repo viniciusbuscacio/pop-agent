@@ -1,0 +1,12 @@
+{
+  "version": "22.23.2",
+  "minimumLauncherVersion": "1.1.0",
+  "packages": {
+    "darwin-arm64": {
+      "sourceUrl": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
+      "file": "node-v22.23.2-darwin-arm64.tar.gz",
+      "size": 50068815,
+      "sha256": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6"
+    }
+  }
+}

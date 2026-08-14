@@ -38,6 +38,7 @@ import type { SettingsService } from '../../application/settings/settings-servic
 import { authMiddleware } from './auth-middleware.js';
 import { createCliDownloadRoutes } from './cli-download-routes.js';
 import { createCliInstallerRoutes } from './cli-installer-routes.js';
+import { createNodeRuntimeRoutes } from './node-runtime-routes.js';
 import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
 import { createFilesRoutes } from './files-routes.js';
 import { createFilesDownloadRoutes } from './files-download-routes.js';
@@ -166,6 +167,10 @@ export function createApp(deps: AppDeps): Hono {
       publicSurface(
         'the macOS/Linux and Windows bootstrap scripts must run before a session or CLI exists; they contain only this request origin and checksummed public launcher artifact metadata',
         createCliInstallerRoutes(deps),
+      ),
+      publicSurface(
+        'the native launcher must obtain the exact checksummed managed Node runtime before a session or Node client exists; the manifest and archive contain only public runtime bytes and release metadata',
+        createNodeRuntimeRoutes(deps),
       ),
     ],
     guarded: [

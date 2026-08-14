@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.0.0"
+const launcherVersion = "1.1.0"
 const requestTimeout = 3 * time.Second
 
 type manifest struct {
@@ -79,7 +79,7 @@ func main() {
 		stderr:     os.Stderr,
 		home:       home,
 		configHome: configHome,
-		http:       &http.Client{Timeout: requestTimeout},
+		http:       &http.Client{},
 		lookPath:   exec.LookPath,
 		command:    exec.Command,
 		execute:    executeCLI,
@@ -95,6 +95,9 @@ func (l *launcher) run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "doctor" {
 		return l.doctor(args)
+	}
+	if len(args) > 0 && args[0] == "runtime" {
+		return l.runtimeCommand(args)
 	}
 
 	st, _ := l.readState()
@@ -180,6 +183,19 @@ func (l *launcher) doctor(args []string) int {
 		} else {
 			fmt.Fprintf(l.stdout, "Node.js: %s (%s)\n", strings.TrimSpace(version), node)
 		}
+	}
+	if managed, managedErr := l.readManagedRuntimeState(); managedErr == nil {
+		directory := l.managedRuntimeDirectory(managed)
+		version, npmVersion, validateErr := l.validateManagedRuntime(directory)
+		if validateErr != nil {
+			fmt.Fprintf(l.stdout, "Managed Node runtime: broken (%v)\n", validateErr)
+		} else {
+			fmt.Fprintf(l.stdout, "Managed Node runtime: v%s, npm %s (staged, not active)\n", version, npmVersion)
+		}
+	} else if errors.Is(managedErr, os.ErrNotExist) {
+		fmt.Fprintln(l.stdout, "Managed Node runtime: not installed")
+	} else {
+		fmt.Fprintf(l.stdout, "Managed Node runtime: invalid state (%v)\n", managedErr)
 	}
 	if runtime.GOOS == "windows" && nodeErr == nil {
 		npmJS := filepath.Join(filepath.Dir(node), "node_modules", "npm", "bin", "npm-cli.js")
@@ -391,6 +407,10 @@ func (l *launcher) download(packageURL, destination string, expected manifestPac
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer response.Body.Close()
+	expectedURL, parseErr := url.Parse(packageURL)
+	if parseErr != nil || response.Request.URL.Scheme != expectedURL.Scheme || response.Request.URL.Host != expectedURL.Host {
+		return errors.New("package download redirected outside the configured server")
+	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("package download returned HTTP %d", response.StatusCode)
 	}

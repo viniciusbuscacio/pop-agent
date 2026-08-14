@@ -157,6 +157,26 @@ func TestStaleUpdateLockCannotBrickFutureUpdates(t *testing.T) {
 	}
 }
 
+func TestPackageDownloadRejectsCrossOriginRedirect(t *testing.T) {
+	payload := []byte("redirected package")
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	}))
+	defer destination.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, destination.URL+"/package", http.StatusFound)
+	}))
+	defer source.Close()
+	hash := sha256.Sum256(payload)
+	l := testLauncher(t)
+	err := l.download(source.URL+"/package", filepath.Join(t.TempDir(), "package.tgz"), manifestPackage{
+		Size: int64(len(payload)), SHA256: hex.EncodeToString(hash[:]),
+	})
+	if err == nil || !strings.Contains(err.Error(), "redirected outside") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestChecksumFailureKeepsPreviousVersion(t *testing.T) {
 	archive := []byte("corrupt")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
