@@ -60,6 +60,68 @@ func EnsureSibling(name string, stopped func()) error {
 	return nil
 }
 
+// WatchStop subscribes to the private graceful-stop signal for one component.
+// Process-handle monitoring remains the crash/force-kill fallback.
+func WatchStop(component string, stopped func()) (func(), error) {
+	name, err := stopEventName(component)
+	if err != nil {
+		return nil, err
+	}
+	value, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return nil, err
+	}
+	event, err := windows.CreateEvent(nil, 0, 0, value)
+	if err != nil {
+		return nil, fmt.Errorf("create %s stop event: %w", component, err)
+	}
+	if err := windows.ResetEvent(event); err != nil {
+		windows.CloseHandle(event)
+		return nil, fmt.Errorf("reset %s stop event: %w", component, err)
+	}
+	go func() {
+		result, waitErr := windows.WaitForSingleObject(event, windows.INFINITE)
+		if waitErr == nil && result == windows.WAIT_OBJECT_0 && stopped != nil {
+			stopped()
+		}
+	}()
+	return func() { _ = windows.CloseHandle(event) }, nil
+}
+
+// SignalStop asks the named sibling to take its normal shutdown path. Missing
+// listeners are expected during first-run configuration and process startup.
+func SignalStop(component string) error {
+	name, err := stopEventName(component)
+	if err != nil {
+		return err
+	}
+	value, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
+	event, err := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, value)
+	if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("open %s stop event: %w", component, err)
+	}
+	defer windows.CloseHandle(event)
+	if err := windows.SetEvent(event); err != nil {
+		return fmt.Errorf("signal %s stop event: %w", component, err)
+	}
+	return nil
+}
+
+func stopEventName(component string) (string, error) {
+	switch component {
+	case "desktop", "tray":
+		return `Local\com.popagent.` + component + `.stop`, nil
+	default:
+		return "", errors.New("invalid peer component")
+	}
+}
+
 func findProcess(name string) (uint32, bool, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {

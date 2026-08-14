@@ -28,6 +28,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app := NewApp()
+	app.onQuit = func() { _ = peerprocess.SignalStop("desktop") }
 	var peerOnce sync.Once
 	var peerErr error
 	startDesktop := func() error {
@@ -42,6 +43,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer app.shutdown()
+	closeStop, err := peerprocess.WatchStop("tray", app.quit)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "pop-desktop-tray: stop signal:", err)
+		return
+	}
+	defer closeStop()
 	// A fresh install remains tray-only until the server is configured; after
 	// configuration, starting either executable owns the same coupled lifecycle.
 	if app.config.ServerURL != "" {

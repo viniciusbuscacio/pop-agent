@@ -33,6 +33,7 @@ type ManagerState struct {
 type App struct {
 	cancel      context.CancelFunc
 	showDesktop func() error
+	onQuit      func()
 
 	mu                    sync.Mutex
 	configPath            string
@@ -139,6 +140,9 @@ func (a *App) shutdown() {
 }
 
 func (a *App) quit() {
+	if a.onQuit != nil {
+		a.onQuit()
+	}
 	if a.cancel != nil {
 		a.cancel()
 	}

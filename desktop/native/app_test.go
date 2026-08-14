@@ -138,6 +138,18 @@ func TestConnectedStatusTextIncludesLastCheckTime(t *testing.T) {
 	}
 }
 
+func TestQuitNotifiesPeerBeforeCancelling(t *testing.T) {
+	order := make([]string, 0, 2)
+	app := &App{
+		onQuit: func() { order = append(order, "peer") },
+		cancel: func() { order = append(order, "cancel") },
+	}
+	app.quit()
+	if got := strings.Join(order, ","); got != "peer,cancel" {
+		t.Fatalf("quit order = %q", got)
+	}
+}
+
 func TestDesktopVersionComparisonIsNumeric(t *testing.T) {
 	if compareDesktopVersions("0.2.9", "0.2.10") >= 0 {
 		t.Fatal("0.2.9 must be older than 0.2.10")

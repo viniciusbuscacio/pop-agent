@@ -51,6 +51,14 @@ func main() {
 		return
 	}
 	defer desktopwindow.Remove()
+	closeStop, err := peerprocess.WatchStop("desktop", desktopwindow.Stop)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "pop-desktop: stop signal:", err)
+		desktopwindow.ShowFatal("Pop Desktop could not create its lifecycle signal.")
+		return
+	}
+	defer closeStop()
+	defer func() { _ = peerprocess.SignalStop("tray") }()
 	if err := peerprocess.EnsureSibling("Pop Desktop Tray.exe", desktopwindow.Stop); err != nil {
 		fmt.Fprintln(os.Stderr, "pop-desktop: tray:", err)
 		desktopwindow.ShowFatal("Pop Desktop could not start its tray component.")
