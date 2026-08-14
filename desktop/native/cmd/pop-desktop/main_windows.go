@@ -37,7 +37,7 @@ func main() {
 		return
 	}
 	if cfg.ServerURL == "" {
-		desktopwindow.ShowFatal("Configure the Pop Agent server in Pop Desktop Manager first.")
+		desktopwindow.ShowFatal("Configure the Pop Agent server in Pop Desktop first.")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())

@@ -69,7 +69,7 @@ func Update(state MenuState) {
 func Run() {
 	systray.Run(func() {
 		systray.SetIcon(trayIcon)
-		systray.SetTooltip("Pop Desktop Manager")
+		systray.SetTooltip("Pop Desktop")
 		menu := buildWindowsMenu()
 		windowsTray.Lock()
 		windowsTray.menu = menu
@@ -88,7 +88,7 @@ func Stop()   { systray.Quit() }
 func Remove() { systray.Quit() }
 
 func buildWindowsMenu() windowsMenu {
-	heading := systray.AddMenuItem("Pop Desktop Manager", "")
+	heading := systray.AddMenuItem("Pop Desktop", "")
 	heading.Disable()
 	systray.AddSeparator()
 
@@ -138,7 +138,7 @@ func buildWindowsMenu() windowsMenu {
 	m.diagnostics = systray.AddMenuItem("Diagnostics…", "Show component diagnostics")
 	m.startAtLogin = systray.AddMenuItemCheckbox("Start at Login", "Start when you sign in", false)
 	systray.AddSeparator()
-	m.quit = systray.AddMenuItem("Quit Pop Desktop Manager", "Quit")
+	m.quit = systray.AddMenuItem("Quit Pop Desktop", "Quit")
 
 	bindWindowsClick(m.openDesktop, func(c Callbacks) func() { return c.OpenDesktop })
 	bindWindowsClick(m.checkDesktop, func(c Callbacks) func() { return c.CheckDesktop })

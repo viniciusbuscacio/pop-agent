@@ -40,13 +40,14 @@ func install() error {
 		return err
 	}
 	stop("Pop Desktop Manager.exe")
+	stop("Pop Desktop Tray.exe")
 	stop("Pop Desktop.exe")
 	stage, err := os.MkdirTemp(parent, ".pop-desktop-install-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(stage)
-	for _, name := range []string{"Pop Desktop Manager.exe", "Pop Desktop.exe", "Pop Desktop.exe.version", "Pop Desktop.ico"} {
+	for _, name := range []string{"Pop Desktop Tray.exe", "Pop Desktop.exe", "Pop Desktop.exe.version", "Pop Desktop.ico"} {
 		bytes, err := payload.ReadFile("payload/" + name)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
@@ -69,7 +70,7 @@ func install() error {
 		return fmt.Errorf("activate installation: %w", err)
 	}
 	_ = os.RemoveAll(backup)
-	command := exec.Command(filepath.Join(destination, "Pop Desktop Manager.exe"))
+	command := exec.Command(filepath.Join(destination, "Pop Desktop Tray.exe"))
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start tray: %w", err)
