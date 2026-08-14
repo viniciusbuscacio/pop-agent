@@ -132,24 +132,49 @@ func (s *Supervisor) Stop(timeout time.Duration) {
 	s.mu.Lock()
 	cmd := s.cmd
 	done := s.done
+	if cmd != nil && s.stdin != nil {
+		// EOF is the managed runtime's native graceful-stop signal.
+		_ = s.stdin.Close()
+	}
 	s.mu.Unlock()
 	if cmd == nil {
 		return
 	}
+
+	grace := 750 * time.Millisecond
+	if timeout < grace {
+		grace = timeout
+	}
+	if waitForProcess(done, grace) {
+		return
+	}
 	terminateProcessGroup(cmd)
-	if done != nil {
-		select {
-		case <-done:
-			return
-		case <-time.After(timeout):
-		}
+	if waitForProcess(done, 250*time.Millisecond) {
+		return
 	}
 	killProcessGroup(cmd)
-	if done != nil {
+	_ = waitForProcess(done, time.Second)
+}
+
+func waitForProcess(done <-chan error, timeout time.Duration) bool {
+	if done == nil {
+		return true
+	}
+	if timeout <= 0 {
 		select {
 		case <-done:
-		case <-time.After(time.Second):
+			return true
+		default:
+			return false
 		}
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 

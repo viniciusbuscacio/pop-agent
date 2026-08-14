@@ -20,6 +20,8 @@ func TestWindowsSupervisorStartsAndStopsNodeProcess(t *testing.T) {
 	body := `process.stdin.once('data', () => {
   process.stdout.write(JSON.stringify({kind:'attached',connectionId:'local-test',transport:'wss'})+'\n');
 });
+process.stdin.resume();
+process.stdin.on('end', () => process.exit(0));
 setInterval(() => {}, 1000);
 `
 	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
@@ -40,7 +42,11 @@ setInterval(() => {}, 1000);
 	case <-time.After(3 * time.Second):
 		t.Fatal("managed process did not attach")
 	}
+	started := time.Now()
 	supervisor.Stop(3 * time.Second)
+	if elapsed := time.Since(started); elapsed > 1500*time.Millisecond {
+		t.Fatalf("graceful stop took %s", elapsed)
+	}
 	if supervisor.Running() {
 		t.Fatal("expected managed process to stop")
 	}
