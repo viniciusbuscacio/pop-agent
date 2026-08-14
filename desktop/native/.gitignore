@@ -2,3 +2,5 @@ build/bin/
 build/desktop-pack/
 .DS_Store
 *.log
+
+cmd/pop-desktop-setup/payload/

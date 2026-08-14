@@ -125,7 +125,8 @@ func TestNewAppAlwaysManagesTheUserApplicationsBundle(t *testing.T) {
 
 func TestEnvWithPathPrependsDetectedNodeWithoutDroppingEnvironment(t *testing.T) {
 	got := envWithPath("/node/bin", []string{"HOME=/tmp/home", "PATH=/usr/bin:/bin"})
-	if strings.Join(got, "|") != "HOME=/tmp/home|PATH=/node/bin:/usr/bin:/bin" {
+	want := "HOME=/tmp/home|PATH=/node/bin" + string(os.PathListSeparator) + "/usr/bin:/bin"
+	if strings.Join(got, "|") != want {
 		t.Fatalf("environment = %v", got)
 	}
 }

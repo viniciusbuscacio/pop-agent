@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -34,6 +35,9 @@ func TestProductVersionsStayAligned(t *testing.T) {
 }
 
 func TestGlobalVersionCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX version gate is covered by build-windows.ps1 on Windows")
+	}
 	local, err := os.ReadFile("VERSION")
 	if err != nil {
 		t.Fatal(err)

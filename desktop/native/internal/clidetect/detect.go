@@ -9,9 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/winprocess"
 )
 
 const versionCommandIntroduced = "0.2.4"
@@ -122,7 +125,7 @@ func hasPopBin(raw json.RawMessage) bool {
 func verifyVersionCommand(ctx context.Context, nodePath, entryPath, want string) error {
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(probeCtx, nodePath, entryPath, "--version").Output()
+	output, err := winprocess.HideWindow(exec.CommandContext(probeCtx, nodePath, entryPath, "--version")).Output()
 	if err != nil {
 		return fmt.Errorf("run Pop CLI --version: %w", err)
 	}
@@ -133,7 +136,27 @@ func verifyVersionCommand(ctx context.Context, nodePath, entryPath, want string)
 }
 
 func candidatePaths(home, nodePath string) []string {
-	paths := make([]string, 0, 24)
+	paths := make([]string, 0, 32)
+	if runtime.GOOS == "windows" {
+		if nodePath != "" {
+			directory := filepath.Dir(nodePath)
+			paths = append(paths,
+				filepath.Join(directory, "node_modules", "pop-agent", "dist", "main.js"),
+				filepath.Join(directory, "pop.cmd"),
+			)
+		}
+		if path, err := exec.LookPath("pop.cmd"); err == nil {
+			paths = append(paths, path)
+		}
+		appData := os.Getenv("APPDATA")
+		localAppData := os.Getenv("LOCALAPPDATA")
+		paths = append(paths,
+			filepath.Join(localAppData, "pi-node", "current", "node_modules", "pop-agent", "dist", "main.js"),
+			filepath.Join(appData, "npm", "node_modules", "pop-agent", "dist", "main.js"),
+			filepath.Join(home, ".volta", "tools", "image", "packages", "pop-agent", "lib", "node_modules", "pop-agent", "dist", "main.js"),
+		)
+		return paths
+	}
 	if nodePath != "" {
 		paths = append(paths, filepath.Join(filepath.Dir(nodePath), "pop"))
 	}
@@ -152,7 +175,6 @@ func candidatePaths(home, nodePath string) []string {
 	paths = append(paths, "/opt/homebrew/bin/pop", "/usr/local/bin/pop")
 	return paths
 }
-
 func appendGlob(paths []string, pattern string) []string {
 	matches, _ := filepath.Glob(pattern)
 	sort.Sort(sort.Reverse(sort.StringSlice(matches)))

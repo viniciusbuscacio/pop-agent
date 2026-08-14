@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -187,16 +186,4 @@ func withPath(prefix string, environment []string) []string {
 		result = append(result, "PATH="+prefix)
 	}
 	return result
-}
-
-func processGroupAttributes() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setpgid: true} }
-func terminateProcessGroup(cmd *exec.Cmd) {
-	if cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-	}
-}
-func killProcessGroup(cmd *exec.Cmd) {
-	if cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
 }

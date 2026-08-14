@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -48,6 +49,9 @@ func TestInspectRejectsUnrelatedPackage(t *testing.T) {
 }
 
 func TestVersionCommandMustMatchPackageManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is Unix-only")
+	}
 	node := filepath.Join(t.TempDir(), "node")
 	if err := os.WriteFile(node, []byte("#!/bin/sh\nprintf '0.2.4\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -81,7 +85,11 @@ func TestCandidatesStartBesideSelectedNode(t *testing.T) {
 	home := t.TempDir()
 	node := filepath.Join(home, ".hermes", "node", "bin", "node")
 	paths := candidatePaths(home, node)
-	if got, want := paths[0], filepath.Join(filepath.Dir(node), "pop"); got != want {
+	want := filepath.Join(filepath.Dir(node), "pop")
+	if runtime.GOOS == "windows" {
+		want = filepath.Join(filepath.Dir(node), "node_modules", "pop-agent", "dist", "main.js")
+	}
+	if got := paths[0]; got != want {
 		t.Fatalf("first candidate = %q, want %q", got, want)
 	}
 }

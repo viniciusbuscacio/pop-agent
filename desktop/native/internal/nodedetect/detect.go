@@ -8,10 +8,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/winprocess"
 )
 
 // MinimumVersion mirrors the Node engine required by Pop Agent 0.2.3.
@@ -79,7 +82,25 @@ func detectCandidates(ctx context.Context, candidates []string, run probe) Resul
 }
 
 func candidatePaths(home string) []string {
-	paths := make([]string, 0, 24)
+	paths := make([]string, 0, 32)
+	if runtime.GOOS == "windows" {
+		localAppData := os.Getenv("LOCALAPPDATA")
+		programFiles := os.Getenv("ProgramFiles")
+		appData := os.Getenv("APPDATA")
+		paths = append(paths,
+			filepath.Join(localAppData, "pi-node", "current", "node.exe"),
+			filepath.Join(programFiles, "nodejs", "node.exe"),
+			filepath.Join(localAppData, "Programs", "nodejs", "node.exe"),
+			filepath.Join(home, ".volta", "bin", "node.exe"),
+			filepath.Join(appData, "fnm", "node-versions", "current", "installation", "node.exe"),
+		)
+		paths = appendGlob(paths, filepath.Join(home, "AppData", "Roaming", "nvm", "*", "node.exe"))
+		if path, err := exec.LookPath("node.exe"); err == nil {
+			paths = append(paths, path)
+		}
+		return paths
+	}
+
 	// Hermes is the deterministic first choice when compatible; the remaining
 	// managers and package installations are searched without invoking a shell.
 	paths = append(paths, filepath.Join(home, ".hermes", "node", "bin", "node"))
@@ -95,7 +116,6 @@ func candidatePaths(home string) []string {
 	}
 	return paths
 }
-
 func appendGlob(paths []string, pattern string) []string {
 	matches, _ := filepath.Glob(pattern)
 	sort.Sort(sort.Reverse(sort.StringSlice(matches)))
@@ -108,7 +128,7 @@ func probeVersion(ctx context.Context, path string) (string, error) {
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(probeCtx, path, "--version").Output()
+	output, err := winprocess.HideWindow(exec.CommandContext(probeCtx, path, "--version")).Output()
 	if err != nil {
 		return "", err
 	}

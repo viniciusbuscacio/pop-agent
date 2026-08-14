@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -71,6 +72,9 @@ func TestDetectCandidatesDistinguishesMissingFromProbeFailure(t *testing.T) {
 }
 
 func TestCandidatePathsIncludeVersionManagersAndPackageManagers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows candidates have a dedicated test")
+	}
 	home := t.TempDir()
 	nvmNode := filepath.Join(home, ".nvm", "versions", "node", "v22.19.0", "bin", "node")
 	if err := os.MkdirAll(filepath.Dir(nvmNode), 0o755); err != nil {
