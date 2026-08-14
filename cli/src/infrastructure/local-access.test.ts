@@ -78,6 +78,39 @@ describe('LocalAccess reconnection', () => {
     localAccess.close();
   });
 
+  it('reattaches when an attached WebSocket silently stops receiving server heartbeats', async () => {
+    const value = await fixture();
+    const events: LocalAccessEvent[] = [];
+    let connections = 0;
+
+    value.sockets.on('connection', (socket) => {
+      connections += 1;
+      const number = connections;
+      socket.on('message', (raw) => {
+        const frame = JSON.parse(String(raw)) as { kind?: string };
+        if (frame.kind !== 'attach') return;
+        socket.send(JSON.stringify({ kind: 'attached', id: `local-${String(number)}` }));
+      });
+    });
+
+    const localAccess = new LocalAccess({
+      url: value.url,
+      token: 'session',
+      version: '0.2.20',
+      reconnectDelayMs: 5,
+      localLeaseMs: 20,
+      onEvent: (event) => events.push(event),
+    });
+    localAccess.connect();
+
+    await eventually(() => {
+      expect(connections).toBeGreaterThanOrEqual(2);
+      expect(localAccess.connectionId).toBe('local-2');
+    });
+    expect(events.some((event) => event.kind === 'closed')).toBe(true);
+    localAccess.close();
+  });
+
   it('falls back to authenticated HTTPS after two pre-attach WebSocket failures', async () => {
     const value = await fixture();
     value.sockets.on('connection', (socket) => socket.close());

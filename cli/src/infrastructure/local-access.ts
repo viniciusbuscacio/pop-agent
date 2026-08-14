@@ -19,6 +19,8 @@ export interface LocalAccessOptions {
   role?: 'interactive' | 'managed-default';
   onEvent?: (event: LocalAccessEvent) => void;
   reconnectDelayMs?: number;
+  /** Test override; production uses the protocol's 45-second local lease. */
+  localLeaseMs?: number;
   fetch?: typeof globalThis.fetch;
 }
 
@@ -48,6 +50,7 @@ export class LocalAccess {
   private refused = false;
   private shouldConnect = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private socketLeaseTimer: ReturnType<typeof setTimeout> | undefined;
   private reconnectAttempt = 0;
   private outageReported = false;
   private preAttachFailures = 0;
@@ -76,6 +79,7 @@ export class LocalAccess {
     this.shouldConnect = false;
     if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
+    this.clearSocketLease();
     this.pollAbort?.abort();
     this.pollAbort = undefined;
     this.socket?.close();
@@ -105,12 +109,15 @@ export class LocalAccess {
         if (connectionId === undefined) return;
         attached = true;
         this.attached(connectionId, 'wss');
+        this.armSocketLease(socket);
         return;
       }
+      if (attached) this.armSocketLease(socket);
       void this.handleServerFrame(frame, (event) => this.sendSocket(event, socket));
     });
     socket.on('close', () => {
       if (this.socket !== socket) return;
+      this.clearSocketLease();
       this.socket = undefined;
       this.id = undefined;
       this.killAll();
@@ -350,6 +357,20 @@ export class LocalAccess {
 
   private sendSocket(frame: Record<string, unknown>, socket: WebSocket): void {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
+  }
+
+  private armSocketLease(socket: WebSocket): void {
+    if (this.socket !== socket) return;
+    this.clearSocketLease();
+    this.socketLeaseTimer = setTimeout(() => {
+      if (this.socket === socket && this.shouldConnect) socket.terminate();
+    }, this.options.localLeaseMs ?? LOCAL_LEASE_MS);
+    this.socketLeaseTimer.unref?.();
+  }
+
+  private clearSocketLease(): void {
+    if (this.socketLeaseTimer !== undefined) clearTimeout(this.socketLeaseTimer);
+    this.socketLeaseTimer = undefined;
   }
 
   private queueHttpEvents(frames: Record<string, unknown>[]): Promise<void> {

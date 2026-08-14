@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.92 — 2026-08-13.
+Version 1.93 — 2026-08-14.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1340,7 +1340,10 @@ PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
 failures with ordinary authenticated HTTPS still healthy, it falls back to
 the long-poll `/v1/local-tools/connections/*` transport. Both use the same
 Bearer session, application frames, limits, heartbeat, cancellation and
-connection id. Pop Desktop passes `{url, token, role}` by stdin, keeps that
+connection id. An attached WSS connection requires inbound server traffic
+within the 45-second local lease; silence terminates the socket and reconnects,
+so a proxy cannot leave Desktop attached to a stream the restarted server no
+longer owns. Pop Desktop passes `{url, token, role}` by stdin, keeps that
 pipe open for renewed web sessions, and launches the exact detected Node + CLI
 entry without a shell. The Manager installs and diagnoses those components but
 does not own the runtime connection.
@@ -1619,6 +1622,11 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.93 (2026-08-14): **PLA detects a silently lost WSS stream (§17).** An
+  attached local-access client now requires inbound server traffic within its
+  45-second lease, terminates a stale socket and reconnects. This prevents a
+  long-lived Desktop child from looking connected to a proxy after the server
+  has lost its registry entry. The changed CLI ships as 0.2.20.
 - 1.92 (2026-08-13): **CLI setup has a stable latest URL (§17).** The public,
   non-cacheable `cli-latest.tgz` alias redirects to this server's exact immutable
   versioned tarball. Installation Guide uses the alias, so copied macOS/Linux
