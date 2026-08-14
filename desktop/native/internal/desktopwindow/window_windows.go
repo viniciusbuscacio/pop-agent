@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	darkCaptionColor uint32 = 0x001b1b1b
-	darkBorderColor  uint32 = 0x00333333
+	darkCaptionColor uint32 = 0x00352c29
+	darkBorderColor  uint32 = 0x00564a45
 	lightTextColor   uint32 = 0x00ffffff
 
 	user32                = windows.NewLazySystemDLL("user32.dll")
