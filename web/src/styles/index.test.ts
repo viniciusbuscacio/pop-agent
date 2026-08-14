@@ -9,3 +9,12 @@ describe('application viewport containment', () => {
     expect(styles).toMatch(/html,\s*body,\s*#root\s*{[^}]*overflow-x:\s*hidden;/s);
   });
 });
+
+describe('user message selection', () => {
+  it('applies a contrasting selection directly to the user bubble', () => {
+    expect(styles).toMatch(
+      /\.user-bubble::selection\s*{[^}]*background:\s*var\(--accent-fg\);[^}]*color:\s*var\(--accent\);/s,
+    );
+    expect(styles).not.toMatch(/\.user-bubble\s+::selection/);
+  });
+});

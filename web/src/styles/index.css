@@ -31,7 +31,7 @@ body {
 
 /* Selection inside the user's accent bubble inverts the pair, so the
    highlight stays visible on the coloured background in both themes. */
-.user-bubble ::selection {
+.user-bubble::selection {
   background: var(--accent-fg);
   color: var(--accent);
 }
