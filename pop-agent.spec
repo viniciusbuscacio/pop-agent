@@ -1670,6 +1670,14 @@ away from `~/Applications`, preventing parallel stale installations.
   each Desktop manifest continues serving its last internally consistent,
   immutable signed package until newer bytes for that platform are published.
   A later package advances the manifest without rewriting an old URL.
+- 1.98 (2026-08-14): **Pop Desktop gains a native Windows x64 host and
+  per-user setup (§17.1).** WebView2 keeps same-origin navigation inside the
+  app, delegates safe external schemes, blocks dangerous schemes, and uses a
+  native dark title bar. The tray, Credential Manager, Node/CLI detection and
+  PLA supervision run without elevation. Separate named mutexes enforce one
+  tray and one Desktop process, preventing duplicate PLA connections; setup
+  stages atomically under `%LOCALAPPDATA%\\Programs`, closes stale processes,
+  starts tray then Desktop, and ships with the global 0.2.26 release.
 
 - 1.95 (2026-08-14): **The internal tray helper presents one public product
   name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
