@@ -11,6 +11,7 @@ import (
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/config"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/desktopaccess"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/desktopwindow"
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/peerprocess"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/singleinstance"
 )
 
@@ -50,5 +51,10 @@ func main() {
 		return
 	}
 	defer desktopwindow.Remove()
+	if err := peerprocess.EnsureSibling("Pop Desktop Tray.exe", desktopwindow.Stop); err != nil {
+		fmt.Fprintln(os.Stderr, "pop-desktop: tray:", err)
+		desktopwindow.ShowFatal("Pop Desktop could not start its tray component.")
+		return
+	}
 	desktopwindow.Run()
 }

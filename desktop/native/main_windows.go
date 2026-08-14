@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 
-	"github.com/viniciusbuscacio/pop-desktop-manager/internal/desktop"
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/peerprocess"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/singleinstance"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/tray"
 )
@@ -27,17 +28,27 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app := NewApp()
-	app.showDesktop = func() error {
-		path, err := desktop.DefaultInstallPath()
-		if err != nil {
-			return err
-		}
-		return desktop.Open(path)
+	var peerOnce sync.Once
+	var peerErr error
+	startDesktop := func() error {
+		peerOnce.Do(func() {
+			peerErr = peerprocess.EnsureSibling("Pop Desktop.exe", app.quit)
+		})
+		return peerErr
 	}
+	app.showDesktop = startDesktop
 	if err := app.startup(ctx, cancel); err != nil {
 		fmt.Fprintln(os.Stderr, "pop-desktop-tray: startup:", err)
 		os.Exit(1)
 	}
 	defer app.shutdown()
+	// A fresh install remains tray-only until the server is configured; after
+	// configuration, starting either executable owns the same coupled lifecycle.
+	if app.config.ServerURL != "" {
+		if err := startDesktop(); err != nil {
+			fmt.Fprintln(os.Stderr, "pop-desktop-tray: desktop:", err)
+			return
+		}
+	}
 	tray.Run()
 }
