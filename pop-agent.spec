@@ -1652,6 +1652,12 @@ Different bytes require a new host semver and URL.
   name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
   actions say `Pop Desktop`. `Pop Desktop Tray` remains only the technical
   helper executable/process name. The immutable release ships as 0.2.22.
+- 1.96 (2026-08-14): **v0.2.24 is a release-only launcher canary (§17).**
+  No product behavior changes from 0.2.23; the new immutable CLI tarball exists
+  specifically to exercise the native launcher's real startup update path —
+  manifest check, download, size/SHA-256 validation, private atomic activation
+  and immediate execution of the new CLI.
+
 - 1.95 (2026-08-14): **`pop` gets a native, failure-independent update launcher
   (§15, §17).** A precompiled Go binary now owns the command, checks the selected
   server before normal startup, installs the exact CLI privately with size,
