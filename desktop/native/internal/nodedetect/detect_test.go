@@ -77,15 +77,19 @@ func TestCandidatePathsIncludeVersionManagersAndPackageManagers(t *testing.T) {
 	}
 	home := t.TempDir()
 	nvmNode := filepath.Join(home, ".nvm", "versions", "node", "v22.19.0", "bin", "node")
-	if err := os.MkdirAll(filepath.Dir(nvmNode), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(nvmNode, []byte("node"), 0o755); err != nil {
-		t.Fatal(err)
+	managedNode := filepath.Join(home, ".pop", "runtime", "node", "versions", "22.23.2-"+runtime.GOOS+"-"+runtime.GOARCH, "bin", "node")
+	for _, node := range []string{nvmNode, managedNode} {
+		if err := os.MkdirAll(filepath.Dir(node), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(node, []byte("node"), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	paths := candidatePaths(home)
 	hermesNode := filepath.Join(home, ".hermes", "node", "bin", "node")
 	for _, want := range []string{
+		managedNode,
 		hermesNode,
 		nvmNode,
 		"/opt/homebrew/bin/node",
@@ -95,8 +99,8 @@ func TestCandidatePathsIncludeVersionManagersAndPackageManagers(t *testing.T) {
 			t.Errorf("candidate paths do not contain %q: %v", want, paths)
 		}
 	}
-	if indexOf(paths, hermesNode) != 0 {
-		t.Fatalf("Hermes must be the first deterministic candidate: %v", paths)
+	if indexOf(paths, managedNode) != 0 || indexOf(paths, hermesNode) != 1 {
+		t.Fatalf("managed Node and Hermes are not the first deterministic candidates: %v", paths)
 	}
 }
 

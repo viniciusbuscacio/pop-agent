@@ -156,8 +156,22 @@ then reads the selected server and requests public, non-cacheable
 ```
 
 The exact tarball and launcher binaries are immutable; manifests and installer
-scripts are `no-store`. The legacy `/cli-latest.tgz` redirect remains for old
-npm-global installations, but is no longer the primary setup path.
+scripts are `no-store`. The launcher installs the tarball's external npm
+packages through Microsoft's Package Feed Proxy
+(`https://packagefeedproxy.microsoft.io/npm/`), avoiding a direct dependency on
+`registry.npmjs.org`; the tarball itself still comes only from the configured
+Pop server and is verified before npm sees it.
+
+The legacy `/cli-latest.tgz` alias remains for old npm-global installations. Its
+non-cacheable redirect always resolves to the current immutable versioned
+artifact. A legacy reinstall can therefore keep one stable command:
+
+```sh
+npm install --global https://your-pop-agent.example/cli-latest.tgz \
+  --registry https://packagefeedproxy.microsoft.io/npm/
+```
+
+The native launcher remains the primary setup path.
 
 *(Corrected 04/08. This first said the reason was that "the client cannot
 drift from the server it talks to". That is only true on the day of the

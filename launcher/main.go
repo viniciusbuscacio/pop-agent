@@ -22,6 +22,7 @@ import (
 
 const launcherVersion = "1.1.0"
 const requestTimeout = 3 * time.Second
+const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 
 type manifest struct {
 	Version                string          `json:"version"`
@@ -190,7 +191,7 @@ func (l *launcher) doctor(args []string) int {
 		if validateErr != nil {
 			fmt.Fprintf(l.stdout, "Managed Node runtime: broken (%v)\n", validateErr)
 		} else {
-			fmt.Fprintf(l.stdout, "Managed Node runtime: v%s, npm %s (staged, not active)\n", version, npmVersion)
+			fmt.Fprintf(l.stdout, "Managed Node runtime: v%s, npm %s (preferred for Pop CLI)\n", version, npmVersion)
 		}
 	} else if errors.Is(managedErr, os.ErrNotExist) {
 		fmt.Fprintln(l.stdout, "Managed Node runtime: not installed")
@@ -275,6 +276,9 @@ func (l *launcher) fetchManifest(serverURL string) (manifest, error) {
 }
 
 func (l *launcher) dependencies(minimum string) (tools, error) {
+	if managed, err := l.managedTools(minimum); err == nil {
+		return managed, nil
+	}
 	node, err := l.lookPath("node")
 	if err != nil {
 		return tools{}, fmt.Errorf("Pop Agent requires Node.js %s or newer.\n\nNode.js was not found on this computer.\nInstall it from https://nodejs.org/ and run `pop` again", minimum)
@@ -371,7 +375,7 @@ func (l *launcher) install(serverURL string, m manifest, localTools tools, previ
 		return err
 	}
 	defer os.RemoveAll(staging)
-	npmArgs := append(append([]string{}, localTools.npmArgs...), "install", "--prefix", staging, "--omit=dev", "--no-audit", "--no-fund", "--no-update-notifier", "--loglevel=error", archive)
+	npmArgs := append(append([]string{}, localTools.npmArgs...), "install", "--prefix", staging, "--registry", npmRegistry, "--omit=dev", "--no-audit", "--no-fund", "--no-update-notifier", "--loglevel=error", archive)
 	cmd := l.command(localTools.npm, npmArgs...)
 	cmd.Stdout, cmd.Stderr = l.stdout, l.stderr
 	if err := cmd.Run(); err != nil {
@@ -396,7 +400,7 @@ func (l *launcher) install(serverURL string, m manifest, localTools tools, previ
 }
 
 func (l *launcher) download(packageURL, destination string, expected manifestPackage) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, packageURL, nil)
 	if err != nil {
@@ -409,7 +413,7 @@ func (l *launcher) download(packageURL, destination string, expected manifestPac
 	defer response.Body.Close()
 	expectedURL, parseErr := url.Parse(packageURL)
 	if parseErr != nil || response.Request.URL.Scheme != expectedURL.Scheme || response.Request.URL.Host != expectedURL.Host {
-		return errors.New("package download redirected outside the configured server")
+		return errors.New("package download redirected outside its trusted source")
 	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("package download returned HTTP %d", response.StatusCode)
@@ -438,6 +442,9 @@ func (l *launcher) download(packageURL, destination string, expected manifestPac
 }
 
 func (l *launcher) startLocal(st state, args []string) int {
+	if managed, err := l.managedTools("22.19.0"); err == nil {
+		return l.start(managed.node, st, args)
+	}
 	node, err := l.lookPath("node")
 	if err != nil {
 		fmt.Fprintln(l.stderr, "Node.js was not found. Pop Agent requires Node.js 22.19.0 or newer.")

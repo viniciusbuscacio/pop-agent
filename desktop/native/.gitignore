@@ -1,5 +1,7 @@
 build/bin/
 build/desktop-pack/
+build/setup-pack/
+build/dmg-venv/
 .DS_Store
 *.log
 

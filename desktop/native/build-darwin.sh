@@ -50,12 +50,24 @@ iconutil -c icns "$ICONSET" -o "$DESKTOP_BUNDLE/Contents/Resources/iconfile.icns
 
 CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o "$DESKTOP_BUNDLE/Contents/MacOS/$DESKTOP_NAME" ./cmd/pop-desktop
 CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o "$DESKTOP_BUNDLE/Contents/Helpers/Pop Desktop Tray" .
+(
+  cd "$ROOT/../../launcher"
+  CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$DESKTOP_BUNDLE/Contents/Helpers/pop" .
+)
 cp "$ROOT/build/desktop/Info.plist" "$DESKTOP_BUNDLE/Contents/Info.plist"
 
-# Sign the nested helper before sealing the outer bundle. Public releases
-# require Developer ID and notarization rather than this stable local identity.
-codesign --force --timestamp=none --sign "$SIGNING_IDENTITY" "$DESKTOP_BUNDLE/Contents/Helpers/Pop Desktop Tray" >/dev/null
-codesign --force --timestamp=none --sign "$SIGNING_IDENTITY" "$DESKTOP_BUNDLE" >/dev/null
+# Sign the nested helpers before sealing the outer bundle. Developer ID
+# releases require Apple's trusted timestamp; local development identities do not.
+sign() {
+  if printf '%s' "$SIGNING_IDENTITY" | grep -q '^Developer ID Application:'; then
+    codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$1" >/dev/null
+  else
+    codesign --force --timestamp=none --sign "$SIGNING_IDENTITY" "$1" >/dev/null
+  fi
+}
+sign "$DESKTOP_BUNDLE/Contents/Helpers/Pop Desktop Tray"
+sign "$DESKTOP_BUNDLE/Contents/Helpers/pop"
+sign "$DESKTOP_BUNDLE"
 codesign --verify --deep --strict "$DESKTOP_BUNDLE"
 
 printf '%s\n' "$DESKTOP_BUNDLE"

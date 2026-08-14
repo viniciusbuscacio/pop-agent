@@ -50,6 +50,19 @@ describe('route guard', () => {
     }
   });
 
+  it('setup downloads without a one-use ticket answer 4xx, never content', async () => {
+    const { app } = createTestApp();
+    for (const path of [
+      '/desktop/setup/download',
+      '/desktop/setup/download?ticket=',
+      '/desktop/setup/download?ticket=bogus',
+    ]) {
+      const response = await app.request(path);
+      expect(response.status, path).toBeGreaterThanOrEqual(400);
+      expect(response.status, path).toBeLessThan(500);
+    }
+  });
+
   it('file downloads without a valid signature answer 4xx, never content', async () => {
     // The download surface sits outside the session guard on purpose: the
     // HMAC in the URL is the whole authorisation (pop-agent.spec §14). So the

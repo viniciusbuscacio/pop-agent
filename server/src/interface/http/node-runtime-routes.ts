@@ -4,8 +4,8 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 
 interface RuntimeArtifact {
+  sourceUrl: string;
   file: string;
-  url: string;
   size: number;
   sha256: string;
 }
@@ -81,7 +81,7 @@ function readRelease(cliPack: string): RuntimeRelease | undefined {
         artifact.file.includes('\\') ||
         artifact.size <= 0 ||
         !/^[a-f0-9]{64}$/.test(artifact.sha256) ||
-        artifact.url !== `/runtime/node/${release.version}/${artifact.file}`
+        artifact.sourceUrl !== `https://nodejs.org/dist/v${release.version}/${artifact.file}`
       ) {
         return undefined;
       }

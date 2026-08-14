@@ -4,7 +4,7 @@ package desktopwindow
 
 import "fmt"
 
-func install(serverURL string, _ SessionHandler) error { fmt.Println(serverURL); return nil }
+func install(serverURL, _ string, _ SessionHandler) error { fmt.Println(serverURL); return nil }
 func setServerURL(serverURL string)                    { fmt.Println(serverURL) }
 func show()                                            {}
 func run()                                             {}

@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   rmSync(output, { recursive: true, force: true });
   mkdirSync(output, { recursive: true });
 
-  const packages: Record<string, { url: string; file: string; size: number; sha256: string }> = {};
+  const packages: Record<string, { sourceUrl: string; file: string; size: number; sha256: string }> = {};
   for (const [target, artifact] of Object.entries(source.packages)) {
     if (!/^[a-z]+-(?:arm64|amd64)$/.test(target)) throw new Error(`invalid runtime target ${target}`);
     if (!Number.isSafeInteger(artifact.size) || artifact.size <= 0) {
@@ -77,8 +77,8 @@ async function main(): Promise<void> {
       rmSync(temporary, { force: true });
     }
     packages[target] = {
+      sourceUrl: artifact.sourceUrl,
       file: artifact.file,
-      url: `/runtime/node/${source.version}/${artifact.file}`,
       size: artifact.size,
       sha256: artifact.sha256,
     };

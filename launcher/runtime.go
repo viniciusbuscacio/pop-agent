@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,9 +22,15 @@ const maximumRuntimeExpansion = int64(512 << 20)
 const maximumRuntimeFiles = 50_000
 
 type runtimeManifest struct {
-	Version                string                     `json:"version"`
-	MinimumLauncherVersion string                     `json:"minimumLauncherVersion"`
-	Packages               map[string]manifestPackage `json:"packages"`
+	Version                string                    `json:"version"`
+	MinimumLauncherVersion string                    `json:"minimumLauncherVersion"`
+	Packages               map[string]runtimePackage `json:"packages"`
+}
+
+type runtimePackage struct {
+	SourceURL string `json:"sourceUrl"`
+	Size      int64  `json:"size"`
+	SHA256    string `json:"sha256"`
 }
 
 type managedRuntimeState struct {
@@ -68,7 +75,7 @@ func (l *launcher) runtimeCommand(args []string) int {
 			fmt.Fprintf(l.stderr, "Managed Node runtime %s could not be installed: %v\n", release.Version, err)
 			return 1
 		}
-		fmt.Fprintf(l.stdout, "Managed Node runtime %s is ready. The current CLI still uses its existing Node until migration is enabled.\n", release.Version)
+		fmt.Fprintf(l.stdout, "Managed Node runtime %s is ready and will be used privately by Pop CLI.\n", release.Version)
 		return 0
 	default:
 		fmt.Fprintf(l.stderr, "Unknown runtime command %q. Use install or doctor.\n", args[1])
@@ -103,13 +110,13 @@ func (l *launcher) fetchRuntimeManifest(serverURL string) (runtimeManifest, erro
 		return runtimeManifest{}, fmt.Errorf("Pop launcher %s is too old; this runtime requires %s or newer", launcherVersion, release.MinimumLauncherVersion)
 	}
 	artifact, ok := release.Packages[runtime.GOOS+"-"+runtime.GOARCH]
-	if !ok || artifact.URL == "" || artifact.Size <= 0 || !validSHA256(artifact.SHA256) {
+	if !ok || !validOfficialNodeURL(artifact.SourceURL, release.Version) || artifact.Size <= 0 || !validSHA256(artifact.SHA256) {
 		return runtimeManifest{}, fmt.Errorf("managed Node runtime %s does not support %s/%s", release.Version, runtime.GOOS, runtime.GOARCH)
 	}
 	return release, nil
 }
 
-func (l *launcher) installManagedRuntime(serverURL string, release runtimeManifest) error {
+func (l *launcher) installManagedRuntime(_ string, release runtimeManifest) error {
 	target := runtime.GOOS + "-" + runtime.GOARCH
 	artifact, ok := release.Packages[target]
 	if !ok {
@@ -124,10 +131,7 @@ func (l *launcher) installManagedRuntime(serverURL string, release runtimeManife
 		}
 	}
 
-	packageURL, err := resolvePackageURL(serverURL, artifact.URL)
-	if err != nil {
-		return err
-	}
+	packageURL := artifact.SourceURL
 	root := l.managedRuntimeRoot()
 	versions := filepath.Join(root, "versions")
 	if err := os.MkdirAll(versions, 0o700); err != nil {
@@ -137,7 +141,7 @@ func (l *launcher) installManagedRuntime(serverURL string, release runtimeManife
 	_ = os.Remove(archive)
 	defer os.Remove(archive)
 	fmt.Fprintf(l.stdout, "Installing managed Node runtime %s for %s...\n", release.Version, target)
-	if err := l.download(packageURL, archive, artifact); err != nil {
+	if err := l.download(packageURL, archive, manifestPackage{Size: artifact.Size, SHA256: artifact.SHA256}); err != nil {
 		return err
 	}
 
@@ -169,6 +173,27 @@ func (l *launcher) installManagedRuntime(serverURL string, release runtimeManife
 		return fmt.Errorf("record installed runtime: %w", err)
 	}
 	return nil
+}
+
+func (l *launcher) managedTools(minimum string) (tools, error) {
+	state, err := l.readManagedRuntimeState()
+	if err != nil {
+		return tools{}, err
+	}
+	directory := l.managedRuntimeDirectory(state)
+	version, _, err := l.validateManagedRuntime(directory)
+	if err != nil {
+		return tools{}, err
+	}
+	if compareVersions(version, minimum) < 0 {
+		return tools{}, fmt.Errorf("managed Node %s is older than required %s", version, minimum)
+	}
+	node := managedNodePath(directory)
+	npmCLI := filepath.Join(directory, "lib", "node_modules", "npm", "bin", "npm-cli.js")
+	if runtime.GOOS == "windows" {
+		npmCLI = filepath.Join(directory, "node_modules", "npm", "bin", "npm-cli.js")
+	}
+	return tools{node: node, npm: node, npmArgs: []string{npmCLI}}, nil
 }
 
 func (l *launcher) validateManagedRuntime(directory string) (string, string, error) {
@@ -214,7 +239,7 @@ func (l *launcher) runtimeDoctor() int {
 	fmt.Fprintf(l.stdout, "Managed Node runtime: v%s (%s/%s)\n", nodeVersion, state.Platform, state.Arch)
 	fmt.Fprintf(l.stdout, "npm: %s\n", npmVersion)
 	fmt.Fprintf(l.stdout, "Path: %s\n", managedNodePath(directory))
-	fmt.Fprintln(l.stdout, "Activation: staged pilot; the CLI still uses its existing Node")
+	fmt.Fprintln(l.stdout, "Activation: preferred private runtime for Pop CLI")
 	return 0
 }
 
@@ -369,4 +394,13 @@ func withinDirectory(root, path string) bool {
 func validSHA256(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size
+}
+
+func validOfficialNodeURL(raw, version string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.Host != "nodejs.org" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	prefix := "/dist/v" + version + "/node-v" + version + "-"
+	return strings.HasPrefix(parsed.Path, prefix) && (strings.HasSuffix(parsed.Path, ".tar.gz") || strings.HasSuffix(parsed.Path, ".zip"))
 }

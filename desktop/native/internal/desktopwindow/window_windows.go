@@ -56,7 +56,7 @@ var (
 	desktopView webview.WebView
 )
 
-func install(serverURL string, onSession SessionHandler) error {
+func install(serverURL, initialToken string, onSession SessionHandler) error {
 	dataPath, err := webViewDataPath()
 	if err != nil {
 		return err
@@ -91,6 +91,10 @@ func install(serverURL string, onSession SessionHandler) error {
 	applyDarkTitleBar(window)
 	setWindowIcon(window)
 	installSessionBridge(candidate, serverURL, onSession)
+	if initialToken != "" {
+		encoded, _ := json.Marshal(initialToken)
+		candidate.Init(`try { localStorage.setItem('pop-agent.persist', '1'); localStorage.setItem('pop-agent.token', ` + string(encoded) + `); } catch (_) {}`)
+	}
 	candidate.Navigate(serverURL)
 	viewMu.Lock()
 	desktopView = candidate

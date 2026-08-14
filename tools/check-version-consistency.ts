@@ -81,21 +81,34 @@ export function versionConsistencyErrors(root: string): string[] {
     }
   }
 
-  const desktopManifestPath = join(root, 'desktop/pack/release.json');
-  if (existsSync(desktopManifestPath)) {
-    const desktop = readJson<DesktopRelease>(root, 'desktop/pack/release.json', errors);
-    if (desktop !== undefined) {
-      if (desktop.version !== version) {
-        errors.push(`desktop/pack/release.json version is ${JSON.stringify(desktop.version)}; expected ${version}`);
-      }
-      const expectedFile = `pop-desktop-${version}-darwin-arm64.zip`;
-      if (desktop.file !== expectedFile) {
-        errors.push(`desktop/pack/release.json file is ${JSON.stringify(desktop.file)}; expected ${expectedFile}`);
-      }
-    }
-  }
+  checkDesktopRelease(root, 'desktop/pack/release.json', `pop-desktop-${version}-darwin-arm64.zip`, version, errors);
+  checkDesktopRelease(
+    root,
+    'desktop/pack/setup-release.json',
+    `pop-desktop-setup-${version}-darwin-arm64.dmg`,
+    version,
+    errors,
+  );
 
   return errors;
+}
+
+function checkDesktopRelease(
+  root: string,
+  relative: string,
+  expectedFile: string,
+  version: string,
+  errors: string[],
+): void {
+  if (!existsSync(join(root, relative))) return;
+  const release = readJson<DesktopRelease>(root, relative, errors);
+  if (release === undefined) return;
+  if (release.version !== version) {
+    errors.push(`${relative} version is ${JSON.stringify(release.version)}; expected ${version}`);
+  }
+  if (release.file !== expectedFile) {
+    errors.push(`${relative} file is ${JSON.stringify(release.file)}; expected ${expectedFile}`);
+  }
 }
 
 export function assertVersionConsistency(root: string): void {

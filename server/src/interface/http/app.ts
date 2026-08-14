@@ -40,6 +40,10 @@ import { createCliDownloadRoutes } from './cli-download-routes.js';
 import { createCliInstallerRoutes } from './cli-installer-routes.js';
 import { createNodeRuntimeRoutes } from './node-runtime-routes.js';
 import { createDesktopDownloadRoutes } from './desktop-download-routes.js';
+import {
+  createDesktopSetupDownloadRoutes,
+  createDesktopSetupReleaseRoutes,
+} from './desktop-setup-routes.js';
 import { createFilesRoutes } from './files-routes.js';
 import { createFilesDownloadRoutes } from './files-download-routes.js';
 import { createAuthRoutes } from './auth-routes.js';
@@ -139,6 +143,7 @@ export interface AppDeps {
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
+  const setupTickets = new EventTickets(deps.clock, 60_000);
 
   // Liveness and the sidebar's health probe (pop-agent.spec §13), as their own
   // mini-app so the typed registry below can bless them explicitly.
@@ -172,6 +177,10 @@ export function createApp(deps: AppDeps): Hono {
         'the native launcher must obtain the exact checksummed managed Node runtime before a session or Node client exists; the manifest and archive contain only public runtime bytes and release metadata',
         createNodeRuntimeRoutes(deps),
       ),
+      publicSurface(
+        'the setup DMG byte stream requires a random one-use ticket minted by an authenticated request; the URL carries no bearer token and expires after one minute',
+        createDesktopSetupDownloadRoutes({ desktopPack: deps.desktopPack, tickets: setupTickets }),
+      ),
     ],
     guarded: [
       sessionGuarded(createAuthRoutes(deps)),
@@ -180,6 +189,9 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createDesktopDownloadRoutes({
         desktopPack: deps.desktopPack,
       })),
+      sessionGuarded(
+        createDesktopSetupReleaseRoutes({ desktopPack: deps.desktopPack, tickets: setupTickets }),
+      ),
       sessionGuarded(createServerRoutes(deps)),
       sessionGuarded(createProviderRoutes(deps)),
       sessionGuarded(createMemoryRoutes(deps)),

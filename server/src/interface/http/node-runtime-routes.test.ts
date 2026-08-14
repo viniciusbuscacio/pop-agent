@@ -20,8 +20,8 @@ describe('managed Node runtime distribution', () => {
       minimumLauncherVersion: '1.1.0',
       packages: {
         'darwin-arm64': {
+          sourceUrl: `https://nodejs.org/dist/v22.23.2/${file}`,
           file,
-          url: `/runtime/node/22.23.2/${file}`,
           size: bytes.length,
           sha256: createHash('sha256').update(bytes).digest('hex'),
         },

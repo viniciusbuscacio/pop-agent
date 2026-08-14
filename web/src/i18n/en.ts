@@ -206,9 +206,14 @@ export const en = {
     'Pop Desktop opens the same Pop Agent interface in a dedicated native window.',
   'settings.installation.desktopMac': 'macOS',
   'settings.installation.desktopMacSteps':
-    'Install and open Pop Desktop Manager, connect it to the server address above, then choose Install Pop Desktop and Open Pop Desktop.',
+    'Download and open Pop Desktop Setup. Enter this server address and your password once; the wizard installs the complete product for your account.',
   'settings.installation.desktopMacRequirements':
-    'Currently available for macOS 14 or newer on Apple Silicon. The Manager also installs and supervises the CLI used for local tools.',
+    'For macOS 14 or newer on Apple Silicon. No administrator access, Homebrew, or existing Node.js installation is required.',
+  'settings.installation.desktopMacRelease': 'Version {version} · {size}',
+  'settings.installation.desktopMacDownload': 'Download Pop Desktop Setup',
+  'settings.installation.desktopMacDownloading': 'Preparing download…',
+  'settings.installation.desktopMacUnavailable': 'The macOS installer has not been published on this server yet.',
+  'settings.installation.desktopMacDownloadError': 'The download could not be started. Try again.',
   'settings.installation.desktopWindows': 'Windows',
   'settings.installation.desktopWindowsBody':
     'A native Windows desktop app is not available yet. Use the installed PWA in Edge or Chrome for an app window, and install Pop CLI with the PowerShell command above for terminal access and local tools.',

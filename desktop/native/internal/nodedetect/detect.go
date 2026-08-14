@@ -101,8 +101,9 @@ func candidatePaths(home string) []string {
 		return paths
 	}
 
-	// Hermes is the deterministic first choice when compatible; the remaining
-	// managers and package installations are searched without invoking a shell.
+	// Pop's private runtime is the deterministic first choice. Hermes and the
+	// remaining managers are migration fallbacks and are never modified.
+	paths = appendGlob(paths, filepath.Join(home, ".pop", "runtime", "node", "versions", "*-"+runtime.GOOS+"-"+runtime.GOARCH, "bin", "node"))
 	paths = append(paths, filepath.Join(home, ".hermes", "node", "bin", "node"))
 	paths = appendGlob(paths, filepath.Join(home, ".local", "share", "fnm", "node-versions", "*", "installation", "bin", "node"))
 	paths = append(paths, filepath.Join(home, ".volta", "bin", "node"))

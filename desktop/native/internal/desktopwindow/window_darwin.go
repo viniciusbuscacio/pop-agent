@@ -6,7 +6,7 @@ package desktopwindow
 #cgo CFLAGS: -fblocks
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
 #include <stdlib.h>
-int pop_desktop_install(const char *serverURL);
+int pop_desktop_install(const char *serverURL, const char *initialToken);
 void pop_desktop_set_server_url(const char *serverURL);
 void pop_desktop_show(void);
 void pop_desktop_run(void);
@@ -30,7 +30,7 @@ var (
 	sessionUpdates   chan string
 )
 
-func install(serverURL string, onSession SessionHandler) error {
+func install(serverURL, initialToken string, onSession SessionHandler) error {
 	updates := make(chan string, 8)
 	go func() {
 		for token := range updates {
@@ -47,8 +47,10 @@ func install(serverURL string, onSession SessionHandler) error {
 	sessionHandlerMu.Unlock()
 
 	value := C.CString(serverURL)
+	token := C.CString(initialToken)
 	defer C.free(unsafe.Pointer(value))
-	if C.pop_desktop_install(value) == 0 {
+	defer C.free(unsafe.Pointer(token))
+	if C.pop_desktop_install(value, token) == 0 {
 		sessionHandlerMu.Lock()
 		sessionUpdates = nil
 		close(updates)

@@ -455,6 +455,21 @@ export interface DesktopReleaseResponse {
   downloadPath: string;
 }
 
+/** Authenticated metadata for the complete macOS setup wizard DMG. */
+export interface DesktopSetupReleaseResponse {
+  version: string;
+  platform: 'darwin';
+  arch: 'arm64';
+  sha256: string;
+  size: number;
+}
+
+/** One-use, short-lived browser download URL; never contains the bearer token. */
+export interface DesktopSetupTicketResponse {
+  downloadPath: string;
+  expiresInSeconds: number;
+}
+
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {
   popAgentVersion: string;

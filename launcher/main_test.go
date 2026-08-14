@@ -98,8 +98,10 @@ exit 2
 while [ "$#" -gt 0 ]; do
   last="$1"
   if [ "$1" = "--prefix" ]; then prefix="$2"; shift 2; continue; fi
+  if [ "$1" = "--registry" ]; then registry="$2"; shift 2; continue; fi
   shift
 done
+[ "$registry" = "https://packagefeedproxy.microsoft.io/npm/" ] || exit 8
 [ "${last##*.}" = "tgz" ] || exit 9
 mkdir -p "$prefix/node_modules/pop-agent/dist"
 printf '0.3.0\n' > "$prefix/node_modules/pop-agent/dist/main.js"

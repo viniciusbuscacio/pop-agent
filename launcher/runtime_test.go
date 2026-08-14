@@ -44,9 +44,9 @@ exit 2
 
 	launcher := testLauncher(t)
 	release := runtimeManifest{
-		Version: "22.23.2", Packages: map[string]manifestPackage{
+		Version: "22.23.2", Packages: map[string]runtimePackage{
 			runtime.GOOS + "-" + runtime.GOARCH: {
-				URL: server.URL + "/node.tar.gz", Size: int64(len(archive)), SHA256: hex.EncodeToString(hash[:]),
+				SourceURL: server.URL + "/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: hex.EncodeToString(hash[:]),
 			},
 		},
 	}
@@ -70,6 +70,14 @@ exit 2
 	if code := launcher.runtimeDoctor(); code != 0 {
 		t.Fatalf("runtime doctor failed: %s", launcher.stdout.(*strings.Builder).String())
 	}
+	if !strings.Contains(launcher.stdout.(*strings.Builder).String(), "preferred private runtime for Pop CLI") {
+		t.Fatal("runtime doctor still describes the activated runtime as staged")
+	}
+	launcher.lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	managed, err := launcher.dependencies("22.19.0")
+	if err != nil || managed.node != managedNodePath(directory) || managed.npm != managed.node {
+		t.Fatalf("managed runtime was not selected for CLI install: %#v, %v", managed, err)
+	}
 	if err := launcher.installManagedRuntime(server.URL, release); err != nil {
 		t.Fatal(err)
 	}
@@ -86,9 +94,9 @@ func TestManagedRuntimeChecksumFailureLeavesNoState(t *testing.T) {
 	defer server.Close()
 	launcher := testLauncher(t)
 	err := launcher.installManagedRuntime(server.URL, runtimeManifest{
-		Version: "22.23.2", Packages: map[string]manifestPackage{
+		Version: "22.23.2", Packages: map[string]runtimePackage{
 			runtime.GOOS + "-" + runtime.GOARCH: {
-				URL: server.URL + "/node.tar.gz", Size: int64(len(archive)), SHA256: strings.Repeat("0", 64),
+				SourceURL: server.URL + "/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: strings.Repeat("0", 64),
 			},
 		},
 	})
@@ -128,10 +136,22 @@ func TestRuntimeExtractionRejectsTraversalAndSpecialEntries(t *testing.T) {
 	}
 }
 
-func TestRuntimeManifestRejectsCrossOriginPackage(t *testing.T) {
-	_, err := resolvePackageURL("https://pop.example", "https://nodejs.org/runtime.tar.gz")
-	if err == nil {
-		t.Fatal("cross-origin runtime package was accepted")
+func TestRuntimeManifestAcceptsOnlyPinnedOfficialNodeDistribution(t *testing.T) {
+	if !validOfficialNodeURL(
+		"https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
+		"22.23.2",
+	) {
+		t.Fatal("official pinned Node distribution URL was rejected")
+	}
+	for _, candidate := range []string{
+		"https://example.com/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
+		"http://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
+		"https://nodejs.org/dist/v22.23.1/node-v22.23.1-darwin-arm64.tar.gz",
+		"https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz?mirror=1",
+	} {
+		if validOfficialNodeURL(candidate, "22.23.2") {
+			t.Fatalf("untrusted Node distribution URL was accepted: %s", candidate)
+		}
 	}
 }
 

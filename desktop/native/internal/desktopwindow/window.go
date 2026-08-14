@@ -6,7 +6,13 @@ type SessionHandler func(token string)
 
 // Install adds the Pop Desktop window to the current native application. It
 // does not start a second event loop, allowing the window and tray to coexist.
-func Install(serverURL string, onSession SessionHandler) error { return install(serverURL, onSession) }
+func Install(serverURL string, onSession SessionHandler) error { return install(serverURL, "", onSession) }
+
+// InstallWithSession seeds the PWA's same-origin storage before its first
+// document loads. Setup uses this once so the user does not sign in twice.
+func InstallWithSession(serverURL, token string, onSession SessionHandler) error {
+	return install(serverURL, token, onSession)
+}
 
 // SetServerURL changes the origin loaded by the native host after configuration.
 func SetServerURL(serverURL string) { setServerURL(serverURL) }

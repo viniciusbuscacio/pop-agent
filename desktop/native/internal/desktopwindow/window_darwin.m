@@ -81,10 +81,11 @@ static NSString *uniqueDownloadPath(NSString *suggestedName) {
 @property(nonatomic, retain) NSWindow *window;
 @property(nonatomic, retain) WKWebView *webView;
 @property(nonatomic, copy) NSString *serverURL;
+@property(nonatomic, copy) NSString *initialToken;
 @property(nonatomic) CGFloat pageZoom;
 @property(nonatomic) NSTimeInterval lastWheelZoomTime;
 @property(nonatomic) NSInteger lastWheelZoomDirection;
-- (id)initWithServerURL:(NSString *)serverURL;
+- (id)initWithServerURL:(NSString *)serverURL initialToken:(NSString *)initialToken;
 - (void)showWindow;
 - (void)zoomIn:(id)sender;
 - (void)zoomOut:(id)sender;
@@ -95,9 +96,12 @@ static NSString *uniqueDownloadPath(NSString *suggestedName) {
 @end
 
 @implementation PopDesktopDelegate
-- (id)initWithServerURL:(NSString *)serverURL {
+- (id)initWithServerURL:(NSString *)serverURL initialToken:(NSString *)initialToken {
     self = [super init];
-    if (self) self.serverURL = serverURL;
+    if (self) {
+        self.serverURL = serverURL;
+        self.initialToken = initialToken;
+    }
     return self;
 }
 
@@ -109,6 +113,7 @@ static NSString *uniqueDownloadPath(NSString *suggestedName) {
     self.webView = nil;
     self.window = nil;
     self.serverURL = nil;
+    self.initialToken = nil;
     [super dealloc];
 }
 
@@ -150,6 +155,21 @@ static NSString *uniqueDownloadPath(NSString *suggestedName) {
         NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
         [configuration setApplicationNameForUserAgent:[@"PopDesktop/" stringByAppendingString:version ?: @"0"]];
         [[configuration userContentController] addScriptMessageHandler:self name:PopDesktopSessionHandlerName];
+        if (self.initialToken.length > 0) {
+            NSData *tokenJSON = [NSJSONSerialization dataWithJSONObject:self.initialToken
+                                                                 options:NSJSONWritingFragmentsAllowed
+                                                                   error:nil];
+            NSString *quotedToken = [[[NSString alloc] initWithData:tokenJSON encoding:NSUTF8StringEncoding] autorelease];
+            NSString *source = [NSString stringWithFormat:
+                @"try { localStorage.setItem('pop-agent.persist', '1'); localStorage.setItem('pop-agent.token', %@); } catch (_) {}",
+                quotedToken];
+            WKUserScript *script = [[WKUserScript alloc] initWithSource:source
+                                                          injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                       forMainFrameOnly:YES];
+            [[configuration userContentController] addUserScript:script];
+            [script release];
+            self.initialToken = nil;
+        }
         [[configuration preferences] setJavaScriptCanOpenWindowsAutomatically:YES];
         WKWebView *webView = [[WKWebView alloc] initWithFrame:[[window contentView] bounds]
                                                configuration:configuration];
@@ -443,14 +463,14 @@ static void installMenus(PopDesktopDelegate *delegate) {
     [mainMenu release];
 }
 
-static void installDesktop(NSString *serverURL) {
+static void installDesktop(NSString *serverURL, NSString *initialToken) {
     if (popDesktopDelegate != nil) {
         popDesktopDelegate.serverURL = serverURL;
         return;
     }
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-    popDesktopDelegate = [[PopDesktopDelegate alloc] initWithServerURL:serverURL];
+    popDesktopDelegate = [[PopDesktopDelegate alloc] initWithServerURL:serverURL initialToken:initialToken];
     installMenus(popDesktopDelegate);
     [NSApp setDelegate:popDesktopDelegate];
     popDesktopZoomMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:(NSEventMaskKeyDown | NSEventMaskScrollWheel)
@@ -462,12 +482,13 @@ static void installDesktop(NSString *serverURL) {
     }];
 }
 
-int pop_desktop_install(const char *serverURL) {
+int pop_desktop_install(const char *serverURL, const char *initialToken) {
     NSString *value = popString(serverURL);
+    NSString *token = popString(initialToken);
     if ([NSThread isMainThread]) {
-        installDesktop(value);
+        installDesktop(value, token);
     } else {
-        dispatch_sync(dispatch_get_main_queue(), ^{ installDesktop(value); });
+        dispatch_sync(dispatch_get_main_queue(), ^{ installDesktop(value, token); });
     }
     return popDesktopDelegate != nil;
 }
@@ -545,7 +566,7 @@ void pop_desktop_remove(void) {
 }
 
 int pop_desktop_terminates_after_last_window_for_testing(void) {
-    PopDesktopDelegate *delegate = [[PopDesktopDelegate alloc] initWithServerURL:@"https://pop.invalid"];
+    PopDesktopDelegate *delegate = [[PopDesktopDelegate alloc] initWithServerURL:@"https://pop.invalid" initialToken:@""];
     BOOL terminates = [delegate applicationShouldTerminateAfterLastWindowClosed:[NSApplication sharedApplication]];
     [delegate release];
     return terminates ? 1 : 0;
