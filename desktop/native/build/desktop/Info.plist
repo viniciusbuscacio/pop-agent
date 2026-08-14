@@ -7,8 +7,8 @@
   <key>CFBundleDisplayName</key><string>Pop Desktop</string>
   <key>CFBundleExecutable</key><string>Pop Desktop</string>
   <key>CFBundleIdentifier</key><string>com.popagent.desktop</string>
-  <key>CFBundleVersion</key><string>0.2.24</string>
-  <key>CFBundleShortVersionString</key><string>0.2.24</string>
+  <key>CFBundleVersion</key><string>0.2.25</string>
+  <key>CFBundleShortVersionString</key><string>0.2.25</string>
   <key>CFBundleIconFile</key><string>iconfile</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>

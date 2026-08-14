@@ -18,6 +18,7 @@ import (
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/keychain"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/loginitem"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/nodedetect"
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/relaunch"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/serverclient"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/status"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/tray"
@@ -33,23 +34,29 @@ type App struct {
 	cancel      context.CancelFunc
 	showDesktop func() error
 
-	mu              sync.Mutex
-	configPath      string
-	config          config.Config
-	state           status.Snapshot
-	serverCheckedAt time.Time
-	nodeDetail      string
-	nodeVersion     string
-	nodePath        string
-	cliDetail       string
-	cliVersion      string
-	cliPath         string
-	cliEntryPath    string
-	serverVersion   string
-	desktopDetail   string
-	desktopVersion  string
-	desktopPath     string
-	desktopRelease  serverclient.DesktopRelease
+	mu                    sync.Mutex
+	configPath            string
+	config                config.Config
+	state                 status.Snapshot
+	serverCheckedAt       time.Time
+	nodeDetail            string
+	nodeVersion           string
+	nodePath              string
+	cliDetail             string
+	cliVersion            string
+	cliPath               string
+	cliEntryPath          string
+	serverVersion         string
+	desktopDetail         string
+	desktopVersion        string
+	desktopPath           string
+	desktopRelease        serverclient.DesktopRelease
+	desktopUpdateVersion  string
+	desktopUpdateRunning  bool
+	confirmDesktopUpdate  func(string, string, string) bool
+	installDesktopPackage func(string, string, string) error
+	relaunchDesktop       func(string, int, int) error
+	stopAfterUpdate       func()
 
 	keychainMu sync.Mutex
 	keychain   keychain.Store
@@ -57,24 +64,25 @@ type App struct {
 }
 
 func NewApp() *App {
-	desktopPath := currentDesktopPath()
-	if desktopPath == "" {
-		desktopPath, _ = desktop.DefaultInstallPath()
-	}
+	desktopPath, _ := desktop.DefaultInstallPath()
 	a := &App{
-		state:          status.Initial(),
-		nodeDetail:     "Checking",
-		nodeVersion:    "Checking",
-		nodePath:       "Searching common locations",
-		cliDetail:      "Checking",
-		cliVersion:     "Checking",
-		cliPath:        "Searching common locations",
-		desktopDetail:  "Not installed",
-		desktopVersion: "Not installed",
-		desktopPath:    desktopPath,
-		keychain:       keychain.New(),
-		server:         serverclient.New(),
+		state:                 status.Initial(),
+		nodeDetail:            "Checking",
+		nodeVersion:           "Checking",
+		nodePath:              "Searching common locations",
+		cliDetail:             "Checking",
+		cliVersion:            "Checking",
+		cliPath:               "Searching common locations",
+		desktopDetail:         "Not installed",
+		desktopVersion:        "Not installed",
+		desktopPath:           desktopPath,
+		confirmDesktopUpdate:  dialog.Confirm,
+		installDesktopPackage: desktop.InstallPackage,
+		relaunchDesktop:       relaunch.Start,
+		keychain:              keychain.New(),
+		server:                serverclient.New(),
 	}
+	a.stopAfterUpdate = a.quit
 	return a
 }
 
@@ -99,6 +107,7 @@ func (a *App) startup(ctx context.Context, cancel context.CancelFunc) error {
 	}
 
 	if err := tray.Install(tray.Callbacks{
+		CheckUpdates:       a.checkUpdates,
 		CheckServer:        a.checkServer,
 		CheckDesktop:       a.checkDesktop,
 		InstallDesktop:     a.installDesktop,
@@ -163,6 +172,15 @@ func (a *App) checkServer() {
 	}()
 }
 
+func (a *App) checkUpdates() {
+	go func() {
+		a.detectDesktop()
+		a.refreshServerVersion()
+		a.refreshDesktopRelease()
+		a.detectNode(context.Background())
+	}()
+}
+
 func (a *App) checkDesktop() {
 	go func() {
 		a.detectDesktop()
@@ -183,55 +201,106 @@ func (a *App) installDesktop() {
 	a.mu.Lock()
 	release := a.desktopRelease
 	origin := a.config.ServerURL
-	path := a.desktopPath
 	a.mu.Unlock()
 	if release.Version == "" || origin == "" {
 		dialog.ShowError("Could not install Pop Desktop", "Connect to a server that publishes Pop Desktop and check again first.")
 		return
 	}
-	go func() {
-		a.setDesktopState(status.Checking, "Installing", "Installing", release.Version, path)
-		token, err := a.getToken(origin)
-		if err != nil {
-			a.detectDesktop()
-			dialog.ShowError("Pop Desktop installation failed", userFacingError(err))
-			return
-		}
-		packageFile, err := os.CreateTemp("", "pop-desktop-*.zip")
-		if err != nil {
-			a.detectDesktop()
-			dialog.ShowError("Pop Desktop installation failed", err.Error())
-			return
-		}
-		packagePath := packageFile.Name()
-		defer os.Remove(packagePath)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		renewed, downloadErr := a.server.DownloadDesktop(ctx, origin, token, release, packageFile)
-		closeErr := packageFile.Close()
-		if downloadErr == nil {
-			downloadErr = closeErr
-		}
-		if downloadErr != nil {
-			a.detectDesktop()
-			dialog.ShowError("Pop Desktop installation failed", userFacingError(downloadErr))
-			return
-		}
-		if renewed != "" {
-			_ = a.setToken(origin, renewed)
-		}
-		if err := desktop.InstallPackage(packagePath, path, release.Version); err != nil {
-			a.detectDesktop()
-			dialog.ShowError("Pop Desktop installation failed", err.Error())
-			return
-		}
+	go a.downloadAndInstallDesktop(release, false)
+}
+
+func (a *App) prepareDesktopUpdate(release serverclient.DesktopRelease) {
+	a.mu.Lock()
+	path := a.desktopPath
+	a.mu.Unlock()
+	installation := desktop.Detect(path)
+	if installation.Err != nil || (installation.Installed && compareDesktopVersions(installation.Version, release.Version) >= 0) {
+		return
+	}
+	a.downloadAndInstallDesktop(release, true)
+}
+
+func (a *App) downloadAndInstallDesktop(release serverclient.DesktopRelease, confirm bool) {
+	if !a.beginDesktopUpdate(release.Version, !confirm) {
+		return
+	}
+	defer a.finishDesktopUpdate()
+
+	a.mu.Lock()
+	origin := a.config.ServerURL
+	path := a.desktopPath
+	a.mu.Unlock()
+	if origin == "" || path == "" {
+		return
+	}
+	a.setDesktopState(status.Checking, "Downloading update", "Downloading update", "v"+release.Version, path)
+	token, err := a.getToken(origin)
+	if err != nil {
 		a.detectDesktop()
-		if err := desktop.Open(path); err != nil {
-			dialog.ShowError("Pop Desktop installed but could not open", err.Error())
-			return
+		if !confirm {
+			dialog.ShowError("Pop Desktop update failed", userFacingError(err))
 		}
-		dialog.ShowInfo("Pop Desktop installed", "Pop Desktop "+release.Version+" was installed in "+path+".")
-	}()
+		return
+	}
+	packageFile, err := os.CreateTemp("", "pop-desktop-*.zip")
+	if err != nil {
+		a.detectDesktop()
+		dialog.ShowError("Pop Desktop update failed", err.Error())
+		return
+	}
+	packagePath := packageFile.Name()
+	defer os.Remove(packagePath)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	renewed, downloadErr := a.server.DownloadDesktop(ctx, origin, token, release, packageFile)
+	closeErr := packageFile.Close()
+	if downloadErr == nil {
+		downloadErr = closeErr
+	}
+	if downloadErr != nil {
+		a.detectDesktop()
+		dialog.ShowError("Pop Desktop update failed", userFacingError(downloadErr))
+		return
+	}
+	if renewed != "" {
+		_ = a.setToken(origin, renewed)
+	}
+	if confirm && !a.confirmDesktopUpdate(
+		"Pop Desktop update ready",
+		"Pop Desktop "+release.Version+" has been downloaded and verified. Install it and restart now?",
+		"Install and Restart",
+	) {
+		a.detectDesktop()
+		return
+	}
+	if err := a.installDesktopPackage(packagePath, path, release.Version); err != nil {
+		a.detectDesktop()
+		dialog.ShowError("Pop Desktop update failed", err.Error())
+		return
+	}
+	if err := a.relaunchDesktop(path, os.Getppid(), os.Getpid()); err != nil {
+		a.detectDesktop()
+		dialog.ShowError("Pop Desktop was installed but could not restart", err.Error())
+		return
+	}
+	a.stopAfterUpdate()
+}
+
+func (a *App) beginDesktopUpdate(version string, force bool) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.desktopUpdateRunning || (!force && a.desktopUpdateVersion == version) {
+		return false
+	}
+	a.desktopUpdateRunning = true
+	a.desktopUpdateVersion = version
+	return true
+}
+
+func (a *App) finishDesktopUpdate() {
+	a.mu.Lock()
+	a.desktopUpdateRunning = false
+	a.mu.Unlock()
 }
 
 func (a *App) checkNode() {
@@ -517,6 +586,7 @@ func (a *App) refreshDesktopRelease() {
 	a.desktopRelease = release
 	a.mu.Unlock()
 	a.publish(a.snapshot())
+	go a.prepareDesktopUpdate(release)
 }
 
 func (a *App) detectNode(ctx context.Context) {
@@ -723,33 +793,31 @@ func (a *App) publish(state ManagerState) {
 		CheckNodeEnabled:       state.Status.Node.State != status.Checking,
 		StartAtLogin:           startAtLogin,
 		StartAtLoginEnabled:    true,
+		CheckUpdatesEnabled:    state.ServerURL != "" && state.Status.Server.State == status.Connected,
 		CheckServerEnabled:     state.ServerURL != "" && state.Status.Server.State != status.Connecting,
 		ConfigureServerEnabled: state.Status.Server.State != status.Connecting,
 	})
 }
 
-func currentDesktopPath() string {
-	executable, err := os.Executable()
-	if err != nil {
-		return ""
+func compareDesktopVersions(left, right string) int {
+	leftParts := strings.Split(left, ".")
+	rightParts := strings.Split(right, ".")
+	for index := 0; index < 3; index++ {
+		var leftValue, rightValue int
+		if index < len(leftParts) {
+			_, _ = fmt.Sscanf(leftParts[index], "%d", &leftValue)
+		}
+		if index < len(rightParts) {
+			_, _ = fmt.Sscanf(rightParts[index], "%d", &rightValue)
+		}
+		if leftValue < rightValue {
+			return -1
+		}
+		if leftValue > rightValue {
+			return 1
+		}
 	}
-	return desktopPathForExecutable(executable)
-}
-
-func desktopPathForExecutable(executable string) string {
-	name := filepath.Base(executable)
-	if name != "Pop Desktop" && name != "Pop Desktop Tray" {
-		return ""
-	}
-	container := filepath.Dir(filepath.Dir(executable))
-	if filepath.Base(container) != "Contents" {
-		return ""
-	}
-	bundle := filepath.Dir(container)
-	if filepath.Ext(bundle) != ".app" {
-		return ""
-	}
-	return bundle
+	return 0
 }
 
 func npmCLIPath(nodePath string) (string, error) {

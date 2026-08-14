@@ -15,7 +15,6 @@ type Config struct {
 	ServerURL     string `json:"serverURL"`
 	LocalPort     int    `json:"localPort"`
 	StartAtLogin  bool   `json:"startAtLogin"`
-	AutoUpdate    bool   `json:"autoUpdate"`
 	PWAAppPath    string `json:"pwaAppPath"`
 }
 

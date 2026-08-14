@@ -1456,9 +1456,9 @@ localhost proxy. A narrowly scoped main-frame, same-origin bridge synchronizes
 only the PWA bearer session; it exposes no filesystem, shell or native command
 API. The host detects a compatible local Node and Pop CLI, then supervises the
 CLI's PLA child for the Desktop lifetime. Its release version follows the global
-Pop Agent version (`0.2.22` here); normal PWA changes do not require a host
-release, but the next native host change uses the then-current global version.
-The native source lives in this monorepo under `desktop/native`. Normal
+Pop Agent version; normal PWA changes do not require a host release, but every
+native host change uses a fresh global version. The native source lives in this
+monorepo under `desktop/native`. Normal
 user-facing labels present the single product name `Pop Desktop`; `Pop Desktop
 Tray` is reserved for the internal helper executable/process and technical
 inspection.
@@ -1473,6 +1473,19 @@ and the package contains no token or user data. The server reads only
 `desktop/pack/release.json` and the file it names. A malformed manifest, absent
 package or size mismatch is a 404. `desktop/pack/` is release output, not source.
 Different bytes require a new host semver and URL.
+
+After restoring an authenticated session, Tray checks the Desktop release. A
+newer numeric semver downloads in the background to a temporary file and must
+pass the server-declared size and SHA-256 before any prompt appears. A native
+confirmation offers **Install and Restart** or **Not Now** once per release per
+process. Confirmation extracts and signature-checks the bundle, atomically
+replaces only `~/Applications/Pop Desktop.app` with rollback on activation
+failure, starts the new bundle's private update finisher, and then closes the old
+Tray/Desktop pair. The finisher waits for both old PIDs and the single-instance
+lock to disappear before reopening the app. Manual **Check for Updates** and
+**Update Pop Desktop…** remain available; cancellation never blocks a later
+manual retry. Running from a development build never changes the managed target
+away from `~/Applications`, preventing parallel stale installations.
 
 ## 18. Production exposure
 
@@ -1652,6 +1665,14 @@ Different bytes require a new host semver and URL.
   name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
   actions say `Pop Desktop`. `Pop Desktop Tray` remains only the technical
   helper executable/process name. The immutable release ships as 0.2.22.
+- 1.97 (2026-08-14): **Pop Desktop prepares verified updates and restarts only
+  after confirmation (§17.1).** The native host now checks its authenticated
+  same-origin release on startup, downloads newer semver bytes in the background,
+  validates size/SHA-256 and bundle signature, asks once, atomically installs to
+  `~/Applications`, then uses a private finisher to wait for both old processes
+  before reopening. Missing Desktop menu items and the inert global update
+  callback are fixed. This ships as 0.2.25.
+
 - 1.96 (2026-08-14): **v0.2.24 is a release-only launcher canary (§17).**
   No product behavior changes from 0.2.23; the new immutable CLI tarball exists
   specifically to exercise the native launcher's real startup update path —

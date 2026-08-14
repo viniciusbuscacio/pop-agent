@@ -7,6 +7,7 @@ package dialog
 #cgo LDFLAGS: -framework Cocoa
 #include <stdlib.h>
 int pop_prompt_server(const char *currentURL, char **serverURL, char **password);
+int pop_confirm(const char *title, const char *message, const char *acceptTitle);
 void pop_show_info(const char *title, const char *message);
 void pop_show_error(const char *title, const char *message);
 */
@@ -25,6 +26,16 @@ func promptServer(currentURL string) (string, string, bool) {
 	defer C.free(unsafe.Pointer(serverURL))
 	defer C.free(unsafe.Pointer(password))
 	return C.GoString(serverURL), C.GoString(password), true
+}
+
+func confirm(title, message, acceptTitle string) bool {
+	titleValue := C.CString(title)
+	messageValue := C.CString(message)
+	acceptValue := C.CString(acceptTitle)
+	defer C.free(unsafe.Pointer(titleValue))
+	defer C.free(unsafe.Pointer(messageValue))
+	defer C.free(unsafe.Pointer(acceptValue))
+	return C.pop_confirm(titleValue, messageValue, acceptValue) != 0
 }
 
 func showInfo(title, message string)  { show(title, message, false) }

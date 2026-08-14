@@ -117,6 +117,30 @@ static void showAlert(const char *title, const char *message, NSAlertStyle style
     }
 }
 
+static int confirmOnMain(const char *title, const char *message, const char *acceptTitle) {
+    [NSApp activateIgnoringOtherApps:YES];
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setAlertStyle:NSAlertStyleInformational];
+    [alert setMessageText:dialogString(title)];
+    [alert setInformativeText:dialogString(message)];
+    [alert addButtonWithTitle:dialogString(acceptTitle)];
+    [alert addButtonWithTitle:@"Not Now"];
+    NSModalResponse response = [alert runModal];
+    [alert release];
+    return response == NSAlertFirstButtonReturn;
+}
+
+int pop_confirm(const char *title, const char *message, const char *acceptTitle) {
+    __block int result = 0;
+    void (^present)(void) = ^{ result = confirmOnMain(title, message, acceptTitle); };
+    if (pthread_main_np() != 0) {
+        present();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), present);
+    }
+    return result;
+}
+
 void pop_show_info(const char *title, const char *message) {
     showAlert(title, message, NSAlertStyleInformational);
 }

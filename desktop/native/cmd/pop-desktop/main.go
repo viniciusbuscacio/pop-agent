@@ -11,9 +11,13 @@ import (
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/config"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/desktopaccess"
 	"github.com/viniciusbuscacio/pop-desktop-manager/internal/desktopwindow"
+	"github.com/viniciusbuscacio/pop-desktop-manager/internal/relaunch"
 )
 
 func main() {
+	if handled, code := relaunch.RunIfRequested(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	runtime.LockOSThread()
 	path, err := config.DefaultPath()
 	if err != nil {

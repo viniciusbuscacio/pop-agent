@@ -19,6 +19,7 @@ Current scope:
 - a same-origin session bridge with no filesystem or command API exposed to web content;
 - same-origin navigation confinement, native downloads, media prompts, and external links delegated to the default application;
 - native Start at Login integration;
+- automatic same-origin update preparation with size/SHA-256 validation, native confirmation, atomic bundle replacement, rollback, and restart after both old processes exit;
 - single-instance enforcement, including exclusion of the former standalone Manager during migration.
 
 ## Development

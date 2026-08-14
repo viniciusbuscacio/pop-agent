@@ -215,6 +215,12 @@ static void installTray(NSData *iconData) {
     popOpenDesktopItem = actionItem(@"Open Pop Desktop", @selector(openDesktop:));
     [popOpenDesktopItem setEnabled:YES];
     [desktopMenu addItem:popOpenDesktopItem];
+    popCheckDesktopItem = actionItem(@"Check Again", @selector(checkDesktop:));
+    [popCheckDesktopItem setEnabled:NO];
+    [desktopMenu addItem:popCheckDesktopItem];
+    popInstallDesktopItem = actionItem(@"Update Pop Desktop…", @selector(installDesktop:));
+    [popInstallDesktopItem setEnabled:NO];
+    [desktopMenu addItem:popInstallDesktopItem];
     [popDesktopItem setSubmenu:desktopMenu];
     [desktopMenu release];
 
