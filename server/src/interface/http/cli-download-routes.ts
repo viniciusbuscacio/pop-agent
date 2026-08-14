@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
 /**
- * The server hands out its own client (docs/cli.md, Distribution):
- *
- *     npm i -g https://your-pop-agent.example/cli-latest.tgz
+ * The server hands out its native launcher, release manifest and Node client
+ * (docs/cli.md, Distribution). The native launcher is the primary path; the
+ * npm-global URL below remains a migration path for old installations.
  *
  * The stable convenience URL redirects, without caching, to the server's exact
  * immutable package URL. That keeps copied setup commands useful after an
@@ -41,6 +42,62 @@ export interface CliDownloadDeps {
 
 export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
   const routes = new Hono();
+
+  routes.get('/cli/manifest.json', (c) => {
+    const file = `cli-${deps.versions.popAgentVersion}.tgz`;
+    const path = join(deps.cliPack, file);
+    try {
+      const bytes = readFileSync(path);
+      c.header('cache-control', 'no-store');
+      return c.json({
+        version: deps.versions.popAgentVersion,
+        minimumNodeVersion: '22.19.0',
+        minimumLauncherVersion: '1.0.0',
+        package: {
+          url: `/${file}`,
+          size: bytes.length,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        },
+      });
+    } catch {
+      return c.notFound();
+    }
+  });
+
+  routes.get('/cli/launcher/manifest.json', (c) => {
+    try {
+      const body = readFileSync(join(deps.cliPack, 'launcher', 'manifest.json'));
+      return c.body(body, 200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+    } catch {
+      return c.notFound();
+    }
+  });
+
+  routes.get('/cli/launcher/:file{pop-launcher-[0-9A-Za-z.\\-]+}', (c) => {
+    const manifestPath = join(deps.cliPack, 'launcher', 'manifest.json');
+    try {
+      const release = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        artifacts?: Record<string, { file?: string }>;
+      };
+      const allowed = Object.values(release.artifacts ?? {}).some(
+        (artifact) => artifact.file === c.req.param('file'),
+      );
+      if (!allowed) return c.notFound();
+      const path = join(deps.cliPack, 'launcher', c.req.param('file'));
+      const size = statSync(path).size;
+      return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {
+        'content-type': 'application/octet-stream',
+        'content-length': String(size),
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-disposition': `attachment; filename="${c.req.param('file')}"`,
+      });
+    } catch {
+      return c.notFound();
+    }
+  });
 
   routes.get('/cli-latest.tgz', (c) => {
     const expected = `cli-${deps.versions.popAgentVersion}.tgz`;

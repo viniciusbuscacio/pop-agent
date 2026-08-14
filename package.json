@@ -1,7 +1,7 @@
 {
   "name": "pop-agent",
   "private": true,
-  "version": "0.2.22",
+  "version": "0.2.23",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
@@ -23,7 +23,8 @@
     "test": "vitest run",
     "prebuild": "npm run version:check",
     "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @pop-agent/web",
-    "gate": "tsx tools/gate-receipt.ts begin && npm run version:check && npm run selfmap:check && npm run lint && npm run typecheck && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
+    "launcher:check": "cd launcher && test -z \"$(gofmt -l .)\" && go vet ./... && go test ./...",
+    "gate": "tsx tools/gate-receipt.ts begin && npm run version:check && npm run selfmap:check && npm run lint && npm run typecheck && npm run launcher:check && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",
     "selfmap:check": "tsx tools/generate-self-map.ts --check",

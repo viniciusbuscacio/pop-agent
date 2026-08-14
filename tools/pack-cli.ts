@@ -33,6 +33,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,7 +128,42 @@ async function main(): Promise<void> {
   const served = `cli-${version}.tgz`;
   if (packed !== served) renameSync(join(out, packed), join(out, served));
 
-  process.stdout.write(`packed ${served}\n`);
+  const launcherSource = readFileSync(join(root, 'launcher', 'main.go'), 'utf8');
+  const launcherVersion = /const launcherVersion = "([^"]+)"/.exec(launcherSource)?.[1];
+  if (launcherVersion === undefined) throw new Error('launcher version constant was not found');
+  const launcherOut = join(out, 'launcher');
+  mkdirSync(launcherOut, { recursive: true });
+  const launcherArtifacts: Record<string, { file: string; size: number; sha256: string }> = {};
+  for (const target of [
+    ['darwin', 'arm64'],
+    ['darwin', 'amd64'],
+    ['linux', 'arm64'],
+    ['linux', 'amd64'],
+    ['windows', 'arm64'],
+    ['windows', 'amd64'],
+  ] as const) {
+    const [os, arch] = target;
+    const suffix = os === 'windows' ? '.exe' : '';
+    const file = `pop-launcher-${launcherVersion}-${os}-${arch}${suffix}`;
+    const path = join(launcherOut, file);
+    execFileSync('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path, '.'], {
+      cwd: join(root, 'launcher'),
+      env: { ...process.env, CGO_ENABLED: '0', GOOS: os, GOARCH: arch },
+      stdio: 'inherit',
+    });
+    const bytes = readFileSync(path);
+    launcherArtifacts[`${os}-${arch}`] = {
+      file,
+      size: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    };
+  }
+  writeFileSync(
+    join(launcherOut, 'manifest.json'),
+    `${JSON.stringify({ version: launcherVersion, artifacts: launcherArtifacts }, undefined, 2)}\n`,
+  );
+
+  process.stdout.write(`packed ${served} and Pop launcher ${launcherVersion}\n`);
 }
 
 await main();

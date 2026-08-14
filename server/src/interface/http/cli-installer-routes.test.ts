@@ -1,44 +1,80 @@
-import { describe, expect, it } from 'vitest';
-import { createCliInstallerRoutes, windowsInstaller } from './cli-installer-routes.js';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createCliInstallerRoutes, unixInstaller, windowsInstaller } from './cli-installer-routes.js';
 
-describe('Windows CLI installer', () => {
-  it('builds the package URL from the server that received the request', async () => {
-    const routes = createCliInstallerRoutes({ versions: { popAgentVersion: '0.2.15' } });
+const release = {
+  version: '1.0.0',
+  artifacts: {
+    'darwin-arm64': { file: 'pop-launcher-1.0.0-darwin-arm64', size: 10, sha256: 'a'.repeat(64) },
+    'darwin-amd64': { file: 'pop-launcher-1.0.0-darwin-amd64', size: 10, sha256: 'b'.repeat(64) },
+    'linux-arm64': { file: 'pop-launcher-1.0.0-linux-arm64', size: 10, sha256: 'c'.repeat(64) },
+    'linux-amd64': { file: 'pop-launcher-1.0.0-linux-amd64', size: 10, sha256: 'd'.repeat(64) },
+    'windows-amd64': { file: 'pop-launcher-1.0.0-windows-amd64.exe', size: 10, sha256: 'e'.repeat(64) },
+  },
+};
+
+describe('native Pop launcher installers', () => {
+  let cliPack: string;
+
+  beforeEach(() => {
+    cliPack = mkdtempSync(join(tmpdir(), 'pop-launcher-pack-'));
+    mkdirSync(join(cliPack, 'launcher'));
+    writeFileSync(join(cliPack, 'launcher', 'manifest.json'), JSON.stringify(release));
+  });
+
+  afterEach(() => rmSync(cliPack, { recursive: true, force: true }));
+
+  it('builds the Windows launcher URL from the server that received the request', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     const response = await routes.request('https://personal-pop.example/install.ps1');
     const script = await response.text();
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(script).toContain("$serverOrigin = 'https://personal-pop.example'");
-    expect(script).toContain("$cliVersion = '0.2.15'");
-    expect(script).toContain('$packageUrl = "$serverOrigin/cli-$cliVersion.tgz"');
+    expect(script).toContain("$origin = 'https://personal-pop.example'");
+    expect(script).toContain('pop-launcher-1.0.0-windows-amd64.exe');
+    expect(script).toContain('Get-FileHash -Algorithm SHA256');
+    expect(script).toContain('Next: pop login $origin');
+  });
+
+  it('serves a checksum-validating Unix installer', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
+    const response = await routes.request('https://personal-pop.example/install.sh');
+    const script = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/x-shellscript');
+    expect(script).toContain("origin='https://personal-pop.example'");
+    expect(script).toContain('darwin-arm64)');
+    expect(script).toContain('sha256sum');
+    expect(script).toContain('$HOME/.local/bin');
   });
 
   it('keeps the public HTTPS origin behind the local reverse proxy', async () => {
-    const routes = createCliInstallerRoutes({ versions: { popAgentVersion: '0.2.15' } });
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     const response = await routes.request('http://127.0.0.1:3000/install.ps1', {
       headers: { host: 'personal-pop.example', 'x-forwarded-proto': 'https' },
     });
 
-    expect(await response.text()).toContain("$serverOrigin = 'https://personal-pop.example'");
+    expect(await response.text()).toContain("$origin = 'https://personal-pop.example'");
   });
 
-  it('installs Node when necessary and invokes the Windows npm launcher', () => {
-    const script = windowsInstaller('https://pop.example', '1.2.3');
-
-    expect(script).toContain("$minimumNodeVersion = [Version]'22.19.0'");
-    expect(script).toContain('winget.Source install --id OpenJS.NodeJS.LTS');
-    expect(script).toContain("'npm.cmd'");
-    expect(script).toContain('& $npmPath install --global $packageUrl');
-    expect(script).toContain('& $popPath --version');
-    expect(script).toContain('Next: pop login $serverOrigin');
+  it('quotes values embedded in shell and PowerShell literals', () => {
+    expect(windowsInstaller("https://pop.example/a'b", release)).toContain(
+      "$origin = 'https://pop.example/a''b'",
+    );
+    expect(unixInstaller("https://pop.example/a'b", release)).toContain(
+      "origin='https://pop.example/a'\\''b'",
+    );
   });
 
-  it('quotes values embedded in PowerShell literals', () => {
-    const script = windowsInstaller("https://pop.example/a'b", "1.2.3'x");
-
-    expect(script).toContain("$serverOrigin = 'https://pop.example/a''b'");
-    expect(script).toContain("$cliVersion = '1.2.3''x'");
+  it('404s until the launcher release has been packed', async () => {
+    rmSync(join(cliPack, 'launcher'), { recursive: true });
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
+    expect((await routes.request('/install.sh')).status).toBe(404);
+    expect((await routes.request('/install.ps1')).status).toBe(404);
   });
 });

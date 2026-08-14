@@ -160,11 +160,11 @@ export function createApp(deps: AppDeps): Hono {
         createFilesDownloadRoutes(deps),
       ),
       publicSurface(
-        'npm cannot log in, so the client tarball must answer without a session (docs/cli.md, Distribution); it carries the client code and this server version, no secrets and no user data, and the version in the filename is compared before anything is read from disk',
+        'the native launcher must discover and download the matching CLI before a session or Node client exists (docs/cli.md, Distribution); manifests, launcher binaries and the client tarball carry only public code/version/checksum metadata, never secrets or user data',
         createCliDownloadRoutes(deps),
       ),
       publicSurface(
-        'the Windows bootstrap must run before a session or CLI exists; it contains only this request origin, the public CLI version and commands that install Node and the public tarball',
+        'the macOS/Linux and Windows bootstrap scripts must run before a session or CLI exists; they contain only this request origin and checksummed public launcher artifact metadata',
         createCliInstallerRoutes(deps),
       ),
     ],

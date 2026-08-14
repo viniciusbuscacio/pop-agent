@@ -1254,10 +1254,12 @@ reimplemented.
 
 ### Updates — two channels, one discipline
 
-Both channels: manual always available, auto opt-in (default OFF, no
-unasked network calls), versions pinned exactly, a recorded
-**last-known-good**, and a **post-update smoke gate** before the new
-version is accepted.
+Server and pi channels: manual always available, auto opt-in (default OFF, no
+unasked registry/repository calls), versions pinned exactly, a recorded
+**last-known-good**, and a **post-update smoke gate** before the new version is
+accepted. The terminal client is the deliberate exception: its native launcher
+checks its already-configured personal server on each normal startup so CLI and
+server do not drift.
 
 **pi channel** (npm, the sensitive one — a pi release can break Pop Agent):
 
@@ -1290,8 +1292,13 @@ version is accepted.
   last-known-good and, on failure, preserves the candidate under a
   `failed-update-*` ref, restores last-known-good, rebuilds and restarts again.
 - Operator CLI: `popman update` does the same from the server shell.
-- The terminal chat client's `pop update` only reinstalls that client from its
-  selected server; it never creates a chat or invokes an LLM.
+- The terminal chat client's installed `pop` command is a precompiled Go
+  launcher. Before a normal TUI start it reads the selected server, fetches the
+  public no-store `/cli/manifest.json`, diagnoses connectivity and Node/npm,
+  installs a newer immutable tarball under `~/.pop/cli/<version>`, verifies size,
+  SHA-256 and `--version`, atomically activates it, then execs the Node CLI.
+  `pop update` forces that same non-LLM repair path; `pop doctor` works even when
+  Node or the CLI is broken. An unreachable server stops before the useless TUI.
 - Plain `git pull && npm ci && npm run build && restart` remains
   documented for local-on users.
 
@@ -1326,12 +1333,16 @@ Not one command with a mode: `pop` and `popman` are separate programs
 with separate audiences, and the split is what keeps the everyday one
 installable. Full design in `docs/cli.md`.
 
-**`pop`** — the chat client. Ships as `@pop-agent/cli`, installs on any
-machine (`npm i -g <server>/cli-latest.tgz`, which redirects without caching to
-this server's immutable `cli-X.Y.Z.tgz` package),
-and carries no server code: no `better-sqlite3`, no `argon2`, nothing
-that knows where `secret.key` lives. The package also carries **Pop Local
-Access (PLA)**, an internal library shared by interactive CLI and the Pop
+**`pop`** — a native Go launcher in front of the TypeScript chat client. The
+server's no-store `/install.sh` and `/install.ps1` select and SHA-256-check a
+precompiled launcher; users never install Go. On first run it asks for the
+server origin when none exists. Public `/cli/manifest.json` names this server's
+exact immutable `cli-X.Y.Z.tgz`, its size/hash, minimum Node and minimum launcher.
+The launcher installs privately and atomically rather than through global npm,
+then execs the active Node CLI. The legacy no-store `/cli-latest.tgz` redirect
+remains for migration. The client carries no server code: no `better-sqlite3`,
+no `argon2`, nothing that knows where `secret.key` lives. It also carries **Pop
+Local Access (PLA)**, an internal library shared by interactive CLI and the Pop
 Desktop host's hidden `--managed-local-access` child mode. PLA has no UI,
 install, version or credentials of its own and never creates a chat or invokes
 an LLM.
@@ -1357,39 +1368,38 @@ pending calls and never replay non-idempotent work. Logout, password recovery,
 epoch change and token expiry close attached local access.
 
     pop | pop "question" | pop -p "…"
-    pop login | logout | servers | chats | update
+    pop login | logout | servers | chats | update | doctor
     pop --chat <id>
-    pop --version
+    pop --version | --launcher-version
 
 Leaving the interactive client through Ctrl+C, `/quit` or `/exit` prints
 `Bye!` and, when the conversation has a server id, a ready-to-paste
 `pop --chat <id>` continuation command. The whole farewell block is grey.
 Before the first message creates the chat, only `Bye!` is printed.
 
-`pop --version` is entirely offline: it prints only the installed semantic
-version and exits without reading a profile, opening PLA, contacting a server
-or creating a chat. Desktop managers may use it for safe discovery.
+`pop --version` is entirely offline: the launcher reads only its atomic local
+state, finds Node and execs the active CLI's side-effect-free version path. It
+does not read a profile, open PLA, contact a server or create a chat. Desktop
+managers may use it for safe discovery. `--launcher-version` needs neither Node
+nor an installed CLI.
 
 Local execution notices (`ran here: …`) belong to the live assistant segment,
 after its tool statuses and before its prose. They are never appended as later
 transcript rows: doing that leaves a finished answer above a long tail of local
 commands and makes the response hard to read, especially in Windows Terminal.
 
-A Windows machine can bootstrap from its own server without already having
-Node or knowing the current CLI version:
+A machine can bootstrap the native launcher from its own server without
+already having Node, npm or knowing the current CLI version:
 
+    curl -fsSL https://<server>/install.sh | sh
     powershell -c "irm https://<server>/install.ps1 | iex"
 
-The public, `no-store` script derives `<server>` from its request origin, embeds
-the running global version, requires 64-bit Windows, accepts Node `>=22.19.0`,
-and installs Node LTS through `winget` only when necessary. It then invokes the
-Windows `npm.cmd` launcher directly, installs the immutable same-origin CLI
-tarball, verifies `pop --version`, and prints `pop login <server>`. It contains
-no session, credential or user data. CLI self-update runs npm's JavaScript
-entrypoint with the current `node.exe` on Windows and resolves `npm` normally
-elsewhere; neither path uses a shell. A `.cmd` wrapper cannot be passed directly
-to Node's shell-free `spawn` on Windows — it fails with `EINVAL` before npm
-starts.
+The public no-store scripts derive `<server>` from their request origin, select
+a precompiled OS/architecture artifact, verify its embedded SHA-256 and add its
+user-owned directory to PATH. They carry no session, credential or user data.
+The launcher subsequently diagnoses Node `>=22.19.0` and npm; on Windows it
+executes npm's JavaScript entrypoint through `node.exe`, never a shell or a
+`.cmd` wrapper.
 
 **`popman`** — the operator's tool. Ships with the server, runs only
 there, and is the only thing that touches systemd, the SQLite file and
@@ -1635,6 +1645,15 @@ Different bytes require a new host semver and URL.
   name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
   actions say `Pop Desktop`. `Pop Desktop Tray` remains only the technical
   helper executable/process name. The immutable release ships as 0.2.22.
+- 1.95 (2026-08-14): **`pop` gets a native, failure-independent update launcher
+  (§15, §17).** A precompiled Go binary now owns the command, checks the selected
+  server before normal startup, installs the exact CLI privately with size,
+  SHA-256 and smoke validation, atomically activates it and execs the Node TUI.
+  It diagnoses missing Node/npm and offline/DNS/TLS/HTTP failures without
+  depending on the broken component; offline stops before the useless TUI.
+  Public no-store launcher installers and manifests join immutable launcher and
+  CLI artifacts; the npm-global alias remains only for legacy migration.
+
 - 1.94 (2026-08-14): **Pop Desktop and Pop Desktop Tray ship as one macOS app
   (§17).** `Pop Desktop.app` contains the WKWebView executable and an internal
   `Pop Desktop Tray` helper. Desktop starts Tray automatically; closing either

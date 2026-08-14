@@ -24,7 +24,10 @@ describe('Settings installation guide', () => {
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
-      `${window.location.origin}/cli-latest.tgz`,
+      `curl -fsSL ${window.location.origin}/install.sh | sh`,
+    );
+    expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
+      `$HOME/.local/bin/pop login ${window.location.origin}`,
     );
   });
 

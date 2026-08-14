@@ -10,7 +10,7 @@ import { Button, Card } from '../ui/controls';
 export function InstallationSection() {
   const origin = window.location.origin.replace(/\/$/, '');
   const windowsCommand = `powershell -c "irm ${origin}/install.ps1 | iex"`;
-  const unixCommands = `npm i -g ${origin}/cli-latest.tgz\npop login ${origin}`;
+  const unixCommands = `curl -fsSL ${origin}/install.sh | sh\n$HOME/.local/bin/pop login ${origin}`;
 
   return (
     <div className="flex flex-col gap-4">

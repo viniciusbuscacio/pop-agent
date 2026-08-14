@@ -124,37 +124,40 @@ The two that did not survive:
    and cover them with a contract test. Worth something; not worth a
    language.
 
-**Go was considered and refused (Vinicius, 04/08).** It wins on
-distribution, which is the thing this section's open question is about:
-one static binary of ~10 MB, no runtime, `scp` it anywhere. Against that
-is the TUI — roughly 350 lines of screen composition that today ride on
-pi-tui and would become a project of their own, maintained by hand and
-no longer improving when pi does.
-
-The asymmetry decided it. The gain is **once** (install Node), the cost
-is **forever** (own a TUI, and forgo every later pi release). Trading a
-one-time annoyance for a permanent one is a bad trade.
-
-**What would reverse it**, stated so it is recognised when it arrives:
-the day `pop` has to run somewhere Node cannot be installed — handed to
-someone who is not a developer, or a machine under corporate policy. Then
-"install Node first" stops being a convenience of the maintainer's and
-becomes a wall, and Go earns it.
+**The TUI remains TypeScript; the stable launcher is Go** *(revised 14/08)*.
+Rewriting the screen in Go would still throw away pi-tui and permanently own
+terminal rendering. The updater has the opposite constraints: it must remain
+able to explain a missing Node/npm, an offline server or a corrupt CLI, so it
+cannot itself depend on Node or on the files it replaces. The installed `pop`
+command is therefore a small precompiled Go launcher; it checks and atomically
+installs the versioned Node CLI, then replaces itself with that CLI process.
+Users install a platform binary, never the Go toolchain.
 
 ## Distribution
 
-**The server serves its own client** *(Vinicius, 04/08; evaluated, not yet
-built)*:
+**The server serves its own launcher and client.** macOS/Linux bootstrap with
+`GET /install.sh`; Windows uses `GET /install.ps1`. Both scripts derive the
+server origin from the request, choose a precompiled launcher for the local
+platform, validate its published SHA-256 and install it as `pop`. The launcher
+then reads the selected server and requests public, non-cacheable
+`GET /cli/manifest.json`:
 
-```
-npm i -g https://your-pop-agent.example/cli-0.2.0.tgz
+```json
+{
+  "version": "0.2.23",
+  "minimumNodeVersion": "22.19.0",
+  "minimumLauncherVersion": "1.0.0",
+  "package": {
+    "url": "/cli-0.2.23.tgz",
+    "size": 1837421,
+    "sha256": "..."
+  }
+}
 ```
 
-Chosen over publishing to the public registry because for self-hosted
-software it is the right shape: **the thing you run hands you the thing
-you talk to it with.** The install line carries its own address, which a
-README cannot get wrong, and what it hands you is that server's own
-version, not whatever the registry's `latest` happens to be.
+The exact tarball and launcher binaries are immutable; manifests and installer
+scripts are `no-store`. The legacy `/cli-latest.tgz` redirect remains for old
+npm-global installations, but is no longer the primary setup path.
 
 *(Corrected 04/08. This first said the reason was that "the client cannot
 drift from the server it talks to". That is only true on the day of the
@@ -163,35 +166,28 @@ handed — the same mismatch, arrived at from the other side. Serving the
 tarball is still the right choice; it just is not what stops drift. That
 is the next section, and it has to exist either way.)*
 
-### Version compatibility
+### Version compatibility and startup
 
-The two ends share a wire — REST, the `StreamEvent` shapes, local access
-frames — and a mismatched pair fails in a way nobody can read. Nothing
-about *where the client came from* prevents that; only local accesshake
-does. Attach already carries the client version (see Protocol sketch);
-the server has to read it.
+For normal invocations the launcher checks the configured server before Node or
+the TUI starts. No configured server prompts for an HTTP(S) origin; the first
+successful launch hands that origin to the CLI's normal authenticated `login`.
+The manifest request itself is the liveness check — there is no redundant health
+request.
 
-**The server holds two numbers** *(decided 04/08)*: its own version, and
-the oldest client it still accepts. Both live on the server and only
-there — no endpoint for the client to consult beforehand, no copy of the
-rule shipped in the client where it could disagree. The client learns the
-answer by attaching and being told. The second number is set by hand and
-moves rarely — only when the wire changes in a way an older client cannot
-survive. Most releases do not touch it.
+- Offline, DNS, TLS, timeout and HTTP failures are diagnosed and stop; an offline
+  chat client has no useful mode to enter.
+- Missing or old Node and missing npm are diagnosed by the launcher, which keeps
+  working without either dependency.
+- A newer server package downloads to a temporary file, verifies byte length and
+  SHA-256, installs under `~/.pop/cli/<version>`, runs `--version` as a smoke
+  check, and only then atomically writes the active-version state.
+- Equal versions start immediately. A locally newer version starts without a
+  downgrade. `pop update` forces a repair/reinstall; `pop doctor` diagnoses the
+  launcher, dependencies and server without starting the Node CLI.
+- `--version` and the Desktop's `--managed-local-access` remain local-only paths.
 
-| Client vs. minimum | What happens |
-|---|---|
-| At or above | **Nothing.** No banner, no prompt. |
-| Below the current version, at or above the minimum | **One dim line**, once per new version: `pop 0.2.0 · server 0.3.0 · update: npm i -g https://…/cli-0.3.0.tgz` |
-| Below the minimum | **Refuses to attach.** Prints the exact install command and offers to run it: `Install now? [Y/n]` |
-
-The asymmetry is the point. In the optional case a prompt would be
-answered `n` on reflex and would train the reflex; a line that scrolls
-past costs nothing and is still there when wanted. In the blocking case
-the client is not usable anyway, so asking is not an interruption — it is
-the way forward, and the one moment where installing on the user's behalf
-is not a surprise. Nothing auto-updates silently, and nothing tries to
-replace a running process mid-session.
+The attach-time minimum-client check remains a final wire-compatibility guard,
+but ordinary drift is removed before attach rather than merely announced.
 
 **Knowing when to raise the minimum** is a judgement, not a detection.
 The wire lives in few places — the `/v1` routes, the `StreamEvent`
@@ -202,38 +198,20 @@ cannot make the call.
 
 **The whole of it**, once per machine:
 
+```sh
+curl -fsSL https://your-pop-agent.example/install.sh | sh
+$HOME/.local/bin/pop login https://your-pop-agent.example
 ```
-brew install node                          # or apt, or whatever that machine uses
-npm i -g https://your-pop-agent.example/cli-0.2.0.tgz
-pop login https://your-pop-agent.example
-```
-
-Windows has a same-origin bootstrap for a machine that may not have Node yet:
 
 ```powershell
 powershell -c "irm https://your-pop-agent.example/install.ps1 | iex"
+pop login https://your-pop-agent.example
 ```
 
-`GET /install.ps1` is public for the same bootstrap reason as the tarball. The
-server derives its own origin from that request and emits its current immutable
-CLI package URL; no configured public URL or hard-coded owner's hostname exists.
-The script requires 64-bit Windows, accepts Node `>=22.19.0`, installs the LTS
-runtime through `winget` when necessary, invokes `npm.cmd` directly, verifies
-`pop --version`, and leaves the exact `pop login <origin>` command. It carries no
-password, token or user data. Because the generated package version changes with
-the server, the script is `no-store`; the versioned tarball remains immutable.
-
-Then `pop`. On the server the first line is already true — Pop Agent runs on
-Node there.
-
-**Node is required, and there is no version of this that is not**
-*(decided 04/08)*. The single-file bundle below does not escape it: it is
-still `node pop.mjs`. The only real escapes are Go and a Node SEA, and
-both cost the TUI or 120 MB. Language already made this trade and named
-what would reverse it — the day `pop` has to run on a machine the
-maintainer does not control. While the machines are his, `brew install
-node` is a one-time annoyance and writing a terminal UI by hand is a
-permanent one.
+Node remains required for the TypeScript TUI. It is deliberately *not* required
+for the launcher or its diagnostics. npm is used only to install dependencies
+inside the launcher's private version directory; nothing is installed globally,
+no `sudo` is needed, and a failed candidate cannot overwrite the active CLI.
 
 **What actually lands**, measured 04/08 — 2.9 MB, no compilation:
 
@@ -595,7 +573,8 @@ pop "explain this"       # one-shot: answer, print, exit
 pop -p "…"               # same, explicit, for scripts
 pop login | logout
 pop chats | open <id>
-pop update               # reinstall this CLI from the selected server, no LLM
+pop update               # launcher repair/reinstall from the selected server, no LLM
+pop doctor               # launcher, dependency and server diagnostics
 pop --version            # print the installed CLI version offline, then exit
 pop --server <profile>   # pick a saved server
 ```
