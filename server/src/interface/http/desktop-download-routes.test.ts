@@ -9,7 +9,7 @@ describe('Pop Desktop distribution', () => {
   let pack: string;
   const version = '0.2.15';
   const file = `pop-desktop-${version}-darwin-arm64.zip`;
-  const routes = () => createDesktopDownloadRoutes({ desktopPack: pack, desktopReleaseVersion: version });
+  const routes = () => createDesktopDownloadRoutes({ desktopPack: pack });
 
   beforeEach(() => {
     pack = mkdtempSync(join(tmpdir(), 'pop-desktop-pack-'));
@@ -56,12 +56,15 @@ describe('Pop Desktop distribution', () => {
     expect((await routes().request('/desktop/release')).status).toBe(404);
   });
 
-  it('refuses a desktop package from a different global release', async () => {
-    const mismatched = createDesktopDownloadRoutes({
-      desktopPack: pack,
-      desktopReleaseVersion: '0.2.11',
-    });
-    expect((await mismatched.request('/desktop/release')).status).toBe(404);
-    expect((await mismatched.request(`/desktop/package/${file}`)).status).toBe(404);
+  it('requires the manifest version and immutable filename to agree', async () => {
+    writeFileSync(
+      join(pack, 'release.json'),
+      JSON.stringify({
+        version: '0.2.16', platform: 'darwin', arch: 'arm64', file,
+        sha256: '0'.repeat(64), size: 21,
+      }),
+    );
+    expect((await routes().request('/desktop/release')).status).toBe(404);
+    expect((await routes().request(`/desktop/package/${file}`)).status).toBe(404);
   });
 });

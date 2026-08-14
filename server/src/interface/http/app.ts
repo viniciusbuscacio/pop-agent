@@ -174,7 +174,6 @@ export function createApp(deps: AppDeps): Hono {
       sessionGuarded(createSettingsRoutes(deps)),
       sessionGuarded(createDesktopDownloadRoutes({
         desktopPack: deps.desktopPack,
-        desktopReleaseVersion: deps.versions.popAgentVersion,
       })),
       sessionGuarded(createServerRoutes(deps)),
       sessionGuarded(createProviderRoutes(deps)),

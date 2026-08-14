@@ -1432,9 +1432,12 @@ release version. A TypeScript consistency check runs before typecheck, build and
 the full gate; it rejects drift in package manifests, lockfile workspace entries,
 the CLI handshake, packed CLI metadata and any published Pop Desktop manifest.
 The native source under `desktop/native` must receive this same file through
-`POP_AGENT_VERSION_FILE`; its build and packaging stop when the local version
-differs. The desktop download route also refuses a manifest whose version differs
-from the running server's global version.
+`POP_AGENT_VERSION_FILE`; a newly built native package therefore uses the global
+version current at build time. Already published platform packages may remain on
+their previous immutable version while the server and CLI advance. The desktop
+download route validates the manifest's internal version, filename, size and hash,
+not equality with the running server version; publishing the later native package
+then advances only that platform's manifest.
 
 The server holds its own version and the
 oldest client it accepts; the local-tools attach compares them.
@@ -1455,9 +1458,10 @@ The host loads this server's HTTPS origin directly: no copied React build or
 localhost proxy. A narrowly scoped main-frame, same-origin bridge synchronizes
 only the PWA bearer session; it exposes no filesystem, shell or native command
 API. The host detects a compatible local Node and Pop CLI, then supervises the
-CLI's PLA child for the Desktop lifetime. Its release version follows the global
-Pop Agent version; normal PWA changes do not require a host release, but every
-native host change uses a fresh global version. The native source lives in this
+CLI's PLA child for the Desktop lifetime. Normal PWA or server changes do not
+require a native package release. Every changed native package uses a fresh global
+version, but one platform may continue serving its last package until its new
+signed bytes are ready. The native source lives in this
 monorepo under `desktop/native`. Normal
 user-facing labels present the single product name `Pop Desktop`; `Pop Desktop
 Tray` is reserved for the internal helper executable/process and technical
@@ -1660,6 +1664,12 @@ away from `~/Applications`, preventing parallel stale installations.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 1.99 (2026-08-14): **Native package publication is platform-independent
+  (§17.1).** Server/CLI releases no longer wait for every native platform:
+  each Desktop manifest continues serving its last internally consistent,
+  immutable signed package until newer bytes for that platform are published.
+  A later package advances the manifest without rewriting an old URL.
 
 - 1.95 (2026-08-14): **The internal tray helper presents one public product
   name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit

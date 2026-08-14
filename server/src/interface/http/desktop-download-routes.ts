@@ -16,14 +16,12 @@ interface StoredRelease {
 export interface DesktopDownloadDeps {
   /** Directory containing release.json and its immutable Pop Desktop zip. */
   desktopPack: string;
-  /** Global Pop Agent version; desktop release publication must match it. */
-  desktopReleaseVersion: string;
 }
 
 const releaseFile = 'release.json';
 const maxManifestBytes = 64 * 1024;
 
-function readRelease(pack: string, expectedVersion: string): { stored: StoredRelease; path: string } | undefined {
+function readRelease(pack: string): { stored: StoredRelease; path: string } | undefined {
   try {
     const manifestPath = join(pack, releaseFile);
     const manifestStat = lstatSync(manifestPath);
@@ -33,7 +31,6 @@ function readRelease(pack: string, expectedVersion: string): { stored: StoredRel
     if (
       typeof parsed.version !== 'string' ||
       !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(parsed.version) ||
-      parsed.version !== expectedVersion ||
       parsed.platform !== 'darwin' ||
       parsed.arch !== 'arm64' ||
       typeof parsed.file !== 'string' ||
@@ -62,7 +59,7 @@ export function createDesktopDownloadRoutes(deps: DesktopDownloadDeps): Hono {
   const routes = new Hono();
 
   routes.get('/desktop/release', (c) => {
-    const release = readRelease(deps.desktopPack, deps.desktopReleaseVersion);
+    const release = readRelease(deps.desktopPack);
     if (release === undefined) return c.notFound();
     const result: DesktopReleaseResponse = {
       version: release.stored.version,
@@ -76,7 +73,7 @@ export function createDesktopDownloadRoutes(deps: DesktopDownloadDeps): Hono {
   });
 
   routes.get('/desktop/package/:file{pop-desktop-[0-9A-Za-z.\\-]+\\.zip}', (c) => {
-    const release = readRelease(deps.desktopPack, deps.desktopReleaseVersion);
+    const release = readRelease(deps.desktopPack);
     if (release === undefined || c.req.param('file') !== release.stored.file) return c.notFound();
     return c.body(Readable.toWeb(createReadStream(release.path)) as ReadableStream, 200, {
       'content-type': 'application/zip',
