@@ -73,6 +73,14 @@ export function versionConsistencyErrors(root: string): string[] {
     }
   }
 
+  const desktopNativeVersionPath = join(root, 'desktop/native/VERSION');
+  if (existsSync(desktopNativeVersionPath)) {
+    const desktopNativeVersion = readText(desktopNativeVersionPath);
+    if (desktopNativeVersion !== version) {
+      errors.push(`desktop/native/VERSION is ${JSON.stringify(desktopNativeVersion)}; expected ${version}`);
+    }
+  }
+
   const desktopManifestPath = join(root, 'desktop/pack/release.json');
   if (existsSync(desktopManifestPath)) {
     const desktop = readJson<DesktopRelease>(root, 'desktop/pack/release.json', errors);

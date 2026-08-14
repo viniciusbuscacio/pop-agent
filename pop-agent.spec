@@ -1414,7 +1414,7 @@ list to manage yet. `popman access-list` says so rather than pretending.
 release version. A TypeScript consistency check runs before typecheck, build and
 the full gate; it rejects drift in package manifests, lockfile workspace entries,
 the CLI handshake, packed CLI metadata and any published Pop Desktop manifest.
-The macOS native repository must receive this same file through
+The native source under `desktop/native` must receive this same file through
 `POP_AGENT_VERSION_FILE`; its build and packaging stop when the local version
 differs. The desktop download route also refuses a manifest whose version differs
 from the running server's global version.
@@ -1427,17 +1427,23 @@ is set by hand and moves only when the wire changes.
 
 ### 17.1 Pop Desktop distribution
 
-Pop Desktop is the existing PWA inside a separately installed, minimal macOS
-`WKWebView` host. The host loads this server's HTTPS origin directly: no copied
-React build or localhost proxy. A narrowly scoped main-frame, same-origin bridge
-synchronizes only the PWA bearer session; it exposes no filesystem, shell or
-native command API. The host detects a compatible local Node and Pop CLI, then
-supervises the CLI's PLA child for the Desktop lifetime. Its release version
-follows the global Pop Agent version (`0.2.12` here); normal PWA changes do not
-require a host release, but the next native host change uses the then-current
-global version.
+Pop Desktop is the existing PWA inside one installed macOS app bundle. Its main
+`Pop Desktop` executable owns the `WKWebView`; an internal `Pop Desktop Tray`
+helper owns the menu-bar controls, server configuration, diagnostics and runtime
+supervision. Desktop starts Tray automatically, and private inherited pipes couple
+their lifecycle: closing either closes both. Tray is not a separate `.app`, login
+item, installer or update target.
 
-The authenticated Manager-only contract is:
+The host loads this server's HTTPS origin directly: no copied React build or
+localhost proxy. A narrowly scoped main-frame, same-origin bridge synchronizes
+only the PWA bearer session; it exposes no filesystem, shell or native command
+API. The host detects a compatible local Node and Pop CLI, then supervises the
+CLI's PLA child for the Desktop lifetime. Its release version follows the global
+Pop Agent version (`0.2.21` here); normal PWA changes do not require a host
+release, but the next native host change uses the then-current global version.
+The native source lives in this monorepo under `desktop/native`.
+
+The authenticated Pop Desktop Tray contract is:
 
 - `GET /v1/desktop/release` — `{version, platform:'darwin', arch:'arm64', sha256, size, downloadPath}`;
 - `GET /v1/desktop/package/pop-desktop-X.Y.Z-darwin-arm64.zip` — the exact immutable signed bundle.
@@ -1622,6 +1628,12 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.94 (2026-08-14): **Pop Desktop and Pop Desktop Tray ship as one macOS app
+  (§17).** `Pop Desktop.app` contains the WKWebView executable and an internal
+  `Pop Desktop Tray` helper. Desktop starts Tray automatically; closing either
+  ends both through private lifecycle pipes. The former standalone Manager is
+  no longer a separate app, installer, login item or update target. The signed
+  immutable macOS package and global release ship as 0.2.21.
 - 1.93 (2026-08-14): **PLA detects a silently lost WSS stream (§17).** An
   attached local-access client now requires inbound server traffic within its
   45-second lease, terminates a stale socket and reconnects. This prevents a

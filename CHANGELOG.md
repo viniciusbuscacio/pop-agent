@@ -7,6 +7,10 @@ normative history.
 
 ### Changed
 
+- **Pop Desktop now ships with Pop Desktop Tray inside one app bundle.** Opening
+  Desktop starts the internal tray helper; closing either process closes the
+  other. The former standalone Pop Desktop Manager is no longer a separate app,
+  installer, login item or update target.
 - **CLI installation commands can stay current.** The stable, non-cacheable
   `cli-latest.tgz` URL redirects to the server's exact immutable CLI package,
   so setup instructions do not need a version edit after each update.
