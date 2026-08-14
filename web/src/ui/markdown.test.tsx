@@ -6,6 +6,9 @@ import { Markdown, internalFilePath } from './markdown';
 
 const link = vi.fn();
 const saveFromLink = vi.fn();
+const highlightCode = vi.hoisted(() => vi.fn());
+
+vi.mock('../lib/syntax-highlighter', () => ({ highlightCode }));
 
 vi.mock('../services/artifacts', () => ({
   filesService: {
@@ -20,6 +23,8 @@ vi.mock('../lib/download', () => ({
 beforeEach(() => {
   link.mockReset();
   saveFromLink.mockReset();
+  highlightCode.mockReset();
+  highlightCode.mockResolvedValue('<pre class="shiki"><code>highlighted</code></pre>');
 });
 
 afterEach(cleanup);
@@ -46,6 +51,24 @@ describe('horizontal overflow containment', () => {
     expect(code?.className).toContain('overflow-x-auto');
     expect(table?.parentElement?.className).toContain('max-w-full');
     expect(table?.parentElement?.className).toContain('overflow-x-auto');
+  });
+});
+
+describe('code block rendering', () => {
+  it('keeps plain text on the stable renderer instead of loading Shiki later', async () => {
+    const { container } = render(<Markdown text={'```text\ncommit-id\n```'} />);
+
+    expect(container.querySelector('pre')?.textContent).toBe('commit-id');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(highlightCode).not.toHaveBeenCalled();
+    expect(container.querySelector('.code-shiki')).toBeNull();
+  });
+
+  it('still highlights languages with syntax', async () => {
+    const { container } = render(<Markdown text={'```typescript\nconst value = 1\n```'} />);
+
+    await waitFor(() => expect(highlightCode).toHaveBeenCalledWith('const value = 1', 'typescript'));
+    expect(container.querySelector('.code-shiki')).not.toBeNull();
   });
 });
 

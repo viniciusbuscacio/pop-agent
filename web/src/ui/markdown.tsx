@@ -239,6 +239,15 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   useEffect(() => {
     let cancelled = false;
 
+    // Plain text has nothing to highlight. Keeping its original <pre> avoids
+    // replacing the whole block after the large Shiki chunk loads, which is a
+    // visible flash for short hashes, commit IDs and command output.
+    if (isPlainCodeLanguage(language)) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void (async () => {
       try {
         const { highlightCode } = await import('../lib/syntax-highlighter');
@@ -286,4 +295,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
       )}
     </div>
   );
+}
+
+function isPlainCodeLanguage(language: string): boolean {
+  return language === 'text' || language === 'txt' || language === 'plaintext';
 }
