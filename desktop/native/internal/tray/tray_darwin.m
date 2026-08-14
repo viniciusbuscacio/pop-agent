@@ -167,13 +167,13 @@ static void installTray(NSData *iconData) {
     [image setTemplate:YES];
     [[popStatusItem button] setImage:image];
     [[popStatusItem button] setImagePosition:NSImageOnly];
-    [[popStatusItem button] setToolTip:@"Pop Desktop Tray"];
+    [[popStatusItem button] setToolTip:@"Pop Desktop"];
     [image release];
 
-    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Pop Desktop Tray"];
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Pop Desktop"];
     [menu setAutoenablesItems:NO];
 
-    [menu addItem:headerItem(@"Pop Desktop Tray")];
+    [menu addItem:headerItem(@"Pop Desktop")];
     [menu addItem:[NSMenuItem separatorItem]];
     popServerItem = componentItem(@"Server  ·  Not configured");
     popDesktopItem = componentItem(@"Desktop  ·  Not installed");
@@ -269,7 +269,7 @@ static void installTray(NSData *iconData) {
     [menu addItem:popStartAtLoginItem];
 
     [menu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit Pop Desktop Tray" action:@selector(quit:) keyEquivalent:@"q"];
+    NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit Pop Desktop" action:@selector(quit:) keyEquivalent:@"q"];
     [quit setTarget:popMenuTarget];
     [menu addItem:quit];
     [quit release];

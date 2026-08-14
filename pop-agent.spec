@@ -1439,9 +1439,12 @@ localhost proxy. A narrowly scoped main-frame, same-origin bridge synchronizes
 only the PWA bearer session; it exposes no filesystem, shell or native command
 API. The host detects a compatible local Node and Pop CLI, then supervises the
 CLI's PLA child for the Desktop lifetime. Its release version follows the global
-Pop Agent version (`0.2.21` here); normal PWA changes do not require a host
+Pop Agent version (`0.2.22` here); normal PWA changes do not require a host
 release, but the next native host change uses the then-current global version.
-The native source lives in this monorepo under `desktop/native`.
+The native source lives in this monorepo under `desktop/native`. Normal
+user-facing labels present the single product name `Pop Desktop`; `Pop Desktop
+Tray` is reserved for the internal helper executable/process and technical
+inspection.
 
 The authenticated Pop Desktop Tray contract is:
 
@@ -1628,6 +1631,10 @@ Different bytes require a new host semver and URL.
 
 ## Changelog
 
+- 1.95 (2026-08-14): **The internal tray helper presents one public product
+  name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
+  actions say `Pop Desktop`. `Pop Desktop Tray` remains only the technical
+  helper executable/process name. The immutable release ships as 0.2.22.
 - 1.94 (2026-08-14): **Pop Desktop and Pop Desktop Tray ship as one macOS app
   (§17).** `Pop Desktop.app` contains the WKWebView executable and an internal
   `Pop Desktop Tray` helper. Desktop starts Tray automatically; closing either

@@ -1,6 +1,9 @@
 node_modules/
 dist/
 build/
+# Native Desktop build inputs are source; generated bundles/packages remain
+# ignored by desktop/native/.gitignore.
+!desktop/native/build/
 coverage/
 .env
 .env.*

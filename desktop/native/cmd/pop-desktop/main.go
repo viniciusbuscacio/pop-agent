@@ -28,14 +28,14 @@ func main() {
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		desktopwindow.ShowFatal("Pop Desktop could not locate Pop Desktop Tray.")
+		desktopwindow.ShowFatal("Pop Desktop could not locate a required component.")
 		return
 	}
 	helper := filepath.Join(filepath.Dir(filepath.Dir(executable)), "Helpers", "Pop Desktop Tray")
 	link, err := applifecycle.StartTray(helper)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pop-desktop: tray:", err)
-		desktopwindow.ShowFatal("Pop Desktop Tray could not start.")
+		desktopwindow.ShowFatal("Pop Desktop could not start its menu-bar component.")
 		return
 	}
 	defer link.Close()

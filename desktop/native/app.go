@@ -148,7 +148,7 @@ func (a *App) configureServer() {
 			dialog.ShowError("Could not connect", userFacingError(err))
 			return
 		}
-		dialog.ShowInfo("Server connected", "Pop Desktop Tray is connected to "+state.ServerURL+".")
+		dialog.ShowInfo("Server connected", "Pop Desktop is connected to "+state.ServerURL+".")
 	}()
 }
 
@@ -159,7 +159,7 @@ func (a *App) checkServer() {
 			dialog.ShowError("Server check failed", userFacingError(err))
 			return
 		}
-		dialog.ShowInfo("Server connected", "Pop Desktop Tray is connected to "+state.ServerURL+".")
+		dialog.ShowInfo("Server connected", "Pop Desktop is connected to "+state.ServerURL+".")
 	}()
 }
 
@@ -314,7 +314,7 @@ func (a *App) showDiagnostics() {
 		nodePath,
 		a.configPath,
 	)
-	dialog.ShowInfo("Pop Desktop Tray Diagnostics", message)
+	dialog.ShowInfo("Pop Desktop Diagnostics", message)
 }
 
 func (a *App) toggleStartAtLogin() {
@@ -454,7 +454,7 @@ func (a *App) persistServerURL(origin string) error {
 	cfg.ServerURL = origin
 	a.mu.Unlock()
 	if path == "" {
-		return errors.New("The manager configuration path is unavailable.")
+		return errors.New("The Pop Desktop configuration path is unavailable.")
 	}
 	if err := config.Save(path, cfg); err != nil {
 		return err
