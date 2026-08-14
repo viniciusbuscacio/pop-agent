@@ -1,0 +1,27 @@
+diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
+index 2013c5a..1062f70 100644
+--- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
++++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
+@@ -12,6 +12,7 @@ const COPILOT_HEADERS = {
+     "Copilot-Integration-Id": "vscode-chat",
+ };
+ const COPILOT_API_VERSION = "2026-06-01";
++const COPILOT_POLICY_CONCURRENCY = 4;
+ function normalizeDomain(input) {
+     const trimmed = input.trim();
+     if (!trimmed)
+@@ -269,9 +270,11 @@ async function enableGitHubCopilotModel(token, modelId, enterpriseDomain, signal
+  */
+ async function enableAllGitHubCopilotModels(token, enterpriseDomain, signal) {
+     const models = Object.values(GITHUB_COPILOT_MODELS);
+-    await Promise.all(models.map(async (model) => {
+-        await enableGitHubCopilotModel(token, model.id, enterpriseDomain, signal);
+-    }));
++    for (let index = 0; index < models.length; index += COPILOT_POLICY_CONCURRENCY) {
++        await Promise.all(models.slice(index, index + COPILOT_POLICY_CONCURRENCY).map(async (model) => {
++            await enableGitHubCopilotModel(token, model.id, enterpriseDomain, signal);
++        }));
++    }
+ }
+ async function loginGitHubCopilot(interaction) {
+     const input = await interaction.prompt({

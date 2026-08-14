@@ -1117,6 +1117,13 @@ reimplemented.
   display events (info / auth_url / device_code / progress) and the
   pending prompt; credentials go from the flow straight into pi's
   store. The wire shapes are copied field-by-field, never spread.
+- **Temporary upstream Copilot patch:** pi 0.84.1 launches one policy request
+  per known model in a single `Promise.all` (30 requests today), causing an
+  authorized login to end as 429 at the final `/models` read. Pop carries the
+  compiled form of upstream commit `b3edf017` through `patch-package`, limiting
+  policy updates to four concurrent requests. `postinstall` reapplies it and
+  the gate verifies it. Remove the patch machinery as soon as a published pi
+  version contains that commit.
 - **Subscription allowance belongs to its provider card.** Settings → Model →
   OpenAI subscription reads the provider's rolling usage windows and reset
   times through `GET /v1/providers/:id/subscription-usage`; it does not create
