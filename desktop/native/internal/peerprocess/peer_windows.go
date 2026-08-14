@@ -35,7 +35,7 @@ func EnsureSibling(name string, stopped func()) error {
 		command := exec.Command(filepath.Join(filepath.Dir(executable), name))
 		command.SysProcAttr = &syscall.SysProcAttr{
 			CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-			HideWindow:    true,
+			HideWindow:    false,
 		}
 		if err := command.Start(); err != nil {
 			return fmt.Errorf("start %s: %w", name, err)
