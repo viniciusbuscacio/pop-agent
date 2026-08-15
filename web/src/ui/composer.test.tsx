@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { useNotificationsStore } from '../store/notifications';
 import { Composer } from './composer';
+import type { ModelChoice } from './slash-menu';
 
 const pending: QueuedMessageDTO = {
   id: 'queued-1',
@@ -22,6 +23,7 @@ function renderComposer(
     executionMode?: 'normal' | 'plan';
     currentProvider?: string;
     currentModel?: string;
+    models?: ModelChoice[];
   } = {},
 ) {
   const onSend = vi.fn().mockResolvedValue(undefined);
@@ -38,7 +40,7 @@ function renderComposer(
       onEditingDone={onEditingDone}
       onStop={vi.fn()}
       onNewChat={vi.fn()}
-      models={[]}
+      models={props.models ?? []}
       activeProvider=""
       activeModel=""
       currentProvider={props.currentProvider ?? ''}
@@ -97,6 +99,47 @@ describe('pending message composition', () => {
     expect(useNotificationsStore.getState().toast?.message).toBe(
       'Provider: openai-codex · Model: gpt-5.6-sol',
     );
+  });
+
+  it('shows providers first, then every searchable model from the chosen provider', () => {
+    const openRouterModels: ModelChoice[] = Array.from({ length: 55 }, (_, index) => ({
+      provider: 'openrouter',
+      providerLabel: 'OpenRouter',
+      providerOrder: 0,
+      model: `alpha-${String(index).padStart(2, '0')}`,
+      label: `OpenRouter · alpha-${String(index).padStart(2, '0')}`,
+    }));
+    openRouterModels.push({
+      provider: 'openrouter',
+      providerLabel: 'OpenRouter',
+      providerOrder: 0,
+      model: 'beta-fast',
+      label: 'OpenRouter · beta-fast',
+    });
+    renderComposer({
+      models: [
+        ...openRouterModels,
+        { provider: 'openai-codex', providerLabel: 'OpenAI Codex', providerOrder: 1, model: 'gpt-5.6', label: 'OpenAI Codex · gpt-5.6' },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    expect(screen.getByText('Providers')).toBeTruthy();
+    expect(screen.getByRole('option', { name: /OpenRouter/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /OpenAI Codex/ })).toBeTruthy();
+    expect(screen.queryByText('alpha-00')).toBeNull();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+
+    fireEvent.click(screen.getByRole('option', { name: /OpenRouter/ }));
+    expect(screen.getByRole('searchbox', { name: 'Search models…' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'alpha-00' })).toBeTruthy();
+    // The 56th model is present before filtering: provider catalogues are not truncated.
+    expect(screen.getByRole('option', { name: 'beta-fast' })).toBeTruthy();
+    expect(screen.queryByText('gpt-5.6')).toBeNull();
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'beta' } });
+    expect(screen.queryByText('alpha-00')).toBeNull();
+    expect(screen.getByRole('option', { name: 'beta-fast' })).toBeTruthy();
   });
 
   it('keeps sending enabled while a run is busy so several inputs can queue', async () => {

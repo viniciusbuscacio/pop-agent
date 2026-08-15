@@ -174,6 +174,8 @@ export const en = {
   'chat.defaultModel': 'Default model',
   'chat.currentModel': 'Provider: {provider} · Model: {model}',
   'chat.currentModelUnavailable': 'No provider and model are active for this chat.',
+  'chat.providers': 'Providers',
+  'chat.backToProviders': 'Back to providers',
   'chat.searchModels': 'Search models…',
   'chat.noModelsFound': 'No models found',
 

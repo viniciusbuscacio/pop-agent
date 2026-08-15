@@ -79,6 +79,8 @@ export interface ModelChoice {
   provider: string;
   model: string;
   label: string;
+  providerLabel?: string;
+  providerOrder?: number;
 }
 
 /** The /model submenu: same look, but options are (provider, model) pairs. */

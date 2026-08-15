@@ -756,6 +756,11 @@ events from stale runs.
   Telegram model rather than a drawer**: the list *is* the screen, and
   opening something is a route change, so the phone's back gesture means
   what the user expects.
+- The model **M** changes only the open chat. Its picker is deliberately
+  two-stage: first **Providers** (configured providers only, plus the global
+  default), then every model from the chosen provider with an immediately
+  focused text filter and a back-to-providers action. A large OpenRouter
+  catalogue never shares one flat list with the other providers.
 - The composer puts a round **P** immediately beside the model's **M**. Its
   per-chat value is durable server state, changed through the existing chat
   PATCH and broadcast as `chat-execution-mode-changed` over the same SSE path

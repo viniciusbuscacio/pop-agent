@@ -93,7 +93,7 @@ export function ChatPage() {
         setProviders(providers);
         setUnconfigured(providers.every((entry) => !entry.configured));
         const perProvider = await Promise.all(
-          providers.map(async (entry) => {
+          providers.filter((entry) => entry.configured).map(async (entry) => {
             try {
               const catalog = await chatsService.models(entry.id);
               return { entry, models: catalog.models };
@@ -104,21 +104,20 @@ export function ChatPage() {
         );
         const withModels = perProvider.filter(({ models: list }) => list.length > 0);
         const several = withModels.length > 1;
-        const catalog = withModels.flatMap(({ entry, models: list }) =>
+        const catalog = withModels.flatMap(({ entry, models: list }, providerOrder) =>
           list.map((model) => ({
             provider: entry.id,
             model: model.id,
             label: several ? `${entry.name} · ${model.id}` : model.id,
+            providerLabel: entry.name,
+            providerOrder,
           })),
         );
         const catalogByKey = new Map(catalog.map((choice) => [`${choice.provider}||${choice.model}`, choice]));
-        const recent = recentResponse.models.map((entry) =>
-          catalogByKey.get(`${entry.provider}||${entry.model}`) ?? {
-            provider: entry.provider,
-            model: entry.model,
-            label: `${entry.provider} · ${entry.model}`,
-          },
-        );
+        const recent = recentResponse.models.flatMap((entry) => {
+          const available = catalogByKey.get(`${entry.provider}||${entry.model}`);
+          return available === undefined ? [] : [available];
+        });
         const recentKeys = new Set(recent.map((choice) => `${choice.provider}||${choice.model}`));
         setModels([
           ...recent,

@@ -265,9 +265,19 @@ export function Select({
 export interface ModelPickerOption {
   value: string;
   label: string;
+  /** Options with the same group are reached through one first-level row. */
+  group?: string;
+  groupLabel?: string;
+  groupOrder?: number;
 }
 
-/** A compact, searchable model picker that keeps the full catalog out of AX until filtered. */
+interface ModelPickerGroup {
+  value: string;
+  label: string;
+  order: number;
+}
+
+/** A compact model picker: providers first in the composer, searchable models second. */
 export function ModelPicker({
   id,
   label,
@@ -275,6 +285,8 @@ export function ModelPicker({
   options,
   placeholder = 'Search models…',
   noResults = 'No models found',
+  groupsLabel = 'Providers',
+  backToGroupsLabel = 'Back to providers',
   onChange,
   className = '',
   compactLabel,
@@ -287,36 +299,56 @@ export function ModelPicker({
   options: ModelPickerOption[];
   placeholder?: string;
   noResults?: string;
+  groupsLabel?: string;
+  backToGroupsLabel?: string;
   onChange: (value: string) => void;
   className?: string;
   compactLabel?: string;
-  /** Increment to open and focus the picker from an action elsewhere on the page. */
+  /** Increment to open the picker from an action elsewhere on the page. */
   openRequest?: number;
-  /**
-   * Where the list opens and how wide the closed control is.
-   *
-   * 'toolbar' is the composer's geometry: a chip that opens upward, because
-   * down there is the screen edge. In a form that same list floats up over
-   * the page header, detached from the field it belongs to, and stops reading
-   * as that field's dropdown at all -- so 'field' opens downward at the full
-   * width of the row, like every other control beside it (Vinicius, 04/08).
-   */
+  /** Toolbar menus escape the composer through a portal; form fields open in place. */
   layout?: 'toolbar' | 'field';
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeGroup, setActiveGroup] = useState<string | undefined>(undefined);
   const [toolbarStyle, setToolbarStyle] = useState<CSSProperties>({});
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const current = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
-  const filtered = options
-    .filter((option) => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-    .slice(0, 50);
+  const grouped = layout === 'toolbar' && options.some((option) => option.group !== undefined);
+  const groups = Array.from(
+    options.reduce((found, option) => {
+      if (option.group !== undefined && !found.has(option.group)) {
+        found.set(option.group, {
+          value: option.group,
+          label: option.groupLabel ?? option.group,
+          order: option.groupOrder ?? Number.MAX_SAFE_INTEGER,
+        });
+      }
+      return found;
+    }, new Map<string, ModelPickerGroup>()).values(),
+  ).sort((left, right) => left.order - right.order || left.label.localeCompare(right.label));
+  const visibleOptions = grouped
+    ? options.filter((option) =>
+        activeGroup === undefined ? option.group === undefined : option.group === activeGroup,
+      )
+    : options;
+  const normalizedQuery = query.toLocaleLowerCase();
+  const filtered = visibleOptions.filter((option) =>
+    `${option.label}\n${option.value}`.toLocaleLowerCase().includes(normalizedQuery),
+  );
+  // Form fields retain the bounded catalogue. The composer shows every model
+  // from the one chosen provider, as requested; its own scroll area contains it.
+  const shownOptions = grouped ? filtered : filtered.slice(0, 50);
 
   useEffect(() => {
-    if (openRequest > 0) setOpen(true);
+    if (openRequest <= 0) return;
+    setActiveGroup(undefined);
+    setQuery('');
+    setOpen(true);
   }, [openRequest]);
 
   useEffect(() => {
@@ -332,9 +364,12 @@ export function ModelPicker({
       }
     }
     document.addEventListener('pointerdown', close);
-    search.current?.focus();
     return () => document.removeEventListener('pointerdown', close);
   }, [open]);
+
+  useEffect(() => {
+    if (open && (!grouped || activeGroup !== undefined)) search.current?.focus();
+  }, [activeGroup, grouped, open]);
 
   useLayoutEffect(() => {
     if (!open || layout !== 'toolbar') return;
@@ -360,7 +395,16 @@ export function ModelPicker({
   function choose(next: string): void {
     onChange(next);
     setOpen(false);
+    setActiveGroup(undefined);
     setQuery('');
+  }
+
+  function toggle(): void {
+    if (!open) {
+      setActiveGroup(undefined);
+      setQuery('');
+    }
+    setOpen(!open);
   }
 
   const menu = open ? (
@@ -373,24 +417,51 @@ export function ModelPicker({
           : 'absolute top-full right-0 left-0 z-20 mt-1 w-full'
       } rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)]`}
     >
-      <input
-        ref={search}
-        type="search"
-        role="searchbox"
-        aria-label={placeholder}
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') setOpen(false);
-          if (event.key === 'Enter' && filtered[0] !== undefined) choose(filtered[0].value);
-        }}
-        placeholder={placeholder}
-        className={fieldClass('sm', 'mb-1 w-full')}
-      />
+      {grouped ? activeGroup === undefined ? (
+        <p className="px-2 py-1.5 text-xs font-semibold text-[var(--screen-fg)]">{groupsLabel}</p>
+      ) : (
+        <div className="flex items-center gap-1 px-1 pb-1">
+          <button
+            type="button"
+            aria-label={backToGroupsLabel}
+            onClick={() => {
+              setActiveGroup(undefined);
+              setQuery('');
+            }}
+            className="rounded px-2 py-1 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+          >
+            ←
+          </button>
+          <span className="min-w-0 truncate text-xs font-semibold text-[var(--screen-fg)]">
+            {groups.find((group) => group.value === activeGroup)?.label ?? activeGroup}
+          </span>
+        </div>
+      ) : null}
+      {!grouped || activeGroup !== undefined ? (
+        <input
+          ref={search}
+          type="search"
+          role="searchbox"
+          aria-label={placeholder}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              if (grouped) {
+                setActiveGroup(undefined);
+                setQuery('');
+              } else {
+                setOpen(false);
+              }
+            }
+            if (event.key === 'Enter' && shownOptions[0] !== undefined) choose(shownOptions[0].value);
+          }}
+          placeholder={placeholder}
+          className={fieldClass('sm', 'mb-1 w-full')}
+        />
+      ) : null}
       <div id={`${id}-listbox`} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
-        {filtered.length === 0 ? (
-          <p className="px-2 py-2 text-xs text-[var(--muted)]">{noResults}</p>
-        ) : filtered.map((option) => (
+        {shownOptions.map((option) => (
           <button
             key={option.value}
             type="button"
@@ -403,8 +474,30 @@ export function ModelPicker({
             {option.value === value ? <span className="ml-auto shrink-0 text-[var(--accent)]">✓</span> : null}
           </button>
         ))}
+        {grouped && activeGroup === undefined ? groups.map((group) => {
+          const selected = options.some((option) => option.group === group.value && option.value === value);
+          return (
+            <button
+              key={group.value}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              onClick={() => setActiveGroup(group.value)}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)]"
+            >
+              <span className="min-w-0 flex-1 truncate">{group.label}</span>
+              {selected ? <span className="text-[var(--accent)]">✓</span> : null}
+              <span className="text-[var(--muted)]">›</span>
+            </button>
+          );
+        }) : null}
+        {shownOptions.length === 0 && (!grouped || activeGroup !== undefined) ? (
+          <p className="px-2 py-2 text-xs text-[var(--muted)]">{noResults}</p>
+        ) : null}
       </div>
-      {filtered.length === 50 ? <p className="px-2 pt-1 text-[10px] text-[var(--muted)]">Type to narrow results</p> : null}
+      {!grouped && filtered.length >= 50 ? (
+        <p className="px-2 pt-1 text-[10px] text-[var(--muted)]">Type to narrow results</p>
+      ) : null}
     </div>
   ) : null;
 
@@ -420,7 +513,7 @@ export function ModelPicker({
         aria-controls={`${id}-listbox`}
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => setOpen((shown) => !shown)}
+        onClick={toggle}
         className={
           compactLabel !== undefined
             ? 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] bg-[var(--input-bg)] p-0 text-sm font-semibold text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'

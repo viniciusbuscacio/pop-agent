@@ -6,16 +6,20 @@ import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
 import { ChatPage } from './chat-page';
 import { useChatStore } from '../store/chat';
 
+const listModels = vi.hoisted(() => vi.fn());
+const listProviders = vi.hoisted(() => vi.fn());
+
 vi.mock('../services/chats', () => ({
   chatsService: {
     messages: () => Promise.resolve({ messages: [] }),
     recentModels: () => Promise.resolve({ models: [] }),
+    models: (provider: string) => listModels(provider) as Promise<unknown>,
   },
 }));
 
 vi.mock('../services/providers', () => ({
   providersService: {
-    list: () => Promise.resolve({ providers: [] }),
+    list: () => listProviders() as Promise<unknown>,
   },
 }));
 
@@ -67,6 +71,10 @@ function renderPage() {
 
 beforeEach(() => {
   chatMessageRender.mockClear();
+  listModels.mockReset();
+  listModels.mockResolvedValue({ models: [] });
+  listProviders.mockReset();
+  listProviders.mockResolvedValue({ providers: [] });
   useChatStore.getState().reset();
   useChatStore.setState({ chats: [chat], openChat: realOpenChat });
   localStorage.clear();
@@ -323,6 +331,20 @@ describe('chat transcript', () => {
     await waitFor(() => expect(screen.queryByTestId('run-status-line')).toBeNull());
     expect(screen.getByTestId('run-status-slot')).toBe(slot);
     expect(slot.className).toContain('h-7');
+  });
+
+  it('loads model catalogues only for configured providers', async () => {
+    listProviders.mockResolvedValue({
+      providers: [
+        { id: 'openrouter', name: 'OpenRouter', configured: true },
+        { id: 'anthropic', name: 'Anthropic', configured: false },
+      ],
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(listModels).toHaveBeenCalledWith('openrouter'));
+    expect(listModels).not.toHaveBeenCalledWith('anthropic');
   });
 
   it('shows pending steering as an ordinary user message after the live answer', async () => {

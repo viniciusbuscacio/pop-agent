@@ -645,6 +645,8 @@ export function Composer({
           label={t('chat.model')}
           placeholder={t('chat.searchModels')}
           noResults={t('chat.noModelsFound')}
+          groupsLabel={t('chat.providers')}
+          backToGroupsLabel={t('chat.backToProviders')}
           compactLabel="M"
           openRequest={modelPickerRequest}
           value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
@@ -652,7 +654,10 @@ export function Composer({
             { value: '', label: t('chat.defaultModel') },
             ...models.map((choice) => ({
               value: `${choice.provider}||${choice.model}`,
-              label: choice.label,
+              label: choice.model,
+              group: choice.provider,
+              groupLabel: choice.providerLabel ?? choice.provider,
+              ...(choice.providerOrder === undefined ? {} : { groupOrder: choice.providerOrder }),
             })),
           ]}
           onChange={(value) => {
