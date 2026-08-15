@@ -168,6 +168,8 @@ interface PendingRun {
   executionMode: ExecutionMode;
   /** Controls the concrete bridge attempt currently using this run. */
   control: AgentRunControl | undefined;
+  /** Concrete pair serving the current attempt, including after failover. */
+  activeModel: { providerId: string; modelId: string } | undefined;
   /** Durable steering inputs already offered to pi, keyed by queue id. */
   steering: Map<string, PendingSteering>;
   started: boolean;
@@ -342,6 +344,7 @@ export class RunService {
       localConnectionId: options.localConnectionId,
       executionMode: options.executionMode ?? 'normal',
       control: undefined,
+      activeModel: undefined,
       steering: new Map(),
       started: false,
       startedAtMs: 0,
@@ -677,6 +680,7 @@ export class RunService {
         tools: run.tools,
         attachments: [],
         createdAt: at,
+        ...(run.activeModel?.providerId.length ? { responseModel: run.activeModel } : {}),
       });
       this.deps.chats.touch(run.chatId, at);
       run.content = '';
@@ -817,6 +821,7 @@ export class RunService {
           tools: run.tools,
           attachments: [],
           createdAt,
+          ...(run.activeModel?.providerId.length ? { responseModel: run.activeModel } : {}),
         })
       : undefined;
     const user = this.deps.chats.appendMessage({
@@ -869,6 +874,7 @@ export class RunService {
       const pair = chain[index];
       if (pair === undefined) break;
       lastPair = pair;
+      run.activeModel = pair;
 
       failure = await this.attempt(run, pair, index);
       if (failure === undefined) {
@@ -938,7 +944,7 @@ export class RunService {
     const finishedAt = new Date(clock.now()).toISOString();
 
     const somethingArrived = content.length > 0 || thinking.length > 0 || tools.length > 0;
-    let messageId = '';
+    let answerMessage: Message | undefined;
 
     // The conversation may have been deleted while this ran (pop-agent.spec §6):
     // the delete aborts the run first, but the abort unwinds asynchronously
@@ -955,7 +961,7 @@ export class RunService {
     // On failure a partial answer is still stored -- a user who watched half
     // a reply appear should find it after a reload.
     if (failure === undefined || somethingArrived) {
-      messageId = chats.appendMessage({
+      answerMessage = chats.appendMessage({
         id: newMessageId(),
         chatId: run.chatId,
         role: 'assistant',
@@ -964,7 +970,8 @@ export class RunService {
         tools,
         attachments: [],
         createdAt: finishedAt,
-      }).id;
+        ...(lastPair?.providerId.length ? { responseModel: lastPair } : {}),
+      });
     }
     // EVERY failure also leaves a persisted system message (pop-agent.spec §6): an
     // error that existed only as an SSE event vanishes on reload, and the
@@ -1001,17 +1008,27 @@ export class RunService {
     // A message was always appended (the answer, or the error mark).
     chats.touch(run.chatId, finishedAt);
 
-    sink.emit(
-      failure === undefined
-        ? { kind: 'done', chatId: run.chatId, runId: run.runId, messageId }
-        : {
-            kind: 'error',
-            chatId: run.chatId,
-            runId: run.runId,
-            code: failure.code,
-            ...(failureMessage === undefined ? {} : { message: failureMessage }),
-          },
-    );
+    if (failure === undefined) {
+      // Successful runs always append an assistant row, including an empty
+      // answer. Carry that exact durable row over SSE so its model footer is
+      // visible immediately rather than only after reopening the chat.
+      if (answerMessage === undefined) throw new Error('Successful run has no answer message.');
+      sink.emit({
+        kind: 'done',
+        chatId: run.chatId,
+        runId: run.runId,
+        messageId: answerMessage.id,
+        message: answerMessage,
+      });
+    } else {
+      sink.emit({
+        kind: 'error',
+        chatId: run.chatId,
+        runId: run.runId,
+        code: failure.code,
+        ...(failureMessage === undefined ? {} : { message: failureMessage }),
+      });
+    }
 
     // After the answer, never in its way: the title job is fire-and-forget,
     // and a run that failed does not deserve a fresher name.

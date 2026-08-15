@@ -44,6 +44,36 @@ describe('chat lifecycle events on the SSE wire', () => {
     });
   });
 
+  it('carries the durable answer and its model attribution on completion', () => {
+    const message = {
+      id: 'message-answer',
+      chatId: chat.id,
+      role: 'assistant' as const,
+      content: 'answer',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: '2026-08-10T12:00:01.000Z',
+      responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+    };
+
+    expect(
+      toStreamEvent({
+        kind: 'done',
+        chatId: chat.id,
+        runId: 'run-answer',
+        messageId: message.id,
+        message,
+      }),
+    ).toEqual({
+      kind: 'done',
+      chatId: chat.id,
+      runId: 'run-answer',
+      messageId: message.id,
+      message,
+    });
+  });
+
   it('sends execution mode changes', () => {
     expect(toStreamEvent({
       kind: 'chat-execution-mode-changed',

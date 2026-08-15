@@ -66,6 +66,28 @@ describe('system messages', () => {
   });
 });
 
+describe('assistant model attribution', () => {
+  it('keeps the concrete provider and model inside the answer row', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          content: 'The answer',
+          responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('message-response-model').textContent).toBe(
+      'Provider: openai-codex · Model: gpt-5.6-sol',
+    );
+    expect(screen.getByTestId('message-response-model').parentElement).toBe(
+      screen.getByTestId('message-assistant'),
+    );
+  });
+});
+
 describe('provider fallback notices', () => {
   it('shows both model pairs and opens model selection', async () => {
     const changeModel = vi.fn();

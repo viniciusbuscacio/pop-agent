@@ -190,6 +190,7 @@ describe('messages', () => {
         content: 'the answer',
         thinking: 'let me see',
         tools: [{ name: 'bash', status: 'done', detail: 'echo hello' }],
+        responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
       }),
     );
 

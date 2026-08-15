@@ -605,6 +605,8 @@ export interface MessageDTO {
   tools: ToolCallDTO[];
   attachments: AttachmentDTO[];
   createdAt: string;
+  /** Concrete pair that produced this assistant segment; absent on legacy rows. */
+  responseModel?: { providerId: string; modelId: string };
   notice?: SystemNoticeDTO;
 }
 
@@ -1002,7 +1004,14 @@ export type StreamEvent =
       status: 'start' | 'output' | 'done' | 'error';
       detail?: string;
     }
-  | { kind: 'done'; chatId: string; runId: string; messageId: string }
+  | {
+      kind: 'done';
+      chatId: string;
+      runId: string;
+      messageId: string;
+      /** New servers carry the durable row so attribution appears without a reload. */
+      message?: MessageDTO;
+    }
   | { kind: 'error'; chatId: string; runId: string; code: string; message?: MessageDTO }
   /** A durable fallback marker, delivered while the replacement attempt is running. */
   | { kind: 'system-message'; chatId: string; runId: string; message: MessageDTO }

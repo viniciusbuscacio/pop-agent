@@ -124,13 +124,86 @@ describe('streaming into the live buffer', () => {
     expect(live()?.content).toBe('');
   });
 
-  it('promotes the buffer to a stored message when the run finishes', () => {
+  it('promotes the durable answer with its model attribution when the run finishes', () => {
     apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'done thinking' });
-    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-0000000000000002' });
+    apply({
+      kind: 'done',
+      chatId: CHAT,
+      runId: RUN,
+      messageId: 'msg-0000000000000002',
+      message: {
+        id: 'msg-0000000000000002',
+        chatId: CHAT,
+        role: 'assistant',
+        content: 'done thinking',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:01.000Z',
+        responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+      },
+    });
 
     expect(live()).toBeUndefined();
     expect(messages().map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(messages()[1]).toMatchObject({ id: 'msg-0000000000000002', content: 'done thinking' });
+    expect(messages()[1]).toMatchObject({
+      id: 'msg-0000000000000002',
+      content: 'done thinking',
+      responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+    });
+  });
+
+  it('keeps fallback events chronologically between the question and replacement answer', () => {
+    apply({
+      kind: 'system-message',
+      chatId: CHAT,
+      runId: RUN,
+      message: {
+        id: 'message-fallback',
+        chatId: CHAT,
+        role: 'system',
+        content: 'Answer retried via openai-codex after openrouter failed.',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:00.500Z',
+        notice: {
+          kind: 'model-fallback',
+          failed: {
+            providerId: 'openrouter',
+            modelId: 'google/gemini-pro',
+            code: 'provider_error',
+            status: 402,
+          },
+          fallback: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+        },
+      },
+    });
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'fallback answer' });
+    apply({
+      kind: 'done',
+      chatId: CHAT,
+      runId: RUN,
+      messageId: 'message-answer',
+      message: {
+        id: 'message-answer',
+        chatId: CHAT,
+        role: 'assistant',
+        content: 'fallback answer',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-09T00:00:01.000Z',
+        responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+      },
+    });
+
+    expect(messages().map((message) => message.role)).toEqual(['user', 'system', 'assistant']);
+    expect(messages().map((message) => message.id)).toEqual([
+      'msg-0000000000000001',
+      'message-fallback',
+      'message-answer',
+    ]);
   });
 
   it('keeps a half-written answer when the run fails, and says so', () => {

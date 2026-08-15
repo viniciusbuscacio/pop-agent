@@ -84,6 +84,8 @@ export interface Message {
   tools: ToolRecord[];
   attachments: Attachment[];
   createdAt: string;
+  /** Concrete pair that produced this assistant segment; absent on legacy rows. */
+  responseModel?: { providerId: string; modelId: string };
   /** Typed UI detail for system messages; their content remains readable without it. */
   notice?: SystemNotice;
   /**

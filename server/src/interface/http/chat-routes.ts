@@ -544,6 +544,7 @@ function toMessageDto(message: Message): MessageDTO {
       dataUri: attachment.dataUri,
     })),
     createdAt: message.createdAt,
+    ...(message.responseModel === undefined ? {} : { responseModel: message.responseModel }),
     ...(message.notice === undefined ? {} : { notice: message.notice }),
   };
 }

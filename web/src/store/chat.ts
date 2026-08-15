@@ -661,20 +661,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // the answer on success); this local copy makes it visible without
         // waiting for a reload, and the next openChat replaces it with the
         // stored truth.
-        const stored: MessageDTO[] = answered
-          ? [
-              {
-                id: messageId,
-                chatId,
-                role: 'assistant',
-                content: live.content,
-                thinking: live.thinking,
-                tools: live.tools,
-                attachments: [],
-                createdAt: new Date().toISOString(),
-              },
-            ]
-          : [];
+        const stored: MessageDTO[] =
+          event.kind === 'done' && event.message !== undefined
+            ? [event.message]
+            : answered
+              ? [
+                  {
+                    id: messageId,
+                    chatId,
+                    role: 'assistant',
+                    content: live.content,
+                    thinking: live.thinking,
+                    tools: live.tools,
+                    attachments: [],
+                    createdAt: new Date().toISOString(),
+                  },
+                ]
+              : [];
         if (event.kind === 'error') {
           stored.push(
             event.message ?? {
