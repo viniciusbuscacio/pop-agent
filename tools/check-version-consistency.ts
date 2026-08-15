@@ -65,11 +65,13 @@ export function versionConsistencyErrors(root: string): string[] {
     errors.push(`cli/src/version.ts VERSION is ${JSON.stringify(cliVersion)}; expected ${version}`);
   }
 
+  // Packed artifacts are immutable release snapshots and may trail the server.
+  // Their own versions stay valid; a source release must not relabel an old tgz.
   const packedCliManifest = join(root, 'cli/pack/package.json');
   if (existsSync(packedCliManifest)) {
     const packed = readJson<PackageJson>(root, 'cli/pack/package.json', errors);
-    if (packed !== undefined && packed.version !== version) {
-      errors.push(`cli/pack/package.json version is ${JSON.stringify(packed.version)}; expected ${version}`);
+    if (packed !== undefined && !semanticVersion.test(packed.version ?? '')) {
+      errors.push(`cli/pack/package.json version is ${JSON.stringify(packed.version)}; expected X.Y.Z`);
     }
   }
 
@@ -81,12 +83,12 @@ export function versionConsistencyErrors(root: string): string[] {
     }
   }
 
-  checkDesktopRelease(root, 'desktop/pack/release.json', `pop-desktop-${version}-darwin-arm64.zip`, version, errors);
+  checkDesktopRelease(root, 'desktop/pack/release.json', 'pop-desktop-', '-darwin-arm64.zip', errors);
   checkDesktopRelease(
     root,
     'desktop/pack/setup-release.json',
-    `pop-desktop-setup-${version}-darwin-arm64.dmg`,
-    version,
+    'pop-desktop-setup-',
+    '-darwin-arm64.dmg',
     errors,
   );
 
@@ -96,16 +98,18 @@ export function versionConsistencyErrors(root: string): string[] {
 function checkDesktopRelease(
   root: string,
   relative: string,
-  expectedFile: string,
-  version: string,
+  filePrefix: string,
+  fileSuffix: string,
   errors: string[],
 ): void {
   if (!existsSync(join(root, relative))) return;
   const release = readJson<DesktopRelease>(root, relative, errors);
   if (release === undefined) return;
-  if (release.version !== version) {
-    errors.push(`${relative} version is ${JSON.stringify(release.version)}; expected ${version}`);
+  if (!semanticVersion.test(release.version ?? '')) {
+    errors.push(`${relative} version is ${JSON.stringify(release.version)}; expected X.Y.Z`);
+    return;
   }
+  const expectedFile = `${filePrefix}${release.version}${fileSuffix}`;
   if (release.file !== expectedFile) {
     errors.push(`${relative} file is ${JSON.stringify(release.file)}; expected ${expectedFile}`);
   }

@@ -40,7 +40,7 @@ describe('global version consistency', () => {
     expect(versionConsistencyErrors(sourceRoot)).toEqual([]);
   });
 
-  it('reports package, lockfile, CLI and desktop release drift together', () => {
+  it('reports source drift and internally inconsistent immutable artifacts together', () => {
     const target = fixture();
     const cliPath = join(target, 'cli/src/version.ts');
     writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace('0.2.28', '0.2.9'));
@@ -63,12 +63,12 @@ describe('global version consistency', () => {
     mkdirSync(join(target, 'desktop/pack'), { recursive: true });
     writeFileSync(
       join(target, 'desktop/pack/release.json'),
-      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-0.2.7-darwin-arm64.zip' }),
+      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-0.2.6-darwin-arm64.zip' }),
       { flag: 'w' },
     );
     writeFileSync(
       join(target, 'desktop/pack/setup-release.json'),
-      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-setup-0.2.7-darwin-arm64.dmg' }),
+      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-setup-0.2.6-darwin-arm64.dmg' }),
       { flag: 'w' },
     );
 
@@ -77,10 +77,8 @@ describe('global version consistency', () => {
       'package-lock.json packages["cli"] version is "0.2.9"; expected 0.2.28',
       'cli/src/version.ts VERSION is "0.2.9"; expected 0.2.28',
       'desktop/native/VERSION is "0.2.8"; expected 0.2.28',
-      'desktop/pack/release.json version is "0.2.7"; expected 0.2.28',
-      'desktop/pack/release.json file is "pop-desktop-0.2.7-darwin-arm64.zip"; expected pop-desktop-0.2.28-darwin-arm64.zip',
-      'desktop/pack/setup-release.json version is "0.2.7"; expected 0.2.28',
-      'desktop/pack/setup-release.json file is "pop-desktop-setup-0.2.7-darwin-arm64.dmg"; expected pop-desktop-setup-0.2.28-darwin-arm64.dmg',
+      'desktop/pack/release.json file is "pop-desktop-0.2.6-darwin-arm64.zip"; expected pop-desktop-0.2.7-darwin-arm64.zip',
+      'desktop/pack/setup-release.json file is "pop-desktop-setup-0.2.6-darwin-arm64.dmg"; expected pop-desktop-setup-0.2.7-darwin-arm64.dmg',
     ]));
   });
 });
