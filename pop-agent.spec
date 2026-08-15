@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.93 — 2026-08-14.
+Version 1.94 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -152,9 +152,19 @@ domain / application / dto / infrastructure / appcore → interface+main):
   `SessionManager.open(path)` with the path stored in
   `chats.pi_session_id`. Smoke tests use `SessionManager.inMemory()`.
 - **Tools**: read, bash, edit, write — all enabled, full power ("yolo
-  mode"). No permission prompts. The only gate is the taint rule (§10).
+  mode"). No permission prompts. The taint rule (§10) remains the safety floor.
   Pop Agent's own capabilities (memory, notes, web, skills) are registered as pi
   custom tools via `defineTool` (typebox schemas).
+- **Plan Mode is a per-message read-only policy, implemented through pi rather
+  than simulated in prose.** Before the model turn, Pop calls pi's
+  `setActiveToolsByName()` with a fail-closed allowlist: `read`, `grep`, `find`,
+  `ls`, Pop's explicit read tools, `local_read` when attached, and MCP tools
+  whose standard `annotations.readOnlyHint` is exactly `true`. `bash`, all
+  write/edit/delete tools, unannotated MCP tools and unknown future tools are
+  absent. The server also prepends an authoritative `[PLAN MODE ACTIVE]`
+  runtime note telling the model to investigate and return a plan, never make
+  or claim changes. A mode change is a durable FIFO barrier: steering may share
+  a live pi loop only when local connection and execution mode both match.
 - **Concurrency**: multiple chats run in parallel. Cap configurable,
   default 20; excess queues with visible status.
   **One run per chat** on top of that ceiling — a second message to a busy
@@ -628,6 +638,10 @@ LLM) over everything from outside — web, files, notes, tool output:
   YOLO). Every refusal is logged (`onFailure` code `turn_tainted`), so the
   trail survives. Only the exfil/secret/destruction shapes are gated —
   gating every command would cripple ordinary tainted work.
+- Plan Mode is independent defense-in-depth, not a taint verdict: its reduced
+  pi tool catalogue applies from the start of the turn even when every input is
+  trusted. MCP `readOnlyHint` is the configured server's advisory contract;
+  absence is denial, and MCP output remains untrusted/taintable as usual.
 
 ## 11. Notes (`infrastructure/notes/`)
 
@@ -700,6 +714,11 @@ cannot send an Authorization header, and a session token in a query string
 ends up in access logs, proxy traces and browser history. So
 `POST /v1/events/ticket` (authenticated) returns a CSPRNG ticket good for
 **one connection and 30 seconds**, and `GET /v1/events?ticket=…` spends it.
+`POST /v1/chats/:id/messages` accepts optional
+`executionMode: "normal" | "plan"` (default `normal`). The mode persists on a
+queued item and is returned in its DTO; clients and rows predating 1.94 default
+to normal.
+
 A reconnect asks for a new one. The hub broadcasts every event to every
 connection — one user, several tabs — and sends a `:ka` comment every 25s so
 a proxy does not mistake an idle stream for a dead one.
@@ -737,6 +756,12 @@ events from stale runs.
   Telegram model rather than a drawer**: the list *is* the screen, and
   opening something is a route change, so the phone's back gesture means
   what the user expects.
+- The composer puts a round **P** immediately beside the model's **M**. It is
+  a per-chat, device-local sticky toggle: active styling, `aria-pressed`, a
+  read-only placeholder and an in-app state announcement make the mode visible.
+  Every send path, including voice transcription and the durable queue, carries
+  the selected execution mode to the server; the UI never tries to enforce the
+  policy itself.
 - **A server the app cannot reach is announced, not hinted** — a full-width
   bar at the top of every screen (`ui/connection-banner`), above the router
   so the failed boot's fallback to login carries it too. The dot is for
@@ -1712,6 +1737,14 @@ away from `~/Applications`, preventing parallel stale installations.
   ends both through private lifecycle pipes. The former standalone Manager is
   no longer a separate app, installer, login item or update target. The signed
   immutable macOS package and global release ship as 0.2.21.
+- 1.94 (2026-08-15): **Plan Mode is a real pi-enforced, per-message read-only
+  policy (§5, §10, §13, §14).** The composer gained a sticky P beside M; the
+  wire and durable FIFO carry `normal|plan`; mode changes form steering
+  barriers. Pi receives both a reduced active-tool catalogue and an explicit
+  runtime note. Native `read/grep/find/ls`, Pop read tools, `local_read`, and
+  MCP tools explicitly advertising `readOnlyHint: true` remain; writes, bash,
+  deletes, unknown tools and unannotated MCP capabilities fail closed.
+
 - 1.93 (2026-08-14): **PLA detects a silently lost WSS stream (§17).** An
   attached local-access client now requires inbound server traffic within its
   45-second lease, terminates a stale socket and reconnects. This prevents a

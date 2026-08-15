@@ -143,10 +143,15 @@ class ScriptedSession implements PiSession {
   readonly promptImages: (import('./pi-engine.js').PiImage[] | undefined)[] = [];
   supportsImages = false;
   readonly models: string[] = [];
+  executionMode: import('../../domain/chat/chat.js').ExecutionMode = 'normal';
   disposed = false;
   sessionFile: string | undefined = '/data/sessions/chat.jsonl';
   readonly tree = new SessionTree();
   private listener: ((event: AgentSessionEvent) => void) | undefined;
+
+  setExecutionMode(mode: import('../../domain/chat/chat.js').ExecutionMode): void {
+    this.executionMode = mode;
+  }
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void {
     this.listener = listener;
@@ -279,7 +284,12 @@ function collect(): { events: AgentEvent[]; onEvent: (event: AgentEvent) => void
 
 function run(
   onEvent: (event: AgentEvent) => void,
-  options: { model?: string; provider?: string; signal?: AbortSignal } = {},
+  options: {
+    model?: string;
+    provider?: string;
+    signal?: AbortSignal;
+    executionMode?: import('../../domain/chat/chat.js').ExecutionMode;
+  } = {},
 ): Promise<AgentRunResult> {
   return bridge.run({
     chatId: CHAT,
@@ -287,6 +297,7 @@ function run(
     model: options.model ?? '',
     ...(options.provider === undefined ? {} : { provider: options.provider }),
     attachments: [],
+    ...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
     onEvent,
     signal: options.signal ?? new AbortController().signal,
   });
@@ -937,6 +948,14 @@ describe('runtime identity', () => {
     await run(collect().onEvent);
 
     expect(engine.sessions[0]?.prompts[0] ?? '').toContain('the configured default');
+  });
+
+  it('switches pi to read-only tools and tells the model when Plan Mode is active', async () => {
+    await run(collect().onEvent, { executionMode: 'plan' });
+
+    expect(engine.sessions[0]?.executionMode).toBe('plan');
+    expect(engine.sessions[0]?.prompts[0] ?? '').toContain('PLAN MODE ACTIVE');
+    expect(engine.sessions[0]?.prompts[0] ?? '').toContain('strictly read-only');
   });
 });
 

@@ -187,6 +187,7 @@ function toWireQueuedMessage(message: import('../../application/ports/queued-mes
     chatId: message.chatId,
     text: message.text,
     deliveryMode: message.deliveryMode,
+    executionMode: message.executionMode,
     attachments: message.attachments,
     filePaths: message.filePaths,
     createdAt: message.createdAt,

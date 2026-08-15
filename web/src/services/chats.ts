@@ -2,6 +2,7 @@ import type {
   ArchiveOtherChatsResponse,
   AttachmentDTO,
   ChatDTO,
+  ExecutionMode,
   ChatListResponse,
   ConfirmResponse,
   DeleteOtherChatsResponse,
@@ -62,12 +63,14 @@ export const chatsService = {
     attachments: AttachmentDTO[] = [],
     filePaths: string[] = [],
     delivery: MessageDelivery = 'steer',
+    executionMode: ExecutionMode = 'normal',
   ): Promise<SendMessageResponse> {
     return apiRequest<SendMessageResponse>(`/chats/${id}/messages`, {
       method: 'POST',
       body: {
         text,
         ...(delivery === 'steer' ? {} : { delivery }),
+        ...(executionMode === 'normal' ? {} : { executionMode }),
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(filePaths.length > 0 ? { filePaths } : {}),
       },

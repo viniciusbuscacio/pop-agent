@@ -1,4 +1,4 @@
-import type { Attachment, MessageClient } from '../../domain/chat/chat.js';
+import type { Attachment, ExecutionMode, MessageClient } from '../../domain/chat/chat.js';
 
 /** One item in the server-owned pending-input FIFO. */
 export type QueuedMessageDelivery = 'steer' | 'follow_up';
@@ -9,6 +9,7 @@ export interface QueuedMessage {
   text: string;
   /** steer joins the live pi loop; follow_up waits for that loop to settle. */
   deliveryMode: QueuedMessageDelivery;
+  executionMode: ExecutionMode;
   attachments: Attachment[];
   filePaths: string[];
   client?: MessageClient;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_PROMPT, autoSkillsInstruction } from './pi-engine.js';
+import { SYSTEM_PROMPT, autoSkillsInstruction, buildPlanToolNames } from './pi-engine.js';
 
 describe('Pop Agent system prompt', () => {
   it('treats a committed clean checkout as part of completing a self-change', () => {
@@ -8,6 +8,13 @@ describe('Pop Agent system prompt', () => {
     expect(SYSTEM_PROMPT).toContain('commit only the related files');
     expect(SYSTEM_PROMPT).toContain('verify the resulting git status');
     expect(SYSTEM_PROMPT).toContain('After a timeout or resumed turn, inspect the real repository state');
+  });
+
+  it('uses a fail-closed read-only tool catalogue in Plan Mode', () => {
+    const tools = buildPlanToolNames(['mcp_weather_forecast']);
+    expect(tools).toEqual(expect.arrayContaining(['read', 'grep', 'find', 'ls', 'local_read']));
+    expect(tools).toContain('mcp_weather_forecast');
+    expect(tools).not.toEqual(expect.arrayContaining(['bash', 'write', 'edit', 'notes_write', 'delete_file']));
   });
 
   it('describes explicit skill requests truthfully for both states', () => {

@@ -9,6 +9,7 @@ import type {
   ToolDefinition,
   ToolResultEvent,
 } from '@earendil-works/pi-coding-agent';
+import type { ExecutionMode } from '../../domain/chat/chat.js';
 import type {
   ModelInfo,
   ProviderAuthInteraction,
@@ -58,6 +59,9 @@ export const SYSTEM_PROMPT = [
   'Answer plainly and helpfully, in the language the user writes in.',
   'You have tools to read and write files and to run commands in your',
   'workspace; use them when they genuinely help with the request.',
+  'A server-generated [PLAN MODE ACTIVE] note at the start of a turn is authoritative:',
+  'that turn is read-only, must end with a plan rather than changes, and must never claim',
+  'that proposed work was implemented. The active pi tool catalogue enforces the boundary.',
   // The product's own vocabulary, spelled out because the agent lives inside
   // the product. Written plainly enough for a weak model -- the deliberate
   // test bench: what works on sabiazinho works on anything.
@@ -149,6 +153,8 @@ export interface PiSession {
   /** pi's native compaction (pop-agent.spec §7): summarize the old span, keep the tail. */
   compact(): Promise<void>;
   setModel(providerId: string, modelId: string): Promise<void>;
+  /** Switches pi's active tool catalogue before the next model turn. */
+  setExecutionMode(mode: ExecutionMode): void;
   /** Sets (or clears) the guard pi consults around each tool call. */
   setGuard(guard: ToolGuard | undefined): void;
   dispose(): void;
@@ -269,6 +275,8 @@ export interface SdkPiEngineOptions {
   autoSkillsEnabled?: () => boolean;
   /** MCP tools are built per session so enabled servers and capabilities stay current. */
   mcpTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool, chatId: string) => ToolDefinition[];
+  /** MCP tools whose server explicitly advertised annotations.readOnlyHint=true. */
+  planReadOnlyMcpTools?: () => string[];
   /**
    * The local tool set (docs/cli.md, Whose local access): pi's own tools built
    * again with remote operations, pointed at the terminal that sent this
@@ -279,6 +287,29 @@ export interface SdkPiEngineOptions {
     sdk: typeof import('@earendil-works/pi-coding-agent'),
     localConnectionId: string | undefined,
   ) => ToolDefinition[];
+}
+
+/** The exact allowlist pi receives for a Plan Mode turn. */
+export function buildPlanToolNames(readOnlyMcpTools: readonly string[] = []): string[] {
+  return [...new Set([
+    'read',
+    'grep',
+    'find',
+    'ls',
+    'notes_list',
+    'notes_read',
+    'notes_search',
+    'memory_search',
+    'memory_open',
+    'memory_recent',
+    'memory_user_read',
+    'files_search',
+    'list_scheduled_tasks',
+    'skills_list',
+    'web_fetch',
+    'local_read',
+    ...readOnlyMcpTools,
+  ])];
 }
 
 /**
@@ -439,14 +470,21 @@ export class SdkPiEngine implements PiEngine {
     // turn enters the transcript before the next model call.
     session.setSteeringMode('all');
 
-    return new SdkPiSession(session, runtime, guardSlot, model.input.includes('image'));
+    return new SdkPiSession(
+      session,
+      runtime,
+      guardSlot,
+      session.getActiveToolNames(),
+      this.planToolNames(),
+      model.input.includes('image'),
+    );
   }
 
-  /**
-   * The last handful of conversations, as an untrusted-data block for the
-   * system prompt (pop-agent.spec §7.1): titles and summaries only, so the agent
-   * can offer "shall I open our chat about X?" and reach it with memory_open.
-   */
+  /** The fail-closed tool catalogue used while a turn is in Plan Mode. */
+  private planToolNames(): string[] {
+    return buildPlanToolNames(this.options.planReadOnlyMcpTools?.() ?? []);
+  }
+
   /**
    * A resumed session sees only a slice of the conversation (pop-agent.spec §7):
    * the continuity note says the real numbers and kills the classic
@@ -470,6 +508,9 @@ export class SdkPiEngine implements PiEngine {
     ];
   }
 
+  /**
+   * Recent conversation names and summaries, as untrusted data in the system prompt.
+   */
   private recentChatsCatalog(): string[] | undefined {
     const memory = this.options.memory;
     if (memory === undefined) return undefined;
@@ -906,8 +947,14 @@ class SdkPiSession implements PiSession {
     private readonly session: AgentSession,
     private readonly runtime: ModelRuntime,
     private readonly guardSlot: { current: ToolGuard | undefined },
+    private readonly normalToolNames: string[],
+    private readonly planToolNames: string[],
     public supportsImages: boolean = false,
   ) {}
+
+  setExecutionMode(mode: ExecutionMode): void {
+    this.session.setActiveToolsByName(mode === 'plan' ? this.planToolNames : this.normalToolNames);
+  }
 
   setGuard(guard: ToolGuard | undefined): void {
     this.guardSlot.current = guard;

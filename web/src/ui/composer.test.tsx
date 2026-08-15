@@ -65,7 +65,21 @@ describe('pending message composition', () => {
     fireEvent.change(area, { target: { value: 'another direction' } });
     fireEvent.click(screen.getByTestId('composer-send'));
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith('another direction', [], [], 'steer'));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('another direction', [], [], 'steer', 'normal'));
+  });
+
+  it('sends Plan Mode through the message contract and remembers it for the chat', async () => {
+    const { onSend } = renderComposer();
+    fireEvent.click(screen.getByTestId('plan-mode'));
+    expect(screen.getByTestId('plan-mode').getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('pop-agent.plan.chat-1')).toBe('true');
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'inspect this' } });
+    fireEvent.click(screen.getByTestId('composer-send'));
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith('inspect this', [], [], 'steer', 'plan'),
+    );
   });
 
   it('edits the pending item identified by the request', async () => {

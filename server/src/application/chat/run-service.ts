@@ -1,5 +1,6 @@
 import {
   type Attachment,
+  type ExecutionMode,
   type Message,
   type MessageClient,
   type ToolRecord,
@@ -63,6 +64,8 @@ export interface StartRunOptions {
    * later does not reach into a run already in flight.
    */
   localConnectionId?: string;
+  /** Defaults to normal; fixed for the whole concrete pi run. */
+  executionMode?: ExecutionMode;
 }
 
 export type StartRunResult =
@@ -162,6 +165,7 @@ interface PendingRun {
   notify: boolean;
   /** The terminal whose local connection this run has, if its message named one. */
   localConnectionId: string | undefined;
+  executionMode: ExecutionMode;
   /** Controls the concrete bridge attempt currently using this run. */
   control: AgentRunControl | undefined;
   /** Durable steering inputs already offered to pi, keyed by queue id. */
@@ -183,6 +187,7 @@ export interface SteeringInput {
   attachments: Attachment[];
   client?: MessageClient;
   localConnectionId?: string;
+  executionMode?: ExecutionMode;
 }
 
 /** The run in flight for a chat, as the routes hand it to a mounting client. */
@@ -335,6 +340,7 @@ export class RunService {
       controller: new AbortController(),
       notify: options.notify ?? true,
       localConnectionId: options.localConnectionId,
+      executionMode: options.executionMode ?? 'normal',
       control: undefined,
       steering: new Map(),
       started: false,
@@ -553,13 +559,18 @@ export class RunService {
   }
 
   /** True only when the message can safely share the live session's tools. */
-  canSteer(chatId: string, localConnectionId: string | undefined): boolean {
+  canSteer(
+    chatId: string,
+    localConnectionId: string | undefined,
+    executionMode: ExecutionMode = 'normal',
+  ): boolean {
     const runId = this.runIdByChat.get(chatId);
     const run = runId === undefined ? undefined : this.runs.get(runId);
     return (
       run !== undefined &&
       run.started &&
-      run.localConnectionId === localConnectionId
+      run.localConnectionId === localConnectionId &&
+      run.executionMode === executionMode
     );
   }
 
@@ -571,6 +582,7 @@ export class RunService {
       run === undefined ||
       !run.started ||
       run.localConnectionId !== input.localConnectionId ||
+      run.executionMode !== (input.executionMode ?? 'normal') ||
       run.control === undefined
     ) {
       return false;
@@ -695,6 +707,7 @@ export class RunService {
         model: pair.modelId,
         provider: pair.providerId,
         attachments: run.attachments,
+        executionMode: run.executionMode,
         ...(run.localConnectionId === undefined
           ? {}
           : { localConnectionId: run.localConnectionId }),

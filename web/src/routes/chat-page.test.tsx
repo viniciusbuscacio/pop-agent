@@ -238,7 +238,7 @@ describe('chat transcript', () => {
       },
     }));
     await waitFor(() => expect(scroller.scrollTop).toBe(1_000));
-    expect(send).toHaveBeenCalledWith(chat.id, 'New message', [], undefined, undefined);
+    expect(send).toHaveBeenCalledWith(chat.id, 'New message', [], undefined, undefined, undefined);
   });
 
   it('contains horizontal overflow without changing native vertical touch scrolling', async () => {

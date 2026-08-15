@@ -610,11 +610,16 @@ export interface LiveRunDTO {
 
 export type MessageDelivery = 'steer' | 'follow_up';
 
+/** Per-message execution policy. Omitted on the wire means ordinary full access. */
+export type ExecutionMode = 'normal' | 'plan';
+
 export interface QueuedMessageDTO {
   id: string;
   chatId: string;
   text: string;
   deliveryMode: MessageDelivery;
+  /** Older servers omit this; clients treat omission as normal. */
+  executionMode?: ExecutionMode;
   attachments: AttachmentDTO[];
   /** Files already in Files, kept as references until this turn starts. */
   filePaths: string[];
@@ -658,6 +663,8 @@ export interface SendMessageRequest {
   text: string;
   /** Omitted/default steers; /queue sends follow_up. */
   delivery?: MessageDelivery;
+  /** Omitted/default is normal. Plan exposes only read-only tools to pi. */
+  executionMode?: ExecutionMode;
   attachments?: AttachmentDTO[];
   /** Files already in Files, referenced by @ in the composer, by path. */
   filePaths?: string[];

@@ -61,6 +61,7 @@ const sendSchema = z
     text: z.string().min(1).max(MAX_MESSAGE_LENGTH),
     /** Default joins the live loop; follow_up is the explicit /queue command. */
     delivery: z.enum(['steer', 'follow_up']).optional(),
+    executionMode: z.enum(['normal', 'plan']).optional(),
     attachments: z
       .array(
         z
@@ -289,7 +290,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       chatId,
       parsed.data.text,
       [...(parsed.data.attachments ?? []), ...referenced],
-      origin,
+      { ...origin, executionMode: parsed.data.executionMode ?? 'normal' },
     );
     if (!result.ok) {
       if (result.reason === 'chat_not_found') return chatNotFound(c);
@@ -299,6 +300,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       const queued = deps.queuedMessages.enqueue(chatId, {
         text: parsed.data.text,
         deliveryMode: parsed.data.delivery ?? 'steer',
+        executionMode: parsed.data.executionMode ?? 'normal',
         attachments: parsed.data.attachments ?? [],
         filePaths: parsed.data.filePaths ?? [],
         ...origin,
@@ -515,6 +517,7 @@ function toQueuedMessageDto(message: QueuedMessage): QueuedMessageDTO {
     chatId: message.chatId,
     text: message.text,
     deliveryMode: message.deliveryMode,
+    executionMode: message.executionMode,
     attachments: message.attachments,
     filePaths: message.filePaths,
     createdAt: message.createdAt,

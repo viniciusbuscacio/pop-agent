@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { AttachmentDTO, MessageDelivery, QueuedMessageDTO } from '@pop-agent/shared';
+import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -53,6 +53,7 @@ export function Composer({
     attachments: AttachmentDTO[],
     filePaths?: string[],
     delivery?: MessageDelivery,
+    executionMode?: ExecutionMode,
   ) => Promise<void>;
   onUpdateQueued: (messageId: string, text: string, attachments: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   onEditingDone: () => void;
@@ -69,6 +70,7 @@ export function Composer({
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [sending, setSending] = useState(false);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>('normal');
   const [editingQueuedId, setEditingQueuedId] = useState<string | undefined>(undefined);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
@@ -98,6 +100,7 @@ export function Composer({
   const mentionsRef = useRef<{ path: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
   const storageKey = `pop-agent.draft.${chatId}`;
+  const planStorageKey = `pop-agent.plan.${chatId}`;
 
   textRef.current = text;
   attachmentsRef.current = attachments;
@@ -116,7 +119,12 @@ export function Composer({
     setSlashMode('commands');
     setNotice(undefined);
     setEditingQueuedId(undefined);
-  }, [storageKey]);
+    try {
+      setExecutionMode(localStorage.getItem(planStorageKey) === 'true' ? 'plan' : 'normal');
+    } catch {
+      setExecutionMode('normal');
+    }
+  }, [storageKey, planStorageKey]);
 
   useEffect(() => {
     if (editRequest === undefined) {
@@ -285,7 +293,13 @@ export function Composer({
       // in front of it) goes to the chat automatically (pop-agent.spec §14).
       autoSendRef.current = false;
       try {
-        await onSend(merged, attachmentsRef.current, mentionsRef.current.map((m) => m.path));
+        await onSend(
+          merged,
+          attachmentsRef.current,
+          mentionsRef.current.map((m) => m.path),
+          'steer',
+          executionMode,
+        );
       } catch {
         // The transcription succeeded; it is the send/queue that failed. Put
         // the merged words into the durable draft instead of misreporting a
@@ -383,7 +397,7 @@ export function Composer({
       if (editingQueuedId !== undefined) {
         await onUpdateQueued(editingQueuedId, outgoing.text, attachments, filePaths);
       } else {
-        await onSend(outgoing.text, attachments, filePaths, outgoing.delivery);
+        await onSend(outgoing.text, attachments, filePaths, outgoing.delivery, executionMode);
       }
       persist('');
       setAttachments([]);
@@ -590,8 +604,8 @@ export function Composer({
               updateSlash(event.target.value, event.target.selectionStart ?? event.target.value.length);
             }}
             onKeyDown={onKeyDown}
-            placeholder={t('chat.placeholder')}
-            aria-label={t('chat.placeholder')}
+            placeholder={executionMode === 'plan' ? t('chat.planPlaceholder') : t('chat.placeholder')}
+            aria-label={executionMode === 'plan' ? t('chat.planPlaceholder') : t('chat.placeholder')}
             // block (not inline-block): an inline textarea leaves baseline
             // descender space in the wrapper, and with the row's items-end the
             // buttons aligned to that phantom bottom, sitting ~7px too low.
@@ -638,6 +652,21 @@ export function Composer({
           onChange={(value) => {
             const [provider = '', model = ''] = value.split('||');
             onSetModel(model, provider);
+          }}
+        />
+
+        <PlanButton
+          enabled={executionMode === 'plan'}
+          onToggle={() => {
+            const next = executionMode === 'plan' ? 'normal' : 'plan';
+            setExecutionMode(next);
+            try {
+              if (next === 'plan') localStorage.setItem(planStorageKey, 'true');
+              else localStorage.removeItem(planStorageKey);
+            } catch {
+              // Device storage is optional; the current composer still switches.
+            }
+            notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden'));
           }}
         />
 
@@ -692,6 +721,27 @@ export function Composer({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Per-chat execution policy; the server still enforces the selected mode. */
+function PlanButton({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+  return (
+    <Pressable
+      type="button"
+      data-testid="plan-mode"
+      aria-pressed={enabled}
+      aria-label={enabled ? t('chat.planOn') : t('chat.planOff')}
+      title={enabled ? t('chat.planOn') : t('chat.planOff')}
+      onClick={onToggle}
+      className={`grid h-10 w-10 place-items-center rounded-full border text-sm font-semibold transition-colors ${
+        enabled
+          ? 'border-[var(--accent)] bg-[var(--hover-overlay)] text-[var(--accent)]'
+          : 'border-[var(--border)] text-[var(--muted)]'
+      }`}
+    >
+      <span aria-hidden="true">P</span>
+    </Pressable>
   );
 }
 

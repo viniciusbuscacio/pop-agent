@@ -36,6 +36,7 @@ function pending(id: string, deliveryMode: QueuedMessage['deliveryMode'] = 'stee
     chatId: CHAT,
     text: id,
     deliveryMode,
+    executionMode: 'normal',
     attachments: [],
     filePaths: [],
     createdAt: id,

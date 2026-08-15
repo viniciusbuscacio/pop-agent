@@ -102,6 +102,11 @@ export const en = {
 
 
   'chat.placeholder': 'Message Pop Agent…',
+  'chat.planPlaceholder': 'Plan without making changes…',
+  'chat.planOn': 'Plan mode: on',
+  'chat.planOff': 'Plan mode: off',
+  'chat.planShown': 'Plan mode enabled — read-only',
+  'chat.planHidden': 'Plan mode disabled',
   'chat.send': 'Send',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
   'chat.queue': 'Queue message',

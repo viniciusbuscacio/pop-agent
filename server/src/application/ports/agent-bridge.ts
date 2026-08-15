@@ -1,4 +1,4 @@
-import type { Attachment, ToolStatus } from '../../domain/chat/chat.js';
+import type { Attachment, ExecutionMode, ToolStatus } from '../../domain/chat/chat.js';
 
 /**
  * The only door to the agent engine (docs/agent-flow.md). pi lives behind this
@@ -44,6 +44,8 @@ export interface AgentRunRequest {
   provider?: string;
   /** Files sent with the message; the adapter decides how the model sees them. */
   attachments: Attachment[];
+  /** Plan mode removes every tool not explicitly classified as read-only. */
+  executionMode?: ExecutionMode;
   /**
    * The terminal that typed this message, when one did (docs/cli.md, Whose
    * local connections). The adapter points the `local_*` tools at it; undefined means the

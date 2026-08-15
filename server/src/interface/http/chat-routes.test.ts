@@ -351,6 +351,25 @@ describe('sending a message', () => {
     await fixture.runs.whenIdle();
   });
 
+  it('keeps Plan Mode behind a live normal turn as a tool-policy barrier', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: normal' } });
+
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'plan next', executionMode: 'plan' },
+    });
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
+      queued: true,
+      message: { text: 'plan next', executionMode: 'plan' },
+    });
+    expect(fixture.runs.canSteer(chat.id, undefined, 'plan')).toBe(false);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
   it('keeps /queue delivery waiting for the active run to finish', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });

@@ -1,4 +1,4 @@
-import type { Attachment, MessageClient } from '../../domain/chat/chat.js';
+import type { Attachment, ExecutionMode, MessageClient } from '../../domain/chat/chat.js';
 import { newQueuedMessageId } from '../../domain/ids.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -14,6 +14,7 @@ export interface QueueInput {
   text: string;
   /** Default steering; /queue explicitly chooses the old follow-up behavior. */
   deliveryMode?: QueuedMessageDelivery;
+  executionMode?: ExecutionMode;
   attachments: Attachment[];
   filePaths: string[];
   client?: MessageClient;
@@ -62,6 +63,7 @@ export class QueuedMessageService {
       chatId,
       ...input,
       deliveryMode: input.deliveryMode ?? 'steer',
+      executionMode: input.executionMode ?? 'normal',
       createdAt: now,
       updatedAt: now,
     };
@@ -82,8 +84,9 @@ export class QueuedMessageService {
     const message: QueuedMessage = {
       ...current,
       ...input,
-      // Editing changes the payload, never the delivery contract originally chosen.
+      // Editing changes the payload, never the delivery or execution contract chosen.
       deliveryMode: current.deliveryMode,
+      executionMode: current.executionMode,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
     this.deps.runs.clearSteering(chatId);
@@ -116,7 +119,7 @@ export class QueuedMessageService {
       // explicit follow-up while the current run is alive.
       if (
         queued.deliveryMode !== 'steer' ||
-        !this.deps.runs.canSteer(chatId, queued.localConnectionId)
+        !this.deps.runs.canSteer(chatId, queued.localConnectionId, queued.executionMode)
       ) {
         break;
       }
@@ -126,6 +129,7 @@ export class QueuedMessageService {
         id: queued.id,
         text: queued.text,
         attachments: [...queued.attachments, ...referenced],
+        executionMode: queued.executionMode,
         ...(queued.client === undefined ? {} : { client: queued.client }),
         ...(queued.localConnectionId === undefined
           ? {}
@@ -176,6 +180,7 @@ export class QueuedMessageService {
         ...(queued.localConnectionId === undefined
           ? {}
           : { localConnectionId: queued.localConnectionId }),
+        executionMode: queued.executionMode,
       },
     );
     if (!started.ok) {

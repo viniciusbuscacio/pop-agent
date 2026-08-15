@@ -34,6 +34,9 @@ export interface ChatSummary extends Chat {
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+/** The tool-access policy fixed for one user turn. */
+export type ExecutionMode = 'normal' | 'plan';
+
 export type ToolStatus = 'start' | 'output' | 'done' | 'error';
 
 /** What a tool call left behind, as rendered in a reloaded conversation. */

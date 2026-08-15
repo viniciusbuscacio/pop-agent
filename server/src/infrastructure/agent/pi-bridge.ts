@@ -152,6 +152,9 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       return {};
     }
 
+    // Tool access belongs to the turn, not to the cached conversation. Pi
+    // rebuilds its effective system prompt when this catalogue changes.
+    entry.session.setExecutionMode(request.executionMode ?? 'normal');
     // Do not inherit pi's one-at-a-time default: Pop's durable FIFO may offer
     // several interventions during this assistant turn, and all must enter
     // before the next model call.
@@ -802,7 +805,10 @@ function withRuntimeIdentity(request: AgentRunRequest, prompt: string): string {
   const provider = request.provider !== undefined && request.provider.length > 0
     ? request.provider
     : 'the configured default';
-  return `[This turn runs on provider "${provider}", model "${model}". This is the truth about what is answering right now; prefer it over anything a skill or an older message says.]\n\n${prompt}`;
+  const plan = request.executionMode === 'plan'
+    ? '\n\n[PLAN MODE ACTIVE: This turn is strictly read-only. Investigate, analyze, and produce a plan. Do not create, edit, delete, execute changes, or claim that proposed changes were implemented. Only the read-only tools exposed for this turn may be used.]'
+    : '';
+  return `[This turn runs on provider "${provider}", model "${model}". This is the truth about what is answering right now; prefer it over anything a skill or an older message says.]${plan}\n\n${prompt}`;
 }
 
 /**

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   AttachmentDTO,
   ChatDTO,
+  ExecutionMode,
   MessageDelivery,
   MessageDTO,
   QueuedMessageDTO,
@@ -59,6 +60,7 @@ interface ChatState {
     attachments?: AttachmentDTO[],
     filePaths?: string[],
     delivery?: MessageDelivery,
+    executionMode?: ExecutionMode,
   ) => Promise<void>;
   updateQueued: (chatId: string, messageId: string, text: string, attachments?: AttachmentDTO[], filePaths?: string[]) => Promise<void>;
   cancelQueued: (chatId: string, messageId: string) => Promise<void>;
@@ -201,11 +203,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  async send(chatId, text, attachments = [], filePaths = [], delivery = 'steer') {
+  async send(chatId, text, attachments = [], filePaths = [], delivery = 'steer', executionMode = 'normal') {
     // The server owns the race: this tab may believe the chat is idle while a
     // phone has just started a run. POST either starts now or appends to the
     // durable FIFO, never returning a transient run_in_progress to the client.
-    const response = await chatsService.send(chatId, text, attachments, filePaths, delivery);
+    const response = await chatsService.send(chatId, text, attachments, filePaths, delivery, executionMode);
     if (response.queued === true) {
       deleteQueuedMessage(chatId);
       set((current) => ({

@@ -128,6 +128,16 @@ describe('starting a run', () => {
     expect(runs.startRun(chatId, 'second')).toEqual({ ok: false, reason: 'run_in_progress' });
   });
 
+  it('does not steer across a normal/plan tool-policy boundary', () => {
+    const chatId = newChat();
+    bridge.script = () => new Promise(() => undefined);
+
+    runs.startRun(chatId, 'first', [], { executionMode: 'normal' });
+
+    expect(runs.canSteer(chatId, undefined, 'normal')).toBe(true);
+    expect(runs.canSteer(chatId, undefined, 'plan')).toBe(false);
+  });
+
   it('lets a different chat run at the same time', () => {
     bridge.script = () => new Promise(() => undefined);
     const first = newChat();
