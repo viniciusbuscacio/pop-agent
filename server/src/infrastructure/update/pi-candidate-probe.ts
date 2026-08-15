@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createServer } from 'node:http';
 
 const [root, expectedVersion] = process.argv.slice(2);
 if (root === undefined || expectedVersion === undefined) throw new Error('candidate probe arguments missing');
@@ -41,8 +42,76 @@ try {
     modelsPath: null,
     allowModelNetwork: false,
   });
-  const model = runtime.getModel('openrouter', 'moonshotai/kimi-k3');
-  if (model === undefined) throw new Error('pi candidate dropped the Pop Agent default model');
+  if (runtime.getModel('openrouter', 'moonshotai/kimi-k3') === undefined) {
+    throw new Error('pi candidate dropped the Pop Agent default model');
+  }
+
+  let requestCount = 0;
+  let toolResultReturned = false;
+  let abortRequestStarted!: () => void;
+  const abortStarted = new Promise<void>((resolve) => { abortRequestStarted = resolve; });
+  const server = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk: string) => { body += chunk; });
+    request.on('end', () => {
+      requestCount += 1;
+      if (requestCount === 2) toolResultReturned = body.includes('candidate tool ok');
+      if (requestCount === 3) {
+        abortRequestStarted();
+        return;
+      }
+      response.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      });
+      const chunks = requestCount === 1
+        ? [
+            { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_probe', type: 'function', function: { name: 'candidate_probe', arguments: '{}' } }] }, finish_reason: null }] },
+            { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+          ]
+        : [
+            { choices: [{ delta: { content: 'candidate turn ok' }, finish_reason: null }] },
+            { choices: [{ delta: {}, finish_reason: 'stop' }] },
+          ];
+      for (const chunk of chunks) response.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      response.end('data: [DONE]\n\n');
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') throw new Error('candidate fake provider did not bind');
+  const provider = 'pop-candidate-probe';
+  runtime.registerProvider(provider, {
+    name: 'Pop candidate probe',
+    baseUrl: `http://127.0.0.1:${String(address.port)}/v1`,
+    api: 'openai-completions',
+    models: [{
+      id: 'probe', name: 'probe', reasoning: false, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 32_000, maxTokens: 1_000,
+      compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' },
+    }],
+  });
+  runtime.setRuntimeApiKey(provider, 'candidate-probe-key');
+  const model = runtime.getModel(provider, 'probe');
+  if (model === undefined) throw new Error('candidate custom provider registration failed');
+  const typebox = await import(pathToFileURL(join(packageRoot, 'node_modules', 'typebox', 'build', 'index.mjs')).href) as typeof import('typebox');
+  let toolRuns = 0;
+  const candidateTool = sdk.defineTool({
+    name: 'candidate_probe',
+    label: 'Candidate probe',
+    description: 'Offline candidate validation tool',
+    parameters: typebox.Type.Object({}),
+    execute: () => {
+      toolRuns += 1;
+      return Promise.resolve({
+        content: [{ type: 'text' as const, text: 'candidate tool ok' }],
+        details: undefined,
+      });
+    },
+  });
   const { session } = await sdk.createAgentSession({
     cwd: scratch,
     agentDir: join(scratch, 'agent'),
@@ -52,9 +121,24 @@ try {
     settingsManager: sdk.SettingsManager.inMemory({
       compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
     }),
-    tools: [],
+    customTools: [candidateTool],
   });
-  await session.dispose();
+  try {
+    await session.prompt('Run the candidate probe tool.');
+    if (toolRuns !== 1 || !toolResultReturned || requestCount !== 2) {
+      throw new Error(`candidate tool/event turn contract failed: toolRuns=${String(toolRuns)} toolResult=${String(toolResultReturned)} requests=${String(requestCount)}`);
+    }
+    const pendingAbort = session.prompt('This request must be aborted.');
+    await Promise.race([
+      abortStarted,
+      new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('candidate abort request did not start')), 5_000)),
+    ]);
+    await session.abort();
+    await pendingAbort;
+  } finally {
+    await session.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

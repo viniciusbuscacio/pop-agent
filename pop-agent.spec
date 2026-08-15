@@ -1319,9 +1319,11 @@ the policy. Active and recommended are currently the same exact dependency from
 Pop installs the exact package and production dependency graph under
 `POP_AGENT_DATA_DIR/pi-runtime/`, with lifecycle scripts disabled, records npm's
 integrity, then starts a separate zero-token Node probe. The probe checks the SDK
-exports and methods Pop imports, the offline default-model catalogue and an
-in-memory session create/dispose cycle. Candidate state is durable and an
-interrupted install becomes an explicit failure on next boot. The active
+exports and methods Pop imports, the offline default-model catalogue, an
+in-memory session, custom-provider registration, one streamed fake-provider turn
+that calls and receives a custom tool, and abort of an in-flight provider request.
+Candidate state is durable and an interrupted install becomes an explicit
+failure on next boot. The active
 checkout and live sessions are never opened or modified by this path.
 
 A prepared candidate is only `ready`: no policy can load it, restart the server
@@ -1332,14 +1334,12 @@ unchanged.
 
 **Later activation phases, not delivered by candidate staging:**
 
-1. Extend the candidate gate with a complete fake-provider turn, event-shape,
-   custom-tool and abort behavior checks. Zero tokens.
-2. Drain running work, activate atomically and restart. Gate passes → version
+1. Drain running work, activate atomically and restart. Gate passes → version
    becomes last-known-good. Gate or boot failure → automatic rollback,
    automatic updates disable themselves, and the user is notified.
-3. **Probation**: a version that passes the gate stays on probation for
+2. **Probation**: a version that passes the gate stays on probation for
    24h; repeated pi bridge crashes trigger the same rollback path.
-4. A future exact-version action provides manual pin and rollback but may never
+3. A future exact-version action provides manual pin and rollback but may never
    bypass candidate validation.
 
 **Pop Agent channel** (its own repo):
