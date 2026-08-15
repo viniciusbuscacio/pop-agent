@@ -1312,7 +1312,7 @@ The durable account setting `piUpdatePolicy` has three values:
   release; this is the default for old and new settings documents;
 - `latest` — evaluate the latest stable npm release as an advanced channel.
 
-**Current delivered phase (isolated staging, no activation):** Settings →
+**Current delivered phase (isolated staging and manual activation):** Settings →
 Updates shows active, Pop-recommended and latest stable pi versions and persists
 the policy. Active and recommended are currently the same exact dependency from
 `server/package.json`. An authenticated owner can prepare the policy target:
@@ -1323,23 +1323,28 @@ exports and methods Pop imports, the offline default-model catalogue, an
 in-memory session, custom-provider registration, one streamed fake-provider turn
 that calls and receives a custom tool, and abort of an in-flight provider request.
 Candidate state is durable and an interrupted install becomes an explicit
-failure on next boot. The active
-checkout and live sessions are never opened or modified by this path.
+failure on next boot. Preparation never opens or modifies live sessions.
 
-A prepared candidate is only `ready`: no policy can load it, restart the server
-or change the active runtime in this phase. `keep-current` refuses preparation;
-`recommended` stages the release pin; `latest` refreshes npm metadata and stages
-the latest stable exact version. A failed lookup or gate leaves chat operation
-unchanged.
+A prepared candidate is `ready`. Manual activation passively waits for current
+runs and tasks, closes admission, then hands the exact validated version to a
+transient systemd supervisor outside the server cgroup. The supervisor snapshots
+pi session JSONL, atomically writes the active-runtime pointer, restarts, and
+accepts only when both HTTP health and a boot-time import stamp name the target
+version. The server strictly validates the pointer, candidate integrity and SDK
+entry before health can answer; `SdkPiEngine` then loads that isolated ESM graph.
+On failure the supervisor stops the candidate, restores both the previous pointer
+and session snapshot, restarts, and verifies the previous version. The update
+status reports every activation and rollback phase; current pi is the version
+selected at this process boot. `keep-current` refuses preparation; `recommended`
+stages the release pin; `latest` refreshes npm metadata and stages the latest
+stable exact version. A failed lookup, gate, handoff or boot never silently
+changes runtime.
 
-**Later activation phases, not delivered by candidate staging:**
+**Later phases:**
 
-1. Drain running work, activate atomically and restart. Gate passes → version
-   becomes last-known-good. Gate or boot failure → automatic rollback,
-   automatic updates disable themselves, and the user is notified.
-2. **Probation**: a version that passes the gate stays on probation for
-   24h; repeated pi bridge crashes trigger the same rollback path.
-3. A future exact-version action provides manual pin and rollback but may never
+1. **Probation**: a version that passes startup stays on probation for
+   24h; repeated pi bridge crashes trigger rollback and notify the owner.
+2. A future exact-version action provides manual pin and rollback but may never
    bypass candidate validation.
 
 **Pop Agent channel** (its own repo):

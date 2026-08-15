@@ -405,7 +405,17 @@ export interface SaveSkillRequest {
 }
 
 /** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (pop-agent.spec §15). */
-export type PiCandidatePhaseDTO = 'idle' | 'installing' | 'validating' | 'ready' | 'failed';
+export type PiCandidatePhaseDTO =
+  | 'idle'
+  | 'installing'
+  | 'validating'
+  | 'ready'
+  | 'waiting-idle'
+  | 'activating'
+  | 'active'
+  | 'rolling-back'
+  | 'rolled-back'
+  | 'failed';
 
 export interface PiCandidateStatusDTO {
   phase: PiCandidatePhaseDTO;
@@ -458,12 +468,20 @@ export type DeploymentRequestResponse =
 
 export type DeploymentCancelResponse = { ok: true } | { ok: false; reason: 'not_waiting' };
 
-/** `POST /v1/update/pi/prepare` — stage and validate, never activate, the policy target. */
+/** `POST /v1/update/pi/prepare` — stage and validate the policy target. */
 export type PiCandidatePrepareResponse =
   | { ok: true; candidate: PiCandidateStatusDTO }
   | {
       ok: false;
       reason: 'policy_keeps_current' | 'target_unavailable' | 'already_running';
+    };
+
+/** `POST /v1/update/pi/activate` — drain and externally activate a ready candidate. */
+export type PiCandidateActivateResponse =
+  | { ok: true; candidate: PiCandidateStatusDTO }
+  | {
+      ok: false;
+      reason: 'candidate_not_ready' | 'already_current' | 'already_scheduled';
     };
 
 /** Manager-only metadata for the signed Pop Desktop host package. */

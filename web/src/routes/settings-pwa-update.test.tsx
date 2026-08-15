@@ -12,10 +12,11 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const { updateStatus, writeSettings, preparePiCandidate } = vi.hoisted(() => ({
+const { updateStatus, writeSettings, preparePiCandidate, activatePiCandidate } = vi.hoisted(() => ({
   updateStatus: vi.fn(),
   writeSettings: vi.fn(),
   preparePiCandidate: vi.fn(),
+  activatePiCandidate: vi.fn(),
 }));
 
 const SETTINGS: SettingsDTO = {
@@ -38,6 +39,7 @@ vi.mock('../services/settings', () => ({
     write: (settings: SettingsDTO) => writeSettings(settings) as Promise<SettingsDTO>,
     updateStatus: () => updateStatus() as Promise<UpdateStatusResponse | undefined>,
     preparePiCandidate: () => preparePiCandidate() as Promise<unknown>,
+    activatePiCandidate: () => activatePiCandidate() as Promise<unknown>,
   },
 }));
 
@@ -50,6 +52,10 @@ beforeEach(() => {
   preparePiCandidate.mockReset().mockResolvedValue({
     ok: true,
     candidate: { phase: 'installing', version: '0.84.1' },
+  });
+  activatePiCandidate.mockReset().mockResolvedValue({
+    ok: true,
+    candidate: { phase: 'waiting-idle', version: '0.85.0' },
   });
 });
 
@@ -105,7 +111,7 @@ describe('Settings PWA update action', () => {
     await screen.findByText('Pop Agent 0.3.0 is available.');
   });
 
-  it('shows pi versions and persists the selected policy without activating a runtime', async () => {
+  it('shows pi versions, persists the policy, and prepares a runtime', async () => {
     updateStatus.mockResolvedValue({
       popAgent: { current: '0.2.30', latest: '0.2.30' },
       pi: { current: '0.84.1', recommended: '0.84.1', latest: '0.85.0' },
@@ -125,9 +131,27 @@ describe('Settings PWA update action', () => {
     await waitFor(() =>
       expect(writeSettings).toHaveBeenCalledWith({ ...SETTINGS, piUpdatePolicy: 'latest' }),
     );
-    expect(screen.getByText(/Candidates are installed and validated in isolation/)).toBeTruthy();
+    expect(screen.getByText(/Candidates are validated in isolation/)).toBeTruthy();
 
     await user.click(screen.getByTestId('update-pi-prepare'));
     await waitFor(() => expect(preparePiCandidate).toHaveBeenCalledOnce());
+  });
+
+  it('offers manual activation only for a validated ready candidate', async () => {
+    updateStatus.mockResolvedValue({
+      popAgent: { current: '0.2.30', latest: '0.2.30' },
+      pi: {
+        current: '0.84.1', recommended: '0.85.0', latest: '0.85.0',
+        candidate: { phase: 'ready', version: '0.85.0', integrity: 'sha512-x' },
+      },
+      node: 'v22.19.0', environment: [], updateCommand: 'update',
+    } satisfies UpdateStatusResponse);
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(await screen.findByText('Advanced'));
+    await user.click(await screen.findByTestId('update-pi-activate'));
+    await waitFor(() => expect(activatePiCandidate).toHaveBeenCalledOnce());
+    expect(await screen.findByText(/Waiting for active work to finish/)).toBeTruthy();
   });
 });

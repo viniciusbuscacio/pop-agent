@@ -28,6 +28,15 @@ describe('NpmUpdateChecker', () => {
     expect(status.updateCommand).toContain('npm run gate');
   });
 
+  it('reports an activated isolated pi separately from the Pop-recommended pin', async () => {
+    const checker = new NpmUpdateChecker(deps({ activePiVersion: '0.84.0' }));
+
+    expect((await checker.status()).pi).toMatchObject({
+      current: '0.84.0',
+      recommended: '0.83.0',
+    });
+  });
+
   it('reports the latest Pop Agent tag from the origin', async () => {
     const checker = new NpmUpdateChecker(deps({ fetchLatestTag: vi.fn().mockResolvedValue('0.3.0') }));
 

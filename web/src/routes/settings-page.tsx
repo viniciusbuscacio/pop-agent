@@ -1381,6 +1381,7 @@ function UpdatesSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [preparingPi, setPreparingPi] = useState(false);
+  const [activatingPi, setActivatingPi] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
   const [appSettings, setAppSettings] = useState<SettingsDTO | undefined>(undefined);
 
@@ -1418,7 +1419,10 @@ function UpdatesSection() {
     deployment?.phase === 'rolling-back';
   const piCandidateBusy =
     update?.pi.candidate?.phase === 'installing' ||
-    update?.pi.candidate?.phase === 'validating';
+    update?.pi.candidate?.phase === 'validating' ||
+    update?.pi.candidate?.phase === 'waiting-idle' ||
+    update?.pi.candidate?.phase === 'activating' ||
+    update?.pi.candidate?.phase === 'rolling-back';
 
   useEffect(() => {
     if (!deploymentBusy && !piCandidateBusy) return;
@@ -1450,6 +1454,25 @@ function UpdatesSection() {
       setRefreshNote(t('settings.updates.piPrepareFailed'));
     } finally {
       setPreparingPi(false);
+    }
+  }
+
+  async function activatePiCandidate(): Promise<void> {
+    setActivatingPi(true);
+    setRefreshNote(undefined);
+    try {
+      const result = await settingsService.activatePiCandidate();
+      if (result.ok) {
+        setUpdate((current) =>
+          current === undefined
+            ? current
+            : { ...current, pi: { ...current.pi, candidate: result.candidate } },
+        );
+      }
+    } catch {
+      setRefreshNote(t('settings.updates.piActivateFailed'));
+    } finally {
+      setActivatingPi(false);
     }
   }
 
@@ -1646,22 +1669,35 @@ function UpdatesSection() {
                 {update.pi.candidate.error === undefined ? '' : ` ${update.pi.candidate.error}`}
               </p>
             )}
-            <div>
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 data-testid="update-pi-prepare"
                 disabled={
                   preparingPi ||
+                  activatingPi ||
                   piCandidateBusy ||
                   appSettings?.piUpdatePolicy === 'keep-current'
                 }
                 onClick={() => void preparePiCandidate()}
               >
-                {preparingPi || piCandidateBusy
+                {preparingPi || update?.pi.candidate?.phase === 'installing' || update?.pi.candidate?.phase === 'validating'
                   ? t('settings.updates.piPreparing')
                   : t('settings.updates.piPrepare')}
               </Button>
+              {update?.pi.candidate?.phase === 'ready' ? (
+                <Button
+                  type="button"
+                  data-testid="update-pi-activate"
+                  disabled={activatingPi}
+                  onClick={() => void activatePiCandidate()}
+                >
+                  {activatingPi
+                    ? t('settings.updates.piActivating')
+                    : t('settings.updates.piActivate')}
+                </Button>
+              ) : null}
             </div>
             <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
             {(update?.environment ?? []).map((tool) => (

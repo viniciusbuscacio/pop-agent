@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
+import { PiActivationService } from '../../application/update/pi-activation-service.js';
 import { createUpdateRoutes } from './update-routes.js';
 
 function routes() {
@@ -25,6 +26,17 @@ function routes() {
     waitForIdle: () => new Promise<void>(() => undefined),
     now: () => '2026-08-09T00:00:00.000Z',
   });
+  let candidate: import('../../application/ports/pi-candidate.js').PiCandidateStatus = {
+    phase: 'ready', version: '0.85.0', integrity: 'sha512-x',
+  };
+  const piActivation = new PiActivationService({
+    activeVersion: '0.84.1',
+    state: { read: () => candidate, write: (next) => { candidate = next; } },
+    supervisor: { start: vi.fn() },
+    pauseTasks: vi.fn(), resumeTasks: vi.fn(), quiesceRuns: vi.fn(), resumeRuns: vi.fn(),
+    waitForIdle: () => new Promise<void>(() => undefined),
+    now: () => '2026-08-09T00:00:00.000Z',
+  });
   return createUpdateRoutes({
     updates: {
       status: () =>
@@ -37,6 +49,7 @@ function routes() {
         }),
     },
     deployment,
+    piActivation,
   });
 }
 
@@ -52,6 +65,16 @@ describe('update routes', () => {
         pending: true,
         phase: 'pending',
       },
+    });
+  });
+
+  it('accepts a ready pi candidate activation without restarting inline', async () => {
+    const response = await routes().request('/update/pi/activate', { method: 'POST' });
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      candidate: { phase: 'waiting-idle', version: '0.85.0' },
     });
   });
 

@@ -20,6 +20,8 @@ const UPDATE_COMMAND = 'cd ~/dev/pop-agent && git pull && npm ci && npm run gate
 
 export interface NpmUpdateCheckerDeps {
   versions: Versions;
+  /** Runtime selected at this process boot; defaults to the bundled recommendation. */
+  activePiVersion?: string;
   now: () => number;
   /** Injectable so tests do not hit the network. */
   fetchLatest?: (pkg: string) => Promise<string | undefined>;
@@ -43,10 +45,8 @@ export class NpmUpdateChecker implements UpdateChecker {
       this.envCache = undefined;
     }
     return {
-      // Phase 1 has no independently installed runtime yet, so the active and
-      // Pop-recommended versions are the exact dependency pinned by this release.
       pi: {
-        current: this.deps.versions.piVersion,
+        current: this.deps.activePiVersion ?? this.deps.versions.piVersion,
         recommended: this.deps.versions.piVersion,
         latest: await this.piLatest(),
       },

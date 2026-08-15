@@ -2,12 +2,14 @@ import { Hono } from 'hono';
 import type {
   DeploymentCancelResponse,
   DeploymentRequestResponse,
+  PiCandidateActivateResponse,
   PiCandidatePrepareResponse,
   UpdateStatusResponse,
 } from '@pop-agent/shared';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
 import type { PiCandidateService } from '../../application/update/pi-candidate-service.js';
+import type { PiActivationService } from '../../application/update/pi-activation-service.js';
 
 /**
  * Update status and safe activation (pop-agent.spec §15). The running process
@@ -18,6 +20,7 @@ export interface UpdateRoutesDeps {
   updates: UpdateChecker;
   deployment?: DeploymentCoordinator;
   piCandidates?: PiCandidateService;
+  piActivation?: PiActivationService;
 }
 
 export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
@@ -52,6 +55,15 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
     const result = await deps.piCandidates.prepare();
     if (!result.ok) return c.json(result satisfies PiCandidatePrepareResponse, 409);
     return c.json({ ok: true, candidate: result.status } satisfies PiCandidatePrepareResponse, 202);
+  });
+
+  routes.post('/update/pi/activate', (c) => {
+    if (deps.piActivation === undefined) {
+      return c.json({ ok: false, reason: 'candidate_not_ready' } satisfies PiCandidateActivateResponse, 503);
+    }
+    const result = deps.piActivation.request();
+    if (!result.ok) return c.json(result satisfies PiCandidateActivateResponse, 409);
+    return c.json({ ok: true, candidate: result.status } satisfies PiCandidateActivateResponse, 202);
   });
 
   routes.post('/update/restart-when-idle', (c) => {

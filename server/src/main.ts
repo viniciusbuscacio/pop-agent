@@ -26,6 +26,7 @@ import { TaskService } from './application/tasks/task-service.js';
 import { DeploymentCoordinator } from './application/update/deployment-coordinator.js';
 import { AutomaticDeploymentService } from './application/update/automatic-deployment.js';
 import { PiCandidateService } from './application/update/pi-candidate-service.js';
+import { PiActivationService } from './application/update/pi-activation-service.js';
 import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
@@ -72,6 +73,8 @@ import {
   JsonPiCandidateStateStore,
   NpmPiCandidateInstaller,
 } from './infrastructure/update/pi-candidate.js';
+import { DetachedPiActivationSupervisor } from './infrastructure/update/pi-activation.js';
+import { resolveActivePiRuntime, validateAndStampPiRuntime } from './infrastructure/update/pi-runtime.js';
 import {
   DetachedDeploymentSupervisor,
   GitDeploymentInspector,
@@ -102,6 +105,9 @@ const deploymentSupervisorScript = fileURLToPath(
 const piCandidateProbeScript = fileURLToPath(
   new URL('./infrastructure/update/pi-candidate-probe.js', import.meta.url),
 );
+const piActivationSupervisorScript = fileURLToPath(
+  new URL('./infrastructure/update/pi-activation.js', import.meta.url),
+);
 
 // Composition root: the one place that knows every layer (pop-agent.spec §3).
 const context = bootstrap();
@@ -118,6 +124,12 @@ const auth = new AuthService({
 const agent = process.env['POP_AGENT_ENGINE'] ?? 'pi';
 if (agent !== 'fake' && agent !== 'pi') {
   throw new Error(`POP_AGENT_ENGINE must be "fake" or "pi", got "${agent}"`);
+}
+const versions = readVersions();
+const piRuntimeRoot = join(context.dataDir, 'pi-runtime');
+const activePiRuntime = resolveActivePiRuntime(piRuntimeRoot, versions.piVersion);
+if (agent === 'pi') {
+  await validateAndStampPiRuntime(activePiRuntime, join(piRuntimeRoot, 'boot.json'));
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
@@ -262,6 +274,7 @@ function piBridge(): PiAgentBridge {
     // + semantic) and returns their bodies for the bridge to prepend (§8).
     skillsFor: (message) => skillRouter.route(message),
     engine: new SdkPiEngine({
+      ...(activePiRuntime.sdkEntry === undefined ? {} : { sdkEntry: activePiRuntime.sdkEntry }),
       workspace,
       sessionsDir: join(context.dataDir, 'sessions'),
       // pi's own config, credentials and catalog cache, all inside Pop Agent's data
@@ -345,18 +358,19 @@ const hub = new SseHub();
 // subject is the JWT's contact URI, which Apple validates -- see the service.
 const push = new WebPushService(context.push, context.secrets, process.env['POP_AGENT_PUSH_SUBJECT']);
 const updates = new NpmUpdateChecker({
-  versions: readVersions(),
+  versions,
+  activePiVersion: activePiRuntime.version,
   now: () => systemClock.now(),
   environment: readEnvironmentVersions,
 });
 const piCandidateState = new JsonPiCandidateStateStore(
-  join(context.dataDir, 'pi-runtime', 'candidate-state.json'),
+  join(piRuntimeRoot, 'candidate-state.json'),
 );
 const piCandidates = new PiCandidateService({
   settings,
   updates,
   installer: new NpmPiCandidateInstaller({
-    root: join(context.dataDir, 'pi-runtime'),
+    root: piRuntimeRoot,
     probeScript: piCandidateProbeScript,
   }),
   state: piCandidateState,
@@ -559,6 +573,29 @@ const deployment = new DeploymentCoordinator({
   },
   now: () => new Date(systemClock.now()).toISOString(),
 });
+const piActivation = new PiActivationService({
+  activeVersion: activePiRuntime.version,
+  state: piCandidateState,
+  supervisor: new DetachedPiActivationSupervisor({
+    runtimeRoot: piRuntimeRoot,
+    statePath: piCandidateState.path,
+    activePath: join(piRuntimeRoot, 'active.json'),
+    bootPath: join(piRuntimeRoot, 'boot.json'),
+    sessionsDir: join(context.dataDir, 'sessions'),
+    serviceName: process.env['POP_AGENT_SERVICE_NAME'] ?? 'pop-agent-service',
+    healthUrl: `http://127.0.0.1:${String(port)}/healthz`,
+    timeoutMs: 60_000,
+    scriptPath: piActivationSupervisorScript,
+  }),
+  pauseTasks: () => taskScheduler.pauseAdmission(),
+  resumeTasks: () => taskScheduler.resumeAdmission(),
+  quiesceRuns: () => runs.beginDeploymentDrain(),
+  resumeRuns: () => runs.endDeploymentDrain(),
+  waitForIdle: async () => {
+    await Promise.all([runs.whenIdle(), taskScheduler.whenIdle()]);
+  },
+  now: () => new Date(systemClock.now()).toISOString(),
+});
 const automaticDeployment = new AutomaticDeploymentService({
   deployment,
   state: deploymentState,
@@ -632,6 +669,7 @@ const app = createApp({
   webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
   updates,
   piCandidates,
+  piActivation,
   deployment,
   backups: new TarBackupService({
     dataDir: context.dataDir,

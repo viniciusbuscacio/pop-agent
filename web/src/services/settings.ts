@@ -2,6 +2,7 @@ import type {
   AboutResponse,
   DeploymentCancelResponse,
   DeploymentRequestResponse,
+  PiCandidateActivateResponse,
   PiCandidatePrepareResponse,
   SettingsDTO,
   UpdateStatusResponse,
@@ -52,6 +53,10 @@ export const settingsService = {
 
   preparePiCandidate(): Promise<PiCandidatePrepareResponse> {
     return apiRequest<PiCandidatePrepareResponse>('/update/pi/prepare', { method: 'POST' });
+  },
+
+  activatePiCandidate(): Promise<PiCandidateActivateResponse> {
+    return apiRequest<PiCandidateActivateResponse>('/update/pi/activate', { method: 'POST' });
   },
 
   restartWhenIdle(): Promise<DeploymentRequestResponse> {

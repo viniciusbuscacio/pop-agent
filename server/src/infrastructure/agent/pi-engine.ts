@@ -210,6 +210,8 @@ export interface PiEngine {
 }
 
 export interface SdkPiEngineOptions {
+  /** Absolute ESM entry of an activated isolated pi runtime; bundled pi when omitted. */
+  sdkEntry?: string;
   /** Where the agent works: POP_AGENT_WORKSPACE (pop-agent.spec §4). */
   workspace: string;
   /** pi's own JSONL sessions, inside POP_AGENT_DATA_DIR. */
@@ -323,6 +325,7 @@ export function buildPlanToolNames(readOnlyMcpTools: readonly string[] = []): st
  */
 export class SdkPiEngine implements PiEngine {
   private runtime: Promise<ModelRuntime> | undefined;
+  private sdkModule: Promise<typeof import('@earendil-works/pi-coding-agent')> | undefined;
   /** The resolved runtime, for the sync auth question below. */
   private runtimeNow: ModelRuntime | undefined;
   private readonly appliedKeys = new Map<string, string>();
@@ -338,7 +341,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   async open(options: PiOpenOptions): Promise<PiSession> {
-    const sdk = await import('@earendil-works/pi-coding-agent');
+    const sdk = await this.sdk();
     const runtime = await this.authenticatedRuntime(options.providerId);
 
     const model = runtime.getModel(options.providerId, options.modelId);
@@ -880,8 +883,15 @@ export class SdkPiEngine implements PiEngine {
     return this.runtime;
   }
 
+  private sdk(): Promise<typeof import('@earendil-works/pi-coding-agent')> {
+    this.sdkModule ??= this.options.sdkEntry === undefined
+      ? import('@earendil-works/pi-coding-agent')
+      : import(this.options.sdkEntry) as Promise<typeof import('@earendil-works/pi-coding-agent')>;
+    return this.sdkModule;
+  }
+
   private async createRuntime(): Promise<ModelRuntime> {
-    const sdk = await import('@earendil-works/pi-coding-agent');
+    const sdk = await this.sdk();
     mkdirSync(this.options.agentDir, { recursive: true });
     return sdk.ModelRuntime.create({
       authPath: this.options.authPath,
