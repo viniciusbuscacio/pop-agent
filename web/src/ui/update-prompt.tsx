@@ -7,7 +7,7 @@ import {
   setUpdateIntervalMs,
   startUpdateChecks,
 } from '../services/pwa-update';
-import { setUpdateChecker } from '../services/update-signal';
+import { setUpdateApplier, setUpdateChecker } from '../services/update-signal';
 import { useUpdatesStore } from '../store/updates';
 
 /**
@@ -30,6 +30,7 @@ export function UpdatePrompt() {
     // is also where the rest of the app is handed a way to trigger a check --
     // pull-to-refresh asks through services/update-signal.
     setUpdateChecker(checkForUpdateNow);
+    setUpdateApplier(applyUpdate);
   }, []);
 
   useEffect(() => {

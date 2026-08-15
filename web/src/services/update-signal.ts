@@ -9,19 +9,33 @@
  * pull-to-refresh. So screens come through here, and the virtual module stays
  * behind ui/update-prompt alone, which registers the real check on mount.
  */
-type Checker = () => Promise<unknown>;
+export type UpdateCheckResult = 'update-found' | 'up-to-date' | 'unavailable' | 'error';
+type Checker = () => Promise<UpdateCheckResult>;
+type Applier = () => Promise<void>;
 
 /** Before the prompt mounts (and in tests) there is simply nothing to ask. */
-let checker: Checker = () => Promise.resolve(undefined);
+let checker: Checker = () => Promise.resolve('unavailable');
+let applier: Applier = () => Promise.resolve();
 
 export function setUpdateChecker(fn: Checker): void {
   checker = fn;
+}
+
+export function setUpdateApplier(fn: Applier): void {
+  applier = fn;
 }
 
 /**
  * Silent by design: a check that finds nothing must look like nothing
  * happened. When it does find a build, ui/update-prompt raises its own banner.
  */
-export function checkForUpdate(): Promise<unknown> {
+export function checkForUpdate(): Promise<UpdateCheckResult> {
   return checker();
+}
+
+/** The footer refresh is the explicit “make this device current” action. */
+export async function checkForAndApplyUpdate(): Promise<UpdateCheckResult> {
+  const result = await checker();
+  if (result === 'update-found') await applier();
+  return result;
 }

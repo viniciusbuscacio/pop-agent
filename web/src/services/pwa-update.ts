@@ -1,4 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
+import type { UpdateCheckResult } from './update-signal';
 
 /**
  * One service worker registration, in one place (pop-agent.spec §15).
@@ -17,8 +18,6 @@ import { registerSW } from 'virtual:pwa-register';
  * `registerSW` must run exactly once, which is why it lives here and not in a
  * component that could remount.
  */
-
-export type UpdateCheckResult = 'update-found' | 'up-to-date' | 'unavailable' | 'error';
 
 let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
 let registration: ServiceWorkerRegistration | undefined;

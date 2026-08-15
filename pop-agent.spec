@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 2.01 — 2026-08-15.
+Version 2.02 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1691,6 +1691,12 @@ away from `~/Applications`, preventing parallel stale installations.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 2.02 (2026-08-15): **v0.2.30 makes the footer refresh the device's force-update
+  control (§14, §15).** One press reloads active and archived conversations,
+  checks the service worker, and immediately activates/reloads a newer PWA when
+  one exists. When already current it remains a quiet data refresh; update
+  activation still flows through the single PWA registration owner.
 
 - 2.01 (2026-08-15): **In-app notices no longer disappear into the dark
   surface (§14).** The shared toast skin uses a restrained blue-grey notice

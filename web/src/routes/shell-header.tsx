@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
 import { useChatStore } from '../store/chat';
 import { useDismiss } from '../lib/dismiss';
+import { checkForAndApplyUpdate } from '../services/update-signal';
 
 /**
  * The app header: the wordmark and the Settings gear. The sidebar always
@@ -77,10 +78,10 @@ export function ShellFooter() {
 }
 
 /**
- * Reloads the chat lists on demand (Vinicius, 05/08). The foreground refetch
- * already heals a stale list when the app resumes; this is the manual handle
- * for every other moment -- another device just deleted or renamed something
- * and the user does not feel like backgrounding the app to find out. It spins
+ * Refreshes the device on demand (Vinicius, 05/08, 15/08): chat lists are
+ * reloaded and the service worker is checked in parallel. If a newer PWA is
+ * available, the same press activates it and reloads the page; otherwise the
+ * button remains the manual handle for cross-device list changes. It spins
  * while it works, so a fast network does not read as a dead button.
  */
 const REFRESH_SPIN_SLOT_MS = 1_000;
@@ -94,7 +95,7 @@ function RefreshButton() {
     const startedAt = performance.now();
     setBusy(true);
     try {
-      await Promise.all([loadChats(), loadArchived()]);
+      await Promise.all([loadChats(), loadArchived(), checkForAndApplyUpdate()]);
     } finally {
       // Finish on a one-second boundary instead of snapping the icon back in
       // the middle of a turn: 0.2 s => 1 turn, 1.5 s => 2, 2.1 s => 3.
