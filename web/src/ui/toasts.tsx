@@ -19,7 +19,7 @@ export function Toasts() {
 
   return (
     <div
-      className="fixed top-16 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] text-sm shadow-lg"
+      className="fixed top-16 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center rounded-lg border border-[var(--notice-border)] bg-[var(--notice-bg)] text-sm shadow-lg"
       data-testid="toasts"
       role="status"
     >

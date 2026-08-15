@@ -18,6 +18,8 @@
   --border: #333333;
   --panel-bg: #2b2b2b;
   --panel-hover: #333333;
+  --notice-bg: #263641;
+  --notice-border: #3d667d;
   --input-bg: #1b1b1b;
   --muted: #9a9a9a;
   --key-fg-dim: #d0d0d0;
@@ -43,6 +45,8 @@
   --border: #e2e2e2;
   --panel-bg: #ffffff;
   --panel-hover: #f4f4f4;
+  --notice-bg: #eaf4fa;
+  --notice-border: #8bbbd5;
   --input-bg: #ffffff;
   --muted: #757575;
   --key-fg-dim: #333333;

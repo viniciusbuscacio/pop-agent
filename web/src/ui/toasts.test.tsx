@@ -20,7 +20,10 @@ describe('actionable notices', () => {
     });
 
     render(<Toasts />);
-    expect(screen.getByRole('status').textContent).toContain('moved to Trash');
+    const notice = screen.getByRole('status');
+    expect(notice.textContent).toContain('moved to Trash');
+    expect(notice.className).toContain('border-[var(--notice-border)]');
+    expect(notice.className).toContain('bg-[var(--notice-bg)]');
 
     await userEvent.click(screen.getByTestId('toast-action'));
     expect(restore).toHaveBeenCalledOnce();
