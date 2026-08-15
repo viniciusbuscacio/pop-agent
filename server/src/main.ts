@@ -54,6 +54,7 @@ import { Argon2PasswordHasher } from './infrastructure/auth/argon2-hasher.js';
 import { bootstrap } from './infrastructure/bootstrap.js';
 import { ensureWorkspace, resolveWorkspace, ensureFilesDir, ensureWorkspaceFilesLink } from './infrastructure/config/data-dir.js';
 import { readVersions } from './infrastructure/config/versions.js';
+import { compiledServerArtifact } from './infrastructure/config/compiled-artifact.js';
 import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
 import { fetchOpenRouterCredits } from './infrastructure/providers/openrouter-credits.js';
@@ -101,11 +102,16 @@ const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
 const deploymentSupervisorScript = fileURLToPath(
   new URL('../dist/manager/update-supervisor.js', import.meta.url),
 );
-const piCandidateProbeScript = fileURLToPath(
-  new URL('./infrastructure/update/pi-candidate-probe.js', import.meta.url),
+// The live service runs main.ts through tsx while release builds run dist/main.js.
+// Both external one-shot programs are compiled artifacts: resolving through
+// ../dist reaches the same file from either location.
+const piCandidateProbeScript = compiledServerArtifact(
+  import.meta.url,
+  'infrastructure/update/pi-candidate-probe.js',
 );
-const piActivationSupervisorScript = fileURLToPath(
-  new URL('./infrastructure/update/pi-activation.js', import.meta.url),
+const piActivationSupervisorScript = compiledServerArtifact(
+  import.meta.url,
+  'infrastructure/update/pi-activation.js',
 );
 
 // Composition root: the one place that knows every layer (pop-agent.spec §3).
