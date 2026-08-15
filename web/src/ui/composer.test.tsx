@@ -63,7 +63,9 @@ describe('pending message composition', () => {
     expect(area.className).not.toContain('focus:border-[var(--accent)]');
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
-    expect(screen.getByRole('listbox', { name: 'Model' })).toBeTruthy();
+    const listbox = screen.getByRole('listbox', { name: 'Model' });
+    expect(listbox.parentElement?.className).toContain('fixed');
+    expect(listbox.parentElement?.parentElement).toBe(document.body);
 
     fireEvent.focus(area);
     expect(composer.className).toContain('overflow-x-clip');

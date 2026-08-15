@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   ButtonHTMLAttributes,
+  CSSProperties,
   HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
@@ -8,6 +9,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * The handful of primitives every screen is built from. Colours come from the
@@ -303,7 +305,10 @@ export function ModelPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [toolbarStyle, setToolbarStyle] = useState<CSSProperties>({});
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const current = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
   const filtered = options
@@ -317,12 +322,40 @@ export function ModelPicker({
   useEffect(() => {
     if (!open) return;
     function close(event: PointerEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        root.current !== null &&
+        !root.current.contains(target) &&
+        (popup.current === null || !popup.current.contains(target))
+      ) {
+        setOpen(false);
+      }
     }
     document.addEventListener('pointerdown', close);
     search.current?.focus();
     return () => document.removeEventListener('pointerdown', close);
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || layout !== 'toolbar') return;
+    function position(): void {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (rect === undefined) return;
+      const width = Math.min(288, window.innerWidth - 16);
+      setToolbarStyle({
+        bottom: window.innerHeight - rect.top + 4,
+        left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+        width,
+      });
+    }
+    position();
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    return () => {
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+    };
+  }, [layout, open]);
 
   function choose(next: string): void {
     onChange(next);
@@ -330,10 +363,56 @@ export function ModelPicker({
     setQuery('');
   }
 
+  const menu = open ? (
+    <div
+      ref={popup}
+      style={layout === 'toolbar' ? toolbarStyle : undefined}
+      className={`${
+        layout === 'toolbar'
+          ? 'fixed z-50'
+          : 'absolute top-full right-0 left-0 z-20 mt-1 w-full'
+      } rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)]`}
+    >
+      <input
+        ref={search}
+        type="search"
+        role="searchbox"
+        aria-label={placeholder}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setOpen(false);
+          if (event.key === 'Enter' && filtered[0] !== undefined) choose(filtered[0].value);
+        }}
+        placeholder={placeholder}
+        className={fieldClass('sm', 'mb-1 w-full')}
+      />
+      <div id={`${id}-listbox`} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <p className="px-2 py-2 text-xs text-[var(--muted)]">{noResults}</p>
+        ) : filtered.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="option"
+            aria-selected={option.value === value}
+            onClick={() => choose(option.value)}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)]"
+          >
+            <span className="truncate">{option.label}</span>
+            {option.value === value ? <span className="ml-auto shrink-0 text-[var(--accent)]">✓</span> : null}
+          </button>
+        ))}
+      </div>
+      {filtered.length === 50 ? <p className="px-2 pt-1 text-[10px] text-[var(--muted)]">Type to narrow results</p> : null}
+    </div>
+  ) : null;
+
   return (
     <div ref={root} className={`min-w-0 ${className}`}>
       <span id={`${id}-label`} className="sr-only">{label}</span>
       <button
+        ref={trigger}
         id={id}
         type="button"
         role="combobox"
@@ -352,48 +431,7 @@ export function ModelPicker({
       >
         {compactLabel ?? current}
       </button>
-      {open ? (
-        <div
-          className={`absolute z-20 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)] ${
-            layout === 'field'
-              ? 'top-full right-0 left-0 mt-1 w-full'
-              : 'right-0 bottom-full mb-1 w-72 max-w-[min(85vw,18rem)]'
-          }`}
-        >
-          <input
-            ref={search}
-            type="search"
-            role="searchbox"
-            aria-label={placeholder}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setOpen(false);
-              if (event.key === 'Enter' && filtered[0] !== undefined) choose(filtered[0].value);
-            }}
-            placeholder={placeholder}
-            className={fieldClass('sm', 'mb-1 w-full')}
-          />
-          <div id={`${id}-listbox`} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-2 py-2 text-xs text-[var(--muted)]">{noResults}</p>
-            ) : filtered.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                onClick={() => choose(option.value)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)]"
-              >
-                <span className="truncate">{option.label}</span>
-                {option.value === value ? <span className="ml-auto shrink-0 text-[var(--accent)]">✓</span> : null}
-              </button>
-            ))}
-          </div>
-          {filtered.length === 50 ? <p className="px-2 pt-1 text-[10px] text-[var(--muted)]">Type to narrow results</p> : null}
-        </div>
-      ) : null}
+      {menu !== null && layout === 'toolbar' ? createPortal(menu, document.body) : menu}
     </div>
   );
 }
