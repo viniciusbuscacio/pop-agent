@@ -25,6 +25,7 @@ import { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { TaskService } from './application/tasks/task-service.js';
 import { DeploymentCoordinator } from './application/update/deployment-coordinator.js';
 import { AutomaticDeploymentService } from './application/update/automatic-deployment.js';
+import { PiCandidateService } from './application/update/pi-candidate-service.js';
 import { intervalTimer } from './application/ports/timer.js';
 import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
@@ -68,6 +69,10 @@ import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
 import { isNewerVersion, NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
 import { readEnvironmentVersions } from './infrastructure/update/environment-versions.js';
 import {
+  JsonPiCandidateStateStore,
+  NpmPiCandidateInstaller,
+} from './infrastructure/update/pi-candidate.js';
+import {
   DetachedDeploymentSupervisor,
   GitDeploymentInspector,
   JsonDeploymentStateStore,
@@ -93,6 +98,9 @@ const desktopPack = fileURLToPath(new URL('../../desktop/pack', import.meta.url)
 /** Built before activation; this process only launches it as an external unit. */
 const deploymentSupervisorScript = fileURLToPath(
   new URL('../dist/manager/update-supervisor.js', import.meta.url),
+);
+const piCandidateProbeScript = fileURLToPath(
+  new URL('./infrastructure/update/pi-candidate-probe.js', import.meta.url),
 );
 
 // Composition root: the one place that knows every layer (pop-agent.spec §3).
@@ -340,6 +348,19 @@ const updates = new NpmUpdateChecker({
   versions: readVersions(),
   now: () => systemClock.now(),
   environment: readEnvironmentVersions,
+});
+const piCandidateState = new JsonPiCandidateStateStore(
+  join(context.dataDir, 'pi-runtime', 'candidate-state.json'),
+);
+const piCandidates = new PiCandidateService({
+  settings,
+  updates,
+  installer: new NpmPiCandidateInstaller({
+    root: join(context.dataDir, 'pi-runtime'),
+    probeScript: piCandidateProbeScript,
+  }),
+  state: piCandidateState,
+  now: () => new Date(systemClock.now()).toISOString(),
 });
 // The pi bridge is the only thing that can dispose a live session; the purger
 // asks it to forget a chat before deleting the chat's files (pop-agent.spec §6).
@@ -610,6 +631,7 @@ const app = createApp({
   push,
   webauthn: new WebAuthnService({ repo: context.webauthn, now: () => systemClock.now() }),
   updates,
+  piCandidates,
   deployment,
   backups: new TarBackupService({
     dataDir: context.dataDir,

@@ -12,9 +12,10 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const { updateStatus, writeSettings } = vi.hoisted(() => ({
+const { updateStatus, writeSettings, preparePiCandidate } = vi.hoisted(() => ({
   updateStatus: vi.fn(),
   writeSettings: vi.fn(),
+  preparePiCandidate: vi.fn(),
 }));
 
 const SETTINGS: SettingsDTO = {
@@ -36,6 +37,7 @@ vi.mock('../services/settings', () => ({
     read: vi.fn(() => Promise.resolve(SETTINGS)),
     write: (settings: SettingsDTO) => writeSettings(settings) as Promise<SettingsDTO>,
     updateStatus: () => updateStatus() as Promise<UpdateStatusResponse | undefined>,
+    preparePiCandidate: () => preparePiCandidate() as Promise<unknown>,
   },
 }));
 
@@ -45,6 +47,10 @@ beforeEach(() => {
   vi.mocked(applyUpdate).mockReset().mockResolvedValue(undefined);
   updateStatus.mockReset().mockResolvedValue(undefined);
   writeSettings.mockReset().mockImplementation((settings: SettingsDTO) => Promise.resolve(settings));
+  preparePiCandidate.mockReset().mockResolvedValue({
+    ok: true,
+    candidate: { phase: 'installing', version: '0.84.1' },
+  });
 });
 
 afterEach(cleanup);
@@ -119,6 +125,9 @@ describe('Settings PWA update action', () => {
     await waitFor(() =>
       expect(writeSettings).toHaveBeenCalledWith({ ...SETTINGS, piUpdatePolicy: 'latest' }),
     );
-    expect(screen.getByText(/Runtime installation and activation are not enabled yet/)).toBeTruthy();
+    expect(screen.getByText(/Candidates are installed and validated in isolation/)).toBeTruthy();
+
+    await user.click(screen.getByTestId('update-pi-prepare'));
+    await waitFor(() => expect(preparePiCandidate).toHaveBeenCalledOnce());
   });
 });

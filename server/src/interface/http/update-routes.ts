@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import type {
   DeploymentCancelResponse,
   DeploymentRequestResponse,
+  PiCandidatePrepareResponse,
   UpdateStatusResponse,
 } from '@pop-agent/shared';
 import type { UpdateChecker } from '../../application/ports/update-checker.js';
 import type { DeploymentCoordinator } from '../../application/update/deployment-coordinator.js';
+import type { PiCandidateService } from '../../application/update/pi-candidate-service.js';
 
 /**
  * Update status and safe activation (pop-agent.spec §15). The running process
@@ -15,6 +17,7 @@ import type { DeploymentCoordinator } from '../../application/update/deployment-
 export interface UpdateRoutesDeps {
   updates: UpdateChecker;
   deployment?: DeploymentCoordinator;
+  piCandidates?: PiCandidateService;
 }
 
 export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
@@ -28,6 +31,7 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
         current: status.pi.current,
         recommended: status.pi.recommended,
         ...(status.pi.latest === undefined ? {} : { latest: status.pi.latest }),
+        ...(deps.piCandidates === undefined ? {} : { candidate: deps.piCandidates.status() }),
       },
       popAgent: {
         current: status.popAgent.current,
@@ -39,6 +43,15 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
       ...(deps.deployment === undefined ? {} : { deployment: deps.deployment.status() }),
     };
     return c.json(response);
+  });
+
+  routes.post('/update/pi/prepare', async (c) => {
+    if (deps.piCandidates === undefined) {
+      return c.json({ ok: false, reason: 'target_unavailable' } satisfies PiCandidatePrepareResponse, 503);
+    }
+    const result = await deps.piCandidates.prepare();
+    if (!result.ok) return c.json(result satisfies PiCandidatePrepareResponse, 409);
+    return c.json({ ok: true, candidate: result.status } satisfies PiCandidatePrepareResponse, 202);
   });
 
   routes.post('/update/restart-when-idle', (c) => {

@@ -50,6 +50,7 @@ import { createAuthRoutes } from './auth-routes.js';
 import { createBackupRoutes } from './backup-routes.js';
 import { createPushRoutes } from './push-routes.js';
 import { createUpdateRoutes } from './update-routes.js';
+import type { PiCandidateService } from '../../application/update/pi-candidate-service.js';
 import { createVoiceRoutes } from './voice-routes.js';
 import { createWebAuthnRoutes } from './webauthn-routes.js';
 import { createChatRoutes } from './chat-routes.js';
@@ -108,6 +109,8 @@ export interface AppDeps {
   push: PushService;
   webauthn: WebAuthnGateway;
   updates: UpdateChecker;
+  /** Isolated pi candidate staging; it has no activation capability. */
+  piCandidates?: PiCandidateService;
   /** Safe hand-off from the running commit to the committed checkout on disk. */
   deployment?: DeploymentCoordinator;
   /** The sink the run service emits into; the hub is its adapter. */
@@ -214,6 +217,7 @@ export function createApp(deps: AppDeps): Hono {
         createUpdateRoutes({
           updates: deps.updates,
           ...(deps.deployment === undefined ? {} : { deployment: deps.deployment }),
+          ...(deps.piCandidates === undefined ? {} : { piCandidates: deps.piCandidates }),
         }),
       ),
       sessionGuarded(createVoiceRoutes(deps)),

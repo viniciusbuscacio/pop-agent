@@ -1380,6 +1380,7 @@ function UpdatesSection() {
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [preparingPi, setPreparingPi] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
   const [appSettings, setAppSettings] = useState<SettingsDTO | undefined>(undefined);
 
@@ -1415,12 +1416,15 @@ function UpdatesSection() {
     deployment?.phase === 'waiting-idle' ||
     deployment?.phase === 'restarting' ||
     deployment?.phase === 'rolling-back';
+  const piCandidateBusy =
+    update?.pi.candidate?.phase === 'installing' ||
+    update?.pi.candidate?.phase === 'validating';
 
   useEffect(() => {
-    if (!deploymentBusy) return;
+    if (!deploymentBusy && !piCandidateBusy) return;
     const timer = setInterval(() => void load(false), 2_000);
     return () => clearInterval(timer);
-  }, [deploymentBusy]);
+  }, [deploymentBusy, piCandidateBusy]);
 
   function saveAutomaticUpdate(patch: Partial<SettingsDTO>): void {
     if (appSettings === undefined) return;
@@ -1428,6 +1432,25 @@ function UpdatesSection() {
       .write({ ...appSettings, ...patch })
       .then(setAppSettings)
       .catch(() => undefined);
+  }
+
+  async function preparePiCandidate(): Promise<void> {
+    setPreparingPi(true);
+    setRefreshNote(undefined);
+    try {
+      const result = await settingsService.preparePiCandidate();
+      if (result.ok) {
+        setUpdate((current) =>
+          current === undefined
+            ? current
+            : { ...current, pi: { ...current.pi, candidate: result.candidate } },
+        );
+      }
+    } catch {
+      setRefreshNote(t('settings.updates.piPrepareFailed'));
+    } finally {
+      setPreparingPi(false);
+    }
   }
 
   async function restartWhenIdle(): Promise<void> {
@@ -1611,7 +1634,35 @@ function UpdatesSection() {
                 <option value="latest">{t('settings.updates.piPolicy.latest')}</option>
               </Select>
             )}
-            <p className="text-xs text-[var(--muted)]">{t('settings.updates.piPolicyPhaseOne')}</p>
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.piPolicyPhaseTwo')}</p>
+            {update?.pi.candidate === undefined || update.pi.candidate.phase === 'idle' ? null : (
+              <p
+                data-testid="update-pi-candidate-status"
+                className={update.pi.candidate.phase === 'failed' ? 'text-xs text-[var(--danger)]' : 'text-xs text-[var(--muted)]'}
+              >
+                {t(`settings.updates.piCandidate.${update.pi.candidate.phase}`, {
+                  version: update.pi.candidate.version ?? '',
+                })}
+                {update.pi.candidate.error === undefined ? '' : ` ${update.pi.candidate.error}`}
+              </p>
+            )}
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="update-pi-prepare"
+                disabled={
+                  preparingPi ||
+                  piCandidateBusy ||
+                  appSettings?.piUpdatePolicy === 'keep-current'
+                }
+                onClick={() => void preparePiCandidate()}
+              >
+                {preparingPi || piCandidateBusy
+                  ? t('settings.updates.piPreparing')
+                  : t('settings.updates.piPrepare')}
+              </Button>
+            </div>
             <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
             {(update?.environment ?? []).map((tool) => (
               <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />

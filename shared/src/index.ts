@@ -405,8 +405,18 @@ export interface SaveSkillRequest {
 }
 
 /** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (pop-agent.spec §15). */
+export type PiCandidatePhaseDTO = 'idle' | 'installing' | 'validating' | 'ready' | 'failed';
+
+export interface PiCandidateStatusDTO {
+  phase: PiCandidatePhaseDTO;
+  version?: string;
+  integrity?: string;
+  error?: string;
+  updatedAt?: string;
+}
+
 export interface UpdateStatusResponse {
-  pi: { current: string; recommended: string; latest?: string };
+  pi: { current: string; recommended: string; latest?: string; candidate?: PiCandidateStatusDTO };
   popAgent: { current: string; latest?: string };
   node: string;
   /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */
@@ -447,6 +457,14 @@ export type DeploymentRequestResponse =
     };
 
 export type DeploymentCancelResponse = { ok: true } | { ok: false; reason: 'not_waiting' };
+
+/** `POST /v1/update/pi/prepare` — stage and validate, never activate, the policy target. */
+export type PiCandidatePrepareResponse =
+  | { ok: true; candidate: PiCandidateStatusDTO }
+  | {
+      ok: false;
+      reason: 'policy_keeps_current' | 'target_unavailable' | 'already_running';
+    };
 
 /** Manager-only metadata for the signed Pop Desktop host package. */
 export interface DesktopReleaseResponse {

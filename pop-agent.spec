@@ -1312,27 +1312,34 @@ The durable account setting `piUpdatePolicy` has three values:
   release; this is the default for old and new settings documents;
 - `latest` — evaluate the latest stable npm release as an advanced channel.
 
-**Current delivered phase (visibility and policy only):** Settings → Updates
-shows active, Pop-recommended and latest stable pi versions and persists the
-policy. Active and recommended are currently the same exact dependency from
-`server/package.json`; no policy installs a package, restarts the server or
-changes the runtime yet. The UI says this explicitly. A failed latest-version
-lookup leaves the value unknown and never changes chat operation.
+**Current delivered phase (isolated staging, no activation):** Settings →
+Updates shows active, Pop-recommended and latest stable pi versions and persists
+the policy. Active and recommended are currently the same exact dependency from
+`server/package.json`. An authenticated owner can prepare the policy target:
+Pop installs the exact package and production dependency graph under
+`POP_AGENT_DATA_DIR/pi-runtime/`, with lifecycle scripts disabled, records npm's
+integrity, then starts a separate zero-token Node probe. The probe checks the SDK
+exports and methods Pop imports, the offline default-model catalogue and an
+in-memory session create/dispose cycle. Candidate state is durable and an
+interrupted install becomes an explicit failure on next boot. The active
+checkout and live sessions are never opened or modified by this path.
 
-**Later activation phases, not delivered by the policy control:**
+A prepared candidate is only `ready`: no policy can load it, restart the server
+or change the active runtime in this phase. `keep-current` refuses preparation;
+`recommended` stages the release pin; `latest` refreshes npm metadata and stages
+the latest stable exact version. A failed lookup or gate leaves chat operation
+unchanged.
 
-1. Discover the target selected by policy and install it in isolated staging,
-   never by mutating the active checkout in place.
-2. Before activating, run the **update gate** — the smoke suite against
-   the candidate (in-memory session + fake provider: create session,
-   run a turn, event shapes, custom-tool registration, abort) plus an SDK
-   contract check (every API Pop Agent imports still exists). Zero tokens.
-3. Drain running work, activate atomically and restart. Gate passes → version
+**Later activation phases, not delivered by candidate staging:**
+
+1. Extend the candidate gate with a complete fake-provider turn, event-shape,
+   custom-tool and abort behavior checks. Zero tokens.
+2. Drain running work, activate atomically and restart. Gate passes → version
    becomes last-known-good. Gate or boot failure → automatic rollback,
    automatic updates disable themselves, and the user is notified.
-4. **Probation**: a version that passes the gate stays on probation for
+3. **Probation**: a version that passes the gate stays on probation for
    24h; repeated pi bridge crashes trigger the same rollback path.
-5. A future exact-version action provides manual pin and rollback but may never
+4. A future exact-version action provides manual pin and rollback but may never
    bypass candidate validation.
 
 **Pop Agent channel** (its own repo):

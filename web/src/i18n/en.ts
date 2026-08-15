@@ -704,8 +704,15 @@ export const en = {
     'Follow the exact pi version tested and approved for this Pop Agent release.',
   'settings.updates.piPolicyHint.latest':
     'Evaluate the latest stable pi release after compatibility checks. This is an advanced channel.',
-  'settings.updates.piPolicyPhaseOne':
-    'Policy and version visibility only. Runtime installation and activation are not enabled yet.',
+  'settings.updates.piPolicyPhaseTwo':
+    'Candidates are installed and validated in isolation. They are never activated in this phase.',
+  'settings.updates.piPrepare': 'Prepare and validate candidate',
+  'settings.updates.piPreparing': 'Preparing candidate…',
+  'settings.updates.piPrepareFailed': 'Could not start pi candidate preparation.',
+  'settings.updates.piCandidate.installing': 'Installing pi {version} in isolated staging…',
+  'settings.updates.piCandidate.validating': 'Validating pi {version} with the offline SDK gate…',
+  'settings.updates.piCandidate.ready': 'pi {version} passed validation and is staged. It is not active.',
+  'settings.updates.piCandidate.failed': 'pi {version} failed candidate preparation.',
   'settings.updates.manualUpdate': 'Manual server update',
 
   'settings.updates.checkTitle': 'App updates',
