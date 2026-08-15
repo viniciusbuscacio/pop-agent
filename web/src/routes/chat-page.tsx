@@ -498,7 +498,7 @@ export function ChatPage() {
         onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
         executionMode={chat?.executionMode ?? 'normal'}
         onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
-        onSetModel={(model, provider) => void setModel(chatId, model, provider)}
+        onSetModel={(model, provider) => setModel(chatId, model, provider)}
         modelPickerRequest={modelPickerRequest}
       />
 

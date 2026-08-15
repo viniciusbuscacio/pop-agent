@@ -761,8 +761,9 @@ events from stale runs.
   default), then every model from the chosen provider with an immediately
   focused text filter and a back-to-providers action. When the chat follows
   that global default, the selected row names the effective provider and model
-  instead of the opaque “Default model”. A large OpenRouter catalogue never
-  shares one flat list with the other providers.
+  instead of the opaque “Default model”. Choosing a model appends the selected
+  provider and model to the chat transcript, just like `/model list`. A large
+  OpenRouter catalogue never shares one flat list with the other providers.
 - The composer puts a round **P** immediately beside the model's **M**. Its
   per-chat value is durable server state, changed through the existing chat
   PATCH and broadcast as `chat-execution-mode-changed` over the same SSE path

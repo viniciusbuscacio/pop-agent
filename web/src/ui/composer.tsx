@@ -75,7 +75,7 @@ export function Composer({
   onShowSystemMessage: (message: string) => void;
   executionMode: ExecutionMode;
   onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
-  onSetModel: (model: string, provider: string) => void;
+  onSetModel: (model: string, provider: string) => Promise<void>;
   modelPickerRequest?: number;
 }) {
   const [text, setText] = useState('');
@@ -216,10 +216,24 @@ export function Composer({
     }
   }
 
+  async function selectModel(choice: ModelChoice): Promise<void> {
+    await onSetModel(choice.model, choice.provider);
+    const provider =
+      choice.provider.length > 0
+        ? choice.providerLabel ?? choice.provider
+        : currentProviderLabel || currentProvider;
+    const model = choice.model.length > 0 ? choice.model : currentModel;
+    onShowSystemMessage(
+      provider.length === 0 || model.length === 0
+        ? t('chat.currentModelUnavailable')
+        : t('chat.currentModel', { provider, model }),
+    );
+  }
+
   function pickModel(choice: ModelChoice): void {
     setSlashMode('commands');
     setSlashQuery(undefined);
-    onSetModel(choice.model, choice.provider);
+    void selectModel(choice);
     area.current?.focus();
   }
 
@@ -672,7 +686,14 @@ export function Composer({
           ]}
           onChange={(value) => {
             const [provider = '', model = ''] = value.split('||');
-            onSetModel(model, provider);
+            const choice = models.find(
+              (candidate) => candidate.provider === provider && candidate.model === model,
+            ) ?? {
+              provider,
+              model,
+              label: model,
+            };
+            void selectModel(choice);
           }}
         />
 

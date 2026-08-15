@@ -31,6 +31,7 @@ function renderComposer(
   const onEditingDone = vi.fn();
   const onSetExecutionMode = vi.fn().mockResolvedValue(undefined);
   const onShowSystemMessage = vi.fn();
+  const onSetModel = vi.fn().mockResolvedValue(undefined);
   render(
     <Composer
       chatId="chat-1"
@@ -50,10 +51,10 @@ function renderComposer(
       onShowSystemMessage={onShowSystemMessage}
       executionMode={props.executionMode ?? 'normal'}
       onSetExecutionMode={onSetExecutionMode}
-      onSetModel={vi.fn()}
+      onSetModel={onSetModel}
     />,
   );
-  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode, onShowSystemMessage };
+  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode, onShowSystemMessage, onSetModel };
 }
 
 afterEach(() => {
@@ -99,6 +100,30 @@ describe('pending message composition', () => {
     });
     expect(effectiveDefault.getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('option', { name: 'Default model' })).toBeNull();
+  });
+
+  it('announces the selected model in the chat after changing it', async () => {
+    const { onSetModel, onShowSystemMessage } = renderComposer({
+      models: [
+        {
+          provider: 'openai-codex',
+          providerLabel: 'OpenAI Codex',
+          model: 'gpt-5.6-sol',
+          label: 'gpt-5.6-sol',
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    fireEvent.click(screen.getByRole('option', { name: /^OpenAI Codex/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'gpt-5.6-sol' }));
+
+    await waitFor(() => {
+      expect(onSetModel).toHaveBeenCalledWith('gpt-5.6-sol', 'openai-codex');
+      expect(onShowSystemMessage).toHaveBeenCalledWith(
+        'Provider: OpenAI Codex · Model: gpt-5.6-sol',
+      );
+    });
   });
 
   it('reports only the active provider and model for /model list', () => {
