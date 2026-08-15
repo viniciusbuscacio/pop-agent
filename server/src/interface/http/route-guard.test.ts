@@ -50,16 +50,25 @@ describe('route guard', () => {
     }
   });
 
-  it('setup downloads without a one-use ticket answer 4xx, never content', async () => {
+  it('does not expose the retired native Desktop distribution API', async () => {
     const { app } = createTestApp();
-    for (const path of [
-      '/desktop/setup/download',
-      '/desktop/setup/download?ticket=',
-      '/desktop/setup/download?ticket=bogus',
-    ]) {
-      const response = await app.request(path);
-      expect(response.status, path).toBeGreaterThanOrEqual(400);
-      expect(response.status, path).toBeLessThan(500);
+    const setup = await app.request('/v1/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'correct horse battery' }),
+    });
+    const token = ((await setup.json()) as { token: string }).token;
+    for (const [path, method] of [
+      ['/v1/desktop/release', 'GET'],
+      ['/v1/desktop/package/pop-desktop-0.2.27-darwin-arm64.zip', 'GET'],
+      ['/v1/desktop/setup/release', 'GET'],
+      ['/v1/desktop/setup/ticket', 'POST'],
+    ] as const) {
+      const response = await app.request(path, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.status, path).toBe(404);
     }
   });
 

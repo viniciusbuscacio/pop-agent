@@ -274,10 +274,10 @@ describe('sending a message', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
   });
 
-  it('uses managed local access only for Desktop-originated messages', async () => {
+  it('never lends a background local connection to a PWA that did not select it', async () => {
     fixture.localConnections.attach({
       id: 'local-managed',
-      role: 'managed-default',
+      role: 'interactive',
       machine: {
         hostname: 'Mac', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.15',
       },
@@ -285,25 +285,15 @@ describe('sending a message', () => {
       close: () => undefined,
     });
 
-    const desktopChat = await newChat();
-    expect((await api(`/v1/chats/${desktopChat.id}/messages`, {
+    const chat = await newChat();
+    expect((await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST',
-      body: { text: 'slow: desktop' },
-      headers: { [CLIENT_HEADER]: 'desktop' },
+      body: { text: 'slow: pwa' },
+      headers: { [CLIENT_HEADER]: 'pwa' },
     })).status).toBe(202);
-    expect(fixture.runs.canSteer(desktopChat.id, 'local-managed')).toBe(true);
-    await api(`/v1/chats/${desktopChat.id}/stop`, { method: 'POST' });
-    await fixture.runs.whenIdle();
-
-    const webChat = await newChat();
-    expect((await api(`/v1/chats/${webChat.id}/messages`, {
-      method: 'POST',
-      body: { text: 'slow: browser' },
-      headers: { [CLIENT_HEADER]: 'web' },
-    })).status).toBe(202);
-    expect(fixture.runs.canSteer(webChat.id, undefined)).toBe(true);
-    expect(fixture.runs.canSteer(webChat.id, 'local-managed')).toBe(false);
-    await api(`/v1/chats/${webChat.id}/stop`, { method: 'POST' });
+    expect(fixture.runs.canSteer(chat.id, undefined)).toBe(true);
+    expect(fixture.runs.canSteer(chat.id, 'local-managed')).toBe(false);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });
 

@@ -102,7 +102,7 @@ func (l *launcher) run(args []string) int {
 	}
 
 	st, _ := l.readState()
-	if hasArg(args, "--version") || hasArg(args, "-v") || hasArg(args, "--managed-local-access") {
+	if hasArg(args, "--version") || hasArg(args, "-v") {
 		return l.startLocal(st, args)
 	}
 

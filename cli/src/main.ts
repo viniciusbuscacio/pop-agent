@@ -10,7 +10,6 @@ import { LocalAccess } from './infrastructure/local-access.js';
 import { installCli } from './infrastructure/installer.js';
 import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './interface/commands.js';
 import { chat } from './interface/chat.js';
-import { managedLocalAccess } from './interface/managed-local-access.js';
 import { VERSION } from './version.js';
 
 /**
@@ -45,17 +44,11 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
   const command = args[0];
 
   if (command === '--version' || command === '-v') {
-    // Keep this before profile and API construction: desktop managers use it
-    // for local discovery, so it must remain a side-effect-free inspection.
+    // Keep this before profile and API construction so version inspection
+    // remains entirely side-effect free.
     terminal.line(VERSION);
     return 0;
   }
-  if (command === '--managed-local-access') {
-    // Native managers start this hidden mode and provide its one-shot config
-    // over stdin. Keep it before profiles/TUI/chat construction.
-    return managedLocalAccess(terminal);
-  }
-
   const profiles = new Profiles(new FileProfileStore());
   const context: Context = {
     profiles,

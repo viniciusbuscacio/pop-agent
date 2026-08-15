@@ -12,11 +12,6 @@ interface PackageLock {
   packages?: Record<string, PackageJson>;
 }
 
-interface DesktopRelease {
-  version?: string;
-  file?: string;
-}
-
 const packagePaths = [
   'package.json',
   'shared/package.json',
@@ -75,44 +70,7 @@ export function versionConsistencyErrors(root: string): string[] {
     }
   }
 
-  const desktopNativeVersionPath = join(root, 'desktop/native/VERSION');
-  if (existsSync(desktopNativeVersionPath)) {
-    const desktopNativeVersion = readText(desktopNativeVersionPath);
-    if (desktopNativeVersion !== version) {
-      errors.push(`desktop/native/VERSION is ${JSON.stringify(desktopNativeVersion)}; expected ${version}`);
-    }
-  }
-
-  checkDesktopRelease(root, 'desktop/pack/release.json', 'pop-desktop-', '-darwin-arm64.zip', errors);
-  checkDesktopRelease(
-    root,
-    'desktop/pack/setup-release.json',
-    'pop-desktop-setup-',
-    '-darwin-arm64.dmg',
-    errors,
-  );
-
   return errors;
-}
-
-function checkDesktopRelease(
-  root: string,
-  relative: string,
-  filePrefix: string,
-  fileSuffix: string,
-  errors: string[],
-): void {
-  if (!existsSync(join(root, relative))) return;
-  const release = readJson<DesktopRelease>(root, relative, errors);
-  if (release === undefined) return;
-  if (!semanticVersion.test(release.version ?? '')) {
-    errors.push(`${relative} version is ${JSON.stringify(release.version)}; expected X.Y.Z`);
-    return;
-  }
-  const expectedFile = `${filePrefix}${release.version}${fileSuffix}`;
-  if (release.file !== expectedFile) {
-    errors.push(`${relative} file is ${JSON.stringify(release.file)}; expected ${expectedFile}`);
-  }
 }
 
 export function assertVersionConsistency(root: string): void {

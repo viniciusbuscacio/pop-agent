@@ -198,7 +198,7 @@ request.
 - Equal versions start immediately. A locally newer version starts without a
   downgrade. `pop update` forces a repair/reinstall; `pop doctor` diagnoses the
   launcher, dependencies and server without starting the Node CLI.
-- `--version` and the Desktop's `--managed-local-access` remain local-only paths.
+- `--version` remains a local-only path.
 
 The attach-time minimum-client check remains a final wire-compatibility guard,
 but ordinary drift is removed before attach rather than merely announced.

@@ -47,10 +47,6 @@ function Boot() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // The native Desktop may have opened over an already persisted web
-    // session. Sync it once; later login, renewal and logout changes are sent
-    // directly by the session service.
-    session.syncDesktop();
     // A session that dies mid-use (epoch bump elsewhere, expiry) lands here.
     setSessionLostHandler(() => {
       setStatus('signed-out');

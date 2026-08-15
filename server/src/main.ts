@@ -97,7 +97,6 @@ const runningCommit = gitCommit(repoRoot);
 const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
 /** Where `npm run pack:cli` leaves the tarball the server hands out. */
 const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
-const desktopPack = fileURLToPath(new URL('../../desktop/pack', import.meta.url));
 /** Built before activation; this process only launches it as an external unit. */
 const deploymentSupervisorScript = fileURLToPath(
   new URL('../dist/manager/update-supervisor.js', import.meta.url),
@@ -728,7 +727,6 @@ const app = createApp({
   })(),
   webDist,
   cliPack,
-  desktopPack,
 });
 
 // The notify-only update channel (pop-agent.spec §15, Vinicius 31/07): when a

@@ -77,7 +77,6 @@ export const FIXED_NOW = 1_700_000_000_000;
 export const WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
 /** The packed client (docs/cli.md, Distribution); absent unless `pack:cli` ran. */
 export const CLI_PACK = fileURLToPath(new URL('../../../cli/pack', import.meta.url));
-export const DESKTOP_PACK = fileURLToPath(new URL('../../../desktop/pack', import.meta.url));
 
 export class MemorySettings implements SettingsRepo {
   private readonly rows = new Map<string, string>();
@@ -490,7 +489,6 @@ export function createTestApp(
       }) satisfies import('@pop-agent/shared').ServerInfoResponse,
     webDist: WEB_DIST,
     cliPack: CLI_PACK,
-    desktopPack: DESKTOP_PACK,
   });
 
   return {

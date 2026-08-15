@@ -7,14 +7,10 @@ normative history.
 
 ### Changed
 
-- **The menu-bar helper now presents the single product name Pop Desktop.** Its
-  technical process and executable remain `Pop Desktop Tray`, while the menu
-  title, tooltip, dialogs, diagnostics title and Quit action no longer expose
-  that implementation detail.
-- **Pop Desktop now ships with Pop Desktop Tray inside one app bundle.** Opening
-  Desktop starts the internal tray helper; closing either process closes the
-  other. The former standalone Pop Desktop Manager is no longer a separate app,
-  installer, login item or update target.
+- **The installed PWA is the desktop app.** The native WKWebView/WebView2
+  wrapper, tray helper and Setup packages were removed. Browser installation
+  and service-worker updates now own the desktop experience; Pop Local Access
+  remains a separate optional capability.
 - **CLI installation commands can stay current.** The stable, non-cacheable
   `cli-latest.tgz` URL redirects to the server's exact immutable CLI package,
   so setup instructions do not need a version edit after each update.

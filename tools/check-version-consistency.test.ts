@@ -15,7 +15,6 @@ const fixtures = [
   'cli/package.json',
   'tools/package.json',
   'cli/src/version.ts',
-  'desktop/native/VERSION',
 ] as const;
 
 let root = '';
@@ -40,7 +39,7 @@ describe('global version consistency', () => {
     expect(versionConsistencyErrors(sourceRoot)).toEqual([]);
   });
 
-  it('reports source drift and internally inconsistent immutable artifacts together', () => {
+  it('reports source drift across manifests, lockfile and the CLI handshake', () => {
     const target = fixture();
     const cliPath = join(target, 'cli/src/version.ts');
     writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace('0.2.30', '0.2.9'));
@@ -58,27 +57,10 @@ describe('global version consistency', () => {
     lock.packages['cli']!.version = '0.2.9';
     writeFileSync(lockPath, `${JSON.stringify(lock)}\n`);
 
-    writeFileSync(join(target, 'desktop/native/VERSION'), '0.2.8\n');
-
-    mkdirSync(join(target, 'desktop/pack'), { recursive: true });
-    writeFileSync(
-      join(target, 'desktop/pack/release.json'),
-      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-0.2.6-darwin-arm64.zip' }),
-      { flag: 'w' },
-    );
-    writeFileSync(
-      join(target, 'desktop/pack/setup-release.json'),
-      JSON.stringify({ version: '0.2.7', file: 'pop-desktop-setup-0.2.6-darwin-arm64.dmg' }),
-      { flag: 'w' },
-    );
-
     expect(versionConsistencyErrors(target)).toEqual(expect.arrayContaining([
       'package.json version is "0.2.9"; expected 0.2.30',
       'package-lock.json packages["cli"] version is "0.2.9"; expected 0.2.30',
       'cli/src/version.ts VERSION is "0.2.9"; expected 0.2.30',
-      'desktop/native/VERSION is "0.2.8"; expected 0.2.30',
-      'desktop/pack/release.json file is "pop-desktop-0.2.6-darwin-arm64.zip"; expected pop-desktop-0.2.7-darwin-arm64.zip',
-      'desktop/pack/setup-release.json file is "pop-desktop-setup-0.2.6-darwin-arm64.dmg"; expected pop-desktop-setup-0.2.7-darwin-arm64.dmg',
     ]));
   });
 });

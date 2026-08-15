@@ -45,18 +45,6 @@ describe('LocalConnectionRegistry', () => {
     expect(registry.connection(undefined)).toBeUndefined();
   });
 
-  it('keeps one managed-default and replaces the previous connection', () => {
-    const registry = new LocalConnectionRegistry();
-    const first = fake('c1');
-    const second = fake('c2');
-    first.connection.role = 'managed-default';
-    second.connection.role = 'managed-default';
-    registry.attach(first.connection);
-    registry.attach(second.connection);
-    expect(first.isClosed()).toBe(true);
-    expect(registry.defaultConnection()).toBe(second.connection);
-  });
-
   it('revokes every connection on an invalidated epoch', () => {
     const registry = new LocalConnectionRegistry();
     const old = fake('old');

@@ -125,18 +125,14 @@ function readClient(c: Context): MessageClient | undefined {
 function selectLocalConnection(
   c: Context,
   registry: LocalConnectionRegistry,
-  client: MessageClient | undefined,
 ): { ok: true; connectionId?: string } | { ok: false } {
   const explicit = c.req.header(LOCAL_CONNECTION_HEADER);
   if (explicit !== undefined && explicit.length > 0) {
     return registry.has(explicit) ? { ok: true, connectionId: explicit } : { ok: false };
   }
-  // The managed connection belongs to the native Desktop host. A browser or
-  // PWA with the same single-user session must not silently inherit access to
-  // that Mac merely because it omitted an explicit connection header.
-  if (client?.kind !== 'desktop') return { ok: true };
-  const managed = registry.defaultConnection();
-  return managed === undefined ? { ok: true } : { ok: true, connectionId: managed.id };
+  // A browser/PWA must select a machine explicitly. Holding a web session alone
+  // never grants whichever computer happens to be connected in the background.
+  return { ok: true };
 }
 
 /** The socket's own address, when the adapter can say. */
@@ -281,7 +277,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     }
 
     const client = readClient(c);
-    const selected = selectLocalConnection(c, deps.localConnections, client);
+    const selected = selectLocalConnection(c, deps.localConnections);
     if (!selected.ok) {
       return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
     }
@@ -346,7 +342,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       }
     }
     const client = readClient(c);
-    const selected = selectLocalConnection(c, deps.localConnections, client);
+    const selected = selectLocalConnection(c, deps.localConnections);
     if (!selected.ok) {
       return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
     }

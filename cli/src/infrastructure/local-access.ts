@@ -16,7 +16,7 @@ export interface LocalAccessOptions {
   url: string;
   token: string | (() => string);
   version: string;
-  role?: 'interactive' | 'managed-default';
+  role?: 'interactive';
   onEvent?: (event: LocalAccessEvent) => void;
   reconnectDelayMs?: number;
   /** Test override; production uses the protocol's 45-second local lease. */

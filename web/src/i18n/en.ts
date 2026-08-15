@@ -216,22 +216,6 @@ export const en = {
   'settings.installation.cliUnix': 'macOS or Linux (Terminal)',
   'settings.installation.cliUnixHint':
     'Requires Node.js 22.19 or newer. Run both commands, then enter your Pop Agent password.',
-  'settings.installation.desktopTitle': 'Desktop app',
-  'settings.installation.desktopBody':
-    'Pop Desktop opens the same Pop Agent interface in a dedicated native window.',
-  'settings.installation.desktopMac': 'macOS',
-  'settings.installation.desktopMacSteps':
-    'Download and open Pop Desktop Setup. Enter this server address and your password once; the wizard installs the complete product for your account.',
-  'settings.installation.desktopMacRequirements':
-    'For macOS 14 or newer on Apple Silicon. No administrator access, Homebrew, or existing Node.js installation is required.',
-  'settings.installation.desktopMacRelease': 'Version {version} · {size}',
-  'settings.installation.desktopMacDownload': 'Download Pop Desktop Setup',
-  'settings.installation.desktopMacDownloading': 'Preparing download…',
-  'settings.installation.desktopMacUnavailable': 'The macOS installer has not been published on this server yet.',
-  'settings.installation.desktopMacDownloadError': 'The download could not be started. Try again.',
-  'settings.installation.desktopWindows': 'Windows',
-  'settings.installation.desktopWindowsBody':
-    'A native Windows desktop app is not available yet. Use the installed PWA in Edge or Chrome for an app window, and install Pop CLI with the PowerShell command above for terminal access and local tools.',
   'settings.server.cpu': 'CPU',
   'settings.server.load': 'Load (1/5/15 min)',
   'settings.server.memory': 'Memory (used / total)',

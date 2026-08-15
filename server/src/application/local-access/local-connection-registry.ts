@@ -5,7 +5,7 @@ export const MISSED_PINGS_BEFORE_GONE = 3;
 export const MAX_CONCURRENT_CALLS = 4;
 export const MAX_CALL_OUTPUT_BYTES = 50 * 1024 * 1024;
 
-export type LocalConnectionRole = 'interactive' | 'managed-default';
+export type LocalConnectionRole = 'interactive';
 
 export interface LocalMachine {
   machineId?: string;
@@ -55,7 +55,6 @@ export interface LocalCall {
 export class LocalConnectionRegistry {
   private readonly entries = new Map<string, Entry>();
   private readonly pending = new Map<string, Pending>();
-  private managedDefaultId: string | undefined;
 
   constructor(
     private readonly onJournal?: (line: string) => void,
@@ -63,15 +62,7 @@ export class LocalConnectionRegistry {
   ) {}
 
   attach(connection: LocalConnection): void {
-    if (connection.role === 'managed-default' && this.managedDefaultId !== undefined) {
-      const previous = this.entries.get(this.managedDefaultId)?.connection;
-      if (previous !== undefined && previous.id !== connection.id) {
-        this.detach(previous.id, 'Local access was replaced by a newer managed connection.');
-        previous.close(4005, 'connection_replaced');
-      }
-    }
     this.entries.set(connection.id, { connection, unanswered: 0, pingId: 0, calls: 0 });
-    if (connection.role === 'managed-default') this.managedDefaultId = connection.id;
     this.onJournal?.(
       `pop local access: attached ${connection.machine.platform}/${connection.machine.arch} (${connection.role ?? 'interactive'})`,
     );
@@ -81,7 +72,6 @@ export class LocalConnectionRegistry {
     const entry = this.entries.get(connectionId);
     if (entry === undefined) return;
     this.entries.delete(connectionId);
-    if (this.managedDefaultId === connectionId) this.managedDefaultId = undefined;
     this.releaseCalls(connectionId, message);
     this.onJournal?.(`pop local access: detached ${connectionId.slice(-6)}`);
   }
@@ -98,9 +88,6 @@ export class LocalConnectionRegistry {
     return entry.connection;
   }
 
-  defaultConnection(): LocalConnection | undefined {
-    return this.connection(this.managedDefaultId);
-  }
 
   has(connectionId: string): boolean {
     return this.connection(connectionId) !== undefined;

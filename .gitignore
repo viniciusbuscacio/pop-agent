@@ -1,15 +1,11 @@
 node_modules/
 dist/
 build/
-# Native Desktop build inputs are source; generated bundles/packages remain
-# ignored by desktop/native/.gitignore.
-!desktop/native/build/
 coverage/
 .env
 .env.*
 *.local
 .DS_Store
 *.tsbuildinfo
-# Packed clients are build outputs, rebuilt by their platform projects.
+# Packed clients are build outputs.
 cli/pack/
-desktop/pack/

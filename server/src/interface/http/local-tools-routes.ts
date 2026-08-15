@@ -290,7 +290,7 @@ function validAttach(value: unknown): AttachFrame | undefined {
   const clientVersion = stringField(machine, 'clientVersion');
   if ([hostname, platform, arch, cwd, clientVersion].some((entry) => entry === undefined)) return undefined;
   const role = frame['role'];
-  if (role !== undefined && role !== 'interactive' && role !== 'managed-default') return undefined;
+  if (role !== undefined && role !== 'interactive') return undefined;
   const machineId = stringField(machine, 'machineId');
   return {
     kind: 'attach',

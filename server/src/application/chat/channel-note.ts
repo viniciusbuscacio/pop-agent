@@ -17,7 +17,6 @@ const NAMES: Record<string, string> = {
   cli: 'the terminal (Pop Agent CLI)',
   web: 'the web app in a browser',
   pwa: 'the installed app',
-  desktop: 'the desktop app',
   api: 'a script calling the API directly',
   task: 'a scheduled task, with nobody watching',
 };

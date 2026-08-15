@@ -49,7 +49,7 @@ export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
  * is read back later.
  *
  * An explicit unknown or departed id is rejected before a run starts. When
- * absent, the server may select the Desktop's managed-default connection.
+ * absent, browser and PWA messages receive server tools only.
  */
 export const LOCAL_CONNECTION_HEADER = 'x-pop-agent-local-connection';
 
@@ -99,12 +99,12 @@ export function installCommand(origin: string, version: string): string {
 }
 
 /**
- * `web` is a browser tab; `pwa` the same app installed and running
- * standalone; `desktop` the embedded shell (not built yet). `mobile` is
- * absent on purpose -- it is a shape of screen, not a client, and lives in
- * the platform instead, or "PWA on an iPhone" would be two answers at once.
+ * `web` is a browser tab; `pwa` is the same app installed and running
+ * standalone. `mobile` is absent on purpose -- it is a shape of screen, not a
+ * client, and lives in the platform instead, or "PWA on an iPhone" would be
+ * two answers at once.
  */
-export const CLIENT_KINDS = ['web', 'pwa', 'desktop', 'cli', 'api', 'task'] as const;
+export const CLIENT_KINDS = ['web', 'pwa', 'cli', 'api', 'task'] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 
 export function isClientKind(value: string): value is ClientKind {
@@ -483,32 +483,6 @@ export type PiCandidateActivateResponse =
       ok: false;
       reason: 'candidate_not_ready' | 'already_current' | 'already_scheduled';
     };
-
-/** Manager-only metadata for the signed Pop Desktop host package. */
-export interface DesktopReleaseResponse {
-  version: string;
-  platform: 'darwin';
-  arch: 'arm64';
-  sha256: string;
-  size: number;
-  /** Same-origin authenticated path; clients must not follow an arbitrary host. */
-  downloadPath: string;
-}
-
-/** Authenticated metadata for the complete macOS setup wizard DMG. */
-export interface DesktopSetupReleaseResponse {
-  version: string;
-  platform: 'darwin';
-  arch: 'arm64';
-  sha256: string;
-  size: number;
-}
-
-/** One-use, short-lived browser download URL; never contains the bearer token. */
-export interface DesktopSetupTicketResponse {
-  downloadPath: string;
-  expiresInSeconds: number;
-}
 
 /** `GET /v1/about` — what Settings → About shows. */
 export interface AboutResponse {

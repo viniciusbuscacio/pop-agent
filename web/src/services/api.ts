@@ -58,7 +58,7 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
  * be two answers at once -- so the phone half is carried as the platform.
  */
 export interface ClientEnvironment {
-  kind: 'web' | 'pwa' | 'desktop';
+  kind: 'web' | 'pwa';
   platform: string;
   deviceLabel: string;
   appLabel: string;
@@ -67,12 +67,11 @@ export interface ClientEnvironment {
 /** Shared by request headers and Settings so both describe this client identically. */
 export function clientEnvironment(): ClientEnvironment {
   const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
-  const desktopHost = /\bPopDesktop\/[0-9.]+\b/.test(agent);
   const standalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as { standalone?: boolean }).standalone === true);
-  const kind = desktopHost ? 'desktop' : standalone ? 'pwa' : 'web';
+  const kind = standalone ? 'pwa' : 'web';
   const platform = platformName();
   const applePhone = /iPhone|iPod/i.test(agent);
   const appleTablet = /iPad/i.test(agent);
@@ -86,7 +85,7 @@ export function clientEnvironment(): ClientEnvironment {
         : platform === 'macos'
           ? 'This Mac'
           : 'This device',
-    appLabel: kind === 'pwa' ? 'Installed PWA' : kind === 'desktop' ? 'Pop Desktop' : 'Web browser',
+    appLabel: kind === 'pwa' ? 'Installed PWA' : 'Web browser',
   };
 }
 

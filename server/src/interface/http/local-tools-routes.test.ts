@@ -31,7 +31,7 @@ const attach = () =>
   request('/v1/local-tools/connections', 'POST', {
     kind: 'attach',
     protocol: 1,
-    role: 'managed-default',
+    role: 'interactive',
     machine: {
       machineId: 'machine-test',
       hostname: 'test-mac',
@@ -76,11 +76,11 @@ describe('HTTPS local-tools fallback', () => {
     await expect(result).resolves.toMatchObject({ ok: true, output: 'YQ==' });
   });
 
-  it('registers managed-default and removes it on delete', async () => {
+  it('removes the selected connection on delete', async () => {
     const connected = await attach();
     const id = ((await connected.json()) as { connectionId: string }).connectionId;
-    expect(fixture.localConnections.defaultConnection()?.id).toBe(id);
+    expect(fixture.localConnections.connection(id)?.id).toBe(id);
     expect((await request(`/v1/local-tools/connections/${id}`, 'DELETE')).status).toBe(204);
-    expect(fixture.localConnections.defaultConnection()).toBeUndefined();
+    expect(fixture.localConnections.connection(id)).toBeUndefined();
   });
 });

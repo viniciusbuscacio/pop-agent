@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 2.03 — 2026-08-15.
+Version 2.04 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -560,15 +560,6 @@ selection is 100% local, no LLM call:
   user lock themselves out by refreshing the page.
 - Frontend storage: `sessionStorage` by default; "Keep me signed in"
   checkbox → `localStorage` (essential on mobile PWA).
-- **Pop Desktop Manager session (macOS):** the manager authenticates through
-  the same `POST /v1/login { password }` contract and stores only the returned
-  session token as a macOS Generic Password. Service is
-  `com.wails.pop-desktop-manager`; account is the normalized server origin.
-  The password is request-only and is never persisted. Startup validates the
-  token against a guarded endpoint, replaces it when
-  `x-pop-agent-token` renews the session, distinguishes an unreachable server
-  from `invalid_session`, and deletes an invalid token. This introduces no
-  second device credential or authentication protocol.
 - **Biometric unlock via WebAuthn/passkey** (Face ID on iOS 16+ installed
   PWA; fingerprint/face on any recent Android Chrome — same code): after a
   password login, Settings offers "Enable Face ID unlock" →
@@ -804,9 +795,9 @@ events from stale runs.
   full-screen view: Server, General, **Installation guide**, Model, **Audio**,
   Memory, Usage, Storage, Backup, Appearance, Updates, Security, About. The
   installation guide derives the current personal server origin at runtime and
-  gives copyable access/setup instructions for web/PWA, CLI on Windows and
-  macOS/Linux, Pop Desktop on macOS, and the honest not-yet-available state of
-  the native Windows desktop app. It never hard-codes one deployment's URL.
+  gives copyable installation instructions for the PWA and CLI on Windows,
+  macOS and Linux. There is no native Desktop wrapper or native installer. It
+  never hard-codes one deployment's URL.
   Chromium's one-shot `beforeinstallprompt` is captured during application boot,
   before Settings mounts. When the browser offers it, Installation shows
   **Install Pop Agent** and opens only the browser-owned confirmation after that
@@ -1415,10 +1406,11 @@ The launcher installs privately and atomically rather than through global npm,
 then execs the active Node CLI. The legacy no-store `/cli-latest.tgz` redirect
 remains for migration. The client carries no server code: no `better-sqlite3`,
 no `argon2`, nothing that knows where `secret.key` lives. It also carries **Pop
-Local Access (PLA)**, an internal library shared by interactive CLI and the Pop
-Desktop host's hidden `--managed-local-access` child mode. PLA has no UI,
-install, version or credentials of its own and never creates a chat or invokes
-an LLM.
+Local Access (PLA)**, an internal library used by the interactive CLI. PLA never
+creates a chat or invokes an LLM. The installed PWA and local access are separate:
+the browser owns the PWA, while a future optional background PLA installer will
+own its own lifecycle without introducing a native WebView wrapper. Until that
+installer ships, local access exists only for the lifetime of the CLI process.
 
 PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
 failures with ordinary authenticated HTTPS still healthy, it falls back to
@@ -1426,16 +1418,13 @@ the long-poll `/v1/local-tools/connections/*` transport. Both use the same
 Bearer session, application frames, limits, heartbeat, cancellation and
 connection id. An attached WSS connection requires inbound server traffic
 within the 45-second local lease; silence terminates the socket and reconnects,
-so a proxy cannot leave Desktop attached to a stream the restarted server no
-longer owns. Pop Desktop passes `{url, token, role}` by stdin, keeps that
-pipe open for renewed web sessions, and launches the exact detected Node + CLI
-entry without a shell. The Manager installs and diagnoses those components but
-does not own the runtime connection.
+so a proxy cannot leave a client attached to a stream the restarted server no
+longer owns.
 
-An interactive message explicitly names its PLA connection. A Desktop-originated
-message without one uses that Desktop's single `managed-default` connection
-when attached; ordinary web/PWA messages never inherit it implicitly. Otherwise
-the run honestly receives no local tools. An explicit dead id is rejected
+An interactive message explicitly names its PLA connection. Browser and PWA
+messages never inherit a background machine implicitly: they must explicitly
+select a live connection once the optional PLA UI exists. Otherwise the run
+honestly receives no local tools. An explicit dead id is rejected
 before a run starts and never falls back to another machine. Disconnects fail
 pending calls and never replay non-idempotent work. Logout, password recovery,
 epoch change and token expiry close attached local access.
@@ -1452,9 +1441,8 @@ Before the first message creates the chat, only `Bye!` is printed.
 
 `pop --version` is entirely offline: the launcher reads only its atomic local
 state, finds Node and execs the active CLI's side-effect-free version path. It
-does not read a profile, open PLA, contact a server or create a chat. Desktop
-managers may use it for safe discovery. `--launcher-version` needs neither Node
-nor an installed CLI.
+does not read a profile, open PLA, contact a server or create a chat.
+`--launcher-version` needs neither Node nor an installed CLI.
 
 Local execution notices (`ran here: …`) belong to the live assistant segment,
 after its tool statuses and before its prose. They are never appended as later
@@ -1496,14 +1484,9 @@ list to manage yet. `popman access-list` says so rather than pretending.
 **Client/server versions.** Root `VERSION` is the single manually edited global
 release version. A TypeScript consistency check runs before typecheck, build and
 the full gate; it rejects drift in package manifests, lockfile workspace entries,
-the CLI handshake, packed CLI metadata and any published Pop Desktop manifest.
-The native source under `desktop/native` must receive this same file through
-`POP_AGENT_VERSION_FILE`; a newly built native package therefore uses the global
-version current at build time. Already published platform packages may remain on
-their previous immutable version while the server and CLI advance. The desktop
-download route validates the manifest's internal version, filename, size and hash,
-not equality with the running server version; publishing the later native package
-then advances only that platform's manifest.
+the CLI handshake and packed CLI metadata. The PWA is part of the server build
+and follows the service-worker update channel; there is no independently
+versioned native Desktop package.
 
 The server holds its own version and the
 oldest client it accepts; the local-tools attach compares them.
@@ -1511,51 +1494,28 @@ Compatible is silent, merely behind prints one line with the install
 command, and below the minimum is refused with that command. The minimum
 is set by hand and moves only when the wire changes.
 
-### 17.1 Pop Desktop distribution
+### 17.1 Installed PWA and optional local access
 
-Pop Desktop is the existing PWA inside one installed macOS app bundle. Its main
-`Pop Desktop` executable owns the `WKWebView`; an internal `Pop Desktop Tray`
-helper owns the menu-bar controls, server configuration, diagnostics and runtime
-supervision. Desktop starts Tray automatically, and private inherited pipes couple
-their lifecycle: closing either closes both. Tray is not a separate `.app`, login
-item, installer or update target.
+The desktop product is the existing PWA installed by the browser. Pop Agent
+ships no WKWebView/WebView2 wrapper, tray helper, DMG, Setup app, Windows setup
+executable, native Desktop download route or independently versioned Desktop
+artifact. The browser owns the app window, operating-system registration,
+permissions and removal; the server-owned PWA manifest names the installed app
+**Pop Agent**.
 
-The host loads this server's HTTPS origin directly: no copied React build or
-localhost proxy. A narrowly scoped main-frame, same-origin bridge synchronizes
-only the PWA bearer session; it exposes no filesystem, shell or native command
-API. The host detects a compatible local Node and Pop CLI, then supervises the
-CLI's PLA child for the Desktop lifetime. Normal PWA or server changes do not
-require a native package release. Every changed native package uses a fresh global
-version, but one platform may continue serving its last package until its new
-signed bytes are ready. The native source lives in this
-monorepo under `desktop/native`. Normal
-user-facing labels present the single product name `Pop Desktop`; `Pop Desktop
-Tray` is reserved for the internal helper executable/process and technical
-inspection.
+Settings → Installation captures Chromium's `beforeinstallprompt` during boot
+and exposes **Install Pop Agent** only while the browser says installation is
+eligible. Safari, iOS and unsupported browsers receive their real Add to Dock or
+Add to Home Screen instructions. PWA updates remain the normal service-worker
+flow in §15 and do not depend on a native release.
 
-The authenticated Pop Desktop Tray contract is:
-
-- `GET /v1/desktop/release` — `{version, platform:'darwin', arch:'arm64', sha256, size, downloadPath}`;
-- `GET /v1/desktop/package/pop-desktop-X.Y.Z-darwin-arm64.zip` — the exact immutable signed bundle.
-
-The path is same-origin and exact, the normal Bearer session guards both calls,
-and the package contains no token or user data. The server reads only
-`desktop/pack/release.json` and the file it names. A malformed manifest, absent
-package or size mismatch is a 404. `desktop/pack/` is release output, not source.
-Different bytes require a new host semver and URL.
-
-After restoring an authenticated session, Tray checks the Desktop release. A
-newer numeric semver downloads in the background to a temporary file and must
-pass the server-declared size and SHA-256 before any prompt appears. A native
-confirmation offers **Install and Restart** or **Not Now** once per release per
-process. Confirmation extracts and signature-checks the bundle, atomically
-replaces only `~/Applications/Pop Desktop.app` with rollback on activation
-failure, starts the new bundle's private update finisher, and then closes the old
-Tray/Desktop pair. The finisher waits for both old PIDs and the single-instance
-lock to disappear before reopening the app. Manual **Check for Updates** and
-**Update Pop Desktop…** remain available; cancellation never blocks a later
-manual retry. Running from a development build never changes the managed target
-away from `~/Applications`, preventing parallel stale installations.
+Pop Local Access is optional and separate from PWA installation. Installing the
+PWA grants no filesystem or command access. A local connection is outbound,
+authenticated and message-scoped; a PWA must explicitly select a live machine
+before a message can use it. Merely holding the user's web session never selects
+a background computer. The background installer, lifecycle controls and Settings
+machine selector are a subsequent PLA milestone; until then, the existing CLI
+provides local access only while that CLI process is running.
 
 ## 18. Production exposure
 
@@ -1731,6 +1691,12 @@ away from `~/Applications`, preventing parallel stale installations.
 
 ## Changelog
 
+- 2.04 (2026-08-15): **The installed PWA replaces the native Desktop product
+  (§14, §17.1).** Pop Agent no longer ships or serves WKWebView/WebView2 hosts,
+  tray helpers, DMG/Setup artifacts or native session bridges. The browser owns
+  installation and updates. PLA remains optional and separate; PWA messages
+  never inherit a machine without explicit selection.
+
 - 2.03 (2026-08-15): **The PWA exposes the browser's real installation action
   in Settings (§14).** The app captures Chromium's install event at boot,
   presents an explicit Install Pop Agent button while eligible, recognizes its
@@ -1758,32 +1724,6 @@ away from `~/Applications`, preventing parallel stale installations.
   PWAs can identify and activate the synchronized frontend through the normal
   update flow.
 
-- 1.99 (2026-08-14): **Native package publication is platform-independent
-  (§17.1).** Server/CLI releases no longer wait for every native platform:
-  each Desktop manifest continues serving its last internally consistent,
-  immutable signed package until newer bytes for that platform are published.
-  A later package advances the manifest without rewriting an old URL.
-- 1.98 (2026-08-14): **Pop Desktop gains a native Windows x64 host and
-  per-user setup (§17.1).** WebView2 keeps same-origin navigation inside the
-  app, delegates safe external schemes, blocks dangerous schemes, and uses a
-  native dark title bar. The tray, Credential Manager, Node/CLI detection and
-  PLA supervision run without elevation. Separate named mutexes enforce one
-  tray and one Desktop process, preventing duplicate PLA connections; setup
-  stages atomically under `%LOCALAPPDATA%\\Programs`, closes stale processes,
-  starts tray then Desktop, and ships with the global 0.2.26 release.
-
-- 1.95 (2026-08-14): **The internal tray helper presents one public product
-  name (§17).** Normal menu-bar labels, dialogs, diagnostics titles and Quit
-  actions say `Pop Desktop`. `Pop Desktop Tray` remains only the technical
-  helper executable/process name. The immutable release ships as 0.2.22.
-- 1.97 (2026-08-14): **Pop Desktop prepares verified updates and restarts only
-  after confirmation (§17.1).** The native host now checks its authenticated
-  same-origin release on startup, downloads newer semver bytes in the background,
-  validates size/SHA-256 and bundle signature, asks once, atomically installs to
-  `~/Applications`, then uses a private finisher to wait for both old processes
-  before reopening. Missing Desktop menu items and the inert global update
-  callback are fixed. This ships as 0.2.25.
-
 - 1.96 (2026-08-14): **v0.2.24 is a release-only launcher canary (§17).**
   No product behavior changes from 0.2.23; the new immutable CLI tarball exists
   specifically to exercise the native launcher's real startup update path —
@@ -1799,12 +1739,6 @@ away from `~/Applications`, preventing parallel stale installations.
   Public no-store launcher installers and manifests join immutable launcher and
   CLI artifacts; the npm-global alias remains only for legacy migration.
 
-- 1.94 (2026-08-14): **Pop Desktop and Pop Desktop Tray ship as one macOS app
-  (§17).** `Pop Desktop.app` contains the WKWebView executable and an internal
-  `Pop Desktop Tray` helper. Desktop starts Tray automatically; closing either
-  ends both through private lifecycle pipes. The former standalone Manager is
-  no longer a separate app, installer, login item or update target. The signed
-  immutable macOS package and global release ship as 0.2.21.
 - 1.96 (2026-08-15): **Plan Mode is a real pi-enforced, synchronized read-only
   policy (§5, §10, §13, §14).** The composer gained P beside M; the selected
   mode is durable chat state broadcast to every device through the existing SSE
@@ -1818,17 +1752,15 @@ away from `~/Applications`, preventing parallel stale installations.
 - 1.93 (2026-08-14): **PLA detects a silently lost WSS stream (§17).** An
   attached local-access client now requires inbound server traffic within its
   45-second lease, terminates a stale socket and reconnects. This prevents a
-  long-lived Desktop child from looking connected to a proxy after the server
-  has lost its registry entry. The changed CLI ships as 0.2.20.
+  long-lived client from looking connected after the server has lost its
+  registry entry. The changed CLI ships as 0.2.20.
 - 1.92 (2026-08-13): **CLI setup has a stable latest URL (§17).** The public,
   non-cacheable `cli-latest.tgz` alias redirects to this server's exact immutable
   versioned tarball. Installation Guide uses the alias, so copied macOS/Linux
   setup commands remain valid after server updates. This ships as 0.2.19.
 - 1.91 (2026-08-13): **Settings carries a personal installation guide (§14, §17).**
-  Web/PWA, CLI, and desktop access instructions now live in one Settings section.
-  Commands derive the current server origin, include one-click copy, use the
-  Windows bootstrap installer, and distinguish the available macOS desktop host
-  from the not-yet-available native Windows app.
+  PWA and CLI access instructions live in one Settings section. Commands derive
+  the current server origin and include one-click copy.
 - 1.90 (2026-08-13): **CLI self-update works on Windows (§17).** The updater
   executes npm's JavaScript entrypoint through the current Node runtime instead
   of spawning `npm.cmd`, which Node rejects with `EINVAL` without a shell. The
@@ -1868,11 +1800,10 @@ away from `~/Applications`, preventing parallel stale installations.
   TUI closes; a not-yet-created conversation only says goodbye. The CLI ships
   this as 0.2.8.
 - 1.81 (2026-08-11): **Pop Local Access replaces the user-facing hands concept (§17).**
-  CLI and Desktop share one internal TypeScript executor. WSS `/v1/local-tools`
-  has an authenticated HTTPS long-poll fallback, managed-default routing makes
-  Desktop local tools available to PWA messages, and session expiry/revocation,
-  cancellation, process-tree cleanup, transport limits and headless IPC are
-  explicit. The breaking wire ships as 0.2.6.
+  The CLI carries the TypeScript executor. WSS `/v1/local-tools` has an
+  authenticated HTTPS long-poll fallback; session expiry/revocation,
+  cancellation, process-tree cleanup and transport limits are explicit. The
+  breaking wire ships as 0.2.6.
 
 - 1.78 (2026-08-11): **CLI hands reconnect instead of disappearing silently (§17).**
   A dropped hands WebSocket leaves chat running, emits one visible reconnecting
