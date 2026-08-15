@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pressable } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { QueuedMessageDTO } from '@pop-agent/shared';
+import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { chatsService } from '../services/chats';
 import { eventStream } from '../services/events';
@@ -14,6 +14,7 @@ import { Composer } from '../ui/composer';
 import { RunStatusLine } from '../ui/run-status-line';
 import { resendSource } from '../lib/resend';
 import { shouldResumeFollowing } from '../lib/chat-follow';
+import { activeChatModel } from '../lib/active-chat-model';
 
 const NO_PENDING_MESSAGES: QueuedMessageDTO[] = [];
 
@@ -38,12 +39,14 @@ export function ChatPage() {
   const setExecutionMode = useChatStore((state) => state.setExecutionMode);
   const createChat = useChatStore((state) => state.createChat);
   const [models, setModels] = useState<ModelChoice[]>([]);
+  const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
   const [resendingId, setResendingId] = useState<string | undefined>(undefined);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const [editingPendingId, setEditingPendingId] = useState<string | undefined>(undefined);
   const editRequest = pending.find((message) => message.id === editingPendingId);
   const [queueActionError, setQueueActionError] = useState(false);
+  const currentModel = activeChatModel(chat, providers);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const lastScrollTop = useRef(0);
@@ -87,6 +90,7 @@ export function ChatPage() {
           providersService.list(),
           chatsService.recentModels().catch(() => ({ models: [] })), 
         ]);
+        setProviders(providers);
         setUnconfigured(providers.every((entry) => !entry.configured));
         const perProvider = await Promise.all(
           providers.map(async (entry) => {
@@ -469,6 +473,8 @@ export function ChatPage() {
         models={models}
         activeProvider={chat?.provider ?? ''}
         activeModel={chat?.model ?? ''}
+        currentProvider={currentModel?.currentProvider ?? ''}
+        currentModel={currentModel?.currentModel ?? ''}
         executionMode={chat?.executionMode ?? 'normal'}
         onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
         onSetModel={(model, provider) => void setModel(chatId, model, provider)}

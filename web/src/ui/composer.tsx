@@ -42,6 +42,8 @@ export function Composer({
   models,
   activeProvider,
   activeModel,
+  currentProvider,
+  currentModel,
   executionMode,
   onSetExecutionMode,
   onSetModel,
@@ -64,6 +66,9 @@ export function Composer({
   models: ModelChoice[];
   activeProvider: string;
   activeModel: string;
+  /** The effective pair after resolving the chat override or global default. */
+  currentProvider: string;
+  currentModel: string;
   executionMode: ExecutionMode;
   onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
   onSetModel: (model: string, provider: string) => void;
@@ -177,14 +182,6 @@ export function Composer({
   function updateSlash(value: string, caret: number): void {
     // Slash commands live at position zero only -- a "/" mid-sentence is prose.
     const before = value.slice(0, caret);
-    // `/model list` is the explicit form of the model picker. Keep the
-    // command in the composer until a model is chosen, just like `/model`.
-    if (/^\/model\s+list$/i.test(before)) {
-      setSlashMode('models');
-      setSlashQuery(undefined);
-      setSlashActive(0);
-      return;
-    }
     const match = /^\/([a-z]*)$/.exec(before);
     setSlashMode('commands');
     setSlashQuery(match?.[1]);
@@ -385,6 +382,18 @@ export function Composer({
       return;
     }
     if (!canSend || sending) return;
+    if (/^\/model\s+list$/i.test(text.trim())) {
+      persist('');
+      setSlashMode('commands');
+      setSlashQuery(undefined);
+      notify(
+        currentProvider.length === 0 || currentModel.length === 0
+          ? t('chat.currentModelUnavailable')
+          : t('chat.currentModel', { provider: currentProvider, model: currentModel }),
+      );
+      area.current?.focus();
+      return;
+    }
     setSending(true);
     setNotice(undefined);
     try {

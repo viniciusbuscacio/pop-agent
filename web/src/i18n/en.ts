@@ -172,6 +172,8 @@ export const en = {
   'chat.newMessages': 'New messages',
   'chat.model': 'Model',
   'chat.defaultModel': 'Default model',
+  'chat.currentModel': 'Provider: {provider} · Model: {model}',
+  'chat.currentModelUnavailable': 'No provider and model are active for this chat.',
   'chat.searchModels': 'Search models…',
   'chat.noModelsFound': 'No models found',
 

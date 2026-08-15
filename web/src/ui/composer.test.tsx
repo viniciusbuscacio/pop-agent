@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
+import { useNotificationsStore } from '../store/notifications';
 import { Composer } from './composer';
 
 const pending: QueuedMessageDTO = {
@@ -16,7 +17,12 @@ const pending: QueuedMessageDTO = {
 };
 
 function renderComposer(
-  props: { editRequest?: QueuedMessageDTO; executionMode?: 'normal' | 'plan' } = {},
+  props: {
+    editRequest?: QueuedMessageDTO;
+    executionMode?: 'normal' | 'plan';
+    currentProvider?: string;
+    currentModel?: string;
+  } = {},
 ) {
   const onSend = vi.fn().mockResolvedValue(undefined);
   const onUpdateQueued = vi.fn().mockResolvedValue(undefined);
@@ -35,6 +41,8 @@ function renderComposer(
       models={[]}
       activeProvider=""
       activeModel=""
+      currentProvider={props.currentProvider ?? ''}
+      currentModel={props.currentModel ?? ''}
       executionMode={props.executionMode ?? 'normal'}
       onSetExecutionMode={onSetExecutionMode}
       onSetModel={vi.fn()}
@@ -46,6 +54,7 @@ function renderComposer(
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  useNotificationsStore.getState().dismiss();
 });
 
 describe('pending message composition', () => {
@@ -70,6 +79,24 @@ describe('pending message composition', () => {
     fireEvent.focus(area);
     expect(composer.className).toContain('overflow-x-clip');
     expect(area.className).toContain('overflow-x-hidden');
+  });
+
+  it('reports only the active provider and model for /model list', () => {
+    const { onSend } = renderComposer({
+      currentProvider: 'openai-codex',
+      currentModel: 'gpt-5.6-sol',
+    });
+    const area = screen.getByRole('textbox');
+
+    fireEvent.change(area, { target: { value: '/model list' } });
+    expect(screen.queryByTestId('slash-menu')).toBeNull();
+    fireEvent.keyDown(area, { key: 'Enter' });
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect((area as HTMLTextAreaElement).value).toBe('');
+    expect(useNotificationsStore.getState().toast?.message).toBe(
+      'Provider: openai-codex · Model: gpt-5.6-sol',
+    );
   });
 
   it('keeps sending enabled while a run is busy so several inputs can queue', async () => {
