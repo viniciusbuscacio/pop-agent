@@ -38,6 +38,20 @@ describe('apiRequest', () => {
     await expect(apiRequest<void>('/chats/chat-1', { method: 'DELETE' })).resolves.toBeUndefined();
   });
 
+  it('sends only the machine the user selected explicitly', async () => {
+    localStorage.setItem('pop-agent.local-connection', 'local-mac');
+    const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await apiRequest('/chats/chat-1/messages', { method: 'POST', body: { text: 'hello' } });
+
+    expect((fetch.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({
+      'x-pop-agent-local-connection': 'local-mac',
+    });
+  });
+
   it('turns an error envelope into a typed ApiError', async () => {
     vi.stubGlobal('fetch', () =>
       Promise.resolve(

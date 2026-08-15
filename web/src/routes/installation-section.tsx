@@ -1,11 +1,17 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import type { LocalConnectionDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import {
   installPwa,
   pwaInstallStatus,
   subscribePwaInstall,
 } from '../services/pwa-install';
-import { Button, Card } from '../ui/controls';
+import { localAccessService } from '../services/local-access';
+import {
+  selectLocalConnection,
+  selectedLocalConnection,
+} from '../services/local-connection-selection';
+import { Button, Card, Select } from '../ui/controls';
 
 /**
  * Device setup instructions are generated from the origin that served this page.
@@ -16,8 +22,22 @@ export function InstallationSection() {
   const origin = window.location.origin.replace(/\/$/, '');
   const windowsCommand = `powershell -c "irm ${origin}/install.ps1 | iex"`;
   const unixCommands = `curl -fsSL ${origin}/install.sh | sh\n$HOME/.local/bin/pop login ${origin}`;
+  const localAccessWindowsCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${origin}/install-local-access.ps1' | iex"`;
+  const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; status=$?; rm -f "$tmp"; exit $status`;
   const pwaStatus = useSyncExternalStore(subscribePwaInstall, pwaInstallStatus, pwaInstallStatus);
   const [pwaDismissed, setPwaDismissed] = useState(false);
+  const [connections, setConnections] = useState<LocalConnectionDTO[]>([]);
+  const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
+
+  useEffect(() => {
+    void localAccessService.connections().then(({ connections: live }) => {
+      setConnections(live);
+      if (selectedConnection !== '' && !live.some((connection) => connection.id === selectedConnection)) {
+        selectLocalConnection(undefined);
+        setSelectedConnection('');
+      }
+    }).catch(() => setConnections([]));
+  }, [selectedConnection]);
 
   async function requestPwaInstall(): Promise<void> {
     setPwaDismissed(false);
@@ -67,6 +87,41 @@ export function InstallationSection() {
           <li>{t('settings.installation.webIphone')}</li>
           <li>{t('settings.installation.webAndroid')}</li>
         </ul>
+      </Card>
+
+      <Card className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-base font-semibold">{t('settings.installation.localAccessTitle')}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.localAccessBody')}</p>
+        </div>
+        <Select
+          id="local-access-machine"
+          label={t('settings.installation.localAccessMachine')}
+          hint={t('settings.installation.localAccessMachineHint')}
+          value={selectedConnection}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            selectLocalConnection(value === '' ? undefined : value);
+            setSelectedConnection(value);
+          }}
+        >
+          <option value="">{t('settings.installation.localAccessServerOnly')}</option>
+          {connections.map((connection) => (
+            <option key={connection.id} value={connection.id}>
+              {connection.machine.hostname} · {connection.machine.platform}/{connection.machine.arch}
+            </option>
+          ))}
+        </Select>
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">{t('settings.installation.localAccessWindows')}</h3>
+          <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessWindowsHint')}</p>
+          <CopyBlock value={localAccessWindowsCommand} testId="installation-local-access-windows" />
+        </section>
+        <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+          <h3 className="text-sm font-semibold">{t('settings.installation.localAccessUnix')}</h3>
+          <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessUnixHint')}</p>
+          <CopyBlock value={localAccessUnixCommand} testId="installation-local-access-unix" />
+        </section>
       </Card>
 
       <Card className="flex flex-col gap-4">

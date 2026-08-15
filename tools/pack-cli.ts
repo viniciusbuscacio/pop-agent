@@ -163,7 +163,33 @@ async function main(): Promise<void> {
     `${JSON.stringify({ version: launcherVersion, artifacts: launcherArtifacts }, undefined, 2)}\n`,
   );
 
-  process.stdout.write(`packed ${served} and Pop launcher ${launcherVersion}\n`);
+  const localAccessOut = join(out, 'local-access');
+  mkdirSync(localAccessOut, { recursive: true });
+  const localAccessArtifacts: Record<string, { file: string; size: number; sha256: string }> = {};
+  const trayTargets: [string, string][] = [['windows', 'amd64']];
+  if (process.platform === 'darwin') trayTargets.push(['darwin', process.arch === 'arm64' ? 'arm64' : 'amd64']);
+  for (const [os, arch] of trayTargets) {
+    const suffix = os === 'windows' ? '.exe' : '';
+    const file = `pop-local-access-${version}-${os}-${arch}${suffix}`;
+    const path = join(localAccessOut, file);
+    execFileSync('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path, '.'], {
+      cwd: join(root, 'local-access', 'tray'),
+      env: { ...process.env, CGO_ENABLED: os === 'windows' ? '0' : '1', GOOS: os, GOARCH: arch },
+      stdio: 'inherit',
+    });
+    const bytes = readFileSync(path);
+    localAccessArtifacts[`${os}-${arch}`] = {
+      file,
+      size: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    };
+  }
+  writeFileSync(
+    join(localAccessOut, 'manifest.json'),
+    `${JSON.stringify({ version, artifacts: localAccessArtifacts }, undefined, 2)}\n`,
+  );
+
+  process.stdout.write(`packed ${served}, Pop launcher ${launcherVersion}, and Pop Local Access ${version}\n`);
 }
 
 await main();

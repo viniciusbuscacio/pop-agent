@@ -1,0 +1,267 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sync"
+	"time"
+)
+
+const trayVersion = "0.2.30"
+
+type childEvent struct {
+	Kind      string `json:"kind"`
+	Server    string `json:"server"`
+	Transport string `json:"transport"`
+	Minimum   string `json:"minimum"`
+}
+
+type app struct {
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	command  *exec.Cmd
+	server   string
+	status   string
+	paused   bool
+	quitting bool
+	log      *os.File
+	view     trayView
+}
+
+func main() {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		fmt.Fprintln(os.Stderr, "Pop Local Access tray currently supports Windows and macOS.")
+		os.Exit(1)
+	}
+	if err := singleInstance(); err != nil {
+		if errors.Is(err, errAlreadyRunning) {
+			return
+		}
+		fmt.Fprintln(os.Stderr, "pop-local-access:", err)
+		os.Exit(1)
+	}
+	log, err := openLog()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "pop-local-access:", err)
+		os.Exit(1)
+	}
+	defer log.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	a := &app{ctx: ctx, cancel: cancel, status: "Starting", log: log}
+	if err := installTray(a); err != nil {
+		fmt.Fprintln(log, "tray:", err)
+		os.Exit(1)
+	}
+	go a.start()
+	runTray()
+}
+
+func (a *app) snapshot() viewState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	autostart, _ := startAtLoginEnabled()
+	return viewState{Server: a.server, Status: a.status, Paused: a.paused, StartAtLogin: autostart}
+}
+
+func (a *app) publish() { a.view.Update(a.snapshot()) }
+
+func (a *app) start() {
+	a.mu.Lock()
+	if a.quitting || a.paused || a.command != nil {
+		a.mu.Unlock()
+		return
+	}
+	pop, err := popPath()
+	if err != nil {
+		a.status = "Pop CLI not installed"
+		a.mu.Unlock()
+		a.publish()
+		return
+	}
+	cmd := exec.CommandContext(a.ctx, pop, "local-access", "--status-json")
+	home, _ := os.UserHomeDir()
+	cmd.Dir = home
+	cmd.SysProcAttr = childProcessAttributes()
+	stdout, err := cmd.StdoutPipe()
+	if err == nil {
+		cmd.Stderr = a.log
+		err = cmd.Start()
+	}
+	if err != nil {
+		a.status = "Could not start"
+		fmt.Fprintln(a.log, "start:", err)
+		a.mu.Unlock()
+		a.publish()
+		return
+	}
+	a.command = cmd
+	a.status = "Connecting"
+	a.mu.Unlock()
+	a.publish()
+	go a.scan(stdout)
+	go func() {
+		err := cmd.Wait()
+		a.mu.Lock()
+		if a.command == cmd {
+			a.command = nil
+		}
+		shouldRestart := !a.quitting && !a.paused
+		if shouldRestart {
+			a.status = "Disconnected — reconnecting"
+		}
+		a.mu.Unlock()
+		if err != nil {
+			fmt.Fprintln(a.log, "local access exited:", err)
+		}
+		a.publish()
+		if shouldRestart {
+			time.Sleep(5 * time.Second)
+			a.start()
+		}
+	}()
+}
+
+func (a *app) scan(reader io.Reader) {
+	scanner := bufio.NewScanner(io.LimitReader(reader, 1<<20))
+	for scanner.Scan() {
+		var event childEvent
+		if json.Unmarshal(scanner.Bytes(), &event) != nil {
+			continue
+		}
+		a.mu.Lock()
+		switch event.Kind {
+		case "starting":
+			a.server = safeOrigin(event.Server)
+			a.status = "Connecting"
+		case "attached":
+			a.status = "Connected"
+		case "closed":
+			a.status = "Disconnected — reconnecting"
+		case "authentication-required":
+			a.status = "Authentication required"
+		case "outdated":
+			a.status = "Update required"
+		}
+		a.mu.Unlock()
+		a.publish()
+	}
+}
+
+func (a *app) stop() {
+	a.mu.Lock()
+	cmd := a.command
+	a.command = nil
+	a.mu.Unlock()
+	if cmd != nil {
+		terminateChild(cmd)
+	}
+}
+
+func (a *app) togglePause() {
+	a.mu.Lock()
+	a.paused = !a.paused
+	paused := a.paused
+	if paused {
+		a.status = "Paused"
+	} else {
+		a.status = "Connecting"
+	}
+	a.mu.Unlock()
+	if paused {
+		a.stop()
+	} else {
+		go a.start()
+	}
+	a.publish()
+}
+
+func (a *app) reconnect() {
+	a.mu.Lock()
+	if a.paused {
+		a.mu.Unlock()
+		return
+	}
+	a.status = "Connecting"
+	a.mu.Unlock()
+	a.stop()
+	go a.start()
+	a.publish()
+}
+
+func (a *app) toggleStartAtLogin() {
+	enabled, _ := startAtLoginEnabled()
+	if err := setStartAtLogin(!enabled); err != nil {
+		fmt.Fprintln(a.log, "start at login:", err)
+	}
+	a.publish()
+}
+
+func (a *app) openPop() {
+	a.mu.Lock()
+	server := a.server
+	a.mu.Unlock()
+	if server != "" {
+		_ = openExternal(server)
+	}
+}
+
+func (a *app) diagnostics() { _ = openExternal(a.log.Name()) }
+
+func (a *app) quit() {
+	a.mu.Lock()
+	a.quitting = true
+	a.mu.Unlock()
+	a.cancel()
+	a.stop()
+	stopTray()
+}
+
+func popPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(home, ".local", "bin", "pop")
+	if runtime.GOOS == "windows" {
+		path = filepath.Join(os.Getenv("LOCALAPPDATA"), "PopAgent", "bin", "pop.exe")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func safeOrigin(value string) string {
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+func openLog() (*os.File, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(home, ".local", "state", "pop-agent")
+	if runtime.GOOS == "darwin" {
+		dir = filepath.Join(home, "Library", "Logs", "Pop Agent")
+	} else if runtime.GOOS == "windows" {
+		dir = filepath.Join(os.Getenv("LOCALAPPDATA"), "Pop Agent", "Logs")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(filepath.Join(dir, "local-access.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+}

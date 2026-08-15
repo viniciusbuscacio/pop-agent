@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { Hono, type Context } from 'hono';
 
 interface LauncherArtifact {
@@ -12,6 +13,8 @@ interface LauncherRelease {
   version: string;
   artifacts: Record<string, LauncherArtifact>;
 }
+
+type LocalAccessRelease = LauncherRelease;
 
 export interface CliInstallerDeps {
   cliPack: string;
@@ -44,6 +47,46 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
       'cache-control': 'no-store',
       'content-disposition': 'inline; filename="install.ps1"',
     });
+  });
+
+  routes.get('/install-local-access.sh', (c) => {
+    const release = readLocalAccessRelease(deps.cliPack);
+    if (readLauncherRelease(deps.cliPack) === undefined || release === undefined) return c.notFound();
+    return c.body(unixLocalAccessInstaller(requestOrigin(c), release), 200, {
+      'content-type': 'text/x-shellscript; charset=utf-8',
+      'cache-control': 'no-store',
+      'content-disposition': 'inline; filename="install-local-access.sh"',
+    });
+  });
+
+  routes.get('/install-local-access.ps1', (c) => {
+    const release = readLocalAccessRelease(deps.cliPack);
+    if (readLauncherRelease(deps.cliPack) === undefined || release === undefined) return c.notFound();
+    return c.body(windowsLocalAccessInstaller(requestOrigin(c), release), 200, {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+      'content-disposition': 'inline; filename="install-local-access.ps1"',
+    });
+  });
+
+  routes.get('/local-access/:file', (c) => {
+    const release = readLocalAccessRelease(deps.cliPack);
+    const artifact = release === undefined
+      ? undefined
+      : Object.values(release.artifacts).find((entry) => entry.file === c.req.param('file'));
+    if (artifact === undefined) return c.notFound();
+    const path = join(deps.cliPack, 'local-access', artifact.file);
+    try {
+      if (statSync(path).size !== artifact.size) return c.notFound();
+      return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {
+        'content-type': 'application/octet-stream',
+        'content-length': String(artifact.size),
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-disposition': `attachment; filename="${artifact.file}"`,
+      });
+    } catch {
+      return c.notFound();
+    }
   });
 
   return routes;
@@ -138,6 +181,114 @@ Write-Host "Next: pop login $origin"
 `;
 }
 
+export function unixLocalAccessInstaller(origin: string, release: LocalAccessRelease): string {
+  const cases = ['darwin-arm64', 'darwin-amd64']
+    .flatMap((target) => {
+      const artifact = release.artifacts[target];
+      return artifact === undefined
+        ? []
+        : [`  ${target}) file='${shellLiteral(artifact.file)}'; sha='${artifact.sha256}' ;;`];
+    })
+    .join('\n');
+  return `#!/usr/bin/env bash
+set -euo pipefail
+origin='${shellLiteral(origin)}'
+pop_bin="$HOME/.local/bin/pop"
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT HUP INT TERM
+curl -fsSL --retry 2 "$origin/install.sh" -o "$tmp"
+sh "$tmp"
+if ! command -v node >/dev/null 2>&1 && ! "$pop_bin" runtime doctor >/dev/null 2>&1; then
+  echo 'Pop Local Access requires Node.js 22.19.0 or newer. Install it from https://nodejs.org/ and run this command again.' >&2
+  exit 1
+fi
+"$pop_bin" login "$origin"
+
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+case "$arch" in arm64|aarch64) arch=arm64 ;; x86_64|amd64) arch=amd64 ;; esac
+case "$os-$arch" in
+${cases}
+  *) echo "Pop Local Access tray is not released for $os-$arch yet." >&2; exit 1 ;;
+esac
+app="$HOME/Applications/Pop Local Access.app"
+bin="$app/Contents/MacOS/Pop Local Access"
+mkdir -p "$app/Contents/MacOS"
+curl -fsSL --retry 2 "$origin/local-access/$file" -o "$tmp"
+actual=$(shasum -a 256 "$tmp" | awk '{print $1}')
+[ "$actual" = "$sha" ] || { echo "Pop Local Access checksum mismatch." >&2; exit 1; }
+chmod 755 "$tmp"
+mv -f "$tmp" "$bin"
+cat > "$app/Contents/Info.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.popagent.local-access</string>
+<key>CFBundleName</key><string>Pop Local Access</string>
+<key>CFBundleExecutable</key><string>Pop Local Access</string>
+<key>LSUIElement</key><true/>
+</dict></plist>
+EOF
+label='com.popagent.local-access'
+plist="$HOME/Library/LaunchAgents/$label.plist"
+mkdir -p "$HOME/Library/LaunchAgents"
+escaped_bin=$(printf '%s' "$bin" | sed 's/&/\\&amp;/g; s/</\\&lt;/g; s/>/\\&gt;/g')
+cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>$label</string><key>ProgramArguments</key><array><string>$escaped_bin</string></array><key>RunAtLoad</key><true/></dict></plist>
+EOF
+launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "$plist"
+launchctl kickstart -k "gui/$(id -u)/$label"
+trap - EXIT HUP INT TERM
+echo 'Pop Local Access is installed. Look for it in the macOS menu bar.'
+`;
+}
+
+export function windowsLocalAccessInstaller(origin: string, release: LocalAccessRelease): string {
+  const artifact = requiredArtifact(release, 'windows-amd64');
+  return `# Pop Local Access installer for 64-bit Windows
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$origin = '${powershellLiteral(origin)}'
+$bootstrap = Join-Path ([IO.Path]::GetTempPath()) ('pop-install-' + [guid]::NewGuid().ToString('N') + '.ps1')
+try {
+  Invoke-WebRequest -UseBasicParsing "$origin/install.ps1" -OutFile $bootstrap
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
+  if ($LASTEXITCODE -ne 0) { throw "Pop launcher installation failed with exit code $LASTEXITCODE" }
+} finally { Remove-Item -Force -ErrorAction SilentlyContinue $bootstrap }
+$pop = Join-Path $env:LOCALAPPDATA 'PopAgent\\bin\\pop.exe'
+if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
+  throw 'Pop Local Access requires Node.js 22.19.0 or newer. Install it from https://nodejs.org/ and run this command again.'
+}
+& $pop login $origin
+if ($LASTEXITCODE -ne 0) { throw 'Pop Agent sign-in did not complete.' }
+$configRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_CONFIG_HOME)) { Join-Path $HOME '.config\\pop-agent' } else { Join-Path $env:XDG_CONFIG_HOME 'pop-agent' }
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+foreach ($path in @($configRoot, (Join-Path $configRoot 'profiles.json'))) {
+  if (Test-Path -LiteralPath $path) {
+    & icacls.exe $path /inheritance:r /grant:r "\${identity}:(F)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not protect $path" }
+  }
+}
+$installDir = Join-Path $env:LOCALAPPDATA 'PopAgent\\LocalAccess'
+$tray = Join-Path $installDir 'pop-local-access.exe'
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ('pop-local-access-' + [guid]::NewGuid().ToString('N') + '.exe')
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Invoke-WebRequest -UseBasicParsing "$origin/local-access/${powershellLiteral(artifact.file)}" -OutFile $tmp
+$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $tmp).Hash.ToLowerInvariant()
+if ($actual -ne '${artifact.sha256}') { Remove-Item -Force $tmp; throw 'Pop Local Access checksum mismatch.' }
+Move-Item -Force $tmp $tray
+$run = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+New-Item -Path $run -Force | Out-Null
+Set-ItemProperty -Path $run -Name 'Pop Local Access' -Value ('"' + $tray + '"')
+Get-Process pop-local-access -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Process -FilePath $tray
+Write-Host 'Pop Local Access is installed. Look for it in the Windows tray.' -ForegroundColor Green
+`;
+}
+
 function readLauncherRelease(cliPack: string): LauncherRelease | undefined {
   try {
     const release = JSON.parse(
@@ -146,6 +297,23 @@ function readLauncherRelease(cliPack: string): LauncherRelease | undefined {
     return typeof release.version === 'string' && release.artifacts !== undefined
       ? release
       : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readLocalAccessRelease(cliPack: string): LocalAccessRelease | undefined {
+  try {
+    const release = JSON.parse(
+      readFileSync(join(cliPack, 'local-access', 'manifest.json'), 'utf8'),
+    ) as LocalAccessRelease;
+    if (typeof release.version !== 'string' || release.artifacts === undefined) return undefined;
+    for (const artifact of Object.values(release.artifacts)) {
+      if (artifact.file.includes('/') || artifact.file.includes('\\') || artifact.size <= 0 || !/^[a-f0-9]{64}$/.test(artifact.sha256)) {
+        return undefined;
+      }
+    }
+    return release;
   } catch {
     return undefined;
   }

@@ -207,6 +207,19 @@ export const en = {
     'iPhone or iPad: open in Safari, tap Share, then Add to Home Screen.',
   'settings.installation.webAndroid':
     'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
+  'settings.installation.localAccessTitle': 'Pop Local Access (optional)',
+  'settings.installation.localAccessBody':
+    'Keep this computer connected so a PWA can explicitly use its files and terminal. A visible tray shows the connection and lets you pause it at any time.',
+  'settings.installation.localAccessMachine': 'Machine used by new messages',
+  'settings.installation.localAccessMachineHint':
+    'Server only is the safe default. Selecting a connected computer explicitly enables its local tools.',
+  'settings.installation.localAccessServerOnly': 'Server only — no computer access',
+  'settings.installation.localAccessWindows': 'Windows (PowerShell)',
+  'settings.installation.localAccessWindowsHint':
+    'Copy this command into PowerShell. Pop asks for your password privately, installs the tray for your Windows user and starts it at sign-in.',
+  'settings.installation.localAccessUnix': 'macOS (Terminal)',
+  'settings.installation.localAccessUnixHint':
+    'Copy both lines into Terminal. Pop asks for your password privately, installs the menu-bar app for your macOS user and starts it at sign-in.',
   'settings.installation.cliTitle': 'Command-line app (Pop CLI)',
   'settings.installation.cliBody':
     'The CLI provides terminal chat and local tools from the computer where it runs.',

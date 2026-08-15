@@ -1,6 +1,12 @@
-import { CLIENT_HEADER, CLIENT_PLATFORM_HEADER, SESSION_TOKEN_HEADER } from '@pop-agent/shared';
+import {
+  CLIENT_HEADER,
+  CLIENT_PLATFORM_HEADER,
+  LOCAL_CONNECTION_HEADER,
+  SESSION_TOKEN_HEADER,
+} from '@pop-agent/shared';
 import { healthMonitor } from './health';
 import { session } from './session';
+import { selectedLocalConnection } from './local-connection-selection';
 
 /**
  * The only module in the app that calls `fetch` (pop-agent.spec §14, enforced by
@@ -116,6 +122,8 @@ export async function apiRequest<T>(
   const headers: Record<string, string> = clientHeaders();
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
+  const localConnection = selectedLocalConnection();
+  if (localConnection !== undefined) headers[LOCAL_CONNECTION_HEADER] = localConnection;
 
   const response = await probed(() =>
     fetch(`${BASE}${path}`, {

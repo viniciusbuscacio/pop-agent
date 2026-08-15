@@ -2,7 +2,13 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createCliInstallerRoutes, unixInstaller, windowsInstaller } from './cli-installer-routes.js';
+import {
+  createCliInstallerRoutes,
+  unixInstaller,
+  unixLocalAccessInstaller,
+  windowsInstaller,
+  windowsLocalAccessInstaller,
+} from './cli-installer-routes.js';
 
 const release = {
   version: '1.0.0',
@@ -22,6 +28,19 @@ describe('native Pop launcher installers', () => {
     cliPack = mkdtempSync(join(tmpdir(), 'pop-launcher-pack-'));
     mkdirSync(join(cliPack, 'launcher'));
     writeFileSync(join(cliPack, 'launcher', 'manifest.json'), JSON.stringify(release));
+    mkdirSync(join(cliPack, 'local-access'));
+    const localRelease = {
+      version: '0.2.30',
+      artifacts: {
+        'darwin-arm64': { file: 'pop-local-access-0.2.30-darwin-arm64', size: 10, sha256: '1'.repeat(64) },
+        'darwin-amd64': { file: 'pop-local-access-0.2.30-darwin-amd64', size: 10, sha256: '2'.repeat(64) },
+        'windows-amd64': { file: 'pop-local-access-0.2.30-windows-amd64.exe', size: 10, sha256: '3'.repeat(64) },
+      },
+    };
+    writeFileSync(join(cliPack, 'local-access', 'manifest.json'), JSON.stringify(localRelease));
+    for (const artifact of Object.values(localRelease.artifacts)) {
+      writeFileSync(join(cliPack, 'local-access', artifact.file), '0123456789');
+    }
   });
 
   afterEach(() => rmSync(cliPack, { recursive: true, force: true }));
@@ -53,6 +72,22 @@ describe('native Pop launcher installers', () => {
     expect(script).toContain('$HOME/.local/bin');
   });
 
+  it('serves background PLA installers for PowerShell and bash', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
+    const unix = await (await routes.request('https://personal-pop.example/install-local-access.sh')).text();
+    const windows = await (await routes.request('https://personal-pop.example/install-local-access.ps1')).text();
+
+    expect(unix).toContain("origin='https://personal-pop.example'");
+    expect(unix).toContain('Pop Local Access.app');
+    expect(unix).toContain('com.popagent.local-access');
+    expect(unix).toContain('launchctl bootstrap');
+    expect(windows).toContain("$origin = 'https://personal-pop.example'");
+    expect(windows).toContain('pop-local-access-0.2.30-windows-amd64.exe');
+    expect(windows).toContain("Name 'Pop Local Access'");
+    expect(windows).toContain('icacls.exe');
+    expect(windows).not.toContain('secret-session');
+  });
+
   it('keeps the public HTTPS origin behind the local reverse proxy', async () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     const response = await routes.request('http://127.0.0.1:3000/install.ps1', {
@@ -68,6 +103,12 @@ describe('native Pop launcher installers', () => {
     );
     expect(unixInstaller("https://pop.example/a'b", release)).toContain(
       "origin='https://pop.example/a'\\''b'",
+    );
+    expect(unixLocalAccessInstaller("https://pop.example/a'b", release)).toContain(
+      "origin='https://pop.example/a'\\''b'",
+    );
+    expect(windowsLocalAccessInstaller("https://pop.example/a'b", release)).toContain(
+      "$origin = 'https://pop.example/a''b'",
     );
   });
 

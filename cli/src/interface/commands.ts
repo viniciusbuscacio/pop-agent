@@ -43,6 +43,8 @@ export interface Context {
   localAccess: (options: LocalAccessOptions) => LocalAccessClient;
   /** Runs npm without a shell; injected so update tests never modify the machine. */
   installCli: (packageUrl: string) => Promise<number>;
+  /** Resolves on SIGINT/SIGTERM; injected so the background command is testable. */
+  waitForShutdown: () => Promise<void>;
 }
 
 export async function login(
@@ -61,6 +63,62 @@ export async function login(
     context.terminal.line(describe(error));
     return 1;
   }
+}
+
+export async function backgroundLocalAccess(
+  context: Context,
+  options: { json?: boolean } = {},
+): Promise<number> {
+  const profile = context.profiles.get(context.profile);
+  if (profile === undefined) {
+    context.terminal.line('No server configured. Run: pop login <url>');
+    return 1;
+  }
+
+  const report = (event: Record<string, unknown>, text: string): void => {
+    context.terminal.line(options.json === true ? JSON.stringify(event) : text);
+  };
+  let fatal: () => void = () => undefined;
+  const stoppedByServer = new Promise<void>((resolve) => {
+    fatal = resolve;
+  });
+  const localAccess = context.localAccess({
+    url: profile.url,
+    token: () => context.profiles.get(context.profile)?.token ?? profile.token,
+    version: VERSION,
+    role: 'background',
+    onEvent: (event) => {
+      if (event.kind === 'attached') {
+        report(event, `Pop Local Access connected (${event.transport}).`);
+      } else if (event.kind === 'closed') {
+        report(event, 'Pop Local Access disconnected; reconnecting…');
+      } else if (event.kind === 'authentication-required') {
+        report(event, 'Pop Local Access needs you to sign in again.');
+      } else if (event.kind === 'outdated') {
+        report(event, `Pop Local Access requires Pop Agent ${event.minimum} or newer.`);
+        fatal();
+      }
+    },
+  });
+
+  // A background process does not make ordinary API calls, so it must create
+  // its own authenticated hop to receive sliding session renewal. The socket
+  // will reconnect with the newly persisted token when its original lease ends.
+  const refresh = context.api({ url: profile.url, token: profile.token });
+  const refreshTimer = setInterval(() => {
+    void refresh.request<void>('/session/refresh', { method: 'POST' }).catch(() => undefined);
+  }, 6 * 60 * 60 * 1_000);
+  refreshTimer.unref?.();
+
+  localAccess.connect();
+  report({ kind: 'starting', server: profile.url }, `Pop Local Access is running for ${profile.url}.`);
+  try {
+    await Promise.race([context.waitForShutdown(), stoppedByServer]);
+  } finally {
+    clearInterval(refreshTimer);
+    localAccess.close();
+  }
+  return 0;
 }
 
 export function logout(context: Context): number {

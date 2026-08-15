@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 2.04 — 2026-08-15.
+Version 2.05 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1411,9 +1411,11 @@ remains for migration. The client carries no server code: no `better-sqlite3`,
 no `argon2`, nothing that knows where `secret.key` lives. It also carries **Pop
 Local Access (PLA)**, an internal library used by the interactive CLI. PLA never
 creates a chat or invokes an LLM. The installed PWA and local access are separate:
-the browser owns the PWA, while a future optional background PLA installer will
-own its own lifecycle without introducing a native WebView wrapper. Until that
-installer ships, local access exists only for the lifetime of the CLI process.
+the browser owns the PWA, while the optional Pop Local Access tray owns its own
+lifecycle without introducing a native WebView wrapper. The tray is a minimal
+native host in `local-access/tray`: it supervises the TypeScript PLA runtime from
+the CLI, exposes connection/pause/reconnect/start-at-login controls and opens the
+PWA, but contains no WebView, chat UI, agent loop or local-tools protocol.
 
 PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
 failures with ordinary authenticated HTTPS still healthy, it falls back to
@@ -1516,9 +1518,21 @@ Pop Local Access is optional and separate from PWA installation. Installing the
 PWA grants no filesystem or command access. A local connection is outbound,
 authenticated and message-scoped; a PWA must explicitly select a live machine
 before a message can use it. Merely holding the user's web session never selects
-a background computer. The background installer, lifecycle controls and Settings
-machine selector are a subsequent PLA milestone; until then, the existing CLI
-provides local access only while that CLI process is running.
+a background computer.
+
+Settings publishes same-origin PowerShell and bash commands. They install the
+checksummed launcher and versioned tray per user, perform an interactive hidden
+password login, protect the CLI profile and register the visible tray at login.
+No password or token appears in argv, environment, URL, script or shell history.
+The first tray release targets Windows and macOS; unsupported platforms are
+refused honestly. The tray supervises `pop local-access --status-json`, shows
+Connected/Connecting/Paused/Auth or update failures, and offers Open Pop Agent,
+Pause/Resume, Reconnect, Start at Login, Diagnostics and Quit.
+
+`GET /v1/local-tools/connections` lists the authenticated user's live machine
+connections. Settings stores a device-local explicit selection; Server only is
+the default. API sends `x-pop-agent-local-connection` only after that choice. A
+stale selected id is rejected rather than falling back to another computer.
 
 ## 18. Production exposure
 

@@ -3,7 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profiles, type Profile, type ProfileStore } from '../application/profiles.js';
 import { Preferences, type CliPreferences, type PreferenceStore } from '../application/preferences.js';
 import { PopAgentApi } from '../infrastructure/api.js';
-import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './commands.js';
+import {
+  ask,
+  backgroundLocalAccess,
+  chats,
+  login,
+  logout,
+  servers,
+  update,
+  type Context,
+  type Terminal,
+} from './commands.js';
 
 /**
  * The whole client, driven without a server (docs/cli.md, "Testable without a
@@ -72,6 +82,7 @@ function contextWith(
       new PopAgentApi({ ...options, fetch: http, onToken: (token) => profiles.refresh('default', token) }),
     localAccess: localAccessFactory,
     installCli: () => Promise.resolve(0),
+    waitForShutdown: () => Promise.resolve(),
   };
 }
 
@@ -128,6 +139,32 @@ describe('pop without a profile', () => {
     expect(await chats(contextWith(http as never))).toBe(1);
     expect(said()).toContain('pop login');
     expect(http).not.toHaveBeenCalled();
+  });
+});
+
+describe('pop local-access', () => {
+  it('runs a background PLA connection until the service asks it to stop', async () => {
+    const profiles = new Profiles(
+      new MemoryStore({ default: { url: 'https://pop.example', token: 'secret-session' } }),
+    );
+    let options: Parameters<Context['localAccess']>[0] | undefined;
+    const local = { connect: vi.fn(), close: vi.fn(), connectionId: undefined };
+    const context = contextWith(vi.fn() as never, profiles, (received) => {
+      options = received;
+      return local;
+    });
+
+    expect(await backgroundLocalAccess(context)).toBe(0);
+    expect(local.connect).toHaveBeenCalledOnce();
+    expect(local.close).toHaveBeenCalledOnce();
+    expect(options?.role).toBe('background');
+    expect(typeof options?.token).toBe('function');
+    expect(said()).toContain('Pop Local Access is running');
+  });
+
+  it('refuses to start without a signed-in profile', async () => {
+    expect(await backgroundLocalAccess(contextWith(vi.fn() as never))).toBe(1);
+    expect(said()).toContain('pop login');
   });
 });
 

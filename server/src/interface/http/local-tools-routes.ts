@@ -152,6 +152,22 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     }),
   );
 
+  routes.get('/local-tools/connections', (c) =>
+    c.json({
+      connections: deps.localConnections.connections().map((connection) => ({
+        id: connection.id,
+        role: connection.role ?? 'interactive',
+        machine: {
+          ...(connection.machine.machineId === undefined ? {} : { machineId: connection.machine.machineId }),
+          hostname: connection.machine.hostname,
+          platform: connection.machine.platform,
+          arch: connection.machine.arch,
+          clientVersion: connection.machine.clientVersion,
+        },
+      })),
+    }),
+  );
+
   routes.post('/local-tools/connections', async (c) => {
     const session = sessionOf(c, deps.auth);
     if (session === undefined) return invalidSession(c);
@@ -290,7 +306,7 @@ function validAttach(value: unknown): AttachFrame | undefined {
   const clientVersion = stringField(machine, 'clientVersion');
   if ([hostname, platform, arch, cwd, clientVersion].some((entry) => entry === undefined)) return undefined;
   const role = frame['role'];
-  if (role !== undefined && role !== 'interactive') return undefined;
+  if (role !== undefined && role !== 'interactive' && role !== 'background') return undefined;
   const machineId = stringField(machine, 'machineId');
   return {
     kind: 'attach',

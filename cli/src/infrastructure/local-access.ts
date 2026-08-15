@@ -16,7 +16,7 @@ export interface LocalAccessOptions {
   url: string;
   token: string | (() => string);
   version: string;
-  role?: 'interactive';
+  role?: 'interactive' | 'background';
   onEvent?: (event: LocalAccessEvent) => void;
   reconnectDelayMs?: number;
   /** Test override; production uses the protocol's 45-second local lease. */
@@ -28,6 +28,7 @@ export type LocalAccessEvent =
   | { kind: 'attached'; connectionId: string; transport: 'wss' | 'https-long-poll' }
   | { kind: 'behind'; server: string; install: string }
   | { kind: 'outdated'; minimum: string; server: string; install: string }
+  | { kind: 'authentication-required' }
   | { kind: 'ran'; command: string }
   | { kind: 'closed' }
   | { kind: 'transport'; transport: 'wss' | 'https-long-poll' };
@@ -144,7 +145,10 @@ export class LocalAccess {
         await this.openPolling();
         return;
       }
-      if (response.status === 401 || response.status === 403) this.refused = true;
+      if (response.status === 401 || response.status === 403) {
+        this.refused = true;
+        this.options.onEvent?.({ kind: 'authentication-required' });
+      }
     } catch {
       // General network failure: HTTPS is not a fallback when HTTPS is down too.
     }
@@ -164,6 +168,7 @@ export class LocalAccess {
       });
       if (response.status === 401 || response.status === 403) {
         this.refused = true;
+        this.options.onEvent?.({ kind: 'authentication-required' });
         this.disconnected(false);
         return;
       }

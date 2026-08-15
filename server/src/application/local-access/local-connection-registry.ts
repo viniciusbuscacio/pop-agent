@@ -5,7 +5,7 @@ export const MISSED_PINGS_BEFORE_GONE = 3;
 export const MAX_CONCURRENT_CALLS = 4;
 export const MAX_CALL_OUTPUT_BYTES = 50 * 1024 * 1024;
 
-export type LocalConnectionRole = 'interactive';
+export type LocalConnectionRole = 'interactive' | 'background';
 
 export interface LocalMachine {
   machineId?: string;
@@ -172,6 +172,12 @@ export class LocalConnectionRegistry {
 
   attached(): LocalMachine[] {
     return [...this.entries.values()].map((entry) => entry.connection.machine);
+  }
+
+  connections(): LocalConnection[] {
+    return [...this.entries.values()]
+      .map((entry) => entry.connection)
+      .filter((connection) => !this.expired(connection));
   }
 
   beat(): void {

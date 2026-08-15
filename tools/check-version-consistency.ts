@@ -60,6 +60,12 @@ export function versionConsistencyErrors(root: string): string[] {
     errors.push(`cli/src/version.ts VERSION is ${JSON.stringify(cliVersion)}; expected ${version}`);
   }
 
+  const traySource = readText(join(root, 'local-access/tray/main.go'));
+  const trayVersion = /const trayVersion = "([^"]+)"/.exec(traySource)?.[1];
+  if (trayVersion !== version) {
+    errors.push(`local-access/tray/main.go trayVersion is ${JSON.stringify(trayVersion)}; expected ${version}`);
+  }
+
   // Packed artifacts are immutable release snapshots and may trail the server.
   // Their own versions stay valid; a source release must not relabel an old tgz.
   const packedCliManifest = join(root, 'cli/pack/package.json');

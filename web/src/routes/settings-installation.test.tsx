@@ -10,6 +10,10 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
+vi.mock('../services/local-access', () => ({
+  localAccessService: { connections: vi.fn(() => Promise.resolve({ connections: [] })) },
+}));
+
 beforeEach(() => {
   window.history.replaceState({}, '', '/settings?section=installation');
 });

@@ -8,7 +8,17 @@ import { FilePreferenceStore } from './infrastructure/preference-file.js';
 import { FileProfileStore } from './infrastructure/profile-file.js';
 import { LocalAccess } from './infrastructure/local-access.js';
 import { installCli } from './infrastructure/installer.js';
-import { ask, chats, login, logout, servers, update, type Context, type Terminal } from './interface/commands.js';
+import {
+  ask,
+  backgroundLocalAccess,
+  chats,
+  login,
+  logout,
+  servers,
+  update,
+  type Context,
+  type Terminal,
+} from './interface/commands.js';
 import { chat } from './interface/chat.js';
 import { VERSION } from './version.js';
 
@@ -28,6 +38,7 @@ const USAGE = `pop — a terminal client for your Pop Agent
   pop servers               list the servers you have signed in to
   pop chats                 list conversations
   pop update                update this CLI from the selected server
+  pop local-access          keep this computer connected in the background
 
   --version                  print this installed CLI version and exit
   --server <name>            use a saved server other than "${DEFAULT_PROFILE}"
@@ -40,6 +51,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
   const profile = takeOption(args, '--server') ?? DEFAULT_PROFILE;
   const chatId = takeOption(args, '--chat');
   const thinking = takeFlag(args, '--thinking');
+  const statusJson = takeFlag(args, '--status-json');
   const prompt = takeOption(args, '-p');
   const command = args[0];
 
@@ -61,6 +73,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
       new PopAgentApi({ ...options, onToken: (token) => profiles.refresh(profile, token) }),
     localAccess: (options) => new LocalAccess(options),
     installCli,
+    waitForShutdown,
   };
 
   if (prompt !== undefined) {
@@ -91,6 +104,8 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
       return chats(context);
     case 'update':
       return update(context);
+    case 'local-access':
+      return backgroundLocalAccess(context, { json: statusJson });
     default:
       // A bare argument is the question, which is what pi and Claude Code do
       // and what the hand expects (docs/cli.md).
@@ -114,6 +129,18 @@ function takeFlag(args: string[], name: string): boolean {
   if (index === -1) return false;
   args.splice(index, 1);
   return true;
+}
+
+function waitForShutdown(): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      process.off('SIGINT', done);
+      process.off('SIGTERM', done);
+      resolve();
+    };
+    process.once('SIGINT', done);
+    process.once('SIGTERM', done);
+  });
 }
 
 /** The real terminal. Kept here so `run` can be driven by a fake in tests. */

@@ -53,6 +53,22 @@ export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
  */
 export const LOCAL_CONNECTION_HEADER = 'x-pop-agent-local-connection';
 
+export interface LocalConnectionDTO {
+  id: string;
+  role: 'interactive' | 'background';
+  machine: {
+    machineId?: string;
+    hostname: string;
+    platform: string;
+    arch: string;
+    clientVersion: string;
+  };
+}
+
+export interface LocalConnectionsResponse {
+  connections: LocalConnectionDTO[];
+}
+
 /**
  * The oldest `pop` this server will talk to (docs/cli.md, Version
  * compatibility).

@@ -76,6 +76,22 @@ describe('HTTPS local-tools fallback', () => {
     await expect(result).resolves.toMatchObject({ ok: true, output: 'YQ==' });
   });
 
+  it('lists live machines so the PWA can select one explicitly', async () => {
+    const connected = await attach();
+    const id = ((await connected.json()) as { connectionId: string }).connectionId;
+    const response = await request('/v1/local-tools/connections', 'GET');
+
+    expect(await response.json()).toEqual({
+      connections: [{
+        id,
+        role: 'interactive',
+        machine: {
+          machineId: 'machine-test', hostname: 'test-mac', platform: 'darwin', arch: 'arm64', clientVersion: '99.0.0',
+        },
+      }],
+    });
+  });
+
   it('removes the selected connection on delete', async () => {
     const connected = await attach();
     const id = ((await connected.json()) as { connectionId: string }).connectionId;
