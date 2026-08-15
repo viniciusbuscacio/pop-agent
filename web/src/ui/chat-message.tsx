@@ -15,11 +15,13 @@ function ChatMessageView({
   onResend,
   resending = false,
   onChangeModel,
+  systemTone = 'default',
 }: {
   message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice'>;
   onResend?: () => void;
   resending?: boolean;
   onChangeModel?: () => void;
+  systemTone?: 'default' | 'info';
 }) {
   const showThinking = useThinkingStore((state) => state.show);
 
@@ -57,7 +59,9 @@ function ChatMessageView({
     return (
       <div
         data-testid="message-system"
-        className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-center text-xs text-[var(--danger)]"
+        className={`flex min-w-0 flex-wrap items-center justify-center gap-2 text-center text-xs ${
+          systemTone === 'info' ? 'text-[var(--muted)]' : 'text-[var(--danger)]'
+        }`}
       >
         <span className="[overflow-wrap:anywhere]">{message.content}</span>
         {onResend === undefined ? null : (

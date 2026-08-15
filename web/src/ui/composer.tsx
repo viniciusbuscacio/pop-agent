@@ -44,6 +44,7 @@ export function Composer({
   activeModel,
   currentProvider,
   currentModel,
+  onShowSystemMessage,
   executionMode,
   onSetExecutionMode,
   onSetModel,
@@ -69,6 +70,7 @@ export function Composer({
   /** The effective pair after resolving the chat override or global default. */
   currentProvider: string;
   currentModel: string;
+  onShowSystemMessage: (message: string) => void;
   executionMode: ExecutionMode;
   onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
   onSetModel: (model: string, provider: string) => void;
@@ -386,7 +388,7 @@ export function Composer({
       persist('');
       setSlashMode('commands');
       setSlashQuery(undefined);
-      notify(
+      onShowSystemMessage(
         currentProvider.length === 0 || currentModel.length === 0
           ? t('chat.currentModelUnavailable')
           : t('chat.currentModel', { provider: currentProvider, model: currentModel }),

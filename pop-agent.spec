@@ -898,8 +898,9 @@ events from stale runs.
 - Files the agent creates: download link in chat when a tool reports a
   file + a workspace file browser.
 - Slash commands: `/model`, `/model list`, `/new`, `/memory`; extensible menu on `/`.
-  `/model` opens model selection; `/model list` only reports the provider and
-  model currently active for that chat and never sends a message to the model.
+  `/model` opens model selection; `/model list` adds a client-side system message
+  with the provider and model currently active for that chat and never sends it
+  to the model.
 - Voice (v0.2): aw's pipeline copied as-is — MediaRecorder → upload →
   ffmpeg (WAV 16k mono) → whisper.cpp (`whisper-cli`, `base` default,
   HF download with SHA1 pin, `-l auto`) → best-effort LLM cleanup. Check

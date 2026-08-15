@@ -51,6 +51,21 @@ describe('horizontal overflow containment', () => {
   });
 });
 
+describe('system messages', () => {
+  it('renders local informational output as quiet transcript text', () => {
+    render(
+      <ChatMessage
+        systemTone="info"
+        message={{ ...base, content: 'Provider: openai-codex · Model: gpt-5.6-sol' }}
+      />,
+    );
+
+    const message = screen.getByTestId('message-system');
+    expect(message.className).toContain('text-[var(--muted)]');
+    expect(message.className).not.toContain('text-[var(--danger)]');
+  });
+});
+
 describe('provider fallback notices', () => {
   it('shows both model pairs and opens model selection', async () => {
     const changeModel = vi.fn();

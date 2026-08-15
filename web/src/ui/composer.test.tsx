@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
-import { useNotificationsStore } from '../store/notifications';
 import { Composer } from './composer';
 import type { ModelChoice } from './slash-menu';
 
@@ -30,6 +29,7 @@ function renderComposer(
   const onUpdateQueued = vi.fn().mockResolvedValue(undefined);
   const onEditingDone = vi.fn();
   const onSetExecutionMode = vi.fn().mockResolvedValue(undefined);
+  const onShowSystemMessage = vi.fn();
   render(
     <Composer
       chatId="chat-1"
@@ -45,18 +45,18 @@ function renderComposer(
       activeModel=""
       currentProvider={props.currentProvider ?? ''}
       currentModel={props.currentModel ?? ''}
+      onShowSystemMessage={onShowSystemMessage}
       executionMode={props.executionMode ?? 'normal'}
       onSetExecutionMode={onSetExecutionMode}
       onSetModel={vi.fn()}
     />,
   );
-  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode };
+  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode, onShowSystemMessage };
 }
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  useNotificationsStore.getState().dismiss();
 });
 
 describe('pending message composition', () => {
@@ -84,7 +84,7 @@ describe('pending message composition', () => {
   });
 
   it('reports only the active provider and model for /model list', () => {
-    const { onSend } = renderComposer({
+    const { onSend, onShowSystemMessage } = renderComposer({
       currentProvider: 'openai-codex',
       currentModel: 'gpt-5.6-sol',
     });
@@ -96,7 +96,7 @@ describe('pending message composition', () => {
 
     expect(onSend).not.toHaveBeenCalled();
     expect((area as HTMLTextAreaElement).value).toBe('');
-    expect(useNotificationsStore.getState().toast?.message).toBe(
+    expect(onShowSystemMessage).toHaveBeenCalledWith(
       'Provider: openai-codex · Model: gpt-5.6-sol',
     );
   });

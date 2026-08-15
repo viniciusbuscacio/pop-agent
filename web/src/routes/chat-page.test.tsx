@@ -30,10 +30,25 @@ vi.mock('../services/events', () => ({
 }));
 
 vi.mock('../ui/composer', () => ({
-  Composer: ({ onSend }: { onSend: (text: string, attachments: []) => Promise<void> }) => (
-    <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
-      Send
-    </button>
+  Composer: ({
+    onSend,
+    onShowSystemMessage,
+  }: {
+    onSend: (text: string, attachments: []) => Promise<void>;
+    onShowSystemMessage: (message: string) => void;
+  }) => (
+    <>
+      <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
+        Send
+      </button>
+      <button
+        type="button"
+        data-testid="composer-system-message"
+        onClick={() => onShowSystemMessage('Provider: openai-codex · Model: gpt-5.6-sol')}
+      >
+        Show model
+      </button>
+    </>
   ),
 }));
 
@@ -114,6 +129,21 @@ describe('chat transcript', () => {
 
     await waitFor(() => expect(screen.queryByTestId('empty-chat-icon')).toBeNull());
     expect(screen.getByTestId('chat-message').textContent).toBe('Hello');
+  });
+
+  it('adds local command output to the transcript as a system message', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('composer-system-message'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Provider: openai-codex · Model: gpt-5.6-sol')).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('empty-chat-icon')).toBeNull();
+    expect(chatMessageRender).toHaveBeenLastCalledWith(
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('openai-codex') }),
+    );
   });
 
   it('does not revisit settled rows when only the live answer grows', async () => {

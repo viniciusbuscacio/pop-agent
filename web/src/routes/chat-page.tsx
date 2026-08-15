@@ -46,6 +46,9 @@ export function ChatPage() {
   const [editingPendingId, setEditingPendingId] = useState<string | undefined>(undefined);
   const editRequest = pending.find((message) => message.id === editingPendingId);
   const [queueActionError, setQueueActionError] = useState(false);
+  // Local command output belongs to the visible transcript, but not to the
+  // durable conversation sent back to the model.
+  const [localSystemMessages, setLocalSystemMessages] = useState<string[]>([]);
   const currentModel = activeChatModel(chat, providers);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -68,6 +71,7 @@ export function ChatPage() {
     setShowJump(false);
     setEditingPendingId(undefined);
     setQueueActionError(false);
+    setLocalSystemMessages([]);
     atBottom.current = true;
     lastScrollTop.current = 0;
   }, [chatId, openChat]);
@@ -179,7 +183,7 @@ export function ChatPage() {
       setMissed((count) => count + 1);
       setShowJump(true);
     }
-  }, [messages?.length, pending.length, pending[0]?.id, streamedLength]);
+  }, [localSystemMessages.length, messages?.length, pending.length, pending[0]?.id, streamedLength]);
 
   // "Is the reader at the bottom?" with aw's tolerance: generous enough that
   // a bounce or an address-bar resize keeps follow mode.
@@ -290,7 +294,7 @@ export function ChatPage() {
           className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         >
-          {messages?.length === 0 && live === undefined && pending.length === 0 ? (
+          {messages?.length === 0 && live === undefined && pending.length === 0 && localSystemMessages.length === 0 ? (
           <div
             data-testid="empty-chat-icon"
             aria-hidden="true"
@@ -364,6 +368,20 @@ export function ChatPage() {
                 </Pressable>
               </div>
             </div>
+          ))}
+
+          {localSystemMessages.map((content, index) => (
+            <ChatMessage
+              key={`local-system-${String(index)}`}
+              systemTone="info"
+              message={{
+                role: 'system',
+                content,
+                thinking: '',
+                tools: [],
+                attachments: [],
+              }}
+            />
           ))}
 
           {queueActionError ? (
@@ -474,6 +492,7 @@ export function ChatPage() {
         activeModel={chat?.model ?? ''}
         currentProvider={currentModel?.currentProvider ?? ''}
         currentModel={currentModel?.currentModel ?? ''}
+        onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
         executionMode={chat?.executionMode ?? 'normal'}
         onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
         onSetModel={(model, provider) => void setModel(chatId, model, provider)}
