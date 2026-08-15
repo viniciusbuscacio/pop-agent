@@ -49,18 +49,24 @@ afterEach(() => {
 });
 
 describe('pending message composition', () => {
-  it('contains horizontal overflow before and after the textarea receives focus', () => {
+  it('contains horizontal overflow without clipping the model menu above the composer', () => {
     renderComposer();
 
     const composer = screen.getByTestId('composer');
     const area = screen.getByTestId('composer-input');
     expect(composer.className).toContain('min-w-0');
-    expect(composer.className).toContain('overflow-x-hidden');
+    // `hidden` on one axis computes the other axis to `auto`, which trapped
+    // the upward-opening model picker inside the short composer row.
+    expect(composer.className).toContain('overflow-x-clip');
+    expect(composer.className).not.toContain('overflow-x-hidden');
     expect(area.className).toContain('overflow-x-hidden');
     expect(area.className).not.toContain('focus:border-[var(--accent)]');
 
+    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    expect(screen.getByRole('listbox', { name: 'Model' })).toBeTruthy();
+
     fireEvent.focus(area);
-    expect(composer.className).toContain('overflow-x-hidden');
+    expect(composer.className).toContain('overflow-x-clip');
     expect(area.className).toContain('overflow-x-hidden');
   });
 

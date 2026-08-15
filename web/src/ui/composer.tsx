@@ -483,7 +483,7 @@ export function Composer({
   return (
     <div
       data-testid="composer"
-      className="min-w-0 overflow-x-hidden border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      className="min-w-0 overflow-x-clip border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
