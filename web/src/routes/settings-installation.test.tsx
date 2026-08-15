@@ -41,6 +41,23 @@ describe('Settings installation guide', () => {
     );
   });
 
+  it('opens the browser-owned PWA installation prompt', async () => {
+    const user = userEvent.setup();
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+      prompt,
+      userChoice: Promise.resolve({ outcome: 'dismissed' as const }),
+    });
+    window.dispatchEvent(event);
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(screen.getByTestId('pwa-install'));
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('pwa-install-dismissed').textContent).toContain('canceled');
+  });
+
   it('starts the authenticated Setup DMG download and copies this server address', async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);

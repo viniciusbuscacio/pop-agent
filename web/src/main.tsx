@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { applyFontSize, useFontStore } from './store/font';
 import { applyTheme, useThemeStore } from './store/theme';
+import './services/pwa-install';
 import './styles/index.css';
 
 // index.html already set the theme before the first paint; this keeps the

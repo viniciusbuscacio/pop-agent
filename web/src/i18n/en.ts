@@ -193,7 +193,12 @@ export const en = {
     'Use this address to open Pop Agent or connect another device. Sign in with your normal Pop Agent password.',
   'settings.installation.webTitle': 'Web and installed PWA',
   'settings.installation.webBody':
-    'Open the address above in any current browser. You can also install it as an app from the browser:',
+    'Install this PWA for its own window, application icon and normal operating-system launcher.',
+  'settings.installation.pwaInstall': 'Install Pop Agent',
+  'settings.installation.pwaInstalled': '✓ Pop Agent is running as an installed app on this device.',
+  'settings.installation.pwaInstallManual':
+    'This browser did not offer the install prompt. Use its menu and choose Install Pop Agent, Add to Dock or Add to Home Screen.',
+  'settings.installation.pwaInstallDismissed': 'Installation was canceled. The browser can offer it again later.',
   'settings.installation.webWindows':
     'Windows: in Edge or Chrome, open the browser menu and choose Install Pop Agent or Install app.',
   'settings.installation.webMac':

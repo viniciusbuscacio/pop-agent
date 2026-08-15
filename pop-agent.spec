@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 2.02 — 2026-08-15.
+Version 2.03 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -807,6 +807,13 @@ events from stale runs.
   gives copyable access/setup instructions for web/PWA, CLI on Windows and
   macOS/Linux, Pop Desktop on macOS, and the honest not-yet-available state of
   the native Windows desktop app. It never hard-codes one deployment's URL.
+  Chromium's one-shot `beforeinstallprompt` is captured during application boot,
+  before Settings mounts. When the browser offers it, Installation shows
+  **Install Pop Agent** and opens only the browser-owned confirmation after that
+  user gesture; it never claims a page can install silently. Running standalone
+  shows Installed, while Safari/iOS/unsupported or ineligible browsers receive
+  their honest Add to Dock/Home Screen/menu instructions instead of a dead
+  button.
   Every Save has a
   Cancel. **Model means the model that answers you** -- the whisper model
   and the transcript cleanup moved out to Audio (Vinicius, 03/08), because
@@ -1723,6 +1730,13 @@ away from `~/Applications`, preventing parallel stale installations.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 2.03 (2026-08-15): **The PWA exposes the browser's real installation action
+  in Settings (§14).** The app captures Chromium's install event at boot,
+  presents an explicit Install Pop Agent button while eligible, recognizes its
+  standalone installed state, and falls back to accurate browser instructions
+  where programmatic installation is unavailable. The browser retains the final
+  confirmation and the page never simulates a successful install.
 
 - 2.02 (2026-08-15): **v0.2.30 makes the footer refresh the device's force-update
   control (§14, §15).** One press reloads active and archived conversations,
