@@ -41,6 +41,7 @@ const DEFAULT_DOC = {
   voiceCleanup: false,
   voiceCleanupModel: '',
   autoSkillsEnabled: true,
+  piUpdatePolicy: 'recommended',
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };
@@ -103,6 +104,40 @@ describe('PUT /v1/settings', () => {
       body: JSON.stringify({ ...DEFAULT_DOC, autoSkillsEnabled: 'yes' }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it('persists each pi update policy and rejects unknown channels', async () => {
+    for (const piUpdatePolicy of ['keep-current', 'recommended', 'latest']) {
+      const res = await authed('/v1/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).piUpdatePolicy).toBe(piUpdatePolicy);
+    }
+
+    const rejected = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy: 'nightly' }),
+    });
+    expect(rejected.status).toBe(400);
+  });
+
+  it('preserves the policy when an older client saves a document without the new field', async () => {
+    await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy: 'latest' }),
+    });
+    const oldClientDocument: Partial<typeof DEFAULT_DOC> = { ...DEFAULT_DOC };
+    delete oldClientDocument.piUpdatePolicy;
+
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...oldClientDocument, voiceCleanup: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).piUpdatePolicy).toBe('latest');
   });
 
   it('rejects an unsupported language', async () => {

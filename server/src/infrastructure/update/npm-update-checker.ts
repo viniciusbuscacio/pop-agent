@@ -43,7 +43,13 @@ export class NpmUpdateChecker implements UpdateChecker {
       this.envCache = undefined;
     }
     return {
-      pi: { current: this.deps.versions.piVersion, latest: await this.piLatest() },
+      // Phase 1 has no independently installed runtime yet, so the active and
+      // Pop-recommended versions are the exact dependency pinned by this release.
+      pi: {
+        current: this.deps.versions.piVersion,
+        recommended: this.deps.versions.piVersion,
+        latest: await this.piLatest(),
+      },
       popAgent: { current: this.deps.versions.popAgentVersion, latest: await this.popAgentLatest() },
       node: this.deps.versions.nodeVersion,
       environment: await this.environmentVersions(),

@@ -19,7 +19,11 @@ describe('NpmUpdateChecker', () => {
     const checker = new NpmUpdateChecker(deps({ fetchLatest: vi.fn().mockResolvedValue('0.84.0') }));
 
     const status = await checker.status();
-    expect(status.pi).toEqual({ current: '0.83.0', latest: '0.84.0' });
+    expect(status.pi).toEqual({
+      current: '0.83.0',
+      recommended: '0.83.0',
+      latest: '0.84.0',
+    });
     expect(status.popAgent.current).toBe('0.2.0');
     expect(status.updateCommand).toContain('npm run gate');
   });

@@ -440,7 +440,7 @@ export function createTestApp(
     updates: {
       status: () =>
         Promise.resolve({
-          pi: { current: '0.83.0', latest: '0.83.0' },
+          pi: { current: '0.83.0', recommended: '0.83.0', latest: '0.83.0' },
           popAgent: { current: '0.2.0-test', latest: undefined },
           node: process.version,
           environment: [{ name: 'ffmpeg', version: '8.0.0-test' }],

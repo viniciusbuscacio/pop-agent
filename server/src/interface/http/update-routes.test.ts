@@ -29,7 +29,7 @@ function routes() {
     updates: {
       status: () =>
         Promise.resolve({
-          pi: { current: '0.84.1', latest: undefined },
+          pi: { current: '0.84.1', recommended: '0.84.1', latest: undefined },
           popAgent: { current: '0.2.0', latest: undefined },
           node: 'v22',
           environment: [],

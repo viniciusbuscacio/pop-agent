@@ -29,6 +29,7 @@ describe('settings service', () => {
       voiceCleanup: true,
       voiceCleanupModel: 'openai/gpt-5-mini',
       autoSkillsEnabled: true,
+      piUpdatePolicy: 'recommended' as const,
       autoActivatePreparedUpdates: true,
       autoRestartIdleMinutes: 15,
     };

@@ -213,6 +213,7 @@ async function run(base: string): Promise<void> {
     voiceCleanup: false,
     voiceCleanupModel: '',
     autoSkillsEnabled: false,
+    piUpdatePolicy: 'recommended',
     autoActivatePreparedUpdates: false,
     autoRestartIdleMinutes: 10,
   };

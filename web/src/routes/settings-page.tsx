@@ -1573,12 +1573,45 @@ function UpdatesSection() {
 
           <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
             <h3 className="text-sm font-semibold">{t('settings.updates.runtimeComponents')}</h3>
-            <Row label="pi" value={update?.pi.current ?? '…'} testId="update-pi-current" />
+            <Row
+              label={t('settings.updates.piActive')}
+              value={update?.pi.current ?? '…'}
+              testId="update-pi-current"
+            />
+            <Row
+              label={t('settings.updates.piRecommended')}
+              value={update?.pi.recommended ?? '…'}
+              testId="update-pi-recommended"
+            />
+            <Row
+              label={t('settings.updates.piLatest')}
+              value={update?.pi.latest ?? t('settings.updates.unknown')}
+              testId="update-pi-latest"
+            />
             {piOutdated ? (
               <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
                 {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
               </p>
             ) : null}
+            {appSettings === undefined ? null : (
+              <Select
+                id="updates-pi-policy"
+                data-testid="updates-pi-policy"
+                label={t('settings.updates.piPolicy')}
+                hint={t(`settings.updates.piPolicyHint.${appSettings.piUpdatePolicy}`)}
+                value={appSettings.piUpdatePolicy}
+                onChange={(event) =>
+                  saveAutomaticUpdate({
+                    piUpdatePolicy: event.target.value as SettingsDTO['piUpdatePolicy'],
+                  })
+                }
+              >
+                <option value="keep-current">{t('settings.updates.piPolicy.keepCurrent')}</option>
+                <option value="recommended">{t('settings.updates.piPolicy.recommended')}</option>
+                <option value="latest">{t('settings.updates.piPolicy.latest')}</option>
+              </Select>
+            )}
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.piPolicyPhaseOne')}</p>
             <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
             {(update?.environment ?? []).map((tool) => (
               <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />

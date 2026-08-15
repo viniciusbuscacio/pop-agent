@@ -12,7 +12,10 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const { updateStatus } = vi.hoisted(() => ({ updateStatus: vi.fn() }));
+const { updateStatus, writeSettings } = vi.hoisted(() => ({
+  updateStatus: vi.fn(),
+  writeSettings: vi.fn(),
+}));
 
 const SETTINGS: SettingsDTO = {
   language: 'en',
@@ -23,6 +26,7 @@ const SETTINGS: SettingsDTO = {
   voiceCleanup: false,
   voiceCleanupModel: '',
   autoSkillsEnabled: false,
+  piUpdatePolicy: 'recommended',
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };
@@ -30,7 +34,7 @@ const SETTINGS: SettingsDTO = {
 vi.mock('../services/settings', () => ({
   settingsService: {
     read: vi.fn(() => Promise.resolve(SETTINGS)),
-    write: vi.fn(),
+    write: (settings: SettingsDTO) => writeSettings(settings) as Promise<SettingsDTO>,
     updateStatus: () => updateStatus() as Promise<UpdateStatusResponse | undefined>,
   },
 }));
@@ -40,6 +44,7 @@ beforeEach(() => {
   vi.mocked(checkForUpdateNow).mockReset();
   vi.mocked(applyUpdate).mockReset().mockResolvedValue(undefined);
   updateStatus.mockReset().mockResolvedValue(undefined);
+  writeSettings.mockReset().mockImplementation((settings: SettingsDTO) => Promise.resolve(settings));
 });
 
 afterEach(cleanup);
@@ -70,7 +75,7 @@ describe('Settings PWA update action', () => {
   it('does not advertise an older published server tag as an update', async () => {
     updateStatus.mockResolvedValue({
       popAgent: { current: '0.2.15', latest: '0.2.0' },
-      pi: { current: '0.84.1', latest: '0.84.1' },
+      pi: { current: '0.84.1', recommended: '0.84.1', latest: '0.84.1' },
       node: 'v22.0.0',
       environment: [],
       updateCommand: 'update',
@@ -84,7 +89,7 @@ describe('Settings PWA update action', () => {
   it('advertises a strictly newer published server tag', async () => {
     updateStatus.mockResolvedValue({
       popAgent: { current: '0.2.15', latest: '0.3.0' },
-      pi: { current: '0.84.1', latest: '0.84.1' },
+      pi: { current: '0.84.1', recommended: '0.84.1', latest: '0.84.1' },
       node: 'v22.0.0',
       environment: [],
       updateCommand: 'update',
@@ -92,5 +97,28 @@ describe('Settings PWA update action', () => {
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
     await screen.findByText('Pop Agent 0.3.0 is available.');
+  });
+
+  it('shows pi versions and persists the selected policy without activating a runtime', async () => {
+    updateStatus.mockResolvedValue({
+      popAgent: { current: '0.2.30', latest: '0.2.30' },
+      pi: { current: '0.84.1', recommended: '0.84.1', latest: '0.85.0' },
+      node: 'v22.19.0',
+      environment: [],
+      updateCommand: 'update',
+    } satisfies UpdateStatusResponse);
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(await screen.findByText('Advanced'));
+    expect((await screen.findByTestId('update-pi-current')).textContent).toContain('0.84.1');
+    expect(screen.getByTestId('update-pi-recommended').textContent).toContain('0.84.1');
+    expect(screen.getByTestId('update-pi-latest').textContent).toContain('0.85.0');
+
+    await user.selectOptions(screen.getByTestId('updates-pi-policy'), 'latest');
+    await waitFor(() =>
+      expect(writeSettings).toHaveBeenCalledWith({ ...SETTINGS, piUpdatePolicy: 'latest' }),
+    );
+    expect(screen.getByText(/Runtime installation and activation are not enabled yet/)).toBeTruthy();
   });
 });

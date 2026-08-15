@@ -10,6 +10,8 @@ import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
  * Theme is absent on purpose -- it belongs to the device, not the account, and
  * lives in the browser's localStorage.
  */
+export type PiUpdatePolicy = 'keep-current' | 'recommended' | 'latest';
+
 export interface AppSettings {
   language: 'en';
   /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
@@ -26,6 +28,8 @@ export interface AppSettings {
   voiceCleanupModel: string;
   /** Whether background learning may create or update Auto-Skills (§8). */
   autoSkillsEnabled: boolean;
+  /** Which pi release channel Pop Agent may evaluate (§15). Activation ships later. */
+  piUpdatePolicy: PiUpdatePolicy;
   /** Activate a gate-verified committed checkout once conversations and tasks are idle. */
   autoActivatePreparedUpdates: boolean;
   /** Quiet period required before an automatic activation may begin. */
@@ -41,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voiceCleanup: false,
   voiceCleanupModel: '',
   autoSkillsEnabled: true,
+  piUpdatePolicy: 'recommended',
   autoActivatePreparedUpdates: false,
   autoRestartIdleMinutes: 10,
 };

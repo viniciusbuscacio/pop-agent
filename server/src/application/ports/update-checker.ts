@@ -6,7 +6,7 @@
  */
 
 export interface UpdateStatus {
-  pi: { current: string; latest: string | undefined };
+  pi: { current: string; recommended: string; latest: string | undefined };
   popAgent: { current: string; latest: string | undefined };
   node: string;
   /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */

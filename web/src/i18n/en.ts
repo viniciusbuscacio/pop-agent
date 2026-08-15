@@ -690,6 +690,22 @@ export const en = {
   'settings.updates.publishedReleases': 'Published releases',
   'settings.updates.noNewerRelease': 'No newer published server release.',
   'settings.updates.runtimeComponents': 'Runtime components',
+  'settings.updates.piActive': 'Active pi version',
+  'settings.updates.piRecommended': 'Recommended by Pop Agent',
+  'settings.updates.piLatest': 'Latest stable pi version',
+  'settings.updates.unknown': 'Unknown',
+  'settings.updates.piPolicy': 'pi update policy',
+  'settings.updates.piPolicy.keepCurrent': 'Keep current version',
+  'settings.updates.piPolicy.recommended': 'Use the version recommended by Pop Agent — Recommended',
+  'settings.updates.piPolicy.latest': 'Track the latest pi version — Advanced',
+  'settings.updates.piPolicyHint.keep-current':
+    'Keep the active pi version fixed until you choose another version.',
+  'settings.updates.piPolicyHint.recommended':
+    'Follow the exact pi version tested and approved for this Pop Agent release.',
+  'settings.updates.piPolicyHint.latest':
+    'Evaluate the latest stable pi release after compatibility checks. This is an advanced channel.',
+  'settings.updates.piPolicyPhaseOne':
+    'Policy and version visibility only. Runtime installation and activation are not enabled yet.',
   'settings.updates.manualUpdate': 'Manual server update',
 
   'settings.updates.checkTitle': 'App updates',

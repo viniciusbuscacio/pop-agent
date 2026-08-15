@@ -172,6 +172,8 @@ export interface SignOutOthersResponse {
  * Theme is absent by design: it belongs to the device, not the account
  * (pop-agent.spec §14).
  */
+export type PiUpdatePolicyDTO = 'keep-current' | 'recommended' | 'latest';
+
 export interface SettingsDTO {
   language: 'en';
   /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
@@ -188,6 +190,8 @@ export interface SettingsDTO {
   voiceCleanupModel: string;
   /** Whether the reviewed background Auto-Skill pipeline is enabled (§8). */
   autoSkillsEnabled: boolean;
+  /** Which pi release channel Pop Agent may evaluate (§15). */
+  piUpdatePolicy: PiUpdatePolicyDTO;
   /** Activate a gate-verified local commit automatically after work drains. */
   autoActivatePreparedUpdates: boolean;
   /** Minutes of total inactivity (no runs or tasks) before an automatic restart triggers. */
@@ -402,7 +406,7 @@ export interface SaveSkillRequest {
 
 /** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (pop-agent.spec §15). */
 export interface UpdateStatusResponse {
-  pi: { current: string; latest?: string };
+  pi: { current: string; recommended: string; latest?: string };
   popAgent: { current: string; latest?: string };
   node: string;
   /** Environment tool versions (whisper, ffmpeg, poppler, tesseract). */

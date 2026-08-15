@@ -26,6 +26,9 @@ const settingsSchema = z
     voiceCleanup: z.boolean(),
     voiceCleanupModel: z.string().max(200),
     autoSkillsEnabled: z.boolean(),
+    // Optional only on input so a stale PWA can still save another setting
+    // after the server gains this field. GET always returns the complete DTO.
+    piUpdatePolicy: z.enum(['keep-current', 'recommended', 'latest']).optional(),
     autoActivatePreparedUpdates: z.boolean(),
     autoRestartIdleMinutes: z.number().int().min(1).max(1440),
   })
@@ -48,7 +51,11 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
     const parsed = settingsSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    return c.json(toDto(deps.settings.write(parsed.data)));
+    const next: AppSettings = {
+      ...parsed.data,
+      piUpdatePolicy: parsed.data.piUpdatePolicy ?? deps.settings.read().piUpdatePolicy,
+    };
+    return c.json(toDto(deps.settings.write(next)));
   });
 
   routes.get('/about', (c) => c.json(deps.versions));
@@ -67,6 +74,7 @@ function toDto(settings: AppSettings): SettingsDTO {
     voiceCleanup: settings.voiceCleanup,
     voiceCleanupModel: settings.voiceCleanupModel,
     autoSkillsEnabled: settings.autoSkillsEnabled,
+    piUpdatePolicy: settings.piUpdatePolicy,
     autoActivatePreparedUpdates: settings.autoActivatePreparedUpdates,
     autoRestartIdleMinutes: settings.autoRestartIdleMinutes,
   };

@@ -26,6 +26,7 @@ export function createUpdateRoutes(deps: UpdateRoutesDeps): Hono {
     const response: UpdateStatusResponse = {
       pi: {
         current: status.pi.current,
+        recommended: status.pi.recommended,
         ...(status.pi.latest === undefined ? {} : { latest: status.pi.latest }),
       },
       popAgent: {

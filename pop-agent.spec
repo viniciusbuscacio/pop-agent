@@ -1296,32 +1296,41 @@ reimplemented.
 
 ### Updates — two channels, one discipline
 
-Server and pi channels: manual always available, auto opt-in (default OFF, no
-unasked registry/repository calls), versions pinned exactly, a recorded
-**last-known-good**, and a **post-update smoke gate** before the new version is
-accepted. The terminal client is the deliberate exception: its native launcher
-checks its already-configured personal server on each normal startup so CLI and
-server do not drift.
+Server and pi versions are pinned exactly. The terminal client is the deliberate
+exception to server-side update cadence: its native launcher checks its already-
+configured personal server on each normal startup so CLI and server do not drift.
 
 **pi channel** (npm, the sensitive one — a pi release can break Pop Agent):
 
-1. Daily semver check against npm (when auto-check is on); SSE banner;
-   install = `npm install @earendil-works/pi-coding-agent@<v> --save-exact`
-   after draining running runs.
-2. Before activating: run the **update gate** — the smoke suite against
-   the new version (in-memory session + fake provider: create session,
+The durable account setting `piUpdatePolicy` has three values:
+
+- `keep-current` — preserve the exact active pi version;
+- `recommended` — use the exact version approved by the active Pop Agent
+  release; this is the default for old and new settings documents;
+- `latest` — evaluate the latest stable npm release as an advanced channel.
+
+**Current delivered phase (visibility and policy only):** Settings → Updates
+shows active, Pop-recommended and latest stable pi versions and persists the
+policy. Active and recommended are currently the same exact dependency from
+`server/package.json`; no policy installs a package, restarts the server or
+changes the runtime yet. The UI says this explicitly. A failed latest-version
+lookup leaves the value unknown and never changes chat operation.
+
+**Later activation phases, not delivered by the policy control:**
+
+1. Discover the target selected by policy and install it in isolated staging,
+   never by mutating the active checkout in place.
+2. Before activating, run the **update gate** — the smoke suite against
+   the candidate (in-memory session + fake provider: create session,
    run a turn, event shapes, custom-tool registration, abort) plus an SDK
    contract check (every API Pop Agent imports still exists). Zero tokens.
-3. Gate passes → version activates and becomes last-known-good. Gate
-   fails (or the bridge fails to boot) → **automatic rollback** to
-   last-known-good, **auto-update disables itself**, and the user is
-   notified (banner + SSE; push when v0.2 lands): "pi X broke Pop Agent,
-   rolled back to Y, auto-update off until you re-enable it."
+3. Drain running work, activate atomically and restart. Gate passes → version
+   becomes last-known-good. Gate or boot failure → automatic rollback,
+   automatic updates disable themselves, and the user is notified.
 4. **Probation**: a version that passes the gate stays on probation for
-   24h; if the pi bridge crashes repeatedly (threshold N) during
-   probation → same rollback + disable + notify path.
-5. `POST /v1/update/apply {version}` accepts any exact version = manual
-   pin or manual rollback.
+   24h; repeated pi bridge crashes trigger the same rollback path.
+5. A future exact-version action provides manual pin and rollback but may never
+   bypass candidate validation.
 
 **Pop Agent channel** (its own repo):
 
