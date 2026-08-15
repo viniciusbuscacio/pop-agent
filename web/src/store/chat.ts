@@ -72,6 +72,7 @@ interface ChatState {
   archiveOthers: (keepChatId: string) => Promise<number>;
   deleteOthers: (keepChatId: string) => Promise<number>;
   setModel: (chatId: string, model: string, provider: string) => Promise<void>;
+  setExecutionMode: (chatId: string, executionMode: ExecutionMode) => Promise<void>;
   remove: (chatId: string) => Promise<void>;
   /** Deletes every archived conversation in one call. */
   removeArchived: () => Promise<void>;
@@ -110,6 +111,14 @@ function upsertChat(chats: ChatDTO[], chat: ChatDTO): ChatDTO[] {
 function setChatPinned(chats: ChatDTO[], chatId: string, pinned: boolean): ChatDTO[] {
   const chat = chats.find((entry) => entry.id === chatId);
   return chat === undefined ? chats : upsertChat(chats, { ...chat, pinned });
+}
+
+function setChatExecutionMode(
+  chats: ChatDTO[],
+  chatId: string,
+  executionMode: ExecutionMode,
+): ChatDTO[] {
+  return chats.map((chat) => (chat.id === chatId ? { ...chat, executionMode } : chat));
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -365,6 +374,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
   },
 
+  async setExecutionMode(chatId, executionMode) {
+    const known = [...get().chats, ...get().archived].find((chat) => chat.id === chatId);
+    const previous = known?.executionMode ?? 'normal';
+    // Immediate locally, then the server's SSE echo makes every other device
+    // converge. A failed PATCH rolls back only if no newer event/tap won.
+    set((state) => ({
+      chats: setChatExecutionMode(state.chats, chatId, executionMode),
+      archived: setChatExecutionMode(state.archived, chatId, executionMode),
+    }));
+    try {
+      await chatsService.patch(chatId, { executionMode });
+    } catch (error) {
+      set((state) => {
+        const current = [...state.chats, ...state.archived].find((chat) => chat.id === chatId);
+        if ((current?.executionMode ?? 'normal') !== executionMode) return state;
+        return {
+          chats: setChatExecutionMode(state.chats, chatId, previous),
+          archived: setChatExecutionMode(state.archived, chatId, previous),
+        };
+      });
+      throw error;
+    }
+  },
+
   async removeArchived() {
     await chatsService.removeArchived();
     set((state) => {
@@ -436,6 +469,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((state) => ({
         chats: setChatPinned(state.chats, event.chatId, event.pinned),
         archived: setChatPinned(state.archived, event.chatId, event.pinned),
+      }));
+      return;
+    }
+    if (event.kind === 'chat-execution-mode-changed') {
+      set((state) => ({
+        chats: setChatExecutionMode(state.chats, event.chatId, event.executionMode),
+        archived: setChatExecutionMode(state.archived, event.chatId, event.executionMode),
       }));
       return;
     }

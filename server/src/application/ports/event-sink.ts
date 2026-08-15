@@ -1,4 +1,4 @@
-import type { Chat, Message, ToolStatus } from '../../domain/chat/chat.js';
+import type { Chat, ExecutionMode, Message, ToolStatus } from '../../domain/chat/chat.js';
 import type { QueuedMessage } from './queued-message-repo.js';
 
 /**
@@ -13,6 +13,8 @@ export type RunEvent =
   | { kind: 'chat-deleted'; chatId: string }
   /** A conversation's durable pinned state changed. */
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
+  /** The composer policy changed and every connected device must follow it. */
+  | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

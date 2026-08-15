@@ -35,6 +35,7 @@ export function ChatPage() {
   const stop = useChatStore((state) => state.stop);
   const respondConfirm = useChatStore((state) => state.respondConfirm);
   const setModel = useChatStore((state) => state.setModel);
+  const setExecutionMode = useChatStore((state) => state.setExecutionMode);
   const createChat = useChatStore((state) => state.createChat);
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
@@ -468,6 +469,8 @@ export function ChatPage() {
         models={models}
         activeProvider={chat?.provider ?? ''}
         activeModel={chat?.model ?? ''}
+        executionMode={chat?.executionMode ?? 'normal'}
+        onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
         onSetModel={(model, provider) => void setModel(chatId, model, provider)}
         modelPickerRequest={modelPickerRequest}
       />

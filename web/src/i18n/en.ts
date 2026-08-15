@@ -107,6 +107,7 @@ export const en = {
   'chat.planOff': 'Plan mode: off',
   'chat.planShown': 'Plan mode enabled — read-only',
   'chat.planHidden': 'Plan mode disabled',
+  'chat.planChangeFailed': 'Could not synchronize Plan mode',
   'chat.send': 'Send',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
   'chat.queue': 'Queue message',

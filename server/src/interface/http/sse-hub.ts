@@ -58,6 +58,7 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
           provider: event.chat.provider,
           archived: event.chat.archived,
           pinned: event.chat.pinned,
+          executionMode: event.chat.executionMode ?? 'normal',
           createdAt: event.chat.createdAt,
           updatedAt: event.chat.updatedAt,
           preview: '',
@@ -67,6 +68,12 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
       return { kind: 'chat-deleted', chatId: event.chatId };
     case 'chat-pin-changed':
       return { kind: 'chat-pin-changed', chatId: event.chatId, pinned: event.pinned };
+    case 'chat-execution-mode-changed':
+      return {
+        kind: 'chat-execution-mode-changed',
+        chatId: event.chatId,
+        executionMode: event.executionMode,
+      };
     case 'delta':
       return {
         kind: 'delta',

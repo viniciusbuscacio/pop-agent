@@ -186,6 +186,18 @@ describe('deleting a chat with a run in flight', () => {
     });
   });
 
+  it('persists and broadcasts the synchronized execution mode', () => {
+    const chat = chats.create();
+
+    expect(chats.setExecutionMode(chat.id, 'plan')?.executionMode).toBe('plan');
+    expect(repo.get(chat.id)?.executionMode).toBe('plan');
+    expect(sink.events.at(-1)).toEqual({
+      kind: 'chat-execution-mode-changed',
+      chatId: chat.id,
+      executionMode: 'plan',
+    });
+  });
+
   it('persists pin and unpin before broadcasting the resulting state', () => {
     const chat = chats.create();
 

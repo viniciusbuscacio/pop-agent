@@ -2,6 +2,7 @@ import type {
   Attachment,
   Chat,
   ChatSummary,
+  ExecutionMode,
   Message,
   SystemNotice,
   ToolRecord,
@@ -29,8 +30,8 @@ export class SqliteChatRepo implements ChatRepo {
   create(chat: Chat): Chat {
     const insert = this.db.prepare(
       `INSERT INTO chats
-         (id, title, model, provider, archived, pinned, pi_session_id, summary, auto_title, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, title, model, provider, archived, pinned, execution_mode, pi_session_id, summary, auto_title, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = chat;
     for (let attempt = 0; ; attempt += 1) {
@@ -42,6 +43,7 @@ export class SqliteChatRepo implements ChatRepo {
           current.provider,
           current.archived ? 1 : 0,
           current.pinned ? 1 : 0,
+          current.executionMode ?? 'normal',
           current.piSessionId,
           current.summary,
           current.autoTitle ? 1 : 0,
@@ -90,6 +92,10 @@ export class SqliteChatRepo implements ChatRepo {
 
   setPinned(id: string, pinned: boolean): void {
     this.db.prepare('UPDATE chats SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, id);
+  }
+
+  setExecutionMode(id: string, executionMode: ExecutionMode): void {
+    this.db.prepare('UPDATE chats SET execution_mode = ? WHERE id = ?').run(executionMode, id);
   }
 
   archiveOthers(keepChatId: string): number {
@@ -340,6 +346,7 @@ interface ChatRow {
   provider: string;
   archived: number;
   pinned: number;
+  execution_mode: 'normal' | 'plan';
   pi_session_id: string;
   summary: string;
   auto_title: number;
@@ -370,6 +377,7 @@ function toChat(row: ChatRow): Chat {
     provider: row.provider ?? '',
     archived: row.archived === 1,
     pinned: row.pinned === 1,
+    executionMode: row.execution_mode ?? 'normal',
     piSessionId: row.pi_session_id,
     summary: row.summary,
     autoTitle: row.auto_title === 1,

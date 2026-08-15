@@ -45,6 +45,7 @@ const patchSchema = z
     pinned: z.boolean().optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
+    executionMode: z.enum(['normal', 'plan']).optional(),
   })
   .strict();
 
@@ -198,6 +199,9 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     }
     if (parsed.data.pinned !== undefined) {
       chat = deps.chats.setPinned(id, parsed.data.pinned) ?? chat;
+    }
+    if (parsed.data.executionMode !== undefined) {
+      chat = deps.chats.setExecutionMode(id, parsed.data.executionMode) ?? chat;
     }
     if (parsed.data.model !== undefined) {
       // The pair is the identity: a model without a provider keeps the chat's
@@ -496,6 +500,7 @@ function toChatDto(chat: Chat | ChatSummary): ChatDTO {
     provider: chat.provider,
     archived: chat.archived,
     pinned: chat.pinned,
+    executionMode: chat.executionMode ?? 'normal',
     createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     preview: 'preview' in chat ? chat.preview : '',

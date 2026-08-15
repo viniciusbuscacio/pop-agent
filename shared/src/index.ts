@@ -529,6 +529,8 @@ export interface ChatDTO {
   archived: boolean;
   /** Kept at the top of the list and exempt from bulk archiving. */
   pinned: boolean;
+  /** Server-synchronized default for messages sent from this chat. */
+  executionMode?: ExecutionMode;
   createdAt: string;
   updatedAt: string;
   /** Last message, for the list. Empty for a chat nobody has written in. */
@@ -645,6 +647,7 @@ export interface PatchChatRequest {
   model?: string;
   /** Must travel with `model`: the identity is the pair (pop-agent.spec §15). */
   provider?: string;
+  executionMode?: ExecutionMode;
 }
 
 /**
@@ -973,6 +976,7 @@ export type StreamEvent =
   | { kind: 'chat-created'; chatId: string; chat: ChatDTO }
   | { kind: 'chat-deleted'; chatId: string }
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
+  | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

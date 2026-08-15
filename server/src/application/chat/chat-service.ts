@@ -1,4 +1,10 @@
-import { DEFAULT_CHAT_TITLE, type Chat, type ChatSummary, type Message } from '../../domain/chat/chat.js';
+import {
+  DEFAULT_CHAT_TITLE,
+  type Chat,
+  type ChatSummary,
+  type ExecutionMode,
+  type Message,
+} from '../../domain/chat/chat.js';
 import { nextChatTitle } from '../../domain/chat/title.js';
 import { newChatId } from '../../domain/ids.js';
 import type { ChatPurger } from '../ports/chat-purger.js';
@@ -42,6 +48,7 @@ export class ChatService {
       provider: '',
       archived: false,
       pinned: false,
+      executionMode: 'normal',
       piSessionId: '',
       summary: '',
       autoTitle: true,
@@ -92,6 +99,19 @@ export class ChatService {
     const chat = this.deps.chats.get(id);
     if (chat === undefined) return undefined;
     this.deps.sink?.emit({ kind: 'chat-pin-changed', chatId: id, pinned: chat.pinned });
+    return chat;
+  }
+
+  setExecutionMode(id: string, executionMode: ExecutionMode): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    this.deps.chats.setExecutionMode(id, executionMode);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({
+      kind: 'chat-execution-mode-changed',
+      chatId: id,
+      executionMode: chat.executionMode ?? 'normal',
+    });
     return chat;
   }
 

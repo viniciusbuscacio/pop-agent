@@ -55,11 +55,12 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
-  it('broadcasts durable creation, pin changes and deletion to connected clients', async () => {
+  it('broadcasts durable creation, mode, pin changes and deletion to connected clients', async () => {
     const events: StreamEvent[] = [];
     const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
 
     const created = await newChat();
+    expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { executionMode: 'plan' } })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { pinned: true } })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { pinned: false } })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'DELETE' })).status).toBe(204);
@@ -67,6 +68,7 @@ describe('chat collection', () => {
 
     expect(events).toEqual([
       { kind: 'chat-created', chatId: created.id, chat: created },
+      { kind: 'chat-execution-mode-changed', chatId: created.id, executionMode: 'plan' },
       { kind: 'chat-pin-changed', chatId: created.id, pinned: true },
       { kind: 'chat-pin-changed', chatId: created.id, pinned: false },
       { kind: 'chat-deleted', chatId: created.id },
@@ -181,7 +183,7 @@ describe('chat collection', () => {
     expect(archivedList.chats.map((chat) => chat.id)).toEqual([filed.id]);
   });
 
-  it('renames, pins and re-models', async () => {
+  it('renames, pins, synchronizes execution mode and re-models', async () => {
     const chat = await newChat();
 
     const renamed = (await (
@@ -193,6 +195,11 @@ describe('chat collection', () => {
       await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { pinned: true } })
     ).json()) as ChatDTO;
     expect(pinned.pinned).toBe(true);
+
+    const planned = (await (
+      await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { executionMode: 'plan' } })
+    ).json()) as ChatDTO;
+    expect(planned.executionMode).toBe('plan');
 
     const remodelled = (await (
       await api(`/v1/chats/${chat.id}`, { method: 'PATCH', body: { model: 'fake/model-2' } })

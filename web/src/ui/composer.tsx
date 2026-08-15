@@ -42,6 +42,8 @@ export function Composer({
   models,
   activeProvider,
   activeModel,
+  executionMode,
+  onSetExecutionMode,
   onSetModel,
   modelPickerRequest = 0,
 }: {
@@ -62,6 +64,8 @@ export function Composer({
   models: ModelChoice[];
   activeProvider: string;
   activeModel: string;
+  executionMode: ExecutionMode;
+  onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
   onSetModel: (model: string, provider: string) => void;
   modelPickerRequest?: number;
 }) {
@@ -70,7 +74,6 @@ export function Composer({
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [sending, setSending] = useState(false);
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>('normal');
   const [editingQueuedId, setEditingQueuedId] = useState<string | undefined>(undefined);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
@@ -100,7 +103,6 @@ export function Composer({
   const mentionsRef = useRef<{ path: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
   const storageKey = `pop-agent.draft.${chatId}`;
-  const planStorageKey = `pop-agent.plan.${chatId}`;
 
   textRef.current = text;
   attachmentsRef.current = attachments;
@@ -119,12 +121,7 @@ export function Composer({
     setSlashMode('commands');
     setNotice(undefined);
     setEditingQueuedId(undefined);
-    try {
-      setExecutionMode(localStorage.getItem(planStorageKey) === 'true' ? 'plan' : 'normal');
-    } catch {
-      setExecutionMode('normal');
-    }
-  }, [storageKey, planStorageKey]);
+  }, [storageKey]);
 
   useEffect(() => {
     if (editRequest === undefined) {
@@ -659,14 +656,9 @@ export function Composer({
           enabled={executionMode === 'plan'}
           onToggle={() => {
             const next = executionMode === 'plan' ? 'normal' : 'plan';
-            setExecutionMode(next);
-            try {
-              if (next === 'plan') localStorage.setItem(planStorageKey, 'true');
-              else localStorage.removeItem(planStorageKey);
-            } catch {
-              // Device storage is optional; the current composer still switches.
-            }
-            notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden'));
+            void onSetExecutionMode(next)
+              .then(() => notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden')))
+              .catch(() => notify(t('chat.planChangeFailed')));
           }}
         />
 

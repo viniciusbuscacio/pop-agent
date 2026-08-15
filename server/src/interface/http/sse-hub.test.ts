@@ -9,6 +9,7 @@ const chat: Chat = {
   provider: '',
   archived: false,
   pinned: false,
+  executionMode: 'normal',
   piSessionId: '',
   summary: '',
   autoTitle: true,
@@ -28,6 +29,7 @@ describe('chat lifecycle events on the SSE wire', () => {
         provider: '',
         archived: false,
         pinned: false,
+        executionMode: 'normal',
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
         preview: '',
@@ -39,6 +41,18 @@ describe('chat lifecycle events on the SSE wire', () => {
     expect(toStreamEvent({ kind: 'chat-deleted', chatId: chat.id })).toEqual({
       kind: 'chat-deleted',
       chatId: chat.id,
+    });
+  });
+
+  it('sends execution mode changes', () => {
+    expect(toStreamEvent({
+      kind: 'chat-execution-mode-changed',
+      chatId: chat.id,
+      executionMode: 'plan',
+    })).toEqual({
+      kind: 'chat-execution-mode-changed',
+      chatId: chat.id,
+      executionMode: 'plan',
     });
   });
 

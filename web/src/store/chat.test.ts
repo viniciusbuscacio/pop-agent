@@ -524,6 +524,36 @@ describe('chat lifecycle events', () => {
     expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([newer.id, created.id]);
   });
 
+  it('applies a remote execution mode change to open and archived chats', () => {
+    const archived = { ...created, id: 'chat-archived', archived: true };
+    useChatStore.setState({ chats: [created], archived: [archived] });
+
+    apply({ kind: 'chat-execution-mode-changed', chatId: created.id, executionMode: 'plan' });
+    apply({ kind: 'chat-execution-mode-changed', chatId: archived.id, executionMode: 'plan' });
+
+    expect(useChatStore.getState().chats[0]?.executionMode).toBe('plan');
+    expect(useChatStore.getState().archived[0]?.executionMode).toBe('plan');
+  });
+
+  it('uses the PATCH result to update the initiating device execution mode', async () => {
+    useChatStore.setState({ chats: [created] });
+    patch.mockResolvedValue({ ...created, executionMode: 'plan' });
+
+    await useChatStore.getState().setExecutionMode(created.id, 'plan');
+
+    expect(patch).toHaveBeenCalledWith(created.id, { executionMode: 'plan' });
+    expect(useChatStore.getState().chats[0]?.executionMode).toBe('plan');
+  });
+
+  it('rolls back an execution mode change the server refused', async () => {
+    useChatStore.setState({ chats: [{ ...created, executionMode: 'normal' }] });
+    patch.mockRejectedValue(new Error('offline'));
+
+    await expect(useChatStore.getState().setExecutionMode(created.id, 'plan')).rejects.toThrow('offline');
+
+    expect(useChatStore.getState().chats[0]?.executionMode).toBe('normal');
+  });
+
   it('uses the PATCH result to update and reorder the initiating device', async () => {
     const newer = {
       ...created,

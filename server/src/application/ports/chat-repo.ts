@@ -1,4 +1,4 @@
-import type { Chat, ChatSummary, Message } from '../../domain/chat/chat.js';
+import type { Chat, ChatSummary, ExecutionMode, Message } from '../../domain/chat/chat.js';
 
 /**
  * Persistence port for conversations (pop-agent.spec §3). SQLite is one adapter;
@@ -14,6 +14,7 @@ export interface ChatRepo {
   rename(id: string, title: string): void;
   setArchived(id: string, archived: boolean): void;
   setPinned(id: string, pinned: boolean): void;
+  setExecutionMode(id: string, executionMode: ExecutionMode): void;
   /** Archives every open conversation except the active one and pinned chats. */
   archiveOthers(keepChatId: string): number;
   setModel(id: string, model: string, provider: string): void;

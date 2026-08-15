@@ -15,10 +15,13 @@ const pending: QueuedMessageDTO = {
   updatedAt: '',
 };
 
-function renderComposer(props: { editRequest?: QueuedMessageDTO } = {}) {
+function renderComposer(
+  props: { editRequest?: QueuedMessageDTO; executionMode?: 'normal' | 'plan' } = {},
+) {
   const onSend = vi.fn().mockResolvedValue(undefined);
   const onUpdateQueued = vi.fn().mockResolvedValue(undefined);
   const onEditingDone = vi.fn();
+  const onSetExecutionMode = vi.fn().mockResolvedValue(undefined);
   render(
     <Composer
       chatId="chat-1"
@@ -32,10 +35,12 @@ function renderComposer(props: { editRequest?: QueuedMessageDTO } = {}) {
       models={[]}
       activeProvider=""
       activeModel=""
+      executionMode={props.executionMode ?? 'normal'}
+      onSetExecutionMode={onSetExecutionMode}
       onSetModel={vi.fn()}
     />,
   );
-  return { onSend, onUpdateQueued, onEditingDone };
+  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode };
 }
 
 afterEach(() => {
@@ -68,11 +73,12 @@ describe('pending message composition', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalledWith('another direction', [], [], 'steer', 'normal'));
   });
 
-  it('sends Plan Mode through the message contract and remembers it for the chat', async () => {
-    const { onSend } = renderComposer();
-    fireEvent.click(screen.getByTestId('plan-mode'));
+  it('requests a synchronized mode change and sends the controlled Plan value', async () => {
+    const { onSend, onSetExecutionMode } = renderComposer({ executionMode: 'plan' });
     expect(screen.getByTestId('plan-mode').getAttribute('aria-pressed')).toBe('true');
-    expect(localStorage.getItem('pop-agent.plan.chat-1')).toBe('true');
+    fireEvent.click(screen.getByTestId('plan-mode'));
+    expect(onSetExecutionMode).toHaveBeenCalledWith('normal');
+    expect(localStorage.getItem('pop-agent.plan.chat-1')).toBeNull();
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'inspect this' } });
     fireEvent.click(screen.getByTestId('composer-send'));

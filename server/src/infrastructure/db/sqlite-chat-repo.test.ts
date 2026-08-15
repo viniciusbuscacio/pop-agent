@@ -18,6 +18,7 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     provider: '',
     archived: false,
     pinned: false,
+    executionMode: 'normal',
     piSessionId: '',
     summary: '',
     autoTitle: true,
@@ -53,6 +54,14 @@ describe('chats', () => {
     const created = repo.create(chat({ title: 'Groceries', model: 'fake/model-1' }));
 
     expect(repo.get(created.id)).toEqual(created);
+  });
+
+  it('persists the synchronized execution mode', () => {
+    const created = repo.create(chat());
+
+    repo.setExecutionMode(created.id, 'plan');
+
+    expect(repo.get(created.id)?.executionMode).toBe('plan');
   });
 
   it('returns undefined for a chat that does not exist', () => {
