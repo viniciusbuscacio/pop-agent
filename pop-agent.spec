@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 1.96 — 2026-08-15.
+Version 2.00 — 2026-08-15.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1691,6 +1691,14 @@ away from `~/Applications`, preventing parallel stale installations.
   silent job is a job nobody can tell is alive.
 
 ## Changelog
+
+- 2.00 (2026-08-15): **v0.2.29 publishes synchronized Plan Mode (§5, §13,
+  §14).** The P toggle is durable chat state and follows the existing lifecycle
+  broadcast path to every connected device; reconnecting clients recover the
+  canonical value through `ChatDTO`. Each message still snapshots the mode for
+  its pi tool policy and durable queue boundary. This release exists so installed
+  PWAs can identify and activate the synchronized frontend through the normal
+  update flow.
 
 - 1.99 (2026-08-14): **Native package publication is platform-independent
   (§17.1).** Server/CLI releases no longer wait for every native platform:
