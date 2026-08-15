@@ -21,6 +21,7 @@ function renderComposer(
     editRequest?: QueuedMessageDTO;
     executionMode?: 'normal' | 'plan';
     currentProvider?: string;
+    currentProviderLabel?: string;
     currentModel?: string;
     models?: ModelChoice[];
   } = {},
@@ -44,6 +45,7 @@ function renderComposer(
       activeProvider=""
       activeModel=""
       currentProvider={props.currentProvider ?? ''}
+      currentProviderLabel={props.currentProviderLabel ?? ''}
       currentModel={props.currentModel ?? ''}
       onShowSystemMessage={onShowSystemMessage}
       executionMode={props.executionMode ?? 'normal'}
@@ -81,6 +83,22 @@ describe('pending message composition', () => {
     fireEvent.focus(area);
     expect(composer.className).toContain('overflow-x-clip');
     expect(area.className).toContain('overflow-x-hidden');
+  });
+
+  it('shows the effective model instead of an opaque default-model selection', () => {
+    renderComposer({
+      currentProvider: 'openai-codex',
+      currentProviderLabel: 'OpenAI Codex',
+      currentModel: 'gpt-5.6-sol',
+    });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+
+    const effectiveDefault = screen.getByRole('option', {
+      name: /^OpenAI Codex \/ gpt-5\.6-sol/,
+    });
+    expect(effectiveDefault.getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('option', { name: 'Default model' })).toBeNull();
   });
 
   it('reports only the active provider and model for /model list', () => {

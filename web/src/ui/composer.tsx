@@ -43,6 +43,7 @@ export function Composer({
   activeProvider,
   activeModel,
   currentProvider,
+  currentProviderLabel,
   currentModel,
   onShowSystemMessage,
   executionMode,
@@ -69,6 +70,7 @@ export function Composer({
   activeModel: string;
   /** The effective pair after resolving the chat override or global default. */
   currentProvider: string;
+  currentProviderLabel: string;
   currentModel: string;
   onShowSystemMessage: (message: string) => void;
   executionMode: ExecutionMode;
@@ -653,7 +655,13 @@ export function Composer({
           openRequest={modelPickerRequest}
           value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
           options={[
-            { value: '', label: t('chat.defaultModel') },
+            {
+              value: '',
+              label:
+                currentProviderLabel.length > 0 && currentModel.length > 0
+                  ? `${currentProviderLabel} / ${currentModel}`
+                  : t('chat.defaultModel'),
+            },
             ...models.map((choice) => ({
               value: `${choice.provider}||${choice.model}`,
               label: choice.model,

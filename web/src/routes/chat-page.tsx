@@ -491,6 +491,9 @@ export function ChatPage() {
         activeProvider={chat?.provider ?? ''}
         activeModel={chat?.model ?? ''}
         currentProvider={currentModel?.currentProvider ?? ''}
+        currentProviderLabel={
+          providers.find((provider) => provider.id === currentModel?.currentProvider)?.name ?? ''
+        }
         currentModel={currentModel?.currentModel ?? ''}
         onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
         executionMode={chat?.executionMode ?? 'normal'}
