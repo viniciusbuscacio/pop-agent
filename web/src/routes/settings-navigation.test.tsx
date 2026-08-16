@@ -56,7 +56,7 @@ describe('Settings navigation', () => {
     expect(screen.getByTestId('settings-tab-appearance').getAttribute('aria-current')).toBe('page');
   });
 
-  it('keeps Settings width constrained with the Huge font size', async () => {
+  it('uses the wide desktop viewport without overflowing at Huge text', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/settings?section=appearance']}>
@@ -67,7 +67,11 @@ describe('Settings navigation', () => {
     await user.selectOptions(screen.getByTestId('settings-font-size'), 'huge');
 
     expect(document.documentElement.style.fontSize).toBe('140%');
+    expect(screen.getByTestId('settings-layout').className).toContain('md:w-[95%]');
+    expect(screen.getByTestId('settings-layout').className).not.toContain('max-w-6xl');
     expect(screen.getByTestId('settings-content').className).toContain('max-w-full');
+    expect(screen.getByTestId('settings-section-content').className).toContain('w-full');
+    expect(screen.getByTestId('settings-section-content').className).not.toContain('max-w-3xl');
     expect(screen.getByTestId('settings-tab-model').textContent).toContain('Models & Providers');
   });
 

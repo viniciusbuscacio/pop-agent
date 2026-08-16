@@ -142,7 +142,10 @@ export function SettingsPage() {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl md:grid-cols-[21rem_minmax(0,1fr)]">
+      <div
+        data-testid="settings-layout"
+        className="mx-auto grid w-full md:w-[95%] md:grid-cols-[21rem_minmax(0,1fr)]"
+      >
         <SettingsIndex
           query={query}
           onQueryChange={setQuery}
@@ -160,7 +163,7 @@ export function SettingsPage() {
               Select a setting to view and change it.
             </div>
           ) : (
-            <div className="mx-auto min-w-0 max-w-3xl">
+            <div data-testid="settings-section-content" className="min-w-0 w-full">
               <div className="mb-5 hidden md:block">
                 <h2 className="text-xl font-semibold">{activeEntry?.label}</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
