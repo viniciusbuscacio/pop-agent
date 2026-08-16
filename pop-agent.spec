@@ -194,7 +194,7 @@ Single file `pop-agent.db`. Migrations numbered, run at boot.
 chats(id, title, model, archived, pi_session_id, summary, auto_title,
       created_at, updated_at)
 messages(id, chat_id, role, content, thinking, tools_json,
-         attachments_json, response_provider, response_model, created_at)
+         attachments_json, created_at)
 messages_fts      -- FTS5 external-content table over messages.content
 message_embeddings(message_rowid, vector)       -- Float32Array BLOB, §7
 chat_titles(chat_id, title, turn, source, created_at)  -- append-only, §14
@@ -1267,15 +1267,14 @@ reimplemented.
   down for an hour too early and kept punishing a hiccup too long.
   Saving a key, completing a sign-in, a green connection test or a
   successful run forgives the provider; a restart forgives everyone.
-- **Failover is LOUD and chronological**: a persisted system message in the
-  transcript ("Answer retried via X after Y failed (code).") is inserted before
-  the replacement answer, plus one journal line (`pop fallback: chat=… from=…
-  to=… code=…`). It is never a floating status detached from message order.
-  Every assistant row also stores and renders the concrete provider/model pair
-  that produced it; old rows leave that attribution absent rather than guessing
-  from the chat's current model. Every billed attempt books its own `llm_runs`
-  row (failover attempts under `<runId>-f<n>`), so the accounting shows what
-  each provider really charged.
+- **Failover is LOUD and chronological**: only when the provider changes, a
+  persisted system message in the transcript ("Answer retried via X after Y
+  failed (code).") is inserted before the replacement answer, plus one journal
+  line (`pop fallback: chat=… from=… to=… code=…`). It is never a floating
+  status detached from message order, and ordinary answers do not repeat their
+  provider/model. Every billed attempt books its own `llm_runs` row (failover
+  attempts under `<runId>-f<n>`), so the accounting shows what each provider
+  really charged.
 - **A retry never replays the user's prompt** (1.73): before a
   failover hop or an overflow retry, the bridge rewinds the pi session
   to before the user message (`SessionManager.branch` on the entry

@@ -169,7 +169,6 @@ describe('finishing a run', () => {
     const messages = repo.getMessages(chatId, { limit: 10 });
     const answer = messages[messages.length - 1];
     expect(answer?.id).toBe(done?.messageId);
-    expect(done?.message).toEqual(answer);
     expect(answer?.role).toBe('assistant');
     expect(answer?.content).toBe('the answer');
     expect(answer?.thinking).toBe('let me think');
@@ -846,10 +845,6 @@ describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
     });
     expect(sink.of('system-message')[0]?.message).toEqual(mark);
     expect(messages[messages.length - 1]?.content).toBe('saved by the second');
-    expect(messages[messages.length - 1]?.responseModel).toEqual({
-      providerId: 'p2',
-      modelId: 'p2/model',
-    });
 
     // Penalized and journaled.
     expect(penalized).toEqual(['p1']);

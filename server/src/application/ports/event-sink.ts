@@ -26,7 +26,7 @@ export type RunEvent =
       status: ToolStatus;
       detail: string;
     }
-  | { kind: 'done'; chatId: string; runId: string; messageId: string; message: Message }
+  | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string; message?: Message }
   /** A persisted fallback marker sent while the replacement attempt is running. */
   | { kind: 'system-message'; chatId: string; runId: string; message: Message }

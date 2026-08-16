@@ -124,36 +124,16 @@ describe('streaming into the live buffer', () => {
     expect(live()?.content).toBe('');
   });
 
-  it('promotes the durable answer with its model attribution when the run finishes', () => {
+  it('promotes the buffer to a stored message when the run finishes', () => {
     apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'done thinking' });
-    apply({
-      kind: 'done',
-      chatId: CHAT,
-      runId: RUN,
-      messageId: 'msg-0000000000000002',
-      message: {
-        id: 'msg-0000000000000002',
-        chatId: CHAT,
-        role: 'assistant',
-        content: 'done thinking',
-        thinking: '',
-        tools: [],
-        attachments: [],
-        createdAt: '2026-08-09T00:00:01.000Z',
-        responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
-      },
-    });
+    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'msg-0000000000000002' });
 
     expect(live()).toBeUndefined();
     expect(messages().map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(messages()[1]).toMatchObject({
-      id: 'msg-0000000000000002',
-      content: 'done thinking',
-      responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
-    });
+    expect(messages()[1]).toMatchObject({ id: 'msg-0000000000000002', content: 'done thinking' });
   });
 
-  it('keeps fallback events chronologically between the question and replacement answer', () => {
+  it('keeps a provider switch between the question and replacement answer', () => {
     apply({
       kind: 'system-message',
       chatId: CHAT,
@@ -180,23 +160,7 @@ describe('streaming into the live buffer', () => {
       },
     });
     apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 1, text: 'fallback answer' });
-    apply({
-      kind: 'done',
-      chatId: CHAT,
-      runId: RUN,
-      messageId: 'message-answer',
-      message: {
-        id: 'message-answer',
-        chatId: CHAT,
-        role: 'assistant',
-        content: 'fallback answer',
-        thinking: '',
-        tools: [],
-        attachments: [],
-        createdAt: '2026-08-09T00:00:01.000Z',
-        responseModel: { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
-      },
-    });
+    apply({ kind: 'done', chatId: CHAT, runId: RUN, messageId: 'message-answer' });
 
     expect(messages().map((message) => message.role)).toEqual(['user', 'system', 'assistant']);
     expect(messages().map((message) => message.id)).toEqual([

@@ -17,10 +17,7 @@ function ChatMessageView({
   onChangeModel,
   systemTone = 'default',
 }: {
-  message: Pick<
-    MessageDTO,
-    'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'responseModel' | 'notice'
-  >;
+  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice'>;
   onResend?: () => void;
   resending?: boolean;
   onChangeModel?: () => void;
@@ -103,15 +100,6 @@ function ChatMessageView({
           <Markdown text={message.content} />
         </div>
       ) : null}
-
-      {message.responseModel === undefined ? null : (
-        <p data-testid="message-response-model" className="text-xs text-[var(--muted)]">
-          {t('chat.currentModel', {
-            provider: message.responseModel.providerId,
-            model: message.responseModel.modelId,
-          })}
-        </p>
-      )}
     </div>
   );
 }

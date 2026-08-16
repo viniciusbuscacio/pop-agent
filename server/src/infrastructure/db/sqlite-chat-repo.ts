@@ -269,8 +269,8 @@ export class SqliteChatRepo implements ChatRepo {
     const insert = this.db.prepare(
       `INSERT INTO messages
          (id, chat_id, role, content, thinking, tools_json, attachments_json, created_at,
-          client, client_platform, client_ip, notice_json, response_provider, response_model)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          client, client_platform, client_ip, notice_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let current = message;
     for (let attempt = 0; ; attempt += 1) {
@@ -288,8 +288,6 @@ export class SqliteChatRepo implements ChatRepo {
           current.client?.platform ?? null,
           current.client?.ip ?? null,
           JSON.stringify(current.notice ?? {}),
-          current.responseModel?.providerId ?? null,
-          current.responseModel?.modelId ?? null,
         );
         return current;
       } catch (error) {
@@ -369,8 +367,6 @@ interface MessageRow {
   client_platform: string | null;
   client_ip: string | null;
   notice_json: string;
-  response_provider: string | null;
-  response_model: string | null;
 }
 
 function toChat(row: ChatRow): Chat {
@@ -400,14 +396,6 @@ function toMessage(row: MessageRow): Message {
     tools: parseJson<ToolRecord[]>(row.tools_json, []),
     attachments: parseJson<Attachment[]>(row.attachments_json, []),
     createdAt: row.created_at,
-    ...(row.response_provider === null || row.response_provider === undefined
-      ? {}
-      : {
-          responseModel: {
-            providerId: row.response_provider,
-            modelId: row.response_model ?? '',
-          },
-        }),
     ...noticeFromJson(row.notice_json),
     // Absent, not empty: a message written before the column existed, or one
     // the server itself wrote, genuinely has no client.

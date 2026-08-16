@@ -101,13 +101,7 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         detail: event.detail,
       };
     case 'done':
-      return {
-        kind: 'done',
-        chatId: event.chatId,
-        runId: event.runId,
-        messageId: event.messageId,
-        message: toWireMessage(event.message),
-      };
+      return { kind: 'done', chatId: event.chatId, runId: event.runId, messageId: event.messageId };
     case 'error':
       return {
         kind: 'error',
@@ -190,7 +184,6 @@ function toWireMessage(message: import('../../domain/chat/chat.js').Message) {
     tools: message.tools,
     attachments: message.attachments,
     createdAt: message.createdAt,
-    ...(message.responseModel === undefined ? {} : { responseModel: message.responseModel }),
     ...(message.notice === undefined ? {} : { notice: message.notice }),
   };
 }
