@@ -1357,9 +1357,13 @@ changes runtime.
 
 **Pop Agent channel** (its own repo):
 
-- Settings → Updates has a "Pop Agent" card: checks the repo's release tags
-  and distinguishes the **boot commit** from checkout `HEAD`. Fetch/install/
-  gate still happens before activation. A clean committed checkout can be
+- Settings → Updates separates **This device**, **Your server**, and a collapsed
+  **AI runtime · Advanced** section. Published release availability belongs to
+  the server card rather than a separate section; the manual shell command is
+  disclosed inside that card. Node and manually managed environment tools live
+  under Settings → Server & Connections → Software, not Updates. The server
+  card checks the repo's release tags and distinguishes the **boot commit** from
+  checkout `HEAD`. Fetch/install/gate still happens before activation. A clean committed checkout can be
   handed to the safe deployment coordinator: it refuses new runs, drains live
   conversations and tasks, then launches a transient systemd supervisor outside
   the server's cgroup. The supervisor restarts, health-checks, records
@@ -1380,11 +1384,13 @@ changes runtime.
 channels above):
 
 - An installed PWA only re-checks its service worker on navigation, so the
-  client drives the check itself: on a **device-chosen interval**
-  (Settings → Appearance → App updates, default **10 minutes**; the shipped
-  factory default drops to **once a day**), on `visibilitychange → visible`
-  when the app is resumed, and on a manual **"Check now"**. The interval is
-  device-scoped in `localStorage`, never sent to the server.
+  client drives the check itself. Settings → Updates → This device has a
+  device-local **Check automatically** switch and, while enabled, a frequency
+  select (default **10 minutes**; the shipped factory default drops to **once
+  a day**). Automatic checks run on that interval and on
+  `visibilitychange → visible`; disabling the switch stops both while keeping
+  manual **Check for updates** available. The choice is device-scoped in
+  `localStorage`, never sent to the server.
 - The registration lives in one module (`web/src/services/pwa-update.ts`);
   `registerSW` runs exactly once. A found update raises the reload banner
   (`registerType: 'prompt'` — never a silent swap).

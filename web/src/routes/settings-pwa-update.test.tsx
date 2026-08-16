@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsDTO, UpdateStatusResponse } from '@pop-agent/shared';
 import { SettingsPage } from './settings-page';
 import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
+import { DEFAULT_UPDATE_MINUTES, useUpdatesStore } from '../store/updates';
 
 vi.mock('../services/pwa-update', () => ({
   applyUpdate: vi.fn(),
@@ -57,6 +58,7 @@ beforeEach(() => {
     ok: true,
     candidate: { phase: 'waiting-idle', version: '0.85.0' },
   });
+  useUpdatesStore.setState({ enabled: true, intervalMinutes: DEFAULT_UPDATE_MINUTES });
 });
 
 afterEach(cleanup);
@@ -80,8 +82,29 @@ describe('Settings PWA update action', () => {
 
     await user.click(await screen.findByTestId('update-check-now'));
 
-    await screen.findByText('This PWA is up to date.');
+    await screen.findByText('This app is up to date.');
     expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('uses a toggle for automatic app checks and reveals frequency only when enabled', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    const toggle = await screen.findByTestId('updates-check-automatically');
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId('update-interval')).toBeTruthy();
+
+    await user.click(toggle);
+
+    expect(useUpdatesStore.getState().enabled).toBe(false);
+    expect(screen.queryByTestId('update-interval')).toBeNull();
+  });
+
+  it('describes the server without assuming its operating system', async () => {
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    expect(await screen.findByText('Pop Agent running on your server.')).toBeTruthy();
+    expect(screen.queryByText(/Linux server/)).toBeNull();
   });
 
   it('does not advertise an older published server tag as an update', async () => {
@@ -94,8 +117,8 @@ describe('Settings PWA update action', () => {
     } satisfies UpdateStatusResponse);
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    await screen.findByText('No newer published server release.');
-    expect(screen.queryByText('Pop Agent 0.2.0 is available.')).toBeNull();
+    expect((await screen.findByTestId('update-server-available')).textContent).toContain('None');
+    expect(screen.queryByText('0.2.0')).toBeNull();
   });
 
   it('advertises a strictly newer published server tag', async () => {
@@ -108,7 +131,7 @@ describe('Settings PWA update action', () => {
     } satisfies UpdateStatusResponse);
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    await screen.findByText('Pop Agent 0.3.0 is available.');
+    expect((await screen.findByTestId('update-server-available')).textContent).toContain('0.3.0');
   });
 
   it('shows pi versions, persists the policy, and prepares a runtime', async () => {
@@ -122,7 +145,7 @@ describe('Settings PWA update action', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    await user.click(await screen.findByText('Advanced'));
+    await user.click(await screen.findByTestId('update-ai-runtime'));
     expect((await screen.findByTestId('update-pi-current')).textContent).toContain('0.84.1');
     expect(screen.getByTestId('update-pi-recommended').textContent).toContain('0.84.1');
     expect(screen.getByTestId('update-pi-latest').textContent).toContain('0.85.0');
@@ -149,7 +172,7 @@ describe('Settings PWA update action', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    await user.click(await screen.findByText('Advanced'));
+    await user.click(await screen.findByTestId('update-ai-runtime'));
     await user.click(await screen.findByTestId('update-pi-activate'));
     await waitFor(() => expect(activatePiCandidate).toHaveBeenCalledOnce());
     expect(await screen.findByText(/Waiting for active work to finish/)).toBeTruthy();

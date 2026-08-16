@@ -91,7 +91,7 @@ export function clientEnvironment(): ClientEnvironment {
         : platform === 'macos'
           ? 'This Mac'
           : 'This device',
-    appLabel: kind === 'pwa' ? 'Installed PWA' : 'Web browser',
+    appLabel: kind === 'pwa' ? 'Installed app' : 'Web browser',
   };
 }
 

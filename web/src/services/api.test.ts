@@ -18,7 +18,7 @@ describe('clientEnvironment', () => {
       kind: 'pwa',
       platform: 'ios',
       deviceLabel: 'This iPhone',
-      appLabel: 'Installed PWA',
+      appLabel: 'Installed app',
     });
   });
 });

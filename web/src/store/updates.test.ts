@@ -4,12 +4,19 @@ import { DEFAULT_UPDATE_MINUTES, useUpdatesStore } from './updates';
 
 beforeEach(() => {
   localStorage.clear();
-  useUpdatesStore.setState({ intervalMinutes: DEFAULT_UPDATE_MINUTES });
+  useUpdatesStore.setState({ enabled: true, intervalMinutes: DEFAULT_UPDATE_MINUTES });
 });
 
 describe('updates store', () => {
   it('defaults to ten minutes', () => {
     expect(useUpdatesStore.getState().intervalMinutes).toBe(10);
+  });
+
+  it('can disable automatic checks on this device', () => {
+    useUpdatesStore.getState().setEnabled(false);
+
+    expect(localStorage.getItem('pop-agent.updateChecksEnabled')).toBe('0');
+    expect(useUpdatesStore.getState().enabled).toBe(false);
   });
 
   it('remembers a valid choice on this device only', () => {

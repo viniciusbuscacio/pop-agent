@@ -39,7 +39,7 @@ export function startUpdateChecks(onNeedRefresh: () => void): void {
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void safeUpdate();
+    if (intervalMs > 0 && document.visibilityState === 'visible') void safeUpdate();
   });
 }
 
@@ -150,7 +150,8 @@ async function newestWaitingWorker(
 
 function restartTimer(): void {
   if (timer !== undefined) clearInterval(timer);
-  if (registration === undefined) return;
+  timer = undefined;
+  if (registration === undefined || intervalMs <= 0) return;
   timer = setInterval(() => void safeUpdate(), intervalMs);
 }
 

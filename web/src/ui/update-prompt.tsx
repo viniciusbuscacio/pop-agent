@@ -22,6 +22,7 @@ import { useUpdatesStore } from '../store/updates';
 export function UpdatePrompt() {
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const checksEnabled = useUpdatesStore((state) => state.enabled);
   const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
 
   useEffect(() => {
@@ -34,8 +35,8 @@ export function UpdatePrompt() {
   }, []);
 
   useEffect(() => {
-    setUpdateIntervalMs(intervalMinutes * 60 * 1000);
-  }, [intervalMinutes]);
+    setUpdateIntervalMs(checksEnabled ? intervalMinutes * 60 * 1000 : 0);
+  }, [checksEnabled, intervalMinutes]);
 
   if (!needsRefresh) return null;
 

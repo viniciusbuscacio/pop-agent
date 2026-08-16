@@ -1167,7 +1167,9 @@ function FontSizeCard() {
  * never reaches the server. "Check now" asks the service worker immediately.
  */
 function AppUpdatesCard() {
+  const checksEnabled = useUpdatesStore((state) => state.enabled);
   const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
+  const setChecksEnabled = useUpdatesStore((state) => state.setEnabled);
   const setIntervalMinutes = useUpdatesStore((state) => state.setIntervalMinutes);
   const [checking, setChecking] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -1195,17 +1197,23 @@ function AppUpdatesCard() {
   }
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Card className="flex flex-col gap-4">
       <div>
         <h2 className="text-base font-semibold">{client.deviceLabel}</h2>
-        <p className="text-xs text-[var(--muted)]">{t('settings.updates.deviceSubtitle')}</p>
+        <p className="text-xs text-[var(--muted)]">
+          {client.kind === 'pwa'
+            ? t('settings.updates.deviceSubtitleInstalled', { device: client.deviceLabel.toLowerCase() })
+            : t('settings.updates.deviceSubtitleBrowser', { device: client.deviceLabel.toLowerCase() })}
+        </p>
       </div>
-      <Row label={t('settings.updates.appType')} value={client.appLabel} testId="update-local-kind" />
-      <Row
-        label={t('settings.updates.localVersion')}
-        value={LOCAL_POP_AGENT_VERSION}
-        testId="update-local-version"
-      />
+      <div className="flex flex-col gap-2">
+        <Row label={t('settings.updates.appType')} value={client.appLabel} testId="update-local-kind" />
+        <Row
+          label={t('settings.updates.localVersion')}
+          value={LOCAL_POP_AGENT_VERSION}
+          testId="update-local-version"
+        />
+      </div>
       {result !== undefined ? (
         <p role="status" data-testid="update-check-result" className="text-sm text-[var(--muted)]">
           {result}
@@ -1223,24 +1231,35 @@ function AppUpdatesCard() {
             ? t('settings.updates.applying')
             : checking
               ? t('settings.updates.checking')
-              : t('settings.updates.checkAndUpdate')}
+              : t('settings.updates.checkForUpdates')}
         </Button>
       </div>
-      <Select
-        id="update-interval"
-        data-testid="update-interval"
-        label={t('settings.updates.automaticChecks')}
-        value={intervalMinutes}
-        onChange={(event) => setIntervalMinutes(Number(event.target.value))}
-        className="w-full max-w-xs"
-      >
-        {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
-          <option key={minutes} value={minutes}>
-            {intervalLabel(minutes)}
-          </option>
-        ))}
-      </Select>
-      <p className="text-xs text-[var(--muted)]">{t('settings.updates.deviceNote')}</p>
+      <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+        <SwitchField
+          id="updates-check-automatically"
+          testId="updates-check-automatically"
+          label={t('settings.updates.checkAutomatically')}
+          hint={t('settings.updates.checkAutomaticallyHint')}
+          checked={checksEnabled}
+          onChange={setChecksEnabled}
+        />
+        {checksEnabled ? (
+          <Select
+            id="update-interval"
+            data-testid="update-interval"
+            label={t('settings.updates.checkFrequency')}
+            value={intervalMinutes}
+            onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+            className="w-full max-w-xs"
+          >
+            {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
+              <option key={minutes} value={minutes}>
+                {intervalLabel(minutes)}
+              </option>
+            ))}
+          </Select>
+        ) : null}
+      </div>
     </Card>
   );
 }
@@ -1250,6 +1269,12 @@ function intervalLabel(minutes: number): string {
   if (minutes < 60) return t('settings.updates.everyMinutes', { count: minutes });
   if (minutes < 1440) return t('settings.updates.everyHours', { count: minutes / 60 });
   return t('settings.updates.everyDay');
+}
+
+function idleLabel(minutes: number): string {
+  return minutes === 60
+    ? t('settings.updates.oneHourInactive')
+    : t('settings.updates.minutesInactive', { count: minutes });
 }
 
 /** Web Push opt-in (pop-agent.spec §14). Device-scoped, like the theme. */
@@ -1448,8 +1473,9 @@ function SecuritySection() {
 }
 
 /**
- * Settings → Updates (pop-agent.spec §15): three cards, one per channel. The
- * shell still fetches/builds commits; once a clean committed checkout differs
+ * Settings → Updates (pop-agent.spec §15): device and server first, with the
+ * AI runtime behind an advanced disclosure. The shell still fetches/builds
+ * commits; once a clean committed checkout differs
  * from the boot commit, this screen can drain work and hand activation to the
  * external restart/health/rollback supervisor.
  */
@@ -1578,35 +1604,48 @@ function UpdatesSection() {
     <div className="flex flex-col gap-4">
       <AppUpdatesCard />
 
-      <Card className="flex flex-col gap-3">
+      {refreshNote !== undefined ? (
+        <p role="status" data-testid="update-refresh-result" className="text-sm text-[var(--muted)]">
+          {refreshNote}
+        </p>
+      ) : null}
+
+      <Card className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-semibold">{t('settings.updates.yourServer')}</h2>
           <p className="text-xs text-[var(--muted)]">{t('settings.updates.serverSubtitle')}</p>
         </div>
-        <Row
-          label={t('settings.updates.runningNow')}
-          value={
-            update === undefined
-              ? '…'
-              : `${update.popAgent.current} · ${deployment?.runningCommit ?? 'unknown'}`
-          }
-          testId="update-pop-agent-current"
-        />
-        {deployment?.pending ? (
+
+        <div className="flex flex-col gap-2">
           <Row
-            label={t('settings.updates.readyToActivate')}
-            value={`${update?.popAgent.current ?? '…'} · ${deployment.headCommit}`}
-            testId="update-head-commit"
+            label={t('settings.updates.serverVersion')}
+            value={update?.popAgent.current ?? '…'}
+            testId="update-pop-agent-version"
           />
-        ) : null}
-        {deployment !== undefined ? (
-          <p
-            data-testid="update-deployment-phase"
-            className={deployment.pending ? 'text-sm text-[var(--accent)]' : 'text-sm text-[var(--muted)]'}
-          >
-            {t(`settings.updates.phase.${deployment.phase}`)}
-          </p>
-        ) : null}
+          <Row
+            label={t('settings.updates.serverBuild')}
+            value={deployment?.runningCommit ?? '…'}
+            testId="update-pop-agent-current"
+          />
+          <Row
+            label={t('settings.updates.serverStatus')}
+            value={deployment === undefined ? '…' : t(`settings.updates.status.${deployment.phase}`)}
+            testId="update-deployment-phase"
+          />
+          <Row
+            label={t('settings.updates.availableUpdate')}
+            value={popAgentOutdated ? (update?.popAgent.latest ?? '…') : t('settings.updates.none')}
+            testId="update-server-available"
+          />
+          {deployment?.pending ? (
+            <Row
+              label={t('settings.updates.readyToActivate')}
+              value={deployment.headCommit}
+              testId="update-head-commit"
+            />
+          ) : null}
+        </div>
+
         {deployment?.clean === false ? (
           <p role="alert" className="text-xs text-[var(--danger)]">
             {t('settings.updates.dirtyTree')}
@@ -1635,12 +1674,24 @@ function UpdatesSection() {
           </div>
         ) : null}
 
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="update-refresh-server"
+            disabled={refreshing}
+            onClick={() => void load(true)}
+          >
+            {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.checkServerUpdates')}
+          </Button>
+        </div>
+
         {appSettings === undefined ? null : (
-          <div className="mt-1 flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
             <SwitchField
               id="updates-auto-activate"
               testId="updates-auto-activate"
-              label={t('settings.updates.autoActivate')}
+              label={t('settings.updates.activateAutomatically')}
               hint={t('settings.updates.autoActivateHint')}
               checked={appSettings.autoActivatePreparedUpdates}
               onChange={(checked) => saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
@@ -1649,7 +1700,7 @@ function UpdatesSection() {
               <Select
                 id="updates-idle-minutes"
                 data-testid="updates-idle-minutes"
-                label={t('settings.updates.idleMinutes')}
+                label={t('settings.updates.restartAfter')}
                 hint={t('settings.updates.idleMinutesHint')}
                 value={String(appSettings.autoRestartIdleMinutes)}
                 onChange={(event) =>
@@ -1657,137 +1708,16 @@ function UpdatesSection() {
                 }
               >
                 {[5, 10, 15, 30, 60].map((minutes) => (
-                  <option key={minutes} value={minutes}>{minutes}</option>
+                  <option key={minutes} value={minutes}>{idleLabel(minutes)}</option>
                 ))}
               </Select>
             ) : null}
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
-          <Button
-            type="button"
-            variant="ghost"
-            data-testid="update-refresh-server"
-            disabled={refreshing}
-            onClick={() => void load(true)}
-          >
-            {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.refreshServer')}
-          </Button>
-          {refreshNote !== undefined ? (
-            <p role="status" data-testid="update-refresh-result" className="text-xs text-[var(--muted)]">
-              {refreshNote}
-            </p>
-          ) : null}
-        </div>
-      </Card>
-
-      <details className="rounded-xl border border-[var(--border)] bg-[var(--panel-bg)] p-6">
-        <summary className="cursor-pointer text-base font-semibold">{t('settings.updates.advanced')}</summary>
-        <div className="mt-4 flex flex-col gap-4">
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">{t('settings.updates.publishedReleases')}</h3>
-            {popAgentOutdated ? (
-              <p data-testid="update-pop-agent-available" className="text-sm text-[var(--accent)]">
-                {t('settings.updates.popAgentAvailable', { version: update?.popAgent.latest ?? '' })}
-              </p>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">{t('settings.updates.noNewerRelease')}</p>
-            )}
-            <p className="text-xs text-[var(--muted)]">{t('settings.updates.notifyNote')}</p>
-          </section>
-
-          <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
-            <h3 className="text-sm font-semibold">{t('settings.updates.runtimeComponents')}</h3>
-            <Row
-              label={t('settings.updates.piActive')}
-              value={update?.pi.current ?? '…'}
-              testId="update-pi-current"
-            />
-            <Row
-              label={t('settings.updates.piRecommended')}
-              value={update?.pi.recommended ?? '…'}
-              testId="update-pi-recommended"
-            />
-            <Row
-              label={t('settings.updates.piLatest')}
-              value={update?.pi.latest ?? t('settings.updates.unknown')}
-              testId="update-pi-latest"
-            />
-            {piOutdated ? (
-              <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
-                {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
-              </p>
-            ) : null}
-            {appSettings === undefined ? null : (
-              <Select
-                id="updates-pi-policy"
-                data-testid="updates-pi-policy"
-                label={t('settings.updates.piPolicy')}
-                hint={t(`settings.updates.piPolicyHint.${appSettings.piUpdatePolicy}`)}
-                value={appSettings.piUpdatePolicy}
-                onChange={(event) =>
-                  saveAutomaticUpdate({
-                    piUpdatePolicy: event.target.value as SettingsDTO['piUpdatePolicy'],
-                  })
-                }
-              >
-                <option value="keep-current">{t('settings.updates.piPolicy.keepCurrent')}</option>
-                <option value="recommended">{t('settings.updates.piPolicy.recommended')}</option>
-                <option value="latest">{t('settings.updates.piPolicy.latest')}</option>
-              </Select>
-            )}
-            <p className="text-xs text-[var(--muted)]">{t('settings.updates.piPolicyPhaseTwo')}</p>
-            {update?.pi.candidate === undefined || update.pi.candidate.phase === 'idle' ? null : (
-              <p
-                data-testid="update-pi-candidate-status"
-                className={update.pi.candidate.phase === 'failed' ? 'text-xs text-[var(--danger)]' : 'text-xs text-[var(--muted)]'}
-              >
-                {t(`settings.updates.piCandidate.${update.pi.candidate.phase}`, {
-                  version: update.pi.candidate.version ?? '',
-                })}
-                {update.pi.candidate.error === undefined ? '' : ` ${update.pi.candidate.error}`}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                data-testid="update-pi-prepare"
-                disabled={
-                  preparingPi ||
-                  activatingPi ||
-                  piCandidateBusy ||
-                  appSettings?.piUpdatePolicy === 'keep-current'
-                }
-                onClick={() => void preparePiCandidate()}
-              >
-                {preparingPi || update?.pi.candidate?.phase === 'installing' || update?.pi.candidate?.phase === 'validating'
-                  ? t('settings.updates.piPreparing')
-                  : t('settings.updates.piPrepare')}
-              </Button>
-              {update?.pi.candidate?.phase === 'ready' ? (
-                <Button
-                  type="button"
-                  data-testid="update-pi-activate"
-                  disabled={activatingPi}
-                  onClick={() => void activatePiCandidate()}
-                >
-                  {activatingPi
-                    ? t('settings.updates.piActivating')
-                    : t('settings.updates.piActivate')}
-                </Button>
-              ) : null}
-            </div>
-            <Row label="Node" value={update?.node ?? '…'} testId="update-node" />
-            {(update?.environment ?? []).map((tool) => (
-              <Row key={tool.name} label={tool.name} value={tool.version} testId={`env-${tool.name}`} />
-            ))}
-            <p className="text-xs text-[var(--muted)]">{t('settings.updates.envNote')}</p>
-          </section>
-
-          <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
-            <h3 className="text-sm font-semibold">{t('settings.updates.manualUpdate')}</h3>
+        <details className="border-t border-[var(--border)] pt-4">
+          <summary className="cursor-pointer text-sm font-medium">{t('settings.updates.manualUpdate')}</summary>
+          <div className="mt-3 flex flex-col gap-3">
             <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
             <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
               {update?.updateCommand ?? '…'}
@@ -1806,7 +1736,97 @@ function UpdatesSection() {
                 {copied ? t('settings.updates.copied') : t('settings.updates.copy')}
               </Button>
             </div>
-          </section>
+          </div>
+        </details>
+      </Card>
+
+      <details className="rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--panel-bg)] p-6">
+        <summary data-testid="update-ai-runtime" className="cursor-pointer text-base font-semibold">
+          {t('settings.updates.aiRuntime')} · <span className="text-[var(--muted)]">{t('settings.updates.advanced')}</span>
+        </summary>
+        <div className="mt-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Row
+              label={t('settings.updates.piActive')}
+              value={update?.pi.current ?? '…'}
+              testId="update-pi-current"
+            />
+            <Row
+              label={t('settings.updates.piRecommended')}
+              value={update?.pi.recommended ?? '…'}
+              testId="update-pi-recommended"
+            />
+            <Row
+              label={t('settings.updates.piLatest')}
+              value={update?.pi.latest ?? t('settings.updates.unknown')}
+              testId="update-pi-latest"
+            />
+          </div>
+          {piOutdated ? (
+            <p data-testid="update-pi-available" className="text-sm text-[var(--accent)]">
+              {t('settings.updates.piAvailable', { version: update?.pi.latest ?? '' })}
+            </p>
+          ) : null}
+          {appSettings === undefined ? null : (
+            <Select
+              id="updates-pi-policy"
+              data-testid="updates-pi-policy"
+              label={t('settings.updates.updatePolicy')}
+              hint={t(`settings.updates.piPolicyHint.${appSettings.piUpdatePolicy}`)}
+              value={appSettings.piUpdatePolicy}
+              onChange={(event) =>
+                saveAutomaticUpdate({
+                  piUpdatePolicy: event.target.value as SettingsDTO['piUpdatePolicy'],
+                })
+              }
+            >
+              <option value="keep-current">{t('settings.updates.piPolicy.keepCurrent')}</option>
+              <option value="recommended">{t('settings.updates.piPolicy.recommended')}</option>
+              <option value="latest">{t('settings.updates.piPolicy.latest')}</option>
+            </Select>
+          )}
+          <p className="text-xs text-[var(--muted)]">{t('settings.updates.piPolicyPhaseTwo')}</p>
+          {update?.pi.candidate === undefined || update.pi.candidate.phase === 'idle' ? null : (
+            <p
+              data-testid="update-pi-candidate-status"
+              className={update.pi.candidate.phase === 'failed' ? 'text-xs text-[var(--danger)]' : 'text-xs text-[var(--muted)]'}
+            >
+              {t(`settings.updates.piCandidate.${update.pi.candidate.phase}`, {
+                version: update.pi.candidate.version ?? '',
+              })}
+              {update.pi.candidate.error === undefined ? '' : ` ${update.pi.candidate.error}`}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="update-pi-prepare"
+              disabled={
+                preparingPi ||
+                activatingPi ||
+                piCandidateBusy ||
+                appSettings?.piUpdatePolicy === 'keep-current'
+              }
+              onClick={() => void preparePiCandidate()}
+            >
+              {preparingPi || update?.pi.candidate?.phase === 'installing' || update?.pi.candidate?.phase === 'validating'
+                ? t('settings.updates.piPreparing')
+                : t('settings.updates.piPrepare')}
+            </Button>
+            {update?.pi.candidate?.phase === 'ready' ? (
+              <Button
+                type="button"
+                data-testid="update-pi-activate"
+                disabled={activatingPi}
+                onClick={() => void activatePiCandidate()}
+              >
+                {activatingPi
+                  ? t('settings.updates.piActivating')
+                  : t('settings.updates.piActivate')}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </details>
     </div>
@@ -1845,7 +1865,6 @@ function ServerSection() {
       <Card className="flex flex-col gap-3">
         <Row label={t('settings.server.time')} value={info ? new Date(info.serverTime).toLocaleString() : '…'} testId="server-time" />
         <Row label={t('settings.server.timezone')} value={info?.timezone ?? '…'} testId="server-timezone" />
-        <Row label={t('settings.server.node')} value={info?.nodeVersion ?? '…'} testId="server-node" />
         <Row label={t('settings.server.popAgent')} value={info ? `${info.popAgentVersion} (${info.commit})` : '…'} testId="server-pop-agent" />
       </Card>
 
@@ -1856,8 +1875,30 @@ function ServerSection() {
         <Row label={t('settings.server.workspace')} value={info?.workspace ?? '…'} testId="server-workspace-path" />
       </Card>
 
+      <ServerSoftwareCard />
       <DangerZoneSection llmStopped={info?.llmStopped === true} />
     </div>
+  );
+}
+
+function ServerSoftwareCard() {
+  const [software, setSoftware] = useState<import('@pop-agent/shared').UpdateStatusResponse | undefined>(undefined);
+
+  useEffect(() => {
+    void settingsService.updateStatus(false).then(setSoftware).catch(() => undefined);
+  }, []);
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div>
+        <h2 className="text-base font-semibold">{t('settings.server.software')}</h2>
+        <p className="text-xs text-[var(--muted)]">{t('settings.server.softwareHint')}</p>
+      </div>
+      <Row label="Node" value={software?.node ?? '…'} testId="server-node" />
+      {(software?.environment ?? []).map((tool) => (
+        <Row key={tool.name} label={tool.name} value={tool.version} testId={`server-software-${tool.name}`} />
+      ))}
+    </Card>
   );
 }
 
@@ -2028,7 +2069,7 @@ function Row({ label, value, testId }: { label: string; value: string; testId: s
   return (
     <div className="flex min-w-0 items-start justify-between gap-4 text-sm">
       <span className="min-w-0 text-[var(--key-fg-dim)]">{label}</span>
-      <span data-testid={testId} className="min-w-0 break-all text-right font-mono text-[var(--muted)]">
+      <span data-testid={testId} className="min-w-0 break-words text-right font-mono text-[var(--muted)]">
         {value}
       </span>
     </div>
