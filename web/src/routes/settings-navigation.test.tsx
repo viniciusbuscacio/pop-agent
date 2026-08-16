@@ -22,7 +22,6 @@ vi.mock('../services/push', () => ({
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
   useFontStore.getState().setChoice('default');
   localStorage.removeItem('pop-agent.fontSize');
 });
@@ -82,7 +81,6 @@ describe('Settings navigation', () => {
   });
 
   it('returns a desktop detail directly to the chat that opened Settings', async () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
     const user = userEvent.setup();
     render(
       <MemoryRouter
@@ -101,13 +99,14 @@ describe('Settings navigation', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByTestId('settings-back'));
+    expect(screen.getByTestId('settings-back-desktop').className).toContain('md:grid');
+    expect(screen.getByTestId('settings-back-phone').className).toContain('md:hidden');
+    await user.click(screen.getByTestId('settings-back-desktop'));
 
     expect(screen.getByTestId('current-location').textContent).toBe('/chat/chat-open');
   });
 
   it('keeps the two-step Settings back path on a phone', async () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })));
     const user = userEvent.setup();
     render(
       <MemoryRouter
@@ -126,10 +125,10 @@ describe('Settings navigation', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByTestId('settings-back'));
+    await user.click(screen.getByTestId('settings-back-phone'));
     expect(screen.getByTestId('current-location').textContent).toBe('/settings');
 
-    await user.click(screen.getByTestId('settings-back'));
+    await user.click(screen.getByTestId('settings-back-phone'));
     expect(screen.getByTestId('current-location').textContent).toBe('/');
   });
 

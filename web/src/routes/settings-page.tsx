@@ -124,13 +124,16 @@ export function SettingsPage() {
     navigate(`/settings?section=${next}`, { state: location.state });
   }
 
-  function goBack(): void {
-    if (window.matchMedia?.('(min-width: 768px)').matches === true) {
-      navigate(settingsReturnTo(location.state));
-      return;
-    }
+  // CSS owns the breakpoint as well as the layout. Separate controls ensure
+  // the visible split view always gets desktop navigation, without asking a
+  // native host's JavaScript matchMedia implementation to classify the window.
+  function goBackOnPhone(): void {
     if (section !== undefined) navigate('/settings', { state: location.state });
     else navigate('/');
+  }
+
+  function goBackOnDesktop(): void {
+    navigate(settingsReturnTo(location.state));
   }
 
   return (
@@ -141,10 +144,19 @@ export function SettingsPage() {
       >
         <Pressable
           type="button"
-          data-testid="settings-back"
+          data-testid="settings-back-phone"
           aria-label={t('common.back')}
-          onClick={goBack}
-          className="grid min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+          onClick={goBackOnPhone}
+          className="grid min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
+        >
+          ←
+        </Pressable>
+        <Pressable
+          type="button"
+          data-testid="settings-back-desktop"
+          aria-label={t('common.back')}
+          onClick={goBackOnDesktop}
+          className="hidden min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:grid"
         >
           ←
         </Pressable>
