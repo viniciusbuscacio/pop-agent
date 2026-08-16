@@ -779,7 +779,7 @@ export function Card({
   const spacing = padding === 'compact' ? 'p-4' : 'p-6';
   return (
     <div
-      className={`min-w-0 max-w-full rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] ${spacing} ${className}`}
+      className={`min-w-0 max-w-full rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] shadow-[var(--shadow-panel)] ${spacing} ${className}`}
       {...props}
     >
       {children}

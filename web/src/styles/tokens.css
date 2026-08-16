@@ -32,32 +32,36 @@
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
   --radius-composer: 1rem;
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.18);
   --shadow-menu: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
 
 :root[data-theme='light'] {
-  --bg: #f3f3f3;
-  --screen-fg: #1a1a1a;
-  --titlebar-fg: #1a1a1a;
+  /* A warm canvas keeps the light theme from reading as a blank white page;
+     controls stay white so the hierarchy remains visible without heavy lines. */
+  --bg: #f7f5f2;
+  --screen-fg: #201f1e;
+  --titlebar-fg: #201f1e;
   --accent: #005fb8;
   --accent-hover: #0a6cc8;
   --accent-fg: #ffffff;
-  --border: #e2e2e2;
+  --border: #dedad4;
   --panel-bg: #ffffff;
-  --panel-hover: #f4f4f4;
+  --panel-hover: #f3f0ec;
   --notice-bg: #eaf4fa;
   --notice-border: #8bbbd5;
   --input-bg: #ffffff;
-  --muted: #757575;
-  --key-fg-dim: #333333;
+  --muted: #6f6b66;
+  --key-fg-dim: #373431;
   --danger: #c42b1c;
   --success: #107c41;
-  --hover-overlay: rgba(0, 0, 0, 0.05);
+  --hover-overlay: rgba(55, 45, 35, 0.055);
   --backdrop: rgba(0, 0, 0, 0.45);
-  --switch-stroke: rgba(0, 0, 0, 0.45);
-  --scroll-thumb: rgba(0, 0, 0, 0.28);
+  --switch-stroke: rgba(32, 31, 30, 0.45);
+  --scroll-thumb: rgba(32, 31, 30, 0.28);
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
   --radius-composer: 1rem;
-  --shadow-menu: 0 10px 24px rgba(0, 0, 0, 0.16);
+  --shadow-panel: 0 1px 2px rgba(60, 48, 32, 0.08), 0 4px 12px rgba(60, 48, 32, 0.04);
+  --shadow-menu: 0 10px 24px rgba(60, 48, 32, 0.16);
 }
