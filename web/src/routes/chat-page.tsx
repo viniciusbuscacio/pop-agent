@@ -304,7 +304,7 @@ export function ChatPage() {
           </div>
         ) : null}
 
-        <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[90%]">
+        <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[95%]">
           {settledTranscript}
 
           {live?.status === 'running' ? (
@@ -453,7 +453,7 @@ export function ChatPage() {
       {unconfigured ? (
         <p
           data-testid="no-provider"
-          className="mx-auto mb-1 w-full px-4 text-center text-xs text-[var(--muted)] md:w-[90%]"
+          className="mx-auto mb-1 w-full px-4 text-center text-xs text-[var(--muted)] md:w-[95%]"
         >
           {t('chat.noProvider')}{' '}
           <Link to="/settings" className="text-[var(--accent)] underline underline-offset-2">

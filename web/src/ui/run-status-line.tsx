@@ -26,7 +26,7 @@ export function RunStatusLine({ status }: { status: 'queued' | 'running' | 'appr
     <div
       data-testid="run-status-line"
       role="status"
-      className="mx-auto flex w-full shrink-0 items-center gap-2 px-4 py-1 text-sm text-[var(--muted)] md:w-[90%]"
+      className="mx-auto flex w-full shrink-0 items-center gap-2 px-4 py-1 text-sm text-[var(--muted)] md:w-[95%]"
     >
       {status === 'running' ? (
         <>

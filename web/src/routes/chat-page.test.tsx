@@ -290,7 +290,7 @@ describe('chat transcript', () => {
     expect(scroller.className).toContain('overflow-y-auto');
     const transcript = screen.getByTestId('chat-transcript');
     expect(transcript.className).toContain('w-full');
-    expect(transcript.className).toContain('md:w-[90%]');
+    expect(transcript.className).toContain('md:w-[95%]');
     expect(transcript.className).not.toContain('max-w-3xl');
     expect(transcript.className).toContain('min-w-0');
     expect(scroller.style.touchAction).toBe('pan-y');

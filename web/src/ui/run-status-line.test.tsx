@@ -14,7 +14,7 @@ describe('RunStatusLine', () => {
 
     const line = screen.getByTestId('run-status-line');
     expect(line.textContent).toBe('Waiting for a free slot…');
-    expect(line.className).toContain('md:w-[90%]');
+    expect(line.className).toContain('md:w-[95%]');
     expect(line.className).not.toContain('max-w-3xl');
     expect(screen.queryByTestId('working-indicator')).toBeNull();
   });
