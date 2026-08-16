@@ -15,8 +15,10 @@ const fixtures = [
   'cli/package.json',
   'tools/package.json',
   'cli/src/version.ts',
+  'local-access/tray/main.go',
 ] as const;
 
+const releaseVersion = readFileSync(join(sourceRoot, 'VERSION'), 'utf8').trim();
 let root = '';
 
 afterEach(() => {
@@ -42,7 +44,7 @@ describe('global version consistency', () => {
   it('reports source drift across manifests, lockfile and the CLI handshake', () => {
     const target = fixture();
     const cliPath = join(target, 'cli/src/version.ts');
-    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace('0.2.30', '0.2.9'));
+    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace(releaseVersion, '0.2.9'));
 
     const rootPackagePath = join(target, 'package.json');
     const rootPackage = JSON.parse(readFileSync(rootPackagePath, 'utf8')) as { version: string };
@@ -58,9 +60,9 @@ describe('global version consistency', () => {
     writeFileSync(lockPath, `${JSON.stringify(lock)}\n`);
 
     expect(versionConsistencyErrors(target)).toEqual(expect.arrayContaining([
-      'package.json version is "0.2.9"; expected 0.2.30',
-      'package-lock.json packages["cli"] version is "0.2.9"; expected 0.2.30',
-      'cli/src/version.ts VERSION is "0.2.9"; expected 0.2.30',
+      `package.json version is "0.2.9"; expected ${releaseVersion}`,
+      `package-lock.json packages["cli"] version is "0.2.9"; expected ${releaseVersion}`,
+      `cli/src/version.ts VERSION is "0.2.9"; expected ${releaseVersion}`,
     ]));
   });
 });
