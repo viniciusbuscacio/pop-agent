@@ -7,6 +7,11 @@ import type {
   ModelInfo,
   ProviderAuthBridge,
 } from '../../application/ports/agent-bridge.js';
+import type {
+  SessionCommandBridge,
+  SessionForkPoint,
+  SessionStatsResult,
+} from '../../application/ports/session-command-bridge.js';
 
 /**
  * A scripted stand-in for pi (Phase 2). It exists so the entire chat -- the
@@ -33,7 +38,7 @@ const DEFAULT_STEP_MS = 80;
 const TOOL_STEP_MS = 150;
 const SLOW_STEP_MS = 500;
 
-export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
+export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCommandBridge {
   /** Overridable so tests do not spend real seconds on the slow script. */
   constructor(private readonly speed = 1) {}
 
@@ -94,6 +99,21 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge {
   discardSession(): void {
     // The fake keeps no sessions to forget.
   }
+
+  compact(): Promise<void> { return Promise.resolve(); }
+  setSessionName(): Promise<void> { return Promise.resolve(); }
+  sessionStats(): Promise<SessionStatsResult> {
+    return Promise.resolve({
+      sessionId: 'fake-session', userMessages: 0, assistantMessages: 0,
+      toolCalls: 0, toolResults: 0, totalMessages: 0,
+      tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0,
+    });
+  }
+  exportSession(_chatId: string, format: 'html' | 'jsonl'): Promise<{ name: string; bytes: Buffer }> {
+    return Promise.resolve({ name: `fake-session.${format}`, bytes: Buffer.from(format === 'html' ? '<html></html>' : '') });
+  }
+  forkPoints(): Promise<SessionForkPoint[]> { return Promise.resolve([]); }
+  forkSession(): Promise<{ sessionFile: string }> { return Promise.resolve({ sessionFile: 'fake-fork.jsonl' }); }
 
   private async answer(
     prompt: string,

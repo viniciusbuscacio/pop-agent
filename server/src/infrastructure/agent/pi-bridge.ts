@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type { Attachment } from '../../domain/chat/chat.js';
@@ -15,6 +16,11 @@ import type {
   RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import type { ChatRepo } from '../../application/ports/chat-repo.js';
+import type {
+  SessionCommandBridge,
+  SessionForkPoint,
+  SessionStatsResult,
+} from '../../application/ports/session-command-bridge.js';
 import {
   DEFAULT_MODEL_ID,
   PROVIDER_ID,
@@ -105,11 +111,45 @@ interface CachedSession {
   lastUsedAt: number;
 }
 
-export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
+export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCommandBridge {
   private readonly sessions = new Map<string, CachedSession>();
   private sweeper: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: PiBridgeDeps) {}
+
+  async compact(chatId: string, instructions?: string): Promise<void> {
+    await this.withIdleSession(chatId, (session) => session.compact(instructions));
+  }
+
+  sessionStats(chatId: string): Promise<SessionStatsResult> {
+    return this.withIdleSession(chatId, (session) => Promise.resolve(this.commandSession(session).stats()));
+  }
+
+  async setSessionName(chatId: string, name: string): Promise<void> {
+    await this.withIdleSession(chatId, (session) => Promise.resolve(this.commandSession(session).setName(name)));
+  }
+
+  exportSession(chatId: string, format: 'html' | 'jsonl'): Promise<{ name: string; bytes: Buffer }> {
+    return this.withIdleSession(chatId, async (session) => {
+      const dir = mkdtempSync(join(tmpdir(), 'pop-pi-export-'));
+      const name = `session-${chatId}.${format}`;
+      const path = join(dir, name);
+      try {
+        const written = await this.commandSession(session).export(format, path);
+        return { name, bytes: readFileSync(written) };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  forkPoints(chatId: string): Promise<SessionForkPoint[]> {
+    return this.withIdleSession(chatId, (session) => Promise.resolve(this.commandSession(session).forkPoints()));
+  }
+
+  forkSession(chatId: string, entryId: string): Promise<{ sessionFile: string }> {
+    return this.withIdleSession(chatId, (session) => Promise.resolve({ sessionFile: this.commandSession(session).fork(entryId) }));
+  }
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const { chatId, model, onEvent, signal } = request;
@@ -469,6 +509,30 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
     );
   }
 
+  private commandSession(session: PiSession): Required<Pick<PiSession, 'stats' | 'setName' | 'export' | 'forkPoints' | 'fork'>> {
+    if (session.stats === undefined || session.setName === undefined || session.export === undefined || session.forkPoints === undefined || session.fork === undefined) {
+      throw new Error('This engine does not support pi session commands.');
+    }
+    return session as Required<Pick<PiSession, 'stats' | 'setName' | 'export' | 'forkPoints' | 'fork'>>;
+  }
+
+  private async withIdleSession<T>(chatId: string, operation: (session: PiSession) => Promise<T>): Promise<T> {
+    const chat = this.deps.chats.get(chatId);
+    if (chat === undefined) throw new Error('Chat not found.');
+    const existing = this.sessions.get(chatId);
+    if (existing !== undefined && existing.busy > 0) throw new Error('Session is busy.');
+    const pair = this.deps.resolvePair?.(chat.provider, chat.model) ?? {
+      providerId: chat.provider || PROVIDER_ID,
+      modelId: chat.model || DEFAULT_MODEL_ID,
+    };
+    const entry = await this.acquire(chatId, pair.providerId, pair.modelId, undefined);
+    try {
+      return await operation(entry.session);
+    } finally {
+      this.release(entry);
+    }
+  }
+
   private async acquire(
     chatId: string,
     providerId: string,
@@ -524,6 +588,10 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge {
       chatId,
       ...(localConnectionId === undefined ? {} : { localConnectionId }),
     });
+
+    // SQLite owns the user-facing title; every session wake reconciles pi's
+    // display name, covering manual and automatic renames alike.
+    if (chat !== undefined) session.setName?.(chat.title);
 
     const entry: CachedSession = {
       chatId,

@@ -13,7 +13,7 @@ import {
   type SlashCommand,
   type Terminal,
 } from '@earendil-works/pi-tui';
-import type { ChatDTO, MessageDTO, MessagesResponse } from '@pop-agent/shared';
+import type { ChatDTO, MessageDTO, MessagesResponse, SessionCommandName } from '@pop-agent/shared';
 import type { ChatSession } from '../../application/session.js';
 import type { RunState } from '../../application/transcript.js';
 import { ApiError } from '../../infrastructure/api.js';
@@ -50,6 +50,11 @@ const COMMANDS: SlashCommand[] = [
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
+  { name: 'compact', description: 'Compact the pi session context' },
+  { name: 'session', description: 'Show pi session statistics' },
+  { name: 'name', description: 'Rename the chat and pi session' },
+  { name: 'export', description: 'Export the pi session to Files' },
+  { name: 'fork', description: 'Fork from an earlier user message' },
   { name: 'help', description: 'List these commands' },
   { name: 'quit', description: 'Leave (or Ctrl+C)' },
 ];
@@ -595,8 +600,37 @@ export class ChatScreen {
         this.setTitle('New conversation');
         this.say(paint.dim('New conversation.'));
         return;
+      case '/compact':
+      case '/session':
+      case '/name':
+      case '/export':
+      case '/fork':
+        void this.runSessionCommand(name.slice(1) as SessionCommandName, text.slice(name.length).trim());
+        return;
       default:
         this.say(paint.yellow(`No such command: ${name ?? text}`));
+    }
+  }
+
+  private async runSessionCommand(command: SessionCommandName, argument: string): Promise<void> {
+    try {
+      if (command === 'fork' && argument.length === 0) {
+        const points = await this.options.session.forkPoints();
+        this.say(points.length === 0
+          ? paint.dim('No user messages are available to fork.')
+          : points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n'));
+        return;
+      }
+      const result = await this.options.session.command(command, argument);
+      if (result.kind === 'fork') {
+        if (result.draft !== undefined) this.editor.setText(result.draft);
+        this.setTitle(result.chat?.title ?? 'Forked conversation');
+        this.say(paint.dim('Forked conversation. The selected request is in the editor.'));
+        return;
+      }
+      this.say(paint.dim(result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`)));
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Command failed.'));
     }
   }
 }

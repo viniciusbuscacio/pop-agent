@@ -500,6 +500,28 @@ export function ChatPage() {
         }
         currentModel={currentModel?.currentModel ?? ''}
         onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
+        onCommand={async (command, argument) => {
+          if (command === 'fork' && argument.trim().length === 0) {
+            const { points } = await chatsService.forkPoints(chatId);
+            const message = points.length === 0
+              ? 'No user messages are available to fork.'
+              : `Choose a point with /fork <number>:\n${points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n')}`;
+            setLocalSystemMessages((current) => [...current, message]);
+            return;
+          }
+          const result = await chatsService.command(chatId, command, argument);
+          if (result.kind === 'fork' && result.chat !== undefined) {
+            try {
+              localStorage.setItem(`pop-agent.draft.${result.chat.id}`, result.draft ?? '');
+            } catch {
+              // The fork still exists; only its prefilled draft is unavailable.
+            }
+            navigate(`/chat/${result.chat.id}`);
+            return;
+          }
+          const message = result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`);
+          setLocalSystemMessages((current) => [...current, message]);
+        }}
         executionMode={chat?.executionMode ?? 'normal'}
         onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
         onSetModel={(model, provider) => setModel(chatId, model, provider)}

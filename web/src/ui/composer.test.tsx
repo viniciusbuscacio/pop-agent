@@ -32,6 +32,7 @@ function renderComposer(
   const onSetExecutionMode = vi.fn().mockResolvedValue(undefined);
   const onShowSystemMessage = vi.fn();
   const onSetModel = vi.fn().mockResolvedValue(undefined);
+  const onCommand = vi.fn().mockResolvedValue(undefined);
   render(
     <Composer
       chatId="chat-1"
@@ -49,12 +50,13 @@ function renderComposer(
       currentProviderLabel={props.currentProviderLabel ?? ''}
       currentModel={props.currentModel ?? ''}
       onShowSystemMessage={onShowSystemMessage}
+      onCommand={onCommand}
       executionMode={props.executionMode ?? 'normal'}
       onSetExecutionMode={onSetExecutionMode}
       onSetModel={onSetModel}
     />,
   );
-  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode, onShowSystemMessage, onSetModel };
+  return { onSend, onUpdateQueued, onEditingDone, onSetExecutionMode, onShowSystemMessage, onSetModel, onCommand };
 }
 
 afterEach(() => {
@@ -142,6 +144,16 @@ describe('pending message composition', () => {
     expect(onShowSystemMessage).toHaveBeenCalledWith(
       'Provider: openai-codex · Model: gpt-5.6-sol',
     );
+  });
+
+  it('executes pi session commands locally instead of sending them to the model', async () => {
+    const { onCommand, onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: '/compact keep decisions' } });
+    fireEvent.keyDown(area, { key: 'Enter' });
+    await waitFor(() => expect(onCommand).toHaveBeenCalledWith('compact', 'keep decisions'));
+    expect(onSend).not.toHaveBeenCalled();
+    expect((area as HTMLTextAreaElement).value).toBe('');
   });
 
   it('shows providers first, then every searchable model from the chosen provider', () => {

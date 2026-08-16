@@ -185,6 +185,16 @@ domain / application / dto / infrastructure / appcore → interface+main):
 - **Tool output streams in real time** to the UI (terminal-style), from
   v0.1.
 - Model switchable per chat and mid-session; global default in Settings.
+- **Native pi session commands:** the composer exposes `/compact [instructions]`,
+  `/session`, `/name <name>`, `/export [html|jsonl]`, and `/fork <number>`.
+  These invoke pi's public SDK operations rather than prompting the model or
+  reproducing pi's behavior. Command results are local system cards and never
+  enter model context. Exports land under `Files/Exports/`. `/name` updates the
+  SQLite title and pi session name, with SQLite authoritative on every session
+  wake. Bare `/fork` lists active-branch user turns; the numbered form creates
+  a new Pop chat backed by pi's branched JSONL session, copies the visible
+  product history before that turn, and prefills the selected request as a
+  draft. Session-mutating commands refuse while that chat is running or queued.
 
 ## 6. Database (SQLite)
 

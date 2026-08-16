@@ -6,7 +6,7 @@ import {
   type Message,
 } from '../../domain/chat/chat.js';
 import { nextChatTitle } from '../../domain/chat/title.js';
-import { newChatId } from '../../domain/ids.js';
+import { newChatId, newMessageId } from '../../domain/ids.js';
 import type { ChatPurger } from '../ports/chat-purger.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
@@ -143,6 +143,33 @@ export class ChatService {
 
   recentModels(): { provider: string; model: string; usedAt: string }[] {
     return this.deps.chats.recentModels(10);
+  }
+
+  userMessageAt(chatId: string, index: number): Message | undefined {
+    return this.deps.chats
+      .getMessages(chatId, { limit: Number.MAX_SAFE_INTEGER })
+      .filter((message) => message.role === 'user')[index];
+  }
+
+  /** Creates the product-side half of a pi fork, stopping before the selected user turn. */
+  fork(sourceId: string, selectedUserIndex: number, piSessionId: string): Chat | undefined {
+    const source = this.deps.chats.get(sourceId);
+    if (source === undefined) return undefined;
+    const fork = this.create();
+    this.deps.chats.setModel(fork.id, source.model, source.provider);
+    this.deps.chats.setExecutionMode(fork.id, source.executionMode ?? 'normal');
+    this.deps.chats.setPiSessionId(fork.id, piSessionId);
+    this.rename(fork.id, `${source.title} fork`);
+
+    let userIndex = 0;
+    for (const message of this.deps.chats.getMessages(sourceId, { limit: Number.MAX_SAFE_INTEGER })) {
+      if (message.role === 'user') {
+        if (userIndex >= selectedUserIndex) break;
+        userIndex += 1;
+      }
+      this.deps.chats.appendMessage({ ...message, id: newMessageId(), chatId: fork.id });
+    }
+    return this.deps.chats.get(fork.id);
   }
 
   /**

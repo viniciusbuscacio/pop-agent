@@ -670,6 +670,26 @@ export interface MessagesResponse {
 }
 
 /** `PATCH /v1/chats/:id` — send only what changes. */
+export type SessionCommandName = 'compact' | 'session' | 'name' | 'export' | 'fork';
+
+export interface SessionCommandRequest {
+  command: SessionCommandName;
+  argument?: string;
+}
+
+export interface SessionForkPointDTO {
+  number: number;
+  text: string;
+}
+
+export interface SessionCommandResponse {
+  kind: SessionCommandName;
+  message?: string;
+  path?: string;
+  chat?: ChatDTO;
+  draft?: string;
+}
+
 export interface PatchChatRequest {
   title?: string;
   archived?: boolean;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO } from '@pop-agent/shared';
+import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO, SessionCommandName } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -46,6 +46,7 @@ export function Composer({
   currentProviderLabel,
   currentModel,
   onShowSystemMessage,
+  onCommand,
   executionMode,
   onSetExecutionMode,
   onSetModel,
@@ -73,6 +74,7 @@ export function Composer({
   currentProviderLabel: string;
   currentModel: string;
   onShowSystemMessage: (message: string) => void;
+  onCommand?: (command: SessionCommandName, argument: string) => Promise<void>;
   executionMode: ExecutionMode;
   onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
   onSetModel: (model: string, provider: string) => Promise<void>;
@@ -202,6 +204,12 @@ export function Composer({
     }
     if (command.name === 'queue') {
       persist('/queue ');
+      setSlashQuery(undefined);
+      area.current?.focus();
+      return;
+    }
+    if (['compact', 'session', 'name', 'export', 'fork'].includes(command.name)) {
+      persist(`/${command.name} `);
       setSlashQuery(undefined);
       area.current?.focus();
       return;
@@ -400,6 +408,22 @@ export function Composer({
       return;
     }
     if (!canSend || sending) return;
+    const sessionCommand = /^\/(compact|session|name|export|fork)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+    if (sessionCommand?.[1] !== undefined) {
+      setSending(true);
+      setNotice(undefined);
+      try {
+        if (onCommand === undefined) throw new Error('Session commands are unavailable.');
+        await onCommand(sessionCommand[1].toLowerCase() as SessionCommandName, sessionCommand[2] ?? '');
+        persist('');
+      } catch {
+        setNotice(t('chat.sendFailed'));
+      } finally {
+        setSending(false);
+      }
+      area.current?.focus();
+      return;
+    }
     if (/^\/model\s+list$/i.test(text.trim())) {
       persist('');
       setSlashMode('commands');

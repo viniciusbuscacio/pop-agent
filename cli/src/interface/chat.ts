@@ -84,6 +84,8 @@ export async function chat(
       loadChat: (chatId) => api.messages(chatId),
       send: (chatId, text) => api.send(chatId, text),
       stop: (chatId) => api.stop(chatId),
+      sessionCommand: (chatId, command, argument) => api.sessionCommand(chatId, command, argument),
+      forkPoints: async (chatId) => (await api.forkPoints(chatId)).points,
       events: async function* () {
         // One ticket, one stream, for as long as the screen is open. Each
         // ticket is spent on use, so a reconnect would need a fresh one --

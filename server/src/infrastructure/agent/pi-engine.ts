@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync } from 'node:fs';
+import type { SessionForkPoint, SessionStatsResult } from '../../application/ports/session-command-bridge.js';
 import type {
   AgentSession,
   AgentSessionEvent,
@@ -151,7 +152,12 @@ export interface PiSession {
   readonly supportsImages: boolean;
   abort(): Promise<void>;
   /** pi's native compaction (pop-agent.spec §7): summarize the old span, keep the tail. */
-  compact(): Promise<void>;
+  compact(instructions?: string): Promise<void>;
+  stats?(): SessionStatsResult;
+  setName?(name: string): void;
+  export?(format: 'html' | 'jsonl', outputPath: string): Promise<string>;
+  forkPoints?(): SessionForkPoint[];
+  fork?(entryId: string): string;
   setModel(providerId: string, modelId: string): Promise<void>;
   /** Switches pi's active tool catalogue before the next model turn. */
   setExecutionMode(mode: ExecutionMode): void;
@@ -1010,8 +1016,65 @@ class SdkPiSession implements PiSession {
     return this.session.abort();
   }
 
-  async compact(): Promise<void> {
-    await this.session.compact();
+  async compact(instructions?: string): Promise<void> {
+    await this.session.compact(instructions);
+  }
+
+  stats(): SessionStatsResult {
+    const stats = this.session.getSessionStats();
+    const context = stats.contextUsage;
+    return {
+      sessionId: stats.sessionId,
+      ...(stats.sessionFile === undefined ? {} : { sessionFile: stats.sessionFile }),
+      userMessages: stats.userMessages,
+      assistantMessages: stats.assistantMessages,
+      toolCalls: stats.toolCalls,
+      toolResults: stats.toolResults,
+      totalMessages: stats.totalMessages,
+      tokens: stats.tokens,
+      cost: stats.cost,
+      ...(context?.tokens === null || context?.percent === null || context === undefined
+        ? {}
+        : { context: { tokens: context.tokens, contextWindow: context.contextWindow, percent: context.percent } }),
+    };
+  }
+
+  setName(name: string): void {
+    if (this.session.sessionName !== name) this.session.setSessionName(name);
+  }
+
+  export(format: 'html' | 'jsonl', outputPath: string): Promise<string> {
+    return format === 'html'
+      ? this.session.exportToHtml(outputPath)
+      : Promise.resolve(this.session.exportToJsonl(outputPath));
+  }
+
+  forkPoints(): SessionForkPoint[] {
+    const active = new Set(
+      this.session.sessionManager.getBranch()
+        .filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+        .map((entry) => entry.id),
+    );
+    return this.session.getUserMessagesForForking()
+      .filter((point) => active.has(point.entryId))
+      .map((point, userMessageIndex) => ({ ...point, userMessageIndex }));
+  }
+
+  fork(entryId: string): string {
+    const selected = this.session.sessionManager.getEntry(entryId);
+    if (selected?.type !== 'message' || selected.message.role !== 'user') {
+      throw new Error('Invalid user message for fork.');
+    }
+    const file = this.session.sessionFile;
+    if (file === undefined) throw new Error('The session has not been saved yet.');
+    const manager = this.session.sessionManager;
+    const copy = (manager.constructor as typeof import('@earendil-works/pi-coding-agent').SessionManager)
+      .open(file, manager.getSessionDir(), manager.getCwd());
+    const forked = selected.parentId === null
+      ? copy.newSession({ parentSession: file })
+      : copy.createBranchedSession(selected.parentId);
+    if (forked === undefined) throw new Error('Could not create the forked session.');
+    return forked;
   }
 
   async setModel(providerId: string, modelId: string): Promise<void> {

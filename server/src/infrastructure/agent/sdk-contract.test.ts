@@ -32,6 +32,12 @@ describe('pi sdk contract', () => {
         'steer',
         'clearQueue',
         'abort',
+        'compact',
+        'getSessionStats',
+        'setSessionName',
+        'exportToHtml',
+        'exportToJsonl',
+        'getUserMessagesForForking',
         'setModel',
         'dispose',
         // Where pi keeps the conversation. Pop Agent stores the path, never reads
@@ -40,6 +46,9 @@ describe('pi sdk contract', () => {
       ]) {
         expect(session, `AgentSession.${method}`).toContain(method);
       }
+
+      const manager = Object.getOwnPropertyNames(sdk.SessionManager.prototype);
+      expect(manager).toContain('createBranchedSession');
 
       // The model runtime is how the key and the catalog stay Pop Agent's own
       // rather than whatever ~/.pi happens to hold (docs/agent-flow.md §8).

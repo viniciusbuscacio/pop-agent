@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import type { Hono } from 'hono';
 import { AuthService } from '../application/auth/auth-service.js';
 import { ChatService } from '../application/chat/chat-service.js';
+import { SessionCommandService } from '../application/chat/session-command-service.js';
 import { RunService } from '../application/chat/run-service.js';
 import { QueuedMessageService } from '../application/chat/queued-message-service.js';
 import { TitleService } from '../application/chat/title-service.js';
@@ -384,6 +385,12 @@ export function createTestApp(
 
   const controlLog: string[] = [];
   const localConnections = new LocalConnectionRegistry(undefined, () => clock.now());
+  const sessionCommands = new SessionCommandService({
+    chats,
+    files,
+    bridge,
+    busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
+  });
   const app = createApp({
     auth,
     settings,
@@ -392,6 +399,7 @@ export function createTestApp(
     secretKey: Buffer.from('test-artifact-signing-key-000000'),
     runs,
     queuedMessages,
+    sessionCommands,
     tasks,
     taskScheduler,
     providers,

@@ -2,6 +2,9 @@ import type {
   ChatDTO,
   MessagesResponse,
   SendMessageResponse,
+  SessionCommandName,
+  SessionCommandResponse,
+  SessionForkPointDTO,
   StreamEvent,
 } from '@pop-agent/shared';
 import { Transcript, emptyRun, type RunState } from './transcript.js';
@@ -25,6 +28,8 @@ export interface SessionPorts {
   loadChat(chatId: string): Promise<MessagesResponse>;
   send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
+  sessionCommand?(chatId: string, command: SessionCommandName, argument: string): Promise<SessionCommandResponse>;
+  forkPoints?(chatId: string): Promise<SessionForkPointDTO[]>;
   /** Yields until the connection ends. Reconnection is the caller's business. */
   events(): AsyncIterable<StreamEvent>;
 }
@@ -178,6 +183,20 @@ export class ChatSession {
   async stop(): Promise<void> {
     if (this.chatId === undefined || !this.busy) return;
     await this.ports.stop(this.chatId);
+  }
+
+  async command(command: SessionCommandName, argument: string): Promise<SessionCommandResponse> {
+    const chatId = this.chatId ?? (await this.ports.createChat()).id;
+    this.chatId = chatId;
+    if (this.ports.sessionCommand === undefined) throw new Error('Session commands are unavailable.');
+    const result = await this.ports.sessionCommand(chatId, command, argument);
+    if (result.kind === 'fork' && result.chat !== undefined) await this.switchTo(result.chat);
+    return result;
+  }
+
+  async forkPoints(): Promise<SessionForkPointDTO[]> {
+    if (this.chatId === undefined || this.ports.forkPoints === undefined) return [];
+    return this.ports.forkPoints(this.chatId);
   }
 
   private absorb(event: StreamEvent): void {

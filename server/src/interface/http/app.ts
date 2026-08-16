@@ -9,6 +9,7 @@ import type { FilesService } from '../../application/files/files-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
+import type { SessionCommandService } from '../../application/chat/session-command-service.js';
 import type { TaskService } from '../../application/tasks/task-service.js';
 import type { TaskScheduler } from '../../application/tasks/task-scheduler.js';
 import type { BackupService } from '../../application/ports/backup-service.js';
@@ -76,6 +77,7 @@ export interface AppDeps {
   runs: RunService;
   /** One server-owned follow-up per conversation. */
   queuedMessages: QueuedMessageService;
+  sessionCommands: SessionCommandService;
   /** Background tasks (pop-agent.spec §21): the rows, and the queue that runs them. */
   tasks: TaskService;
   taskScheduler: TaskScheduler;

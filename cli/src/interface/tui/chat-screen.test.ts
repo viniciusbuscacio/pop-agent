@@ -99,6 +99,8 @@ function screenWith(
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
+    sessionCommand: vi.fn((_chatId, command) => Promise.resolve({ kind: command, message: 'Session details' })),
+    forkPoints: vi.fn(() => Promise.resolve([])),
     events: async function* () {
       // Never yields: these tests feed the screen directly.
     },
@@ -134,6 +136,17 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('New conversation');
     expect(plain()).toContain('http://pop-agent.test');
     expect(plain()).toContain('/help');
+  });
+
+  it('runs pi session commands locally instead of sending them as prompts', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/session');
+    await flush();
+    expect(ports.sessionCommand).toHaveBeenCalledWith('chat-1', 'session', '');
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(plain()).toContain('Session details');
   });
 
   it('opens /chats as a keyboard picker and loads the selected conversation', async () => {

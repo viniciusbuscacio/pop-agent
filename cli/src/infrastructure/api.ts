@@ -11,6 +11,9 @@ import type {
   LoginResponse,
   MessagesResponse,
   SendMessageResponse,
+  SessionCommandName,
+  SessionCommandResponse,
+  SessionForkPointDTO,
   UpdateStatusResponse,
 } from '@pop-agent/shared';
 
@@ -89,6 +92,16 @@ export class PopAgentApi {
 
   stop(chatId: string): Promise<void> {
     return this.request<void>(`/chats/${chatId}/stop`, { method: 'POST' });
+  }
+
+  sessionCommand(chatId: string, command: SessionCommandName, argument = ''): Promise<SessionCommandResponse> {
+    return this.request<SessionCommandResponse>(`/chats/${chatId}/commands`, {
+      method: 'POST', body: { command, ...(argument.length === 0 ? {} : { argument }) },
+    });
+  }
+
+  forkPoints(chatId: string): Promise<{ points: SessionForkPointDTO[] }> {
+    return this.request<{ points: SessionForkPointDTO[] }>(`/chats/${chatId}/fork-points`);
   }
 
   /** EventSource cannot send a header, so the stream is opened with a ticket. */

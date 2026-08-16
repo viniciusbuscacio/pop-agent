@@ -16,6 +16,11 @@ import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/cha
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
+import {
+  SessionCommandArgumentError,
+  SessionCommandBusyError,
+  type SessionCommandService,
+} from '../../application/chat/session-command-service.js';
 import type { QueuedMessage } from '../../application/ports/queued-message-repo.js';
 import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import type { ModelInfo } from '../../application/ports/agent-bridge.js';
@@ -50,6 +55,10 @@ const patchSchema = z
   .strict();
 
 const keepChatSchema = z.object({ keepChatId: z.string().min(1).max(80) }).strict();
+const sessionCommandSchema = z.object({
+  command: z.enum(['compact', 'session', 'name', 'export', 'fork']),
+  argument: z.string().max(1000).optional(),
+}).strict();
 
 /** 16 MB of file is ~21.4 MB of base64; the schema allows a little slack. */
 const MAX_ATTACHMENT_DATA_URI = 22_400_000;
@@ -85,6 +94,7 @@ export interface ChatRoutesDeps {
   files: FilesService;
   runs: RunService;
   queuedMessages: QueuedMessageService;
+  sessionCommands: SessionCommandService;
   providers: ProviderService;
   hub: SseHub;
   tickets: EventTickets;
@@ -218,6 +228,44 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
   routes.delete('/chats/:id', (c) => {
     if (!deps.chats.delete(c.req.param('id'))) return chatNotFound(c);
     return c.body(null, 204);
+  });
+
+  routes.get('/chats/:id/fork-points', async (c) => {
+    const points = await deps.sessionCommands.forkPoints(c.req.param('id'));
+    if (points === undefined) return chatNotFound(c);
+    return c.json({ points: points.map((point, index) => ({ number: index + 1, text: point.text })) });
+  });
+
+  routes.post('/chats/:id/commands', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = sessionCommandSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+    try {
+      const result = await deps.sessionCommands.execute(
+        c.req.param('id'), parsed.data.command, parsed.data.argument ?? '',
+      );
+      if (result === undefined) return chatNotFound(c);
+      if (result.kind === 'session') {
+        const stats = result.stats;
+        const context = stats.context === undefined
+          ? 'Context: unavailable'
+          : `Context: ${String(stats.context.tokens)} / ${String(stats.context.contextWindow)} tokens (${stats.context.percent.toFixed(1)}%)`;
+        return c.json({ kind: result.kind, message: `${context}\nMessages: ${String(stats.totalMessages)}\nTokens: ${String(stats.tokens.total)}\nCost: $${stats.cost.toFixed(4)}` });
+      }
+      if (result.kind === 'export') return c.json({ kind: result.kind, path: result.path });
+      if (result.kind === 'fork') return c.json({ kind: result.kind, chat: toChatDto(result.chat), draft: result.draft });
+      if (result.kind === 'name') return c.json({ kind: result.kind, chat: toChatDto(result.chat) });
+      return c.json({ kind: result.kind, message: 'Context compacted.' });
+    } catch (error) {
+      if (error instanceof SessionCommandBusyError) {
+        return apiError(c, 409, 'run_in_progress', 'Wait for the current run to finish.');
+      }
+      if (error instanceof SessionCommandArgumentError) {
+        return apiError(c, 400, 'invalid_field', error.message);
+      }
+      return apiError(c, 500, 'session_command_failed', error instanceof Error ? error.message : 'Command failed.');
+    }
   });
 
   routes.get('/chats/:id/messages', (c) => {

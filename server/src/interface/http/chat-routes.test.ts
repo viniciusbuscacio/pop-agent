@@ -40,6 +40,38 @@ beforeEach(async () => {
   token = ((await setup.json()) as { token: string }).token;
 });
 
+describe('pi session commands', () => {
+  it('runs compact, session, name and export through the bridge', async () => {
+    const chat = await newChat();
+
+    expect((await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'compact' } })).status).toBe(200);
+    const session = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'session' } });
+    expect(((await session.json()) as { message: string }).message).toContain('Tokens: 0');
+
+    const named = await api(`/v1/chats/${chat.id}/commands`, {
+      method: 'POST', body: { command: 'name', argument: 'Project Atlas' },
+    });
+    expect(((await named.json()) as { chat: ChatDTO }).chat.title).toBe('Project Atlas');
+
+    const exported = await api(`/v1/chats/${chat.id}/commands`, {
+      method: 'POST', body: { command: 'export', argument: 'html' },
+    });
+    const path = ((await exported.json()) as { path: string }).path;
+    expect(path).toBe('Exports/fake-session.html');
+    expect(fixture.files.read(path)?.toString()).toContain('<html>');
+  });
+
+  it('lists fork points and validates command arguments', async () => {
+    const chat = await newChat();
+    const points = await api(`/v1/chats/${chat.id}/fork-points`);
+    expect(await points.json()).toEqual({ points: [] });
+    const invalid = await api(`/v1/chats/${chat.id}/commands`, {
+      method: 'POST', body: { command: 'fork' },
+    });
+    expect(invalid.status).toBe(400);
+  });
+});
+
 describe('chat collection', () => {
   it('needs a session', async () => {
     expect((await api('/v1/chats', { auth: false })).status).toBe(401);

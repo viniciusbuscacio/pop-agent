@@ -13,6 +13,9 @@ import type {
   PatchChatRequest,
   QueuedMessageDTO,
   SendMessageResponse,
+  SessionCommandName,
+  SessionCommandResponse,
+  SessionForkPointDTO,
   StopRunResponse,
 } from '@pop-agent/shared';
 import { apiRequest } from './api';
@@ -117,5 +120,15 @@ export const chatsService = {
 
   recentModels(): Promise<RecentModelsResponse> {
     return apiRequest<RecentModelsResponse>('/recent-models');
+  },
+
+  command(id: string, command: SessionCommandName, argument = ''): Promise<SessionCommandResponse> {
+    return apiRequest<SessionCommandResponse>(`/chats/${id}/commands`, {
+      method: 'POST', body: { command, ...(argument.length === 0 ? {} : { argument }) },
+    });
+  },
+
+  forkPoints(id: string): Promise<{ points: SessionForkPointDTO[] }> {
+    return apiRequest<{ points: SessionForkPointDTO[] }>(`/chats/${id}/fork-points`);
   },
 };

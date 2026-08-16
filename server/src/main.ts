@@ -9,11 +9,13 @@ import { envelope } from './domain/safety/sanitize.js';
 import { hasReadOnlyHint, mcpToolName } from './infrastructure/mcp/plan-mode.js';
 import { AuthService } from './application/auth/auth-service.js';
 import { ChatService } from './application/chat/chat-service.js';
+import { SessionCommandService } from './application/chat/session-command-service.js';
 import { RunService } from './application/chat/run-service.js';
 import { QueuedMessageService } from './application/chat/queued-message-service.js';
 import { TitleService } from './application/chat/title-service.js';
 import { HealthService } from './application/health/health-service.js';
 import type { AgentBridge, ProviderAuthBridge } from './application/ports/agent-bridge.js';
+import type { SessionCommandBridge } from './application/ports/session-command-bridge.js';
 import { systemClock } from './application/ports/clock.js';
 import { OAuthFlowService } from './application/providers/oauth-flow-service.js';
 import { FileOAuthCooldownStore } from './infrastructure/providers/oauth-cooldown-file.js';
@@ -214,7 +216,7 @@ const indexer =
         embedder,
         onError: (message) => console.warn(`pop embedding: ${message}`),
       });
-const bridge: AgentBridge & ProviderAuthBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
+const bridge: AgentBridge & ProviderAuthBridge & SessionCommandBridge = agent === 'pi' ? piBridge() : new FakeAgentBridge();
 
 // The providers seen by the routes: key precedence (secrets over
 // environment), the key test, and the per-provider model catalog with the
@@ -635,6 +637,13 @@ const voiceCleanup = new VoiceCleanup({
   model: () => settings.read().voiceCleanupModel,
 });
 
+const sessionCommands = new SessionCommandService({
+  chats,
+  files,
+  bridge,
+  busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
+});
+
 const app = createApp({
   auth,
   settings,
@@ -643,6 +652,7 @@ const app = createApp({
   secretKey: context.secretKey,
   runs,
   queuedMessages,
+  sessionCommands,
   tasks,
   taskScheduler,
   providers,
