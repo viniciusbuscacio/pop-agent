@@ -44,6 +44,8 @@ describe('Settings navigation', () => {
     expect(screen.getByText('System')).toBeTruthy();
     expect(screen.getByText('Models & Providers')).toBeTruthy();
     expect(screen.queryByText('Usage')).toBeNull();
+    expect(screen.getByTestId('settings-tab-audio').querySelector('svg.lucide-mic')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-server').querySelector('svg.lucide-server')).toBeTruthy();
     expect(screen.getByTestId('settings-header').className).toContain('bg-[var(--bg)]');
 
     await user.type(screen.getByRole('searchbox', { name: 'Search settings' }), 'push');
