@@ -76,7 +76,7 @@ func (v trayView) Update(state viewState) {
 	if v.status == nil {
 		return
 	}
-	v.status.SetTitle("● " + state.Status)
+	v.status.SetTitle(statusTitle(state.Status))
 	if state.Server == "" {
 		v.server.SetTitle("Server not configured")
 		v.open.Disable()
@@ -96,6 +96,13 @@ func (v trayView) Update(state viewState) {
 	} else {
 		v.startAtLogin.Uncheck()
 	}
+}
+
+func statusTitle(status string) string {
+	if status == "Connected" {
+		return "🟢 Connected"
+	}
+	return "● " + status
 }
 
 func stopTray() { systray.Quit() }
