@@ -207,19 +207,23 @@ export const en = {
     'iPhone or iPad: open in Safari, tap Share, then Add to Home Screen.',
   'settings.installation.webAndroid':
     'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
-  'settings.installation.localAccessTitle': 'Pop Local Access (optional)',
+  'settings.installation.localAccessTitle': 'Local computer access',
   'settings.installation.localAccessBody':
-    'Keep this computer connected so a PWA can explicitly use its files and terminal. A visible tray shows the connection and lets you pause it at any time.',
-  'settings.installation.localAccessMachine': 'Machine used by new messages',
-  'settings.installation.localAccessMachineHint':
-    'Server only is the safe default. Selecting a connected computer explicitly enables its local tools.',
-  'settings.installation.localAccessServerOnly': 'Server only — no computer access',
-  'settings.installation.localAccessWindows': 'Windows (PowerShell)',
+    'Pop Local Access is a separate app that lets Pop Agent access and edit files on your computer. Enable it only if you want Pop Agent to work on this computer. It is disabled by default.',
+  'settings.installation.localAccessMachine': 'Allow access to',
+  'settings.installation.localAccessEnabled':
+    'Enabled — Pop Agent can access and edit files on {machine}.',
+  'settings.installation.localAccessDisabled':
+    'Disabled — Pop Agent cannot access files on your computer.',
+  'settings.installation.localAccessServerOnly': 'Disabled — server only',
+  'settings.installation.localAccessConnected': 'connected',
+  'settings.installation.localAccessInstallTitle': 'Connect another computer',
+  'settings.installation.localAccessWindows': 'Connect a Windows PC',
   'settings.installation.localAccessWindowsHint':
-    'Copy this command into PowerShell. Pop asks for your password privately, installs the tray for your Windows user and starts it at sign-in.',
-  'settings.installation.localAccessUnix': 'macOS (Terminal)',
+    'Copy this command into PowerShell. Enter your Pop Agent password when asked. The connection starts automatically when you sign in to Windows.',
+  'settings.installation.localAccessUnix': 'Connect a Mac',
   'settings.installation.localAccessUnixHint':
-    'Copy both lines into Terminal. Pop asks for your password privately, installs the menu-bar app for your macOS user and starts it at sign-in.',
+    'Copy this command into Terminal. Enter your Pop Agent password when asked. The connection starts automatically when you sign in to your Mac.',
   'settings.installation.cliTitle': 'Command-line app (Pop CLI)',
   'settings.installation.cliBody':
     'The CLI provides terminal chat and local tools from the computer where it runs.',

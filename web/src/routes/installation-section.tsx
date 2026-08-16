@@ -28,6 +28,9 @@ export function InstallationSection() {
   const [pwaDismissed, setPwaDismissed] = useState(false);
   const [connections, setConnections] = useState<LocalConnectionDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
+  const selectedMachine = connections.find(
+    (connection) => connection.id === selectedConnection,
+  )?.machine.hostname;
 
   useEffect(() => {
     void localAccessService.connections().then(({ connections: live }) => {
@@ -97,7 +100,9 @@ export function InstallationSection() {
         <Select
           id="local-access-machine"
           label={t('settings.installation.localAccessMachine')}
-          hint={t('settings.installation.localAccessMachineHint')}
+          hint={selectedMachine === undefined
+            ? t('settings.installation.localAccessDisabled')
+            : t('settings.installation.localAccessEnabled', { machine: selectedMachine })}
           value={selectedConnection}
           onChange={(event) => {
             const value = event.currentTarget.value;
@@ -108,10 +113,13 @@ export function InstallationSection() {
           <option value="">{t('settings.installation.localAccessServerOnly')}</option>
           {connections.map((connection) => (
             <option key={connection.id} value={connection.id}>
-              {connection.machine.hostname} · {connection.machine.platform}/{connection.machine.arch}
+              {connection.machine.hostname} — {platformName(connection.machine.platform)} ({t('settings.installation.localAccessConnected')})
             </option>
           ))}
         </Select>
+        <h3 className="border-t border-[var(--border)] pt-4 text-sm font-semibold">
+          {t('settings.installation.localAccessInstallTitle')}
+        </h3>
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">{t('settings.installation.localAccessWindows')}</h3>
           <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessWindowsHint')}</p>
@@ -143,6 +151,13 @@ export function InstallationSection() {
 
     </div>
   );
+}
+
+function platformName(platform: string): string {
+  if (platform === 'darwin') return 'Mac';
+  if (platform === 'win32') return 'Windows PC';
+  if (platform === 'linux') return 'Linux computer';
+  return 'Computer';
 }
 
 function CopyBlock({ value, testId }: { value: string; testId: string }) {

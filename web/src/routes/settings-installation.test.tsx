@@ -10,12 +10,16 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
+const connectionsMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../services/local-access', () => ({
-  localAccessService: { connections: vi.fn(() => Promise.resolve({ connections: [] })) },
+  localAccessService: { connections: connectionsMock },
 }));
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/settings?section=installation');
+  window.localStorage.clear();
+  connectionsMock.mockResolvedValue({ connections: [] });
 });
 
 afterEach(cleanup);
@@ -35,6 +39,33 @@ describe('Settings installation guide', () => {
     );
     expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('status=$?');
     expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('exit ');
+  });
+
+  it('explains local computer access without platform jargon', async () => {
+    connectionsMock.mockResolvedValue({
+      connections: [{
+        id: 'mac-connection',
+        role: 'background',
+        machine: {
+          hostname: 'm1',
+          platform: 'darwin',
+          arch: 'arm64',
+          clientVersion: '0.2.34',
+        },
+      }],
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    const select = await screen.findByLabelText('Allow access to');
+    expect(select.textContent).toContain('Disabled — server only');
+    expect(select.textContent).toContain('m1 — Mac (connected)');
+    expect(select.textContent).not.toContain('darwin');
+    expect(select.textContent).not.toContain('arm64');
+
+    await user.selectOptions(select, 'mac-connection');
+
+    expect(screen.getByText('Enabled — Pop Agent can access and edit files on m1.')).toBeTruthy();
   });
 
   it('opens the browser-owned PWA installation prompt', async () => {
