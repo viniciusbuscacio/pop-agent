@@ -49,6 +49,7 @@ export function ChatPage() {
   // Local command output belongs to the visible transcript, but not to the
   // durable conversation sent back to the model.
   const [localSystemMessages, setLocalSystemMessages] = useState<string[]>([]);
+  const [compacting, setCompacting] = useState(false);
   const currentModel = activeChatModel(chat, providers);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -72,6 +73,7 @@ export function ChatPage() {
     setEditingPendingId(undefined);
     setQueueActionError(false);
     setLocalSystemMessages([]);
+    setCompacting(false);
     atBottom.current = true;
     lastScrollTop.current = 0;
   }, [chatId, openChat]);
@@ -467,9 +469,11 @@ export function ChatPage() {
       ) : null}
 
       <div data-testid="run-status-slot" className="h-7 shrink-0">
-        {live === undefined ? null : (
+        {live !== undefined ? (
           <RunStatusLine status={confirm === undefined ? live.status : 'approval'} />
-        )}
+        ) : compacting ? (
+          <CompactProgress />
+        ) : null}
       </div>
 
       <Composer
@@ -501,26 +505,34 @@ export function ChatPage() {
         currentModel={currentModel?.currentModel ?? ''}
         onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
         onCommand={async (command, argument) => {
-          if (command === 'fork' && argument.trim().length === 0) {
-            const { points } = await chatsService.forkPoints(chatId);
-            const message = points.length === 0
-              ? 'No user messages are available to fork.'
-              : `Choose a point with /fork <number>:\n${points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n')}`;
-            setLocalSystemMessages((current) => [...current, message]);
-            return;
-          }
-          const result = await chatsService.command(chatId, command, argument);
-          if (result.kind === 'fork' && result.chat !== undefined) {
-            try {
-              localStorage.setItem(`pop-agent.draft.${result.chat.id}`, result.draft ?? '');
-            } catch {
-              // The fork still exists; only its prefilled draft is unavailable.
+          const isCompact = command === 'compact';
+          if (isCompact) setCompacting(true);
+          try {
+            if (command === 'fork' && argument.trim().length === 0) {
+              const { points } = await chatsService.forkPoints(chatId);
+              const message = points.length === 0
+                ? 'No user messages are available to fork.'
+                : `Choose a point with /fork <number>:\n${points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n')}`;
+              setLocalSystemMessages((current) => [...current, message]);
+              return;
             }
-            navigate(`/chat/${result.chat.id}`);
-            return;
+            const result = await chatsService.command(chatId, command, argument);
+            if (result.kind === 'fork' && result.chat !== undefined) {
+              try {
+                localStorage.setItem(`pop-agent.draft.${result.chat.id}`, result.draft ?? '');
+              } catch {
+                // The fork still exists; only its prefilled draft is unavailable.
+              }
+              navigate(`/chat/${result.chat.id}`);
+              return;
+            }
+            const message = result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`);
+            if (isCompact) setCompacting(false);
+            setLocalSystemMessages((current) => [...current, message]);
+          } catch (error) {
+            if (isCompact) setCompacting(false);
+            throw error;
           }
-          const message = result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`);
-          setLocalSystemMessages((current) => [...current, message]);
         }}
         executionMode={chat?.executionMode ?? 'normal'}
         onSetExecutionMode={(executionMode) => setExecutionMode(chatId, executionMode)}
@@ -529,5 +541,26 @@ export function ChatPage() {
       />
 
     </>
+  );
+}
+
+function CompactProgress() {
+  const message = t('chat.compacting');
+  return (
+    <div
+      data-testid="compact-progress"
+      role="status"
+      aria-live="polite"
+      className="mx-auto w-full px-4 py-0.5 md:w-[95%]"
+    >
+      <p className="mb-1 text-xs text-[var(--muted)]">{message}</p>
+      <div
+        role="progressbar"
+        aria-label={message}
+        className="h-1 overflow-hidden rounded-full bg-[var(--input-bg)]"
+      >
+        <span className="block h-full w-1/3 rounded-full bg-[var(--accent)] motion-safe:animate-[updatebar_1s_ease-in-out_infinite]" />
+      </div>
+    </div>
   );
 }

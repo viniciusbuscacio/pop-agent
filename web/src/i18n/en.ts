@@ -137,6 +137,7 @@ export const en = {
   'chat.queued': 'Queued: {text}',
   'chat.answering': 'Answering…',
   'chat.working': 'Working…',
+  'chat.compacting': 'Compacting context…',
   'chat.waitingTurn': 'Waiting for a free slot…',
   'chat.waitingApproval': 'Waiting for approval…',
   'chat.stopped': 'You stopped this answer.',

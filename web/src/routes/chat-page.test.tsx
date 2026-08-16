@@ -8,12 +8,14 @@ import { useChatStore } from '../store/chat';
 
 const listModels = vi.hoisted(() => vi.fn());
 const listProviders = vi.hoisted(() => vi.fn());
+const runSessionCommand = vi.hoisted(() => vi.fn());
 
 vi.mock('../services/chats', () => ({
   chatsService: {
     messages: () => Promise.resolve({ messages: [] }),
     recentModels: () => Promise.resolve({ models: [] }),
     models: (provider: string) => listModels(provider) as Promise<unknown>,
+    command: (...args: unknown[]) => runSessionCommand(...args) as Promise<unknown>,
   },
 }));
 
@@ -33,9 +35,11 @@ vi.mock('../ui/composer', () => ({
   Composer: ({
     onSend,
     onShowSystemMessage,
+    onCommand,
   }: {
     onSend: (text: string, attachments: []) => Promise<void>;
     onShowSystemMessage: (message: string) => void;
+    onCommand: (command: 'compact', argument: string) => Promise<void>;
   }) => (
     <>
       <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
@@ -47,6 +51,13 @@ vi.mock('../ui/composer', () => ({
         onClick={() => onShowSystemMessage('Provider: openai-codex · Model: gpt-5.6-sol')}
       >
         Show model
+      </button>
+      <button
+        type="button"
+        data-testid="composer-compact"
+        onClick={() => void onCommand('compact', '')}
+      >
+        Compact
       </button>
     </>
   ),
@@ -90,6 +101,8 @@ beforeEach(() => {
   listModels.mockResolvedValue({ models: [] });
   listProviders.mockReset();
   listProviders.mockResolvedValue({ providers: [] });
+  runSessionCommand.mockReset();
+  runSessionCommand.mockResolvedValue({ kind: 'compact', message: 'Context compacted.' });
   useChatStore.getState().reset();
   useChatStore.setState({ chats: [chat], openChat: realOpenChat });
   localStorage.clear();
@@ -144,6 +157,27 @@ describe('chat transcript', () => {
     expect(chatMessageRender).toHaveBeenLastCalledWith(
       expect.objectContaining({ role: 'system', content: expect.stringContaining('openai-codex') }),
     );
+  });
+
+  it('shows compact progress in the working slot, then puts completion in the timeline', async () => {
+    let finish!: (value: { kind: 'compact'; message: string }) => void;
+    runSessionCommand.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('composer-compact'));
+
+    const progress = await screen.findByTestId('compact-progress');
+    expect(progress.textContent).toContain('Compacting context…');
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBeNull();
+    expect(screen.getByTestId('run-status-slot').contains(progress)).toBe(true);
+
+    finish({ kind: 'compact', message: 'Context compacted.' });
+    await waitFor(() => expect(screen.queryByTestId('compact-progress')).toBeNull());
+    expect(chatMessageRender).toHaveBeenLastCalledWith(
+      expect.objectContaining({ role: 'system', content: 'Context compacted.' }),
+    );
+    expect(screen.queryByTestId('empty-chat-icon')).toBeNull();
   });
 
   it('does not revisit settled rows when only the live answer grows', async () => {
