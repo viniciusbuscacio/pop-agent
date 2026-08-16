@@ -2,7 +2,7 @@ package systray
 
 /*
 #cgo darwin CFLAGS: -DDARWIN -x objective-c -fobjc-arc
-#cgo darwin LDFLAGS: -framework Cocoa -framework WebKit
+#cgo darwin LDFLAGS: -framework Cocoa
 
 #include "systray.h"
 */
