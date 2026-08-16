@@ -58,6 +58,9 @@ describe('Settings installation guide', () => {
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
     const select = await screen.findByLabelText('Allow access to');
+    expect(screen.getByText(
+      'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
+    )).toBeTruthy();
     expect(select.textContent).toContain('Disabled — server only');
     expect(select.textContent).toContain('m1 — Mac (connected)');
     expect(select.textContent).not.toContain('darwin');

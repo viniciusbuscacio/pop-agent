@@ -34,14 +34,10 @@ func installTray(a *app) error {
 
 func runTray() {
 	systray.Run(func() {
-		systray.SetIcon(trayIcon)
-		systray.SetTooltip("Pop Local Access")
-		heading := systray.AddMenuItem("Pop Local Access", fmt.Sprintf("Version %s", trayVersion))
-		heading.Disable()
-		activeView.status = systray.AddMenuItem("Starting", "Connection status")
-		activeView.status.Disable()
-		activeView.server = systray.AddMenuItem("—", "Pop Agent server")
-		activeView.server.Disable()
+		systray.SetTemplateIcon(trayIcon, trayIcon)
+		systray.SetTooltip(fmt.Sprintf("Pop Local Access %s", trayVersion))
+		activeView.status = systray.AddMenuItem("Starting", "Connection status — click to reconnect")
+		activeView.server = systray.AddMenuItem("—", "Pop Agent server — click to open")
 		systray.AddSeparator()
 		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open the PWA in your default browser")
 		activeView.pause = systray.AddMenuItem("Pause Local Access", "Stop local tools without uninstalling")
@@ -51,6 +47,8 @@ func runTray() {
 		activeView.diagnostics = systray.AddMenuItem("Diagnostics…", "Open the local log")
 		systray.AddSeparator()
 		activeView.quit = systray.AddMenuItem("Quit Pop Local Access", "Stop local access until opened again")
+		bind(activeView.status, func(a *app) { a.reconnect() })
+		bind(activeView.server, func(a *app) { a.openPop() })
 		bind(activeView.open, func(a *app) { a.openPop() })
 		bind(activeView.pause, func(a *app) { a.togglePause() })
 		bind(activeView.reconnect, func(a *app) { a.reconnect() })

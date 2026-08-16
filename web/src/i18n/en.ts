@@ -209,7 +209,7 @@ export const en = {
     'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
   'settings.installation.localAccessTitle': 'Local computer access',
   'settings.installation.localAccessBody':
-    'Pop Local Access is a separate app that lets Pop Agent access and edit files on your computer. Enable it only if you want Pop Agent to work on this computer. It is disabled by default.',
+    'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
   'settings.installation.localAccessMachine': 'Allow access to',
   'settings.installation.localAccessEnabled':
     'Enabled — Pop Agent can access and edit files on {machine}.',
