@@ -122,7 +122,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh max-w-full overflow-x-clip">
       <header
         data-testid="settings-header"
         className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] p-3"
@@ -151,13 +151,16 @@ export function SettingsPage() {
           className={section === undefined ? 'block' : 'hidden md:block'}
         />
 
-        <main className={section === undefined ? 'hidden md:block' : 'min-w-0 p-4 md:p-6'}>
+        <main
+          data-testid="settings-content"
+          className={section === undefined ? 'hidden min-w-0 max-w-full md:block' : 'min-w-0 max-w-full p-4 md:p-6'}
+        >
           {section === undefined ? (
             <div className="flex min-h-[60dvh] items-center justify-center p-8 text-center text-sm text-[var(--muted)]">
               Select a setting to view and change it.
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto min-w-0 max-w-3xl">
               <div className="mb-5 hidden md:block">
                 <h2 className="text-xl font-semibold">{activeEntry?.label}</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
@@ -193,7 +196,7 @@ function SettingsIndex({
   })).filter((group) => group.entries.length > 0);
 
   return (
-    <nav aria-label="Settings" className={`${className} border-[var(--border)] p-4 md:min-h-[calc(100dvh-65px)] md:border-r md:p-5`}>
+    <nav aria-label="Settings" className={`${className} min-w-0 max-w-full border-[var(--border)] p-4 md:min-h-[calc(100dvh-65px)] md:border-r md:p-5`}>
       <SearchField
         id="settings-search"
         aria-label="Search settings"
@@ -247,7 +250,7 @@ function SettingsRow({ entry, active, divided, onClick }: {
         <SettingsIcon section={entry.id} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-[var(--screen-fg)]">{entry.label}</span>
+        <span className="block truncate text-sm font-medium text-[var(--screen-fg)]">{entry.label}</span>
         <span className="block truncate text-xs text-[var(--muted)]">{entry.summary}</span>
       </span>
       <span aria-hidden="true" className="text-lg text-[var(--muted)]">›</span>
@@ -614,7 +617,7 @@ function BackupSection() {
                   {(backup.size / 1024).toFixed(0)} KB · {backup.createdAt.slice(0, 16).replace('T', ' ')}
                 </p>
               </div>
-              <div className="flex flex-none gap-1">
+              <div className="flex max-w-full flex-wrap gap-1">
                 <Button type="button" variant="ghost" onClick={() => void download(backup.name)}>
                   {t('backup.download')}
                 </Button>
@@ -2023,9 +2026,9 @@ function AboutSection() {
 
 function Row({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-[var(--key-fg-dim)]">{label}</span>
-      <span data-testid={testId} className="font-mono text-[var(--muted)]">
+    <div className="flex min-w-0 items-start justify-between gap-4 text-sm">
+      <span className="min-w-0 text-[var(--key-fg-dim)]">{label}</span>
+      <span data-testid={testId} className="min-w-0 break-all text-right font-mono text-[var(--muted)]">
         {value}
       </span>
     </div>

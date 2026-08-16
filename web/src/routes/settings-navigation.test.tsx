@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './settings-page';
+import { useFontStore } from '../store/font';
 
 vi.mock('../services/pwa-update', () => ({
   applyUpdate: vi.fn(),
@@ -19,7 +20,11 @@ vi.mock('../services/push', () => ({
   },
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useFontStore.getState().setChoice('default');
+  localStorage.removeItem('pop-agent.fontSize');
+});
 
 describe('Settings navigation', () => {
   it('starts with a searchable, grouped index instead of tabs', async () => {
@@ -49,6 +54,21 @@ describe('Settings navigation', () => {
     expect(await screen.findByTestId('settings-theme')).toBeTruthy();
     expect(screen.getByTestId('settings-font-size')).toBeTruthy();
     expect(screen.getByTestId('settings-tab-appearance').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('keeps Settings width constrained with the Huge font size', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/settings?section=appearance']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    await user.selectOptions(screen.getByTestId('settings-font-size'), 'huge');
+
+    expect(document.documentElement.style.fontSize).toBe('140%');
+    expect(screen.getByTestId('settings-content').className).toContain('max-w-full');
+    expect(screen.getByTestId('settings-tab-model').textContent).toContain('Models & Providers');
   });
 
   it('uses a switch for an on/off setting', async () => {

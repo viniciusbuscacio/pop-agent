@@ -23,7 +23,7 @@ type IconButtonSize = 'sm' | 'md';
 // navigation, and a New chat button in the same weight right under it read as
 // a second title rather than an action (Vinicius, 03/08).
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
+  'inline-flex max-w-full items-center justify-center gap-2 rounded-[var(--radius-control)] font-medium transition-colors disabled:opacity-50 disabled:cursor-default';
 
 /**
  * Size is a prop, never a `text-`/`px-` handed in through `className`: two
@@ -94,7 +94,7 @@ export function Button({
  * happened to emit them in, not by the order they were written.
  */
 const FIELD_BASE =
-  'border border-[var(--border)] bg-[var(--input-bg)] outline-none disabled:cursor-default disabled:opacity-50';
+  'min-w-0 max-w-full border border-[var(--border)] bg-[var(--input-bg)] outline-none disabled:cursor-default disabled:opacity-50';
 
 const FIELD_SIZES = {
   /** A form field with a label above it. */
@@ -776,7 +776,7 @@ export function Card({
   const border = variant === 'danger' ? 'border-[var(--danger)]' : 'border-[var(--border)]';
   return (
     <div
-      className={`rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] p-6 ${className}`}
+      className={`min-w-0 max-w-full rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] p-6 ${className}`}
     >
       {children}
     </div>
