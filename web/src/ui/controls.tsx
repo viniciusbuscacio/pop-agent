@@ -685,7 +685,7 @@ export function SwitchField({
           onChange={(event) => onChange(event.target.checked)}
           className="peer sr-only"
         />
-        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-[var(--screen-fg)] transition-transform ${checked ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`} />
+        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-[transform,background-color] ${checked ? 'translate-x-[1.125rem] bg-[var(--switch-thumb-on)]' : 'translate-x-0.5 bg-[var(--switch-thumb-off)]'}`} />
       </span>
     </label>
   );

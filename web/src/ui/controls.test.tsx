@@ -61,4 +61,17 @@ describe('UI design-system primitives', () => {
     expect(screen.getByTestId('file').getAttribute('type')).toBe('file');
     expect(screen.getByRole('menu')).toBeTruthy();
   });
+
+  it('uses distinct switch thumbs for off and on', () => {
+    render(
+      <>
+        <SwitchField id="switch-off" label="Off" checked={false} onChange={vi.fn()} />
+        <SwitchField id="switch-on" label="On" checked onChange={vi.fn()} />
+      </>,
+    );
+
+    const [off, on] = screen.getAllByRole('switch');
+    expect(off?.nextElementSibling?.className).toContain('bg-[var(--switch-thumb-off)]');
+    expect(on?.nextElementSibling?.className).toContain('bg-[var(--switch-thumb-on)]');
+  });
 });

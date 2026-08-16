@@ -27,7 +27,8 @@
   --success: #3fbf6f;
   --hover-overlay: rgba(255, 255, 255, 0.06);
   --backdrop: rgba(0, 0, 0, 0.65);
-  --switch-stroke: rgba(255, 255, 255, 0.6);
+  --switch-thumb-off: rgba(255, 255, 255, 0.6);
+  --switch-thumb-on: #ffffff;
   --scroll-thumb: rgba(255, 255, 255, 0.28);
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
@@ -57,7 +58,8 @@
   --success: #107c41;
   --hover-overlay: rgba(55, 45, 35, 0.055);
   --backdrop: rgba(0, 0, 0, 0.45);
-  --switch-stroke: rgba(32, 31, 30, 0.45);
+  --switch-thumb-off: #5f5b57;
+  --switch-thumb-on: #ffffff;
   --scroll-thumb: rgba(32, 31, 30, 0.28);
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
