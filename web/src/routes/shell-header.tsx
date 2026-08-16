@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from 'react';
 import { Pressable } from '../ui/controls';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
 import { useChatStore } from '../store/chat';
@@ -19,7 +19,7 @@ export function ShellHeader({
   className?: string;
   settingsTestId?: string;
 }) {
-  const navigate = useNavigate();
+  const openSettings = useOpenSettings();
   return (
     <header
       className={`flex items-center justify-between gap-2 border-b border-[var(--border)] p-3 ${className}`}
@@ -29,7 +29,7 @@ export function ShellHeader({
         type="button"
         data-testid={settingsTestId}
         aria-label={t('shell.settings')}
-        onClick={() => navigate('/settings')}
+        onClick={openSettings}
         className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
       >
         <GearIcon />
@@ -53,7 +53,7 @@ export function ShellHeader({
  * they keep the plain 0.75rem and never move (Vinicius, 03/08).
  */
 export function ShellFooter() {
-  const navigate = useNavigate();
+  const openSettings = useOpenSettings();
   return (
     <footer
       data-testid="shell-footer"
@@ -67,7 +67,7 @@ export function ShellFooter() {
           type="button"
           data-testid="shell-settings"
           aria-label={t('shell.settings')}
-          onClick={() => navigate('/settings')}
+          onClick={openSettings}
           className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           <GearIcon />
@@ -75,6 +75,16 @@ export function ShellFooter() {
       </span>
     </footer>
   );
+}
+
+/** Carries the selected desktop pane through the full-screen Settings route. */
+function useOpenSettings(): () => void {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return () =>
+    navigate('/settings', {
+      state: { returnTo: `${location.pathname}${location.search}${location.hash}` },
+    });
 }
 
 /**

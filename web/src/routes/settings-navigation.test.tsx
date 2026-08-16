@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './settings-page';
 import { useFontStore } from '../store/font';
@@ -22,9 +22,15 @@ vi.mock('../services/push', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   useFontStore.getState().setChoice('default');
   localStorage.removeItem('pop-agent.fontSize');
 });
+
+function CurrentLocation() {
+  const location = useLocation();
+  return <span data-testid="current-location">{`${location.pathname}${location.search}`}</span>;
+}
 
 describe('Settings navigation', () => {
   it('starts with a searchable, grouped index instead of tabs', async () => {
@@ -73,6 +79,58 @@ describe('Settings navigation', () => {
     expect(screen.getByTestId('settings-section-content').className).toContain('w-full');
     expect(screen.getByTestId('settings-section-content').className).not.toContain('max-w-3xl');
     expect(screen.getByTestId('settings-tab-model').textContent).toContain('Models & Providers');
+  });
+
+  it('returns a desktop detail directly to the chat that opened Settings', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/settings',
+            search: '?section=appearance',
+            state: { returnTo: '/chat/chat-open' },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/chat/:chatId" element={<CurrentLocation />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByTestId('settings-back'));
+
+    expect(screen.getByTestId('current-location').textContent).toBe('/chat/chat-open');
+  });
+
+  it('keeps the two-step Settings back path on a phone', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/settings',
+            search: '?section=appearance',
+            state: { returnTo: '/chat/chat-open' },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings" element={<><SettingsPage /><CurrentLocation /></>} />
+          <Route path="/" element={<CurrentLocation />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByTestId('settings-back'));
+    expect(screen.getByTestId('current-location').textContent).toBe('/settings');
+
+    await user.click(screen.getByTestId('settings-back'));
+    expect(screen.getByTestId('current-location').textContent).toBe('/');
   });
 
   it('uses a switch for an on/off setting', async () => {

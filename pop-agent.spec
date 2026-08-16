@@ -801,7 +801,11 @@ events from stale runs.
   wide screens retain the same hierarchy as an index/content split view. The
   desktop split view uses 95% of the viewport with no fixed maximum width, and
   destination content expands across its pane instead of stopping at a tablet-
-  sized ceiling. Binary settings use switches and choices among multiple values use selects;
+  sized ceiling. On desktop, Settings remembers the selected chat or explorer
+  pane that opened it, and Back from either the index or a destination returns
+  there directly. On phones, Back from a destination first returns to the
+  Settings index, then to the unselected app list. Binary settings use switches
+  and choices among multiple values use selects;
   buttons perform actions rather than representing state. At large accessibility
   font sizes, provider cards stack identity, details, allowance and actions
   vertically; provider names and allowance text remain readable rather than

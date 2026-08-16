@@ -456,7 +456,11 @@ export function ChatPage() {
           className="mx-auto mb-1 w-full px-4 text-center text-xs text-[var(--muted)] md:w-[95%]"
         >
           {t('chat.noProvider')}{' '}
-          <Link to="/settings" className="text-[var(--accent)] underline underline-offset-2">
+          <Link
+            to="/settings"
+            state={{ returnTo: `/chat/${chatId}` }}
+            className="text-[var(--accent)] underline underline-offset-2"
+          >
             {t('chat.noProviderLink')}
           </Link>
         </p>

@@ -100,6 +100,14 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 
 const SETTINGS_ENTRIES = SETTINGS_GROUPS.flatMap((group) => group.entries);
 
+function settingsReturnTo(state: unknown): string {
+  if (typeof state !== 'object' || state === null || !('returnTo' in state)) return '/';
+  const returnTo = (state as { returnTo?: unknown }).returnTo;
+  return typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('/settings')
+    ? returnTo
+    : '/';
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -113,11 +121,15 @@ export function SettingsPage() {
   const activeEntry = SETTINGS_ENTRIES.find((entry) => entry.id === section);
 
   function openSection(next: Section): void {
-    navigate(`/settings?section=${next}`);
+    navigate(`/settings?section=${next}`, { state: location.state });
   }
 
   function goBack(): void {
-    if (section !== undefined) navigate('/settings');
+    if (window.matchMedia?.('(min-width: 768px)').matches === true) {
+      navigate(settingsReturnTo(location.state));
+      return;
+    }
+    if (section !== undefined) navigate('/settings', { state: location.state });
     else navigate('/');
   }
 
