@@ -1,6 +1,6 @@
 # pop-agent.spec — the project specification
 
-Version 2.05 — 2026-08-15.
+Version 2.06 — 2026-08-16.
 This file is the single source of truth for Pop Agent. AGENTS.md (and CLAUDE.md,
 which imports it) directs here. When a working session produces a new rule or
 decision, it lands in this file. History and the "why" live in the
@@ -1424,8 +1424,11 @@ installable. Full design in `docs/cli.md`.
 **`pop`** — a native Go launcher in front of the TypeScript chat client. The
 server's no-store `/install.sh` and `/install.ps1` select and SHA-256-check a
 precompiled launcher; users never install Go. On first run it asks for the
-server origin when none exists. Public `/cli/manifest.json` names this server's
-exact immutable `cli-X.Y.Z.tgz`, its size/hash, minimum Node and minimum launcher.
+server origin when none exists. Public `/cli/manifest.json` names the latest
+immutable packed `cli-X.Y.Z.tgz`, its size/hash, minimum Node and minimum launcher.
+That packed release may briefly trail the server version; protocol negotiation
+remains the authority on compatibility, so a version bump cannot turn first
+install into a 404 before new artifacts are packed.
 The launcher installs privately and atomically rather than through global npm,
 then execs the active Node CLI. The legacy no-store `/cli-latest.tgz` redirect
 remains for migration. The client carries no server code: no `better-sqlite3`,

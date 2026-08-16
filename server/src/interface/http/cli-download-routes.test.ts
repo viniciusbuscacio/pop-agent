@@ -21,6 +21,7 @@ describe('cli download', () => {
   beforeEach(() => {
     pack = mkdtempSync(join(tmpdir(), 'pop-pack-'));
     writeFileSync(join(pack, 'cli-0.2.0.tgz'), 'tarball');
+    writeFileSync(join(pack, 'package.json'), JSON.stringify({ name: 'pop-agent', version: '0.2.0' }));
     mkdirSync(join(pack, 'launcher'));
     writeFileSync(join(pack, 'launcher', 'pop-launcher-1.0.0-darwin-arm64'), 'launcher');
     writeFileSync(join(pack, 'launcher', 'manifest.json'), JSON.stringify({
@@ -55,8 +56,10 @@ describe('cli download', () => {
     });
   });
 
-  it('does not advertise a package that has not been built', async () => {
-    expect((await routes('9.9.9').request('/cli/manifest.json')).status).toBe(404);
+  it('keeps advertising the latest packed release when the server version moves ahead', async () => {
+    const response = await routes('9.9.9').request('/cli/manifest.json');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ version: '0.2.0', package: { url: '/cli-0.2.0.tgz' } });
   });
 
   it('serves only launcher artifacts declared by the launcher manifest', async () => {
@@ -79,24 +82,22 @@ describe('cli download', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('serves this server version, with no session', async () => {
+  it('serves the latest packed version, with no session', async () => {
     const response = await routes('0.2.0').request('/cli-0.2.0.tgz');
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/gzip');
     expect(await response.text()).toBe('tarball');
   });
 
-  it('refuses a version this server does not serve, even when the file is there', async () => {
-    // The server has moved to 0.3.0; the 0.2.0 file is still on disk. Serving
-    // it would pair a 0.2 client with a 0.3 server, which the handshake would
-    // then have to refuse -- one step too late to be useful.
+  it('refuses a package that is not the immutable release named by the pack manifest', async () => {
     writeFileSync(join(pack, 'cli-0.3.0.tgz'), 'newer');
-    const response = await routes('0.3.0').request('/cli-0.2.0.tgz');
+    const response = await routes('0.3.0').request('/cli-0.3.0.tgz');
     expect(response.status).toBe(404);
   });
 
   it('404s when the server was never packed', async () => {
     // Reads as "no client to give you", which is true, rather than as a crash.
+    rmSync(join(pack, 'package.json'));
     const response = await routes('9.9.9').request('/cli-9.9.9.tgz');
     expect(response.status).toBe(404);
   });

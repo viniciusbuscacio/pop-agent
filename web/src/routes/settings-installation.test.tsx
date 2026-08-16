@@ -33,6 +33,8 @@ describe('Settings installation guide', () => {
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
       `$HOME/.local/bin/pop login ${window.location.origin}`,
     );
+    expect(screen.getByTestId('installation-local-access-unix').textContent).toContain('exit_code=$?');
+    expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('status=$?');
   });
 
   it('opens the browser-owned PWA installation prompt', async () => {

@@ -43,6 +43,10 @@ normative history.
 
 ### Fixed
 
+- **PLA installation survives server version bumps and zsh.** The launcher
+  manifest now advertises the latest immutable packed CLI release instead of
+  404ing whenever the server version moves ahead of its artifacts, and the
+  copied macOS command no longer assigns zsh's read-only `status` variable.
 - **`pop update` works on Windows.** It now runs npm's JavaScript entrypoint
   through the current Node executable instead of asking `spawn` to execute the
   `npm.cmd` shell wrapper, which failed with `EINVAL`.
