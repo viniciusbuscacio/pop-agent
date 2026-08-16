@@ -31,6 +31,7 @@ describe('Settings navigation', () => {
     expect(screen.getByText('Data')).toBeTruthy();
     expect(screen.getByText('System')).toBeTruthy();
     expect(screen.getByText('Models & Providers')).toBeTruthy();
+    expect(screen.getByTestId('settings-header').className).toContain('bg-[var(--bg)]');
 
     await user.type(screen.getByRole('searchbox', { name: 'Search settings' }), 'push');
 

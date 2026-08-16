@@ -126,7 +126,10 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--screen-bg)] p-3">
+      <header
+        data-testid="settings-header"
+        className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] p-3"
+      >
         <Pressable
           type="button"
           data-testid="settings-back"
