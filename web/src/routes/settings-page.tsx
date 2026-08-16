@@ -33,6 +33,7 @@ import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
+import { lastActiveChatPath } from '../lib/last-active-chat';
 
 /** Settings is route navigation, not a row of tabs. On phones the index and
  * section are separate screens; wide screens keep the index beside the open
@@ -101,11 +102,18 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 const SETTINGS_ENTRIES = SETTINGS_GROUPS.flatMap((group) => group.entries);
 
 function settingsReturnTo(state: unknown): string {
-  if (typeof state !== 'object' || state === null || !('returnTo' in state)) return '/';
-  const returnTo = (state as { returnTo?: unknown }).returnTo;
-  return typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('/settings')
-    ? returnTo
-    : '/';
+  const returnTo =
+    typeof state === 'object' && state !== null && 'returnTo' in state
+      ? (state as { returnTo?: unknown }).returnTo
+      : undefined;
+  if (
+    typeof returnTo === 'string' &&
+    returnTo.startsWith('/') &&
+    !returnTo.startsWith('/settings')
+  ) {
+    return returnTo;
+  }
+  return lastActiveChatPath() ?? '/';
 }
 
 export function SettingsPage() {

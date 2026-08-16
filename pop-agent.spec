@@ -803,7 +803,9 @@ events from stale runs.
   destination content expands across its pane instead of stopping at a tablet-
   sized ceiling. On desktop, Settings remembers the selected chat or explorer
   pane that opened it, and Back from either the index or a destination returns
-  there directly. On phones, Back from a destination first returns to the
+  there directly. The last active chat is also kept for the browser session so
+  this return survives a Settings reload or an entry path without route state.
+  On phones, Back from a destination first returns to the
   Settings index, then to the unselected app list. Binary settings use switches
   and choices among multiple values use selects;
   buttons perform actions rather than representing state. At large accessibility

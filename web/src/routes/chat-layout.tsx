@@ -5,6 +5,7 @@ import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
 import { PopBubbleMark } from '../ui/pop-bubble-mark';
 import { ChatList } from './chat-list';
+import { forgetLastActiveChat, rememberLastActiveChat } from '../lib/last-active-chat';
 
 /**
  * The two-pane shell, Telegram-style ([[Decisoes-pre-Fase-2]] §1).
@@ -36,6 +37,11 @@ export function ChatLayout() {
     mcpDetail !== null;
 
   useEffect(() => {
+    const chatId = openChat?.params.chatId;
+    if (chatId !== undefined) rememberLastActiveChat(chatId);
+  }, [openChat?.params.chatId]);
+
+  useEffect(() => {
     // One stream for the whole session; the store fans events out from here.
     const unsubscribe = eventStream.subscribe(apply);
     eventStream.start();
@@ -51,6 +57,7 @@ export function ChatLayout() {
     // with the list instead of leaving an empty conversation pane behind.
     return eventStream.subscribe((event) => {
       if (event.kind === 'chat-deleted' && event.chatId === openChat?.params.chatId) {
+        forgetLastActiveChat(event.chatId);
         navigate('/', { replace: true });
       }
     });

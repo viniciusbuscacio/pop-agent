@@ -30,7 +30,10 @@ beforeEach(() => {
   useChatStore.getState().reset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+});
 
 describe('no chat selected', () => {
   it('shows the Pop bubble above the empty-state copy', () => {
@@ -60,10 +63,14 @@ describe('deleted open conversations', () => {
     );
 
     expect(screen.getByTestId('location').textContent).toBe('/chat/chat-open');
+    await waitFor(() =>
+      expect(sessionStorage.getItem('pop-agent.lastActiveChat')).toBe('/chat/chat-open'),
+    );
     for (const listener of listeners) {
       listener({ kind: 'chat-deleted', chatId: 'chat-open' });
     }
 
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+    expect(sessionStorage.getItem('pop-agent.lastActiveChat')).toBeNull();
   });
 });

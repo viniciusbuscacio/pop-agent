@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './settings-page';
 import { useFontStore } from '../store/font';
+import { rememberLastActiveChat } from '../lib/last-active-chat';
 
 vi.mock('../services/pwa-update', () => ({
   applyUpdate: vi.fn(),
@@ -24,6 +25,7 @@ afterEach(() => {
   cleanup();
   useFontStore.getState().setChoice('default');
   localStorage.removeItem('pop-agent.fontSize');
+  sessionStorage.clear();
 });
 
 function CurrentLocation() {
@@ -104,6 +106,23 @@ describe('Settings navigation', () => {
     await user.click(screen.getByTestId('settings-back-desktop'));
 
     expect(screen.getByTestId('current-location').textContent).toBe('/chat/chat-open');
+  });
+
+  it('falls back to the previously active chat when Settings has no route state', async () => {
+    rememberLastActiveChat('chat-remembered');
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/settings?section=appearance']}>
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/chat/:chatId" element={<CurrentLocation />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByTestId('settings-back-desktop'));
+
+    expect(screen.getByTestId('current-location').textContent).toBe('/chat/chat-remembered');
   });
 
   it('keeps the two-step Settings back path on a phone', async () => {
