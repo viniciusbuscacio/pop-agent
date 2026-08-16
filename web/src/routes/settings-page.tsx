@@ -10,7 +10,6 @@ import {
   type SettingsDTO,
   type SkillDTO,
   type StorageResponse,
-  type UsageResponse,
 } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { InstallationSection } from './installation-section';
@@ -46,7 +45,6 @@ type Section =
   | 'audio'
   | 'auto-skills'
   | 'memory'
-  | 'usage'
   | 'storage'
   | 'backup'
   | 'appearance'
@@ -86,7 +84,6 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
   {
     label: 'Data',
     entries: [
-      { id: 'usage', label: 'Usage', summary: 'Tokens, costs and provider activity' },
       { id: 'storage', label: 'Storage', summary: 'Space used by Pop Agent' },
       { id: 'backup', label: 'Backup', summary: 'Create, download and restore snapshots' },
     ],
@@ -274,7 +271,6 @@ function SettingsIcon({ section }: { section: Section }) {
   if (section === 'notifications') return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
   if (section === 'security') return <svg {...common}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>;
   if (section === 'storage') return <svg {...common}><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>;
-  if (section === 'usage') return <svg {...common}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>;
   if (section === 'backup') return <svg {...common}><path d="M4 7h16v13H4zM3 3h18v4H3zM9 11h6M12 11v5M9 14l3 3 3-3"/></svg>;
   if (section === 'updates') return <svg {...common}><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>;
   if (section === 'installation') return <svg {...common}><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 8v6M9 11l3 3 3-3"/></svg>;
@@ -295,7 +291,6 @@ function SettingsSection({ section }: { section: Section }): ReactNode {
   if (section === 'audio') return <AudioSection />;
   if (section === 'auto-skills') return <AutoSkillsSection />;
   if (section === 'memory') return <MemorySection />;
-  if (section === 'usage') return <UsageSection />;
   if (section === 'storage') return <StorageSection />;
   if (section === 'backup') return <BackupSection />;
   if (section === 'appearance') return <AppearanceSection />;
@@ -638,70 +633,6 @@ function BackupSection() {
   );
 }
 
-/** The cost dashboard (pop-agent.spec §14), read off llm_runs. */
-function UsageSection() {
-  const [usage, setUsage] = useState<UsageResponse | undefined>(undefined);
-
-  useEffect(() => {
-    settingsService
-      .usage()
-      .then(setUsage)
-      .catch(() => setUsage(undefined));
-  }, []);
-
-  if (usage === undefined) {
-    return <Card>{t('app.loading')}</Card>;
-  }
-
-  const dollars = (value: number): string => `$${value.toFixed(4)}`;
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3">
-        <p className="text-sm text-[var(--muted)]">{t('usage.intro')}</p>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <Stat label={t('usage.totalCost')} value={dollars(usage.total.cost)} testId="usage-total" />
-          <Stat label={t('usage.runs')} value={String(usage.total.runs)} />
-          <Stat
-            label={t('usage.tokens')}
-            value={`${usage.total.tokensIn} / ${usage.total.tokensOut}`}
-          />
-        </div>
-      </Card>
-
-      {usage.byModel.length === 0 ? (
-        <Card>
-          <p className="text-sm text-[var(--muted)]">{t('usage.empty')}</p>
-        </Card>
-      ) : (
-        <>
-          <Card className="flex flex-col gap-2">
-            <h2 className="text-base font-semibold">{t('usage.byModel')}</h2>
-            {usage.byModel.map((row) => (
-              <div key={row.model} className="flex justify-between gap-4 text-sm">
-                <span className="truncate font-mono text-[var(--key-fg-dim)]">{row.model}</span>
-                <span className="text-[var(--muted)]">
-                  {row.runs} · {dollars(row.cost)}
-                </span>
-              </div>
-            ))}
-          </Card>
-
-          <Card className="flex flex-col gap-2">
-            <h2 className="text-base font-semibold">{t('usage.byDay')}</h2>
-            {usage.byDay.map((row) => (
-              <div key={row.day} className="flex justify-between gap-4 text-sm">
-                <span className="font-mono text-[var(--key-fg-dim)]">{row.day}</span>
-                <span className="text-[var(--muted)]">{dollars(row.cost)}</span>
-              </div>
-            ))}
-          </Card>
-        </>
-      )}
-    </div>
-  );
-}
-
 /**
  * Where the disk went (pop-agent.spec §14). Measurement before any quota: a limit
  * chosen without this screen is a guess, and the guess is usually wrong about
@@ -866,9 +797,8 @@ export function SkillsSection() {
         </div>
       </Card>
 
-      {/* One discreet line, never a card: the money already has a home in
-          Settings → Usage, so all this has to say is when Pop Agent last looked and
-          how much is waiting on the reader. */}
+      {/* One discreet line, never a card: this only says when Pop Agent last
+          looked and how much is waiting on the reader. */}
       {distiller === undefined ? null : (
         <p data-testid="distiller-status" className="text-xs text-[var(--muted)]">
           {distillerLine(distiller)}

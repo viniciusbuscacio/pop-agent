@@ -308,7 +308,6 @@ export const en = {
   'settings.section.notifications': 'Notifications',
   'settings.section.autoSkills': 'Auto-skills',
   'settings.section.memory': 'Memory',
-  'settings.section.usage': 'Usage',
   'settings.section.storage': 'Storage',
   'settings.section.backup': 'Backup',
   'settings.section.appearance': 'Appearance',
@@ -344,14 +343,6 @@ export const en = {
   'storage.hint.workspace': 'Where the agent reads and writes while it works.',
   'storage.hint.other': 'Notes, skills and the agent\'s own sessions.',
   'storage.hint.backups': 'Full copies of everything above. Ten are kept.',
-  'usage.intro':
-    "What your conversations have cost. A provider you pay by the key is billed per token; a subscription is not, so those runs count tokens and cost nothing.",
-  'usage.totalCost': 'Total spent',
-  'usage.runs': 'Runs',
-  'usage.tokens': 'Tokens (in / out)',
-  'usage.byModel': 'By model',
-  'usage.byDay': 'Recent days',
-  'usage.empty': 'No usage yet.',
 
   'skills.intro': 'Skills are know-how Pop Agent pulls in when a request calls for it.',
   'skills.builtin': 'Built-in',

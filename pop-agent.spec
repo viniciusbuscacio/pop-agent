@@ -795,7 +795,7 @@ events from stale runs.
   full-screen, route-based hierarchy rather than a strip of tabs. Its searchable
   English index groups destinations as **Agent** (Models & Providers, Audio,
   Instructions, Memory, Auto-skills), **App** (Appearance, Notifications,
-  Updates, Installation), **Data** (Usage, Storage, Backup), and **System**
+  Updates, Installation), **Data** (Storage, Backup), and **System**
   (Server & Connections, Security, About). On a phone the index and destination
   are separate screens so the native back gesture has a truthful destination;
   wide screens retain the same hierarchy as an index/content split view.
@@ -901,8 +901,6 @@ events from stale runs.
   the chat row and feeds the recent-chats catalog (§7.1) — infinite chats stay
   indexed. `chat_titles` is append-only: every title, its user turn,
   auto|manual.
-- **Usage dashboard** (Settings → Usage): full cost control from
-  `llm_runs` — per day, per provider, per model, per conversation.
 - Files the agent creates: download link in chat when a tool reports a
   file + a workspace file browser.
 - Slash commands: `/model`, `/model list`, `/new`, `/memory`; extensible menu on `/`.
@@ -1169,9 +1167,9 @@ reimplemented.
   version contains that commit.
 - **Subscription allowance belongs to its provider card.** Settings → Model →
   OpenAI subscription reads the provider's rolling usage windows and reset
-  times through `GET /v1/providers/:id/subscription-usage`; it does not create
-  another total in Settings → Usage. The engine asks pi for fresh OAuth auth
-  first, then calls OpenAI's Codex usage endpoint. Only plan, percentages and
+  times through `GET /v1/providers/:id/subscription-usage`; allowance stays on
+  that provider card rather than creating a separate Settings destination. The
+  engine asks pi for fresh OAuth auth first, then calls OpenAI's Codex usage endpoint. Only plan, percentages and
   reset clocks cross the infrastructure boundary — never email, account id or
   tokens. Failure hides the optional row rather than breaking Model settings.
 - **Status/resolve semantics**: for an oauth definition `configured`
