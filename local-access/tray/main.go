@@ -10,9 +10,11 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -63,6 +65,13 @@ func main() {
 		os.Exit(1)
 	}
 	go a.start()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	go func() {
+		<-signals
+		a.quit()
+	}()
 	runTray()
 }
 
