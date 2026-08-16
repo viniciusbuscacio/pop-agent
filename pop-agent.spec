@@ -792,12 +792,19 @@ events from stale runs.
   (waiting up to a minute would leave a send that did nothing unexplained)
   and any answer, a 500 included, clears it just as fast.
 - **Never a side drawer/panel for forms** (permanent veto). Settings is a
-  full-screen view: Server, General, **Installation guide**, Model, **Audio**,
-  Memory, Usage, Storage, Backup, Appearance, Updates, Security, About. The
-  installation guide derives the current personal server origin at runtime and
-  gives copyable installation instructions for the PWA and CLI on Windows,
-  macOS and Linux. There is no native Desktop wrapper or native installer. It
-  never hard-codes one deployment's URL.
+  full-screen, route-based hierarchy rather than a strip of tabs. Its searchable
+  English index groups destinations as **Agent** (Models & Providers, Audio,
+  Instructions, Memory, Auto-skills), **App** (Appearance, Notifications,
+  Updates, Installation), **Data** (Usage, Storage, Backup), and **System**
+  (Server & Connections, Security, About). On a phone the index and destination
+  are separate screens so the native back gesture has a truthful destination;
+  wide screens retain the same hierarchy as an index/content split view.
+  Binary settings use switches and choices among multiple values use selects;
+  buttons perform actions rather than representing state. The installation
+  guide derives the current personal server origin at runtime and gives
+  copyable installation instructions for the PWA and CLI on Windows, macOS and
+  Linux. There is no native Desktop wrapper or native installer. It never
+  hard-codes one deployment's URL.
   Chromium's one-shot `beforeinstallprompt` is captured during application boot,
   before Settings mounts. When the browser offers it, Installation shows
   **Install Pop Agent** and opens only the browser-owned confirmation after that

@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   compareVersions,
   type AboutResponse,
@@ -31,16 +31,13 @@ import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
-import { Button, Card, CheckField, Segmented, Select, TextArea, TextField, Pressable } from '../ui/controls';
+import { Button, Card, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 
-/**
- * Settings as a full screen with a back button -- never a drawer or a modal
- * (permanent house veto, pop-agent.spec §14). Sections sit on the left on a wide
- * screen and become a row of tabs when there is no room for a column.
- */
-
+/** Settings is route navigation, not a row of tabs. On phones the index and
+ * section are separate screens; wide screens keep the index beside the open
+ * section. Forms remain full-screen and never move into a drawer or modal. */
 type Section =
   | 'server'
   | 'general'
@@ -53,101 +50,259 @@ type Section =
   | 'storage'
   | 'backup'
   | 'appearance'
+  | 'notifications'
   | 'updates'
   | 'security'
   | 'about';
 
-const SECTIONS: { id: Section; labelKey: Parameters<typeof t>[0] }[] = [
-  { id: 'server', labelKey: 'settings.section.server' },
-  { id: 'general', labelKey: 'settings.section.general' },
-  { id: 'installation', labelKey: 'settings.section.installation' },
-  { id: 'model', labelKey: 'settings.section.model' },
-  { id: 'audio', labelKey: 'settings.section.audio' },
-  { id: 'auto-skills', labelKey: 'settings.section.autoSkills' },
-  { id: 'memory', labelKey: 'settings.section.memory' },
-  { id: 'usage', labelKey: 'settings.section.usage' },
-  { id: 'storage', labelKey: 'settings.section.storage' },
-  { id: 'backup', labelKey: 'settings.section.backup' },
-  { id: 'appearance', labelKey: 'settings.section.appearance' },
-  { id: 'updates', labelKey: 'settings.section.updates' },
-  { id: 'security', labelKey: 'settings.section.security' },
-  { id: 'about', labelKey: 'settings.section.about' },
+type SettingsEntry = {
+  id: Section;
+  label: string;
+  summary: string;
+};
+
+type SettingsGroup = { label: string; entries: SettingsEntry[] };
+
+const SETTINGS_GROUPS: SettingsGroup[] = [
+  {
+    label: 'Agent',
+    entries: [
+      { id: 'model', label: 'Models & Providers', summary: 'Choose how Pop Agent answers' },
+      { id: 'audio', label: 'Audio', summary: 'Voice transcription and cleanup' },
+      { id: 'general', label: 'Instructions', summary: 'Response preferences for every conversation' },
+      { id: 'memory', label: 'Memory', summary: 'What Pop Agent knows about you' },
+      { id: 'auto-skills', label: 'Auto-skills', summary: 'Reusable abilities learned from chats' },
+    ],
+  },
+  {
+    label: 'App',
+    entries: [
+      { id: 'appearance', label: 'Appearance', summary: 'Theme and text size' },
+      { id: 'notifications', label: 'Notifications', summary: 'Push notification preferences' },
+      { id: 'updates', label: 'Updates', summary: 'PWA, server and runtime versions' },
+      { id: 'installation', label: 'Installation', summary: 'Install and connect your devices' },
+    ],
+  },
+  {
+    label: 'Data',
+    entries: [
+      { id: 'usage', label: 'Usage', summary: 'Tokens, costs and provider activity' },
+      { id: 'storage', label: 'Storage', summary: 'Space used by Pop Agent' },
+      { id: 'backup', label: 'Backup', summary: 'Create, download and restore snapshots' },
+    ],
+  },
+  {
+    label: 'System',
+    entries: [
+      { id: 'server', label: 'Server & Connections', summary: 'Health, hardware and server actions' },
+      { id: 'security', label: 'Security', summary: 'Password, passkeys and sessions' },
+      { id: 'about', label: 'About', summary: 'Version, licenses and project information' },
+    ],
+  },
 ];
+
+const SETTINGS_ENTRIES = SETTINGS_GROUPS.flatMap((group) => group.entries);
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  // A push notification deep-links here with ?section=updates (pop-agent.spec §15).
-  const requested = new URLSearchParams(window.location.search).get('section');
-  const [section, setSection] = useState<Section>(
-    SECTIONS.some((entry) => entry.id === requested) ? (requested as Section) : 'general',
-  );
+  const location = useLocation();
+  // happy-dom's MemoryRouter does not inherit window.history; the fallback also
+  // keeps old embedders that mount this route directly working.
+  const requested = new URLSearchParams(location.search || window.location.search).get('section');
+  const section = SETTINGS_ENTRIES.some((entry) => entry.id === requested)
+    ? (requested as Section)
+    : undefined;
+  const [query, setQuery] = useState('');
+  const activeEntry = SETTINGS_ENTRIES.find((entry) => entry.id === section);
+
+  function openSection(next: Section): void {
+    navigate(`/settings?section=${next}`);
+  }
+
+  function goBack(): void {
+    if (section !== undefined) navigate('/settings');
+    else navigate('/');
+  }
 
   return (
     <div className="min-h-dvh">
-      <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--screen-bg)] p-3">
         <Pressable
           type="button"
           data-testid="settings-back"
           aria-label={t('common.back')}
-          onClick={() => navigate('/')}
-          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
+          onClick={goBack}
+          className="grid min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           ←
         </Pressable>
-        <h1 className="text-lg font-semibold">{t('settings.title')}</h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold md:hidden">{activeEntry?.label ?? 'Settings'}</h1>
+          <h1 className="hidden text-lg font-semibold md:block">Settings</h1>
+        </div>
       </header>
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 p-4 md:w-[90%] md:max-w-none md:flex-row">
-        <nav className="flex gap-1 overflow-x-auto md:w-48 md:shrink-0 md:flex-col">
-          {SECTIONS.map((entry) => (
-            <Pressable
-              key={entry.id}
-              type="button"
-              data-testid={`settings-tab-${entry.id}`}
-              aria-current={section === entry.id}
-              onClick={() => setSection(entry.id)}
-              className={
-                section === entry.id
-                  ? 'rounded-md bg-[var(--accent)] px-3 py-2 text-left text-sm text-[var(--accent-fg)]'
-                  : 'rounded-md px-3 py-2 text-left text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
-              }
-            >
-              {t(entry.labelKey)}
-            </Pressable>
-          ))}
-        </nav>
+      <div className="mx-auto grid w-full max-w-6xl md:grid-cols-[21rem_minmax(0,1fr)]">
+        <SettingsIndex
+          query={query}
+          onQueryChange={setQuery}
+          active={section}
+          onOpen={openSection}
+          className={section === undefined ? 'block' : 'hidden md:block'}
+        />
 
-        {/*
-          `min-w-0` is load-bearing, not decoration. A flex item defaults to
-          `min-width: auto`, so without it this column refuses to shrink below
-          the widest thing inside it -- one long skill description was enough
-          to push the whole page wider than the window, which put a horizontal
-          scrollbar on Settings and scrolled the nav off the left edge. It also
-          means `truncate` inside a section never fires: the column yields
-          instead of the text being cut.
-        */}
-        <div className="min-w-0 flex-1">
-          {section === 'server' ? <ServerSection /> : null}
-          {section === 'general' ? <GeneralSection /> : null}
-          {section === 'installation' ? <InstallationSection /> : null}
-          {section === 'model' ? <ProvidersSection /> : null}
-          {section === 'audio' ? <AudioSection /> : null}
-          {section === 'auto-skills' ? <AutoSkillsSection /> : null}
-          {section === 'memory' ? <MemorySection /> : null}
-          {section === 'usage' ? <UsageSection /> : null}
-          {section === 'storage' ? <StorageSection /> : null}
-          {section === 'backup' ? <BackupSection /> : null}
-          {section === 'appearance' ? <AppearanceSection /> : null}
-          {section === 'updates' ? <UpdatesSection /> : null}
-          {section === 'security' ? <SecuritySection /> : null}
-          {section === 'about' ? <AboutSection /> : null}
-        </div>
+        <main className={section === undefined ? 'hidden md:block' : 'min-w-0 p-4 md:p-6'}>
+          {section === undefined ? (
+            <div className="flex min-h-[60dvh] items-center justify-center p-8 text-center text-sm text-[var(--muted)]">
+              Select a setting to view and change it.
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl">
+              <div className="mb-5 hidden md:block">
+                <h2 className="text-xl font-semibold">{activeEntry?.label}</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
+              </div>
+              <SettingsSection section={section} />
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
 }
 
-function GeneralSection() {
+function SettingsIndex({
+  query,
+  onQueryChange,
+  active,
+  onOpen,
+  className,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  active: Section | undefined;
+  onOpen: (section: Section) => void;
+  className: string;
+}) {
+  const needle = query.trim().toLowerCase();
+  const groups = SETTINGS_GROUPS.map((group) => ({
+    ...group,
+    entries: group.entries.filter((entry) =>
+      `${entry.label} ${entry.summary} ${group.label}`.toLowerCase().includes(needle),
+    ),
+  })).filter((group) => group.entries.length > 0);
+
+  return (
+    <nav aria-label="Settings" className={`${className} border-[var(--border)] p-4 md:min-h-[calc(100dvh-65px)] md:border-r md:p-5`}>
+      <SearchField
+        id="settings-search"
+        aria-label="Search settings"
+        placeholder="Search settings"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        className="mb-5 w-full"
+      />
+      <div className="flex flex-col gap-5">
+        {groups.map((group) => (
+          <section key={group.label}>
+            <h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              {group.label}
+            </h2>
+            <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--panel-bg)]">
+              {group.entries.map((entry, index) => (
+                <SettingsRow
+                  key={entry.id}
+                  entry={entry}
+                  active={active === entry.id}
+                  divided={index > 0}
+                  onClick={() => onOpen(entry.id)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+        {groups.length === 0 ? (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">No settings found.</p>
+        ) : null}
+      </div>
+    </nav>
+  );
+}
+
+function SettingsRow({ entry, active, divided, onClick }: {
+  entry: SettingsEntry;
+  active: boolean;
+  divided: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Pressable
+      type="button"
+      data-testid={`settings-tab-${entry.id}`}
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+      className={`flex min-h-16 w-full items-center gap-3 px-3 py-2 text-left ${divided ? 'border-t border-[var(--border)]' : ''} ${active ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'}`}
+    >
+      <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-fg)]">
+        <SettingsIcon section={entry.id} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-[var(--screen-fg)]">{entry.label}</span>
+        <span className="block truncate text-xs text-[var(--muted)]">{entry.summary}</span>
+      </span>
+      <span aria-hidden="true" className="text-lg text-[var(--muted)]">›</span>
+    </Pressable>
+  );
+}
+
+function SettingsIcon({ section }: { section: Section }) {
+  const common = {
+    width: 19,
+    height: 19,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+
+  if (section === 'audio') return <svg {...common}><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11v1a7 7 0 0 1-14 0v-1M12 19v3"/></svg>;
+  if (section === 'notifications') return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
+  if (section === 'security') return <svg {...common}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>;
+  if (section === 'storage') return <svg {...common}><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>;
+  if (section === 'usage') return <svg {...common}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>;
+  if (section === 'backup') return <svg {...common}><path d="M4 7h16v13H4zM3 3h18v4H3zM9 11h6M12 11v5M9 14l3 3 3-3"/></svg>;
+  if (section === 'updates') return <svg {...common}><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>;
+  if (section === 'installation') return <svg {...common}><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 8v6M9 11l3 3 3-3"/></svg>;
+  if (section === 'appearance') return <svg {...common}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>;
+  if (section === 'memory') return <svg {...common}><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23zM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23z"/></svg>;
+  if (section === 'auto-skills') return <svg {...common}><path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 15l.7 1.8 1.8.7-1.8.7L5 20l-.7-1.8-1.8-.7 1.8-.7z"/></svg>;
+  if (section === 'general') return <svg {...common}><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></svg>;
+  if (section === 'model') return <svg {...common}><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="m7 7 3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/></svg>;
+  if (section === 'server') return <svg {...common}><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg>;
+}
+
+function SettingsSection({ section }: { section: Section }): ReactNode {
+  if (section === 'server') return <ServerSection />;
+  if (section === 'general') return <InstructionsSection />;
+  if (section === 'installation') return <InstallationSection />;
+  if (section === 'model') return <ProvidersSection />;
+  if (section === 'audio') return <AudioSection />;
+  if (section === 'auto-skills') return <AutoSkillsSection />;
+  if (section === 'memory') return <MemorySection />;
+  if (section === 'usage') return <UsageSection />;
+  if (section === 'storage') return <StorageSection />;
+  if (section === 'backup') return <BackupSection />;
+  if (section === 'appearance') return <AppearanceSection />;
+  if (section === 'notifications') return <NotificationsSection />;
+  if (section === 'updates') return <UpdatesSection />;
+  if (section === 'security') return <SecuritySection />;
+  return <AboutSection />;
+}
+
+function InstructionsSection() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
   const [instructions, setInstructions] = useState('');
   const [saved, setSaved] = useState(false);
@@ -180,16 +335,6 @@ function GeneralSection() {
   return (
     <div className="flex flex-col gap-4">
     <Card className="flex flex-col gap-4">
-      <Select
-        id="settings-language"
-        data-testid="settings-language"
-        label={t('settings.general.language')}
-        defaultValue="en"
-        className="w-48"
-      >
-        <option value="en">English</option>
-      </Select>
-
       <TextArea
         id="settings-instructions"
         data-testid="settings-instructions"
@@ -899,7 +1044,7 @@ function AutoSkillsSection() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4">
-        <CheckField
+        <SwitchField
           id="settings-auto-skills-enabled"
           testId="settings-auto-skills-enabled"
           label={t('settings.autoSkills.enabled')}
@@ -939,7 +1084,7 @@ function VoiceCleanupCard() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <CheckField
+      <SwitchField
         id="voice-cleanup-toggle"
         testId="voice-cleanup-toggle"
         label={t('voice.cleanup')}
@@ -1036,22 +1181,21 @@ function AppearanceSection() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4">
-        <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.appearance.theme')}</span>
-        <Segmented<ThemeChoice>
-          ariaLabel={t('settings.appearance.theme')}
+        <Select
+          id="settings-theme"
+          data-testid="settings-theme"
+          label={t('settings.appearance.theme')}
           value={choice}
-          onChange={setChoice}
-          options={[
-            { value: 'system', label: t('settings.appearance.system'), testId: 'settings-theme-system' },
-            { value: 'light', label: t('settings.appearance.light'), testId: 'settings-theme-light' },
-            { value: 'dark', label: t('settings.appearance.dark'), testId: 'settings-theme-dark' },
-          ]}
-        />
+          onChange={(event) => setChoice(event.target.value as ThemeChoice)}
+        >
+          <option value="system">{t('settings.appearance.system')}</option>
+          <option value="light">{t('settings.appearance.light')}</option>
+          <option value="dark">{t('settings.appearance.dark')}</option>
+        </Select>
         <p className="text-xs text-[var(--muted)]">{t('settings.appearance.note')}</p>
       </Card>
 
       <FontSizeCard />
-      <NotificationsCard />
     </div>
   );
 }
@@ -1063,19 +1207,19 @@ function FontSizeCard() {
 
   return (
     <Card className="flex flex-col gap-4">
-      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.appearance.fontSize')}</span>
-      <Segmented<FontSizeChoice>
-        ariaLabel={t('settings.appearance.fontSize')}
+      <Select
+        id="settings-font-size"
+        data-testid="settings-font-size"
+        label={t('settings.appearance.fontSize')}
         value={choice}
-        onChange={setChoice}
-        options={[
-          { value: 'small', label: t('settings.appearance.fontSmall'), testId: 'settings-font-small' },
-          { value: 'default', label: t('settings.appearance.fontDefault'), testId: 'settings-font-default' },
-          { value: 'large', label: t('settings.appearance.fontLarge'), testId: 'settings-font-large' },
-          { value: 'xlarge', label: t('settings.appearance.fontXlarge'), testId: 'settings-font-xlarge' },
-          { value: 'huge', label: t('settings.appearance.fontHuge'), testId: 'settings-font-huge' },
-        ]}
-      />
+        onChange={(event) => setChoice(event.target.value as FontSizeChoice)}
+      >
+        <option value="small">{t('settings.appearance.fontSmall')}</option>
+        <option value="default">{t('settings.appearance.fontDefault')}</option>
+        <option value="large">{t('settings.appearance.fontLarge')}</option>
+        <option value="xlarge">{t('settings.appearance.fontXlarge')}</option>
+        <option value="huge">{t('settings.appearance.fontHuge')}</option>
+      </Select>
       <p className="text-xs text-[var(--muted)]">{t('settings.appearance.fontNote')}</p>
     </Card>
   );
@@ -1173,7 +1317,7 @@ function intervalLabel(minutes: number): string {
 }
 
 /** Web Push opt-in (pop-agent.spec §14). Device-scoped, like the theme. */
-function NotificationsCard() {
+function NotificationsSection() {
   const [supported] = useState(() => pushService.supported());
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1200,16 +1344,16 @@ function NotificationsCard() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <span className="text-sm text-[var(--key-fg-dim)]">{t('settings.notifications.title')}</span>
       {supported ? (
-        <>
-          <div>
-            <Button type="button" data-testid="notifications-toggle" disabled={busy} onClick={() => void toggle()}>
-              {subscribed ? t('settings.notifications.disable') : t('settings.notifications.enable')}
-            </Button>
-          </div>
-          <p className="text-xs text-[var(--muted)]">{t('settings.notifications.note')}</p>
-        </>
+        <SwitchField
+          id="notifications-toggle"
+          testId="notifications-toggle"
+          disabled={busy}
+          checked={subscribed}
+          onChange={() => void toggle()}
+          label={t('settings.notifications.title')}
+          hint={t('settings.notifications.note')}
+        />
       ) : (
         <p className="text-xs text-[var(--muted)]">{t('settings.notifications.unsupported')}</p>
       )}
@@ -1557,7 +1701,7 @@ function UpdatesSection() {
 
         {appSettings === undefined ? null : (
           <div className="mt-1 flex flex-col gap-3 border-t border-[var(--border)] pt-4">
-            <CheckField
+            <SwitchField
               id="updates-auto-activate"
               testId="updates-auto-activate"
               label={t('settings.updates.autoActivate')}

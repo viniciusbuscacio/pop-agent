@@ -656,25 +656,32 @@ export function SwitchField({
   hint,
   checked,
   onChange,
+  testId,
+  disabled = false,
 }: {
   id: string;
   label: string;
   hint?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  testId?: string;
+  disabled?: boolean;
 }) {
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-4 text-sm">
+    <label htmlFor={id} className={`flex items-center justify-between gap-4 text-sm ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'}`}>
       <span>
         <span className="block text-[var(--screen-fg)]">{label}</span>
-        {hint === undefined ? null : <span className="block text-xs text-[var(--muted)]">{hint}</span>}
+        {hint === undefined ? null : <span id={`${id}-hint`} className="block text-xs text-[var(--muted)]">{hint}</span>}
       </span>
       <span className={`relative h-5 w-9 shrink-0 rounded-full border border-[var(--border)] ${checked ? 'bg-[var(--accent)]' : 'bg-[var(--input-bg)]'}`}>
         <input
           id={id}
           type="checkbox"
           role="switch"
+          data-testid={testId}
           checked={checked}
+          disabled={disabled}
+          aria-describedby={hint === undefined ? undefined : `${id}-hint`}
           onChange={(event) => onChange(event.target.checked)}
           className="peer sr-only"
         />
