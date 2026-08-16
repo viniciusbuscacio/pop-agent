@@ -23,7 +23,7 @@ export function InstallationSection() {
   const windowsCommand = `powershell -c "irm ${origin}/install.ps1 | iex"`;
   const unixCommands = `curl -fsSL ${origin}/install.sh | sh\n$HOME/.local/bin/pop login ${origin}`;
   const localAccessWindowsCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${origin}/install-local-access.ps1' | iex"`;
-  const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; exit_code=$?; rm -f "$tmp"; exit $exit_code`;
+  const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`;
   const pwaStatus = useSyncExternalStore(subscribePwaInstall, pwaInstallStatus, pwaInstallStatus);
   const [pwaDismissed, setPwaDismissed] = useState(false);
   const [connections, setConnections] = useState<LocalConnectionDTO[]>([]);
