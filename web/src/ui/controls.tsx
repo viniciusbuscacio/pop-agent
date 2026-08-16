@@ -767,16 +767,20 @@ export function Menu({ className = '', ...props }: HTMLAttributes<HTMLDivElement
 export function Card({
   children,
   variant = 'default',
+  padding = 'default',
   className = '',
-}: {
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
   variant?: 'default' | 'danger';
-  className?: string;
+  padding?: 'default' | 'compact';
 }) {
   const border = variant === 'danger' ? 'border-[var(--danger)]' : 'border-[var(--border)]';
+  const spacing = padding === 'compact' ? 'p-4' : 'p-6';
   return (
     <div
-      className={`min-w-0 max-w-full rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] p-6 ${className}`}
+      className={`min-w-0 max-w-full rounded-[var(--radius-panel)] border ${border} bg-[var(--panel-bg)] ${spacing} ${className}`}
+      {...props}
     >
       {children}
     </div>

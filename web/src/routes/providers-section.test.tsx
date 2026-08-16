@@ -66,6 +66,10 @@ describe('OpenAI subscription card', () => {
     expect(screen.getByText('3%')).toBeTruthy();
     expect(screen.getByText('Plus plan')).toBeTruthy();
     expect(screen.getByText(/^Resets /)).toBeTruthy();
+    expect(screen.getByTestId('provider-card-name').textContent).toBe('OpenAI — ChatGPT subscription');
+    expect(screen.getByTestId('provider-card-name').className).not.toContain('truncate');
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('provider-edit').parentElement?.className).toContain('grid-cols-2');
     const progress = screen.getByRole('progressbar', { name: 'Weekly usage' });
     expect(progress.getAttribute('aria-valuenow')).toBe('3');
     await waitFor(() => expect(subscriptionUsage).toHaveBeenCalledWith('openai-codex'));

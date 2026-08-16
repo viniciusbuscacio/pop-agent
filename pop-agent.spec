@@ -800,7 +800,10 @@ events from stale runs.
   are separate screens so the native back gesture has a truthful destination;
   wide screens retain the same hierarchy as an index/content split view.
   Binary settings use switches and choices among multiple values use selects;
-  buttons perform actions rather than representing state. The installation
+  buttons perform actions rather than representing state. At large accessibility
+  font sizes, provider cards stack identity, details, allowance and actions
+  vertically; provider names and allowance text remain readable rather than
+  being truncated to preserve a desktop row. The installation
   guide derives the current personal server origin at runtime and gives
   copyable installation instructions for the PWA and CLI on Windows, macOS and
   Linux. There is no native Desktop wrapper or native installer. It never

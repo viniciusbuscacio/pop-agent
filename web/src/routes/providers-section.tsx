@@ -187,71 +187,75 @@ function ProviderCard({
 
   return (
     <Card
-      className={`flex flex-col gap-2 ${provider.enabled ? '' : 'opacity-70'}`}
+      padding="compact"
+      className={`flex flex-col gap-3 ${provider.enabled ? '' : 'opacity-70'}`}
       data-testid={`provider-card-${provider.id}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <Pressable
-            type="button"
-            data-testid="provider-toggle"
-            aria-pressed={provider.enabled}
-            aria-label={provider.enabled ? t('provider.disable') : t('provider.enable')}
-            title={provider.enabled ? t('provider.disable') : t('provider.enable')}
-            disabled={toggling}
-            onClick={() => void toggleEnabled()}
-            className={`mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+      <div className="flex min-w-0 items-center gap-3">
+        <Pressable
+          type="button"
+          role="switch"
+          data-testid="provider-toggle"
+          aria-checked={provider.enabled}
+          aria-label={provider.enabled ? t('provider.disable') : t('provider.enable')}
+          title={provider.enabled ? t('provider.disable') : t('provider.enable')}
+          disabled={toggling}
+          onClick={() => void toggleEnabled()}
+          className={`flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+            provider.enabled
+              ? 'border-transparent bg-[var(--accent)]'
+              : 'border-[var(--border)] bg-transparent'
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={
               provider.enabled
-                ? 'border-transparent bg-[var(--accent)]'
-                : 'border-[var(--border)] bg-transparent'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={
-                provider.enabled
-                  ? 'block h-3.5 w-3.5 translate-x-4 rounded-full bg-[var(--accent-fg)] transition-transform'
-                  : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
-              }
-            />
-          </Pressable>
-          <div className="min-w-0">
-            <p className="truncate font-semibold" data-testid="provider-card-name">
-              {provider.name}
-            </p>
-            <Balance providerId={provider.id} listVersion={listVersion} />
-            <p className="truncate text-xs text-[var(--muted)]">
-              {t('provider.priorityBadge', { n: index + 1 })}
-              {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
-              {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
-              {!provider.enabled ? ` · ${t('provider.priority.off')}` : ''}
-            </p>
-            {provider.id === 'openai-codex' ? (
-              <SubscriptionUsage providerId={provider.id} listVersion={listVersion} />
-            ) : null}
-          </div>
-        </div>
-        <span className="flex shrink-0 gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-testid="provider-edit"
-            onClick={onEdit}
-          >
-            {t('common.edit')}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="sm"
-            data-testid="provider-delete"
-            onClick={onDelete}
-          >
-            {t('shell.delete')}
-          </Button>
-        </span>
+                ? 'block h-3.5 w-3.5 translate-x-4 rounded-full bg-[var(--accent-fg)] transition-transform'
+                : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
+            }
+          />
+        </Pressable>
+        <p className="min-w-0 break-words font-semibold" data-testid="provider-card-name">
+          {provider.name}
+        </p>
       </div>
+
+      <div className="min-w-0">
+        <Balance providerId={provider.id} listVersion={listVersion} />
+        <p className="break-words text-xs text-[var(--muted)]">
+          {t('provider.priorityBadge', { n: index + 1 })}
+          {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
+          {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
+          {!provider.enabled ? ` · ${t('provider.priority.off')}` : ''}
+        </p>
+      </div>
+
+      {provider.id === 'openai-codex' ? (
+        <SubscriptionUsage providerId={provider.id} listVersion={listVersion} />
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-testid="provider-edit"
+          onClick={onEdit}
+        >
+          {t('common.edit')}
+        </Button>
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          data-testid="provider-delete"
+          onClick={onDelete}
+        >
+          {t('shell.delete')}
+        </Button>
+      </div>
+
       {authErrorAt === undefined ? null : (
         <Pressable
           type="button"
@@ -300,7 +304,7 @@ function Balance({
 
   if (credits === undefined || credits === null) return null;
   return (
-    <p className="truncate text-xs text-[var(--muted)]" data-testid="provider-credits">
+    <p className="break-words text-xs text-[var(--muted)]" data-testid="provider-credits">
       {t('provider.credits', {
         remaining: formatDollars(credits.remaining),
         used: formatDollars(credits.used),
