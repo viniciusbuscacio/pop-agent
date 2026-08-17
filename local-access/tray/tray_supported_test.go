@@ -25,23 +25,23 @@ func TestStatusIconsStaySmallAndUseConnectedGreen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if image.Bounds().Dx() != 16 || image.Bounds().Dy() != 16 {
+		if image.Bounds().Dx() != 32 || image.Bounds().Dy() != 32 {
 			t.Fatalf("%s bounds = %v", test.path, image.Bounds())
 		}
-		red, green, blue, alpha := image.At(7, 7).RGBA()
+		red, green, blue, alpha := image.At(15, 15).RGBA()
 		if red != test.wantRed || green != test.wantGreen || blue != test.wantBlue || alpha != 0xffff {
 			t.Fatalf("%s center = %#x %#x %#x %#x", test.path, red, green, blue, alpha)
 		}
 		opaque := 0
-		for y := 0; y < 16; y++ {
-			for x := 0; x < 16; x++ {
+		for y := 0; y < 32; y++ {
+			for x := 0; x < 32; x++ {
 				_, _, _, pixelAlpha := image.At(x, y).RGBA()
 				if pixelAlpha != 0 {
 					opaque++
 				}
 			}
 		}
-		if opaque < 115 || opaque > 140 {
+		if opaque < 440 || opaque > 500 {
 			t.Fatalf("%s dot size = %d visible pixels", test.path, opaque)
 		}
 	}
