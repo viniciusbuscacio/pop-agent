@@ -95,7 +95,12 @@ function ChatMessageView({
         <ThinkingCard text={message.thinking} answered={message.content.length > 0} />
       ) : null}
 
-      {message.tools.length > 0 ? <ToolCards tools={message.tools} /> : null}
+      {message.tools.length > 0 ? (
+        <ToolCards
+          tools={message.tools}
+          interrupted={/interrupted by a server restart/i.test(message.content)}
+        />
+      ) : null}
 
       {message.content.length > 0 ? (
         <div className="text-[var(--screen-fg)]">
@@ -286,7 +291,7 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
 }
 
 /** Consecutive calls collapse into one card, so six greps read as "Ran 6 tools". */
-function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
+function ToolCards({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
   const [open, setOpen] = useState(false);
   const grouped = tools.length > 1;
 
@@ -303,7 +308,7 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
         <span className="font-mono text-[var(--key-fg-dim)]">
           {grouped ? t('chat.ranTools', { count: tools.length }) : (tools[0]?.name ?? '')}
         </span>
-        <ToolStatusMark tools={tools} />
+        <ToolStatusMark tools={tools} interrupted={interrupted} />
       </Pressable>
 
       {open ? (
@@ -325,7 +330,7 @@ function ToolCards({ tools }: { tools: ToolCallDTO[] }) {
   );
 }
 
-function ToolStatusMark({ tools }: { tools: ToolCallDTO[] }) {
+function ToolStatusMark({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
   const last = tools[tools.length - 1];
   if (last === undefined) return null;
 
@@ -334,6 +339,13 @@ function ToolStatusMark({ tools }: { tools: ToolCallDTO[] }) {
   }
   if (last.status === 'done') {
     return <span className="text-xs text-[var(--success)]">✓</span>;
+  }
+  if (interrupted) {
+    return (
+      <span data-testid="tool-interrupted" className="text-xs text-[var(--muted)]">
+        {t('chat.toolInterrupted')}
+      </span>
+    );
   }
   return <Spinner />;
 }

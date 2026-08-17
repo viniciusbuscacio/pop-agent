@@ -131,6 +131,7 @@ export const en = {
   'chat.thinking': 'Thinking',
   'chat.ranTools': 'Ran {count} tools',
   'chat.toolFailed': 'failed',
+  'chat.toolInterrupted': 'interrupted',
   'chat.sending': 'Sending:',
   'chat.waiting': 'Waiting:',
   'chat.queuedLabel': 'Queued:',

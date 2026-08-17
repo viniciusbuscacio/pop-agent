@@ -51,6 +51,39 @@ describe('horizontal overflow containment', () => {
   });
 });
 
+describe('tool status', () => {
+  it('stops an unfinished tool indicator when persisted content says the run was interrupted', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          content: 'Partial answer\n\n*— interrupted by a server restart —*',
+          tools: [{ name: 'bash', status: 'output', detail: 'partial output' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('tool-interrupted').textContent).toBe('interrupted');
+    expect(screen.getByTestId('tool-card').querySelector('.animate-spin')).toBeNull();
+  });
+
+  it('keeps an unfinished live tool spinning without the interruption marker', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'bash', status: 'start', detail: '' }],
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('tool-interrupted')).toBeNull();
+    expect(screen.getByTestId('tool-card').querySelector('.animate-spin')).not.toBeNull();
+  });
+});
+
 describe('system messages', () => {
   it('renders compact completion from durable history as a timeline event', () => {
     render(
