@@ -56,6 +56,10 @@ describe('chat lifecycle events on the SSE wire', () => {
     });
   });
 
+  it('invalidates local computer state without leaking machine details', () => {
+    expect(toStreamEvent({ kind: 'local-machines-changed' })).toEqual({ kind: 'local-machines-changed' });
+  });
+
   it('sends both pin and unpin state', () => {
     expect(toStreamEvent({ kind: 'chat-pin-changed', chatId: chat.id, pinned: true })).toEqual({
       kind: 'chat-pin-changed',

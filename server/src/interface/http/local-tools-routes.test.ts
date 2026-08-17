@@ -112,6 +112,22 @@ describe('HTTPS local-tools fallback', () => {
     expect((await request('/v1/local-tools/machines/missing', 'PATCH', { enabled: true })).status).toBe(404);
   });
 
+  it('broadcasts computer changes over the shared SSE hub', async () => {
+    const events: string[] = [];
+    const unsubscribe = fixture.hub.subscribe((payload) => events.push(payload));
+    const connected = await attach();
+    const id = ((await connected.json()) as { connectionId: string }).connectionId;
+    await request('/v1/local-tools/machines/machine-test', 'PATCH', { enabled: true });
+    await request(`/v1/local-tools/connections/${id}`, 'DELETE');
+    unsubscribe();
+
+    expect(events.map((payload) => JSON.parse(payload))).toEqual([
+      { kind: 'local-machines-changed' },
+      { kind: 'local-machines-changed' },
+      { kind: 'local-machines-changed' },
+    ]);
+  });
+
   it('removes the selected connection on delete', async () => {
     const connected = await attach();
     const id = ((await connected.json()) as { connectionId: string }).connectionId;

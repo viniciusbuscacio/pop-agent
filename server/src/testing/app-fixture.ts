@@ -387,7 +387,12 @@ export function createTestApp(
 
   const controlLog: string[] = [];
   const localAccessPolicy = new LocalAccessPolicyService(settingsRepo);
-  const localConnections = new LocalConnectionRegistry(undefined, () => clock.now(), localAccessPolicy);
+  const localConnections = new LocalConnectionRegistry(
+    undefined,
+    () => clock.now(),
+    localAccessPolicy,
+    () => hub.emit({ kind: 'local-machines-changed' }),
+  );
   const sessionCommands = new SessionCommandService({
     chats,
     files,

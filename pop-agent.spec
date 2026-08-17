@@ -1573,7 +1573,10 @@ Connected when file access is off.
 
 `GET /v1/local-tools/connections` lists live transports for compatibility and
 `GET /v1/local-tools/machines` lists deduplicated persistent computer identities,
-permission and online state. Settings stores only which allowed computer this
+permission and online state. That GET is the initial/reconnection snapshot;
+attach, detach and permission changes emit `local-machines-changed` over the
+same session-wide SSE channel as `chat-deleted`, so Settings never polls.
+Settings stores only which allowed computer this
 PWA should use when more than one is available; with exactly one allowed online
 computer it selects that computer automatically. API sends
 `x-pop-agent-local-connection` only after that choice. A stable machine id is

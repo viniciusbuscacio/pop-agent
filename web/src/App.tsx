@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-route
 import { t } from './i18n';
 import { setSessionLostHandler } from './services/api';
 import { authService } from './services/auth';
+import { eventStream } from './services/events';
 import { session } from './services/session';
 import { useAuthStore } from './store/auth';
 import { ChatLayout, NoChatSelected } from './routes/chat-layout';
@@ -53,6 +54,12 @@ function Boot() {
       navigate('/login');
     });
   }, [navigate, setStatus]);
+
+  useEffect(() => {
+    if (status !== 'signed-in') return;
+    eventStream.start();
+    return () => eventStream.stop();
+  }, [status]);
 
   useEffect(() => {
     let cancelled = false;

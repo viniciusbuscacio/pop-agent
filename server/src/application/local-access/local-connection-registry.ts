@@ -61,6 +61,7 @@ export class LocalConnectionRegistry {
     private readonly onJournal?: (line: string) => void,
     private readonly now: () => number = Date.now,
     private readonly accessPolicy?: LocalAccessPolicyService,
+    private readonly onMachinesChanged?: () => void,
   ) {}
 
   attach(connection: LocalConnection): void {
@@ -69,6 +70,7 @@ export class LocalConnectionRegistry {
     this.onJournal?.(
       `pop local access: attached ${connection.machine.platform}/${connection.machine.arch} (${connection.role ?? 'interactive'})`,
     );
+    this.onMachinesChanged?.();
   }
 
   detach(connectionId: string, message = 'The local connection disconnected before this finished.'): void {
@@ -77,6 +79,7 @@ export class LocalConnectionRegistry {
     this.entries.delete(connectionId);
     this.releaseCalls(connectionId, message);
     this.onJournal?.(`pop local access: detached ${connectionId.slice(-6)}`);
+    this.onMachinesChanged?.();
   }
 
   heard(connectionId: string): void {
@@ -121,6 +124,7 @@ export class LocalConnectionRegistry {
       entry.connection.send({ kind: 'access_policy', enabled });
     }
     this.onJournal?.(`pop local access: ${enabled ? 'enabled' : 'disabled'} ${machineId}`);
+    this.onMachinesChanged?.();
     return true;
   }
 

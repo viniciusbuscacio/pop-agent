@@ -141,12 +141,14 @@ if (agent === 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
+const hub = new SseHub();
 // Which computers are allowed and which secure transports are currently attached.
 const localAccessPolicy = new LocalAccessPolicyService(context.settings);
 const localConnections = new LocalConnectionRegistry(
   (line) => console.log(line),
   Date.now,
   localAccessPolicy,
+  () => hub.emit({ kind: 'local-machines-changed' }),
 );
 // Files as a plain folder (pop-agent.spec §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
@@ -366,7 +368,6 @@ function piBridge(): PiAgentBridge {
   });
 }
 
-const hub = new SseHub();
 // Web Push: the VAPID keys live in the secrets table, generated once. The
 // subject is the JWT's contact URI, which Apple validates -- see the service.
 const push = new WebPushService(context.push, context.secrets, process.env['POP_AGENT_PUSH_SUBJECT']);

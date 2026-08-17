@@ -1043,6 +1043,7 @@ export type StreamEvent =
   | { kind: 'chat-deleted'; chatId: string }
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
   | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
+  | { kind: 'local-machines-changed' }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

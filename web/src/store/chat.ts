@@ -589,7 +589,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
-    if (event.kind === 'update') return;
+    if (event.kind === 'update' || event.kind === 'local-machines-changed') return;
 
     const { chatId, runId } = event;
     const current = get().live[chatId];

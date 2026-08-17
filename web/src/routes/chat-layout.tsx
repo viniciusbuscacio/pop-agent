@@ -42,13 +42,9 @@ export function ChatLayout() {
   }, [openChat?.params.chatId]);
 
   useEffect(() => {
-    // One stream for the whole session; the store fans events out from here.
-    const unsubscribe = eventStream.subscribe(apply);
-    eventStream.start();
-    return () => {
-      unsubscribe();
-      eventStream.stop();
-    };
+    // Boot owns the one session-wide stream; this shell only feeds chat events
+    // into the chat store while it is mounted.
+    return eventStream.subscribe(apply);
   }, [apply]);
 
   useEffect(() => {

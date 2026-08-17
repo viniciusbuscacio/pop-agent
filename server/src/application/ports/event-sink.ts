@@ -15,6 +15,8 @@ export type RunEvent =
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
   /** The composer policy changed and every connected device must follow it. */
   | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
+  /** A computer connected, disconnected, or changed its synchronized access permission. */
+  | { kind: 'local-machines-changed' }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
   | { kind: 'thinking'; chatId: string; runId: string; seq: number; text: string }
   | {

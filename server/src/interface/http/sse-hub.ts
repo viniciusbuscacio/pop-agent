@@ -74,6 +74,8 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
         chatId: event.chatId,
         executionMode: event.executionMode,
       };
+    case 'local-machines-changed':
+      return { kind: 'local-machines-changed' };
     case 'delta':
       return {
         kind: 'delta',

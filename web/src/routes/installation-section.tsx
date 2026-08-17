@@ -7,6 +7,7 @@ import {
   subscribePwaInstall,
 } from '../services/pwa-install';
 import { localAccessService } from '../services/local-access';
+import { eventStream } from '../services/events';
 import {
   selectLocalConnection,
   selectedLocalConnection,
@@ -32,10 +33,12 @@ export function InstallationSection() {
 
   useEffect(() => {
     let active = true;
+    let request = 0;
     const refresh = async (): Promise<void> => {
+      const current = ++request;
       try {
         const response = await localAccessService.machines();
-        if (!active) return;
+        if (!active || current !== request) return;
         setMachines(response.machines);
         const usable = response.machines.filter((machine) => machine.enabled && machine.connected);
         const selectedStillWorks = usable.some((machine) => machine.machineId === selectedLocalConnection());
@@ -45,14 +48,18 @@ export function InstallationSection() {
           setSelectedConnection(automatic ?? '');
         }
       } catch {
-        if (active) setMachines([]);
+        if (active && current === request) setMachines([]);
       }
     };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 2_000);
+    const unsubscribe = eventStream.subscribe((event) => {
+      if (event.kind === 'local-machines-changed') void refresh();
+    });
+    const stopResume = eventStream.onResume(() => void refresh());
     return () => {
       active = false;
-      window.clearInterval(timer);
+      unsubscribe();
+      stopResume();
     };
   }, []);
 

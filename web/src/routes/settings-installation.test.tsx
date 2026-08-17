@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,14 +11,33 @@ vi.mock('../services/pwa-update', () => ({
 }));
 
 const localAccessMocks = vi.hoisted(() => ({ machines: vi.fn(), setEnabled: vi.fn() }));
+const eventMocks = vi.hoisted(() => ({
+  listeners: new Set<(event: { kind: string }) => void>(),
+  resumeListeners: new Set<() => void>(),
+}));
 
 vi.mock('../services/local-access', () => ({
   localAccessService: localAccessMocks,
 }));
 
+vi.mock('../services/events', () => ({
+  eventStream: {
+    subscribe: (listener: (event: { kind: string }) => void) => {
+      eventMocks.listeners.add(listener);
+      return () => eventMocks.listeners.delete(listener);
+    },
+    onResume: (listener: () => void) => {
+      eventMocks.resumeListeners.add(listener);
+      return () => eventMocks.resumeListeners.delete(listener);
+    },
+  },
+}));
+
 beforeEach(() => {
   window.history.replaceState({}, '', '/settings?section=installation');
   window.localStorage.clear();
+  eventMocks.listeners.clear();
+  eventMocks.resumeListeners.clear();
   localAccessMocks.machines.mockReset();
   localAccessMocks.setEnabled.mockReset();
   localAccessMocks.machines.mockResolvedValue({ machines: [] });
@@ -67,6 +86,26 @@ describe('Settings installation guide', () => {
     expect(localAccessMocks.setEnabled).toHaveBeenCalledWith('machine-m1', true);
     expect(window.localStorage.getItem('pop-agent.local-connection')).toBe('machine-m1');
     expect(toggle).toHaveProperty('checked', true);
+  });
+
+  it('refreshes computer access from the shared SSE stream without polling', async () => {
+    const machine = {
+      machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',
+      clientVersion: '0.2.35', enabled: false, connected: true,
+    };
+    localAccessMocks.machines
+      .mockResolvedValueOnce({ machines: [machine] })
+      .mockResolvedValue({ machines: [{ ...machine, enabled: true }] });
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+    const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
+    expect(toggle).toHaveProperty('checked', false);
+
+    await act(async () => {
+      for (const listener of eventMocks.listeners) listener({ kind: 'local-machines-changed' });
+    });
+
+    await waitFor(() => expect(toggle).toHaveProperty('checked', true));
+    expect(localAccessMocks.machines).toHaveBeenCalledTimes(2);
   });
 
   it('opens the browser-owned PWA installation prompt', async () => {
