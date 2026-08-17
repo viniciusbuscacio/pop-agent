@@ -13,6 +13,9 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   and detailed decision history is separate from current requirements. The old
   monolithic root specification was removed after every tracked reference and
   normative section was migrated; the gate now validates the specification set.
+  The General overview was then reconciled with the current code: it now maps
+  capabilities and state ownership, corrects runtime paths and removes obsolete
+  roadmap, multi-user and development-environment assumptions.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;

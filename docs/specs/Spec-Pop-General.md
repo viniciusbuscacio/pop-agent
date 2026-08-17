@@ -38,7 +38,7 @@ to silently choose one side.
 | §17 — CLI and operator CLI | [Spec-Pop-CLI.md](Spec-Pop-CLI.md) |
 | §17.1 — installed PWA and optional local access | [Spec-Pop-Local-Access.md](Spec-Pop-Local-Access.md) |
 | §18 — production exposure | [Spec-Pop-Deployment-and-Operations.md](Spec-Pop-Deployment-and-Operations.md) |
-| §§19–20 — roadmap and working conventions | this document |
+| §§19–20 — versioning and working conventions | this document |
 | §21 — background tasks and maintenance | [Spec-Pop-Background-Tasks.md](Spec-Pop-Background-Tasks.md) |
 | SSE and snapshot synchronization | [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md) |
 | UI design system | [Spec-Pop-Style-Guide.md](Spec-Pop-Style-Guide.md) |
@@ -52,70 +52,128 @@ to silently choose one side.
 - Volatile implementation detail should be derived from code where practical.
 - Research drafts, Obsidian notes and Files documents are not normative until
   their accepted decisions are incorporated into this set.
-- Historical entries are preserved as history, not left mixed into current rules.
+- Historical entries are preserved as history, not mixed into current rules.
+- `npm run specs:check` prevents a missing index entry, broken relative link,
+  non-normative subsystem spec or return of the removed monolithic file.
 
 ## High-value paths by task
 
-- HTTP contract: `shared/src`, application use case/port, `server/src/interface/http`, `web/src/services`.
-- Chat run: `server/src/application/chat`, `server/src/infrastructure/agent`, `docs/agent-flow.md`.
+- HTTP contract: `shared/src`, application use case/port,
+  `server/src/interface/http`, `web/src/services`.
+- Chat run: `server/src/application/chat`,
+  `server/src/infrastructure/agent`, `docs/agent-flow.md`.
 - Screen: `web/src/routes`, `web/src/services`, `web/src/store`, `web/src/ui`.
-- Persistent setting: application service/port, settings adapter, DTO, route and UI service.
-- Agent tool: application policy, infrastructure registration, safety classification and Plan Mode tests.
-- Installation/update: launcher/scripts, immutable artifacts, installation UI and platform tests.
+- Persistent setting: application service/port, settings adapter, DTO, route
+  and UI service.
+- Agent tool: application policy, infrastructure registration, safety
+  classification and Plan Mode tests.
+- Installation/update: launcher/scripts, immutable artifacts, installation UI
+  and platform tests.
 
 ## 1. What Pop Agent is
 
-- A self-hosted personal agent platform: clone from GitHub, deploy on a
-  VPS, and your personal agent is live — reachable from any browser as a
-  PWA (desktop and mobile).
-- **Single user per installation.** A second person runs a second instance
-  on another port. This is a permanent design constraint, not a v1 shortcut.
-- The engine is the **pi agent** (https://pi.dev), embedded in-process via
-  its TypeScript SDK. Pop Agent is the product around it: auth, chats, memory,
-  notes, skills, costs, backup, PWA.
-- License MIT. Repo private until the maintainer opens it. Repo is 100%
-  English — code, comments, tests, docs, UI strings, commits. npm package
-  name, if ever published: `pop-agent` (free on npm at the time of the rename;
-  the old `popy` was squatted).
-- **Zero telemetry, no phone-home** — declared in the README. The only
-  outbound traffic: LLM/provider calls and the opt-in update check.
+Pop Agent is a self-hosted personal agent platform. One installation belongs to
+one owner and is reachable through its server from browsers, an installed PWA
+and the terminal client.
+
+Permanent product rules:
+
+- **Single user per installation.** A second person runs a separate instance.
+  This is an architectural constraint, not a temporary v1 limitation.
+- **The brain stays on the server.** Pop Agent embeds pi in-process through its
+  TypeScript SDK. Providers, prompts, sessions, memory, policy, accounting and
+  product persistence remain server-side.
+- **Clients are views and optional hands.** The PWA and CLI present the product;
+  optional Pop Local Access lends explicitly selected local tools without
+  creating another agent.
+- **Self-hosted data ownership.** Product data remains on the owner's server
+  except for traffic required by features the owner invokes or configures.
+- **Zero telemetry and no analytics phone-home.** Outbound traffic is limited to
+  provider/OAuth calls, explicit web or MCP use, configured update/package
+  checks, push delivery and other user-requested integrations.
+- **Repository language is English.** Code, comments, tests, normative specs,
+  UI strings and commits are English. User content may use any language.
+- **MIT license.** The package/product name is `pop-agent`.
+
+## Core capabilities
+
+- Authenticated multi-device chat with durable history, streaming, queues,
+  steering, attachments, voice input and per-run usage.
+- Multiple model providers, subscription sign-in, custom compatible endpoints,
+  per-chat model selection and controlled failover.
+- Conversation search, semantic retrieval and a living user-memory document.
+- A shared Files tree, private Notes vault and local embeddings.
+- Built-in, personal and reviewed automatic skills selected locally per turn.
+- Server tools, web access, MCP tools and optional selected-computer tools.
+- Scheduled agent tasks and internal maintenance jobs.
+- PWA installation, terminal access, backups, update channels and recovery.
+- Authentication, passkeys, encrypted secrets, external-content taint and
+  enforced read-only Plan Mode.
+
+## System context
+
+```text
+Browser / installed PWA ── HTTP + SSE ──┐
+Pop CLI ──────────────── HTTP + SSE ────┼── Pop Agent server ── providers
+PLA tray / CLI ─────── WS or polling ───┘         │
+                                                   ├── SQLite product state
+                                                   ├── pi JSONL sessions
+                                                   ├── Files and Notes
+                                                   ├── Skills and embeddings
+                                                   └── update/backup state
+```
+
+HTTP carries commands and snapshots. The session-wide SSE stream carries chat
+streaming and state invalidations. PLA is a distinct authenticated channel
+between the server and an optional local runtime.
+
+## State ownership
+
+| State | Authority |
+|---|---|
+| Chats, messages, settings, tasks, usage and indexes | SQLite |
+| Exact execution context, branches and compaction | pi-owned JSONL sessions |
+| User-visible files | the plain `files/` directory |
+| Pop Agent's private Markdown notes | the `notes/` vault |
+| Built-in skill definitions | repository source |
+| Personal and automatic skills | the `skills/` vault plus SQLite metadata |
+| Live local-computer availability | the PLA connection registry |
+| Local-computer permission | persistent server policy, synchronized to PLA |
+| Theme, font and other device-scoped preferences | browser/device storage |
+| Current implementation behavior | code and tests |
+| Required product behavior | this modular specification set |
 
 ## 2. Stack
 
-- **Backend**: Node.js 22 LTS, TypeScript strict, pure ESM. HTTP: Hono.
-  Validation: Zod at the borders. Logs: pino (JSON in prod, pretty in dev;
-  never log message content in prod).
-- **Database**: SQLite via `better-sqlite3`, WAL mode, FTS5 in the same
-  file. Vectors are ordinary `BLOB` columns holding a `Float32Array`;
-  similarity is a dot product in JS over the loaded set. **`sqlite-vec` is
-  not a dependency and never was** — earlier versions of this spec promised
-  it, the plan-B authorized on 31/07 is what got built, and this line is the
-  correction (1.60). A single-user server has thousands of rows, not
-  millions, and brute force over them is milliseconds; adopting the
-  extension now would add a native dependency and a *second* vector search
-  beside the working one. Embeddings computed locally in-process:
-  `multilingual-e5-small` via transformers.js (ONNX, CPU, PT/EN).
-- **Frontend**: React 19 + TypeScript strict, Vite, Tailwind CSS v4 over
-  own CSS-var design tokens, react-router, Zustand (or
-  `useSyncExternalStore` stores). PWA via vite-plugin-pwa.
-- **Tests**: Vitest (+ Testing Library + happy-dom on web). Lint: ESLint 9
-  flat config. **Gate**: `npm run gate` = lint + typecheck + tests + build.
-  Nothing commits without a green gate.
-- **CI**: GitHub Actions runs gate + smoke (fake provider, zero tokens) on
-  every push to main, from the first skeleton commit.
+- **Runtime:** Node.js `>=22.19.0`, TypeScript strict and pure ESM.
+- **Agent engine:** `@earendil-works/pi-coding-agent` pinned exactly and loaded
+  through the infrastructure bridge.
+- **HTTP and validation:** Hono at the interface edge, Zod for product HTTP
+  payloads and TypeBox-compatible schemas for pi tools.
+- **Database:** SQLite through `better-sqlite3`, WAL and FTS5. Vectors are
+  `Float32Array` blobs compared in JavaScript; `sqlite-vec` is not used.
+- **Embeddings:** local multilingual E5 through Transformers.js/ONNX on CPU.
+- **Frontend:** React 19, React Router, Zustand, Vite, Tailwind CSS v4 over
+  semantic CSS variables, and `vite-plugin-pwa`.
+- **Native support:** small Go programs provide the stable `pop` launcher and
+  optional local-access tray; they do not contain the agent or web UI.
+- **Tests:** Vitest, Testing Library/happy-dom, Go tests, contract probes and an
+  end-to-end smoke server with a fake provider.
+- **CI:** GitHub Actions runs `npm ci` and the full gate on pushes to `main` and
+  pull requests.
 
-## 3. Repo layout (monorepo, npm workspaces)
+## 3. Repository layout and architecture
 
-```
+```text
 pop-agent/
-├── docs/specs/            # this modular normative specification set
+├── docs/specs/            # modular normative specification set
 ├── AGENTS.md              # agent entry point and repository quick facts
 ├── package.json           # workspaces: shared, server, web, cli
 ├── shared/src/            # pure DTO wire contract
 ├── server/src/
 │   ├── domain/            # entities, value objects and pure policy
-│   ├── application/       # use cases and ports
-│   ├── infrastructure/    # SQLite, pi, filesystems and provider adapters
+│   ├── application/       # use cases and application-owned ports
+│   ├── infrastructure/    # SQLite, pi, filesystem and provider adapters
 │   ├── interface/         # Hono routes, SSE and DTO mapping
 │   ├── architecture/      # enforced dependency-boundary tests
 │   └── main.ts            # composition root
@@ -126,101 +184,114 @@ pop-agent/
 └── tools/                 # generators, checks, packaging and smoke
 ```
 
-**The backend is 100% clean architecture** (aw's `internal/` layout ported:
-domain / application / dto / infrastructure / appcore → interface+main):
+The backend follows enforced clean architecture:
 
-- **Dependency rule**, enforced by `server/src/architecture/boundary.test.ts`
-  (runs in the gate; aw's `boundary_test.go` ported): `domain` imports
-  nothing; `application` imports only `domain`; `infrastructure` imports
-  `application` + `domain`; `interface` imports `application` + `domain` +
-  `shared`; `main.ts` wires everything. Any other cross-layer import fails
-  the gate.
-- **Inner layers are pure** (aw's second test): `domain`, `application` and
-  `shared` may use Node built-ins but NEVER third-party packages.
-  Exceptions only via an explicit allowlist in the boundary test, each with
-  a TODO — the aw shrinking-allowlist spirit.
-- **DTOs standardize everything that crosses the boundary**: `shared/` is
-  the DTO layer — plain types, zero dependencies (`StreamEvent`,
-  `ApiError`, request/response shapes). Domain objects never leave the
-  application layer; the interface layer validates inbound payloads with
-  Zod and maps use-case results to DTOs explicitly. Being a workspace
-  package, the same DTOs are consumed by `web/` — the frontend needs no
-  architecture of its own, just the wire contract.
-- Persistence is behind ports defined in `application/ports/`
-  (`ChatRepo`, `MemoryRepo`, `SkillRepo`…). SQLite is an adapter. A future
-  multi-user Postgres port = new adapter, not a rewrite. No ORM as an
-  abstraction bet; optionally Drizzle as a typed query builder inside the
-  adapter. FTS5/vec queries are raw SQL in the adapter, by design.
+- `domain` imports no product layer;
+- `application` depends inward on domain and owns ports;
+- `infrastructure` implements ports and may depend on application/domain;
+- `interface` owns transport validation and DTO mapping;
+- `main.ts` is the composition root;
+- `shared` contains dependency-free wire DTOs consumed by server, web and CLI;
+- domain objects never cross the HTTP/SSE boundary;
+- the architecture test enforces dependency direction and inner-layer purity.
 
-## 4. Runtime data (`POP_AGENT_DATA_DIR`, default `~/.pop-agent/`)
+Persistence ports isolate application policy from SQLite and make adapters
+replaceable and testable. They do not imply a multi-user product roadmap.
 
-```
+The PWA has a simpler boundary: components render and compose behavior;
+`web/src/services/` is the only door to HTTP, SSE and external browser
+integration. The UI design-system check prevents pages from creating a second
+control skin.
+
+The generated self-map derives package versions, source-layer counts, PWA routes
+and Settings sections from code. `npm run selfmap:check` prevents drift.
+
+## 4. Runtime data and workspace
+
+The default durable data root is `~/.pop-agent/`, owner-only and overrideable
+with `POP_AGENT_DATA_DIR`.
+
+```text
 ~/.pop-agent/
-├── pop-agent.db          # SQLite: product data (§6)
-├── secret.key       # 0600 — encrypts stored provider secrets; NEVER in backups
-├── sessions/        # pi's JSONL session files (pi-owned, never parsed by Pop Agent)
-├── attachments/     # uploaded files (metadata in DB)
-├── files/           # the user's Files: a plain folder tree, real names (§14)
-├── notes/           # Pop Agent's own markdown notes vault (§11)
-├── skills/          # user-added skills (§8)
-└── backups/         # tar.gz snapshots (§16)
+├── pop-agent.db           # SQLite product state
+├── secret.key             # local encryption/signing key, mode 0600
+├── sessions/              # pi-owned JSONL sessions
+├── files/                 # the user's Files tree
+├── notes/                 # private Markdown notes vault
+├── skills/                # personal and automatic skill vaults
+├── pi-runtime/            # validated isolated pi candidates and pointer
+├── pi-agent/              # pi runtime support state
+├── pi-auth.json           # pi-managed subscription credentials
+├── models/                # local embedding model cache
+└── voice-models/          # local transcription models
 ```
 
-- `.env`: `OPENROUTER_API_KEY` optional seed, `POP_AGENT_PORT` (default 8787),
-  `POP_AGENT_BIND` (default `127.0.0.1`), `POP_AGENT_DATA_DIR`, `POP_AGENT_WORKSPACE`,
-  `POP_AGENT_ENGINE` (`fake` | `pi`; `fake` is the scripted bridge used to build and
-  test the chat without spending tokens).
-  The session HMAC secret is **not** an environment variable: it is
-  generated at setup and kept in the encrypted `secrets` table (§9), so a
-  leaked backup -- which excludes `secret.key` -- cannot forge a token.
-- `POP_AGENT_WORKSPACE` (default `~/pop-agent-workspace/`): the single root directory
-  where the agent works; remote-coding repos are cloned as subfolders.
+Some small update/provider state files also live under the data root. Their
+adapters, not this overview, define exact volatile names.
+
+The default working root is `~/pop-agent-workspace/`, overrideable with
+`POP_AGENT_WORKSPACE`. It is intentionally separate from secrets and durable
+product internals. It contains cloned projects and scratch work, plus:
+
+```text
+pop-agent-workspace/
+├── Files -> ~/.pop-agent/files   # controlled symlink to the Files tab
+└── attachments/<chatId>/         # tool-readable message attachment copies
+```
+
+Backups default to `pop-backups/` beside the data directory, never inside the
+tree being archived. Backup policy and exact inclusion/exclusion rules live in
+`Spec-Pop-Memory-and-Storage.md`.
+
+Core environment settings:
+
+- `POP_AGENT_PORT` (default `8787`);
+- `POP_AGENT_BIND` (default `127.0.0.1`);
+- `POP_AGENT_DATA_DIR`;
+- `POP_AGENT_WORKSPACE`;
+- `POP_AGENT_ENGINE` (`pi` or the test-only `fake`).
+
+Provider secrets are not configuration-file defaults. The session signing
+secret is encrypted in SQLite; `secret.key` is excluded from backups so copied
+archives cannot forge or decrypt credentials by themselves.
 
 ## 19. Versioning and roadmap
 
-- Annotated semver tags (`v0.1.0`) + CHANGELOG.
-- **v0.1**: chat + streaming + auth + SQLite + memory + notes + web_fetch.
-- **v0.2**: voice, attachments, backup UI, Web Push, skills mini-RAG,
-  passkey/biometric unlock (§9).
-- Later: web_search, Playwright, Mermaid/KaTeX, custom themes, restore UI,
-  i18n PT-BR.
+- Root `VERSION` is the manually edited global product version and must agree
+  with package manifests, lockfile workspace entries and protocol metadata.
+- Pop Agent uses semantic versions and annotated release tags. Released bytes
+  are immutable; changed bytes require a new version and URL.
+- `CHANGELOG.md` records shipped changes. `History-Pop-Spec.md` preserves the
+  detailed migrated decision history without making superseded behavior current.
+- The product is pre-1.0 and may still make intentional compatibility changes,
+  but protocol breaks must update explicit minimum-version gates and migration
+  behavior.
+- Roadmap ideas belong in research/proposal documents until approved. The
+  normative General spec does not promise a fixed list of future features.
 
 ## 20. Working conventions
 
-- Flow: agent codes, gate green → conventional commit straight to main.
-  The maintainer tests visually; the agent tests through `/v1/ax` + smoke.
-  A dedicated home Linux box will serve as a real test server the agent
-  logs into (details when it's set up).
-- **Continuous execution (decided 31/07/2026)**: the remaining phases run
-  in sequence with **no manual acceptance between them**. The agent tests
-  each block itself — full gate plus a live check against the dev server
-  in the browser — and calls the maintainer once, at the end, with a
-  numeric summary and an iPhone checklist. Anything that can only be
-  validated on the device (passkey, push with the PWA closed, real-mic
-  recording, PWA reinstall) goes on that checklist, never blocks the flow.
-  Small product/technical decisions are the agent's to make: decide,
-  record here with a version bump, move on.
-- Scope evolves in batches of ~20 questions in the maintainer's notes
-  (Portuguese, outside the repo). When an answer signals a concept wasn't
-  clear, stop and explain before deciding.
-- **Dev happens on the test server, not on the maintainer's machines**:
-  the agent connects over SSH to `ubuntu-home` (Ubuntu Server 26.04, home
-  LAN / tailnet), codes in the clone at `~/dev/pop-agent`, runs the gate, the
-  dev server and the smoke there, and pushes to GitHub from there. The
-  Windows ThinkPad is only the terminal (and holds a read-only mirror
-  clone); the Mac has npm blocked by corporate policy. UI testing: the
-  agent drives a browser (Chrome DevTools) against the server's URL —
-  same interface the maintainer uses. Production target: any Linux with
-  systemd + Node 22 (`npm run build` + systemd unit example in repo).
-  Docker: maybe later, never required.
-- The test server runs the dev build under **systemd**
-  (`deploy/pop-agent-service.service`: sources through tsx, absolute `ExecStart`
-  because systemd's boot PATH is minimal), so the tailnet URL answers
-  after a reboot with nobody logged in. The production unit points at the
-  compiled `dist/` instead.
-- Gate order is lint → typecheck → **build** → test → smoke: the server
-  serves the built frontend, so both the tests and the smoke need it to
-  exist first.
-- Verify-at-coding list: pi RPC mode as crash-isolation plan B; SDK
-  per-session skill scoping (§8); pi's abort behavior on running bash
-  (§5); pi's native auto-compaction (§7); aw's voice-to-composer UX (§14).
+- Read the General index and relevant focused specs before architectural work;
+  inspect current code and tests before asserting implementation details.
+- Repository changes are English and limited to the requested concern.
+- Parallel or isolated work uses Git worktrees. Never overwrite unrelated work
+  found in `main`.
+- Before declaring code work complete: review the full related diff, run
+  `npm run gate`, commit only related files and verify final Git status.
+- The gate runs version consistency, pi patch validation, specification and
+  generated self-map checks, lint, typecheck, Go launcher/tray checks, build,
+  the complete test suite and smoke.
+- Runtime changes are not deployed merely because they compiled. Activate the
+  committed checkout through the appropriate service/update path, then verify
+  health, running commit/version and repository status.
+- After a timeout, restart or resumed conversation, inspect the real repository,
+  service and process state before claiming that a gate, commit or deployment
+  completed.
+- Device-only behavior—installed PWA lifecycle, passkeys, push with the app
+  closed, microphone capture and platform-native tray/install behavior—receives
+  an explicit device checklist after automated coverage.
+- Small implementation choices may be made within approved scope; product,
+  security or architectural changes require the owner's explicit decision and
+  an update to the relevant normative specification.
+- Historical plans and research remain useful evidence but do not override the
+  current modular specification set.
