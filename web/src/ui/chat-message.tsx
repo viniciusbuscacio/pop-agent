@@ -59,11 +59,17 @@ function ChatMessageView({
     return (
       <div
         data-testid="message-system"
-        className={`flex min-w-0 flex-wrap items-center justify-center gap-2 text-center text-xs ${
-          systemTone === 'info' ? 'text-[var(--muted)]' : 'text-[var(--danger)]'
+        className={`flex min-w-0 items-center justify-center gap-3 text-center text-xs ${
+          systemTone === 'info' ? 'w-full text-[var(--muted)]' : 'flex-wrap text-[var(--danger)]'
         }`}
       >
+        {systemTone === 'info' ? (
+          <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
+        ) : null}
         <span className="[overflow-wrap:anywhere]">{message.content}</span>
+        {systemTone === 'info' ? (
+          <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
+        ) : null}
         {onResend === undefined ? null : (
           <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
             <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>

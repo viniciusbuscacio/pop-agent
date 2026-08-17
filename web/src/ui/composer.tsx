@@ -33,6 +33,7 @@ const MAX_ATTACHMENTS = 8;
 export function Composer({
   chatId,
   busy,
+  locked = false,
   editRequest,
   onSend,
   onUpdateQueued,
@@ -54,6 +55,7 @@ export function Composer({
 }: {
   chatId: string;
   busy: boolean;
+  locked?: boolean;
   editRequest?: QueuedMessageDTO;
   onSend: (
     text: string,
@@ -397,6 +399,7 @@ export function Composer({
     text.trim().length > 0 || attachments.length > 0 || voice !== 'idle';
 
   async function submit(): Promise<void> {
+    if (locked) return;
     // Send while talking means "stop, transcribe and send" (aw's errand).
     if (voice === 'recording') {
       autoSendRef.current = true;
@@ -534,11 +537,13 @@ export function Composer({
   return (
     <div
       data-testid="composer"
-      className="min-w-0 overflow-x-clip border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      aria-busy={locked}
+      inert={locked}
+      className={`min-w-0 overflow-x-clip border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${locked ? 'pointer-events-none opacity-60' : ''}`}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
-        addFiles(event.dataTransfer.files);
+        if (!locked) addFiles(event.dataTransfer.files);
       }}
     >
       {notice !== undefined ? (
@@ -646,6 +651,7 @@ export function Composer({
             data-testid="composer-input"
             rows={1}
             value={text}
+            disabled={locked}
             onChange={(event) => {
               persist(event.target.value);
               updateMention(event.target.value, event.target.selectionStart ?? event.target.value.length);

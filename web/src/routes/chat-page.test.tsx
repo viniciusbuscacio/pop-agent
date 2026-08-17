@@ -36,12 +36,15 @@ vi.mock('../ui/composer', () => ({
     onSend,
     onShowSystemMessage,
     onCommand,
+    locked,
   }: {
     onSend: (text: string, attachments: []) => Promise<void>;
     onShowSystemMessage: (message: string) => void;
     onCommand: (command: 'compact', argument: string) => Promise<void>;
+    locked?: boolean;
   }) => (
     <>
+      <output data-testid="composer-locked">{locked ? 'locked' : 'unlocked'}</output>
       <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
         Send
       </button>
@@ -171,9 +174,11 @@ describe('chat transcript', () => {
     expect(progress.textContent).toContain('Compacting context…');
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBeNull();
     expect(screen.getByTestId('run-status-slot').contains(progress)).toBe(true);
+    expect(screen.getByTestId('composer-locked').textContent).toBe('locked');
 
     finish({ kind: 'compact', message: 'Context compacted.' });
     await waitFor(() => expect(screen.queryByTestId('compact-progress')).toBeNull());
+    expect(screen.getByTestId('composer-locked').textContent).toBe('unlocked');
     expect(chatMessageRender).toHaveBeenLastCalledWith(
       expect.objectContaining({ role: 'system', content: 'Context compacted.' }),
     );

@@ -52,7 +52,7 @@ describe('horizontal overflow containment', () => {
 });
 
 describe('system messages', () => {
-  it('renders local informational output as quiet transcript text', () => {
+  it('renders local informational output as a quiet timeline event', () => {
     render(
       <ChatMessage
         systemTone="info"
@@ -61,8 +61,10 @@ describe('system messages', () => {
     );
 
     const message = screen.getByTestId('message-system');
+    expect(message.className).toContain('w-full');
     expect(message.className).toContain('text-[var(--muted)]');
     expect(message.className).not.toContain('text-[var(--danger)]');
+    expect(message.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
   });
 });
 

@@ -24,6 +24,7 @@ function renderComposer(
     currentProviderLabel?: string;
     currentModel?: string;
     models?: ModelChoice[];
+    locked?: boolean;
   } = {},
 ) {
   const onSend = vi.fn().mockResolvedValue(undefined);
@@ -65,6 +66,17 @@ afterEach(() => {
 });
 
 describe('pending message composition', () => {
+  it('locks the whole composer while a session operation is running', () => {
+    renderComposer({ locked: true });
+
+    const composer = screen.getByTestId('composer');
+    const area = screen.getByTestId('composer-input');
+    expect(composer.getAttribute('aria-busy')).toBe('true');
+    expect(composer.hasAttribute('inert')).toBe(true);
+    expect(composer.className).toContain('pointer-events-none');
+    expect(area).toHaveProperty('disabled', true);
+  });
+
   it('contains horizontal overflow without clipping the model menu above the composer', () => {
     renderComposer();
 

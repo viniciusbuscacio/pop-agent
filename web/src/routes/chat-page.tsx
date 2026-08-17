@@ -479,6 +479,7 @@ export function ChatPage() {
       <Composer
         chatId={chatId}
         busy={live !== undefined}
+        locked={compacting}
         {...(editRequest === undefined ? {} : { editRequest })}
         onSend={(text, attachments, filePaths, delivery, executionMode) => {
           // Sending is an explicit return to the live conversation. Re-arm
