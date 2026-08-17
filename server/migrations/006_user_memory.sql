@@ -1,4 +1,4 @@
--- The living user-memory document (pop-agent.spec §7, §6).
+-- The living user-memory document (docs/specs/Spec-Pop-General.md §7, §6).
 --
 -- One row, ever: a single markdown document the agent keeps about the user,
 -- plus a one-level backup so a bad edit (or an over-eager condensation) can be

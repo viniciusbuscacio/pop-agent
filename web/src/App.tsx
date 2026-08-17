@@ -23,7 +23,7 @@ import { ConnectionBanner } from './ui/connection-banner';
 import { Toasts } from './ui/toasts';
 
 /**
- * Boot decides the screen (pop-agent.spec §9): a server with no account goes to the
+ * Boot decides the screen (docs/specs/Spec-Pop-General.md §9): a server with no account goes to the
  * wizard, a device with no token goes to login, anything else is the app.
  */
 export function App() {

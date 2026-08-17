@@ -1,4 +1,4 @@
--- How often each skill actually earns its slot (pop-agent.spec §8, §6 do plano).
+-- How often each skill actually earns its slot (docs/specs/Spec-Pop-General.md §8, §6 do plano).
 --
 -- The router writes here every time it injects a skill. The counter is what
 -- the garbage collector will read when there are more auto-skills than the cap

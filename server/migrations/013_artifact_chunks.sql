@@ -1,4 +1,4 @@
--- Semantic index over the user's files (pop-agent.spec §7/§14, decision of 31/07):
+-- Semantic index over the user's files (docs/specs/Spec-Pop-General.md §7/§14, decision of 31/07):
 -- extracted text, chunked, one embedding per chunk, so the agent can learn
 -- from what lives in Files. Same shape as message_embeddings: a Float32Array
 -- BLOB and a brute-force cosine in JS -- one user's files are thousands of

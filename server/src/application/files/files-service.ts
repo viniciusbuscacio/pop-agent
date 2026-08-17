@@ -13,7 +13,7 @@ import { cleanRelative, isHiddenPath, resolveInFiles } from '../../domain/files/
 import type { Clock } from '../ports/clock.js';
 
 /**
- * Files as a plain folder (pop-agent.spec §14, "Files as a plain folder").
+ * Files as a plain folder (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder").
  *
  * `POP_AGENT_DATA_DIR/files/` is the single source of truth: real names, real
  * subfolders, no catalog. This service is the one place that touches the tree

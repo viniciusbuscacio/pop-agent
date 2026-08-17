@@ -1,4 +1,4 @@
--- Web Push subscriptions (pop-agent.spec §14).
+-- Web Push subscriptions (docs/specs/Spec-Pop-General.md §14).
 --
 -- One row per browser that opted in. The endpoint is the unique id the push
 -- service gave the browser; the keys let us encrypt a payload only that

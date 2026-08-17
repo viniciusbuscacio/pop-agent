@@ -1,5 +1,5 @@
 /**
- * Persistence for registered passkeys (pop-agent.spec §9). One account, many
+ * Persistence for registered passkeys (docs/specs/Spec-Pop-General.md §9). One account, many
  * authenticators.
  */
 export interface WebAuthnCredential {
@@ -19,7 +19,7 @@ export interface WebAuthnRepo {
 }
 
 /**
- * The WebAuthn ceremony as the routes see it (pop-agent.spec §9). Options and
+ * The WebAuthn ceremony as the routes see it (docs/specs/Spec-Pop-General.md §9). Options and
  * responses cross as opaque JSON so this port stays free of the library's
  * types -- the interface layer just relays them between the browser and the
  * adapter in infrastructure.

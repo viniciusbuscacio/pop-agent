@@ -2,7 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
 /**
- * A guarded fetch for the agent's web_fetch tool (pop-agent.spec §12). Only http
+ * A guarded fetch for the agent's web_fetch tool (docs/specs/Spec-Pop-General.md §12). Only http
  * and https, only public hosts, capped and timed out, and the readable text
  * pulled out of the HTML. SSRF is the real risk: the hostname is resolved and
  * every returned address checked against the private ranges before a

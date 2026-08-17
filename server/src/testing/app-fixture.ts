@@ -137,7 +137,7 @@ export class RefusingGateway implements ProviderGateway {
 }
 
 /**
- * The engine's subscription-auth surface, scripted (pop-agent.spec §15). The
+ * The engine's subscription-auth surface, scripted (docs/specs/Spec-Pop-General.md §15). The
  * default login shows one URL, asks for one code and accepts only
  * "good-code" -- enough to walk the whole wire without pi or a browser.
  */
@@ -178,7 +178,7 @@ export interface TestApp {
   controlLog: string[];
   auth: AuthService;
   chats: ChatService;
-  /** The user's Files over a throwaway tree (pop-agent.spec §14). */
+  /** The user's Files over a throwaway tree (docs/specs/Spec-Pop-General.md §14). */
   files: FilesService;
   runs: RunService;
   queuedMessages: QueuedMessageService;
@@ -219,7 +219,7 @@ export interface TestAppOptions {
   transcriber?: FakeTranscriber;
   /** Swap in a pre-seeded subscription-auth fake to test the oauth routes. */
   providerAuth?: FakeProviderAuth;
-  /** Drive the task scheduler's tick by hand (pop-agent.spec §21). */
+  /** Drive the task scheduler's tick by hand (docs/specs/Spec-Pop-General.md §21). */
   timer?: Timer;
   /** Replace the official MCP transport with a deterministic contract fake. */
   mcpClients?: McpClientFactory;
@@ -302,7 +302,7 @@ export function createTestApp(
   });
 
   const settings = new SettingsService(settingsRepo);
-  // Files as a plain folder (pop-agent.spec §14): a real service over a throwaway
+  // Files as a plain folder (docs/specs/Spec-Pop-General.md §14): a real service over a throwaway
   // tree, exactly as main.ts wires it.
   const files = new FilesService({
     root: mkdtempSync(join(tmpdir(), 'pop-test-files-')),
@@ -353,7 +353,7 @@ export function createTestApp(
   });
   queueDrain.service = queuedMessages;
 
-  // Wired exactly the way main.ts wires it (pop-agent.spec §6): a delete stops the
+  // Wired exactly the way main.ts wires it (docs/specs/Spec-Pop-General.md §6): a delete stops the
   // chat's work first, then purges what it left in the workspace. The
   // workspace is a throwaway directory, so a test can look at it.
   const workspace = mkdtempSync(join(tmpdir(), 'pop-test-workspace-'));
@@ -373,7 +373,7 @@ export function createTestApp(
     purger: new FsChatPurger({ workspace, forgetSession: () => undefined }),
   });
 
-  // Background tasks (pop-agent.spec §21). The timer is inert: nothing ticks by
+  // Background tasks (docs/specs/Spec-Pop-General.md §21). The timer is inert: nothing ticks by
   // itself in a test, and `run-now` drives the queue directly.
   const taskRepo = new SqliteTaskRepo(db);
   const tasks = new TaskService({ tasks: taskRepo, clock });

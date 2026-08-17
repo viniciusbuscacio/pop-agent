@@ -4,7 +4,7 @@ import type { ChatRepo } from '../ports/chat-repo.js';
 import type { EventSink } from '../ports/event-sink.js';
 
 /**
- * Titles and summaries written by the service model (pop-agent.spec §14-§15).
+ * Titles and summaries written by the service model (docs/specs/Spec-Pop-General.md §14-§15).
  * A chat keeps its deterministic "Chat N" starter through the first two user
  * turns. Once the third run finishes, one background completion names the
  * conversation and writes the summary Phase 4's memory will read.
@@ -36,7 +36,7 @@ export interface TitleServiceDeps {
   chats: ChatRepo;
   /**
    * One background completion, on whatever provider serves this chat
-   * (pop-agent.spec §15, corrected 07/08). A title used to be hard-wired to
+   * (docs/specs/Spec-Pop-General.md §15, corrected 07/08). A title used to be hard-wired to
    * OpenRouter and a global model id -- so a chat running on Maritaca had its
    * title written by a model that lived somewhere else entirely, if the id
    * existed at all. The provider is now inherited from the chat, and the model

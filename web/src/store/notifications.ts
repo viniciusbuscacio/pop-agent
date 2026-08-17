@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /**
- * In-app notifications (pop-agent.spec §14) -- the small "this just happened"
+ * In-app notifications (docs/specs/Spec-Pop-General.md §14) -- the small "this just happened"
  * messages the app shows itself, nothing to do with the operating system's
  * notifications. The update prompt set the shape; this is the general channel,
  * and the thinking toggle is its first caller.

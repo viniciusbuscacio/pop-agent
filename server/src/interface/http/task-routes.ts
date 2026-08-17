@@ -8,7 +8,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Background tasks over HTTP (pop-agent.spec §21). CRUD, the enabled switch, and
+ * Background tasks over HTTP (docs/specs/Spec-Pop-General.md §21). CRUD, the enabled switch, and
  * "run now" -- which queues rather than runs inline, so the request answers
  * at once and the run itself takes as long as it takes.
  */

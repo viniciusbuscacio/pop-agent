@@ -8,7 +8,7 @@ import type { RunService } from '../chat/run-service.js';
 
 /**
  * The one clock in the process that makes things happen on their own
- * (pop-agent.spec §21).
+ * (docs/specs/Spec-Pop-General.md §21).
  *
  * Every tick it asks the repository what is due, appends those tasks to a
  * queue, and works the queue **one at a time**. Serialised on purpose: a task
@@ -39,7 +39,7 @@ export interface TaskSchedulerDeps {
   timer: Timer;
   /** Overridable so a test does not wait thirty real seconds. */
   tickMs?: number;
-  /** Internal housekeeping, invisible to the user (pop-agent.spec §21). */
+  /** Internal housekeeping, invisible to the user (docs/specs/Spec-Pop-General.md §21). */
   jobs?: MaintenanceJob[];
   /** One line per finished run; main.ts sends it to the journal. */
   onJournal?: (line: string) => void;

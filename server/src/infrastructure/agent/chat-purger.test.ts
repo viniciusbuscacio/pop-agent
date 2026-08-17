@@ -47,7 +47,7 @@ describe('FsChatPurger', () => {
     const jsonl = join(sessions, 'session.jsonl');
     const sidecar = join(sessions, 'session');
     const attachments = join(workspace, 'attachments', CHAT);
-    // The user's Files must survive a chat deletion (pop-agent.spec §14).
+    // The user's Files must survive a chat deletion (docs/specs/Spec-Pop-General.md §14).
     const filesDir = join(root, 'files');
     writeFileSync(jsonl, '{}');
     mkdirSync(sidecar, { recursive: true });

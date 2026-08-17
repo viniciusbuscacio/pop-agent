@@ -429,7 +429,7 @@ function InstructionsSection() {
 }
 
 /**
- * The living document Pop Agent keeps about the user (pop-agent.spec §7). The agent
+ * The living document Pop Agent keeps about the user (docs/specs/Spec-Pop-General.md §7). The agent
  * writes it through its tools; here the user can read, edit, and restore the
  * one-level backup.
  */
@@ -506,7 +506,7 @@ function MemorySection() {
   );
 }
 
-/** Passkey / Face ID setup and management (pop-agent.spec §9). */
+/** Passkey / Face ID setup and management (docs/specs/Spec-Pop-General.md §9). */
 function PasskeyControls() {
   const [supported] = useState(() => passkeyService.supported());
   const [credentials, setCredentials] = useState<{ id: string; label: string }[]>([]);
@@ -576,7 +576,7 @@ function PasskeyControls() {
   );
 }
 
-/** Backup and restore (pop-agent.spec §16). */
+/** Backup and restore (docs/specs/Spec-Pop-General.md §16). */
 function BackupSection() {
   const [backups, setBackups] = useState<import('@pop-agent/shared').BackupDTO[]>([]);
   const [busy, setBusy] = useState(false);
@@ -683,7 +683,7 @@ function BackupSection() {
 }
 
 /**
- * Where the disk went (pop-agent.spec §14). Measurement before any quota: a limit
+ * Where the disk went (docs/specs/Spec-Pop-General.md §14). Measurement before any quota: a limit
  * chosen without this screen is a guess, and the guess is usually wrong about
  * which line is the expensive one. Sorted heaviest first for the same reason
  * -- the answer to "what is eating my disk" should be the first row, not
@@ -784,7 +784,7 @@ function Stat({ label, value, testId }: { label: string; value: string; testId?:
 }
 
 /**
- * Skills management (pop-agent.spec §8). A list, and a full-screen editor when you
+ * Skills management (docs/specs/Spec-Pop-General.md §8). A list, and a full-screen editor when you
  * create or edit one -- never a side drawer (permanent house veto). Built-in
  * skills can be edited but not deleted.
  */
@@ -943,7 +943,7 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
 };
 
 /**
- * The providers and the models (pop-agent.spec §15). One card picks the global
+ * The providers and the models (docs/specs/Spec-Pop-General.md §15). One card picks the global
  * default pair; below it, one card per provider carries its write-only key,
  * its key test and its default model. Provider is data: the list comes from
  * GET /v1/providers, never hardcoded here.
@@ -951,7 +951,7 @@ const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> =
 /**
  * Where the model catalogue came from -- live, cached, or the engine's offline
  * list. It used to also carry the global Service Model picker; that moved onto
- * each provider's own card on 07/08 (pop-agent.spec §15), because one model id
+ * each provider's own card on 07/08 (docs/specs/Spec-Pop-General.md §15), because one model id
  * cannot be right for every provider at once. What is left is the diagnosis.
  */
 function CatalogSourceCard() {
@@ -997,7 +997,7 @@ function AudioSection() {
 }
 
 /**
- * The optional LLM pass over a raw transcript (pop-agent.spec §14). Off by default
+ * The optional LLM pass over a raw transcript (docs/specs/Spec-Pop-General.md §14). Off by default
  * (decision of 31/07): the raw text lands in the composer in whisper time;
  * turning this on trades ~10s+ per note for punctuation fixes.
  */
@@ -1095,7 +1095,7 @@ function VoiceCleanupCard() {
   );
 }
 
-/** The whisper model for voice transcription (pop-agent.spec §14). */
+/** The whisper model for voice transcription (docs/specs/Spec-Pop-General.md §14). */
 function VoiceModelCard() {
   const [status, setStatus] = useState<VoiceModelStatus[]>([]);
   const [selected, setSelected] = useState('');
@@ -1208,7 +1208,7 @@ function FontSizeCard() {
 }
 
 /**
- * How the installed PWA notices a new build (pop-agent.spec §15). Device-scoped
+ * How the installed PWA notices a new build (docs/specs/Spec-Pop-General.md §15). Device-scoped
  * like the theme and notifications: the interval lives in localStorage and
  * never reaches the server. "Check now" asks the service worker immediately.
  */
@@ -1323,7 +1323,7 @@ function idleLabel(minutes: number): string {
     : t('settings.updates.minutesInactive', { count: minutes });
 }
 
-/** Web Push opt-in (pop-agent.spec §14). Device-scoped, like the theme. */
+/** Web Push opt-in (docs/specs/Spec-Pop-General.md §14). Device-scoped, like the theme. */
 function NotificationsSection() {
   const [supported] = useState(() => pushService.supported());
   const [subscribed, setSubscribed] = useState(false);
@@ -1519,7 +1519,7 @@ function SecuritySection() {
 }
 
 /**
- * Settings → Updates (pop-agent.spec §15): device and server first, with the
+ * Settings → Updates (docs/specs/Spec-Pop-General.md §15): device and server first, with the
  * AI runtime behind an advanced disclosure. The shell still fetches/builds
  * commits; once a clean committed checkout differs
  * from the boot commit, this screen can drain work and hand activation to the

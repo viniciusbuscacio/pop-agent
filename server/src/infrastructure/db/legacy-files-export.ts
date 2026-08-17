@@ -6,7 +6,7 @@ import type { FileProvenanceRepo } from '../../application/ports/file-provenance
 
 /**
  * The one-time walk from the artifact catalog to the plain Files folder
- * (pop-agent.spec §14, spec 1.58 migration note).
+ * (docs/specs/Spec-Pop-General.md §14, spec 1.58 migration note).
  *
  * Reading happens BEFORE the migrations run -- migration 027 drops the very
  * tables this reads -- so bootstrap calls {@link readLegacyCatalog} on the

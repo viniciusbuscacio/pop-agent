@@ -55,7 +55,7 @@ export default defineConfig({
         // reload races activation (the press-Reload-twice bug). Safe under
         // 'prompt': activation itself still waits for the user's consent.
         clientsClaim: true,
-        // Adds the Web Push handlers (pop-agent.spec §14) to the generated worker.
+        // Adds the Web Push handlers (docs/specs/Spec-Pop-General.md §14) to the generated worker.
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
         // APIs, health checks and signed file views are never the app shell.

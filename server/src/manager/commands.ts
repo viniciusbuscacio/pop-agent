@@ -1,5 +1,5 @@
 /**
- * `popman` — the operator's tool (docs/cli.md, Naming; pop-agent.spec §17).
+ * `popman` — the operator's tool (docs/cli.md, Naming; docs/specs/Spec-Pop-General.md §17).
  *
  * The split from `pop` is not cosmetic. Keeping them one command would drag
  * `better-sqlite3`, `argon2` and code that knows where `secret.key` lives onto
@@ -149,9 +149,9 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
     }
 
     case 'access-list':
-      // Named in pop-agent.spec §18 and not built: there is no IP access list to
+      // Named in docs/specs/Spec-Pop-General.md §18 and not built: there is no IP access list to
       // manage yet. Saying so beats a command that appears to work.
-      deps.err('Not built yet: Pop Agent has no IP access list (pop-agent.spec §18).');
+      deps.err('Not built yet: Pop Agent has no IP access list (docs/specs/Spec-Pop-General.md §18).');
       return 1;
 
     default:

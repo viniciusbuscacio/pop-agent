@@ -7,7 +7,7 @@ import type {
 } from '../../application/ports/disk-usage.js';
 
 /**
- * Measuring directories with the real filesystem (pop-agent.spec §14).
+ * Measuring directories with the real filesystem (docs/specs/Spec-Pop-General.md §14).
  *
  * Everything here answers instead of throwing. This report is read on a
  * Settings screen, and a directory that does not exist yet -- no backup ever

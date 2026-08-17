@@ -1,5 +1,5 @@
 /**
- * A repeating timer as a dependency (pop-agent.spec §21), for the same reason the
+ * A repeating timer as a dependency (docs/specs/Spec-Pop-General.md §21), for the same reason the
  * clock is one: a test that had to wait thirty real seconds for a tick would
  * be a test nobody runs. The scheduler asks this port to call it back; the
  * unit tests hand it a fake and pull the trigger themselves.

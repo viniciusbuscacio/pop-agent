@@ -1,7 +1,7 @@
 import { SELF_MAP } from './self-map.generated.js';
 
 /**
- * The skills Pop Agent ships with (pop-agent.spec §8). Deliberately short and practical:
+ * The skills Pop Agent ships with (docs/specs/Spec-Pop-General.md §8). Deliberately short and practical:
  * each one is know-how the model does not reliably have about *this* install,
  * routed in only when the request calls for it. The first, pop-agent-manual, is
  * how Pop Agent explains and diagnoses itself -- it ships pinned, because identity
@@ -93,10 +93,9 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
       '- Your server runs from a clone of the pop repo on this machine. Find',
       '  it with bash (`readlink /proc/$(pgrep -f pop)/cwd` on Linux) or ask',
       '  the user where it lives.',
-      '- `pop-agent.spec` at the repo root is the single source of truth for design',
-      '  decisions. Read it before proposing architectural changes.',
-      '- Internal subsystem specifications live under `docs/specs/`. Start with',
-      '  `docs/specs/Spec-Pop-General.md`: it tells you which focused spec to read.',
+      '- The normative modular specification lives under `docs/specs/`. Start with',
+      '  `docs/specs/Spec-Pop-General.md`: it tells you which focused spec to read',
+      '  before proposing architectural changes.',
       '  Load only the specs relevant to the request, then inspect current code and',
       '  tests before changing or asserting implementation details.',
       '',

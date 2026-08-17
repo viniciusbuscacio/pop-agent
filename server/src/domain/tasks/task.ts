@@ -1,5 +1,5 @@
 /**
- * A background task (pop-agent.spec §21): a prompt with a schedule.
+ * A background task (docs/specs/Spec-Pop-General.md §21): a prompt with a schedule.
  *
  * Two kinds and no more, because a cron expression is a language and this is a
  * personal agent: `once` runs at the next tick and switches itself off,
@@ -21,7 +21,7 @@ export interface Task {
   nextRunAt?: number;
   enabled: boolean;
   /**
-   * Whether a finished run pushes a notification (pop-agent.spec §14). On by
+   * Whether a finished run pushes a notification (docs/specs/Spec-Pop-General.md §14). On by
    * default, because a task the user asked for is news -- but a task running
    * every ten minutes is a phone buzzing every ten minutes, and the switch is
    * the difference between a useful schedule and one the user turns off.

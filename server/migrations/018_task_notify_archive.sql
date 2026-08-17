@@ -1,4 +1,4 @@
--- Two per-task switches (pop-agent.spec §21).
+-- Two per-task switches (docs/specs/Spec-Pop-General.md §21).
 --
 -- `notify_on_finish` defaults to 1 because that is what every task did before
 -- this column existed, and a task the user asked for is news. It exists at all

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `popman`'s composition root (docs/cli.md, Naming; pop-agent.spec §17).
+ * `popman`'s composition root (docs/cli.md, Naming; docs/specs/Spec-Pop-General.md §17).
  *
  * The wiring only: systemd through `systemctl`, the backups through the same
  * service the HTTP routes use, the password through the same `AuthService`.

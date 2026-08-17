@@ -26,7 +26,7 @@ export function matchesSourceFilter(skill: SkillDTO, filter: SkillSourceFilter):
 /**
  * Skills, shared between the sidebar list and the right-hand editor pane so a
  * save or a delete on one side shows on the other at once -- the same shape as
- * the files store, for the same explorer layout (pop-agent.spec §8, §14).
+ * the files store, for the same explorer layout (docs/specs/Spec-Pop-General.md §8, §14).
  */
 interface SkillsState {
   skills: SkillDTO[] | undefined;

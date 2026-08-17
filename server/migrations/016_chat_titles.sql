@@ -1,4 +1,4 @@
--- Forensic history of every title a chat ever had (pop-agent.spec §14, aw's
+-- Forensic history of every title a chat ever had (docs/specs/Spec-Pop-General.md §14, aw's
 -- append-only chat_titles ported): who named it (auto|manual), at which user
 -- turn, and when. Cheap to keep, priceless when asking "why is this chat
 -- called that?".

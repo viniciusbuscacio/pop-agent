@@ -1,7 +1,7 @@
 import { extname } from 'node:path';
 
 /**
- * MIME from the file name (pop-agent.spec §14): with Files as a plain folder the
+ * MIME from the file name (docs/specs/Spec-Pop-General.md §14): with Files as a plain folder the
  * extension is the only witness of type -- there is no catalog row to ask.
  * Unknown extensions download as octet-stream, which every browser saves.
  */

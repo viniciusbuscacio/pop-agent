@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WorkspaceSweeper } from './workspace-sweeper.js';
 
 /**
- * The orphan sweep (pop-agent.spec §21). Most of what this asserts is what the
+ * The orphan sweep (docs/specs/Spec-Pop-General.md §21). Most of what this asserts is what the
  * sweep must NOT touch: a conservative job that deleted one file too many
  * would be worse than no job at all.
  */

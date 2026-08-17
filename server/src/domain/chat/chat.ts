@@ -1,5 +1,5 @@
 /**
- * The chat entities (pop-agent.spec §6). Plain data owned by the domain: the
+ * The chat entities (docs/specs/Spec-Pop-General.md §6). Plain data owned by the domain: the
  * application layer works with these, and the interface layer maps them to the
  * wire DTOs, so renaming a field here never silently reshapes the API.
  */
@@ -10,7 +10,7 @@ export interface Chat {
   /** Model id chosen for this conversation; empty means "the default". */
   model: string;
   /**
-   * Provider half of the model identity pair (pop-agent.spec §15); empty means
+   * Provider half of the model identity pair (docs/specs/Spec-Pop-General.md §15); empty means
    * "the default provider". Meaningful whenever `model` is.
    */
   provider: string;
@@ -49,7 +49,7 @@ export interface ToolRecord {
 }
 
 /**
- * A file sent with a message (pop-agent.spec §6, aw's shape). The data URI is the
+ * A file sent with a message (docs/specs/Spec-Pop-General.md §6, aw's shape). The data URI is the
  * payload itself -- stored with the message, rendered from there, and written
  * into the agent's workspace so its tools can open the file.
  */
@@ -88,7 +88,7 @@ export interface Message {
   /** Typed UI detail for system messages; their content remains readable without it. */
   notice?: SystemNotice;
   /**
-   * Which client the user sent this from (pop-agent.spec §13). Absent on every
+   * Which client the user sent this from (docs/specs/Spec-Pop-General.md §13). Absent on every
    * assistant and system message -- those are born on the server -- and on
    * anything written before the field existed, where a value would be a guess
    * recorded as a fact.

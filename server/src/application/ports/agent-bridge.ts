@@ -16,7 +16,7 @@ export type AgentEvent =
   /**
    * `status` is the HTTP status of the provider's refusal, when the adapter
    * could tell -- it is what lets failover classify by type instead of prose
-   * (pop-agent.spec §15, fase 2).
+   * (docs/specs/Spec-Pop-General.md §15, fase 2).
    */
   | { kind: 'error'; code: string; status?: number };
 
@@ -40,7 +40,7 @@ export interface AgentRunRequest {
   chatId: string;
   prompt: string;
   model: string;
-  /** Provider half of the pair (pop-agent.spec §15); empty means the default. */
+  /** Provider half of the pair (docs/specs/Spec-Pop-General.md §15); empty means the default. */
   provider?: string;
   /** Files sent with the message; the adapter decides how the model sees them. */
   attachments: Attachment[];
@@ -56,7 +56,7 @@ export interface AgentRunRequest {
   /** Called once the adapter can accept steering for this exact live run. */
   onControlReady?: (control: AgentRunControl) => void;
   /**
-   * Asks the user to allow a risky action mid-run (pop-agent.spec §10). Resolves
+   * Asks the user to allow a risky action mid-run (docs/specs/Spec-Pop-General.md §10). Resolves
    * true to proceed, false to block. Absent means "no one is watching" -- the
    * adapter must treat that as a denial, never a silent yes.
    */
@@ -95,7 +95,7 @@ export interface AgentBridge {
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(providerId?: string): Promise<ModelInfo[]>;
   /**
-   * Hard-forgets a chat's session (pop-agent.spec §15, fase 2): the run
+   * Hard-forgets a chat's session (docs/specs/Spec-Pop-General.md §15, fase 2): the run
    * service calls this when it gives up on an attempt, so a bridge that keeps
    * running in the background can never be re-prompted into a shared context.
    */
@@ -123,7 +123,7 @@ export interface EngineCompletionRequest {
 }
 
 /**
- * A question the engine's login flow asks the user (pop-agent.spec §15). These are
+ * A question the engine's login flow asks the user (docs/specs/Spec-Pop-General.md §15). These are
  * the port's own structural types -- the engine's SDK has equivalents, but
  * the application layer must not know that.
  */
@@ -172,7 +172,7 @@ export interface ProviderSubscriptionUsage {
 }
 
 /**
- * The engine's subscription-auth surface (pop-agent.spec §15): whether a provider
+ * The engine's subscription-auth surface (docs/specs/Spec-Pop-General.md §15): whether a provider
  * holds an OAuth credential, the login flow that obtains one, and the logout
  * that drops it. Separate from {@link AgentBridge} because running a chat and
  * signing in to a subscription are different jobs -- the run orchestration

@@ -3,7 +3,7 @@ import type { TaskDTO } from '@pop-agent/shared';
 import { tasksService } from '../services/tasks';
 
 /**
- * The background-task list (pop-agent.spec §21), shared by the sidebar and the
+ * The background-task list (docs/specs/Spec-Pop-General.md §21), shared by the sidebar and the
  * full-screen form so a save on one is visible on the other without a reload.
  *
  * `undefined` means "not loaded yet", which is what tells the list apart from

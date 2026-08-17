@@ -8,7 +8,7 @@ import { inlineView } from '../../domain/files/inline-view.js';
 import { apiError } from './errors.js';
 
 /**
- * The public Files download (pop-agent.spec §14, "Files as a plain folder"). This
+ * The public Files download (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder"). This
  * route sits OUTSIDE `/v1`, so it carries no session — the HMAC signature in
  * the URL is the whole authorisation, and it covers the path and the expiry
  * together. A bad or forged signature, an expired link, an unknown path or a

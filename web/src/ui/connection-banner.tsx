@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { healthMonitor } from '../services/health';
 
 /**
- * Says out loud that the app cannot reach its server (pop-agent.spec §14).
+ * Says out loud that the app cannot reach its server (docs/specs/Spec-Pop-General.md §14).
  *
  * The health dot in the sidebar footer is a diagnosis for problems the user
  * could act on. An unreachable server is not a diagnosis, it is a wall: every

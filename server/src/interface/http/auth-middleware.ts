@@ -6,14 +6,14 @@ import { publicV1PathSet } from './route-registry.js';
 
 /**
  * Routes under /v1 that answer without a session: derived from the typed
- * route registry (pop-agent.spec §9), never duplicated here. Each path's written
+ * route registry (docs/specs/Spec-Pop-General.md §9), never duplicated here. Each path's written
  * reason lives next to its declaration in route-registry.ts, and the probe
  * in route-guard.test.ts asserts nothing beyond that list slips through.
  */
 const PUBLIC_PATHS: ReadonlySet<string> = publicV1PathSet();
 
 /**
- * Bearer-token guard for /v1 (pop-agent.spec §9). On a token past its first day it
+ * Bearer-token guard for /v1 (docs/specs/Spec-Pop-General.md §9). On a token past its first day it
  * also hands back a fresh one in `x-pop-agent-token`, which is what keeps a weekly
  * user from ever meeting the login screen.
  */

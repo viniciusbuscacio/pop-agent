@@ -11,7 +11,7 @@ import {
 import type { WebAuthnGateway, WebAuthnRepo } from '../../application/ports/webauthn-repo.js';
 
 /**
- * Passkeys (pop-agent.spec §9): registering a phone's Face ID / a security key, and
+ * Passkeys (docs/specs/Spec-Pop-General.md §9): registering a phone's Face ID / a security key, and
  * unlocking with it instead of the password. The ceremony's challenge is held
  * in memory for the moment between issuing the options and verifying the
  * response -- one at a time is enough for a single-user server.

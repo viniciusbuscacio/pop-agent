@@ -1,5 +1,5 @@
 /**
- * The auto-skill loop against a real model (pop-agent.spec §8, fases b and c).
+ * The auto-skill loop against a real model (docs/specs/Spec-Pop-General.md §8, fases b and c).
  *
  * The gate proves the distiller's control flow against a scripted answer, and
  * proves the router's ranking against fixed vectors. Neither can answer the

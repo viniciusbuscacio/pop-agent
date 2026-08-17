@@ -3,7 +3,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { SECRET_KEY_BYTES } from '../../application/crypto/secret-box.js';
 
 /**
- * Loads POP_AGENT_DATA_DIR/secret.key, creating it on first boot (pop-agent.spec §9).
+ * Loads POP_AGENT_DATA_DIR/secret.key, creating it on first boot (docs/specs/Spec-Pop-General.md §9).
  * This file is what makes the secrets table readable, so it is 0600 and stays
  * out of backups: a leaked backup then leaks no credentials.
  */

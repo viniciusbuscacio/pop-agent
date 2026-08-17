@@ -12,7 +12,7 @@ import type { PiCandidateService } from '../../application/update/pi-candidate-s
 import type { PiActivationService } from '../../application/update/pi-activation-service.js';
 
 /**
- * Update status and safe activation (pop-agent.spec §15). The running process
+ * Update status and safe activation (docs/specs/Spec-Pop-General.md §15). The running process
  * never restarts itself: it drains work and hands a committed checkout to an
  * external transient unit, which owns health validation and rollback.
  */

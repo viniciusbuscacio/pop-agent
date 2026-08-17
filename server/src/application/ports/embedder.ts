@@ -1,5 +1,5 @@
 /**
- * Turning text into a vector for similarity search (pop-agent.spec §7). The model
+ * Turning text into a vector for similarity search (docs/specs/Spec-Pop-General.md §7). The model
  * runs locally on the server's CPU; embedding a message costs electricity, not
  * tokens. The e5 family needs a `query:` / `passage:` prefix, which the adapter
  * applies -- callers just say which kind of text this is.

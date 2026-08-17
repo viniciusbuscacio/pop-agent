@@ -26,7 +26,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Provider configuration (pop-agent.spec §15). The routes speak plural and are
+ * Provider configuration (docs/specs/Spec-Pop-General.md §15). The routes speak plural and are
  * driven by the declarative provider list: adding a provider adds a row of
  * data, never a route.
  *
@@ -37,7 +37,7 @@ import { apiError } from './errors.js';
 const keySchema = z.object({ apiKey: z.string().min(1).max(500) }).strict();
 const testSchema = z.object({ apiKey: z.string().min(1).max(500).optional() }).strict();
 const defaultModelSchema = z.object({ model: z.string().max(200) }).strict();
-/** Empty puts the provider back to following its chat model (pop-agent.spec §15). */
+/** Empty puts the provider back to following its chat model (docs/specs/Spec-Pop-General.md §15). */
 const serviceModelSchema = z.object({ model: z.string().max(200) }).strict();
 /** The whole priority list at once: partial edits would need a merge rule. */
 const orderSchema = z
@@ -66,7 +66,7 @@ const transcribeSchema = z
 
 export interface ProviderRoutesDeps {
   providers: ProviderService;
-  /** The single-active OAuth sign-in flow (pop-agent.spec §15, fase 1.5). */
+  /** The single-active OAuth sign-in flow (docs/specs/Spec-Pop-General.md §15, fase 1.5). */
   oauthFlows: OAuthFlowService;
   transcriber: Transcriber;
   voiceCleanup: VoiceCleanup;
@@ -162,7 +162,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json(response);
   });
 
-  // The priority list (pop-agent.spec §15, fase 2): #1 is the global default and
+  // The priority list (docs/specs/Spec-Pop-General.md §15, fase 2): #1 is the global default and
   // the rest is the failover order. Sent whole, like every other list here.
   routes.put('/providers/order', async (c) => {
     const body = await readJson(c);
@@ -185,7 +185,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
   });
 
   // The provider's default model: the pair's provider half already has a
-  // home (Settings), this is the per-provider half (pop-agent.spec §15).
+  // home (Settings), this is the per-provider half (docs/specs/Spec-Pop-General.md §15).
   routes.put('/providers/:id/default-model', async (c) => {
     const id = c.req.param('id');
     if (deps.providers.status(id) === undefined) return providerNotFound(c, id);
@@ -199,7 +199,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
   });
 
   // The provider's Service Model: what Pop Agent uses for its own background work
-  // on this provider (pop-agent.spec §15, corrected 07/08). Beside the credential
+  // on this provider (docs/specs/Spec-Pop-General.md §15, corrected 07/08). Beside the credential
   // rather than in General, because a model id only means something inside one
   // provider's catalog.
   routes.put('/providers/:id/service-model', async (c) => {
@@ -214,7 +214,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
-  // Unlimited custom providers (pop-agent.spec §15): each instance is pure data --
+  // Unlimited custom providers (docs/specs/Spec-Pop-General.md §15): each instance is pure data --
   // a name, an endpoint, a model -- created first (the id anchors everything),
   // edited in place, deleted with its key. Never a secret in any of these.
   routes.post('/providers/custom', async (c) => {
@@ -263,7 +263,7 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
-  // Subscription sign-in (pop-agent.spec §15, fase 1.5). The flow lives on the
+  // Subscription sign-in (docs/specs/Spec-Pop-General.md §15, fase 1.5). The flow lives on the
   // server; these four routes are the browser's whole view of it: start it,
   // poll its transcript, answer its one question, stop it. Token material
   // never crosses this wire in either direction.

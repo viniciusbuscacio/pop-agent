@@ -139,7 +139,7 @@ describe('SkillsVault', () => {
 });
 
 
-  describe('Agent Skills folders (pop-agent.spec §8)', () => {
+  describe('Agent Skills folders (docs/specs/Spec-Pop-General.md §8)', () => {
     it('discovers a directory holding SKILL.md, recursively', () => {
       mkdirSync(join(root, 'pack', 'deep-skill'), { recursive: true });
       writeFileSync(

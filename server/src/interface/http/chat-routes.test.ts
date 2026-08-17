@@ -269,7 +269,7 @@ describe('chat collection', () => {
     expect((await api(`/v1/chats/${chat.id}/messages`)).status).toBe(404);
   });
 
-  it('takes the chat\'s workspace attachments with it (pop-agent.spec §6)', async () => {
+  it('takes the chat\'s workspace attachments with it (docs/specs/Spec-Pop-General.md §6)', async () => {
     const chat = await newChat();
     const attachments = join(fixture.workspace, 'attachments', chat.id);
     mkdirSync(attachments, { recursive: true });

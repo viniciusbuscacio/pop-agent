@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaintGuard, isDestructiveBash, isExfilOrSecretRead } from './tool-taint.js';
 
 /**
- * The guard's job under YOLO mode (pop-agent.spec §10): never ask a human anything,
+ * The guard's job under YOLO mode (docs/specs/Spec-Pop-General.md §10): never ask a human anything,
  * but never let an injected web page turn a tainted turn into a data leak or an
  * irreversible wipe. A clean turn runs everything; a tainted turn refuses the
  * dangerous set on its own and tells the model why.

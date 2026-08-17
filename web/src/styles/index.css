@@ -67,7 +67,7 @@ body {
   margin: 0;
 }
 
-/* The health dot's gentle pulse (pop-agent.spec §14): opacity only, never
+/* The health dot's gentle pulse (docs/specs/Spec-Pop-General.md §14): opacity only, never
    stroboscopic. */
 @keyframes health-pulse {
   0%,

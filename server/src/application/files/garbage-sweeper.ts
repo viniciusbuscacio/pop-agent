@@ -2,7 +2,7 @@ import type { MaintenanceJob } from '../ports/maintenance-job.js';
 import type { FilesService } from './files-service.js';
 
 /**
- * Empties what the Garbage has kept long enough (pop-agent.spec §14, §21).
+ * Empties what the Garbage has kept long enough (docs/specs/Spec-Pop-General.md §14, §21).
  *
  * Housekeeping, not a task: nobody asked for it, there is no chat and no row,
  * and the agent cannot be asked about it. It rides the scheduler's tick like

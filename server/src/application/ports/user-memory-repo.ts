@@ -1,5 +1,5 @@
 /**
- * The single living document the agent keeps about the user (pop-agent.spec §7).
+ * The single living document the agent keeps about the user (docs/specs/Spec-Pop-General.md §7).
  * One row, with a one-level backup so a bad edit can be rolled back.
  */
 export interface UserMemory {

@@ -1,4 +1,4 @@
-# Prompt-injection test plan (pop-agent.spec §10)
+# Prompt-injection test plan (docs/specs/Spec-Pop-General.md §10)
 
 Status: **PREPARED, NOT YET RUN.** Written 2026-08-01 alongside commits
 `cb54bde` (automatic taint brake) and `ec8a983` (redirect false-positive fix).

@@ -1,5 +1,5 @@
 /**
- * Generates the derived half of the pop-agent-codebase skill (pop-agent.spec §8):
+ * Generates the derived half of the pop-agent-codebase skill (docs/specs/Spec-Pop-General.md §8):
  * the repo map and the UI map, read from the code so they cannot drift from
  * it. Hand-written architecture docs lie within weeks; this one is emitted by
  * `npm run selfmap` and the gate fails on drift (`npm run selfmap:check`).
@@ -57,7 +57,7 @@ function layerLines(): string[] {
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
-      const note = LAYER_NOTES[name] ?? 'see pop-agent.spec';
+      const note = LAYER_NOTES[name] ?? 'see docs/specs/Spec-Pop-General.md';
       const count = sourceFileCount(join(src, name));
       const size = count === 1 ? '1 module' : `${String(count)} modules`;
       return `- \`${name}/\` -- ${note} (${size})`;
@@ -110,7 +110,7 @@ function selfMap(): string {
 function render(): string {
   const lines = selfMap().split('\n');
   return [
-    '/** The derived self-map (pop-agent.spec §8). Regenerate with `npm run selfmap`. */',
+    '/** The derived self-map (docs/specs/Spec-Pop-General.md §8). Regenerate with `npm run selfmap`. */',
     'export const SELF_MAP = [',
     ...lines.map((line) => `  ${JSON.stringify(line)},`),
     "].join('\\n');",

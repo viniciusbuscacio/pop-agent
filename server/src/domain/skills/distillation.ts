@@ -1,7 +1,7 @@
 import type { Message } from '../chat/chat.js';
 
 /**
- * What the background distiller asks and how it reads the answer (pop-agent.spec §8,
+ * What the background distiller asks and how it reads the answer (docs/specs/Spec-Pop-General.md §8,
  * auto-skill fase c). Pure on purpose: the prompt and the parse are the two
  * places this feature is most likely to be wrong, and both are cheap to test
  * when they do not need a provider, a clock or a disk.

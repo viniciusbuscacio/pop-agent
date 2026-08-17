@@ -5,7 +5,7 @@ import type { BackupService } from '../../application/ports/backup-service.js';
 import { apiError } from './errors.js';
 
 /**
- * Backup and restore over HTTP (pop-agent.spec §16). Settings → Backup lists the
+ * Backup and restore over HTTP (docs/specs/Spec-Pop-General.md §16). Settings → Backup lists the
  * snapshots, makes one, downloads one, restores one (a restart applies it) and
  * deletes one. The download streams the tar.gz straight off disk.
  */

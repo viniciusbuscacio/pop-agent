@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 
 /**
  * Versions of the tools the server leans on for voice and document
- * extraction (pop-agent.spec §14/§15) -- the Environment card of Settings →
+ * extraction (docs/specs/Spec-Pop-General.md §14/§15) -- the Environment card of Settings →
  * Updates. Visibility only: these are apt/system packages, and updating
  * them stays a deliberate shell act, never something the process does.
  * Best-effort by contract: a missing binary reports as such.

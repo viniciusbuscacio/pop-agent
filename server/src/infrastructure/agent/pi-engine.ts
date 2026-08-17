@@ -78,7 +78,7 @@ export const SYSTEM_PROMPT = [
   '"Notes" (notas) are your own vault: notes_list and its siblings.',
   'Pop Agent also runs scheduled tasks for the user; list_scheduled_tasks shows',
   'them, including yours.',
-  // Skills left the conversation entirely (pop-agent.spec §8, 1.66). Without this
+  // Skills left the conversation entirely (docs/specs/Spec-Pop-General.md §8, 1.66). Without this
   // line the model, asked to make one and holding no tool for it, improvises --
   // and improvising here means claiming it saved something it did not.
   'You do not write skills yourself. Background auto-skill behavior is controlled',
@@ -116,7 +116,7 @@ export class PiEngineError extends Error {
 }
 
 /**
- * The safety valve the bridge sets around a run (pop-agent.spec §10). pi calls it
+ * The safety valve the bridge sets around a run (docs/specs/Spec-Pop-General.md §10). pi calls it
  * before a tool runs and after one produces output; it is what turns "a run
  * that read something suspicious" into "a destructive command that has to be
  * confirmed first".
@@ -131,7 +131,7 @@ export interface ToolGuard {
   ): Promise<{ block: boolean; reason?: string }>;
 }
 
-/** An image handed to a multimodal model as input (pop-agent.spec §14, RF-014). */
+/** An image handed to a multimodal model as input (docs/specs/Spec-Pop-General.md §14, RF-014). */
 export interface PiImage {
   /** Base64 (no data-URI prefix). */
   data: string;
@@ -148,10 +148,10 @@ export interface PiSession {
   setSteeringMode(mode: 'all' | 'one-at-a-time'): void;
   /** Clears pi's in-memory queues; Pop Agent itself keeps pending input durable. */
   clearQueue(): { steering: string[]; followUp: string[] };
-  /** Whether the current model accepts image input (pop-agent.spec §14, RF-014). */
+  /** Whether the current model accepts image input (docs/specs/Spec-Pop-General.md §14, RF-014). */
   readonly supportsImages: boolean;
   abort(): Promise<void>;
-  /** pi's native compaction (pop-agent.spec §7): summarize the old span, keep the tail. */
+  /** pi's native compaction (docs/specs/Spec-Pop-General.md §7): summarize the old span, keep the tail. */
   compact(instructions?: string): Promise<void>;
   stats?(): SessionStatsResult;
   setName?(name: string): void;
@@ -178,7 +178,7 @@ export interface PiSession {
 }
 
 export interface PiOpenOptions {
-  /** The pair is the model identity (pop-agent.spec §15). */
+  /** The pair is the model identity (docs/specs/Spec-Pop-General.md §15). */
   providerId: string;
   modelId: string;
   sessionFile: string | undefined;
@@ -218,7 +218,7 @@ export interface PiEngine {
 export interface SdkPiEngineOptions {
   /** Absolute ESM entry of an activated isolated pi runtime; bundled pi when omitted. */
   sdkEntry?: string;
-  /** Where the agent works: POP_AGENT_WORKSPACE (pop-agent.spec §4). */
+  /** Where the agent works: POP_AGENT_WORKSPACE (docs/specs/Spec-Pop-General.md §4). */
   workspace: string;
   /** pi's own JSONL sessions, inside POP_AGENT_DATA_DIR. */
   sessionsDir: string;
@@ -243,7 +243,7 @@ export interface SdkPiEngineOptions {
   /** Read late, not captured: keys can arrive after boot, from Settings. */
   apiKey: (providerId: string) => string | undefined;
   /**
-   * The user-created custom instances (pop-agent.spec §15): pi has no builtin for
+   * The user-created custom instances (docs/specs/Spec-Pop-General.md §15): pi has no builtin for
    * them, so the engine registers each as an OpenAI-compatible provider,
    * lazily on first use and again whenever its data changed -- adding or
    * editing one never needs a restart. Read late, not captured.
@@ -263,7 +263,7 @@ export interface SdkPiEngineOptions {
   /** The scheduled tasks Pop Agent runs, so the agent can SEE them (task-tools). */
   scheduledTasks?: () => import('../../domain/tasks/task.js').Task[];
   /**
-   * Real numbers for the continuity note (pop-agent.spec §7): how many messages
+   * Real numbers for the continuity note (docs/specs/Spec-Pop-General.md §7): how many messages
    * the chat has stored, so a resumed session knows the size of what it
    * only partially sees.
    */
@@ -272,11 +272,11 @@ export interface SdkPiEngineOptions {
   memorySearch?: MemorySearcher;
   /** The living document the agent keeps about the user; tools + prompt. */
   userMemory?: UserMemoryRepo;
-  /** The user's Files folder: powers delete_file and files_search (pop-agent.spec §14). */
+  /** The user's Files folder: powers delete_file and files_search (docs/specs/Spec-Pop-General.md §14). */
   files?: FilesService;
   /**
    * The skills vault, so the agent can read its own skills and write a new
-   * one when the user asks (pop-agent.spec §8, auto-skill fase b).
+   * one when the user asks (docs/specs/Spec-Pop-General.md §8, auto-skill fase b).
    */
   skills?: SkillsRepo;
   /** Current background auto-skill policy, read whenever a session opens (§8). */
@@ -376,7 +376,7 @@ export class SdkPiEngine implements PiEngine {
 
     // The one thing whose output can block a tool: an inline extension that
     // asks the session's current guard before every tool runs, and feeds it
-    // every tool result (pop-agent.spec §10). `noExtensions` still keeps pi's own
+    // every tool result (docs/specs/Spec-Pop-General.md §10). `noExtensions` still keeps pi's own
     // extensions out; this is ours, not the host's.
     const guardSlot: { current: ToolGuard | undefined } = { current: undefined };
 
@@ -415,7 +415,7 @@ export class SdkPiEngine implements PiEngine {
         },
       ],
       // The system prompt gains the user's instructions and a catalog of
-      // recent conversations (pop-agent.spec §7.1) -- names only, as untrusted
+      // recent conversations (docs/specs/Spec-Pop-General.md §7.1) -- names only, as untrusted
       // data, so the agent knows what memory it can open without being told.
       appendSystemPrompt: [
         ...(options.instructions.length === 0 ? [] : [options.instructions]),
@@ -455,7 +455,7 @@ export class SdkPiEngine implements PiEngine {
     ];
 
     // The compaction policy, explicit instead of inherited defaults
-    // (pop-agent.spec §7): pi summarizes the old span when the context passes
+    // (docs/specs/Spec-Pop-General.md §7): pi summarizes the old span when the context passes
     // `window - reserveTokens`, keeping a 20k-token tail. inMemory also
     // keeps a host ~/.pi settings file from leaking in.
     const settingsManager = sdk.SettingsManager.inMemory({
@@ -495,7 +495,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * A resumed session sees only a slice of the conversation (pop-agent.spec §7):
+   * A resumed session sees only a slice of the conversation (docs/specs/Spec-Pop-General.md §7):
    * the continuity note says the real numbers and kills the classic
    * post-restart hallucination -- answering from memory what a tool result
    * used to say. Untrusted-data envelope, never bare system authority.
@@ -541,7 +541,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * The living document about the user, for the system prompt (pop-agent.spec §7).
+   * The living document about the user, for the system prompt (docs/specs/Spec-Pop-General.md §7).
    * This is Pop Agent's own trusted memory, not external content, so it is not
    * enveloped -- but it is capped, and secrets were scrubbed on write.
    */
@@ -569,7 +569,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * One completion, outside any chat (pop-agent.spec §15). `authenticatedRuntime`
+   * One completion, outside any chat (docs/specs/Spec-Pop-General.md §15). `authenticatedRuntime`
    * is the whole reason this lives here: it already resolves an API key and a
    * subscription credential through the same door, so a caller never has to
    * know which kind of provider it is holding.
@@ -631,7 +631,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * pi's interactive OAuth login (pop-agent.spec §15, fase 1.5). The credential is
+   * pi's interactive OAuth login (docs/specs/Spec-Pop-General.md §15, fase 1.5). The credential is
    * persisted by the runtime into Pop Agent's own auth file (`authPath`); nothing
    * comes back to the caller.
    *
@@ -816,7 +816,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * A custom instance exists only as data the user typed (pop-agent.spec §15):
+   * A custom instance exists only as data the user typed (docs/specs/Spec-Pop-General.md §15):
    * when the id names one, register it with pi as an OpenAI-compatible
    * endpoint carrying its one configured model. Stamped per id, so an edit
    * re-registers and an untouched instance costs a string compare. Not a

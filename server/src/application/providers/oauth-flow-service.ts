@@ -9,7 +9,7 @@ import { oauthFailureCode } from './oauth-diagnostic.js';
 import { providerDefinition } from './provider-definitions.js';
 
 /**
- * One interactive OAuth login at a time (pop-agent.spec §15, fase 1.5). The
+ * One interactive OAuth login at a time (docs/specs/Spec-Pop-General.md §15, fase 1.5). The
  * engine's flow runs on the server; the browser only sees a transcript --
  * events to show, at most one question to answer -- and answers it with
  * `submit`. Token material never enters this service: the credential goes

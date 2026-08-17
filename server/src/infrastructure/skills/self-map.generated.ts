@@ -1,4 +1,4 @@
-/** The derived self-map (pop-agent.spec §8). Regenerate with `npm run selfmap`. */
+/** The derived self-map (docs/specs/Spec-Pop-General.md §8). Regenerate with `npm run selfmap`. */
 export const SELF_MAP = [
   "## Repo map (generated -- npm run selfmap)",
   "",
@@ -12,7 +12,7 @@ export const SELF_MAP = [
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (15 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (73 modules)",
   "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (32 modules)",
-  "- `manager/` -- see pop-agent.spec (3 modules)",
+  "- `manager/` -- see docs/specs/Spec-Pop-General.md (3 modules)",
   "- `testing/` -- shared test harness helpers (1 module)",
   "",
   "## UI map (generated)",

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Clean-architecture boundary test (pop-agent.spec §3), ported from aw's
+ * Clean-architecture boundary test (docs/specs/Spec-Pop-General.md §3), ported from aw's
  * boundary_test.go. Two rules:
  *
  * 1. Dependency rule — a layer may import only the layers listed for it.

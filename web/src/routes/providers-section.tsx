@@ -527,7 +527,7 @@ function ConfigureProvider({
   const [name, setName] = useState(provider.name);
   const [baseURL, setBaseURL] = useState(provider.baseURL ?? '');
   const [model, setModel] = useState(provider.defaultModel);
-  // Empty means "follow the chat model" (pop-agent.spec §15). The card shows the
+  // Empty means "follow the chat model" (docs/specs/Spec-Pop-General.md §15). The card shows the
   // resolved value, so a provider that never chose one still reads sensibly;
   // choosing the chat model again is what clears it.
   const [serviceModel, setServiceModel] = useState(provider.serviceModel);
@@ -739,7 +739,7 @@ function ConfigureProvider({
           />
         )}
 
-        {/* The Service Model, beside the credential (pop-agent.spec §15, corrected
+        {/* The Service Model, beside the credential (docs/specs/Spec-Pop-General.md §15, corrected
             07/08). It used to be one global setting, which could not be right:
             a model id only means something inside one provider's catalogue, so
             a single stored id was wrong for every provider but one. Shown

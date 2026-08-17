@@ -213,7 +213,7 @@ describe('messages', () => {
 
   it('names the newest message of every chat in one query', () => {
     // The distiller's tick reads this against its watermarks instead of
-    // opening every tail (pop-agent.spec §8, fase c).
+    // opening every tail (docs/specs/Spec-Pop-General.md §8, fase c).
     const empty = repo.create(chat());
     const busy = repo.create(chat());
     repo.appendMessage(message(busy.id, { content: 'one', createdAt: '2026-07-30T20:00:00.000Z' }));
@@ -284,7 +284,7 @@ describe('messages', () => {
     expect(() => repo.appendMessage(message('chat-000000000000'))).toThrow();
   });
 
-  it('re-draws the id and retries on a primary-key collision (pop-agent.spec §6)', () => {
+  it('re-draws the id and retries on a primary-key collision (docs/specs/Spec-Pop-General.md §6)', () => {
     // Force a collision: create a chat, then try to create another with the
     // same id. The repo must not throw or overwrite -- it re-draws and inserts.
     const taken = chat({ id: 'chat-CollisionAAA', title: 'first' });

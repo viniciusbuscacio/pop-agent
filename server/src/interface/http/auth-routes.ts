@@ -13,7 +13,7 @@ import { ProgressiveLockout } from './lockout.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 
 /**
- * Auth endpoints (pop-agent.spec §9). Mounted under /v1.
+ * Auth endpoints (docs/specs/Spec-Pop-General.md §9). Mounted under /v1.
  *
  * The credential routes carry two independent brakes: a sliding rate limit on
  * request volume, and a progressive lockout on wrong answers. `auth/state` is

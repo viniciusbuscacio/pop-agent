@@ -1,4 +1,4 @@
--- Durable observability for the background skill distiller (pop-agent.spec §8).
+-- Durable observability for the background skill distiller (docs/specs/Spec-Pop-General.md §8).
 --
 -- `skill_distillation` remains the queue watermark. These rows are an immutable
 -- account of each window the distiller tried to read, including failures (which

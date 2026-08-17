@@ -312,7 +312,7 @@ export function Composer({
       const existing = textRef.current.trim();
       const merged = existing.length > 0 ? `${existing}\n${result.text}` : result.text;
       // A voice note is meant to be sent: the transcript (with any typed draft
-      // in front of it) goes to the chat automatically (pop-agent.spec §14).
+      // in front of it) goes to the chat automatically (docs/specs/Spec-Pop-General.md §14).
       autoSendRef.current = false;
       try {
         await onSend(

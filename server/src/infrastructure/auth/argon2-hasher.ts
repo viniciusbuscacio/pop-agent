@@ -2,7 +2,7 @@ import argon2 from 'argon2';
 import type { PasswordHasher } from '../../application/ports/password-hasher.js';
 
 /**
- * argon2id password hashing (pop-agent.spec §9). Parameters are stated explicitly
+ * argon2id password hashing (docs/specs/Spec-Pop-General.md §9). Parameters are stated explicitly
  * rather than left to the library default, so a future version changing its
  * mind does not silently weaken existing installs.
  *

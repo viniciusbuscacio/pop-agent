@@ -5,7 +5,7 @@ import { chatCache } from './chat-cache';
  *
  * "Keep me signed in" is the whole difference: checked, the token goes to
  * localStorage and survives closing the tab; unchecked, sessionStorage drops
- * it with the tab. The rest of the app just asks for `token` (pop-agent.spec §9).
+ * it with the tab. The rest of the app just asks for `token` (docs/specs/Spec-Pop-General.md §9).
  */
 
 const TOKEN_KEY = 'pop-agent.token';

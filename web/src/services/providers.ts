@@ -26,7 +26,7 @@ export function normalizeBaseUrl(url: string): string {
 }
 
 /**
- * The providers API (pop-agent.spec §15). Everything is per-provider-id; the key
+ * The providers API (docs/specs/Spec-Pop-General.md §15). Everything is per-provider-id; the key
  * is write-only end to end -- it goes in through PUT and no route ever hands
  * it back.
  */
@@ -36,7 +36,7 @@ export const providersService = {
   },
 
   /**
-   * The priority list, whole (pop-agent.spec §15, fase 2). Sent complete rather
+   * The priority list, whole (docs/specs/Spec-Pop-General.md §15, fase 2). Sent complete rather
    * than as a move, so the server never has to merge two half-edits.
    */
   setOrder(ids: string[]): Promise<ProvidersResponse> {
@@ -99,7 +99,7 @@ export const providersService = {
 
   /**
    * The provider's Service Model -- what Pop Agent uses on it for its own work
-   * (pop-agent.spec §15). '' puts it back to following the chat model.
+   * (docs/specs/Spec-Pop-General.md §15). '' puts it back to following the chat model.
    */
   setServiceModel(providerId: string, model: string): Promise<ProvidersResponse> {
     return apiRequest<ProvidersResponse>(`/providers/${providerId}/service-model`, {
@@ -109,7 +109,7 @@ export const providersService = {
   },
 
   /**
-   * Unlimited custom providers (pop-agent.spec §15): create empty (the id anchors
+   * Unlimited custom providers (docs/specs/Spec-Pop-General.md §15): create empty (the id anchors
    * the card and the key), edit in place, delete with everything that was its.
    */
   createCustom(name?: string): Promise<CreateCustomProviderResponse> {
@@ -131,7 +131,7 @@ export const providersService = {
   },
 
   /**
-   * Subscription sign-in (pop-agent.spec §15, fase 1.5): the flow runs on the
+   * Subscription sign-in (docs/specs/Spec-Pop-General.md §15, fase 1.5): the flow runs on the
    * server; the card starts it, polls its transcript and answers its one
    * question. No token material ever reaches the browser.
    */

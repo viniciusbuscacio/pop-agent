@@ -8,7 +8,7 @@ import { useTasksStore } from '../store/tasks';
 import { Button, Pressable, Menu } from '../ui/controls';
 
 /**
- * The background-task list (pop-agent.spec §21). It lives in the sidebar for the
+ * The background-task list (docs/specs/Spec-Pop-General.md §21). It lives in the sidebar for the
  * same reason the conversation list does: on a phone the list *is* the screen,
  * and creating or editing one is a route change to a full-screen form -- never
  * a drawer (§14).

@@ -6,7 +6,7 @@ import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { OAuthSection } from './oauth-section';
 
 /**
- * The sign-in card outlives the page (pop-agent.spec §15, fase 1.5). Signing in
+ * The sign-in card outlives the page (docs/specs/Spec-Pop-General.md §15, fase 1.5). Signing in
  * means leaving for the provider and coming back, and on the way back the
  * page is frequently a fresh mount: a new tab, a reload, or the PWA resumed
  * from the background. If the card only knew about flows it had started

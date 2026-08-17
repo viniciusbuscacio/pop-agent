@@ -4,7 +4,7 @@ import type { EmbeddingsRepo } from '../ports/embeddings-repo.js';
 import type { MemoryChatHit, MemoryMessageRow, MemoryRepo } from '../ports/memory-repo.js';
 
 /**
- * Memory search that is lexical and semantic at once (pop-agent.spec §7). FTS5 finds
+ * Memory search that is lexical and semantic at once (docs/specs/Spec-Pop-General.md §7). FTS5 finds
  * the messages that share words with the query; the embedder finds the ones
  * that share meaning even when they share no words ("what did we decide about
  * the trip" reaching a message that only said "flights to Recife"). The two

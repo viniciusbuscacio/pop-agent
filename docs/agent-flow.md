@@ -1,6 +1,6 @@
 # Agent flow — frontend ↔ pi SDK, end to end
 
-Design detail for pop-agent.spec §5, §13, §14. The spec stays normative; this
+Design detail for docs/specs/Spec-Pop-General.md §5, §13, §14. The spec stays normative; this
 document explains how a message travels through every layer and what each
 layer maps. Update it when the flow changes.
 

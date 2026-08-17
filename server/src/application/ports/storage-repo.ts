@@ -1,5 +1,5 @@
 /**
- * What the database can say about its own weight (pop-agent.spec §14).
+ * What the database can say about its own weight (docs/specs/Spec-Pop-General.md §14).
  *
  * Bytes that live on disk are measured on disk; this is the one only SQL
  * knows -- how much of the database is derived index rather than anything

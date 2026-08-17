@@ -2,7 +2,7 @@ import { registerSW } from 'virtual:pwa-register';
 import type { UpdateCheckResult } from './update-signal';
 
 /**
- * One service worker registration, in one place (pop-agent.spec §15).
+ * One service worker registration, in one place (docs/specs/Spec-Pop-General.md §15).
  *
  * An installed PWA only re-checks its service worker on navigation. On a phone
  * the app is resumed from suspension far more often than it is navigated, so a

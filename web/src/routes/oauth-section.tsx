@@ -5,7 +5,7 @@ import { providersService } from '../services/providers';
 import { Button, TextField } from '../ui/controls';
 
 /**
- * The subscription sign-in, inline in the provider's card (pop-agent.spec §15,
+ * The subscription sign-in, inline in the provider's card (docs/specs/Spec-Pop-General.md §15,
  * fase 1.5). The flow runs on the server; this section starts it, polls its
  * transcript every two seconds and renders it: a link to open, a device code
  * to type, at most one question to answer. No token ever reaches the browser.

@@ -1,74 +1,79 @@
 # Pop Agent — pi agent integration
 
-**Status:** current architecture explanation
-**Normative source:** `pop-agent.spec` §§5, 7, 8, 10 and 15
-**Primary code:** `server/src/infrastructure/agent`, `server/src/application/chat`
-**Deep dive:** [`../agent-flow.md`](../agent-flow.md)
+**Status:** normative
+**Legacy coverage:** §5
+**Primary implementation:** server/src/infrastructure/agent, server/src/application/chat
+**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
 
-## Boundary
+> Section numbers are preserved from the former monolithic specification so
+> existing code comments remain traceable. Cross-section references resolve
+> through the legacy section map in `Spec-Pop-General.md`.
+## 5. pi integration (`infrastructure/agent/`)
 
-pi is the in-process agent engine. Pop Agent owns the product around it: authentication, chats, product persistence, memory, skills, safety, providers, usage, PWA and CLI.
+> End-to-end flow detail (frontend ↔ pi through every layer, event
+> mapping, failure modes): `docs/agent-flow.md`.
 
-The application reaches pi through an application-owned bridge port. pi types and implementation details stay in the infrastructure adapter. The frontend and CLI never import or talk directly to the pi SDK.
+- Package `@earendil-works/pi-coding-agent`, embedded via SDK
+  (`createAgentSession`). Plan B if crash isolation ever demands it: pi as
+  an RPC subprocess — the `AgentBridge` interface covers both without
+  touching the rest.
+- **Who stores what**: pi persists sessions as JSONL trees (branching,
+  compaction, model changes) — that is the *execution state*, the exact
+  context the model sees. Pop Agent never parses those files. Pop Agent's SQLite is
+  the *product state*: chat list, titles, rendered messages, search,
+  memory. Messages exist in both places on purpose — a pi format change
+  must never touch the UI or memory.
+- pi's `sessionDir` points into `POP_AGENT_DATA_DIR/sessions/`
+  (`SessionManager.create(cwd, sessionDir)`). Resume =
+  `SessionManager.open(path)` with the path stored in
+  `chats.pi_session_id`. Smoke tests use `SessionManager.inMemory()`.
+- **Tools**: read, bash, edit, write — all enabled, full power ("yolo
+  mode"). No permission prompts. The taint rule (§10) remains the safety floor.
+  Pop Agent's own capabilities (memory, notes, web, skills) are registered as pi
+  custom tools via `defineTool` (typebox schemas).
+- **Plan Mode is a per-message read-only policy, implemented through pi rather
+  than simulated in prose.** Before the model turn, Pop calls pi's
+  `setActiveToolsByName()` with a fail-closed allowlist: `read`, `grep`, `find`,
+  `ls`, Pop's explicit read tools, `local_read` when attached, and MCP tools
+  whose standard `annotations.readOnlyHint` is exactly `true`. `bash`, all
+  write/edit/delete tools, unannotated MCP tools and unknown future tools are
+  absent. The server also prepends an authoritative `[PLAN MODE ACTIVE]`
+  runtime note telling the model to investigate and return a plan, never make
+  or claim changes. A mode change is a durable FIFO barrier: steering may share
+  a live pi loop only when local connection and execution mode both match.
+- **Concurrency**: multiple chats run in parallel. Cap configurable,
+  default 20; excess queues with visible status.
+  **One run per chat** on top of that ceiling — a second message to a busy
+  chat is refused with `run_in_progress`, and the frontend holds it in a
+  one-slot client-side queue that fires when the chat frees. Overflow past
+  the global ceiling is queued rather than refused, so a burst of chats
+  degrades into waiting.
+- **Stopping a queued run** removes it from the queue instead of aborting an
+  engine it never reached, and still reports `aborted`: a client that asked
+  to stop needs to stop waiting. Idle sessions unload from
+  RAM after ~3h; reopening is transparent (ms). A warm-standby pool (+1
+  pre-created session) was evaluated and rejected for now — session
+  creation is an in-process object (ms); revisit only if skill/extension
+  scanning ever makes it slow.
+- **Stop is a kill**: stopping a run must kill the process group of any
+  running bash child, not just abort the stream. aw has a working
+  implementation to consult; verify what pi does on abort while coding.
+- **Tool output streams in real time** to the UI (terminal-style), from
+  v0.1.
+- Model switchable per chat and mid-session; global default in Settings.
+- **Native pi session commands:** the composer exposes `/compact [instructions]`,
+  `/session`, `/name <name>`, `/export [html|jsonl]`, and `/fork <number>`.
+  These invoke pi's public SDK operations rather than prompting the model or
+  reproducing pi's behavior. Command results never enter model context. The
+  `/compact` completion is a durable system timeline marker, delivered through
+  the same history/SSE path as provider fallback markers; other command output
+  remains local to the visible transcript. Exports land under `Files/Exports/`. `/name` updates the
+  SQLite title and pi session name, with SQLite authoritative on every session
+  wake. Bare `/fork` lists active-branch user turns; the numbered form creates
+  a new Pop chat backed by pi's branched JSONL session, copies the visible
+  product history before that turn, and prefills the selected request as a
+  draft. Session-mutating commands refuse while that chat is running or queued.
 
-## State ownership
+## Detailed flow
 
-- pi JSONL sessions are execution state: branch, model context, compaction and tool history.
-- SQLite is product state: chats, rendered messages, titles, search, queues and usage.
-- Duplication of visible messages is intentional; Pop does not parse pi JSONL to render the UI.
-- `chats.pi_session_id` links a product chat to its pi session.
-
-## Run path
-
-```text
-HTTP message request
-  → application run orchestration
-  → persist user input / queue decision
-  → build instructions, skills and tool set
-  → AgentBridge / pi session
-  → map pi events to application events
-  → persist assistant result
-  → publish StreamEvent over SSE
-```
-
-See `docs/agent-flow.md` for queue, steering, stream and reconciliation detail.
-
-## Session lifecycle
-
-Sessions are opened or created under `POP_AGENT_DATA_DIR/sessions/` and cached by chat. Idle sessions unload from memory and reopen from their pi-owned path. Pop changes sessions through public pi APIs; native session commands such as compact, export and fork are product commands rather than prompts to the model.
-
-## Instructions and context
-
-The bridge assembles Pop Agent's neutral identity, custom instructions, pinned built-in knowledge and per-turn selected skills. Context from Files, memory, notes, web or MCP remains external content and must retain its trust envelope.
-
-## Tools
-
-Server tools and custom Pop tools are registered with pi. Local tools are separate prefixed tools backed by a selected PLA connection. Tool availability is computed per message; Plan Mode supplies a fail-closed read-only set through pi's active-tool API.
-
-Do not create a second agent loop in the CLI or web client. Providers, safety, sessions and accounting remain centralized.
-
-## Providers and models
-
-Provider configuration and model choice belong to Pop application services. The bridge receives the resolved provider/model for a run. Secrets stay server-side and encrypted at rest. Provider fallback and service-model work are accounted separately from the visible chat run where required.
-
-## Events and persistence
-
-The adapter maps pi SDK events to stable application events. The application assembles durable messages and the interface maps them to shared DTOs. Frequent fragments carry run identity and sequence so clients can reconcile after a snapshot or reconnect.
-
-## Cancellation and failure
-
-Stop aborts the pi session and its tool work. A terminal outcome is persisted and emitted. Provider errors become stable product error codes; they do not trigger uncontrolled retry loops. Interrupted server runs are reconciled into readable product history.
-
-## Change checklist
-
-When changing pi integration, inspect:
-
-- SDK public types and pinned package version;
-- bridge contract and adapter mapping;
-- session wake/reopen behavior;
-- tool selection and Plan Mode;
-- safety taint propagation;
-- usage accounting;
-- persisted message reconstruction;
-- SSE/CLI/PWA reconciliation tests;
-- pi patch checks and the full gate.
+See [../agent-flow.md](../agent-flow.md).

@@ -33,7 +33,7 @@ import { TaintGuard } from './tool-taint.js';
 import { shouldFailOver } from '../../application/chat/failover.js';
 
 /**
- * pi behind the AgentBridge port (pop-agent.spec §5, docs/agent-flow.md).
+ * pi behind the AgentBridge port (docs/specs/Spec-Pop-General.md §5, docs/agent-flow.md).
  *
  * It is the same port the scripted fake implements, and the application layer
  * did not change by a line to accept it -- which was the point of building
@@ -74,7 +74,7 @@ export interface PiBridgeDeps {
   /** The Skill Router: the relevant skills for a message, as prompt blocks. */
   skillsFor?: (message: string) => Promise<string[]>;
   /**
-   * Resolves the pair that should actually run (pop-agent.spec §15): the chat's
+   * Resolves the pair that should actually run (docs/specs/Spec-Pop-General.md §15): the chat's
    * override when usable, the global default otherwise, with silent
    * degradation and the never-empty election inside. Read per run.
    */
@@ -85,7 +85,7 @@ export interface PiBridgeDeps {
   idleMs?: number;
   onUsage?: (usage: PiRunUsage) => void;
   /**
-   * The wire carries a stable code and nothing else (pop-agent.spec §13), which is
+   * The wire carries a stable code and nothing else (docs/specs/Spec-Pop-General.md §13), which is
    * right for the UI and useless for whoever has to explain why a run failed.
    * The provider's own words go here, to the server log.
    */
@@ -163,11 +163,11 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
       await this.withSkills(this.withAttachments(request), request.prompt),
     );
     // Image attachments also go straight to the model when it is multimodal
-    // (pop-agent.spec §14, RF-014); otherwise they stay files the agent reads with
+    // (docs/specs/Spec-Pop-General.md §14, RF-014); otherwise they stay files the agent reads with
     // its tools (RF-015 fallback).
     const images = imagesFor(request);
 
-    // The pair is the identity (pop-agent.spec §15): the chat's override when it
+    // The pair is the identity (docs/specs/Spec-Pop-General.md §15): the chat's override when it
     // works, the global default when it does not -- never an error.
     const pair = this.deps.resolvePair?.(request.provider ?? '', model) ?? {
       providerId:
@@ -303,7 +303,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     // The safety guard for this run: it feeds on tool output and, in a turn
     // that read something suspicious, refuses on its own the commands that
     // would exfiltrate, read a secret, or destroy irreversibly -- no dialog,
-    // the model just gets told no (pop-agent.spec §10). A clean turn runs freely.
+    // the model just gets told no (docs/specs/Spec-Pop-General.md §10). A clean turn runs freely.
     entry.session.setGuard(
       new TaintGuard({
         ...(request.confirm === undefined ? {} : { confirm: request.confirm }),
@@ -329,7 +329,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     try {
       await entry.session.prompt(prompt, entry.session.supportsImages ? images : undefined);
 
-      // The reactive compaction trigger (pop-agent.spec §7): token accounting
+      // The reactive compaction trigger (docs/specs/Spec-Pop-General.md §7): token accounting
       // always errs a little, so when the provider refuses the turn for
       // context overflow, compact and retry the SAME turn -- exactly once,
       // never in a loop. The user sees one seamless run.
@@ -417,7 +417,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     return this.deps.engine.complete(request);
   }
 
-  // Subscription auth (pop-agent.spec §15, fase 1.5): the bridge only forwards --
+  // Subscription auth (docs/specs/Spec-Pop-General.md §15, fase 1.5): the bridge only forwards --
   // credentials live in the engine's store and never surface here.
   hasProviderAuth(providerId: string): boolean {
     return this.deps.engine.hasProviderAuth(providerId);
@@ -476,7 +476,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
   }
 
   /**
-   * Prepends the skills the router picked for this message (pop-agent.spec §8).
+   * Prepends the skills the router picked for this message (docs/specs/Spec-Pop-General.md §8).
    * These are Pop Agent's own trusted instructions, so they lead the prompt rather
    * than being wrapped as untrusted data.
    */
@@ -569,7 +569,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
 
     if (cached !== undefined) {
       // A model switch inside one provider needs no new authentication. The
-      // JSONL history remains untouched (pop-agent.spec §15).
+      // JSONL history remains untouched (docs/specs/Spec-Pop-General.md §15).
       if (cached.modelId !== modelId) {
         await cached.session.setModel(providerId, modelId);
         cached.modelId = modelId;
@@ -811,7 +811,7 @@ class RunTranslator {
 
   /**
    * The run settled on a provider error that names the context window
-   * (pop-agent.spec §7, reactive trigger). pi retries transient failures by
+   * (docs/specs/Spec-Pop-General.md §7, reactive trigger). pi retries transient failures by
    * itself; an overflow it only surfaces.
    */
   failedOnOverflow(): boolean {
@@ -822,7 +822,7 @@ class RunTranslator {
   finish(aborted: boolean): void {
     if (aborted || this.lastStopReason === 'aborted') this.fail('aborted', undefined);
     else if (this.lastStopReason === 'error') {
-      // Typed for failover (pop-agent.spec §15, fase 2): a transport failure gets
+      // Typed for failover (docs/specs/Spec-Pop-General.md §15, fase 2): a transport failure gets
       // its own code, and an HTTP refusal carries its status when the
       // provider's message names one.
       const message = this.lastErrorMessage;
@@ -881,7 +881,7 @@ function withRuntimeIdentity(request: AgentRunRequest, prompt: string): string {
 
 /**
  * The image attachments as multimodal content: base64 without the data-URI
- * prefix, plus the mime type (pop-agent.spec §14, RF-014). Non-images, and payloads
+ * prefix, plus the mime type (docs/specs/Spec-Pop-General.md §14, RF-014). Non-images, and payloads
  * that are not well-formed data URIs, are skipped -- they still land on disk
  * via saveAttachment for the agent's tools.
  */
@@ -972,7 +972,7 @@ function messageOf(error: unknown): string | undefined {
 /**
  * The HTTP status a thrown error carries, when the SDK put one on it
  * (`status`/`statusCode` on the error or its cause). Typed input for the
- * failover classifier (pop-agent.spec §15, fase 2).
+ * failover classifier (docs/specs/Spec-Pop-General.md §15, fase 2).
  */
 function statusOf(error: unknown): number | undefined {
   for (const candidate of [error, (error as { cause?: unknown } | null)?.cause]) {

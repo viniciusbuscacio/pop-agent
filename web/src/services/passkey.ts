@@ -6,7 +6,7 @@ import type {
 import { apiRequest } from './api';
 
 /**
- * Passkey / Face ID from the browser side (pop-agent.spec §9). Registration needs a
+ * Passkey / Face ID from the browser side (docs/specs/Spec-Pop-General.md §9). Registration needs a
  * session; login is public and hands back a session token the app then holds,
  * exactly like the password login.
  */

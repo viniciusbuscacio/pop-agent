@@ -11,7 +11,7 @@ import type { SettingsRepo } from '../ports/settings-repo.js';
 import { signToken, verifyToken, type TokenPayload, type VerifyResult } from './token.js';
 
 /**
- * The single-user account (pop-agent.spec §9): password login, recovery key, and an
+ * The single-user account (docs/specs/Spec-Pop-General.md §9): password login, recovery key, and an
  * epoch that invalidates every issued token at once.
  *
  * Where each piece lives, and why:
@@ -99,7 +99,7 @@ export class AuthService {
 
   /**
    * A session token on the current epoch, for a caller that has authenticated
-   * some other way -- a passkey (pop-agent.spec §9). Undefined before setup.
+   * some other way -- a passkey (docs/specs/Spec-Pop-General.md §9). Undefined before setup.
    */
   issueSessionToken(): string | undefined {
     const record = this.record();
@@ -132,7 +132,7 @@ export class AuthService {
   }
 
   /**
-   * The way back in for whoever holds the shell (pop-agent.spec §17): no current
+   * The way back in for whoever holds the shell (docs/specs/Spec-Pop-General.md §17): no current
    * password, no recovery key, because the case it exists for is having lost
    * both. `popman reset-password` is the only caller, and it can only run on
    * the server itself, next to the database it is rewriting.

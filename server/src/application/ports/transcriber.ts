@@ -1,5 +1,5 @@
 /**
- * Voice into text (pop-agent.spec §14, aw's flow). The adapter is whisper.cpp on
+ * Voice into text (docs/specs/Spec-Pop-General.md §14, aw's flow). The adapter is whisper.cpp on
  * the server's own CPU -- transcription costs electricity, not tokens
  * (decision of 31/07/2026, replacing the short-lived cloud route).
  */

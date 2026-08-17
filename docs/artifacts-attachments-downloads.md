@@ -3,13 +3,13 @@
 > **HISTORICAL — superseded 2026-08-05.** The artifact catalog this plan
 > built — the `artifacts` table, versions, id-named blobs, per-id signed
 > links, `save_artifact`/`read_artifact` — was replaced by Files as a plain
-> folder (pop-agent.spec 1.58/1.59, §4/§6/§14). Nothing below is normative; it
+> folder (docs/specs/Spec-Pop-General.md 1.58/1.59, §4/§6/§14). Nothing below is normative; it
 > stays as the record of what was built and why it could be retired.
 
-> The normative rules land in `pop-agent.spec`; this file is the working plan the
+> The normative rules land in `docs/specs/Spec-Pop-General.md`; this file is the working plan the
 > maintainer's notes call RF-001–019. It is split into blocks that each end on
 > a green gate and a small commit. No block waits for manual acceptance
-> (working model, pop-agent.spec §19/§20); the final iPhone checklist collects what
+> (working model, docs/specs/Spec-Pop-General.md §19/§20); the final iPhone checklist collects what
 > only a device can confirm.
 
 ## What exists before this (verified 2026-07-31)

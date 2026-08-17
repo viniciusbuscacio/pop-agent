@@ -1,4 +1,4 @@
--- Auto-titles and summaries (pop-agent.spec §14, Phase 3 step 3).
+-- Auto-titles and summaries (docs/specs/Spec-Pop-General.md §14, Phase 3 step 3).
 --
 -- summary is written by the service model alongside the title; the memory of
 -- Phase 4 reads it. auto_title records whether Pop Agent may keep renaming this

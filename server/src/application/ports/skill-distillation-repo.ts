@@ -1,5 +1,5 @@
 /**
- * What the background distiller has to remember between ticks (pop-agent.spec §8,
+ * What the background distiller has to remember between ticks (docs/specs/Spec-Pop-General.md §8,
  * auto-skill fase c).
  *
  * Two things, and they are different in kind. The **watermark** is how far into

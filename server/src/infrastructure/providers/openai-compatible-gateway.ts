@@ -7,7 +7,7 @@ import {
 } from '../../application/ports/provider-gateway.js';
 
 /**
- * Any OpenAI-compatible HTTP API (pop-agent.spec §15): the model catalog and the
+ * Any OpenAI-compatible HTTP API (docs/specs/Spec-Pop-General.md §15): the model catalog and the
  * one-shot completions that do not belong to a conversation -- the key test,
  * titles and summaries. OpenRouter, OpenAI and user-run endpoints all speak
  * this shape; chat traffic goes through pi, never through here.
@@ -119,7 +119,7 @@ export class OpenAiCompatibleGateway implements ProviderGateway {
   }
 }
 
-/** The default provider, with its attribution headers (pop-agent.spec §15). */
+/** The default provider, with its attribution headers (docs/specs/Spec-Pop-General.md §15). */
 export function createOpenRouterGateway(): OpenAiCompatibleGateway {
   return new OpenAiCompatibleGateway(
     'https://openrouter.ai/api/v1',

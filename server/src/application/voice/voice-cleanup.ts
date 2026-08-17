@@ -1,5 +1,5 @@
 /**
- * Cleaning up a raw voice transcript with one cheap LLM call (pop-agent.spec §14,
+ * Cleaning up a raw voice transcript with one cheap LLM call (docs/specs/Spec-Pop-General.md §14,
  * aw's flow). whisper hears the words but not the punctuation; a single pass by
  * the service model fixes capitalization, sentence breaks and obvious mishears,
  * keeping the original language and adding nothing. Best-effort by contract: no
@@ -20,7 +20,7 @@ const PROMPT = [
 
 export interface VoiceCleanupDeps {
   /**
-   * One background completion on the default provider (pop-agent.spec §15): a voice
+   * One background completion on the default provider (docs/specs/Spec-Pop-General.md §15): a voice
    * note has no parent chat to inherit a provider from, so it takes the head of
    * the priority list. `model` overrides the provider's Service Model when the
    * user named one in Settings.

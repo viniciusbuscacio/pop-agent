@@ -6,7 +6,7 @@ import { DEFAULT_SKILLS } from './default-skills.js';
 /**
  * The shipped defaults against the real dialogue (2026-07-31) in which the
  * router surfaced no self-knowledge and Pop Agent recommended Python for its own
- * skills (pop-agent.spec §8). The user writes Portuguese, the routing texts are
+ * skills (docs/specs/Spec-Pop-General.md §8). The user writes Portuguese, the routing texts are
  * English: these messages must reach pop-agent-codebase on translation-stable
  * tokens alone -- no embedder in the loop.
  */

@@ -5,7 +5,7 @@ import { apiError } from './errors.js';
 /**
  * Request-body plumbing shared by the routes: read JSON, and turn a Zod
  * failure into the project's error envelope with a code the frontend can
- * branch on (pop-agent.spec §13).
+ * branch on (docs/specs/Spec-Pop-General.md §13).
  */
 
 export async function readJson(c: Context): Promise<unknown> {

@@ -1,9 +1,9 @@
 /**
  * Types shared between server and web. The web app never redefines a
- * server type — it imports from here (pop-agent.spec §3, §13).
+ * server type — it imports from here (docs/specs/Spec-Pop-General.md §3, §13).
  */
 
-/** Structured API error body. Codes are stable (pop-agent.spec §13). */
+/** Structured API error body. Codes are stable (docs/specs/Spec-Pop-General.md §13). */
 export interface ApiError {
   error: {
     code: string;
@@ -20,12 +20,12 @@ export interface LockedError extends ApiError {
 /**
  * Response header carrying a refreshed session token. The API renews a token
  * that is over a day old; the client swaps whatever it stored when it sees
- * this (pop-agent.spec §9).
+ * this (docs/specs/Spec-Pop-General.md §9).
  */
 export const SESSION_TOKEN_HEADER = 'x-pop-agent-token';
 
 /**
- * Which client sent a request (pop-agent.spec §13). Set once in each client's API
+ * Which client sent a request (docs/specs/Spec-Pop-General.md §13). Set once in each client's API
  * layer, so every call carries it -- including the ones nobody has written
  * yet -- and recorded on the message so the history remembers where each turn
  * happened, not just where this one is.
@@ -201,19 +201,19 @@ export interface SignOutOthersResponse {
  * partial merge -- and rejects any field it does not know.
  *
  * Theme is absent by design: it belongs to the device, not the account
- * (pop-agent.spec §14).
+ * (docs/specs/Spec-Pop-General.md §14).
  */
 export type PiUpdatePolicyDTO = 'keep-current' | 'recommended' | 'latest';
 
 export interface SettingsDTO {
   language: 'en';
-  /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
+  /** Provider used when a chat does not choose its own (docs/specs/Spec-Pop-General.md §15). */
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
-  /** whisper.cpp model for voice transcription (pop-agent.spec §14). */
+  /** whisper.cpp model for voice transcription (docs/specs/Spec-Pop-General.md §14). */
   voiceModel: string;
   /** Whether an LLM pass improves the raw transcript before it is used. */
   voiceCleanup: boolean;
@@ -236,7 +236,7 @@ export interface UserMemoryDTO {
   hasBackup: boolean;
 }
 
-/** A data-directory snapshot (pop-agent.spec §16). */
+/** A data-directory snapshot (docs/specs/Spec-Pop-General.md §16). */
 export interface BackupDTO {
   name: string;
   size: number;
@@ -248,7 +248,7 @@ export interface BackupsResponse {
 }
 
 /**
- * `GET /v1/storage` — where the disk went (pop-agent.spec §14). One line per kind
+ * `GET /v1/storage` — where the disk went (docs/specs/Spec-Pop-General.md §14). One line per kind
  * of weight, measured before any quota exists, because a limit chosen without
  * looking is a guess about which line is the expensive one.
  */
@@ -276,14 +276,14 @@ export interface StorageResponse {
   disk?: { freeBytes: number; totalBytes: number };
 }
 
-/** `GET /v1/usage` — the cost dashboard (pop-agent.spec §14). */
+/** `GET /v1/usage` — the cost dashboard (docs/specs/Spec-Pop-General.md §14). */
 export interface UsageResponse {
   total: { runs: number; tokensIn: number; tokensOut: number; cost: number };
   byModel: { model: string; runs: number; cost: number }[];
   byDay: { day: string; cost: number }[];
 }
 
-/** A skill as Settings → Skills shows and edits it (pop-agent.spec §8). */
+/** A skill as Settings → Skills shows and edits it (docs/specs/Spec-Pop-General.md §8). */
 export interface SkillDTO {
   slug: string;
   name: string;
@@ -291,7 +291,7 @@ export interface SkillDTO {
   whenToUse: string;
   body: string;
   /**
-   * Where the skill came from (pop-agent.spec §8). `builtin` ships with the app and
+   * Where the skill came from (docs/specs/Spec-Pop-General.md §8). `builtin` ships with the app and
    * cannot be deleted; `auto` was distilled from a conversation; `user` is the
    * user's own. Editing an auto skill promotes it to `user`.
    */
@@ -374,7 +374,7 @@ export interface DistillerStatusDTO {
   systematicBlocking: boolean;
 }
 
-// ---- Files as a plain folder (pop-agent.spec §14, spec 1.58) ----
+// ---- Files as a plain folder (docs/specs/Spec-Pop-General.md §14, spec 1.58) ----
 
 /**
  * One entry of the Files tree (`GET /v1/files`): the disk as it is. The path
@@ -435,7 +435,7 @@ export interface SaveSkillRequest {
   pinned?: boolean;
 }
 
-/** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (pop-agent.spec §15). */
+/** `GET /v1/update/status` — versions and whether newer pi/Pop Agent exist (docs/specs/Spec-Pop-General.md §15). */
 export type PiCandidatePhaseDTO =
   | 'idle'
   | 'installing'
@@ -553,7 +553,7 @@ export interface ServerInfoResponse {
 }
 
 /**
- * `GET /v1/health` — the sidebar's silence-means-healthy probe (pop-agent.spec
+ * `GET /v1/health` — the sidebar's silence-means-healthy probe (docs/specs/Spec-Pop-General.md
  * §13). Public, cheap, cached signals only: a missing answer means
  * "Server offline", an `error` field means connected-but-degraded.
  */
@@ -569,7 +569,7 @@ export interface ChatDTO {
   title: string;
   /** Empty means "whatever the default model is". */
   model: string;
-  /** Empty means "whatever the default provider is" (pop-agent.spec §15). */
+  /** Empty means "whatever the default provider is" (docs/specs/Spec-Pop-General.md §15). */
   provider: string;
   archived: boolean;
   /** Kept at the top of the list and exempt from bulk archiving. */
@@ -711,13 +711,13 @@ export interface PatchChatRequest {
   archived?: boolean;
   pinned?: boolean;
   model?: string;
-  /** Must travel with `model`: the identity is the pair (pop-agent.spec §15). */
+  /** Must travel with `model`: the identity is the pair (docs/specs/Spec-Pop-General.md §15). */
   provider?: string;
   executionMode?: ExecutionMode;
 }
 
 /**
- * A file sent with a message (pop-agent.spec §6, aw's shape). The data URI is the
+ * A file sent with a message (docs/specs/Spec-Pop-General.md §6, aw's shape). The data URI is the
  * whole payload: stored on the message row, rendered from there, and written
  * into the agent's workspace so its tools can read the file.
  */
@@ -755,7 +755,7 @@ export interface StopRunResponse {
   stopped: boolean;
 }
 
-/** `POST /v1/chats/:id/confirm` — answers a paused risky action (pop-agent.spec §10). */
+/** `POST /v1/chats/:id/confirm` — answers a paused risky action (docs/specs/Spec-Pop-General.md §10). */
 export interface ConfirmRequest {
   runId: string;
   allow: boolean;
@@ -767,7 +767,7 @@ export interface ConfirmResponse {
 }
 
 /**
- * A background task as the Tasks screen shows it (pop-agent.spec §21). Times are
+ * A background task as the Tasks screen shows it (docs/specs/Spec-Pop-General.md §21). Times are
  * ISO strings on the wire, like every other timestamp the API hands out, even
  * though the table stores epoch milliseconds.
  */
@@ -878,7 +878,7 @@ export interface ProviderStatusDTO {
   /** The model this provider uses for Pop Agent's own background work (§15). */
   serviceModel: string;
   allowCustomModel: boolean;
-  /** A custom instance's endpoint; never a secret (pop-agent.spec §15). */
+  /** A custom instance's endpoint; never a secret (docs/specs/Spec-Pop-General.md §15). */
   baseURL?: string;
   /** True for a user-created custom instance: editable, deletable. */
   custom?: boolean;
@@ -886,7 +886,7 @@ export interface ProviderStatusDTO {
   order: number;
   /** The user's on/off switch: a disabled provider never serves a run. */
   enabled: boolean;
-  /** When set, the last run failed with an auth-class error (pop-agent.spec §15). */
+  /** When set, the last run failed with an auth-class error (docs/specs/Spec-Pop-General.md §15). */
   authErrorAt?: string;
 }
 
@@ -929,7 +929,7 @@ export interface SetProviderKeyRequest {
 }
 
 /**
- * Unlimited custom OpenAI-compatible providers (pop-agent.spec §15). An instance
+ * Unlimited custom OpenAI-compatible providers (docs/specs/Spec-Pop-General.md §15). An instance
  * is created empty first -- its id anchors the key and the card -- then
  * edited in place. The key travels only through the ordinary key route.
  */
@@ -981,7 +981,7 @@ export interface TestProviderResponse {
 }
 
 /**
- * Subscription sign-in (pop-agent.spec §15, fase 1.5). The flow runs on the
+ * Subscription sign-in (docs/specs/Spec-Pop-General.md §15, fase 1.5). The flow runs on the
  * server; the browser polls its transcript and answers at most one question.
  * No token material ever rides these shapes.
  */
@@ -1062,7 +1062,7 @@ export type StreamEvent =
   | { kind: 'title'; chatId: string; title: string }
   /** A persisted user turn opened a run, whichever client sent it. */
   | { kind: 'run-started'; chatId: string; runId: string; user: MessageDTO }
-  /** A risky action is paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
+  /** A risky action is paused mid-run, waiting for Allow or Deny (docs/specs/Spec-Pop-General.md §10). */
   | { kind: 'confirm'; chatId: string; runId: string; action: string; detail: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }

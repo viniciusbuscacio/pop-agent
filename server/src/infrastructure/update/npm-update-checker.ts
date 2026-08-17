@@ -3,7 +3,7 @@ import type { UpdateChecker, UpdateStatus, UpdateStatusOptions } from '../../app
 import type { Versions } from '../config/versions.js';
 
 /**
- * The update check (pop-agent.spec §15): current versions, plus the latest pi on
+ * The update check (docs/specs/Spec-Pop-General.md §15): current versions, plus the latest pi on
  * the npm registry and the latest Pop Agent tag on the git origin -- knowing a new
  * version exists is worth a cheap request, applying it stays a documented
  * shell procedure gated by `npm run gate`. Results are cached briefly so

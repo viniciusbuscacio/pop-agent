@@ -1,7 +1,7 @@
 import type { Chat, ChatSummary, ExecutionMode, Message } from '../../domain/chat/chat.js';
 
 /**
- * Persistence port for conversations (pop-agent.spec §3). SQLite is one adapter;
+ * Persistence port for conversations (docs/specs/Spec-Pop-General.md §3). SQLite is one adapter;
  * the use cases never learn which.
  */
 export interface ChatRepo {
@@ -25,13 +25,13 @@ export interface ChatRepo {
   /** A manual rename turns auto-titling off; nothing turns it back on today. */
   setAutoTitle(id: string, autoTitle: boolean): void;
 
-  /** Append-only forensic log of every title a chat ever had (pop-agent.spec §14). */
+  /** Append-only forensic log of every title a chat ever had (docs/specs/Spec-Pop-General.md §14). */
   recordTitle(entry: { chatId: string; title: string; turn: number; source: 'auto' | 'manual'; createdAt: string }): void;
 
   /**
    * Records where pi keeps this conversation's own session file. Pop Agent never
    * reads that file -- it only needs the path to hand back when the chat wakes
-   * up on the other side of an idle unload or a restart (pop-agent.spec §5).
+   * up on the other side of an idle unload or a restart (docs/specs/Spec-Pop-General.md §5).
    */
   setPiSessionId(id: string, piSessionId: string): void;
 
@@ -51,7 +51,7 @@ export interface ChatRepo {
   ): Message[];
 
   /**
-   * The newest message id of every chat, in one query (pop-agent.spec §8, fase
+   * The newest message id of every chat, in one query (docs/specs/Spec-Pop-General.md §8, fase
    * c). The distiller's tick compares these against its watermarks to find the
    * chats worth opening at all -- the idle answer is almost always "nothing
    * new anywhere", and learning that used to cost one tail-read per chat.

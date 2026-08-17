@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path';
 
 /**
- * Path safety for the Files folder (pop-agent.spec §14, "Files as a plain folder").
+ * Path safety for the Files folder (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder").
  *
  * Files are addressed by real relative paths now, so the path itself is user
  * input everywhere -- the download URL, the upload form, the agent's tools.

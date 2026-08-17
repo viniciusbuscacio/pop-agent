@@ -1,7 +1,7 @@
 import type { Embedder, EmbeddingKind } from '../../application/ports/embedder.js';
 
 /**
- * Local embeddings with transformers.js (pop-agent.spec §7): the multilingual
+ * Local embeddings with transformers.js (docs/specs/Spec-Pop-General.md §7): the multilingual
  * e5-small model, run on the server's CPU. The model (~110 MB) downloads once
  * into POP_AGENT_DATA_DIR/models and is cached; the whole library is imported
  * dynamically so an install running the fake bridge -- CI, the smoke -- never

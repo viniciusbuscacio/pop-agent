@@ -13,7 +13,7 @@ import type { Db } from './types.js';
 
 /**
  * A primary-key collision is astronomically unlikely with 65-bit ids, but the
- * behaviour is defined (pop-agent.spec §6): re-draw the id and try once more rather
+ * behaviour is defined (docs/specs/Spec-Pop-General.md §6): re-draw the id and try once more rather
  * than fail the request or overwrite. One retry is plenty.
  */
 function isPrimaryKeyCollision(error: unknown): boolean {

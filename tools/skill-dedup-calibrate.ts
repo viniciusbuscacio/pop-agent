@@ -1,6 +1,6 @@
 /**
  * What cosine and vocabulary actually separate "the same skill again" from
- * "a different skill" (pop-agent.spec §8). The distiller's dedup bars come from this
+ * "a different skill" (docs/specs/Spec-Pop-General.md §8). The distiller's dedup bars come from this
  * measurement; before it they were guessed, and the guess filed a good
  * "Restart Pop Agent service" skill as a revision of `self-change` at 0.9017.
  *

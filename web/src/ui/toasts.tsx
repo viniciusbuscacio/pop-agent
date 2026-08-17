@@ -3,7 +3,7 @@ import { Pressable } from './controls';
 
 /**
  * In-app notifications, in the same corner and skin as the update prompt
- * (pop-agent.spec §14): the default way the app tells you something small happened
+ * (docs/specs/Spec-Pop-General.md §14): the default way the app tells you something small happened
  * -- the thinking toggle is the first. Tap to dismiss; it clears on its own
  * either way. Not the operating system's notifications, which are Web Push.
  *

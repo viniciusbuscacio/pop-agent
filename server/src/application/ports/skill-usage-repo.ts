@@ -1,5 +1,5 @@
 /**
- * How often each skill is actually injected (pop-agent.spec §8). The router records
+ * How often each skill is actually injected (docs/specs/Spec-Pop-General.md §8). The router records
  * it; the Skills screen shows it; the garbage collector will one day read it to
  * decide which auto-skills to archive when there are too many.
  *

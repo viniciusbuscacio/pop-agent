@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 /**
  * Authenticated encryption for values stored in the secrets table
- * (pop-agent.spec §9). AES-256-GCM over node:crypto -- no third-party dependency,
+ * (docs/specs/Spec-Pop-General.md §9). AES-256-GCM over node:crypto -- no third-party dependency,
  * so this stays in a pure layer.
  *
  * A sealed value is a single buffer: nonce || ciphertext || tag. The nonce is

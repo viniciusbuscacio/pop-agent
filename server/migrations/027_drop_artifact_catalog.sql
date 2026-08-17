@@ -1,4 +1,4 @@
--- Files became a plain folder (pop-agent.spec §14, spec 1.58): the catalog dies.
+-- Files became a plain folder (docs/specs/Spec-Pop-General.md §14, spec 1.58): the catalog dies.
 -- The rows are exported to POP_AGENT_DATA_DIR/files/ by bootstrap BEFORE the
 -- migrations run (the export reads these tables from the pre-migration file),
 -- so by the time this executes the data already lives on disk under its real

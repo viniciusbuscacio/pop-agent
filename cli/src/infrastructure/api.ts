@@ -117,7 +117,7 @@ export class PopAgentApi {
   async request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
     const headers: Record<string, string> = {
       // Set here and nowhere else, so every call carries it -- including the
-      // ones nobody has written yet (pop-agent.spec §13).
+      // ones nobody has written yet (docs/specs/Spec-Pop-General.md §13).
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
     };

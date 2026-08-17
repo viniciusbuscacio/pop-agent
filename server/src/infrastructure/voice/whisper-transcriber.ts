@@ -31,7 +31,7 @@ export interface WhisperOptions {
   ffmpeg: string;
   /**
    * Resolves the GGML model to use, downloading it if needed. Async because a
-   * model may not be on disk yet (pop-agent.spec §14).
+   * model may not be on disk yet (docs/specs/Spec-Pop-General.md §14).
    */
   resolveModel: () => Promise<string>;
 }
@@ -53,7 +53,7 @@ export class WhisperTranscriber implements Transcriber {
 
     const dir = mkdtempSync(join(tmpdir(), 'pop-voice-'));
     try {
-      // Internal files get the id convention (pop-agent.spec §6): audio_<11>.wav.
+      // Internal files get the id convention (docs/specs/Spec-Pop-General.md §6): audio_<11>.wav.
       // Distinct basenames, so a recording that is already .wav does not
       // collide with ffmpeg's output.
       const input = join(dir, randomFileName('audio', safeExtension(job.format)));

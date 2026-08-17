@@ -1,5 +1,5 @@
 -- Artifacts: files the agent produces (or the user uploads), tracked per chat
--- and downloadable through a signed link (pop-agent.spec §6, §14). The bytes live on
+-- and downloadable through a signed link (docs/specs/Spec-Pop-General.md §6, §14). The bytes live on
 -- disk under POP_AGENT_DATA_DIR/artifacts/<chat_id>/<id>; this row is the record.
 -- The id is the only identifier that ever leaves the server: no filesystem path
 -- or storage key is exposed.

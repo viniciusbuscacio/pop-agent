@@ -1,7 +1,7 @@
 import type { Chat } from '../../domain/chat/chat.js';
 
 /**
- * Removes everything a chat left outside the database (pop-agent.spec §6): pi's
+ * Removes everything a chat left outside the database (docs/specs/Spec-Pop-General.md §6): pi's
  * JSONL session file and the chat's attachment directory. The SQLite rows go
  * by cascade; this is the rest, so deleting a conversation leaves no orphans.
  */

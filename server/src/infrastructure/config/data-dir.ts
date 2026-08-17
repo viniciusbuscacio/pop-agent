@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Runtime data lives in one directory (pop-agent.spec §4) so a backup is a folder
+ * Runtime data lives in one directory (docs/specs/Spec-Pop-General.md §4) so a backup is a folder
  * copy. Default ~/.pop-agent, overridable with POP_AGENT_DATA_DIR (tests point it at a
  * temp dir).
  */
@@ -19,7 +19,7 @@ export function ensureDataDir(dataDir: string): string {
 }
 
 /**
- * The single root the agent works in (pop-agent.spec §4). Kept apart from the data
+ * The single root the agent works in (docs/specs/Spec-Pop-General.md §4). Kept apart from the data
  * directory on purpose: this one is meant to be looked at, edited and cloned
  * into, and it holds no keys.
  */
@@ -36,7 +36,7 @@ export function ensureWorkspace(workspace: string): string {
 }
 
 /**
- * The user's Files (pop-agent.spec §14 "Files as a plain folder"): a plain
+ * The user's Files (docs/specs/Spec-Pop-General.md §14 "Files as a plain folder"): a plain
  * directory tree with real names, inside the data directory so it rides the
  * backup. What `tree` shows here is exactly what the Files tab shows.
  */
@@ -74,7 +74,7 @@ export function ensureWorkspaceFilesLink(workspace: string, filesDir: string): s
 }
 
 /**
- * Where artifact bytes live (pop-agent.spec §6, §14): inside the data directory so
+ * Where artifact bytes live (docs/specs/Spec-Pop-General.md §6, §14): inside the data directory so
  * they ride the backup (they are the user's own content), grouped per chat.
  */
 export function resolveArtifactsDir(dataDir: string): string {

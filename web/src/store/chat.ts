@@ -47,7 +47,7 @@ interface ChatState {
   pending: Record<string, QueuedMessageDTO[]>;
   failures: Record<string, string>;
 
-  /** A risky action paused mid-run, waiting for Allow or Deny (pop-agent.spec §10). */
+  /** A risky action paused mid-run, waiting for Allow or Deny (docs/specs/Spec-Pop-General.md §10). */
   confirms: Record<string, { runId: string; action: string; detail: string }>;
 
   loadChats: () => Promise<void>;
@@ -369,7 +369,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async setModel(chatId, model, provider) {
-    // The pair is the identity (pop-agent.spec §15): they always travel together.
+    // The pair is the identity (docs/specs/Spec-Pop-General.md §15): they always travel together.
     const updated = await chatsService.patch(chatId, { model, provider });
     set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
   },

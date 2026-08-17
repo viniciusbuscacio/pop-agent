@@ -1,4 +1,4 @@
--- skill_revisions.similarity becomes nullable (pop-agent.spec §8, auto-skill).
+-- skill_revisions.similarity becomes nullable (docs/specs/Spec-Pop-General.md §8, auto-skill).
 --
 -- The column exists to retune the dedup bars with real measurements, and a
 -- revision proposed on a SLUG COLLISION used to carry a hardcoded 1 -- a

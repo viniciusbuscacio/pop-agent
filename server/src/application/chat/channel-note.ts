@@ -1,6 +1,6 @@
 /**
  * Telling the agent where a message came from, and only when it is news
- * (pop-agent.spec §13).
+ * (docs/specs/Spec-Pop-General.md §13).
  *
  * The naive version puts "this arrived through the CLI" on every turn. In a
  * fifty-turn conversation that is fifty copies of a fact that mattered once,

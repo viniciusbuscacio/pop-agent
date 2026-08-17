@@ -87,7 +87,7 @@ export function ChatPage() {
   }, [chatId, openChat]);
 
   useEffect(() => {
-    // The pickable pairs (pop-agent.spec §15): every provider that has a catalog
+    // The pickable pairs (docs/specs/Spec-Pop-General.md §15): every provider that has a catalog
     // contributes its models, labelled with the provider when there are
     // several. A failed provider just contributes nothing.
     void (async () => {

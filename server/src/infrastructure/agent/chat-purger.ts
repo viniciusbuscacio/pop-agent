@@ -4,10 +4,10 @@ import type { Chat } from '../../domain/chat/chat.js';
 import type { ChatPurger } from '../../application/ports/chat-purger.js';
 
 /**
- * Deletes a chat's on-disk remains (pop-agent.spec §6): pi's JSONL session file and
+ * Deletes a chat's on-disk remains (docs/specs/Spec-Pop-General.md §6): pi's JSONL session file and
  * the chat's attachment folder in the workspace. The user's Files are NOT
  * touched -- deleting a conversation must never delete the files it produced
- * (pop-agent.spec §14, plain-folder design). Best-effort by design -- a file already gone is the goal, not
+ * (docs/specs/Spec-Pop-General.md §14, plain-folder design). Best-effort by design -- a file already gone is the goal, not
  * an error -- and it disposes any live pi session first so nothing rewrites the
  * file after it is removed.
  */

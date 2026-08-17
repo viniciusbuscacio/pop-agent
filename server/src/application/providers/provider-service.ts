@@ -20,7 +20,7 @@ import {
 import type { ProviderCooldown } from './provider-cooldown.js';
 
 /**
- * The providers as the rest of the app sees them (pop-agent.spec §15): where the
+ * The providers as the rest of the app sees them (docs/specs/Spec-Pop-General.md §15): where the
  * keys live, whether they work, and what models they offer. Provider is data,
  * not a class -- everything here is driven by PROVIDER_DEFINITIONS.
  *
@@ -32,7 +32,7 @@ import type { ProviderCooldown } from './provider-cooldown.js';
 
 const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** The unlimited-customs registry (pop-agent.spec §15): pure data, never a key. */
+/** The unlimited-customs registry (docs/specs/Spec-Pop-General.md §15): pure data, never a key. */
 const CUSTOM_REGISTRY_KEY = 'provider.custom.registry';
 /** The single-slot era's config and id; read only by the boot migration. */
 const LEGACY_CUSTOM_CONFIG_KEY = 'provider.custom.config';
@@ -41,7 +41,7 @@ const LEGACY_CUSTOM_ID = 'custom';
 const CUSTOM_ALIAS_KEY = 'provider.custom.alias';
 
 /**
- * The priority list, #1 first (pop-agent.spec §15, fase 2). The list IS the
+ * The priority list, #1 first (docs/specs/Spec-Pop-General.md §15, fase 2). The list IS the
  * failover chain and its head IS the global default: one lever, so the
  * numbered list can never disagree with what a new chat actually uses.
  */
@@ -65,7 +65,7 @@ export interface ProviderStatus {
   defaultModel: string;
   /**
    * The model this provider uses for Pop Agent's own background work -- titles,
-   * summaries, transcript cleanup (pop-agent.spec §15). Equal to `defaultModel`
+   * summaries, transcript cleanup (docs/specs/Spec-Pop-General.md §15). Equal to `defaultModel`
    * until the user picks something cheaper.
    */
   serviceModel: string;
@@ -78,7 +78,7 @@ export interface ProviderStatus {
   order: number;
   /** The user's on/off switch: a disabled provider never serves a run. */
   enabled: boolean;
-  /** When set, the last run failed with an auth-class error (pop-agent.spec §15). */
+  /** When set, the last run failed with an auth-class error (docs/specs/Spec-Pop-General.md §15). */
   authErrorAt?: string;
 }
 
@@ -90,7 +90,7 @@ interface CatalogCache {
   models: ModelInfo[];
 }
 
-/** The pair that identifies a model (pop-agent.spec §15). */
+/** The pair that identifies a model (docs/specs/Spec-Pop-General.md §15). */
 export interface ModelRef {
   providerId: string;
   modelId: string;
@@ -108,7 +108,7 @@ export interface ProviderServiceDeps {
   /** The plain-HTTP face of each BUILTIN provider, by id. */
   gateways: Record<string, ProviderGateway>;
   /**
-   * Builds the gateway for a custom instance's endpoint (pop-agent.spec §15).
+   * Builds the gateway for a custom instance's endpoint (docs/specs/Spec-Pop-General.md §15).
    * Called per use with the instance's normalized base URL.
    */
   customGateway?: (baseURL: string) => ProviderGateway;
@@ -126,7 +126,7 @@ export interface ProviderServiceDeps {
    */
   engineModels: (providerId: string) => Promise<ModelInfo[]>;
   /**
-   * Whether the engine holds an OAuth credential for a provider (pop-agent.spec
+   * Whether the engine holds an OAuth credential for a provider (docs/specs/Spec-Pop-General.md
    * §15, fase 1.5). The credential lives in pi's own store; this is the only
    * question the service ever asks about it.
    */
@@ -145,12 +145,12 @@ export interface ProviderServiceDeps {
   /** Drops the engine's stored OAuth credential (disconnect). */
   engineLogout: (providerId: string) => Promise<void>;
   /**
-   * The advisory failover cooldown (pop-agent.spec §15, fase 2): the chain skips
+   * The advisory failover cooldown (docs/specs/Spec-Pop-General.md §15, fase 2): the chain skips
    * penalized providers, and saving a key forgives its provider.
    */
   cooldown?: ProviderCooldown;
   /**
-   * Where background completions book their spend (pop-agent.spec §14). Rows
+   * Where background completions book their spend (docs/specs/Spec-Pop-General.md §14). Rows
    * are flagged `service` so the Usage screen can tell them from chat runs.
    */
   llmRuns?: LlmRunsRepo;
@@ -265,7 +265,7 @@ export class ProviderService {
     this.clearAuthError(providerId);
   }
 
-  /** Drops an oauth provider's subscription credential (pop-agent.spec §15). */
+  /** Drops an oauth provider's subscription credential (docs/specs/Spec-Pop-General.md §15). */
   async disconnect(providerId: string): Promise<void> {
     if (providerDefinition(providerId)?.authType !== 'oauth') return;
     await this.deps.engineLogout(providerId);
@@ -368,7 +368,7 @@ export class ProviderService {
   }
 
   /**
-   * Creates a custom instance (pop-agent.spec §15): an id nothing else carries --
+   * Creates a custom instance (docs/specs/Spec-Pop-General.md §15): an id nothing else carries --
    * `custom-` + 5 random hex bytes, re-rolled on the unlikely collision --
    * and pure data beside it. The key arrives later through the ordinary
    * per-provider key route, sealed under this id.
@@ -458,7 +458,7 @@ export class ProviderService {
   }
 
   /**
-   * One-time boot migration from the single-slot era (pop-agent.spec §15): a
+   * One-time boot migration from the single-slot era (docs/specs/Spec-Pop-General.md §15): a
    * legacy `provider.custom.config` and/or `provider.custom.apiKey` becomes
    * one registry instance, key and all, and the legacy entries are removed.
    * The instance's id is remembered as an alias, so a chat override still
@@ -509,7 +509,7 @@ export class ProviderService {
   }
 
   /**
-   * The Service Model of one provider (pop-agent.spec §15, corrected 07/08).
+   * The Service Model of one provider (docs/specs/Spec-Pop-General.md §15, corrected 07/08).
    *
    * Pop Agent runs two kinds of call: the Chat Model, which the user talks to, and
    * the Service Model, which does Pop Agent's own work -- naming a conversation,
@@ -583,7 +583,7 @@ export class ProviderService {
   }
 
   /**
-   * Runs one of Pop Agent's own completions over that chain (pop-agent.spec §15 fase 2,
+   * Runs one of Pop Agent's own completions over that chain (docs/specs/Spec-Pop-General.md §15 fase 2,
    * confirmed 07/08). A service task is not special: when the provider it
    * inherited refuses, it moves down the same list a chat run would.
    *
@@ -653,7 +653,7 @@ export class ProviderService {
 
   /**
    * Background work bills like chat work, so it lands in the same book
-   * (pop-agent.spec §14): titles, summaries and voice cleanup used to spend
+   * (docs/specs/Spec-Pop-General.md §14): titles, summaries and voice cleanup used to spend
    * without a row, and the Usage screen read low by exactly what they cost.
    * `chatId` is empty by convention -- a service run belongs to no
    * conversation, and the report never groups by chat.
@@ -685,7 +685,7 @@ export class ProviderService {
   }
 
   /**
-   * Which pair should actually run (pop-agent.spec §15): a chat override wins when
+   * Which pair should actually run (docs/specs/Spec-Pop-General.md §15): a chat override wins when
    * it is usable; otherwise the global default; when the default's key is
    * gone the next configured provider is elected -- the slot is never empty.
    * With nothing configured at all the default pair is answered anyway, and
@@ -702,7 +702,7 @@ export class ProviderService {
   }
 
   /**
-   * The failover chain for a run (pop-agent.spec §15, fase 2): every usable pair
+   * The failover chain for a run (docs/specs/Spec-Pop-General.md §15, fase 2): every usable pair
    * in resolution order -- override first, then the global default, then the
    * remaining definitions -- one entry per provider. Penalized providers are
    * filtered out, unless that would empty the chain (the cooldown is

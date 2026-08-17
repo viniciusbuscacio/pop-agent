@@ -3,7 +3,7 @@ import { apiRequest } from './api';
 import { createStreamEventBatcher } from './stream-event-batcher';
 
 /**
- * The single EventSource (pop-agent.spec §14). Components never see it: they read
+ * The single EventSource (docs/specs/Spec-Pop-General.md §14). Components never see it: they read
  * the store, which this file feeds.
  *
  * Connecting takes two steps because EventSource cannot send a header — ask

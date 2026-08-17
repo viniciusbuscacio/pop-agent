@@ -1,5 +1,5 @@
 /*
- * Web Push handlers, imported into the generated service worker (pop-agent.spec
+ * Web Push handlers, imported into the generated service worker (docs/specs/Spec-Pop-General.md
  * §14). A push shows a notification; tapping it focuses an open Pop Agent window or
  * opens one at the deep link the server sent.
  */

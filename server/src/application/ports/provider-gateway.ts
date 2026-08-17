@@ -1,7 +1,7 @@
 import type { ModelInfo, RunUsage } from './agent-bridge.js';
 
 /**
- * The provider's plain HTTP face (pop-agent.spec §15): the model catalog and the
+ * The provider's plain HTTP face (docs/specs/Spec-Pop-General.md §15): the model catalog and the
  * one-shot completions that do not belong to a conversation -- the key test
  * now, titles and summaries in the next step. Anything conversational goes
  * through the AgentBridge instead.

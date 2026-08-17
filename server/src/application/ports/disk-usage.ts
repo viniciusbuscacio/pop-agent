@@ -1,6 +1,6 @@
 /**
  * Measuring the filesystem, kept behind a port so the storage report can be
- * tested without a disk (pop-agent.spec §14).
+ * tested without a disk (docs/specs/Spec-Pop-General.md §14).
  *
  * Every method answers rather than throws: a directory that does not exist yet
  * (no backups taken, no voice models downloaded) is zero bytes, not an error.

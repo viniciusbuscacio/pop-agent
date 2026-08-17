@@ -11,7 +11,7 @@ import { ChatService } from './chat-service.js';
 import { RunService } from './run-service.js';
 
 /**
- * Deleting a conversation kills its work (pop-agent.spec §6). The order is the
+ * Deleting a conversation kills its work (docs/specs/Spec-Pop-General.md §6). The order is the
  * whole point, so the order is what this asserts: the abort reaches the bridge
  * *before* the first row is deleted. A delete that removed the rows first
  * would leave a pi process group running, spending the user's own credit, on

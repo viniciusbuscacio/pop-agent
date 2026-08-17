@@ -1,7 +1,7 @@
 import type { FileNode } from './files-service.js';
 
 /**
- * The Files catalog for the session's system prompt (pop-agent.spec §7.4): the
+ * The Files catalog for the session's system prompt (docs/specs/Spec-Pop-General.md §7.4): the
  * agent knows *that* a file exists without being handed it -- presence is
  * cheap, content is on demand (files_search, read, @-mention). Filenames are
  * the user's data, so the block announces itself as data, not instructions.

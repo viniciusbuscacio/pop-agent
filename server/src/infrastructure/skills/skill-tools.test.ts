@@ -4,7 +4,7 @@ import type { Skill } from '../../domain/skills/skill.js';
 import { buildSkillTools } from './skill-tools.js';
 
 /**
- * The "vira skill" hand (pop-agent.spec §8, fase b). What matters here: it writes an
+ * The "vira skill" hand (docs/specs/Spec-Pop-General.md §8, fase b). What matters here: it writes an
  * `auto` skill, it will not quietly replace one that already works, and nothing
  * that smells of a credential survives into a body that future prompts replay.
  */
@@ -67,7 +67,7 @@ const GOOD = {
 
 describe('the agent has no hand to write a skill', () => {
   it('exposes skills_list and nothing else', () => {
-    // The tool is gone, not guarded (pop-agent.spec §8, 1.66). Writing a skill mid
+    // The tool is gone, not guarded (docs/specs/Spec-Pop-General.md §8, 1.66). Writing a skill mid
     // conversation was the whole of fase (b), and it is what put skill talk in
     // front of the user on turns that had nothing to do with skills. Reading
     // stays: "which skills do you have?" is an ordinary question.

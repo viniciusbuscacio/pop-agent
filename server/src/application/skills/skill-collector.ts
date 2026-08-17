@@ -3,7 +3,7 @@ import type { SkillUsageRepo } from '../ports/skill-usage-repo.js';
 import type { SkillArchiveRepo, SkillsRepo } from '../ports/skills-repo.js';
 
 /**
- * The archiving collector (pop-agent.spec §8, auto-skill fase c). The distiller
+ * The archiving collector (docs/specs/Spec-Pop-General.md §8, auto-skill fase c). The distiller
  * writes; this is the only thing that takes away, and it does not delete.
  *
  * **A cap, not an expiry.** The rule is "at most N auto-skills", and when there

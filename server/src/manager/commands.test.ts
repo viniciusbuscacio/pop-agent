@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { run, systemctlArgv, type ManagerDeps } from './commands.js';
 
 /**
- * popman's behaviour, without a systemd or a database (pop-agent.spec §17).
+ * popman's behaviour, without a systemd or a database (docs/specs/Spec-Pop-General.md §17).
  *
  * What is worth pinning is the wording as much as the exit code: these
  * commands are read by whoever is locked out at the time, and "the password

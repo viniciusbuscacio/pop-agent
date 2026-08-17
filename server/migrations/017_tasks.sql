@@ -1,4 +1,4 @@
--- Background tasks (pop-agent.spec §21): a prompt the user schedules once or every
+-- Background tasks (docs/specs/Spec-Pop-General.md §21): a prompt the user schedules once or every
 -- N minutes. Each due task opens a fresh conversation named after the task and
 -- runs through the normal chat pipeline, so failover, compaction and error
 -- persistence all apply and the result is readable as an ordinary chat.

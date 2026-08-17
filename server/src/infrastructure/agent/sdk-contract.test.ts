@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_ID, PROVIDER_ID } from './pi-engine.js';
 
 /**
- * SDK contract check (pop-agent.spec §15): every pi API Pop Agent relies on must
+ * SDK contract check (docs/specs/Spec-Pop-General.md §15): every pi API Pop Agent relies on must
  * exist. This same check runs inside the update gate before a new pi
  * version is accepted — if pi renames or removes something we use, this
  * fails before the update ever activates.

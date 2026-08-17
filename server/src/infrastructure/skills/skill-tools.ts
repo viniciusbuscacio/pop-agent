@@ -3,7 +3,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 
 /**
- * The agent's read-only view of its own skills (pop-agent.spec §8).
+ * The agent's read-only view of its own skills (docs/specs/Spec-Pop-General.md §8).
  *
  * There used to be a `skill_write` beside it -- fase (b), "vira skill" answered
  * live, mid-conversation. It is gone (1.66). Writing a skill during a turn put

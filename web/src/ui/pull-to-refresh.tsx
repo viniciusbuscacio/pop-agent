@@ -3,7 +3,7 @@ import { usePullToRefresh } from '../lib/pull-to-refresh';
 import { checkForUpdate } from '../services/update-signal';
 
 /**
- * A scroll area you can pull down to refresh (pop-agent.spec §14). Wraps the list
+ * A scroll area you can pull down to refresh (docs/specs/Spec-Pop-General.md §14). Wraps the list
  * it scrolls, so a screen adopts the gesture by swapping its own
  * `overflow-y-auto` div for this one.
  *

@@ -52,7 +52,7 @@ export function createStaticSite(distDir: string): MiddlewareHandler {
 }
 
 /**
- * Cache policy that lets updates actually land (pop-agent.spec §15). Hashed build
+ * Cache policy that lets updates actually land (docs/specs/Spec-Pop-General.md §15). Hashed build
  * assets are content-addressed and safe to cache forever; everything else --
  * crucially sw.js and the HTML shell -- must be revalidated every time, or a
  * heuristic cache can keep serving a stale worker and the PWA never sees a new

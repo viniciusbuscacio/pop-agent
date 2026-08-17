@@ -1,5 +1,5 @@
 /**
- * The append-only log of which chat wrote which Files path (pop-agent.spec §6,
+ * The append-only log of which chat wrote which Files path (docs/specs/Spec-Pop-General.md §6,
  * §14). History, not state: a later rename does not update it, deleting a
  * chat does not erase it, and nothing breaks when an entry points at a name
  * that moved. That immunity is the whole design -- a live file↔chat link

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Signed download links for Files (pop-agent.spec §14, "Files as a plain folder").
+ * Signed download links for Files (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder").
  *
  * Same contract the artifact links had, re-anchored on the path: no file is
  * reachable by a public URL without a signature. The signing key is derived

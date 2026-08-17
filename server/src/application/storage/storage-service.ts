@@ -3,7 +3,7 @@ import type { DirectorySize, DiskUsage } from '../ports/disk-usage.js';
 import type { StorageRepo } from '../ports/storage-repo.js';
 
 /**
- * Where the disk actually went (pop-agent.spec §14).
+ * Where the disk actually went (docs/specs/Spec-Pop-General.md §14).
  *
  * This exists before any quota does, on purpose, and the first install it was
  * pointed at settled the argument: 1.7 GB of downloaded whisper weights
@@ -45,7 +45,7 @@ export interface StorageServiceDeps {
   repo: StorageRepo;
   disk: DiskUsage;
   dataDir: string;
-  /** The user's Files folder (pop-agent.spec §14): measured as the tab shows it. */
+  /** The user's Files folder (docs/specs/Spec-Pop-General.md §14): measured as the tab shows it. */
   filesDir: string;
   workspace: string;
   backupsDir: string;

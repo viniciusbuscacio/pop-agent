@@ -7,7 +7,7 @@ import { saveFromLink } from '../lib/download';
 import { filesService } from '../services/artifacts';
 
 /**
- * Assistant text as markdown (pop-agent.spec §14). Raw HTML is not enabled: the
+ * Assistant text as markdown (docs/specs/Spec-Pop-General.md §14). Raw HTML is not enabled: the
  * content comes from a model, which means it comes from whatever the model
  * read, and a conversation should not be able to inject markup into the app.
  *

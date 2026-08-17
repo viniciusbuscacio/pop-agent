@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 
 /**
- * Versions for Settings → About (pop-agent.spec §13).
+ * Versions for Settings → About (docs/specs/Spec-Pop-General.md §13).
  *
  * The pi version is read from the dependency string in server/package.json
  * rather than by importing the SDK: About must answer instantly and must not
  * pull a large bundle into memory just to print a number. The dependency is
- * pinned exactly (pop-agent.spec §15), so the string is the version.
+ * pinned exactly (docs/specs/Spec-Pop-General.md §15), so the string is the version.
  *
  * Both URLs resolve the same from src/ (tsx) and dist/ (compiled): each sits
  * the same depth below the server workspace.

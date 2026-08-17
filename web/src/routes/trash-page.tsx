@@ -14,7 +14,7 @@ import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
 
 /**
- * The Files trash (pop-agent.spec §14): what deleting put aside, and the two things
+ * The Files trash (docs/specs/Spec-Pop-General.md §14): what deleting put aside, and the two things
  * you can do about it. Each row is one entry of Files/Garbage/, and its name
  * in there is the handle for restore and purge.
  *

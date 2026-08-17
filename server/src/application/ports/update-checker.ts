@@ -1,5 +1,5 @@
 /**
- * Checking whether a newer version is available (pop-agent.spec §15). Pop Agent does not
+ * Checking whether a newer version is available (docs/specs/Spec-Pop-General.md §15). Pop Agent does not
  * update itself from the running process -- that is a documented shell
  * procedure, run by the maintainer, gated by the same `npm run gate` -- but it
  * can tell the maintainer when there is something to update to.

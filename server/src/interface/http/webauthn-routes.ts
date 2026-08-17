@@ -7,7 +7,7 @@ import { badBody, readJson } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * Passkey registration and login (pop-agent.spec §9). Registration needs a session
+ * Passkey registration and login (docs/specs/Spec-Pop-General.md §9). Registration needs a session
  * -- only the signed-in user adds an authenticator. Login is public: proving a
  * passkey IS the authentication, and it hands back a session token like the
  * password login does. The relying-party id and origin come from the request

@@ -1,7 +1,7 @@
 import type { Clock } from '../../application/ports/clock.js';
 
 /**
- * Sliding-window rate limit for the credential routes (pop-agent.spec §9). In
+ * Sliding-window rate limit for the credential routes (docs/specs/Spec-Pop-General.md §9). In
  * memory, like the lockout: one process, one account.
  *
  * Behind `tailscale serve` every request arrives from 127.0.0.1, so in the

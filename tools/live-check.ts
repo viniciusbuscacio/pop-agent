@@ -1,5 +1,5 @@
 /**
- * The one test that spends money (pop-agent.spec §20, Phase 3).
+ * The one test that spends money (docs/specs/Spec-Pop-General.md §20, Phase 3).
  *
  * Everything else about the chat is proved against the fake bridge and costs
  * nothing: the gate, the smoke, CI. This file exists for the one question none

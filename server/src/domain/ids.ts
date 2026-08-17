@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 /**
- * Identifiers and internal file names (pop-agent.spec §6). Two shapes, one
+ * Identifiers and internal file names (docs/specs/Spec-Pop-General.md §6). Two shapes, one
  * generator:
  *
  * - **Entity id**: `prefix-<11 base62>` with a full-word prefix -- `chat-`,

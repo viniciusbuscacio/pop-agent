@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * End-to-end smoke test (pop-agent.spec §20).
+ * End-to-end smoke test (docs/specs/Spec-Pop-General.md §20).
  *
  * Unit tests build the app in-process; this one starts the real server as its
  * own process against a throwaway data directory and talks to it over HTTP,

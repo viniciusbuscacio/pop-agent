@@ -34,7 +34,7 @@ import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
 import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
 
 /**
- * The background distiller (pop-agent.spec §8, auto-skill fase c): the half of
+ * The background distiller (docs/specs/Spec-Pop-General.md §8, auto-skill fase c): the half of
  * auto-skill nobody has to ask for. Fase (b) waits for "vira skill"; this
  * reads the conversations that ended without anyone thinking to say it.
  *

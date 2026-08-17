@@ -9,7 +9,7 @@ export interface MemorySearcher {
 }
 
 /**
- * Memory tools (pop-agent.spec §7): the agent reaching back across every past
+ * Memory tools (docs/specs/Spec-Pop-General.md §7): the agent reaching back across every past
  * conversation. Search is grouped by chat; open pulls a transcript; recent
  * lists what happened lately. Everything returned is old message text -- which
  * may itself contain something pasted from outside -- so it goes through

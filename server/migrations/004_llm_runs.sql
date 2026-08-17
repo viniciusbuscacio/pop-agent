@@ -1,4 +1,4 @@
--- Per-run cost accounting (pop-agent.spec §6, §14; Phase 3 step 4).
+-- Per-run cost accounting (docs/specs/Spec-Pop-General.md §6, §14; Phase 3 step 4).
 --
 -- One row per finished run, with the provider's own numbers -- the usage pi
 -- reports, never an estimate. Deliberately no foreign key to chats: deleting

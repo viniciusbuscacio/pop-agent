@@ -23,7 +23,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
 /**
- * The skills CRUD (pop-agent.spec §8): Settings → Skills lists them, lets the user
+ * The skills CRUD (docs/specs/Spec-Pop-General.md §8): Settings → Skills lists them, lets the user
  * write their own and edit any, and delete their own. The Skill Router reads
  * the same vault to decide which fire per turn.
  *
@@ -48,7 +48,7 @@ export interface SkillsRoutesDeps {
   skills: SkillsRepo;
   /** Use counts, merged into the list so the screen can show what earns its slot. */
   usage?: SkillUsageRepo;
-  /** Proposed rewrites waiting for a yes (pop-agent.spec §8, fase c). */
+  /** Proposed rewrites waiting for a yes (docs/specs/Spec-Pop-General.md §8, fase c). */
   revisions?: SkillRevisionsRepo;
   /** The archive the collector fills, and the way back out of it. */
   archive?: SkillArchiveRepo;
@@ -109,7 +109,7 @@ export function createSkillsRoutes(deps: SkillsRoutesDeps): Hono {
       : c.json(toAttemptDto(retry), 202);
   });
 
-  /** Out of the archive and back into the router (pop-agent.spec §8). */
+  /** Out of the archive and back into the router (docs/specs/Spec-Pop-General.md §8). */
   routes.post('/skills/:slug/restore', (c) => {
     const restored = deps.archive?.restore(c.req.param('slug'));
     return restored === undefined

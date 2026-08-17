@@ -1,4 +1,4 @@
--- Vectors for the skill router (pop-agent.spec §8).
+-- Vectors for the skill router (docs/specs/Spec-Pop-General.md §8).
 --
 -- The router blends a lexical ranking with a semantic one, and the semantic
 -- half needs a vector per skill. Computing those is cheap but not free: the

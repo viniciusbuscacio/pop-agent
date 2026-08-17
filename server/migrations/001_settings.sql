@@ -1,9 +1,9 @@
--- Settings and secrets (pop-agent.spec §6, §9).
+-- Settings and secrets (docs/specs/Spec-Pop-General.md §6, §9).
 --
 -- settings.value holds JSON so a key can carry any shape without a schema
 -- change. secrets.value_encrypted is sealed with AES-256-GCM using the key in
 -- POP_AGENT_DATA_DIR/secret.key (layout: nonce || ciphertext || tag). The database
--- file itself is deliberately not encrypted -- see pop-agent.spec §9 for the threat
+-- file itself is deliberately not encrypted -- see docs/specs/Spec-Pop-General.md §9 for the threat
 -- model and why the key file is excluded from backups.
 
 CREATE TABLE settings (

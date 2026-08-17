@@ -1,7 +1,7 @@
 import type { Clock } from '../../application/ports/clock.js';
 
 /**
- * Progressive lockout for password and recovery-key attempts (pop-agent.spec §9).
+ * Progressive lockout for password and recovery-key attempts (docs/specs/Spec-Pop-General.md §9).
  *
  * Pop Agent has exactly one account, so the counter is global rather than per user.
  * The first four misses are free -- typos happen -- and from the fifth the

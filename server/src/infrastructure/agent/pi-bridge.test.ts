@@ -909,7 +909,7 @@ describe('attachments', () => {
   });
 });
 
-describe('typing provider failures for failover (pop-agent.spec §15, fase 2)', () => {
+describe('typing provider failures for failover (docs/specs/Spec-Pop-General.md §15, fase 2)', () => {
   it('reads the status from the code-shaped places providers put it', () => {
     expect(extractHttpStatus('402 {"error":{"message":"Insufficient credits"}}')).toBe(402);
     expect(extractHttpStatus('Provider returned error, status code: 429')).toBe(429);
@@ -959,7 +959,7 @@ describe('runtime identity', () => {
   });
 });
 
-describe('session rewind on retry (pop-agent.spec §15)', () => {
+describe('session rewind on retry (docs/specs/Spec-Pop-General.md §15)', () => {
   it('leaves one user prompt on the main path after overflow compact-and-retry', async () => {
     let calls = 0;
     engine.next.onPrompt = () => {

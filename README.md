@@ -33,9 +33,10 @@ still move without compatibility promises.
 
 ## Documentation
 
-`pop-agent.spec` is the single source of truth for architecture and behavior;
-`CHANGELOG.md` tracks what shipped. Start subsystem navigation at
-`docs/specs/Spec-Pop-General.md`; focused design deep-dives live in `docs/`.
+The normative specification is modular. Start at
+`docs/specs/Spec-Pop-General.md`; it routes each subsystem to its specification.
+`CHANGELOG.md` tracks what shipped, and focused explanatory deep-dives live in
+`docs/`.
 
 ## License
 

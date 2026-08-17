@@ -25,7 +25,7 @@ import {
 import { DEFAULT_SKILLS } from './default-skills.js';
 
 /**
- * Where skills live on disk (pop-agent.spec §8): one markdown file per skill under
+ * Where skills live on disk (docs/specs/Spec-Pop-General.md §8): one markdown file per skill under
  * `POP_AGENT_DATA_DIR/skills/`, each with a small YAML-ish front matter (name,
  * description, whenToUse) and the body below. Pop Agent's own skills are seeded on
  * first boot and marked built-in; the user's are just more files. The Skill
@@ -52,7 +52,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,48}$/;
 export const AUTO_DIR = 'auto';
 
 /**
- * Where the collector puts what it retires (pop-agent.spec §8). A reserved name, so
+ * Where the collector puts what it retires (docs/specs/Spec-Pop-General.md §8). A reserved name, so
  * the scanner walks past it: a skill in here is out of the router but still on
  * disk, which is the whole point -- the policy is a cap with archiving, never a
  * delete. A seasonal procedure (the once-a-year tax routine) would be destroyed
@@ -61,7 +61,7 @@ export const AUTO_DIR = 'auto';
  */
 export const ARCHIVE_DIR = '_archive';
 
-/** The defaults that ship pinned (pop-agent.spec §8), pinned even where the seeded
+/** The defaults that ship pinned (docs/specs/Spec-Pop-General.md §8), pinned even where the seeded
  * file predates the flag -- no migration, the code is the source. */
 const PINNED_DEFAULTS = new Set(
   DEFAULT_SKILLS.filter((skill) => skill.pinned === true).map((skill) => skill.slug),
@@ -267,7 +267,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   }
 
   /**
-   * Moves a skill out of the router without destroying it (pop-agent.spec §8): the
+   * Moves a skill out of the router without destroying it (docs/specs/Spec-Pop-General.md §8): the
    * collector's only verb. It lands in `_archive/<slug>/SKILL.md` whatever
    * shape it had, because the archive is a resting place and not a working
    * layout -- and coming back out is then one rule, not two.
@@ -448,7 +448,7 @@ export class SkillsVault implements SkillsRepo, SkillArchiveRepo {
   }
 
   /**
-   * Drops built-ins removed from the shipped roster (pop-agent.spec §8). A file
+   * Drops built-ins removed from the shipped roster (docs/specs/Spec-Pop-General.md §8). A file
    * the user never touched is deleted; one they edited is promoted to `user`
    * so their words are never destroyed.
    */

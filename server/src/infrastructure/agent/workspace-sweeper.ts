@@ -3,7 +3,7 @@ import { extname, join } from 'node:path';
 import type { MaintenanceJob } from '../../application/ports/maintenance-job.js';
 
 /**
- * The orphan sweep (pop-agent.spec §21): once a day, remove the derived files in
+ * The orphan sweep (docs/specs/Spec-Pop-General.md §21): once a day, remove the derived files in
  * the workspace that nothing points at any more.
  *
  * Two targets, both deliberately narrow:

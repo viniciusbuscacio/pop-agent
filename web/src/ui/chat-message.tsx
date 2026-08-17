@@ -26,7 +26,7 @@ function ChatMessageView({
   const showThinking = useThinkingStore((state) => state.show);
 
   // A run that failed or was stopped leaves this mark in the history
-  // forever (pop-agent.spec §6): quiet, centered, unmistakably not a reply.
+  // forever (docs/specs/Spec-Pop-General.md §6): quiet, centered, unmistakably not a reply.
   if (message.role === 'system') {
     if (message.notice?.kind === 'context-compacted') {
       return <TimelineEvent content={message.content} />;

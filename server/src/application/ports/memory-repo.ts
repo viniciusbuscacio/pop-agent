@@ -1,5 +1,5 @@
 /**
- * Reading across every conversation, not just the current one (pop-agent.spec §7).
+ * Reading across every conversation, not just the current one (docs/specs/Spec-Pop-General.md §7).
  * This is what lets the agent answer "what did we decide about X last week?"
  * -- lexical search over all messages, plus the recent chats to offer as a
  * catalog in the system prompt.

@@ -1,6 +1,6 @@
 /**
  * Which uploads may be shown in the browser instead of saved to disk
- * (pop-agent.spec §14, RF-004–008).
+ * (docs/specs/Spec-Pop-General.md §14, RF-004–008).
  *
  * "Open file" is worth having, but serving arbitrary uploaded bytes inline
  * from Pop Agent's own origin is how a file steals a session: an uploaded .html or

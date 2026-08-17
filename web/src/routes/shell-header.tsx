@@ -39,7 +39,7 @@ export function ShellHeader({
 }
 
 /**
- * The floating strip at the BOTTOM of the sidebar (pop-agent.spec §14): wordmark,
+ * The floating strip at the BOTTOM of the sidebar (docs/specs/Spec-Pop-General.md §14): wordmark,
  * health indicator and Settings, always visible while the list scrolls
  * behind it (the list's own padding keeps the last row clear).
  *

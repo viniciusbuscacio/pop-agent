@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 /**
  * Whether and how often this device asks its service worker for a new app
- * build. Both controls are device-scoped like the theme (pop-agent.spec §14,
+ * build. Both controls are device-scoped like the theme (docs/specs/Spec-Pop-General.md §14,
  * §15): they never travel to the server. Automatic checks are on at ten minutes
  * by default while Pop Agent moves fast; the shipped default drops to daily.
  *

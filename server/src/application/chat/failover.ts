@@ -1,5 +1,5 @@
 /**
- * Whether a failed attempt deserves another provider (pop-agent.spec §15, fase 2).
+ * Whether a failed attempt deserves another provider (docs/specs/Spec-Pop-General.md §15, fase 2).
  *
  * The verdict is typed -- a code the bridge assigned, plus the HTTP status
  * where one was available -- never a substring match over prose. The classes:

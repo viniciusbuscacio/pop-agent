@@ -1,68 +1,59 @@
-# Pop Agent — Pop Local Access
+# Pop Agent — installed PWA and Pop Local Access
 
-**Status:** current architecture explanation
-**Normative source:** `pop-agent.spec` §§5, 10, 14 and 17
-**Primary code:** `server/src/application/local-access`, `server/src/interface/http/local-tools-routes.ts`, `cli/src`, `local-access/tray`
-**Related:** [`../cli.md`](../cli.md)
+**Status:** normative
+**Legacy coverage:** §17.1
+**Primary implementation:** server/src/application/local-access, cli, local-access/tray
+**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
 
-## Product boundary
+> Section numbers are preserved from the former monolithic specification so
+> existing code comments remain traceable. Cross-section references resolve
+> through the legacy section map in `Spec-Pop-General.md`.
+### 17.1 Installed PWA and optional local access
 
-Pop Local Access (PLA) lets the server-side agent use tools on a selected user computer. It is not a local agent: providers, prompts, pi sessions, memory, safety and accounting remain on the server.
+The desktop product is the existing PWA installed by the browser. Pop Agent
+ships no WKWebView/WebView2 wrapper, tray helper, DMG, Setup app, Windows setup
+executable, native Desktop download route or independently versioned Desktop
+artifact. The browser owns the app window, operating-system registration,
+permissions and removal; the server-owned PWA manifest names the installed app
+**Pop Agent**.
 
-The optional native tray makes a persistent local capability visible and supervises the TypeScript PLA runtime. It does not contain a WebView or a second Pop Agent interface.
+Settings → Installation captures Chromium's `beforeinstallprompt` during boot
+and exposes **Install Pop Agent** only while the browser says installation is
+eligible. Safari, iOS and unsupported browsers receive their real Add to Dock or
+Add to Home Screen instructions. PWA updates remain the normal service-worker
+flow in §15 and do not depend on a native release.
 
-## Channels
+Pop Local Access is optional and separate from PWA installation. Installing the
+PWA grants no filesystem or command access. A local connection is outbound and
+authenticated. Each stable computer identity has a persistent server-authoritative
+**Allow access to local files** policy, disabled by default and synchronized
+between every PWA, the tray and the CLI. The transport remains attached while
+access is off so it can receive policy changes, but both server and PLA refuse
+local calls. A disabled stale browser selection continues safely with server
+tools; an unknown or unavailable enabled selection is still rejected.
 
-```text
-PWA ── HTTP/SSE ── server ── WS or HTTP polling ── PLA runtime
-                                               └── tray supervision
-```
+Settings publishes same-origin PowerShell and bash commands. They install the
+checksummed launcher and versioned tray per user, perform an interactive hidden
+password login, protect the CLI profile and register the visible tray at login.
+No password or token appears in argv, environment, URL, script or shell history.
+The first tray release targets Windows and macOS; unsupported platforms are
+refused honestly. The tray supervises `pop local-access --status-json`, shows
+Access enabled/disabled, Connecting, Auth or update failures, and offers the
+same **Allow access to local files** switch as the PWA, Open Pop Agent,
+Reconnect, Start at Login, Diagnostics and Quit. Transport health is not called
+Connected when file access is off.
 
-- HTTP changes policy and obtains machine snapshots.
-- SSE invalidates PWA machine state.
-- The PLA channel attaches a computer and carries calls/results.
+`GET /v1/local-tools/connections` lists live transports for compatibility and
+`GET /v1/local-tools/machines` lists deduplicated persistent computer identities,
+permission and online state. That GET is the initial/reconnection snapshot;
+attach, detach and permission changes emit `local-machines-changed` over the
+same session-wide SSE channel as `chat-deleted`, so Settings never polls.
+Settings stores only which allowed computer this
+PWA should use when more than one is available; with exactly one allowed online
+computer it selects that computer automatically. API sends
+`x-pop-agent-local-connection` only after that choice. A stable machine id is
+resolved to its current tray-preferred connection after reconnects.
 
-## Identity and selection
+## Related transport and synchronization
 
-A machine has a stable `machineId`; each connection has a temporary connection ID. PWA selection persists the stable machine ID. The server resolves it to a currently active transport for every request.
-
-When more than one connection exists for a machine, the background/tray connection is preferred over an interactive CLI connection. UI lists machines, not duplicate transports.
-
-If a selected machine is unavailable or disabled, sending must fail clearly. Never fall back silently to the server or another computer.
-
-## Permission
-
-Known-machine permission is persisted server-side and defaults to disabled. Settings can enable or disable **Allow access to local files** for each machine. The registry publishes policy to active transports and cancels calls when access is disabled.
-
-A live transport alone is not authority. Resolution checks both current connection and policy.
-
-## Tools
-
-The model receives separate prefixed tools such as `local_read`, `local_write`, `local_edit` and `local_bash` only when the message has valid local routing. Plain tools continue to mean the Pop Agent server.
-
-The tool catalogue attached to the turn is authoritative. Code and prompts must not infer local availability from the PWA environment.
-
-## Connection lifecycle
-
-Attach reports machine ID, hostname, platform, architecture, cwd and client version. Heartbeats detect dead transports. Disconnect, expiry, revocation or access disable settles pending calls and emits `local-machines-changed` so PWAs refresh state.
-
-WebSocket is preferred; the long-poll transport preserves environments where WebSocket is unavailable. Protocol frames are bounded and duplicate polling events are rejected.
-
-## Safety
-
-Local tools have the privileges of the local user and are not a sandbox. Taint and Plan Mode apply across server and local operations. Tokens and passwords must not appear in script URLs, argv, environment or logs. The client validates authorization and limits rather than trusting arbitrary server payloads blindly.
-
-## Tray responsibilities
-
-- visible connection state;
-- open the Pop Agent PWA;
-- pause/reconnect/quit controls;
-- user-scope start at login;
-- supervision of the PLA runtime;
-- actionable diagnosis.
-
-The tray must not recreate native Desktop product UI.
-
-## Change checklist
-
-Test stable-ID reconnection, tray restart with a new connection ID, interactive plus background transports, explicit machine selection, disabled/offline behavior, `/queue` and normal sends, stop/cancel, heartbeat expiry, session revocation, PWA invalidation and Windows/macOS packaging.
+See [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md).

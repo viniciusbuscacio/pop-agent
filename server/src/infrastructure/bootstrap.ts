@@ -75,14 +75,14 @@ export interface AppContext {
   autoSkillPublications: AutoSkillPublicationRepo;
   userMemory: UserMemoryRepo;
   usage: UsageRepo;
-  /** What the database can say about its own weight (pop-agent.spec §14). */
+  /** What the database can say about its own weight (docs/specs/Spec-Pop-General.md §14). */
   storage: StorageRepo;
-  /** Background tasks (pop-agent.spec §21). */
+  /** Background tasks (docs/specs/Spec-Pop-General.md §21). */
   tasks: TaskRepo;
   mcp: McpRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
-  /** The health endpoint's cheap liveness query (pop-agent.spec §13). */
+  /** The health endpoint's cheap liveness query (docs/specs/Spec-Pop-General.md §13). */
   pingDb: () => void;
 }
 

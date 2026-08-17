@@ -1,7 +1,7 @@
 # Pop Agent — Real-time event synchronization
 
-**Status:** current architecture explanation
-**Normative source:** `pop-agent.spec` §§5, 13 and 14
+**Status:** normative
+**Normative source:** this modular specification set
 **Primary code:** `server/src/application/ports/event-sink.ts`, `server/src/interface/http/sse-hub.ts`, `server/src/interface/http/event-tickets.ts`, `web/src/services/events.ts`
 **Related:** [`../agent-flow.md`](../agent-flow.md)
 

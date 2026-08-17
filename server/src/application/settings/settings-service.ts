@@ -3,7 +3,7 @@ import { DEFAULT_MODEL_ID } from '../providers/openrouter.js';
 import { DEFAULT_PROVIDER_ID } from '../providers/provider-definitions.js';
 
 /**
- * Application-owned settings (pop-agent.spec §13). Deliberately not the wire DTO:
+ * Application-owned settings (docs/specs/Spec-Pop-General.md §13). Deliberately not the wire DTO:
  * the interface layer maps between the two, so a rename here never silently
  * changes the API.
  *
@@ -14,13 +14,13 @@ export type PiUpdatePolicy = 'keep-current' | 'recommended' | 'latest';
 
 export interface AppSettings {
   language: 'en';
-  /** Provider used when a chat does not choose its own (pop-agent.spec §15). */
+  /** Provider used when a chat does not choose its own (docs/specs/Spec-Pop-General.md §15). */
   defaultProvider: string;
   /** Model used when a chat does not choose its own. */
   defaultModel: string;
   /** Appended to the agent's system prompt. Empty means none. */
   customInstructions: string;
-  /** whisper.cpp model for voice transcription (pop-agent.spec §14). */
+  /** whisper.cpp model for voice transcription (docs/specs/Spec-Pop-General.md §14). */
   voiceModel: string;
   /** Whether an LLM pass improves the raw transcript. Off = raw text, fast. */
   voiceCleanup: boolean;

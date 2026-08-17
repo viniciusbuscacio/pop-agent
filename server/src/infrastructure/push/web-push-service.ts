@@ -8,7 +8,7 @@ import type {
 import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
 
 /**
- * Web Push (pop-agent.spec §14): the server telling a phone that a run finished even
+ * Web Push (docs/specs/Spec-Pop-General.md §14): the server telling a phone that a run finished even
  * when the PWA is closed. The VAPID key pair is generated once and kept in the
  * secrets table, so a restart does not invalidate every subscription. A
  * subscription the push service reports gone (404/410) is deleted.

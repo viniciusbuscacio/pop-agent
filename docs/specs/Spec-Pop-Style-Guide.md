@@ -1,7 +1,7 @@
 # Pop Agent — UI style guide index
 
-**Status:** current architecture explanation
-**Normative source:** `pop-agent.spec` §14
+**Status:** normative
+**Normative source:** this modular specification set
 **Canonical detailed guide:** [`../ui-style-guide.md`](../ui-style-guide.md)
 **Primary code:** `web/src/ui/controls.tsx`, `web/src/styles/tokens.css`, `web/src/styles/index.css`
 

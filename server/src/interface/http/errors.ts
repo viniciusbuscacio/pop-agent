@@ -3,7 +3,7 @@ import type { ApiError } from '@pop-agent/shared';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 /**
- * Every failure leaves the API in the same envelope (pop-agent.spec §13), so the
+ * Every failure leaves the API in the same envelope (docs/specs/Spec-Pop-General.md §13), so the
  * frontend maps one shape and switches on `code` instead of parsing prose.
  */
 export function apiError(

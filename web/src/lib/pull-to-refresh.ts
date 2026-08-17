@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
- * Pull down at the top of a list to refresh it (pop-agent.spec §14).
+ * Pull down at the top of a list to refresh it (docs/specs/Spec-Pop-General.md §14).
  *
  * An installed PWA has to build this itself. Safari's own pull-to-refresh
  * exists in a browser tab and NOT in standalone display mode, which is exactly

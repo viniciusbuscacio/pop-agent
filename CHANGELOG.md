@@ -1,12 +1,18 @@
 # Changelog
 
-All notable changes to Pop Agent. Dates are ISO. See `pop-agent.spec` for the full
-normative history.
+All notable changes to Pop Agent. Dates are ISO. Current normative rules start
+at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
+`docs/specs/History-Pop-Spec.md`.
 
 ## Unreleased
 
 ### Changed
 
+- **The project specification is now modular.** `docs/specs/Spec-Pop-General.md`
+  is the normative entry point, subsystem rules live in focused specifications,
+  and detailed decision history is separate from current requirements. The old
+  monolithic root specification was removed after every tracked reference and
+  normative section was migrated; the gate now validates the specification set.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;

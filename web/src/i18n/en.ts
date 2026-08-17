@@ -1,5 +1,5 @@
 /**
- * Every string the UI shows passes through here (pop-agent.spec §14). The app is
+ * Every string the UI shows passes through here (docs/specs/Spec-Pop-General.md §14). The app is
  * English today; the indirection is what lets another language land later
  * without hunting through JSX.
  */

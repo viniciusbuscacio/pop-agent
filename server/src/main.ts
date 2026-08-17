@@ -117,7 +117,7 @@ const piActivationSupervisorScript = compiledServerArtifact(
   'infrastructure/update/pi-activation.js',
 );
 
-// Composition root: the one place that knows every layer (pop-agent.spec §3).
+// Composition root: the one place that knows every layer (docs/specs/Spec-Pop-General.md §3).
 const context = bootstrap();
 
 const auth = new AuthService({
@@ -127,7 +127,7 @@ const auth = new AuthService({
   clock: systemClock,
 });
 
-// Which engine answers (pop-agent.spec §4). `fake` is scripted and free; `pi` is
+// Which engine answers (docs/specs/Spec-Pop-General.md §4). `fake` is scripted and free; `pi` is
 // the real thing and spends money. A typo must not quietly pick either.
 const agent = process.env['POP_AGENT_ENGINE'] ?? 'pi';
 if (agent !== 'fake' && agent !== 'pi') {
@@ -150,7 +150,7 @@ const localConnections = new LocalConnectionRegistry(
   localAccessPolicy,
   () => hub.emit({ kind: 'local-machines-changed' }),
 );
-// Files as a plain folder (pop-agent.spec §14): real names under dataDir/files/,
+// Files as a plain folder (docs/specs/Spec-Pop-General.md §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
 const files = new FilesService({ root: filesDir, clock: systemClock });
@@ -175,12 +175,12 @@ const mcp = new McpService({
   clients: new OfficialMcpClientFactory(),
   dataDir: context.dataDir,
 });
-// The agent's own notes vault (pop-agent.spec §11), inside the data directory.
+// The agent's own notes vault (docs/specs/Spec-Pop-General.md §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
-// The skills vault (pop-agent.spec §8): seeds the defaults on first boot.
+// The skills vault (docs/specs/Spec-Pop-General.md §8): seeds the defaults on first boot.
 const skillsVault = new SkillsVault(join(context.dataDir, 'skills'), context.autoSkillPublications);
 
-// Local embeddings power semantic memory and skill routing (pop-agent.spec §7, §8).
+// Local embeddings power semantic memory and skill routing (docs/specs/Spec-Pop-General.md §7, §8).
 // Built only for the real agent -- the fake bridge never embeds anything -- and
 // the model downloads on first use into the data directory.
 const embedder =
@@ -193,7 +193,7 @@ const hybridMemory = new HybridMemory({
   ...(embedder === undefined ? {} : { embedder }),
 });
 // Selections are logged so router thresholds are tuned from data, not guessed
-// (pop-agent.spec §8). Slugs and scores only -- message content stays out of logs.
+// (docs/specs/Spec-Pop-General.md §8). Slugs and scores only -- message content stays out of logs.
 const skillRouter = new SkillRouterService({
   skills: skillsVault,
   ...(embedder === undefined ? {} : { embedder }),
@@ -228,10 +228,10 @@ const bridge: AgentBridge & ProviderAuthBridge & SessionCommandBridge = agent ==
 
 // The providers seen by the routes: key precedence (secrets over
 // environment), the key test, and the per-provider model catalog with the
-// engine's as offline fallback (pop-agent.spec §15). Provider is data: each id in
+// engine's as offline fallback (docs/specs/Spec-Pop-General.md §15). Provider is data: each id in
 // the declarative list maps to a plain-HTTP gateway here.
 const gateway = createOpenRouterGateway();
-// The advisory failover cooldown (pop-agent.spec §15, fase 2): shared by the
+// The advisory failover cooldown (docs/specs/Spec-Pop-General.md §15, fase 2): shared by the
 // chain (which skips penalized providers), the run loop (which penalizes)
 // and the credential writes (which forgive).
 const cooldown = new ProviderCooldown({ clock: systemClock });
@@ -248,7 +248,7 @@ const providers: ProviderService = new ProviderService({
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: (providerId) => bridge.listModels(providerId),
-  // Subscription providers (pop-agent.spec §15, fase 1.5): the engine owns the
+  // Subscription providers (docs/specs/Spec-Pop-General.md §15, fase 1.5): the engine owns the
   // credential; the service only ever asks yes/no questions about it.
   engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),
   engineComplete: (request) => bridge.complete(request),
@@ -257,7 +257,7 @@ const providers: ProviderService = new ProviderService({
   // Background work books its spend in the same ledger as chat runs (§14).
   llmRuns: context.llmRuns,
   setDefaultProvider: (providerId, model) => {
-    // The list's head IS the default (pop-agent.spec §15): written back here so
+    // The list's head IS the default (docs/specs/Spec-Pop-General.md §15): written back here so
     // Settings, /model and every new chat report the same provider.
     const current = settings.read();
     settings.write({ ...current, defaultProvider: providerId, defaultModel: model });
@@ -268,7 +268,7 @@ const providers: ProviderService = new ProviderService({
   }),
 });
 // The single-slot custom of the pre-registry era becomes a registry
-// instance on boot (pop-agent.spec §15); with nothing legacy left this is a no-op.
+// instance on boot (docs/specs/Spec-Pop-General.md §15); with nothing legacy left this is a no-op.
 providers.migrateLegacyCustom();
 // The one interactive sign-in at a time, driven through the bridge.
 const oauthFlows = new OAuthFlowService({
@@ -331,7 +331,7 @@ function piBridge(): PiAgentBridge {
           .map((capability) => mcpToolName(server.id, capability.name))),
     }),
     resolvePair: (provider, model) => providers.resolve({ provider, model }),
-    // Pinned skills lead the session's system prompt (pop-agent.spec §8): identity
+    // Pinned skills lead the session's system prompt (docs/specs/Spec-Pop-General.md §8): identity
     // is not left to a per-turn router. The Files catalog rides along (§7.4)
     // so the agent knows what exists without being handed it. The bridge
     // reopens a session when this string changes, so a pin edit or a new
@@ -391,7 +391,7 @@ const piCandidates = new PiCandidateService({
   now: () => new Date(systemClock.now()).toISOString(),
 });
 // The pi bridge is the only thing that can dispose a live session; the purger
-// asks it to forget a chat before deleting the chat's files (pop-agent.spec §6).
+// asks it to forget a chat before deleting the chat's files (docs/specs/Spec-Pop-General.md §6).
 const purger = new FsChatPurger({
   workspace,
   forgetSession: (chatId) => {
@@ -407,7 +407,7 @@ const runs = new RunService({
   sink: hub,
   clock: systemClock,
   llmRuns: context.llmRuns,
-  // Failover (pop-agent.spec §15, fase 2): the chain of usable pairs, the
+  // Failover (docs/specs/Spec-Pop-General.md §15, fase 2): the chain of usable pairs, the
   // cooldown a refusing provider is penalized into, and the journal line.
   resolveChain: (override) => providers.resolveChain(override),
   cooldown,
@@ -423,7 +423,7 @@ const runs = new RunService({
     queueDrain.service?.delivered(chatId, steeringId),
   onLlmStarted: () => queueDrain.service?.drainAll(),
   onActivity: () => noteDeploymentActivity(),
-  // When a run ends, tell the phone -- even with the PWA closed (pop-agent.spec §14).
+  // When a run ends, tell the phone -- even with the PWA closed (docs/specs/Spec-Pop-General.md §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that
     // succeeded or failed, and health would otherwise stop seeing it.
@@ -461,7 +461,7 @@ const runs = new RunService({
     chats: context.chats,
     // The provider comes from the chat, the model from that provider's
     // Service Model, and a refusal walks the same failover chain a run does
-    // (pop-agent.spec §15, corrected 07/08).
+    // (docs/specs/Spec-Pop-General.md §15, corrected 07/08).
     complete: async (request, ctx) => (await providers.completeAsService(request, ctx)).text,
     sink: hub,
     onFailure: (message) => console.warn(`pop ${message}`),
@@ -469,7 +469,7 @@ const runs = new RunService({
 });
 
 // Built after the run service on purpose: deleting a conversation stops its
-// work first (pop-agent.spec §6), and that is the run service's job.
+// work first (docs/specs/Spec-Pop-General.md §6), and that is the run service's job.
 const chats = new ChatService({
   chats: context.chats,
   clock: systemClock,
@@ -501,7 +501,7 @@ const queuedMessages = new QueuedMessageService({
 queueDrain.service = queuedMessages;
 queuedMessages.drainAll();
 
-// Background tasks (pop-agent.spec §21): the rows, the queue that runs them, and
+// Background tasks (docs/specs/Spec-Pop-General.md §21): the rows, the queue that runs them, and
 // the daily housekeeping that rides the same tick. The sweep is internal --
 // it has no row, no chat and no agent tool; it only ever removes derived
 // files in the workspace that nothing points at any more.
@@ -513,7 +513,7 @@ const taskScheduler = new TaskScheduler({
   clock: systemClock,
   timer: intervalTimer,
   jobs: [
-    // The auto-skill pair (pop-agent.spec §8, fase c). They ride this tick rather
+    // The auto-skill pair (docs/specs/Spec-Pop-General.md §8, fase c). They ride this tick rather
     // than owning timers, so everything periodic in the process is in one
     // place -- and the distiller's interval is a getter over Settings, which
     // is why changing it takes effect on the next tick instead of the next
@@ -527,7 +527,7 @@ const taskScheduler = new TaskScheduler({
       vectors: context.skillVectors,
       // The provider is inherited from the chat being distilled; a job with no
       // parent chat would fall through to the default. Same failover chain as
-      // a run (pop-agent.spec §15).
+      // a run (docs/specs/Spec-Pop-General.md §15).
       complete: async (request, ctx) =>
         (await providers.completeAsService(request, {
           ...(ctx.provider === undefined ? {} : { provider: ctx.provider }),
@@ -544,7 +544,7 @@ const taskScheduler = new TaskScheduler({
       usage: context.skillUsage,
       onJournal: (line) => console.log(line),
     }),
-    // The Garbage empties itself once a day (pop-agent.spec §14): thirty days is
+    // The Garbage empties itself once a day (docs/specs/Spec-Pop-General.md §14): thirty days is
     // a floor, not a deadline, so a daily check is the right cadence.
     new GarbageSweeper({ files, onJournal: (line) => console.log(line) }),
     new WorkspaceSweeper({
@@ -752,7 +752,7 @@ const app = createApp({
   cliPack,
 });
 
-// The notify-only update channel (pop-agent.spec §15, Vinicius 31/07): when a
+// The notify-only update channel (docs/specs/Spec-Pop-General.md §15, Vinicius 31/07): when a
 // newer Pop Agent tag appears on the origin, one push per version -- tapping it
 // deep-links into Settings → Updates. Applying the update stays a shell act.
 const updateNoticePath = join(context.dataDir, 'update-noticed');
@@ -787,7 +787,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   });
 }
 
-// Nothing runs itself until the server is actually up (pop-agent.spec §21).
+// Nothing runs itself until the server is actually up (docs/specs/Spec-Pop-General.md §21).
 taskScheduler.start();
 automaticDeployment.start();
 
@@ -814,7 +814,7 @@ serve(
       : 'Pop Agent bridge: fake (scripted; no model is contacted)',
   );
   // Catch up the embedding index for anything written before this boot, in the
-  // background so nothing waits on the model download (pop-agent.spec §7).
+  // background so nothing waits on the model download (docs/specs/Spec-Pop-General.md §7).
   if (indexer !== undefined) {
     const pending = context.embeddings.pendingCount();
     if (pending > 0) console.log(`pop embedding backfill: ${String(pending)} messages`);

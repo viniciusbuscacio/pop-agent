@@ -7,7 +7,7 @@ import type {
 } from '@pop-agent/shared';
 import { apiRequest } from './api';
 
-/** Background tasks over the API (pop-agent.spec §21). */
+/** Background tasks over the API (docs/specs/Spec-Pop-General.md §21). */
 export const tasksService = {
   list(): Promise<TasksResponse> {
     return apiRequest<TasksResponse>('/tasks');

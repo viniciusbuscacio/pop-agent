@@ -1,7 +1,7 @@
 import type { Task } from '../../domain/tasks/task.js';
 
 /**
- * Persistence for background tasks (pop-agent.spec §21). SQLite is one adapter; the
+ * Persistence for background tasks (docs/specs/Spec-Pop-General.md §21). SQLite is one adapter; the
  * scheduler never learns which.
  */
 

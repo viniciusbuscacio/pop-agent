@@ -9,7 +9,7 @@ import { session } from './session';
 import { selectedLocalConnection } from './local-connection-selection';
 
 /**
- * The only module in the app that calls `fetch` (pop-agent.spec §14, enforced by
+ * The only module in the app that calls `fetch` (docs/specs/Spec-Pop-General.md §14, enforced by
  * ESLint). Everything the API layer owes the rest of the app happens here:
  * the base path, the bearer token, silent token renewal, and turning an error
  * envelope into something typed.
@@ -56,7 +56,7 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
 }
 
 /**
- * Which client this is, and what it is running on (pop-agent.spec §13).
+ * Which client this is, and what it is running on (docs/specs/Spec-Pop-General.md §13).
  *
  * `web` and `pwa` are the same code; the only real difference is whether it
  * was installed, which `display-mode: standalone` is exactly the question

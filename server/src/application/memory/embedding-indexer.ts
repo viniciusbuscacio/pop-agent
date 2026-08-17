@@ -2,7 +2,7 @@ import type { Embedder } from '../ports/embedder.js';
 import type { EmbeddingsRepo } from '../ports/embeddings-repo.js';
 
 /**
- * Keeps the embedding index trailing the messages (pop-agent.spec §7). Embedding is
+ * Keeps the embedding index trailing the messages (docs/specs/Spec-Pop-General.md §7). Embedding is
  * never on the path of a reply: a finished run hands its rowids here and moves
  * on, and a boot backfill catches whatever was written while there was no
  * embedder (or an older Pop Agent). One at a time, so the model is not asked to run

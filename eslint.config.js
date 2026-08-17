@@ -31,7 +31,7 @@ export default tseslint.config(
     },
   },
   {
-    // The services layer is the only door to the outside (pop-agent.spec §14).
+    // The services layer is the only door to the outside (docs/specs/Spec-Pop-General.md §14).
     // A component reaching for fetch/EventSource directly fails the gate.
     files: ['web/src/**/*.{ts,tsx}'],
     ignores: ['web/src/services/**'],

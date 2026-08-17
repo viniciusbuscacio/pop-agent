@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { VoiceModelStatus, VoiceModelStore } from '../../application/ports/voice-models.js';
 
 /**
- * The whisper.cpp GGML models Pop Agent offers (pop-agent.spec §14). Each is fetched on
+ * The whisper.cpp GGML models Pop Agent offers (docs/specs/Spec-Pop-General.md §14). Each is fetched on
  * demand into POP_AGENT_DATA_DIR/voice-models with its SHA1 verified against this
  * pinned manifest -- a corrupted or tampered download is rejected, not run. The
  * default is `base`: on this 4-core home server it runs ~0.5x realtime where

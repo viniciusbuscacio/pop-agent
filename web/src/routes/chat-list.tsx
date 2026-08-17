@@ -743,7 +743,7 @@ function SkillsSourceFilter() {
 }
 
 /**
- * The skills list in the sidebar (pop-agent.spec §8), the explorer twin of the
+ * The skills list in the sidebar (docs/specs/Spec-Pop-General.md §8), the explorer twin of the
  * folder tree: the shared store keeps it in step with the editor pane, and a
  * row opens that skill on the right. Filtered by the sidebar search.
  */
@@ -1091,7 +1091,7 @@ function ChatRow({
             <span
               className="truncate text-sm font-medium"
               onDoubleClick={(event) => {
-                // Inline rename (pop-agent.spec §14): double-click does what
+                // Inline rename (docs/specs/Spec-Pop-General.md §14): double-click does what
                 // the menu's Rename does, one gesture less.
                 event.preventDefault();
                 event.stopPropagation();

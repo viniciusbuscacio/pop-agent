@@ -747,7 +747,7 @@ describe('a process shutdown mid-run', () => {
   });
 });
 
-describe('failing over between providers (pop-agent.spec §15, fase 2)', () => {
+describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, fase 2)', () => {
   let penalized: string[];
   let cleared: string[];
   let authFailures: string[];
