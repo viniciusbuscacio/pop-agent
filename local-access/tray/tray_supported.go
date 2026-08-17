@@ -21,6 +21,12 @@ type trayView struct {
 	status, server, open, pause, reconnect, diagnostics, startAtLogin, quit *systray.MenuItem
 }
 
+//go:embed statusConnected.png
+var statusConnectedIcon []byte
+
+//go:embed statusNeutral.png
+var statusNeutralIcon []byte
+
 var activeView trayView
 
 func installTray(a *app) error {
@@ -76,7 +82,12 @@ func (v trayView) Update(state viewState) {
 	if v.status == nil {
 		return
 	}
-	v.status.SetTitle(statusTitle(state.Status))
+	v.status.SetTitle(state.Status)
+	if state.Status == "Connected" {
+		v.status.SetIcon(statusConnectedIcon)
+	} else {
+		v.status.SetIcon(statusNeutralIcon)
+	}
 	if state.Server == "" {
 		v.server.SetTitle("Server not configured")
 		v.open.Disable()
@@ -96,13 +107,6 @@ func (v trayView) Update(state viewState) {
 	} else {
 		v.startAtLogin.Uncheck()
 	}
-}
-
-func statusTitle(status string) string {
-	if status == "Connected" {
-		return "🟢 Connected"
-	}
-	return "● " + status
 }
 
 func stopTray() { systray.Quit() }
