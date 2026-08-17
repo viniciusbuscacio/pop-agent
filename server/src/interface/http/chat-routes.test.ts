@@ -331,6 +331,7 @@ describe('sending a message', () => {
       send: () => undefined,
       close: () => undefined,
     });
+    fixture.localAccessPolicy.setEnabled('machine-m1', true);
 
     const chat = await newChat();
     const response = await api(`/v1/chats/${chat.id}/messages`, {
@@ -341,6 +342,29 @@ describe('sending a message', () => {
 
     expect(response.status).toBe(202);
     expect(fixture.runs.canSteer(chat.id, 'machine-m1')).toBe(true);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('continues server-only when a previously selected computer is disabled', async () => {
+    fixture.localConnections.attach({
+      id: 'local-disabled',
+      role: 'background',
+      machine: {
+        machineId: 'machine-disabled', hostname: 'm1', platform: 'darwin', arch: 'arm64',
+        cwd: '/Users/vini', clientVersion: '0.2.34',
+      },
+      send: () => undefined,
+      close: () => undefined,
+    });
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'server only' },
+      headers: { [LOCAL_CONNECTION_HEADER]: 'machine-disabled' },
+    });
+    expect(response.status).toBe(202);
+    expect(fixture.runs.canSteer(chat.id, 'machine-disabled')).toBe(false);
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });

@@ -48,8 +48,9 @@ export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
  * phone, and a conversation answered from two machines stays legible when it
  * is read back later.
  *
- * An explicit unknown or departed id is rejected before a run starts. When
- * absent, browser and PWA messages receive server tools only.
+ * An explicit unknown or unavailable enabled id is rejected before a run
+ * starts. A known computer whose synchronized permission is Off safely receives
+ * server tools only, as does a request with no selection.
  */
 export const LOCAL_CONNECTION_HEADER = 'x-pop-agent-local-connection';
 
@@ -67,6 +68,20 @@ export interface LocalConnectionDTO {
 
 export interface LocalConnectionsResponse {
   connections: LocalConnectionDTO[];
+}
+
+export interface LocalMachineAccessDTO {
+  machineId: string;
+  hostname: string;
+  platform: string;
+  arch: string;
+  clientVersion: string;
+  enabled: boolean;
+  connected: boolean;
+}
+
+export interface LocalMachinesResponse {
+  machines: LocalMachineAccessDTO[];
 }
 
 /**

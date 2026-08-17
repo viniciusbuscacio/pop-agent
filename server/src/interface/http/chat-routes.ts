@@ -138,7 +138,11 @@ function selectLocalConnection(
 ): { ok: true; connectionId?: string } | { ok: false } {
   const explicit = c.req.header(LOCAL_CONNECTION_HEADER);
   if (explicit !== undefined && explicit.length > 0) {
-    return registry.has(explicit) ? { ok: true, connectionId: explicit } : { ok: false };
+    if (registry.has(explicit)) return { ok: true, connectionId: explicit };
+    // A synchronized Off switch means "continue with server tools", not
+    // "reject the user's message". Unknown or unavailable enabled machines
+    // remain an error so no request silently falls through to another computer.
+    return registry.knownAndDisabled(explicit) ? { ok: true } : { ok: false };
   }
   // A browser/PWA must select a machine explicitly. Holding a web session alone
   // never grants whichever computer happens to be connected in the background.

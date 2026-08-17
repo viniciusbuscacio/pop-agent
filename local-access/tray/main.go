@@ -25,19 +25,22 @@ type childEvent struct {
 	Server    string `json:"server"`
 	Transport string `json:"transport"`
 	Minimum   string `json:"minimum"`
+	Enabled   *bool  `json:"enabled"`
 }
 
 type app struct {
-	mu       sync.Mutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	command  *exec.Cmd
-	server   string
-	status   string
-	paused   bool
-	quitting bool
-	log      *os.File
-	view     trayView
+	mu            sync.Mutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+	command       *exec.Cmd
+	commandInput  io.WriteCloser
+	server        string
+	status        string
+	accessEnabled bool
+	accessKnown   bool
+	quitting      bool
+	log           *os.File
+	view          trayView
 }
 
 func main() {
@@ -79,14 +82,17 @@ func (a *app) snapshot() viewState {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	autostart, _ := startAtLoginEnabled()
-	return viewState{Server: a.server, Status: a.status, Paused: a.paused, StartAtLogin: autostart}
+	return viewState{
+		Server: a.server, Status: a.status, AccessEnabled: a.accessEnabled,
+		AccessKnown: a.accessKnown, StartAtLogin: autostart,
+	}
 }
 
 func (a *app) publish() { a.view.Update(a.snapshot()) }
 
 func (a *app) start() {
 	a.mu.Lock()
-	if a.quitting || a.paused || a.command != nil {
+	if a.quitting || a.command != nil {
 		a.mu.Unlock()
 		return
 	}
@@ -102,6 +108,10 @@ func (a *app) start() {
 	cmd.Dir = home
 	cmd.SysProcAttr = childProcessAttributes()
 	stdout, err := cmd.StdoutPipe()
+	var stdin io.WriteCloser
+	if err == nil {
+		stdin, err = cmd.StdinPipe()
+	}
 	if err == nil {
 		cmd.Stderr = a.log
 		err = cmd.Start()
@@ -114,6 +124,8 @@ func (a *app) start() {
 		return
 	}
 	a.command = cmd
+	a.commandInput = stdin
+	a.accessKnown = false
 	a.status = "Connecting"
 	a.mu.Unlock()
 	a.publish()
@@ -123,8 +135,9 @@ func (a *app) start() {
 		a.mu.Lock()
 		if a.command == cmd {
 			a.command = nil
+			a.commandInput = nil
 		}
-		shouldRestart := !a.quitting && !a.paused
+		shouldRestart := !a.quitting
 		if shouldRestart {
 			a.status = "Disconnected — reconnecting"
 		}
@@ -153,7 +166,17 @@ func (a *app) scan(reader io.Reader) {
 			a.server = safeOrigin(event.Server)
 			a.status = "Connecting"
 		case "attached":
-			a.status = "Connected"
+			a.status = "Checking access"
+		case "access-policy":
+			if event.Enabled != nil {
+				a.accessEnabled = *event.Enabled
+				a.accessKnown = true
+				if a.accessEnabled {
+					a.status = "Access enabled"
+				} else {
+					a.status = "Access disabled"
+				}
+			}
 		case "closed":
 			a.status = "Disconnected — reconnecting"
 		case "authentication-required":
@@ -170,37 +193,31 @@ func (a *app) stop() {
 	a.mu.Lock()
 	cmd := a.command
 	a.command = nil
+	a.commandInput = nil
 	a.mu.Unlock()
 	if cmd != nil {
 		terminateChild(cmd)
 	}
 }
 
-func (a *app) togglePause() {
+func (a *app) toggleAccess() {
 	a.mu.Lock()
-	a.paused = !a.paused
-	paused := a.paused
-	if paused {
-		a.status = "Paused"
-	} else {
-		a.status = "Connecting"
-	}
+	input := a.commandInput
+	enabled := !a.accessEnabled
+	known := a.accessKnown
 	a.mu.Unlock()
-	if paused {
-		a.stop()
-	} else {
-		go a.start()
+	if input == nil || !known {
+		return
 	}
-	a.publish()
+	if _, err := fmt.Fprintf(input, "{\"kind\":\"set-access\",\"enabled\":%t}\n", enabled); err != nil {
+		fmt.Fprintln(a.log, "set access:", err)
+	}
 }
 
 func (a *app) reconnect() {
 	a.mu.Lock()
-	if a.paused {
-		a.mu.Unlock()
-		return
-	}
 	a.status = "Connecting"
+	a.accessKnown = false
 	a.mu.Unlock()
 	a.stop()
 	go a.start()

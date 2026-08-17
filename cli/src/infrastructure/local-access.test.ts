@@ -147,6 +147,32 @@ describe('LocalAccess reconnection', () => {
     localAccess.close();
   });
 
+  it('hides local tools while disabled and sends tray changes over the secure channel', async () => {
+    const value = await fixture();
+    const received: Record<string, unknown>[] = [];
+    value.sockets.on('connection', (socket) => {
+      socket.on('message', (raw) => {
+        const frame = JSON.parse(String(raw)) as Record<string, unknown>;
+        received.push(frame);
+        if (frame.kind === 'attach') {
+          socket.send(JSON.stringify({ kind: 'attached', id: 'local-disabled', accessEnabled: false }));
+          socket.send(JSON.stringify({ kind: 'access_policy', enabled: false }));
+        }
+      });
+    });
+    const events: LocalAccessEvent[] = [];
+    const localAccess = new LocalAccess({
+      url: value.url, token: 'session', version: '0.2.34', onEvent: (event) => events.push(event),
+    });
+    localAccess.connect();
+    await eventually(() => expect(events).toContainEqual({ kind: 'access-policy', enabled: false }));
+    expect(localAccess.connectionId).toBeUndefined();
+
+    localAccess.setAccessEnabled(true);
+    await eventually(() => expect(received).toContainEqual({ kind: 'set_access', enabled: true }));
+    localAccess.close();
+  });
+
   it('does not reconnect after an explicit close', async () => {
     const value = await fixture();
     let connections = 0;

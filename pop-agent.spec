@@ -1450,8 +1450,9 @@ creates a chat or invokes an LLM. The installed PWA and local access are separat
 the browser owns the PWA, while the optional Pop Local Access tray owns its own
 lifecycle without introducing a native WebView wrapper. The tray is a minimal
 native host in `local-access/tray`: it supervises the TypeScript PLA runtime from
-the CLI, exposes connection/pause/reconnect/start-at-login controls and opens the
-PWA, but contains no WebView, chat UI, agent loop or local-tools protocol.
+the CLI, exposes a server-synchronized per-computer file-access switch plus
+reconnect/start-at-login controls and opens the PWA, but contains no WebView,
+chat UI, agent loop or local-tools protocol.
 
 PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
 failures with ordinary authenticated HTTPS still healthy, it falls back to
@@ -1551,10 +1552,13 @@ Add to Home Screen instructions. PWA updates remain the normal service-worker
 flow in §15 and do not depend on a native release.
 
 Pop Local Access is optional and separate from PWA installation. Installing the
-PWA grants no filesystem or command access. A local connection is outbound,
-authenticated and message-scoped; a PWA must explicitly select a live machine
-before a message can use it. Merely holding the user's web session never selects
-a background computer.
+PWA grants no filesystem or command access. A local connection is outbound and
+authenticated. Each stable computer identity has a persistent server-authoritative
+**Allow access to local files** policy, disabled by default and synchronized
+between every PWA, the tray and the CLI. The transport remains attached while
+access is off so it can receive policy changes, but both server and PLA refuse
+local calls. A disabled stale browser selection continues safely with server
+tools; an unknown or unavailable enabled selection is still rejected.
 
 Settings publishes same-origin PowerShell and bash commands. They install the
 checksummed launcher and versioned tray per user, perform an interactive hidden
@@ -1562,13 +1566,18 @@ password login, protect the CLI profile and register the visible tray at login.
 No password or token appears in argv, environment, URL, script or shell history.
 The first tray release targets Windows and macOS; unsupported platforms are
 refused honestly. The tray supervises `pop local-access --status-json`, shows
-Connected/Connecting/Paused/Auth or update failures, and offers Open Pop Agent,
-Pause/Resume, Reconnect, Start at Login, Diagnostics and Quit.
+Access enabled/disabled, Connecting, Auth or update failures, and offers the
+same **Allow access to local files** switch as the PWA, Open Pop Agent,
+Reconnect, Start at Login, Diagnostics and Quit. Transport health is not called
+Connected when file access is off.
 
-`GET /v1/local-tools/connections` lists the authenticated user's live machine
-connections. Settings stores a device-local explicit selection; Server only is
-the default. API sends `x-pop-agent-local-connection` only after that choice. A
-stale selected id is rejected rather than falling back to another computer.
+`GET /v1/local-tools/connections` lists live transports for compatibility and
+`GET /v1/local-tools/machines` lists deduplicated persistent computer identities,
+permission and online state. Settings stores only which allowed computer this
+PWA should use when more than one is available; with exactly one allowed online
+computer it selects that computer automatically. API sends
+`x-pop-agent-local-connection` only after that choice. A stable machine id is
+resolved to its current tray-preferred connection after reconnects.
 
 ## 18. Production exposure
 

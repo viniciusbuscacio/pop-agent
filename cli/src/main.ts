@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createInterface as createLineInterface } from 'node:readline';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { Profiles, DEFAULT_PROFILE } from './application/profiles.js';
@@ -74,6 +75,7 @@ export async function run(argv: string[], terminal: Terminal): Promise<number> {
     localAccess: (options) => new LocalAccess(options),
     installCli,
     waitForShutdown,
+    watchLocalAccessControl,
   };
 
   if (prompt !== undefined) {
@@ -129,6 +131,21 @@ function takeFlag(args: string[], name: string): boolean {
   if (index === -1) return false;
   args.splice(index, 1);
   return true;
+}
+
+function watchLocalAccessControl(onEnabled: (enabled: boolean) => void): () => void {
+  const lines = createLineInterface({ input: process.stdin, terminal: false });
+  lines.on('line', (line) => {
+    try {
+      const command = JSON.parse(line) as { kind?: unknown; enabled?: unknown };
+      if (command.kind === 'set-access' && typeof command.enabled === 'boolean') {
+        onEnabled(command.enabled);
+      }
+    } catch {
+      // The tray protocol is line-delimited JSON; malformed input is ignored.
+    }
+  });
+  return () => lines.close();
 }
 
 function waitForShutdown(): Promise<void> {

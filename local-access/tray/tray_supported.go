@@ -11,14 +11,15 @@ import (
 )
 
 type viewState struct {
-	Server       string
-	Status       string
-	Paused       bool
-	StartAtLogin bool
+	Server        string
+	Status        string
+	AccessEnabled bool
+	AccessKnown   bool
+	StartAtLogin  bool
 }
 
 type trayView struct {
-	status, server, open, pause, reconnect, diagnostics, startAtLogin, quit *systray.MenuItem
+	status, server, open, access, reconnect, diagnostics, startAtLogin, quit *systray.MenuItem
 }
 
 var activeView trayView
@@ -40,7 +41,7 @@ func runTray() {
 		activeView.server = systray.AddMenuItem("—", "Pop Agent server — click to open")
 		systray.AddSeparator()
 		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open the PWA in your default browser")
-		activeView.pause = systray.AddMenuItem("Pause Local Access", "Stop local tools without uninstalling")
+		activeView.access = systray.AddMenuItemCheckbox("Allow access to local files", "Allow Pop Agent to access files on this computer", false)
 		activeView.reconnect = systray.AddMenuItem("Reconnect", "Restart the secure outbound connection")
 		systray.AddSeparator()
 		activeView.startAtLogin = systray.AddMenuItemCheckbox("Start at Login", "Start Pop Local Access when you sign in", false)
@@ -50,7 +51,7 @@ func runTray() {
 		bind(activeView.status, func(a *app) { a.reconnect() })
 		bind(activeView.server, func(a *app) { a.openPop() })
 		bind(activeView.open, func(a *app) { a.openPop() })
-		bind(activeView.pause, func(a *app) { a.togglePause() })
+		bind(activeView.access, func(a *app) { a.toggleAccess() })
 		bind(activeView.reconnect, func(a *app) { a.reconnect() })
 		bind(activeView.startAtLogin, func(a *app) { a.toggleStartAtLogin() })
 		bind(activeView.diagnostics, func(a *app) { a.diagnostics() })
@@ -76,7 +77,7 @@ func (v trayView) Update(state viewState) {
 	if v.status == nil {
 		return
 	}
-	v.status.SetStatusTitle(state.Status, state.Status == "Connected")
+	v.status.SetStatusTitle(state.Status, state.AccessEnabled && state.AccessKnown)
 	if state.Server == "" {
 		v.server.SetTitle("Server not configured")
 		v.open.Disable()
@@ -84,13 +85,17 @@ func (v trayView) Update(state viewState) {
 		v.server.SetTitle(state.Server)
 		v.open.Enable()
 	}
-	if state.Paused {
-		v.pause.SetTitle("Resume Local Access")
-		v.reconnect.Disable()
+	if state.AccessEnabled {
+		v.access.Check()
 	} else {
-		v.pause.SetTitle("Pause Local Access")
-		v.reconnect.Enable()
+		v.access.Uncheck()
 	}
+	if state.AccessKnown {
+		v.access.Enable()
+	} else {
+		v.access.Disable()
+	}
+	v.reconnect.Enable()
 	if state.StartAtLogin {
 		v.startAtLogin.Check()
 	} else {

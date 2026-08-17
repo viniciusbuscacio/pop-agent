@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
 import { LocalConnectionRegistry, PING_EVERY_MS } from './application/local-access/local-connection-registry.js';
+import { LocalAccessPolicyService } from './application/local-access/local-access-policy-service.js';
 import { Type } from 'typebox';
 import { envelope } from './domain/safety/sanitize.js';
 import { hasReadOnlyHint, mcpToolName } from './infrastructure/mcp/plan-mode.js';
@@ -140,8 +141,13 @@ if (agent === 'pi') {
 }
 
 const workspace = ensureWorkspace(resolveWorkspace());
-// Which terminals are attached and which local connections are attached (docs/cli.md step 3).
-const localConnections = new LocalConnectionRegistry((line) => console.log(line));
+// Which computers are allowed and which secure transports are currently attached.
+const localAccessPolicy = new LocalAccessPolicyService(context.settings);
+const localConnections = new LocalConnectionRegistry(
+  (line) => console.log(line),
+  Date.now,
+  localAccessPolicy,
+);
 // Files as a plain folder (pop-agent.spec §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);

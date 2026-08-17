@@ -212,6 +212,11 @@ export const en = {
   'settings.installation.localAccessBody':
     'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
   'settings.installation.localAccessMachine': 'Allow access to',
+  'settings.installation.localAccessForMachine': 'Allow access to files on {machine}',
+  'settings.installation.localAccessUseFrom': 'Use files from',
+  'settings.installation.localAccessOnline': 'Online',
+  'settings.installation.localAccessOffline': 'Offline',
+  'settings.installation.localAccessNone': 'No computers have been connected yet.',
   'settings.installation.localAccessEnabled':
     'Enabled — Pop Agent can access and edit files on {machine}.',
   'settings.installation.localAccessDisabled':

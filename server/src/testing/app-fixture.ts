@@ -31,6 +31,7 @@ import { FakeAgentBridge } from '../infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from '../infrastructure/agent/chat-purger.js';
 import { StorageService } from '../application/storage/storage-service.js';
 import { LocalConnectionRegistry } from '../application/local-access/local-connection-registry.js';
+import { LocalAccessPolicyService } from '../application/local-access/local-access-policy-service.js';
 import { SqliteStorageRepo } from '../infrastructure/db/sqlite-storage-repo.js';
 import { NodeDiskUsage } from '../infrastructure/storage/node-disk-usage.js';
 import { FilesService } from '../application/files/files-service.js';
@@ -182,6 +183,7 @@ export interface TestApp {
   runs: RunService;
   queuedMessages: QueuedMessageService;
   localConnections: LocalConnectionRegistry;
+  localAccessPolicy: LocalAccessPolicyService;
   tasks: TaskService;
   taskScheduler: TaskScheduler;
   mcp: McpService;
@@ -384,7 +386,8 @@ export function createTestApp(
   });
 
   const controlLog: string[] = [];
-  const localConnections = new LocalConnectionRegistry(undefined, () => clock.now());
+  const localAccessPolicy = new LocalAccessPolicyService(settingsRepo);
+  const localConnections = new LocalConnectionRegistry(undefined, () => clock.now(), localAccessPolicy);
   const sessionCommands = new SessionCommandService({
     chats,
     files,
@@ -508,6 +511,7 @@ export function createTestApp(
     runs,
     queuedMessages,
     localConnections,
+    localAccessPolicy,
     tasks,
     taskScheduler,
     mcp,

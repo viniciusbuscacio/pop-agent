@@ -24,6 +24,7 @@ export interface Terminal {
 export interface LocalAccessClient {
   connect(): void;
   close(): void;
+  setAccessEnabled?(enabled: boolean): void;
   readonly connectionId: string | undefined;
 }
 
@@ -45,6 +46,8 @@ export interface Context {
   installCli: (packageUrl: string) => Promise<number>;
   /** Resolves on SIGINT/SIGTERM; injected so the background command is testable. */
   waitForShutdown: () => Promise<void>;
+  /** Tray-only JSON lines arriving on stdin; absent for ordinary interactive commands. */
+  watchLocalAccessControl?: (onEnabled: (enabled: boolean) => void) => () => void;
 }
 
 export async function login(
@@ -92,6 +95,8 @@ export async function backgroundLocalAccess(
         report(event, `Pop Local Access connected (${event.transport}).`);
       } else if (event.kind === 'closed') {
         report(event, 'Pop Local Access disconnected; reconnecting…');
+      } else if (event.kind === 'access-policy') {
+        report(event, event.enabled ? 'Local file access enabled.' : 'Local file access disabled.');
       } else if (event.kind === 'authentication-required') {
         report(event, 'Pop Local Access needs you to sign in again.');
       } else if (event.kind === 'outdated') {
@@ -110,11 +115,15 @@ export async function backgroundLocalAccess(
   }, 6 * 60 * 60 * 1_000);
   refreshTimer.unref?.();
 
+  const stopWatching = options.json === true
+    ? context.watchLocalAccessControl?.((enabled) => localAccess.setAccessEnabled?.(enabled))
+    : undefined;
   localAccess.connect();
   report({ kind: 'starting', server: profile.url }, `Pop Local Access is running for ${profile.url}.`);
   try {
     await Promise.race([context.waitForShutdown(), stoppedByServer]);
   } finally {
+    stopWatching?.();
     clearInterval(refreshTimer);
     localAccess.close();
   }

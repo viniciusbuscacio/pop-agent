@@ -136,7 +136,13 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
               send: (payload) => ws.send(JSON.stringify(payload)),
               close: (code, reason) => ws.close(code, reason),
             });
-            ws.send(JSON.stringify({ kind: 'attached', connectionId: id, heartbeatMs: 15_000 }));
+            ws.send(JSON.stringify({
+              kind: 'attached',
+              connectionId: id,
+              heartbeatMs: 15_000,
+              accessEnabled: deps.localConnections.accessEnabled(attach.machine.machineId),
+            }));
+            deps.localConnections.publishAccessPolicy(id);
             if (compatibility.warning !== undefined) ws.send(JSON.stringify(compatibility.warning));
             return;
           }
@@ -168,6 +174,30 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     }),
   );
 
+  routes.get('/local-tools/machines', (c) => {
+    const liveMachineIds = new Set(
+      deps.localConnections.connections()
+        .map((connection) => connection.machine.machineId)
+        .filter((machineId): machineId is string => machineId !== undefined),
+    );
+    const machines = deps.localConnections.knownMachines().map((machine) => ({
+      ...machine,
+      connected: liveMachineIds.has(machine.machineId),
+    }));
+    return c.json({ machines });
+  });
+
+  routes.patch('/local-tools/machines/:id', async (c) => {
+    const body = await jsonWithinLimit(c);
+    const enabled = booleanField(body, 'enabled');
+    if (enabled === undefined) return apiError(c, 400, 'invalid_access_policy', 'Invalid local access setting.');
+    const machineId = c.req.param('id');
+    if (!deps.localConnections.setAccessEnabled(machineId, enabled)) {
+      return apiError(c, 404, 'local_machine_not_found', 'That computer is not known to Pop Agent.');
+    }
+    return c.json({ machineId, enabled });
+  });
+
   routes.post('/local-tools/connections', async (c) => {
     const session = sessionOf(c, deps.auth);
     if (session === undefined) return invalidSession(c);
@@ -189,6 +219,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
       send: connection.send,
       close: connection.close,
     });
+    deps.localConnections.publishAccessPolicy(connection.id);
     const frames = compatibility.warning === undefined ? [] : [compatibility.warning];
     return c.json(
       {
@@ -196,6 +227,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
         transport: 'https-long-poll' as const,
         heartbeatMs: 15_000,
         pollTimeoutMs: POLL_TIMEOUT_MS,
+        accessEnabled: deps.localConnections.accessEnabled(attach.machine.machineId),
         frames,
       },
       201,
@@ -268,6 +300,12 @@ function handleClientFrame(
   frame: Record<string, unknown>,
 ): void {
   if (frame['kind'] === 'pong') return;
+  if (frame['kind'] === 'set_access') {
+    const enabled = booleanField(frame, 'enabled');
+    const machineId = registry.transportConnection(connectionId)?.machine.machineId;
+    if (enabled !== undefined && machineId !== undefined) registry.setAccessEnabled(machineId, enabled);
+    return;
+  }
   if (frame['kind'] === 'output') {
     const callId = stringField(frame, 'callId');
     const chunk = stringField(frame, 'chunk');
@@ -384,6 +422,12 @@ function stringField(value: unknown, key: string): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === 'string' ? field : undefined;
+}
+
+function booleanField(value: unknown, key: string): boolean | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === 'boolean' ? field : undefined;
 }
 
 function numberField(value: unknown, key: string): number | undefined {

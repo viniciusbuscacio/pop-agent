@@ -1,4 +1,5 @@
 import { entityId } from '../../domain/ids.js';
+import type { LocalAccessPolicyService } from './local-access-policy-service.js';
 
 export const PING_EVERY_MS = 15_000;
 export const MISSED_PINGS_BEFORE_GONE = 3;
@@ -59,10 +60,12 @@ export class LocalConnectionRegistry {
   constructor(
     private readonly onJournal?: (line: string) => void,
     private readonly now: () => number = Date.now,
+    private readonly accessPolicy?: LocalAccessPolicyService,
   ) {}
 
   attach(connection: LocalConnection): void {
     this.entries.set(connection.id, { connection, unanswered: 0, pingId: 0, calls: 0 });
+    this.accessPolicy?.remember(connection.machine);
     this.onJournal?.(
       `pop local access: attached ${connection.machine.platform}/${connection.machine.arch} (${connection.role ?? 'interactive'})`,
     );
@@ -81,14 +84,53 @@ export class LocalConnectionRegistry {
     if (entry !== undefined) entry.unanswered = 0;
   }
 
-  /** Resolves either one live connection ID or the computer's stable machine ID. */
+  /** Resolves an allowed live connection ID or stable machine ID. */
   connection(selector: string | undefined): LocalConnection | undefined {
+    const connection = this.transportConnection(selector);
+    if (connection === undefined) return undefined;
+    return this.accessPolicy === undefined || this.accessPolicy.enabled(connection.machine.machineId)
+      ? connection
+      : undefined;
+  }
+
+  /** Resolves the secure transport even while file access is disabled. */
+  transportConnection(selector: string | undefined): LocalConnection | undefined {
     if (selector === undefined) return undefined;
     const direct = this.entries.get(selector)?.connection;
     if (direct !== undefined && !this.expired(direct)) return direct;
     return this.connections()
       .filter((connection) => connection.machine.machineId === selector)
       .sort((a, b) => Number(b.role === 'background') - Number(a.role === 'background'))[0];
+  }
+
+  accessEnabled(machineId: string | undefined): boolean {
+    return machineId !== undefined && (this.accessPolicy?.enabled(machineId) ?? true);
+  }
+
+  knownAndDisabled(selector: string): boolean {
+    if (this.accessPolicy === undefined) return false;
+    const machineId = this.transportConnection(selector)?.machine.machineId ?? selector;
+    return this.accessPolicy.machines().some((machine) => machine.machineId === machineId && !machine.enabled);
+  }
+
+  setAccessEnabled(machineId: string, enabled: boolean): boolean {
+    if (this.accessPolicy === undefined || !this.accessPolicy.setEnabled(machineId, enabled)) return false;
+    for (const entry of this.entries.values()) {
+      if (entry.connection.machine.machineId !== machineId) continue;
+      if (!enabled) this.cancelCalls(entry.connection, 'Local file access was disabled.');
+      entry.connection.send({ kind: 'access_policy', enabled });
+    }
+    this.onJournal?.(`pop local access: ${enabled ? 'enabled' : 'disabled'} ${machineId}`);
+    return true;
+  }
+
+  publishAccessPolicy(connectionId: string): void {
+    const connection = this.entries.get(connectionId)?.connection;
+    if (connection === undefined) return;
+    connection.send({
+      kind: 'access_policy',
+      enabled: this.accessEnabled(connection.machine.machineId),
+    });
   }
 
   has(selector: string): boolean {
@@ -138,7 +180,7 @@ export class LocalConnectionRegistry {
     if (pending === undefined) return;
     pending.outputBytes += new TextEncoder().encode(chunk).byteLength;
     if (pending.outputBytes > MAX_CALL_OUTPUT_BYTES) {
-      const connection = this.connection(pending.connectionId);
+      const connection = this.transportConnection(pending.connectionId);
       connection?.send({ kind: 'cancel', callId, reason: 'output_limit' });
       this.settle(callId, { ok: false, output: '', error: 'Local output exceeded 50 MiB.' });
       return;
@@ -176,6 +218,10 @@ export class LocalConnectionRegistry {
     return [...this.entries.values()].map((entry) => entry.connection.machine);
   }
 
+  knownMachines() {
+    return this.accessPolicy?.machines() ?? [];
+  }
+
   connections(): LocalConnection[] {
     return [...this.entries.values()]
       .map((entry) => entry.connection)
@@ -203,6 +249,14 @@ export class LocalConnectionRegistry {
 
   private expired(connection: LocalConnection): boolean {
     return connection.expiresAt !== undefined && this.now() >= connection.expiresAt;
+  }
+
+  private cancelCalls(connection: LocalConnection, message: string): void {
+    for (const [callId, pending] of [...this.pending]) {
+      if (pending.connectionId !== connection.id) continue;
+      connection.send({ kind: 'cancel', callId, reason: 'access_disabled' });
+      this.settle(callId, { ok: false, output: '', error: message });
+    }
   }
 
   private releaseCalls(connectionId: string, message: string): void {

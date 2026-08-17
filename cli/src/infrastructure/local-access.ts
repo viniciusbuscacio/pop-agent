@@ -26,6 +26,7 @@ export interface LocalAccessOptions {
 
 export type LocalAccessEvent =
   | { kind: 'attached'; connectionId: string; transport: 'wss' | 'https-long-poll' }
+  | { kind: 'access-policy'; enabled: boolean }
   | { kind: 'behind'; server: string; install: string }
   | { kind: 'outdated'; minimum: string; server: string; install: string }
   | { kind: 'authentication-required' }
@@ -48,6 +49,7 @@ interface PollEnvelope {
 export class LocalAccess {
   private socket: WebSocket | undefined;
   private id: string | undefined;
+  private accessEnabled = false;
   private refused = false;
   private shouldConnect = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -66,7 +68,7 @@ export class LocalAccess {
   constructor(private readonly options: LocalAccessOptions) {}
 
   get connectionId(): string | undefined {
-    return this.id;
+    return this.accessEnabled ? this.id : undefined;
   }
 
   connect(): void {
@@ -74,6 +76,16 @@ export class LocalAccess {
     this.shouldConnect = true;
     this.refused = false;
     this.open();
+  }
+
+  setAccessEnabled(enabled: boolean): void {
+    if (this.id === undefined) return;
+    const frame = { kind: 'set_access', enabled };
+    if (this.transport === 'https-long-poll') {
+      void this.queueHttpEvents([frame]).catch(() => undefined);
+    } else if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(frame));
+    }
   }
 
   close(): void {
@@ -86,6 +98,7 @@ export class LocalAccess {
     this.socket?.close();
     this.socket = undefined;
     this.id = undefined;
+    this.accessEnabled = false;
     this.killAll();
   }
 
@@ -109,6 +122,7 @@ export class LocalAccess {
         const connectionId = stringField(frame, 'connectionId') ?? stringField(frame, 'id');
         if (connectionId === undefined) return;
         attached = true;
+        this.accessEnabled = frame['accessEnabled'] !== false;
         this.attached(connectionId, 'wss');
         this.armSocketLease(socket);
         return;
@@ -180,10 +194,12 @@ export class LocalAccess {
       if (!response.ok) throw new Error(`local connect: ${String(response.status)}`);
       const body = (await response.json()) as {
         connectionId?: string;
+        accessEnabled?: boolean;
         frames?: Record<string, unknown>[];
       };
       if (typeof body.connectionId !== 'string') throw new Error('local connect: missing id');
       this.lastHttpSuccess = Date.now();
+      this.accessEnabled = body.accessEnabled !== false;
       this.attached(body.connectionId, 'https-long-poll');
       for (const frame of body.frames ?? []) await this.handleServerFrame(frame, (event) => this.queueHttpEvents([event]));
       await this.pollLoop(body.connectionId, abort.signal);
@@ -233,6 +249,11 @@ export class LocalAccess {
       await send({ kind: 'pong', pingId: frame['pingId'] });
       return;
     }
+    if (frame['kind'] === 'access_policy') {
+      this.accessEnabled = frame['enabled'] === true;
+      this.options.onEvent?.({ kind: 'access-policy', enabled: this.accessEnabled });
+      return;
+    }
     if (frame['kind'] === 'outdated') {
       this.outdated(frame);
       return;
@@ -252,6 +273,13 @@ export class LocalAccess {
     }
     if (frame['kind'] !== 'call') return;
     const call = frame as unknown as CallFrame;
+    if (!this.accessEnabled) {
+      await send({
+        kind: 'result', callId: call.callId, ok: false, output: '',
+        error: 'Local file access is disabled on this computer.',
+      });
+      return;
+    }
     const completed = this.completedCalls.get(call.callId);
     if (completed !== undefined) {
       await send(completed);
@@ -426,6 +454,7 @@ export class LocalAccess {
 
   private disconnected(schedule = true): void {
     this.id = undefined;
+    this.accessEnabled = false;
     this.killAll();
     if (!this.outageReported) {
       this.outageReported = true;

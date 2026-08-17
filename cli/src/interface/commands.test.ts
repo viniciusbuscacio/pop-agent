@@ -162,6 +162,23 @@ describe('pop local-access', () => {
     expect(said()).toContain('Pop Local Access is running');
   });
 
+  it('relays the tray switch through stdin control without stopping the transport', async () => {
+    const profiles = new Profiles(
+      new MemoryStore({ default: { url: 'https://pop.example', token: 'secret-session' } }),
+    );
+    const setAccessEnabled = vi.fn();
+    const context = contextWith(vi.fn() as never, profiles, () => ({
+      connect: vi.fn(), close: vi.fn(), connectionId: undefined, setAccessEnabled,
+    }));
+    context.watchLocalAccessControl = (onEnabled) => {
+      onEnabled(true);
+      return vi.fn();
+    };
+
+    expect(await backgroundLocalAccess(context, { json: true })).toBe(0);
+    expect(setAccessEnabled).toHaveBeenCalledWith(true);
+  });
+
   it('refuses to start without a signed-in profile', async () => {
     expect(await backgroundLocalAccess(contextWith(vi.fn() as never))).toBe(1);
     expect(said()).toContain('pop login');

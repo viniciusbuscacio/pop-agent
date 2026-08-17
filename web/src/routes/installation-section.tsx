@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { LocalConnectionDTO } from '@pop-agent/shared';
+import type { LocalMachineAccessDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import {
   installPwa,
@@ -11,7 +11,7 @@ import {
   selectLocalConnection,
   selectedLocalConnection,
 } from '../services/local-connection-selection';
-import { Button, Card, Select } from '../ui/controls';
+import { Button, Card, Select, SwitchField } from '../ui/controls';
 
 /**
  * Device setup instructions are generated from the origin that served this page.
@@ -26,24 +26,52 @@ export function InstallationSection() {
   const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`;
   const pwaStatus = useSyncExternalStore(subscribePwaInstall, pwaInstallStatus, pwaInstallStatus);
   const [pwaDismissed, setPwaDismissed] = useState(false);
-  const [connections, setConnections] = useState<LocalConnectionDTO[]>([]);
+  const [machines, setMachines] = useState<LocalMachineAccessDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
-  const selectableConnections = uniqueMachines(connections);
-  const selectedMachine = selectableConnections.find(
-    (connection) => connectionSelector(connection) === selectedConnection,
-  )?.machine.hostname;
+  const usableMachines = machines.filter((machine) => machine.enabled && machine.connected);
 
   useEffect(() => {
-    void localAccessService.connections().then(({ connections: live }) => {
-      setConnections(live);
-      if (selectedConnection !== '' && !live.some(
-        (connection) => connectionSelector(connection) === selectedConnection,
-      )) {
-        selectLocalConnection(undefined);
-        setSelectedConnection('');
+    let active = true;
+    const refresh = async (): Promise<void> => {
+      try {
+        const response = await localAccessService.machines();
+        if (!active) return;
+        setMachines(response.machines);
+        const usable = response.machines.filter((machine) => machine.enabled && machine.connected);
+        const selectedStillWorks = usable.some((machine) => machine.machineId === selectedLocalConnection());
+        if (!selectedStillWorks) {
+          const automatic = usable.length === 1 ? usable[0]?.machineId : undefined;
+          selectLocalConnection(automatic);
+          setSelectedConnection(automatic ?? '');
+        }
+      } catch {
+        if (active) setMachines([]);
       }
-    }).catch(() => setConnections([]));
-  }, [selectedConnection]);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  async function setMachineEnabled(machineId: string, enabled: boolean): Promise<void> {
+    try {
+      await localAccessService.setEnabled(machineId, enabled);
+    } catch {
+      return;
+    }
+    setMachines((current) => current.map((machine) =>
+      machine.machineId === machineId ? { ...machine, enabled } : machine));
+    if (enabled && selectedConnection === '') {
+      selectLocalConnection(machineId);
+      setSelectedConnection(machineId);
+    } else if (!enabled && selectedConnection === machineId) {
+      selectLocalConnection(undefined);
+      setSelectedConnection('');
+    }
+  }
 
   async function requestPwaInstall(): Promise<void> {
     setPwaDismissed(false);
@@ -100,26 +128,41 @@ export function InstallationSection() {
           <h2 className="text-base font-semibold">{t('settings.installation.localAccessTitle')}</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.localAccessBody')}</p>
         </div>
-        <Select
-          id="local-access-machine"
-          label={t('settings.installation.localAccessMachine')}
-          hint={selectedMachine === undefined
-            ? t('settings.installation.localAccessDisabled')
-            : t('settings.installation.localAccessEnabled', { machine: selectedMachine })}
-          value={selectedConnection}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            selectLocalConnection(value === '' ? undefined : value);
-            setSelectedConnection(value);
-          }}
-        >
-          <option value="">{t('settings.installation.localAccessServerOnly')}</option>
-          {selectableConnections.map((connection) => (
-            <option key={connection.id} value={connectionSelector(connection)}>
-              {connection.machine.hostname} — {platformName(connection.machine.platform)} ({t('settings.installation.localAccessConnected')})
-            </option>
-          ))}
-        </Select>
+        {machines.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">{t('settings.installation.localAccessNone')}</p>
+        ) : machines.map((machine) => (
+          <div key={machine.machineId} className="rounded-[var(--radius-control)] border border-[var(--border)] p-3">
+            <SwitchField
+              id={`local-access-${machine.machineId}`}
+              testId={`local-access-${machine.machineId}`}
+              label={t('settings.installation.localAccessForMachine', { machine: machine.hostname })}
+              hint={`${platformName(machine.platform)} — ${machine.connected
+                ? t('settings.installation.localAccessOnline')
+                : t('settings.installation.localAccessOffline')}`}
+              checked={machine.enabled}
+              onChange={(enabled) => void setMachineEnabled(machine.machineId, enabled)}
+            />
+          </div>
+        ))}
+        {usableMachines.length > 1 ? (
+          <Select
+            id="local-access-machine"
+            label={t('settings.installation.localAccessUseFrom')}
+            value={selectedConnection}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              selectLocalConnection(value === '' ? undefined : value);
+              setSelectedConnection(value);
+            }}
+          >
+            <option value="">{t('settings.installation.localAccessServerOnly')}</option>
+            {usableMachines.map((machine) => (
+              <option key={machine.machineId} value={machine.machineId}>
+                {machine.hostname} — {platformName(machine.platform)}
+              </option>
+            ))}
+          </Select>
+        ) : null}
         <h3 className="border-t border-[var(--border)] pt-4 text-sm font-semibold">
           {t('settings.installation.localAccessInstallTitle')}
         </h3>
@@ -154,20 +197,6 @@ export function InstallationSection() {
 
     </div>
   );
-}
-
-function connectionSelector(connection: LocalConnectionDTO): string {
-  return connection.machine.machineId ?? connection.id;
-}
-
-function uniqueMachines(connections: LocalConnectionDTO[]): LocalConnectionDTO[] {
-  const selected = new Map<string, LocalConnectionDTO>();
-  for (const connection of connections) {
-    const selector = connectionSelector(connection);
-    const current = selected.get(selector);
-    if (current === undefined || connection.role === 'background') selected.set(selector, connection);
-  }
-  return [...selected.values()];
 }
 
 function platformName(platform: string): string {
