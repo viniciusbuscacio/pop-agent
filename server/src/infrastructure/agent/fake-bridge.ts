@@ -14,7 +14,7 @@ import type {
 } from '../../application/ports/session-command-bridge.js';
 
 /**
- * A scripted stand-in for pi (Phase 2). It exists so the entire chat -- the
+ * A scripted stand-in for pi. It exists so the entire chat -- the
  * streaming UI, the run registry, the queue, persistence, Stop -- can be built
  * and tested end to end without spending a single token, and so the failure
  * paths can be triggered on demand instead of hoped for.

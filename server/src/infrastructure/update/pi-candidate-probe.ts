@@ -18,21 +18,88 @@ if (exportedEntry === undefined || !exportedEntry.startsWith('./')) {
 }
 const entry = join(packageRoot, exportedEntry);
 const sdk = await import(pathToFileURL(entry).href) as typeof import('@earendil-works/pi-coding-agent');
-if (typeof sdk.createAgentSession !== 'function') throw new Error('pi SDK export missing: createAgentSession');
-if (typeof sdk.defineTool !== 'function') throw new Error('pi SDK export missing: defineTool');
-if (sdk.SessionManager === undefined) throw new Error('pi SDK export missing: SessionManager');
-if (sdk.SettingsManager === undefined) throw new Error('pi SDK export missing: SettingsManager');
-if (sdk.ModelRuntime === undefined) throw new Error('pi SDK export missing: ModelRuntime');
-if (sdk.AgentSession === undefined) throw new Error('pi SDK export missing: AgentSession');
-for (const method of ['subscribe', 'prompt', 'steer', 'clearQueue', 'abort', 'compact', 'setModel', 'dispose', 'sessionFile']) {
+const requiredFunctions = [
+  'createAgentSession',
+  'defineTool',
+  'createBashToolDefinition',
+  'createReadToolDefinition',
+  'createWriteToolDefinition',
+  'createEditToolDefinition',
+] as const;
+for (const name of requiredFunctions) {
+  if (typeof sdk[name] !== 'function') throw new Error(`pi SDK export missing: ${name}`);
+}
+for (const name of ['SessionManager', 'SettingsManager', 'ModelRuntime', 'AgentSession', 'DefaultResourceLoader'] as const) {
+  if (sdk[name] === undefined) throw new Error(`pi SDK export missing: ${name}`);
+}
+for (const method of ['create', 'open', 'inMemory']) {
+  if (typeof sdk.SessionManager[method as keyof typeof sdk.SessionManager] !== 'function') {
+    throw new Error(`pi SessionManager static contract missing: ${method}`);
+  }
+}
+if (typeof sdk.SettingsManager.inMemory !== 'function') {
+  throw new Error('pi SettingsManager static contract missing: inMemory');
+}
+if (typeof sdk.ModelRuntime.create !== 'function') {
+  throw new Error('pi ModelRuntime static contract missing: create');
+}
+const agentSessionMethods = [
+  'subscribe',
+  'prompt',
+  'steer',
+  'clearQueue',
+  'abort',
+  'compact',
+  'getActiveToolNames',
+  'setActiveToolsByName',
+  'setSteeringMode',
+  'getSessionStats',
+  'setSessionName',
+  'exportToHtml',
+  'exportToJsonl',
+  'getUserMessagesForForking',
+  'setModel',
+  'dispose',
+  'sessionFile',
+] as const;
+for (const method of agentSessionMethods) {
   if (!Object.getOwnPropertyNames(sdk.AgentSession.prototype).includes(method)) {
     throw new Error(`pi AgentSession contract missing: ${method}`);
   }
 }
-for (const method of ['getModel', 'getModels', 'setRuntimeApiKey', 'registerProvider']) {
+const sessionManagerMethods = [
+  'getSessionDir',
+  'getCwd',
+  'getLeafId',
+  'getEntry',
+  'getBranch',
+  'buildSessionContext',
+  'branch',
+  'resetLeaf',
+  'createBranchedSession',
+] as const;
+for (const method of sessionManagerMethods) {
+  if (!Object.getOwnPropertyNames(sdk.SessionManager.prototype).includes(method)) {
+    throw new Error(`pi SessionManager contract missing: ${method}`);
+  }
+}
+const modelRuntimeMethods = [
+  'getModel',
+  'getModels',
+  'getAuth',
+  'setRuntimeApiKey',
+  'registerProvider',
+  'completeSimple',
+  'login',
+  'logout',
+] as const;
+for (const method of modelRuntimeMethods) {
   if (!Object.getOwnPropertyNames(sdk.ModelRuntime.prototype).includes(method)) {
     throw new Error(`pi ModelRuntime contract missing: ${method}`);
   }
+}
+if (!Object.getOwnPropertyNames(sdk.DefaultResourceLoader.prototype).includes('reload')) {
+  throw new Error('pi DefaultResourceLoader contract missing: reload');
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'pop-pi-candidate-'));
@@ -124,6 +191,11 @@ try {
     customTools: [candidateTool],
   });
   try {
+    if (session.sessionManager === undefined || session.agent === undefined) {
+      throw new Error('pi AgentSession runtime contract missing: sessionManager/agent');
+    }
+    session.setSteeringMode('all');
+    session.setActiveToolsByName(session.getActiveToolNames());
     await session.prompt('Run the candidate probe tool.');
     if (toolRuns !== 1 || !toolResultReturned || requestCount !== 2) {
       throw new Error(`candidate tool/event turn contract failed: toolRuns=${String(toolRuns)} toolResult=${String(toolResultReturned)} requests=${String(requestCount)}`);

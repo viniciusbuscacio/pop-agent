@@ -2,9 +2,8 @@ import type { Attachment, ExecutionMode, ToolStatus } from '../../domain/chat/ch
 
 /**
  * The only door to the agent engine (docs/agent-flow.md). pi lives behind this
- * port; so does the scripted fake that Phase 2 runs against. The use cases
- * cannot tell which, which is the point: Phase 3 swaps the adapter and the
- * orchestration below it does not change.
+ * port; so does the scripted fake used by tests and smoke. The use cases cannot
+ * tell which one is active, so engine integration never leaks into orchestration.
  */
 
 export type AgentEvent =
@@ -15,8 +14,7 @@ export type AgentEvent =
   | { kind: 'steering-delivered'; steeringId: string }
   /**
    * `status` is the HTTP status of the provider's refusal, when the adapter
-   * could tell -- it is what lets failover classify by type instead of prose
-   * (docs/specs/Spec-Pop-General.md §15, fase 2).
+   * could tell -- it is what lets failover classify by type instead of prose.
    */
   | { kind: 'error'; code: string; status?: number };
 
@@ -56,9 +54,9 @@ export interface AgentRunRequest {
   /** Called once the adapter can accept steering for this exact live run. */
   onControlReady?: (control: AgentRunControl) => void;
   /**
-   * Asks the user to allow a risky action mid-run (docs/specs/Spec-Pop-General.md §10). Resolves
-   * true to proceed, false to block. Absent means "no one is watching" -- the
-   * adapter must treat that as a denial, never a silent yes.
+   * Optional confirmation channel retained by the engine-neutral run contract.
+   * The current taint policy blocks classified risky actions automatically and
+   * does not depend on a user being present to answer.
    */
   confirm?: (request: { action: string; detail: string }) => Promise<boolean>;
   /** Aborted when the user presses Stop; the adapter must give up promptly. */
@@ -95,7 +93,7 @@ export interface AgentBridge {
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   listModels(providerId?: string): Promise<ModelInfo[]>;
   /**
-   * Hard-forgets a chat's session (docs/specs/Spec-Pop-General.md §15, fase 2): the run
+   * Hard-forgets a chat's session before a replacement attempt. The run
    * service calls this when it gives up on an attempt, so a bridge that keeps
    * running in the background can never be re-prompted into a shared context.
    */

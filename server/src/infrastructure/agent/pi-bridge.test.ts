@@ -803,8 +803,33 @@ describe('sessions', () => {
     expect(engine.opened[1]?.sessionFile).toBe('/data/sessions/chat.jsonl');
   });
 
-  it('keeps the session while the instructions do not change', async () => {
-    bridge = new PiAgentBridge({ chats, engine, instructions: () => 'Same words.' });
+  it('reopens the session when captured prompt or tool context changes', async () => {
+    let revision = 'context-1';
+    bridge = new PiAgentBridge({
+      chats,
+      engine,
+      contextRevision: () => revision,
+    });
+    const { onEvent } = collect();
+
+    await run(onEvent);
+    const first = engine.next;
+    engine.next = new ScriptedSession();
+    revision = 'context-2';
+    await run(onEvent);
+
+    expect(first.disposed).toBe(true);
+    expect(engine.opened).toHaveLength(2);
+    expect(engine.opened[1]?.sessionFile).toBe('/data/sessions/chat.jsonl');
+  });
+
+  it('keeps the session while its instructions and context do not change', async () => {
+    bridge = new PiAgentBridge({
+      chats,
+      engine,
+      instructions: () => 'Same words.',
+      contextRevision: () => 'same-context',
+    });
     const { onEvent } = collect();
 
     await run(onEvent);
@@ -909,7 +934,7 @@ describe('attachments', () => {
   });
 });
 
-describe('typing provider failures for failover (docs/specs/Spec-Pop-General.md §15, fase 2)', () => {
+describe('typing provider failures for failover', () => {
   it('reads the status from the code-shaped places providers put it', () => {
     expect(extractHttpStatus('402 {"error":{"message":"Insufficient credits"}}')).toBe(402);
     expect(extractHttpStatus('Provider returned error, status code: 429')).toBe(429);

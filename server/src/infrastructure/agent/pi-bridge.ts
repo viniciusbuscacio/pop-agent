@@ -35,9 +35,8 @@ import { shouldFailOver } from '../../application/chat/failover.js';
 /**
  * pi behind the AgentBridge port (docs/specs/Spec-Pop-General.md §5, docs/agent-flow.md).
  *
- * It is the same port the scripted fake implements, and the application layer
- * did not change by a line to accept it -- which was the point of building
- * Phase 2 against a fake in the first place.
+ * It is the same port the scripted fake implements, so application policy and
+ * end-to-end smoke tests do not depend on the concrete engine.
  *
  * Two things live here that the port cannot express:
  *
@@ -55,7 +54,7 @@ import { shouldFailOver } from '../../application/chat/failover.js';
 const IDLE_DISPOSE_MS = 3 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
-/** What one run cost, in the provider's own numbers. Phase 3 step 4 stores it. */
+/** What one run cost, in the provider's own numbers. */
 export interface PiRunUsage {
   chatId: string;
   provider: string;
@@ -81,6 +80,13 @@ export interface PiBridgeDeps {
   resolvePair?: (provider: string, model: string) => { providerId: string; modelId: string };
   /** The user's custom instructions. Read per run, same reason. */
   instructions?: () => string;
+  /**
+   * Revision of session-open context that is not carried by `instructions`:
+   * prompt catalogs, policy-controlled tools and attached-machine state. pi
+   * fixes those resources when a session opens, so a changed revision must
+   * reopen the same JSONL before the next run.
+   */
+  contextRevision?: (chatId: string, localConnectionId: string | undefined) => string;
   /** Overridable so tests do not wait three hours. */
   idleMs?: number;
   onUsage?: (usage: PiRunUsage) => void;
@@ -99,6 +105,8 @@ interface CachedSession {
   modelId: string;
   /** What the session was opened with; a change means reopening. */
   instructions: string;
+  /** Dynamic prompt/tool context captured when the session opened. */
+  contextRevision: string;
   /**
    * The terminal whose tools are registered in this session, if any. pi fixes
    * the tool list when the session opens, so a message from a DIFFERENT
@@ -417,7 +425,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     return this.deps.engine.complete(request);
   }
 
-  // Subscription auth (docs/specs/Spec-Pop-General.md §15, fase 1.5): the bridge only forwards --
+  // Subscription auth: the bridge only forwards --
   // credentials live in the engine's store and never surface here.
   hasProviderAuth(providerId: string): boolean {
     return this.deps.engine.hasProviderAuth(providerId);
@@ -540,17 +548,20 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     localConnectionId: string | undefined,
   ): Promise<CachedSession> {
     const instructions = this.deps.instructions?.() ?? '';
+    const contextRevision = this.deps.contextRevision?.(chatId, localConnectionId) ?? '';
 
     let cached = this.sessions.get(chatId);
-    // Instructions live in the system prompt, and the local tools live in the
-    // tool list; pi fixes both when the session opens. Reopening from the
-    // JSONL is the same move that survives a restart, so either change costs
-    // one transparent reload, not the conversation. Local access belongs to this
-    // MESSAGE, so answering from the laptop and then from the phone reopens
-    // once each way -- which is the price of the tools meaning one machine.
+    // Instructions and the other resource-loader context live in the system
+    // prompt, while local and MCP capabilities live in the tool list. pi fixes
+    // all of them when the session opens. Reopening from JSONL is the same move
+    // that survives a restart, so a change costs one transparent reload, not
+    // the conversation. Local access belongs to this MESSAGE, so answering
+    // from the laptop and then from the phone reopens once each way.
     const stale =
       cached !== undefined &&
-      (cached.instructions !== instructions || cached.localConnectionId !== localConnectionId);
+      (cached.instructions !== instructions ||
+        cached.contextRevision !== contextRevision ||
+        cached.localConnectionId !== localConnectionId);
     if (cached !== undefined && stale && cached.busy === 0) {
       cached.session.dispose();
       this.sessions.delete(chatId);
@@ -599,6 +610,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
       providerId,
       modelId,
       instructions,
+      contextRevision,
       localConnectionId,
       busy: 1,
       lastUsedAt: Date.now(),
@@ -822,7 +834,7 @@ class RunTranslator {
   finish(aborted: boolean): void {
     if (aborted || this.lastStopReason === 'aborted') this.fail('aborted', undefined);
     else if (this.lastStopReason === 'error') {
-      // Typed for failover (docs/specs/Spec-Pop-General.md §15, fase 2): a transport failure gets
+      // Typed for failover: a transport failure gets
       // its own code, and an HTTP refusal carries its status when the
       // provider's message names one.
       const message = this.lastErrorMessage;
@@ -972,7 +984,7 @@ function messageOf(error: unknown): string | undefined {
 /**
  * The HTTP status a thrown error carries, when the SDK put one on it
  * (`status`/`statusCode` on the error or its cause). Typed input for the
- * failover classifier (docs/specs/Spec-Pop-General.md §15, fase 2).
+ * failover classifier in the providers/models specification.
  */
 function statusOf(error: unknown): number | undefined {
   for (const candidate of [error, (error as { cause?: unknown } | null)?.cause]) {

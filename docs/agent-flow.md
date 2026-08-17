@@ -1,345 +1,320 @@
-# Agent flow — frontend ↔ pi SDK, end to end
+# Agent flow — client to pi SDK and back
 
-Design detail for docs/specs/Spec-Pop-General.md §5, §13, §14. The spec stays normative; this
-document explains how a message travels through every layer and what each
-layer maps. Update it when the flow changes.
+This is the implementation guide for the normative pi integration in
+[`docs/specs/Spec-Pop-Pi-Agent-Integration.md`](specs/Spec-Pop-Pi-Agent-Integration.md).
+It explains the current path of a chat message. The focused specification is
+authoritative when this supporting document diverges.
 
-**The frontend never touches the pi SDK.** Its entire contract is DTOs
-(`@pop-agent/shared`) over HTTP + SSE. The pi SDK lives behind two boundaries:
-the `AgentBridge` port (application) and its adapter (infrastructure).
+The frontend and CLI never import or address pi. Their contracts are shared
+HTTP and SSE DTOs. pi exists only in server infrastructure behind
+application-owned ports.
 
-## The wire (what web sees)
+## 1. End-to-end map
 
-```
-web                        server
- │  POST /v1/chats/:id/messages          SendMessageRequest DTO
- │ ────────────────────────────────────▶ { text, attachments? }
- │  202 Accepted                         SendMessageResponse DTO
- │ ◀──────────────────────────────────── { runId, userMessageId }
- │                         or, if busy:  { queued: true, message, head }
- │
- │  GET /v1/events (EventSource, one per app instance)
- │ ◀━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ StreamEvent DTOs, one per SSE frame
- │    delta → thinking → tool(start|output|done) → … → done
-```
-
-- Send is **fire-and-return**: the POST starts the run and answers immediately.
-  If that chat is already running, the same POST atomically appends to its
-  durable SQLite FIFO and offers the head to pi as **steering** by default. The
-  FIFO accepts up to 1,024 pending inputs per chat; only the next append is
-  refused with `queue_full`. The composer command `/queue <message>` sends
-  `delivery: follow_up` and preserves the older behavior: do not offer that
-  item to pi; wait for the run to settle. Pi inserts steering after the current
-  assistant turn and its tool calls, before the next model call. Pop offers
-  every contiguous steering item and explicitly sets pi's `steeringMode` to
-  `all`, so the complete accepted batch enters before that model call. An
-  explicit follow-up is a FIFO barrier: neither it nor later input overtakes
-  the current run. If the run has not reached pi, comes from a different local
-  connection, or ends first, the durable head remains a normal follow-up. The
-  persisted `delivery_mode` keeps
-  `/queue` explicit across edits and reconnects. ID-addressed `PUT` and
-  `DELETE` routes edit or cancel any pending item; the legacy routes continue
-  to target the head.
-- Run events carry `chatId` + `runId`. Queue events are chat-scoped: they carry
-  an incremental `upsert` or `remove`, plus the shared FIFO head for older
-  clients, and a `started` user-message identity when consumed as a new run.
-  `steering-delivered` closes
-  the current assistant segment, inserts the steering user message and resets
-  the live buffer while preserving the same run id. The frontend keeps a **runId registry**:
-  stale run fragments are dropped while queue changes still reach every tab.
-- Stop: `POST /v1/chats/:id/stop` → server aborts; the run's terminal
-  event is `error` with code `aborted` (or `done` if it finished first).
-
-## Layer-by-layer (server)
-
-```
-interface/http            application               infrastructure/agent
-─────────────             ─────────────             ────────────────────
-POST …/messages           StartRun use case         PiAgentBridge (adapter)
- Zod-validate DTO   ───▶   cap check (≤20 runs)      ensure session:
- map DTO → command         persist user message       open(pi_session_id)
-                           call AgentBridge.run  ───▶  or create(sessionDir)
-                                                      subscribe → session.prompt
-GET /v1/events            EventSink port            pi events → AgentEvent
- SSE hub          ◀───     forward AgentEvents ◀───   (mapping table below)
- map AgentEvent →          persist assistant msg
- StreamEvent DTO           on terminal event
+```text
+PWA / CLI
+   │ POST message, queue edit, Stop, session command
+   ▼
+interface/http
+   │ validate DTO and map transport result
+   ▼
+application/chat
+   │ persist product state, admit/queue run, choose provider chain
+   │
+   │ AgentBridge / ProviderAuthBridge / SessionCommandBridge
+   ▼
+infrastructure/agent/PiAgentBridge
+   │ prepare prompt, acquire session, translate events, guard and rewind
+   │
+   │ PiEngine / PiSession
+   ▼
+infrastructure/agent/SdkPiEngine + SdkPiSession
+   │ dynamic SDK call
+   ▼
+@earendil-works/pi-coding-agent
+   │ provider requests and tool execution
+   ▼
+PiAgentBridge → RunService → SQLite + EventSink → SSE → every client
 ```
 
-- **DTOs in, DTOs out** — domain objects never cross `interface/`.
-  Inbound: Zod parse → command object for the use case. Outbound: the SSE
-  hub maps application `AgentEvent`s to `StreamEvent` DTOs; route handlers
-  map use-case results to response DTOs. All DTO shapes live in
-  `@pop-agent/shared` so web imports the exact same types.
-- **Ports owned by application** (`application/ports/`):
-  - `AgentBridge.run({ chatId, prompt, model, onEvent, signal })` and
-    `listModels()` — the only door to pi.
-  - `ChatRepo` — persistence (SQLite adapter).
-  - `EventSink.emit(event)` — the only door to connected clients (SSE hub
-    adapter in `interface/`).
-- The use case is transport-blind and engine-blind: swap Hono or swap pi
-  (SDK → RPC subprocess) and `application/` does not change.
+`FakeAgentBridge` can replace the concrete adapter at the same application
+boundary. Smoke tests therefore cover HTTP, persistence and SSE without loading
+the SDK or spending tokens.
 
-## PiAgentBridge internals (infrastructure/agent)
+## 2. Sending and queuing
 
-- **Session cache**: `Map<chatId, { session, lastUsedAt }>`. Idle > 3h →
-  dispose and drop (spec §5); reopening via `SessionManager.open(path)` is
-  transparent. `chats.pi_session_id` stores the JSONL path; first run of a
-  chat uses `SessionManager.create(POP_AGENT_WORKSPACE, POP_AGENT_DATA_DIR/sessions)`
-  and records the path.
-- **Concurrency** is not here. The ceiling and the queue live in the
-  application (`RunService`), where they belong: they are a product rule, not
-  an engine detail. The bridge counts only whether a cached session is in use,
-  so an idle sweep never disposes one mid-run.
-- **Abort**: `signal` from the use case → `session.abort()`. Killing the
-  process group of a running bash child is the SDK's own behaviour, verified
-  behaviourally (see §2 below) -- aw's implementation is not needed.
-- **Event mapping** (pi SDK → application `AgentEvent`); exact pi names to
-  be confirmed against the SDK types when coding — this table is the
-  contract the adapter must satisfy no matter what pi renames:
+The ordinary wire begins with:
 
-| pi SDK event                                        | AgentEvent          |
-|-----------------------------------------------------|---------------------|
-| `message_update` + `text_delta`                     | `delta { text }`    |
-| `message_update` + `thinking_delta`                 | `thinking { text }` |
-| `tool_execution_start`                              | `tool start`        |
-| tool output updates (streamed)                      | `tool output`       |
-| tool execution end (ok / error)                     | `tool done | error` |
-| prompt resolved                                     | `done`              |
-| abort / thrown error                                | `error { code }`    |
-
-- Terminal handling in the use case: assemble the final assistant message
-  (text + thinking + tool records) from the accumulated events, persist it
-  via `ChatRepo`, then emit `done` with the persisted `messageId`.
-
-## Frontend consumption (web)
-
-- `services/events.ts` owns the single `EventSource`; reconnects with
-  backoff; dispatches parsed `StreamEvent`s to the chat store. Components
-  never see the EventSource (spec §14 services rule).
-- Store keeps per-chat: persisted messages + a live buffer keyed by
-  `runId`. `delta`/`thinking`/`tool` append to the buffer; `done` promotes
-  the buffer to a persisted message (id from the event) and clears it.
-- `run-status`, not token or tool traffic, drives the run-level line immediately
-  above the composer in both clients: queued is static, running animates
-  `Working…`, and the terminal `done`/`error` removes it. Spinner frames are
-  local presentation and never cross SSE. Tool events only drive tool cards,
-  so a finished tool cannot make an otherwise-active run look idle.
-- **Reload / reconnect reconciliation**: on mount or SSE reconnect,
-  refetch `GET /v1/chats/:id/messages` and merge with the live buffer by
-  `runId`/`messageId` — never duplicate a message that both paths deliver
-  (aw's streaming machine, spec §14).
-- Send path: POST first, then append the accepted user message or the server's
-  durable FIFO item. `GET .../messages` reconciles both `live` and the entire
-  pending FIFO; SSE incrementally adds, edits or removes exact items on other
-  devices. Pending items remain visible and editable by id, and the composer
-  stays available for more input up to the defensive cap. An item is not
-  deleted merely because pi accepted it: only pi's user-message event consumes
-  it, advances the head and offers the next steering item. `steering-delivered`
-  persists the assistant
-  segment before it, inserts the user message, and continues the same run with
-  an empty live buffer. If it was not delivered, run settlement starts it
-  normally and broadcasts `queue.started`. Old on-device queue keys are
-  uploaded once as an upgrade path and deleted only after server acceptance.
-
-## Failure modes (design targets)
-
-| Failure                       | Behavior                                        |
-|-------------------------------|-------------------------------------------------|
-| SSE drops mid-run             | client reconnects + refetches; run unaffected   |
-| server restarts mid-run       | partial answer is marked interrupted; undelivered steering starts as a follow-up after boot |
-| PWA/tab closes with pending input | SQLite row remains; snapshot restores it on any device |
-| two tabs queue simultaneously | synchronous appends preserve both in FIFO order; only item 1,025 gets `queue_full` |
-| pi throws inside a run        | `error` event with stable code; user message already persisted |
-| provider auth/limit error     | `error` code surfaces the provider code; no retry loops |
-| Stop pressed                  | abort + child process-group kill; terminal `error/aborted` |
-
-## v0.1 build order for this flow
-
-1. ✅ `AgentBridge` port + fake adapter (scripted events) → wire the full
-   path with zero tokens; smoke test asserts the SSE sequence.
-2. ✅ Frontend chat store + streaming UI against the fake adapter first.
-3. ✅ `PiAgentBridge` with persistent sessions (`sessionDir`,
-   `pi_session_id`) and the real key from the environment. The in-memory
-   session manager was skipped: `tools/live-check.ts` runs against a temporary
-   data directory instead, which exercises the persistence too.
-
-## SDK verification (pi 0.83.0, checked 31/07/2026)
-
-Phase 3 §V, answered against the installed types rather than the docs. The
-mapping table above was designed before this check; where reality differs, this
-section wins.
-
-### 1. Event names — confirmed, with one correction
-
-`AgentSession.subscribe(listener)` delivers `AgentSessionEvent`, which is
-`AgentEvent` minus `agent_end`. The union is:
-
-```
-agent_start | turn_start | turn_end | message_start | message_update |
-message_end | tool_execution_start | tool_execution_update | tool_execution_end
+```text
+POST /v1/chats/:chatId/messages
+{ text, attachments?, delivery?, executionMode? }
 ```
 
-Text and thinking are **not** separate top-level events. They arrive inside
-`message_update`, whose `assistantMessageEvent` carries the streaming detail:
+For an idle chat, the application:
 
-```
-text_start | text_delta { delta } | text_end { content } |
-thinking_start | thinking_delta { delta } | thinking_end |
-tool_call | usage
-```
+1. validates that the chat exists and the server accepts LLM work;
+2. persists the original user message in SQLite;
+3. allocates a run id and broadcasts `run-started` with that persisted message;
+4. executes immediately when below the global ceiling or enters the visible
+   in-memory admission queue;
+5. returns the accepted run and message identity without waiting for the model.
 
-So the adapter matches on `event.assistantMessageEvent.type`, not on the outer
-event type. Tool events do sit at the top level:
+Only one concrete run owns a chat. A second message received through HTTP while
+that chat is occupied is atomically appended to the per-chat SQLite FIFO rather
+than exposed as a transient `run_in_progress` failure. The FIFO holds up to
+1,024 pending inputs per chat.
 
-| pi event                 | payload                                | AgentEvent      |
-|--------------------------|----------------------------------------|-----------------|
-| `tool_execution_start`   | `toolCallId`, `toolName`, `args`       | `tool start`    |
-| `tool_execution_update`  | `toolCallId`, `toolName`, `partialResult` | `tool output` |
-| `tool_execution_end`     | `toolCallId`, `toolName`, `result`, `isError` | `tool done`/`error` |
+The default delivery mode may offer a compatible queue head to the live pi loop
+as steering. `/queue <message>` sets `follow_up`, which is a FIFO barrier and
+waits for run settlement. Execution-mode or selected-local-connection changes
+are barriers too. Queue items may be edited or deleted by id, and every change
+is synchronized across clients.
 
-### 1b. What writing the adapter changed in the above
+The global execution ceiling defaults to 20. Runs for different chats above the
+ceiling wait in `RunService` and emit queued status; this admission queue is
+distinct from a busy chat's durable message FIFO.
 
-Three corrections, each found by building against the SDK rather than reading it:
+## 3. Application orchestration
 
-- **`message_update` never carries the end of a message.** The stream switches
-  to `message_end` for that, whose `AssistantMessage` holds `stopReason`
-  (`stop` / `toolUse` / `error` / `aborted`) and `usage`. So the `usage` entry
-  listed under `assistantMessageEvent` in §1 and §4 does not exist: an adapter
-  watching only `message_update` sees every token and never learns how it went,
-  or what it cost.
-- **The terminal signal is simpler than `turn_end`.** `session.prompt()`
-  resolves when the whole run is over -- tool loops, auto-retries and
-  continuations included. The bridge awaits it and never inspects `turn_end`.
-  That also settles who decides a run failed: a `message_end` with
-  `stopReason: "error"` may still be followed by a successful retry pi ran on
-  its own, so the verdict waits for `prompt()` to return and reads the last one.
-- **Tool output arrives as cumulative snapshots, not deltas.** The bash tool
-  re-sends everything the command has printed so far, throttled to 100ms. Both
-  the UI and the stored record *append*, so the bridge diffs each snapshot
-  against what it already forwarded and puts only the new tail on the wire.
+`RunService` owns product behavior and knows only `AgentBridge`:
 
-### 2. Abort — the SDK owns it
+- one run per chat and the global ceiling;
+- durable user-message and assistant-message projection;
+- run status and stable failure codes;
+- AbortController lifecycle;
+- provider failover and cooldown integration;
+- usage booking;
+- notifications, indexing and provenance hooks;
+- offering and settling durable steering items.
 
-`session.abort()` exists, and so does `session.abortBash()` for a running shell
-command specifically. Also present: `abortCompaction()`, `abortBranchSummary()`,
-`abortRetry()`.
+It passes an `AgentRunRequest` containing the chat, provider/model pair, prompt,
+attachments, execution mode, optional local-connection identity, callbacks and
+abort signal. Once the bridge exposes `AgentRunControl`, the queue service can
+offer, cancel or rebuild steering for that exact run.
 
-**Answered, in the source and then for real: pi already kills the process
-group.** The bash tool spawns with `detached: true`, so the child leads its own
-group, and abort calls `killProcessTree(pid)` -- `process.kill(-pid, "SIGKILL")`,
-falling back to the bare pid. Confirmed behaviourally on the test server with
-`tools/live-check.ts --tools`: the model was asked to run `sleep 47`, `pgrep`
-found the shell and its child, Stop was pressed, and both were gone. aw's own
-process-group kill is therefore **not** needed -- spec §5's "Stop is a kill" is
-satisfied by the SDK.
+The application is transport-blind and SDK-blind. Domain objects do not cross
+the interface boundary; route and SSE adapters map them to DTOs from
+`@pop-agent/shared`.
 
-### 3. Custom instructions — through the resource loader, answered
+## 4. Acquiring a pi session
 
-`CreateAgentSessionOptions` has no system-prompt field, but
-`DefaultResourceLoader` takes two: `systemPrompt` replaces pi's base prompt
-and `appendSystemPrompt: string[]` extends it. Pop Agent builds its own loader per
-session -- `systemPrompt` set to a short neutral Pop Agent prompt (the coding-agent
-persona is not what a personal assistant should sound like) and the user's
-custom instructions appended when present. The same loader construction turns
-off everything a server has no use for: `noExtensions`, `noSkills`,
-`noPromptTemplates`, `noThemes`, `noContextFiles` -- so no `AGENTS.md`
-scavenged from the workspace can quietly join the prompt. Instructions are
-fixed at session open; the bridge reopens a cached session from its JSONL when
-the setting changes, the same move that survives a restart.
+`PiAgentBridge` maintains one cached `PiSession` per chat. On every operation it
+resolves the effective provider/model pair and reads the current session-open
+context revision.
 
-### 4. Usage and cost — pi reports both
+A cached session is reopened from its JSONL when any captured input changed:
 
-`Usage` carries `input`, `output`, `cacheRead`, `cacheWrite`, optional
-`reasoning`, `totalTokens`, and a `cost` breakdown with a `total`. No estimation
-by character count is needed, and `llm_runs` can store real numbers. Usage
-arrives on the `AssistantMessage` of a `message_end` event (see 1b), and a run
-that used tools produces several -- the bridge adds them up, because every call
-in a tool loop is billed. Measured on the first live run: 530 in + 29 out =
-US$ 0.002265. The totals leave through the port: `run()` resolves with an
-`AgentRunResult` whose usage the application books into `llm_runs`, one row
-per run id -- the event stream stays exactly what the UI renders.
+- owner/pinned/Files instructions;
+- Auto-skills policy, living memory or recent-chat catalog;
+- enabled MCP capability catalog;
+- selected local connection, machine details or permission;
+- provider identity.
 
-### 5. Model changes mid-session — supported
+A model change inside the same provider uses `setModel()` in place. A busy
+session is never disposed by revision refresh or the idle sweeper. Idle entries
+are disposed after approximately three hours; shutdown, chat deletion and the
+operator's LLM restart also clear applicable entries.
 
-`session.setModel(model)` is public and async. Models come from `ModelRegistry`
-/ `resolveCliModel`; the runtime that owns auth is `ModelRuntime`, which
-defaults to `agentDir/auth.json` and `models.json` and can be passed in.
+If SQLite holds `pi_session_id`, the engine resumes with
+`SessionManager.open()`. Otherwise it creates under
+`POP_AGENT_DATA_DIR/sessions/`. A missing stored path starts clean and is
+replaced after pi assigns a new file; other open failures remain visible.
 
-### 6. Tools
+SQLite owns the chat title. Each SDK open synchronizes pi's session name from
+that title.
 
-Built-ins are `read`, `bash`, `edit`, `write`, enabled by default. `tools` is an
-allowlist, `excludeTools` a denylist applied after it, and `noTools: "all" |
-"builtin"` sets the default. `customTools` registers our own (memory, notes,
-web) later without touching the built-ins.
+## 5. Opening the SDK runtime
 
-### 7. Skills — controlled by the resource loader
+`SdkPiEngine` dynamically imports either the validated active runtime entry or
+the repository-pinned package. It creates an isolated `ModelRuntime` with
+Pop-owned auth/catalog paths and no ordinary model-catalog network fetch.
 
-`loadSkills` / `loadSkillsFromDir` / `formatSkillsForPrompt` are exported, and
-discovery runs through `DefaultResourceLoader`. Turning pi's own progressive
-disclosure off is therefore a resource-loader decision, not a flag — which is
-what the Skill Router (§8) will need in v0.2.
+Before opening a session it:
 
-### 8. Binding a model to our OpenRouter key, without touching `~/.pi`
+1. applies the current key or subscription credential;
+2. registers current custom provider definitions when needed;
+3. resolves the exact model;
+4. creates or opens the pi `SessionManager`;
+5. builds Pop's `DefaultResourceLoader` with host discovery disabled;
+6. builds Pop custom tools, enabled MCP tools and applicable `local_*` tools;
+7. creates in-memory pi settings for compaction and steering;
+8. calls `createAgentSession()` and wraps the result in `SdkPiSession`.
 
-This was the open question that blocked the bridge. Verified against the
-installed `ModelRuntime` types (pi 0.83.0):
+The resource loader replaces pi's coding-agent persona. It appends Pop's
+captured instructions, user memory, the untrusted recent-chat catalog and a
+continuity note for resumed sessions. Pinned skills and Files catalog arrive in
+the instruction block assembled by the composition root. Per-turn routed
+skills remain part of that turn's prompt.
 
-```ts
-const runtime = await ModelRuntime.create({
-  authPath: join(dataDir, 'pi-auth.json'),   // isolated: never ~/.pi/agent/auth.json
-  modelsPath: null,                          // do not read pi's models.json
-  modelsStorePath: join(dataDir, 'pi-models-store.json'),
-  allowModelNetwork: false,                  // no catalog fetch during boot
-});
+## 6. Prompt and attachment preparation
 
-await runtime.setRuntimeApiKey('openrouter', apiKey);
+Before calling pi, the bridge:
 
-const model = runtime.getModel('openrouter', 'moonshotai/kimi-k3');
-// → passed to createAgentSession({ model, agentDir, sessionManager, ... })
-```
+1. writes accepted attachments under
+   `POP_AGENT_WORKSPACE/attachments/<chatId>/` with sanitized names;
+2. adds their relative paths to the model prompt;
+3. prepends relevant routed skills;
+4. adds the runtime/client identity note when required;
+5. extracts valid image data for a model that declares image input.
 
-Why each piece:
+SQLite retains the owner's original message. Prompt-only framing is not written
+back into product history.
 
-- **`authPath` isolated.** A stored credential outranks the environment
-  variable, so pointing at pi's own auth file would let a credential Pop Agent never
-  set decide which account gets billed. Pop Agent keeps its own.
-- **`modelsPath: null`.** Pop Agent pins the models it offers; inheriting pi's local
-  catalog would make behaviour depend on whatever the operator ran the CLI with.
-- **`allowModelNetwork: false`.** Boot must not depend on OpenRouter being
-  reachable. The live catalog is a Settings-screen action (`runtime.refresh()`),
-  not a startup cost.
-- **`agentDir` inside `POP_AGENT_DATA_DIR`.** Not in the original recipe, and it
-  belongs for the same reason as the other three: `agentDir` is where pi reads
-  settings, extensions and skills from, and a `~/.pi/agent` on the host must not
-  get a vote on how Pop Agent behaves.
+Steering input goes through the same preparation pipeline. A text-only model
+receives attachment paths but no unsupported inline image payload.
 
-**`registerProvider` turned out to be unnecessary, and the reason is worth
-recording**: this section first said the built-in `openrouter` provider "ships
-with no model entries", so Pop Agent had to declare its own row with pinned pricing.
-That is wrong. `pi-ai/dist/providers/data/openrouter.json` ships **303 models**,
-`moonshotai/kimi-k3` among them, priced exactly as OpenRouter's live catalog
-prices it: US$3/M input, US$15/M output, US$0.30/M cache read, 1,048,576
-context, checked against `GET https://openrouter.ai/api/v1/models` on the same
-day. With `allowModelNetwork: false`, `modelsPath: null` and an empty auth file,
-`getModel('openrouter', 'moonshotai/kimi-k3')` simply resolves.
+## 7. Tools, execution mode and guard
 
-So the bridge declares nothing, and there is no second copy of the price to
-drift out of date. What guards it instead is `sdk-contract.test.ts`, which
-resolves that model offline in the gate: a pi release that drops the row breaks
-the build rather than the first conversation of the day.
+Normal Mode restores the tool names captured when the SDK session opened:
+server `read`, `bash`, `edit`, `write`, Pop tools, enabled MCP capabilities and
+allowed local tools.
 
-One footnote to "isolated": `ModelRuntime.create` *does* create the file at
-`authPath`, empty. That is fine -- it is Pop Agent's own, inside `POP_AGENT_DATA_DIR`. The
-point was isolation from `~/.pi`, not abstinence.
+Plan Mode calls `setActiveToolsByName()` with the fail-closed read-only list.
+Only MCP tools explicitly annotated with `readOnlyHint: true` enter it. The
+runtime prompt also receives `[PLAN MODE ACTIVE]`; the active catalog, not model
+compliance alone, prevents writes.
 
-Verified to exist with these signatures: `ModelRuntime.create(options)`,
-`setRuntimeApiKey(providerId, apiKey)` (async), `getModel(providerId, modelId)`,
-`getModels(providerId)`, `registerProvider(providerId, config)`,
-`refresh(options)`.
+For every run the bridge installs a `TaintGuard` through a small Pop-owned pi
+extension. Tool results feed the turn's taint state. Before later tool calls,
+the guard automatically blocks classified exfiltration, secret access or
+irreversible action. The guard is removed in `finally` so state cannot leak to
+the next run.
 
-### Still open
+Server tools always mean the server workspace. `local_*` definitions are pi's
+same tool schemas backed by PLA operations for the selected allowed computer.
+If no allowed local connection was associated with the message, those tools are
+absent.
 
-Nothing. Every question this section tracked has an answer above: events (1),
-abort (2), custom instructions (3), usage (4), model switching (5), tools (6),
-skills (7), the key and the catalog (8).
+## 8. SDK events to product events
+
+`AgentSession.subscribe()` emits pi events. The bridge maps only the information
+the application needs:
+
+| SDK event | Bridge action |
+|---|---|
+| `message_update` / `text_delta` | emit `delta` |
+| `message_update` / `thinking_delta` | emit `thinking` |
+| `tool_execution_start` | emit tool `start` with call detail |
+| `tool_execution_update` | diff cumulative output and emit only its new tail |
+| `tool_execution_end` | emit tool `done` or `error` |
+| steering `message_start` with matching user text | emit `steering-delivered` |
+| assistant `message_end` | collect usage and last failure state |
+
+pi tool updates are cumulative snapshots. Forwarding each snapshot whole would
+duplicate output because clients and persistence append; `RunTranslator` tracks
+the prior snapshot per tool call.
+
+`session.prompt()` resolving ends the complete engine loop, including tools and
+SDK-internal continuation. The bridge then emits the final application outcome;
+`RunService` persists the assembled assistant projection and sends product SSE
+events.
+
+A run may contain several provider calls. Usage from every assistant terminal
+message is added before one product `llm_runs` entry is booked.
+
+## 9. Steering lifecycle
+
+The bridge forces pi steering mode to `all`. Queue-service offers are serialized
+and passed to `session.steer()` in FIFO order. Acceptance into pi's in-memory
+queue does not consume SQLite.
+
+When pi emits the matching user-message start, the bridge reports
+`steering-delivered`. The application then:
+
+- persists the completed assistant segment before it;
+- persists the steering user message;
+- removes that durable queue item;
+- resets the current live assistant buffer while retaining the run id;
+- offers the next compatible FIFO head.
+
+Cancellation clears pi's queue and reconstructs it from still-valid durable
+items. Undelivered input remains in SQLite after run settlement and starts as a
+normal follow-up. This keeps SQLite, not pi RAM, authoritative.
+
+## 10. Stop, overflow and failover
+
+Stop aborts the run's `AbortController`; the bridge calls `session.abort()`.
+The SDK's bash implementation terminates the child process group, so work and
+streaming stop together. A run waiting in the global admission queue is removed
+without opening an engine and still settles as aborted.
+
+Before prompting, the bridge records the current JSONL leaf. On context
+overflow it:
+
+1. rewinds the rejected turn to that leaf;
+2. unsubscribes the first translator;
+3. asks pi to compact;
+4. subscribes a fresh translator carrying prior usage;
+5. retries the identical prepared turn once.
+
+A second failure is terminal. There is no unbounded compaction loop.
+
+For a failover-eligible refusal, the bridge also rewinds before returning to
+`RunService`. The next provider opens the same clean JSONL branch, preventing
+the owner's question from appearing twice. Product policy decides whether an
+attempt is safe to replay and which provider is next.
+
+## 11. Session commands and background completions
+
+`SessionCommandBridge` adapts pi's public operations for compact, stats, name,
+HTML/JSONL export and branch/fork. Commands acquire an idle session and refuse
+to mutate one in use. Product services decide which results become timeline
+markers or Files exports.
+
+`AgentBridge.complete()` uses `ModelRuntime.completeSimple()` without a chat
+session, history or tools. It is the common path for service work and returns
+provider-reported usage when available.
+
+`ProviderAuthBridge` delegates OAuth and subscription allowance operations to
+the isolated model runtime. Credential material stays below the port.
+
+## 12. Client projection and reconciliation
+
+The PWA owns one EventSource in `web/src/services/events.ts`. It batches
+high-volume stream fragments for rendering but flushes lifecycle events
+immediately. Stores keep persisted messages plus a live projection keyed by
+`chatId` and `runId`; stale fragments from replaced runs are ignored.
+
+On boot or SSE reconnect, the frontend refetches the server transcript and full
+pending FIFO. The server snapshot is authoritative; SSE supplies low-latency
+increments. A steering-delivery boundary settles one assistant segment and
+starts another within the same run.
+
+Run status, not tool-card state, drives queued/running presentation. Stop and
+terminal events clear it. Detailed synchronization rules live in
+`Spec-Pop-Events-Synchronization.md` and frontend behavior in
+`Spec-Pop-Frontend.md`.
+
+## 13. Failure behavior
+
+| Failure | Required result |
+|---|---|
+| SSE disconnects | run continues; reconnect plus snapshot converges |
+| tab/PWA closes | server run and durable FIFO continue |
+| server restarts mid-run | partial product run is interrupted; pending FIFO survives |
+| pi session path is missing | log and create a replacement session |
+| pi session is corrupt | expose an operational failure; do not silently erase it |
+| provider rejects before unsafe work | stable error or eligible clean failover |
+| context overflow | compact and retry once from the pre-turn leaf |
+| Stop is pressed | abort engine and process group; settle terminally |
+| local permission changes | next operation reopens without stale local tools |
+| candidate SDK breaks a required API | candidate remains inactive |
+
+Provider details useful to operators go to server logs. SSE carries stable codes
+and product-safe state, never credentials.
+
+## 14. Contract protection
+
+`server/src/infrastructure/agent/sdk-contract.test.ts` verifies every bundled SDK
+surface used by the adapter. The candidate probe repeats that runtime contract
+against the isolated candidate and performs an offline loopback behavior check:
+custom tool call, tool-result continuation and in-flight abort.
+
+The contract includes AgentSession tool/mode/session-command APIs,
+SessionManager tree APIs, resource/settings loaders, local tool factories and
+ModelRuntime model/auth/completion APIs. Adding a new SDK call requires adding
+it to both checks in the same change.
+
+Focused bridge/engine tests cover event mapping, cache invalidation, steering,
+rewind, Plan Mode, attachments, usage and safety. The repository gate then runs
+architecture checks, all tests, builds and end-to-end fake-provider smoke.

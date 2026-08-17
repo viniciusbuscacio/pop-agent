@@ -26,6 +26,12 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   SSE reconciliation, IndexedDB cache, streaming performance, offline health,
   install/update lifecycle, push, accessibility and device test obligations;
   server-owned Files, pi and queue internals now route to their focused specs.
+- **The pi integration specification is now a complete engine guide.** It defines
+  adapter boundaries, isolated runtime loading, SQLite/JSONL ownership, prompt
+  and tool construction, Plan Mode, session freshness, events, steering,
+  concurrency, Stop, compaction, failover, native commands, SDK update contracts
+  and test obligations. The supporting end-to-end agent flow now describes the
+  current durable FIFO and SDK behavior without historical build phases.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -66,6 +72,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   migration names and rejects duplicate versions before touching SQLite. Voice
   transcription claims its temporary input/output names exclusively and redraws
   on collision instead of allowing an existing file to be replaced.
+- **Cached pi sessions no longer retain stale prompt or tool context.** Changes
+  to Auto-skills policy, living/recent memory, enabled MCP capabilities or the
+  selected local computer now reopen the same JSONL before the next operation.
+  The pi candidate gate also verifies the complete session, tree, resource,
+  local-tool, completion and auth API surface Pop Agent actually uses.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.

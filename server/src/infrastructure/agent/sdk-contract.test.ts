@@ -17,11 +17,22 @@ describe('pi sdk contract', () => {
     async () => {
       const sdk = await import('@earendil-works/pi-coding-agent');
 
-      expect(typeof sdk.createAgentSession).toBe('function');
-      expect(typeof sdk.defineTool).toBe('function');
+      for (const name of [
+        'createAgentSession',
+        'defineTool',
+        'createBashToolDefinition',
+        'createReadToolDefinition',
+        'createWriteToolDefinition',
+        'createEditToolDefinition',
+      ] as const) {
+        expect(typeof sdk[name], name).toBe('function');
+      }
       expect(typeof sdk.SessionManager?.create).toBe('function');
       expect(typeof sdk.SessionManager?.open).toBe('function');
       expect(typeof sdk.SessionManager?.inMemory).toBe('function');
+      expect(typeof sdk.SettingsManager?.inMemory).toBe('function');
+      expect(typeof sdk.DefaultResourceLoader).toBe('function');
+      expect(Object.getOwnPropertyNames(sdk.DefaultResourceLoader.prototype)).toContain('reload');
 
       // The bridge drives these; a rename here is a silent breakage everywhere
       // else, so it fails the gate instead.
@@ -33,6 +44,9 @@ describe('pi sdk contract', () => {
         'clearQueue',
         'abort',
         'compact',
+        'getActiveToolNames',
+        'setActiveToolsByName',
+        'setSteeringMode',
         'getSessionStats',
         'setSessionName',
         'exportToHtml',
@@ -48,13 +62,34 @@ describe('pi sdk contract', () => {
       }
 
       const manager = Object.getOwnPropertyNames(sdk.SessionManager.prototype);
-      expect(manager).toContain('createBranchedSession');
+      for (const method of [
+        'getSessionDir',
+        'getCwd',
+        'getLeafId',
+        'getEntry',
+        'getBranch',
+        'buildSessionContext',
+        'branch',
+        'resetLeaf',
+        'createBranchedSession',
+      ]) {
+        expect(manager, `SessionManager.${method}`).toContain(method);
+      }
 
       // The model runtime is how the key and the catalog stay Pop Agent's own
       // rather than whatever ~/.pi happens to hold (docs/agent-flow.md §8).
       expect(typeof sdk.ModelRuntime?.create).toBe('function');
       const runtime = Object.getOwnPropertyNames(sdk.ModelRuntime.prototype);
-      for (const method of ['getModel', 'getModels', 'setRuntimeApiKey']) {
+      for (const method of [
+        'getModel',
+        'getModels',
+        'getAuth',
+        'setRuntimeApiKey',
+        'registerProvider',
+        'completeSimple',
+        'login',
+        'logout',
+      ]) {
         expect(runtime, `ModelRuntime.${method}`).toContain(method);
       }
     },

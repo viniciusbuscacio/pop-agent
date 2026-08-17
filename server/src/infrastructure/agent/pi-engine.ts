@@ -52,7 +52,7 @@ export { DEFAULT_MODEL_ID };
 
 /**
  * Pop Agent's own voice, replacing pi's coding-agent persona. Short and neutral on
- * purpose (Phase 3 plan): what Pop Agent is comes from here, how the user wants it
+ * purpose: what Pop Agent is comes from here, how the user wants it
  * to behave comes from the custom instructions appended after it.
  */
 export const SYSTEM_PROMPT = [
@@ -275,8 +275,8 @@ export interface SdkPiEngineOptions {
   /** The user's Files folder: powers delete_file and files_search (docs/specs/Spec-Pop-General.md §14). */
   files?: FilesService;
   /**
-   * The skills vault, so the agent can read its own skills and write a new
-   * one when the user asks (docs/specs/Spec-Pop-General.md §8, auto-skill fase b).
+   * The skills vault, exposed through the read-only skills catalog. Skill
+   * creation belongs to the reviewed background distiller, never a live turn.
    */
   skills?: SkillsRepo;
   /** Current background auto-skill policy, read whenever a session opens (§8). */
@@ -631,7 +631,7 @@ export class SdkPiEngine implements PiEngine {
   }
 
   /**
-   * pi's interactive OAuth login (docs/specs/Spec-Pop-General.md §15, fase 1.5). The credential is
+   * pi's interactive OAuth login. The credential is
    * persisted by the runtime into Pop Agent's own auth file (`authPath`); nothing
    * comes back to the caller.
    *

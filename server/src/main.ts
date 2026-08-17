@@ -344,8 +344,25 @@ function piBridge(): PiAgentBridge {
       ]
         .filter((block) => block.trim().length > 0)
         .join('\n\n'),
-    // Until Phase 3 step 4 gives them a table, both land in the log -- which is
-    // still the difference between "it failed" and knowing why.
+    // The engine captures these prompt blocks and tool definitions when a pi
+    // session opens. Their product state can change without changing the
+    // instruction string above, so make that state part of the cache key too.
+    contextRevision: (_chatId, localConnectionId) => {
+      const localConnection = localConnections.connection(localConnectionId);
+      return JSON.stringify({
+        autoSkillsEnabled: settings.read().autoSkillsEnabled,
+        userMemory: context.userMemory.read().doc,
+        recentChats: context.memory.recentChats(15),
+        mcp: mcp.list()
+          .filter((server) => server.enabled)
+          .map((server) => ({ id: server.id, capabilities: server.capabilities })),
+        localConnection: localConnection === undefined
+          ? null
+          : { id: localConnection.id, machine: localConnection.machine },
+      });
+    },
+    // Keep per-run engine accounting visible to operators in addition to the
+    // application-owned usage ledger.
     onUsage: (usage) => {
       // What was actually billed, not what pi's catalogue says it would have
       // cost: a subscription charges nothing per token, and a log line reading
