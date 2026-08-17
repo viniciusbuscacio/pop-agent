@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -7,7 +7,7 @@ import {
   type TranscriptionJob,
   type Transcriber,
 } from '../../application/ports/transcriber.js';
-import { randomBase62, randomFileName } from '../../domain/ids.js';
+import { createExclusiveInternalFile } from '../process/internal-file.js';
 
 /**
  * aw's local voice pipeline, ported: ffmpeg turns whatever the browser
@@ -53,13 +53,17 @@ export class WhisperTranscriber implements Transcriber {
 
     const dir = mkdtempSync(join(tmpdir(), 'pop-voice-'));
     try {
-      // Internal files get the id convention (docs/specs/Spec-Pop-General.md §6): audio_<11>.wav.
-      // Distinct basenames, so a recording that is already .wav does not
-      // collide with ffmpeg's output.
-      const input = join(dir, randomFileName('audio', safeExtension(job.format)));
-      const wav = join(dir, randomFileName('audio', 'wav'));
-      const transcriptBase = join(dir, `text_${randomBase62(11)}`);
-      writeFileSync(input, audio);
+      // Claim every internal path exclusively: even the astronomically unlikely
+      // random-name collision must redraw rather than replace an input/output.
+      const input = createExclusiveInternalFile(
+        dir,
+        'audio',
+        safeExtension(job.format),
+        audio,
+      );
+      const wav = createExclusiveInternalFile(dir, 'audio', 'wav');
+      const transcript = createExclusiveInternalFile(dir, 'text', 'txt');
+      const transcriptBase = transcript.slice(0, -'.txt'.length);
 
       // 16 kHz mono PCM is the one shape whisper.cpp accepts (aw's flags).
       await run(

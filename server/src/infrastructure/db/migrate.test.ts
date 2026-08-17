@@ -68,9 +68,25 @@ describe('migration runner', () => {
     expect(tableNames(db)).not.toContain('ok');
   });
 
-  it('rejects a file that does not start with a version number', () => {
+  it('rejects a migration name outside NNN_descriptive_name.sql', () => {
     const dir = migrationsDir({ 'settings.sql': 'CREATE TABLE nope (id INTEGER);' });
-    expect(() => migrate(new Database(':memory:'), dir)).toThrow(/<number>_<name>\.sql/);
+    expect(() => migrate(new Database(':memory:'), dir)).toThrow(/NNN_descriptive_name\.sql/);
+  });
+
+  it('requires zero-padded three-digit versions', () => {
+    const dir = migrationsDir({ '01_short.sql': 'CREATE TABLE nope (id INTEGER);' });
+    expect(() => migrate(new Database(':memory:'), dir)).toThrow(/NNN_descriptive_name\.sql/);
+  });
+
+  it('rejects duplicate versions before either migration changes the database', () => {
+    const dir = migrationsDir({
+      '001_first.sql': 'CREATE TABLE first (id INTEGER PRIMARY KEY);',
+      '001_second.sql': 'CREATE TABLE second (id INTEGER PRIMARY KEY);',
+    });
+    const db = new Database(':memory:');
+
+    expect(() => migrate(db, dir)).toThrow(/duplicate migration version 1/);
+    expect(tableNames(db)).toEqual([]);
   });
 
   it('ships the real migrations: settings and secrets exist after a default run', () => {

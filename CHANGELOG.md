@@ -16,6 +16,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   The General overview was then reconciled with the current code: it now maps
   capabilities and state ownership, corrects runtime paths and removes obsolete
   roadmap, multi-user and development-environment assumptions.
+- **The Backend specification is now a complete server guide.** It defines the
+  TypeScript process model, clean-architecture boundaries, composition, ports,
+  SQLite ownership, migration discipline, persistence invariants, deletion,
+  failure handling, performance rules and backend test obligations without
+  duplicating the exact migration-owned schema.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -52,6 +57,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Fixed
 
+- **Migration and internal-file collisions now fail safely.** Boot validates all
+  migration names and rejects duplicate versions before touching SQLite. Voice
+  transcription claims its temporary input/output names exclusively and redraws
+  on collision instead of allowing an existing file to be replaced.
 - **PLA installation survives server version bumps and zsh.** The launcher
   manifest now advertises the latest immutable packed CLI release instead of
   404ing whenever the server version moves ahead of its artifacts, and the
