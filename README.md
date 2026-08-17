@@ -34,7 +34,8 @@ still move without compatibility promises.
 ## Documentation
 
 `pop-agent.spec` is the single source of truth for architecture and behavior;
-`CHANGELOG.md` tracks what shipped. Design deep-dives live in `docs/`.
+`CHANGELOG.md` tracks what shipped. Start subsystem navigation at
+`docs/specs/Spec-Pop-General.md`; focused design deep-dives live in `docs/`.
 
 ## License
 

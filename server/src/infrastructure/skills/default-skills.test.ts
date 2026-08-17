@@ -60,9 +60,12 @@ describe('default skills routing', () => {
     expect(body).toContain('memory_search');
   });
 
-  it('tells Pop Agent its extensions are TypeScript', () => {
+  it('tells Pop Agent its extensions are TypeScript and routes detailed self-knowledge', () => {
     const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-codebase')?.body ?? '';
     expect(body).toContain('TypeScript on');
+    expect(body).toContain('docs/specs/Spec-Pop-General.md');
+    expect(body).toContain('Load only the specs relevant to the request');
+    expect(body).toContain('inspect current code and');
     expect(body).toContain('## Repo map');
     expect(body).toContain('## UI map');
   });
