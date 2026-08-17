@@ -28,6 +28,9 @@ function ChatMessageView({
   // A run that failed or was stopped leaves this mark in the history
   // forever (pop-agent.spec §6): quiet, centered, unmistakably not a reply.
   if (message.role === 'system') {
+    if (message.notice?.kind === 'context-compacted') {
+      return <TimelineEvent content={message.content} />;
+    }
     if (message.notice?.kind === 'model-fallback') {
       const { failed, fallback } = message.notice;
       return (
@@ -56,20 +59,13 @@ function ChatMessageView({
         />
       );
     }
+    if (systemTone === 'info') return <TimelineEvent content={message.content} />;
     return (
       <div
         data-testid="message-system"
-        className={`flex min-w-0 items-center justify-center gap-3 text-center text-xs ${
-          systemTone === 'info' ? 'w-full text-[var(--muted)]' : 'flex-wrap text-[var(--danger)]'
-        }`}
+        className="flex min-w-0 flex-wrap items-center justify-center gap-3 text-center text-xs text-[var(--danger)]"
       >
-        {systemTone === 'info' ? (
-          <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
-        ) : null}
         <span className="[overflow-wrap:anywhere]">{message.content}</span>
-        {systemTone === 'info' ? (
-          <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
-        ) : null}
         {onResend === undefined ? null : (
           <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
             <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
@@ -106,6 +102,19 @@ function ChatMessageView({
           <Markdown text={message.content} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TimelineEvent({ content }: { content: string }) {
+  return (
+    <div
+      data-testid="message-system"
+      className="flex w-full min-w-0 items-center justify-center gap-3 text-center text-xs text-[var(--muted)]"
+    >
+      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
+      <span className="[overflow-wrap:anywhere]">{content}</span>
+      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-[var(--border)]" />
     </div>
   );
 }

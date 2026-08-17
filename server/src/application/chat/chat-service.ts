@@ -151,6 +151,23 @@ export class ChatService {
       .filter((message) => message.role === 'user')[index];
   }
 
+  recordContextCompacted(chatId: string): Message | undefined {
+    if (this.deps.chats.get(chatId) === undefined) return undefined;
+    const message = this.deps.chats.appendMessage({
+      id: newMessageId(),
+      chatId,
+      role: 'system',
+      content: 'Context compacted.',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: new Date(this.deps.clock.now()).toISOString(),
+      notice: { kind: 'context-compacted' },
+    });
+    this.deps.sink?.emit({ kind: 'system-message', chatId, message });
+    return message;
+  }
+
   /** Creates the product-side half of a pi fork, stopping before the selected user turn. */
   fork(sourceId: string, selectedUserIndex: number, piSessionId: string): Chat | undefined {
     const source = this.deps.chats.get(sourceId);

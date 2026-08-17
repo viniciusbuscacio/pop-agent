@@ -67,6 +67,7 @@ export interface ModelAttemptNotice {
 }
 
 export type SystemNotice =
+  | { kind: 'context-compacted' }
   | {
       kind: 'model-fallback';
       failed: ModelAttemptNotice;

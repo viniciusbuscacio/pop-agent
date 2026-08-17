@@ -417,7 +417,7 @@ function toMessage(row: MessageRow): Message {
 
 function noticeFromJson(raw: string | undefined): { notice?: SystemNotice } {
   const value = parseJson<Partial<SystemNotice>>(raw ?? '{}', {});
-  return value.kind === 'model-fallback' || value.kind === 'run-failure'
+  return value.kind === 'context-compacted' || value.kind === 'model-fallback' || value.kind === 'run-failure'
     ? { notice: value as SystemNotice }
     : {};
 }

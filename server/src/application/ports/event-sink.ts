@@ -28,8 +28,8 @@ export type RunEvent =
     }
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string; message?: Message }
-  /** A persisted fallback marker sent while the replacement attempt is running. */
-  | { kind: 'system-message'; chatId: string; runId: string; message: Message }
+  /** A persisted timeline marker, optionally associated with a live run. */
+  | { kind: 'system-message'; chatId: string; runId?: string; message: Message }
   | { kind: 'title'; chatId: string; title: string }
   /** A persisted user turn opened a run, whichever client sent it. */
   | { kind: 'run-started'; chatId: string; runId: string; user: Message }

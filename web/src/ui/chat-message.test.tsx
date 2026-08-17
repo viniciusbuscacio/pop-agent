@@ -52,6 +52,23 @@ describe('horizontal overflow containment', () => {
 });
 
 describe('system messages', () => {
+  it('renders compact completion from durable history as a timeline event', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          content: 'Context compacted.',
+          notice: { kind: 'context-compacted' },
+        }}
+      />,
+    );
+
+    const message = screen.getByTestId('message-system');
+    expect(message.textContent).toBe('Context compacted.');
+    expect(message.className).toContain('w-full');
+    expect(message.className).toContain('text-[var(--muted)]');
+  });
+
   it('renders local informational output as a quiet timeline event', () => {
     render(
       <ChatMessage

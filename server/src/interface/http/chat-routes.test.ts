@@ -43,8 +43,22 @@ beforeEach(async () => {
 describe('pi session commands', () => {
   it('runs compact, session, name and export through the bridge', async () => {
     const chat = await newChat();
+    const events: StreamEvent[] = [];
+    const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
 
     expect((await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'compact' } })).status).toBe(200);
+    const history = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as { messages: MessageDTO[] };
+    expect(history.messages).toContainEqual(expect.objectContaining({
+      role: 'system',
+      content: 'Context compacted.',
+      notice: { kind: 'context-compacted' },
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      kind: 'system-message',
+      chatId: chat.id,
+      message: expect.objectContaining({ notice: { kind: 'context-compacted' } }),
+    }));
+    unsubscribe();
     const session = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'session' } });
     expect(((await session.json()) as { message: string }).message).toContain('Tokens: 0');
 

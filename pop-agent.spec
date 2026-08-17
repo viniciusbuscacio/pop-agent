@@ -188,8 +188,10 @@ domain / application / dto / infrastructure / appcore → interface+main):
 - **Native pi session commands:** the composer exposes `/compact [instructions]`,
   `/session`, `/name <name>`, `/export [html|jsonl]`, and `/fork <number>`.
   These invoke pi's public SDK operations rather than prompting the model or
-  reproducing pi's behavior. Command results are local system cards and never
-  enter model context. Exports land under `Files/Exports/`. `/name` updates the
+  reproducing pi's behavior. Command results never enter model context. The
+  `/compact` completion is a durable system timeline marker, delivered through
+  the same history/SSE path as provider fallback markers; other command output
+  remains local to the visible transcript. Exports land under `Files/Exports/`. `/name` updates the
   SQLite title and pi session name, with SQLite authoritative on every session
   wake. Bare `/fork` lists active-branch user turns; the numbered form creates
   a new Pop chat backed by pi's branched JSONL session, copies the visible

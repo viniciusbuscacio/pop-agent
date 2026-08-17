@@ -605,6 +605,7 @@ export interface ModelAttemptDTO {
 
 /** Structured detail for actionable system history; content remains the legacy fallback. */
 export type SystemNoticeDTO =
+  | { kind: 'context-compacted' }
   | {
       kind: 'model-fallback';
       failed: ModelAttemptDTO;
@@ -1040,8 +1041,8 @@ export type StreamEvent =
     }
   | { kind: 'done'; chatId: string; runId: string; messageId: string }
   | { kind: 'error'; chatId: string; runId: string; code: string; message?: MessageDTO }
-  /** A durable fallback marker, delivered while the replacement attempt is running. */
-  | { kind: 'system-message'; chatId: string; runId: string; message: MessageDTO }
+  /** A durable timeline marker, optionally associated with a live run. */
+  | { kind: 'system-message'; chatId: string; runId?: string; message: MessageDTO }
   | { kind: 'title'; chatId: string; title: string }
   /** A persisted user turn opened a run, whichever client sent it. */
   | { kind: 'run-started'; chatId: string; runId: string; user: MessageDTO }

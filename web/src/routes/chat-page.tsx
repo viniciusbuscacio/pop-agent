@@ -527,8 +527,15 @@ export function ChatPage() {
               navigate(`/chat/${result.chat.id}`);
               return;
             }
+            if (isCompact) {
+              // Compaction completion is durable history, just like a provider
+              // fallback marker. Reconcile from the canonical transcript rather
+              // than rendering a separate local notice below it.
+              await openChat(chatId);
+              setCompacting(false);
+              return;
+            }
             const message = result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`);
-            if (isCompact) setCompacting(false);
             setLocalSystemMessages((current) => [...current, message]);
           } catch (error) {
             if (isCompact) setCompacting(false);

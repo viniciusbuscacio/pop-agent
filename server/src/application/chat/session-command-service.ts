@@ -42,6 +42,7 @@ export class SessionCommandService {
 
     if (command === 'compact') {
       await this.deps.bridge.compact(chatId, argument.trim() || undefined);
+      this.deps.chats.recordContextCompacted(chatId);
       return { kind: 'compact' };
     }
     if (command === 'session') {

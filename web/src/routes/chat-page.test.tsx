@@ -6,13 +6,14 @@ import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
 import { ChatPage } from './chat-page';
 import { useChatStore } from '../store/chat';
 
+const listMessages = vi.hoisted(() => vi.fn());
 const listModels = vi.hoisted(() => vi.fn());
 const listProviders = vi.hoisted(() => vi.fn());
 const runSessionCommand = vi.hoisted(() => vi.fn());
 
 vi.mock('../services/chats', () => ({
   chatsService: {
-    messages: () => Promise.resolve({ messages: [] }),
+    messages: (...args: unknown[]) => listMessages(...args) as Promise<unknown>,
     recentModels: () => Promise.resolve({ models: [] }),
     models: (provider: string) => listModels(provider) as Promise<unknown>,
     command: (...args: unknown[]) => runSessionCommand(...args) as Promise<unknown>,
@@ -100,6 +101,8 @@ function renderPage() {
 
 beforeEach(() => {
   chatMessageRender.mockClear();
+  listMessages.mockReset();
+  listMessages.mockResolvedValue({ messages: [] });
   listModels.mockReset();
   listModels.mockResolvedValue({ models: [] });
   listProviders.mockReset();
@@ -176,11 +179,28 @@ describe('chat transcript', () => {
     expect(screen.getByTestId('run-status-slot').contains(progress)).toBe(true);
     expect(screen.getByTestId('composer-locked').textContent).toBe('locked');
 
+    listMessages.mockResolvedValue({
+      messages: [{
+        id: 'message-compacted',
+        chatId: chat.id,
+        role: 'system',
+        content: 'Context compacted.',
+        thinking: '',
+        tools: [],
+        attachments: [],
+        createdAt: '2026-08-17T00:00:00.000Z',
+        notice: { kind: 'context-compacted' },
+      }],
+    });
     finish({ kind: 'compact', message: 'Context compacted.' });
     await waitFor(() => expect(screen.queryByTestId('compact-progress')).toBeNull());
     expect(screen.getByTestId('composer-locked').textContent).toBe('unlocked');
     expect(chatMessageRender).toHaveBeenLastCalledWith(
-      expect.objectContaining({ role: 'system', content: 'Context compacted.' }),
+      expect.objectContaining({
+        role: 'system',
+        content: 'Context compacted.',
+        notice: { kind: 'context-compacted' },
+      }),
     );
     expect(screen.queryByTestId('empty-chat-icon')).toBeNull();
   });

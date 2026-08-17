@@ -114,7 +114,7 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
       return {
         kind: 'system-message',
         chatId: event.chatId,
-        runId: event.runId,
+        ...(event.runId === undefined ? {} : { runId: event.runId }),
         message: toWireMessage(event.message),
       };
     case 'title':
