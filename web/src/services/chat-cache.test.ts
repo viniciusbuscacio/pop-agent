@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageDTO } from '@pop-agent/shared';
 
 class MemoryRequest<T> {
@@ -69,6 +69,11 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 function message(chatId: string, content: string): MessageDTO {
   return {
     id: `message-${chatId}`,
@@ -97,4 +102,64 @@ describe('chat transcript cache', () => {
 
     expect(await chatCache.get('chat-one')).toBeUndefined();
   });
+
+  it('evicts the least recently used transcripts at the 50 MB cap', async () => {
+    vi.spyOn(Date, 'now').mockImplementation(incrementingClock());
+    useEncodedSizes();
+    const { chatCache } = await import('./chat-cache');
+    await chatCache.put('chat-a', [message('chat-a', 'size-20mb')]);
+    await chatCache.put('chat-b', [message('chat-b', 'size-20mb')]);
+    // A is now newer than B despite having been inserted first.
+    await chatCache.get('chat-a');
+    await chatCache.put('chat-c', [message('chat-c', 'size-20mb')]);
+
+    expect(await chatCache.get('chat-a')).toBeDefined();
+    expect(await chatCache.get('chat-b')).toBeUndefined();
+    expect(await chatCache.get('chat-c')).toBeDefined();
+  });
+
+  it('does not retain one transcript larger than the complete cache budget', async () => {
+    useEncodedSizes();
+    const { chatCache } = await import('./chat-cache');
+    await chatCache.put('chat-large', [message('chat-large', 'ordinary')]);
+    await chatCache.put('chat-large', [message('chat-large', 'size-51mb')]);
+
+    expect(await chatCache.get('chat-large')).toBeUndefined();
+  });
+
+  it('degrades to no cache when IndexedDB cannot be opened', async () => {
+    vi.stubGlobal('indexedDB', {
+      open: () => {
+        const request = new MemoryRequest<typeof database>();
+        queueMicrotask(() => {
+          request.error = new DOMException('denied', 'SecurityError');
+          request.onerror?.();
+        });
+        return request;
+      },
+      deleteDatabase: () => new MemoryRequest<undefined>(),
+    });
+    const { chatCache } = await import('./chat-cache');
+
+    await expect(chatCache.get('chat-one')).resolves.toBeUndefined();
+    await expect(chatCache.put('chat-one', [message('chat-one', 'answer')])).resolves.toBeUndefined();
+  });
 });
+
+function incrementingClock(): () => number {
+  let now = 0;
+  return () => ++now;
+}
+
+function useEncodedSizes(): void {
+  class SizedTextEncoder {
+    encode(value: string): Uint8Array {
+      const match = /size-(\d+)mb/.exec(value);
+      const byteLength = match?.[1] === undefined
+        ? value.length
+        : Number(match[1]) * 1024 * 1024;
+      return { byteLength } as Uint8Array;
+    }
+  }
+  vi.stubGlobal('TextEncoder', SizedTextEncoder);
+}

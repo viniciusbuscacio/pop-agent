@@ -5,51 +5,99 @@ import { chatCache } from './chat-cache';
  *
  * "Keep me signed in" is the whole difference: checked, the token goes to
  * localStorage and survives closing the tab; unchecked, sessionStorage drops
- * it with the tab. The rest of the app just asks for `token` (docs/specs/Spec-Pop-General.md §9).
+ * it with the tab. If browser storage is denied, an in-memory fallback keeps
+ * the authenticated page usable until it closes.
  */
 
 const TOKEN_KEY = 'pop-agent.token';
 const PERSIST_KEY = 'pop-agent.persist';
+let volatileToken: string | undefined;
+let volatileStore: 'local' | 'page' | undefined;
 
-function persistent(): boolean {
+function localStore(): Storage | undefined {
   try {
-    return localStorage.getItem(PERSIST_KEY) === '1';
+    return window.localStorage;
   } catch {
-    return false;
-  }
-}
-
-function store(): Storage | undefined {
-  try {
-    return persistent() ? localStorage : sessionStorage;
-  } catch {
-    // Private modes can deny storage entirely; the app still works for the
-    // life of the page, it just cannot remember anything.
     return undefined;
   }
 }
 
+function pageStore(): Storage | undefined {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function read(storage: Storage | undefined, key: string): string | undefined {
+  try {
+    return storage?.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function write(storage: Storage | undefined, key: string, value: string): void {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // The in-memory token remains authoritative for this page.
+  }
+}
+
+function remove(storage: Storage | undefined, key: string): void {
+  try {
+    storage?.removeItem(key);
+  } catch {
+    // The in-memory token remains authoritative for this page.
+  }
+}
+
+function persistent(): boolean {
+  return read(localStore(), PERSIST_KEY) === '1';
+}
+
+function selectedStore(): Storage | undefined {
+  const useLocal = volatileStore === undefined ? persistent() : volatileStore === 'local';
+  return useLocal ? localStore() : pageStore();
+}
+
+function otherStore(): Storage | undefined {
+  const useLocal = volatileStore === undefined ? persistent() : volatileStore === 'local';
+  return useLocal ? pageStore() : localStore();
+}
+
 export const session = {
   token(): string | undefined {
-    return store()?.getItem(TOKEN_KEY) ?? undefined;
+    // The alternate read recovers from a preference write that failed after a
+    // previous session left the opposite value behind.
+    return read(selectedStore(), TOKEN_KEY) ?? read(otherStore(), TOKEN_KEY) ?? volatileToken;
   },
 
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
-    localStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(TOKEN_KEY);
-    localStorage.setItem(PERSIST_KEY, keepSignedIn ? '1' : '0');
-    store()?.setItem(TOKEN_KEY, token);
+    volatileToken = token;
+    volatileStore = keepSignedIn ? 'local' : 'page';
+    remove(localStore(), TOKEN_KEY);
+    remove(pageStore(), TOKEN_KEY);
+    write(localStore(), PERSIST_KEY, keepSignedIn ? '1' : '0');
+    // Choose from the requested behavior rather than rereading a preference
+    // that a denied localStorage could not persist.
+    write(keepSignedIn ? localStore() : pageStore(), TOKEN_KEY, token);
   },
 
   /** A renewed token from `x-pop-agent-token`: same storage, new value. */
   refresh(token: string): void {
-    store()?.setItem(TOKEN_KEY, token);
+    volatileToken = token;
+    write(selectedStore(), TOKEN_KEY, token);
   },
 
   clear(): void {
-    localStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(TOKEN_KEY);
+    volatileToken = undefined;
+    volatileStore = undefined;
+    remove(localStore(), TOKEN_KEY);
+    remove(pageStore(), TOKEN_KEY);
     // Cached transcripts belong to the authenticated session. Never let a
     // later account on the same browser inherit the previous one's history.
     chatCache.clear();

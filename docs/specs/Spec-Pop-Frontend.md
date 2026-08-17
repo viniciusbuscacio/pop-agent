@@ -2,327 +2,562 @@
 
 **Status:** normative
 **Legacy coverage:** §14
-**Primary implementation:** web/src
+**Primary implementation:** `web/src`, `web/vite.config.ts`, `web/public`
 **Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
 
 > Section numbers are preserved from the former monolithic specification so
 > existing code comments remain traceable. Cross-section references resolve
 > through the legacy section map in `Spec-Pop-General.md`.
-## 14. Frontend rules (web/)
 
-- The React app only paints. No business rules. Components never call
-  `fetch`/`EventSource` — only `web/src/services/*` does (enforced by
-  ESLint restricted-imports; gate fails otherwise). Types come from
-  `shared/`, never redefined.
-- Layout: ChatGPT-style without inventing — sidebar (chats, filter, New,
-  archived), central column, composer. **The app bar (wordmark + Settings)
-  lives at the BOTTOM of the sidebar**, floating above the endlessly
-  scrolling list (the list keeps a padding-bottom so the last row is never
-  hidden), and carries the **health indicator**: silence means healthy —
-  nothing renders while `/v1/health` is all `ok`; a *degraded* server (it
-  answered, but something inside is sick) shows a small gently pulsing red
-  button (opacity animation, never stroboscopic) whose tooltip/click names
-  the diagnosis ("LLM provider disconnected", "Database disconnected").
-  Diagnosis only; maintenance actions come later. **Narrow screens follow the
-  Telegram model rather than a drawer**: the list *is* the screen, and
-  opening something is a route change, so the phone's back gesture means
-  what the user expects.
-- The model **M** changes only the open chat. Its picker is deliberately
-  two-stage: first **Providers** (configured providers only, plus the global
-  default), then every model from the chosen provider with an immediately
-  focused text filter and a back-to-providers action. When the chat follows
-  that global default, the selected row names the effective provider and model
-  instead of the opaque “Default model”. Choosing a model appends the selected
-  provider and model to the chat transcript, just like `/model list`. A large
-  OpenRouter catalogue never shares one flat list with the other providers.
-- The composer puts a round **P** immediately beside the model's **M**. Its
-  per-chat value is durable server state, changed through the existing chat
-  PATCH and broadcast as `chat-execution-mode-changed` over the same SSE path
-  as create/delete/pin; every connected device follows immediately, while a
-  reconnect recovers it from `ChatDTO`. Active styling, `aria-pressed`, a
-  read-only placeholder and an in-app state announcement make the mode visible.
-  Every send path, including voice transcription and the durable queue, snapshots
-  the selected execution mode; the UI never tries to enforce the policy itself.
-- **A server the app cannot reach is announced, not hinted** — a full-width
-  bar at the top of every screen (`ui/connection-banner`), above the router
-  so the failed boot's fallback to login carries it too. The dot is for
-  diagnoses the user could act on; an unreachable server is a wall, and the
-  PWA hides it well: every screen still paints from the service worker's
-  cache, so the app looks alive and only the answers stop. Three states,
-  because the next move differs in each — **"You're offline."** (the device
-  has no network: theirs to fix), **"Server is offline."** + *"Your internet
-  is working — the problem is on the server. Nothing you typed was lost.
-  Trying to reconnect…"* (naming the culprit is the point; without it the
-  first suspect is always the wi-fi), and **"Back online."** for 3s, because
-  an outage that ends in silence leaves you poking at the app to find out
-  whether it is safe to type again. A bar, never a modal: the conversations
-  already loaded stay readable. "Trying to reconnect…" is only honest if it
-  is true, so the retry is real, plus a "Try now" button.
-- **Connection cadence** (`services/health`): healthy it is a keepalive —
-  one `/v1/health` a minute; unreachable it is a retry — 5s doubling to 30s,
-  because the only thing anyone wants then is the moment it comes back.
-  `navigator.onLine === false` skips the request entirely (nothing can
-  succeed with the radio down) and tells the two failures apart. Nothing runs
-  while the page is hidden: iOS freezes a backgrounded PWA within seconds, so
-  a surviving timer would only resume holding a verdict from whenever the
-  system suspended it — the poll stops on `pagehide`/hidden and fires
-  immediately on `pageshow`/visible, the same pair `services/events` uses.
-  **The wake-up probe matters more than the interval.** Every real request is
-  also a probe: `services/api` reports a fetch that never landed at once
-  (waiting up to a minute would leave a send that did nothing unexplained)
-  and any answer, a 500 included, clears it just as fast.
-- **Never a side drawer/panel for forms** (permanent veto). Settings is a
-  full-screen, route-based hierarchy rather than a strip of tabs. Its searchable
-  English index groups destinations as **Agent** (Models & Providers, Audio,
-  Instructions, Memory, Auto-skills), **App** (Appearance, Notifications,
-  Updates, Installation), **Data** (Storage, Backup), and **System**
-  (Server & Connections, Security, About). On a phone the index and destination
-  are separate screens so the native back gesture has a truthful destination;
-  wide screens retain the same hierarchy as an index/content split view. The
-  desktop split view uses 95% of the viewport with no fixed maximum width, and
-  destination content expands across its pane instead of stopping at a tablet-
-  sized ceiling. On desktop, Settings remembers the selected chat or explorer
-  pane that opened it, and Back from either the index or a destination returns
-  there directly. The last active chat is also kept for the browser session so
-  this return survives a Settings reload or an entry path without route state.
-  On phones, Back from a destination first returns to the
-  Settings index, then to the unselected app list. Binary settings use switches
-  and choices among multiple values use selects;
-  buttons perform actions rather than representing state. At large accessibility
-  font sizes, provider cards stack identity, details, allowance and actions
-  vertically; provider names and allowance text remain readable rather than
-  being truncated to preserve a desktop row. The installation
-  guide derives the current personal server origin at runtime and gives
-  copyable installation instructions for the PWA and CLI on Windows, macOS and
-  Linux. There is no native Desktop wrapper or native installer. It never
-  hard-codes one deployment's URL.
-  Chromium's one-shot `beforeinstallprompt` is captured during application boot,
-  before Settings mounts. When the browser offers it, Installation shows
-  **Install Pop Agent** and opens only the browser-owned confirmation after that
-  user gesture; it never claims a page can install silently. Running standalone
-  shows Installed, while Safari/iOS/unsupported or ineligible browsers receive
-  their honest Add to Dock/Home Screen/menu instructions instead of a dead
-  button.
-  Every Save has a
-  Cancel. **Model means the model that answers you** -- the whisper model
-  and the transcript cleanup moved out to Audio (Vinicius, 03/08), because
-  under Model they sat beneath a heading about something else and anyone
-  looking for the microphone had no reason to open it.
-- Rendering v0.1: markdown (react-markdown + remark-gfm, sanitized, no raw
-  HTML) + code highlight (Shiki, themes synced light/dark, copy button,
-  language label). Mermaid/KaTeX: later.
-- Streaming UX (aw's machine as reference): runId registry, reload
-  reconciliation mid-run, polite autoscroll + "jump to latest", auto-title
-  via SSE, and per-chat drafts in localStorage. Delta, thinking and tool
-  fragments are delivered to React at most once per animation frame, and
-  settled transcript rows keep stable memoized renders: a long conversation
-  must not reparse all historical Markdown for every new fragment. Lifecycle
-  events flush queued fragments first and remain immediate. While an answer
-  streams, any reader gesture toward older content suspends autoscroll immediately, before
-  iOS applies its native scroll; the intent listener stays passive and the
-  floating control must not resize the scroller or interfere with native pan.
-  Streaming must not pull the viewport back to the bottom. Following resumes
-  only when the reader moves back to the latest content or taps "jump to
-  latest". The transcript itself never scrolls horizontally: ordinary text,
-  paths and long tokens wrap within the column, while code and tables retain
-  their own bounded horizontal scroll areas. The document root is horizontally
-  contained too, and the pane, transcript viewport and composer form each keep
-  the same containment before and after focus; focusing the composer cannot
-  merely shift an outer page overflow out of sight. **Run activity is a separate line immediately above the composer,
-  in both web and CLI**: queued is a static “Waiting for a free slot…”, running
-  is a locally animated Braille spinner plus “Working…”, and `done`/`error`
-  removes its content. The web permanently reserves the line's height so an
-  answer settling never shifts the transcript vertically. Text, thinking and
-  tool cards never replace this line; tool
-  spinners describe one call, while `run-status` describes the whole run. The
-  clients animate locally -- SSE never carries presentation frames. Thinking
-  is visible by default in both clients. The web stores that choice in device
-  localStorage; the CLI stores it in its separate device-local preferences
-  file. `/think` redraws live, settled, historical and pre-steering assistant
-  segments immediately, and settlement never discards reasoning already shown.
-  The **pending-input FIFO is
-  server-owned**: ordered SQLite rows survive restart. The complete FIFO is
-  returned with the message snapshot, while incremental add/edit/remove events
-  keep phone, desktop and tabs in sync; the current head remains on the wire for
-  older clients. Every pending input stays visible with edit/cancel controls,
-  and the composer remains available to append more. A POST racing an active
-  run appends atomically; the defensive ceiling is 1,024 pending inputs per
-  chat, so only item 1,025 is
-  refused with `queue_full`. While pi is running with the same terminal local connection,
-  Pop offers every contiguous `steer` item through pi's native steering queue
-  and explicitly sets `steeringMode=all`: the whole accepted batch enters after
-  the current assistant turn and its tool calls, before the next model call.
-  Each item stays durable until pi emits its matching user-message event.
-  `/queue <message>` is a FIFO barrier and the explicit escape hatch to the old
-  behavior: it persists
-  `delivery_mode=follow_up` and is not offered to pi until the live run ends.
-  Delivery persists the assistant segment before it, inserts the user bubble,
-  advances the FIFO and continues under the same run id. Pending inputs are
-  painted in FIFO order as ordinary user bubbles: the steering head says
-  `Sending:`, later steering says `Waiting:`, and explicit follow-up says
-  `Queued:` because it waits for the current run to finish. No separate composer
-  strip exposes the internal steering vocabulary. Until pi emits that
-  user-message event the SQLite row remains authoritative, so a restart or an
-  unavailable steering channel degrades into the ordinary follow-up path instead
-  of losing input. ID-addressed PUT and DELETE edit or cancel any pending item;
-  the legacy routes still target the head. Text, uploads and Files references
-  survive PWA reclamation and server restart.
-  Legacy `pop-agent.queued.*` localStorage rows migrate on first open.
-- **Adoption**: an event for a chat with no live buffer starts one, so a run
-  begun on another device streams into every open window. Runs that already
-  ended are remembered briefly, so their stragglers are ignored rather than
-  adopted as something new.
-- Context menus are **visible buttons, not long-press**: a hidden gesture has
-  no affordance on a touch screen and fights the scroll, and hover-only
-  controls are invisible to keyboards.
-- Thinking: collapsed streaming card. Tool calls: card per call with
-  real-time output; consecutive calls group. Sensitive-action confirmation
-  renders inline in the chat (§10).
-- Chat titles: a chat is born with the deterministic starter **"Chat N"**
-  (lowest free N among the living chats) and keeps it through the user's first
-  two messages. There is no first-message word-picking rename.
-- Auto-title (LLM): ONE background call after the 3rd user turn writes TITLE
-  (≤40 chars, at most six words) + SUMMARY together, using the chat provider's
-  service model and the conversation's language. It is a one-time naming pass,
-  not a periodic rewrite. A refused request, unavailable provider or unusable
-  parse (<2 chars = failure) leaves **"Chat N"** untouched. Manual rename
-  disables auto forever, and a successfully titled chat is not revisited.
-  Every skip logs its reason (manual-rename, cadence, already-titled,
-  same-title…) so "why didn't it rename?" is one log line. The summary lands on
-  the chat row and feeds the recent-chats catalog (§7.1) — infinite chats stay
-  indexed. `chat_titles` is append-only: every title, its user turn,
-  auto|manual.
-- Files the agent creates: download link in chat when a tool reports a
-  file + a workspace file browser.
-- Slash commands: `/model`, `/model list`, `/new`, `/memory`; extensible menu on `/`.
-  `/model` opens model selection; `/model list` adds a client-side system message
-  with the provider and model currently active for that chat and never sends it
-  to the model.
-- Voice (v0.2): aw's pipeline copied as-is — MediaRecorder → upload →
-  ffmpeg (WAV 16k mono) → whisper.cpp (`whisper-cli`, `base` default,
-  HF download with SHA1 pin, `-l auto`) → best-effort LLM cleanup. Check
-  in aw whether the transcript lands in the composer and replicate.
-- UI in English; strings structured in a light i18n layer from day one
-  (simple dictionary, no heavy lib) so PT-BR can land later without
-  retrofit.
-- Icons: Lucide. No emoji as icons. Toasts: own implementation, top-right,
-  theme-tinted, async events only; form errors inline.
-- `data-testid` on every interactive control, kebab-case and named after
-  the thing (`setup-password`, `login-submit`, `settings-theme-dark`);
-  basic real a11y (visible focus, keyboard nav, `aria-live` on streaming).
-- **Every field control comes from `ui/controls.tsx`** — `TextField`,
-  `Select`, `TextArea`, `CheckField`, plus `Button`, `Card` and
-  `Segmented`. A hand-rolled `<select>` or `<textarea>` with its own class
-  string is a bug waiting to be fixed N times; they had already drifted
-  apart before the primitives existed. The field skin lives in one
-  constant and the two sizes (`md` for a labelled form field, `sm` for a
-  toolbar control) are a **prop, never a `className` override**: two
-  competing `px-` classes are settled by the order Tailwind emitted them,
-  not the order they were written.
-  - A primitive given no `label` renders bare, so a toolbar keeps its flex
-    row instead of gaining a wrapper — and then `aria-label` is mandatory,
-    because it is the only name the tree will ever get.
-  - Layout classes (widths, `flex-1`) still come through `className`; only
-    the skin is owned by the primitive.
-  - `tools/check-ui-primitives.ts` parses production TSX before TypeScript and
-    rejects native `button`/`input`/`select`/`textarea` outside the primitive
-    implementation, hand-written menu shells, duplicate focus treatments,
-    literal component colors and private skins passed through `className`. A
-    new kind of control is added to `ui/controls.tsx` first; feature
-    code cannot create a private visual dialect. The maintained catalog and
-    usage rules live in `docs/ui-style-guide.md`.
-- Theme: follows the system (`prefers-color-scheme`) + manual
-  System/Light/Dark override. **Never sent to the server** — it belongs to
-  the device, lives in `localStorage`, and is applied by an inline script
-  before the first paint so the wrong colours never flash. Two token maps;
-  regression test: every theme defines every token. App icon: friendly mascot, designed later — v0.1
-  ships a simple placeholder.
-- PWA: app-shell precache; API/SSE never cached; SW update prompt. iOS:
-  HTTPS required, safe-areas, `dvh`. Android: WebAPK via manifest. Offline
-  is honest: shell + "Pop Agent is offline". Web Push in v0.2 — exactly two
-  triggers: "run finished" and "agent needs confirmation" (the second is
-  still to be wired).
-- **Web Push, end to end**: `push-sw.js` is imported into the generated
-  service worker (`workbox.importScripts`) and owns `push` (always shows a
-  notification — `userVisibleOnly` demands it) and `notificationclick`
-  (focus an open window at the deep link, or open one). Settings →
-  Appearance carries the device-scoped opt-in, which asks for permission
-  inside the click itself (iOS refuses a prompt that is not in a user
-  gesture) and registers the subscription with `/v1/push/subscribe`. A
-  finished run calls `PushService.send`; a subscription the service reports
-  gone (404/410) is deleted.
-- **The VAPID `sub` claim is not a formality.** It is a contact URI for the
-  application server, and Apple *validates* it: `web.push.apple.com`
-  answers **403 `BadJwtToken`** for a subject it dislikes, silently — the
-  phone simply never rings and nothing in the UI says why. `@localhost` is
-  the trap: a perfectly good address for a machine talking to itself, and
-  not a domain Apple accepts. Pop Agent signs with a real public URL by default;
-  `POP_AGENT_PUSH_SUBJECT` sets the operator's own `mailto:` or `https:` URI,
-  and a value that would be rejected upstream is **dropped for the default
-  rather than honoured** — a typo in an environment variable must not
-  quietly switch every notification off.
+## Scope
 
-### Files as a plain folder (supersedes RF-001–019)
+The Pop Agent frontend is one React application delivered as a responsive web
+app and installable PWA. The same built client runs in phone browsers, installed
+standalone windows and wide desktop browsers. There is no separate native
+desktop UI or native installer.
 
-> Redesigned in 1.58: Files stopped being a catalog over id-named blobs and
-> became a directory. The paragraphs below are the target state; the previous
-> design (`save_artifact`/`read_artifact`, id-addressed downloads, versions,
-> the path index) lives in the changelog if a rollback ever needs it.
+The frontend owns:
 
-- **`POP_AGENT_DATA_DIR/files/` is the single source of truth.** Real names, real
-  subfolders. The Files tab renders the tree as it is on disk — a `readdir`
-  walk, no `artifacts` table, no `file-` ids, no path index. What `tree`
-  shows over SSH is exactly what the tab shows. Hidden entries (dotfiles)
-  are reserved for Pop Agent's own metadata and are never listed.
-- **The agent sees Files as a folder.** `Files/` is exposed inside the
-  workspace root, so the built-in `read`/`write`/`bash` tools already cover
-  it: "save something for the user" means writing `Files/relatorio.pdf`.
-  `save_artifact` and `read_artifact` retire. The system prompt teaches one
-  rule — *a file the user asked for is not done until it exists under
-  `Files/`; the rest of the workspace is scratch.*
-- **Overwrite is the feature.** Saving a name that exists replaces it. No
-  versions, no history (`artifact_versions` is gone). What the user wants
-  from "save it again" is the new file (Vinicius, 05/08).
-- **Provenance is a log, not a catalog** (Vinicius, 05/08): the
-  `file_provenance` table (§6) records "chat X wrote `Files/foo.pdf` at T",
-  append-only, written by the server as it serves the tree. It answers
-  "which files did this chat produce" without ever having to be right about
-  where the file is *now* — history cannot desynchronize.
-- **The trash is a folder.** Deleting from the UI moves the entry into
-  `files/Garbage/`; the agent deletes through a **`delete_file(path)` tool
-  whose real effect is that same move** — never `rm` (Vinicius, 05/08: a
-  rule enforced by a tool beats a rule taught in a prompt). A hidden
-  `Garbage/.garbage.json` records `{originalPath, deletedAt}` per entry —
-  the `.trashinfo` idea from the Linux desktop. Restore moves it back; a
-  daily sweep purges what is older than 30 days. Self-healing by design: a
-  file with no entry purges by its own mtime and restores to the Files
-  root; an entry with no file is dropped on the next sweep. The delete endpoint
-  returns the exact Garbage entry it created (collision-safe handle included),
-  and the UI immediately shows an actionable “moved to Trash” notice with
-  **Restore**; batch undo restores parents before separately selected children.
-- **Downloads stay HMAC-signed, now over the path.**
-  `GET /files/download?path=<rel>&expires=<ms>&sig=<b64url>` — the
-  signature covers path+expiry and is checked before the expiry, so
-  tampering with either fails as a bad signature. Path resolution refuses
-  `..`, absolutes and symlink escapes (the same jail the workspace already
-  has). 403 forged, 410 expired, 404 unknown; expiry is a property of the
-  link, and a fresh one can be minted any time.
-- **Search is by name, live.** `files_search(query)` walks the tree at
-  query time and matches names and paths — no index, no watcher, no
-  embeddings (Vinicius, 05/08: names only for now). Content search, if it
-  ever returns, is an index keyed by path+mtime, out of scope here.
-- **Uploads** (`POST /v1/files`, multipart, 25 MB cap) land in the folder
-  open in the tab (the root by default). Multimodal input is unchanged:
-  image attachments still go inline to models that accept image input;
-  text-only models keep the file-on-disk path.
-- **Migration**: one boot-time walk of the old `artifacts` table writes
-  each latest version to `files/<folders>/<name>` (older versions are not
-  carried over), seeds `file_provenance` from the rows' chat ids, then
-  drops `artifacts`, `artifact_versions` and the folders table and removes
-  `POP_AGENT_DATA_DIR/artifacts/`. `FilesReindexJob` and the id-based routes go
-  with them.
+- boot presentation, protected routing and browser-session handling;
+- responsive navigation and page composition;
+- client-side interaction, optimistic presentation and rollback;
+- HTTP/SSE service adapters and snapshot reconciliation;
+- transient live-run state, device preferences, drafts and caches;
+- Markdown/tool/attachment rendering;
+- PWA installation, update prompt, offline shell and push reception;
+- accessibility, i18n and design-system conformance.
 
-## Related normative specifications
+The server remains authoritative for product state and policy. The frontend may
+cache, predict and reconcile, but it may not become the authority for chats,
+messages, queue delivery, permissions, execution mode, Files, tasks, providers
+or security decisions.
 
-- [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md)
-- [Spec-Pop-Style-Guide.md](Spec-Pop-Style-Guide.md)
+Focused specifications retain subsystem detail:
+
+- HTTP DTOs, resources and errors: [Spec-Pop-API.md](Spec-Pop-API.md);
+- SSE ordering, batching and reconnect recovery:
+  [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md);
+- UI primitives and visual language: [Spec-Pop-Style-Guide.md](Spec-Pop-Style-Guide.md);
+- install and update channels: [Spec-Pop-Installation.md](Spec-Pop-Installation.md);
+- Files and backup authority: [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md);
+- auth and browser-visible security: [Spec-Pop-Security.md](Spec-Pop-Security.md);
+- optional selected-computer access: [Spec-Pop-Local-Access.md](Spec-Pop-Local-Access.md);
+- pi run and queue semantics: [Spec-Pop-Pi-Agent-Integration.md](Spec-Pop-Pi-Agent-Integration.md).
+
+## 14. Frontend architecture
+
+```text
+main.tsx
+  └── App / BrowserRouter
+        ├── routes/       page composition and navigation
+        ├── ui/           reusable visual and interaction primitives
+        ├── store/        Zustand client projections and device choices
+        ├── services/     HTTP, SSE, browser integration and caches
+        ├── lib/          framework-light presentation helpers
+        ├── i18n/         user-facing strings
+        └── styles/       semantic tokens and global layout rules
+```
+
+### Layer responsibilities
+
+- **Routes** compose screens, select store slices and coordinate interactions.
+  They may own page-local state but do not call browser network primitives.
+- **UI components** render reusable controls and specialized chat/file
+  surfaces. They receive behavior through props or focused stores.
+- **Stores** hold browser projections and interaction state. They may call
+  services and reconcile responses/events, but may not define server policy.
+- **Services** are the only door to HTTP, SSE, IndexedDB, service workers,
+  passkeys, push and other external browser integration.
+- **Libraries** hold deterministic presentation helpers such as model
+  selection, resend lookup, scroll-follow decisions and time formatting.
+- **Shared DTOs** come from `@pop-agent/shared`. The frontend does not redefine
+  wire contracts or import backend domain entities.
+
+`eslint.config.js` rejects direct `fetch` and `EventSource` use outside
+`web/src/services/`. `tools/check-ui-primitives.ts` rejects private control
+skins and forbidden native form controls. Both checks run in the gate.
+
+The frontend has legitimate rules of interaction and synchronization; “the app
+only paints” is not the architecture. The actual boundary is that durable
+product decisions remain server-owned while the client owns presentation,
+device behavior, cache and convergence.
+
+## Runtime and build
+
+- React 19 runs in `StrictMode` with React Router, Zustand and TypeScript.
+- Vite builds the production assets into `web/dist`; the Hono server serves
+  that exact output from the same origin as the API.
+- Development uses `vite build --watch`, not a second public dev-server port.
+- Tailwind CSS v4 consumes semantic CSS variables defined by the style system.
+- The product version is compiled from root `VERSION`; Settings must show the
+  build loaded on this device rather than accidentally substituting the server
+  process version.
+- Browser history routes require the server's PWA fallback, but `/v1/*`,
+  `/healthz` and signed Files views must never be replaced by `index.html`.
+
+## Boot and session lifecycle
+
+`main.tsx` applies theme and font state before rendering and mounts `App`.
+`App` keeps global connection, update and toast surfaces above the protected
+route tree so login/setup failures still receive honest status.
+
+Boot asks `GET /v1/auth/state` and chooses one of four states:
+
+- `loading` — boot is unresolved;
+- `needs-setup` — route to `/setup`;
+- `signed-out` — route to `/login`;
+- `signed-in` — start the one SSE connection and allow protected routes.
+
+A session rejected with `invalid_session` is cleared once and navigates to
+login. A wrong password is an ordinary form failure and must not trigger the
+global lost-session path.
+
+### Token storage
+
+- “Keep me signed in” stores the token in `localStorage`.
+- Otherwise the token uses `sessionStorage` and ends with the browser session.
+- Silent token renewal replaces the token in the selected store.
+- If browser storage is denied, an in-memory fallback keeps the current page
+  usable but intentionally cannot survive a reload.
+- Sign-out/invalid-session clears both token stores and the authenticated
+  transcript cache. Cached conversation text must never leak into a later
+  session on the same browser profile.
+- Session tokens never enter query strings. SSE obtains a one-use ticket through
+  the authenticated API.
+
+## Route map
+
+Public/session-establishing routes:
+
+| Route | Purpose |
+|---|---|
+| `/setup` | first-owner setup |
+| `/login` | password/passkey entry |
+| `/recover` | recovery-key flow |
+
+Protected application routes:
+
+| Route | Purpose |
+|---|---|
+| `/` | unselected explorer/list shell |
+| `/chat/:chatId` | conversation |
+| `/files`, `/files/*` | Files root or folder |
+| `/files/trash` | recoverable Garbage entries |
+| `/tasks`, `/tasks/new`, `/tasks/:taskId` | task explorer/editor |
+| `/skills`, `/skills/new`, `/skills/:slug` | skill explorer/editor |
+| `/mcp`, `/mcp/new`, `/mcp/:id` | MCP explorer/editor |
+| `/settings/*?section=<id>` | Settings index or destination |
+
+Unknown routes replace to `/`. Route order keeps `/files/trash` ahead of the
+Files wildcard.
+
+## Responsive shell and navigation
+
+Pop Agent uses route-based navigation, not hidden drawers:
+
+- On narrow screens, the explorer/list is the screen. Selecting a chat, folder,
+  task, skill or MCP server navigates to a separate screen, so browser/OS back
+  gestures have truthful history.
+- On wide screens, the explorer remains in a fixed left pane while the selected
+  content occupies the remaining width.
+- The sidebar app bar lives at the bottom above the scrolling list and exposes
+  wordmark, Settings and degraded-health diagnosis.
+- The list reserves bottom space so its last item is never hidden behind the
+  app bar.
+- Forms do not open in side drawers. Creation/editing uses routes or full page
+  content panes.
+- Context actions use visible pressable controls. Long-press-only, hover-only
+  and touch gestures that compete with native scrolling are not primary UI.
+- The document, pane, transcript and composer remain horizontally contained
+  before and after focus. Ordinary long text wraps; code and tables own bounded
+  horizontal scrollers.
+
+## Settings information architecture
+
+Settings is a searchable hierarchy, not a row of tabs:
+
+- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills;
+- **App:** Appearance, Notifications, Updates, Installation;
+- **Data:** Storage, Backup;
+- **System:** Server & Connections, Security, About.
+
+A destination deep-links as `/settings?section=<id>`. On a phone, Back returns
+from destination to Settings index and then to the unselected app list. On a
+wide screen, index and destination share a 95%-viewport split view and Back
+returns to the chat/explorer that opened Settings. Route state is preferred;
+the session's last active chat is the fallback after reload/direct entry.
+
+Binary state uses switches, multiple-choice state uses selects, and buttons
+perform actions. Save flows provide Cancel. Large accessibility fonts must not
+truncate provider identity, allowance or actions merely to preserve a desktop
+row.
+
+Installation derives the current same-origin server at runtime. It never embeds
+one deployment's URL or advertises a native wrapper that does not exist.
+
+## State ownership
+
+| State | Browser representation | Authority / lifetime |
+|---|---|---|
+| Chat lists, messages, queue, live runs | Zustand chat store | server snapshots/events; current page |
+| Files, tasks, skills, MCP projections | focused Zustand stores | server snapshots; current page |
+| Auth routing status | Zustand auth store | current page plus token presence |
+| Session token | local/session storage or memory fallback | server-issued credential |
+| Transcript warm cache | IndexedDB | disposable device cache |
+| Theme, font, thinking visibility | localStorage-backed stores | device preference |
+| Update-check preference | localStorage-backed store | device preference |
+| Per-chat draft | localStorage | device-local unsent text |
+| Last active chat / selected local computer | browser storage | device navigation/context |
+| Component menus, dialogs, scroll intent | React local state/refs | mounted component |
+| App shell/assets | service-worker Cache Storage | generated build, never product data |
+
+A store must preserve object identity when its selected value did not change.
+Streaming one chat must not force unrelated screens or settled history rows to
+re-render.
+
+## Service boundary
+
+`services/api.ts` centralizes:
+
+- `/v1` base path;
+- bearer token and client/platform headers;
+- optional selected-local-connection header;
+- JSON encoding and structured `ApiError` mapping;
+- renewed-session header handling;
+- connection-monitor evidence from every success/failure;
+- binary download and multipart upload variants.
+
+Feature services expose typed product operations and hide paths/methods from
+routes and components. Browser-only integration likewise remains in services:
+SSE, health, IndexedDB, push, passkeys, PWA install/update and session storage.
+
+A response of any HTTP status proves that the server is reachable. Only a fetch
+that does not land proves transport failure. A 204 or successful empty response
+must not be parsed as JSON.
+
+## Synchronization and recovery
+
+One authenticated PWA instance owns one EventSource. Stores subscribe to the
+session-wide stream and filter/apply relevant events.
+
+- Initial mount fetches the relevant HTTP snapshot.
+- Incremental SSE events update or invalidate that snapshot.
+- Reconnect obtains a fresh event ticket and notifies resume subscribers.
+- Returning from background reconnects promptly when needed and refreshes
+  snapshots because iOS may have dropped events while suspended.
+- Consumers guard against an older request overwriting newer state.
+- Periodic polling is not a substitute for a missing invalidation/reconnect
+  path. Health and update checks are deliberate exceptions with separate
+  purposes.
+
+High-rate `delta`, `thinking` and `tool` fragments are queued until at most one
+animation-frame delivery. Every non-fragment event first flushes queued
+fragments and then delivers immediately, preserving terminal ordering.
+
+Detailed ticket, retry and event rules live in the Events specification.
+
+## Chat projection and reconciliation
+
+The chat store holds separate records for:
+
+- open and archived chat summaries;
+- settled messages by chat;
+- one live buffer per active chat;
+- complete server-owned pending-input FIFO by chat;
+- pending sensitive confirmation;
+- latest visible failure.
+
+Events are matched by chat, run and monotonic sequence. A fragment at or below a
+snapshot's `seq` is ignored. A run started on another device is adopted when no
+local live buffer exists. Recently finished run IDs are remembered in a small
+bounded set so delayed terminal fragments are not mistaken for a new run.
+
+Opening/reopening a chat replaces local product history with the server
+snapshot, including live and pending state. Optimistic user messages and local
+terminal marks improve immediacy, but the next snapshot replaces them with
+stored truth.
+
+Chat create, pin and execution-mode updates are idempotent because SSE may beat
+the initiating HTTP response. Execution mode updates optimistically and rolls
+back only if no newer event/user choice has superseded the attempted value.
+Deletion treats server `not_found` as convergence and removes every local cache,
+live, queue and routing remnant.
+
+## Persistent transcript cache
+
+`services/chat-cache.ts` provides a best-effort IndexedDB cache named
+`pop-agent-chat-cache`, with one `transcripts` record per chat.
+
+- It stores the latest bounded transcript snapshot returned by the server.
+- Opening a chat starts cache and server reads together, paints cached content
+  when available, then reconciles with the complete current server snapshot.
+- The server request is still the normal messages snapshot; there is no separate
+  revision-check endpoint in the current API.
+- Each record stores encoded byte size and last-access time.
+- The global budget is 50 MB. Writes evict least-recently-used records until
+  under budget; a single record larger than the budget is not retained.
+- Reading refreshes recency. Chat deletion removes its record. Session clear
+  deletes the entire database.
+- IndexedDB denial, private browsing, quota pressure and cache corruption must
+  degrade to ordinary online loading without breaking chat.
+- Cached content is never treated as proof that a chat still exists or that its
+  run state is current.
+
+A future lightweight revision API requires coordinated API/Backend design; the
+frontend must not assume or simulate one.
+
+## Streaming rendering and scroll
+
+- Settled transcript rows are memoized by stable message object identity.
+- The settled transcript subtree is memoized independently of the live answer.
+- Historical Markdown must not be reparsed for each streamed fragment.
+- Live text/thinking/tool updates render no more than once per animation frame.
+- Run status occupies a permanently reserved line above the composer. Queued,
+  working and approval status animate locally; SSE does not carry animation
+  frames.
+- Thinking is visible by default and the device preference redraws live and
+  settled answers without deleting reasoning.
+- Tool fragments fold into one record per call and consecutive calls present as
+  a compact group.
+- Markdown, tool output and long paths cannot widen the transcript. Code/table
+  surfaces scroll internally when wrapping would destroy meaning.
+
+Autoscroll is polite:
+
+- follow only while the reader is at the latest content;
+- upward wheel/touch intent disarms follow before native scroll settles;
+- touch listeners remain passive and never take ownership of pan;
+- streaming never drags a reader back from older content;
+- follow resumes only after returning to the bottom or pressing “jump to
+  latest”;
+- the floating control overlays rather than resizing the scroller.
+
+## Composer, pending input and voice
+
+The composer owns device-local draft interaction, not delivery authority:
+
+- drafts are keyed by chat in localStorage and survive reload;
+- failed sends retain exact text, attachments and Files references;
+- Enter sends, Shift+Enter inserts a line, and Escape stops a live run;
+- drag/drop, picker and paste support attachments, with frontend limits matching
+  API limits (eight items, 16 MB each);
+- `@` references existing Files paths without uploading them again;
+- model and Plan controls snapshot their current values into each send;
+- Plan styling and announcement make mode visible, but only the server enforces
+  tool restrictions;
+- pending input remains visible as ordinary user bubbles with edit/cancel;
+- presentation distinguishes `Sending`, `Waiting` and explicit `Queued` without
+  exposing internal queue machinery as another composer panel.
+
+Legacy `pop-agent.queued.*` localStorage entries are read only for one-time
+migration into the server-owned queue and are deleted only after accepted
+server state proves they are safe to remove.
+
+Voice uses the browser's `MediaRecorder`, uploads a data URI through the voice
+service and receives cleaned text. A successful transcription is sent together
+with any existing draft; if send/queue fails, the merged text becomes the
+recoverable draft. Leaving the chat stops an active recorder and its media
+tracks.
+
+Slash/session commands are recognized client-side only where they invoke a
+specific API/UI action. Local command output is visible transcript UI but never
+pretends to be durable model context.
+
+## Model and provider presentation
+
+The selected model identity is the `(provider, model)` pair. The picker:
+
+- shows configured providers and the global default;
+- separates provider choice from large model catalog filtering;
+- names the effective provider/model when following the default;
+- keeps recent available pairs first;
+- never flattens every provider into one unscannable catalog;
+- updates only the open chat.
+
+Provider status, authentication, failover and service-model policy remain
+server-owned. Frontend catalog failures produce an honest empty/degraded picker,
+not invented model data.
+
+## Files and other explorers
+
+Chats, Files, Tasks, Skills and MCP share the route-based explorer pattern, but
+their server authorities remain distinct.
+
+The Files UI:
+
+- renders the live server tree by real path;
+- supports folders, upload, search, preview/download and selection;
+- moves delete requests to Garbage and shows an immediate undo action using the
+  exact returned Garbage handle;
+- restores parent selections before separately selected children;
+- never uses a stale frontend catalog as Files authority;
+- requests signed links from the API rather than constructing signatures;
+- treats hidden metadata and path-jail decisions as server policy.
+
+The detailed Files layout, retention, provenance and backup rules live in the
+Memory and Storage specification. Task execution, skill policy and MCP protocol
+likewise remain in their focused specs; the frontend owns their list/editor
+interaction only.
+
+## Health and offline UX
+
+A connection banner above the route tree distinguishes:
+
+- device offline (`navigator.onLine === false`);
+- internet available but personal server unreachable;
+- recovery (“Back online” briefly).
+
+An unreachable server is a full-width non-modal banner with a real retry and
+“Try now”, not a subtle status dot. Already loaded content stays readable. A
+reachable but degraded server uses the sidebar health diagnosis for provider or
+DB trouble.
+
+Health cadence:
+
+- reachable/degraded: one cheap `/v1/health` keepalive per minute;
+- unreachable: retry after 5 seconds, exponential to 30 seconds;
+- hidden/pagehide: stop polling;
+- visible/pageshow/online/offline: probe immediately;
+- device definitely offline: skip impossible network requests.
+
+Every ordinary API request also updates reachability evidence immediately. The
+health probe uses `no-store`; cached health is not health.
+
+The service worker may keep the shell readable offline, but no UI may imply
+that server-owned actions succeeded while disconnected. Failed send/draft state
+must remain recoverable.
+
+## PWA installation
+
+The PWA manifest declares standalone display, same-origin scope/start URL,
+regular and maskable icons, theme/background colors and HTTPS-secure behavior.
+Safe-area and dynamic viewport units support installed mobile windows.
+
+Chromium's one-shot `beforeinstallprompt` is captured at module boot before
+Settings mounts. Installation:
+
+- is offered only when the browser reports eligibility;
+- starts from an explicit user gesture;
+- opens the browser-owned confirmation;
+- reports Installed in standalone mode or after `appinstalled`;
+- gives honest Add to Home Screen/Dock/menu instructions on Safari/iOS and
+  unsupported/ineligible browsers;
+- never claims silent installation is possible.
+
+## Service worker and update lifecycle
+
+The generated Workbox service worker precaches only the app shell/assets.
+`/v1/*`, health and signed Files views are network-only or excluded from
+navigation fallback. Product data is not placed in Workbox runtime caches.
+
+Registration occurs exactly once in `services/pwa-update.ts` with prompt mode.
+Device-local Settings controls automatic checks and interval; the current
+default is enabled every 10 minutes. Checks run on the interval, on return to
+visible and on explicit user action. Disabling automatic checks preserves the
+manual action.
+
+Applying an update must reach the newest available build with one user action:
+
+1. call `registration.update()` at click time;
+2. if a newer worker is still `installing`, wait for its `statechange` to a
+   terminal installation state;
+3. select the resulting newest `waiting` worker rather than an older worker
+   that was already waiting;
+4. send `SKIP_WAITING` only after installation completed;
+5. reload once on `controllerchange` or worker activation;
+6. start the 8-second fallback only after installation, never while the new
+   precache is still downloading.
+
+The active page may still contain an older handler from before this rule shipped;
+one final manual browser reload can be necessary to acquire the fixed client.
+
+## Web Push
+
+`push-sw.js` is imported into the generated worker and owns `push` plus
+`notificationclick`. A received push always creates a user-visible notification;
+clicking focuses an existing client at the deep link or opens one.
+
+The device-scoped opt-in lives under Settings → Notifications. Permission is
+requested inside the user's click, then the browser subscription is registered
+with the server. Unsupported contexts and iOS not installed to Home Screen show
+honest requirements instead of a dead toggle.
+
+Which server events send notifications is server policy, not frontend policy.
+The PWA must render any accepted notification safely, keep its deep link
+same-origin and never embed credentials in notification URLs.
+
+## Rendering, i18n and accessibility
+
+- User-facing strings come from the lightweight English i18n dictionary.
+  Components do not scatter hard-coded translatable prose.
+- Markdown uses `react-markdown` plus GFM without raw HTML execution.
+- Shiki highlighting follows light/dark themes and provides copy/language UI.
+- Untrusted text is rendered as text/Markdown data, never injected as HTML.
+- Images use bounded previews; other attachments show readable file identity.
+- Lucide and approved product marks provide icons. Emoji are not substitutes
+  for control icons.
+- Form failures render inline; asynchronous cross-screen outcomes may use the
+  owned toast system.
+- Interactive controls have accessible names, visible focus and keyboard
+  operation. Icon-only controls require `aria-label`.
+- Streaming/status changes use appropriate polite live/status semantics and
+  sensitive confirmation remains an inline alert dialog.
+- Tests prefer role/name semantics. Stable kebab-case `data-testid` is used
+  when semantic queries cannot uniquely express the product element.
+
+Detailed control variants, tokens, responsive typography and prohibited styles
+live in the Style Guide specification and `docs/ui-style-guide.md`.
+
+## Frontend security boundaries
+
+- The browser never enforces Plan Mode, local-access permission, Files jails or
+  action authorization; it displays server decisions.
+- Session credentials go only in authorization headers or browser storage, not
+  URLs, logs, local drafts or IndexedDB transcript metadata.
+- Event payloads update presentation but do not authorize follow-up actions.
+- External/provider/server text remains data. React escaping and no-raw-HTML
+  Markdown are the rendering floor.
+- Signed Files URLs are treated as opaque, short-lived links.
+- Logout removes authenticated transcript cache as well as credentials.
+- Service-worker caches contain public app assets, never API responses.
+
+## Frontend test obligations
+
+Frontend work uses the smallest relevant unit/component tests plus the full
+gate. Depending on the concern, coverage includes:
+
+- deterministic lib/store tests for reconciliation, ordering and rollback;
+- service tests for API envelopes, health cadence, SSE batching, IndexedDB
+  eviction/failure and service-worker lifecycle;
+- component tests through accessible roles/names and user events;
+- route tests with MemoryRouter for narrow/wide navigation semantics;
+- style/token and UI primitive checks;
+- production build and smoke from the Hono-served `web/dist`.
+
+Performance-sensitive chat tests must prove:
+
+- a frame batches multiple fragments;
+- terminal events flush fragments before immediate delivery;
+- settled message rows retain identity across live updates;
+- a large prior transcript does not re-render its Markdown for each delta;
+- scroll intent disarms follow without blocking native pan;
+- cached history paints before server reconciliation;
+- LRU/oversized/denied-cache paths remain bounded and safe.
+
+PWA update tests must cover an old waiting worker plus a newer slow installing
+worker, installation-before-activation, fallback timing and reload-once.
+
+Automated DOM tests cannot prove every installed-device behavior. Release checks
+for relevant changes explicitly cover:
+
+- iPhone/iPad installed PWA foreground/background recovery;
+- Android/Chromium install prompt and standalone detection;
+- service-worker update on a throttled/slow connection;
+- microphone permission, recording teardown and transcript send recovery;
+- push while the app is closed and notification deep links;
+- passkeys in a real secure context;
+- phone back gestures and desktop split panes;
+- large accessibility fonts and horizontal overflow.
+
+Before completion run `npm run gate`: specs/self-map, lint, typecheck, UI checks,
+frontend build, complete tests and smoke.

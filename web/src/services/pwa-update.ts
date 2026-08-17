@@ -1,4 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
+import { activateNewestServiceWorker, once } from './pwa-update-lifecycle';
 import type { UpdateCheckResult } from './update-signal';
 
 /**
@@ -68,84 +69,18 @@ export async function applyUpdate(): Promise<void> {
   // page. The old 1.5s blind timer raced activation: on a phone the page
   // often reloaded still under the previous worker, the banner came back,
   // and Reload read as a button that must be pressed several times.
-  let reloaded = false;
-  const reload = (): void => {
-    if (reloaded) return;
-    reloaded = true;
-    window.location.reload();
-  };
+  const reload = once(() => window.location.reload());
   // Fires thanks to clientsClaim in the generated worker (vite.config.ts).
   navigator.serviceWorker?.addEventListener('controllerchange', reload, { once: true });
 
-  // One press must jump to the *newest* build, not to whatever was waiting when
-  // the banner first appeared. Between the banner and the click no check runs
-  // unless the tab was hidden and shown, so a burst of builds leaves the
-  // waiting worker stale -- and activating a stale worker only advances one
-  // version, which is why catching up took a Reload per build (reload, update,
-  // reload, update...). Re-check now: update() fetches the current sw.js and,
-  // if it is newer, starts installing it, replacing the waiting worker. It
-  // only becomes `waiting` once its precache finishes, so wait for that
-  // before activating it.
-  let target: ServiceWorker | undefined;
-  try {
-    await registration?.update();
-    target = await newestWaitingWorker(registration);
-  } catch {
-    // Offline or unsupported: fall through to whatever is already waiting.
-  }
-  target ??= registration?.waiting ?? undefined;
-
-  if (target !== undefined) {
-    const worker = target;
-    // Its own activation is as good a reload signal as the controller change.
-    worker.addEventListener('statechange', () => {
-      if (worker.state === 'activated') reload();
-    });
-    // Last resort for browsers that activate the worker but miss both events.
-    // It starts only after the newest worker is fully installed, so it cannot
-    // reload the page while that worker is still downloading its precache.
-    setTimeout(reload, 8000);
-    // The generated worker calls skipWaiting() on this message (vite.config.ts).
-    worker.postMessage({ type: 'SKIP_WAITING' });
-    return;
-  }
+  // One press must jump to the newest build, not an older worker that happened
+  // to be waiting when the banner first appeared. The testable lifecycle waits
+  // for any new installation, activates it, and starts its fallback only then.
+  if (await activateNewestServiceWorker(registration, reload)) return;
 
   // Nothing waited (already current, or the direct check was unavailable):
   // hand off to the library, which messages its own tracked worker and reloads.
   await updateSW?.(true);
-}
-
-/**
- * The freshest worker to activate, after a re-check. `registration.update()`
- * resolves once the newest sw.js has been fetched and compared, but a worker
- * it finds newer is still *installing* then -- it reaches `waiting` only after
- * its precache completes. Grabbing `registration.waiting` too early would skip
- * to the previous build, so we wait for the in-flight worker to finish first.
- */
-async function newestWaitingWorker(
-  reg: ServiceWorkerRegistration | undefined,
-): Promise<ServiceWorker | undefined> {
-  if (reg === undefined) return undefined;
-  const installing = reg.installing;
-  if (installing !== null) {
-    await new Promise<void>((resolve) => {
-      const settle = (): void => {
-        // 'installed' is the waiting state; the terminal states end the wait too.
-        if (
-          installing.state === 'installed' ||
-          installing.state === 'activated' ||
-          installing.state === 'redundant'
-        ) {
-          installing.removeEventListener('statechange', settle);
-          resolve();
-        }
-      };
-      installing.addEventListener('statechange', settle);
-      // The state can change between reading `reg.installing` and subscribing.
-      settle();
-    });
-  }
-  return reg.waiting ?? undefined;
 }
 
 function restartTimer(): void {

@@ -21,6 +21,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   SQLite ownership, migration discipline, persistence invariants, deletion,
   failure handling, performance rules and backend test obligations without
   duplicating the exact migration-owned schema.
+- **The Frontend specification is now a complete PWA guide.** It defines boot,
+  routes, responsive navigation, state ownership, service/store boundaries,
+  SSE reconciliation, IndexedDB cache, streaming performance, offline health,
+  install/update lifecycle, push, accessibility and device test obligations;
+  server-owned Files, pi and queue internals now route to their focused specs.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -61,6 +66,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   migration names and rejects duplicate versions before touching SQLite. Voice
   transcription claims its temporary input/output names exclusively and redraws
   on collision instead of allowing an existing file to be replaced.
+- **Login and logout survive denied browser storage.** Session access is guarded
+  against browser `SecurityError`/quota failures and falls back to memory for the
+  current page, while logout still clears credentials and transcript cache.
+  Slow PWA installation and IndexedDB eviction paths now have direct regression
+  coverage rather than relying only on Settings/component tests.
 - **PLA installation survives server version bumps and zsh.** The launcher
   manifest now advertises the latest immutable packed CLI release instead of
   404ing whenever the server version moves ahead of its artifacts, and the
