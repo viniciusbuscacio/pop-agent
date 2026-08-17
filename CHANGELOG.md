@@ -7,12 +7,12 @@ normative history.
 
 ### Changed
 
-- **Pop Local Access is an optional visible tray companion.** Same-origin
-  PowerShell/bash installers set up a checksummed per-user tray on Windows or
-  macOS. It supervises the CLI's TypeScript PLA runtime and exposes connection,
-  pause, reconnect, diagnostics and start-at-login controls without restoring a
-  WebView or second chat interface. The PWA lists live machines and uses local
-  tools only after the user explicitly selects one; Server only remains default.
+- **Pop Local Access has one synchronized permission per computer.** The PWA,
+  tray and CLI now share the same persistent **Allow access to local files**
+  switch. Access is disabled by default and enforced by both server and PLA;
+  turning it off keeps ordinary messages working with server tools. The tray no
+  longer confuses a connected control channel with enabled file access, and
+  duplicate CLI/tray connections remain one stable computer identity.
 - **The installed PWA is the desktop app.** The native WKWebView/WebView2
   wrapper, tray helper and Setup packages were removed. Browser installation
   and service-worker updates now own the desktop experience; Pop Local Access
