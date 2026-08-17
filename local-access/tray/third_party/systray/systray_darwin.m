@@ -183,6 +183,29 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
   }
 }
 
+- (void) setMenuItemStatusTitle:(NSArray*)titleMenuIdAndConnected {
+  NSString* title = [titleMenuIdAndConnected objectAtIndex:0];
+  NSNumber* menuId = [titleMenuIdAndConnected objectAtIndex:1];
+  NSNumber* connected = [titleMenuIdAndConnected objectAtIndex:2];
+  NSMenuItem* menuItem = find_menu_item(menu, menuId);
+  if (menuItem == NULL) {
+    return;
+  }
+  NSString* fullTitle = [NSString stringWithFormat:@"● %@", title];
+  NSMutableAttributedString* attributed = [[NSMutableAttributedString alloc] initWithString:fullTitle];
+  [attributed addAttribute:NSFontAttributeName
+                     value:[NSFont menuFontOfSize:0]
+                     range:NSMakeRange(0, [fullTitle length])];
+  [attributed addAttribute:NSFontAttributeName
+                     value:[NSFont systemFontOfSize:12 weight:NSFontWeightMedium]
+                     range:NSMakeRange(0, 1)];
+  [attributed addAttribute:NSForegroundColorAttributeName
+                     value:([connected boolValue] ? [NSColor systemGreenColor] : [NSColor secondaryLabelColor])
+                     range:NSMakeRange(0, 1)];
+  menuItem.image = nil;
+  menuItem.attributedTitle = attributed;
+}
+
 - (void) setMenuItemIcon:(NSArray*)imageAndMenuId {
   NSImage* image = [imageAndMenuId objectAtIndex:0];
   NSNumber* menuId = [imageAndMenuId objectAtIndex:1];
@@ -241,6 +264,14 @@ void setIcon(const char* iconBytes, int length, bool template) {
   [image setSize:NSMakeSize(16, 16)];
   image.template = template;
   runInMainThread(@selector(setIcon:), (id)image);
+}
+
+void setMenuItemStatusTitle(int menuId, char* ctitle, bool connected) {
+  NSString* title = [[NSString alloc] initWithCString:ctitle encoding:NSUTF8StringEncoding];
+  free(ctitle);
+  NSNumber* mId = [NSNumber numberWithInt:menuId];
+  NSNumber* isConnected = [NSNumber numberWithBool:connected];
+  runInMainThread(@selector(setMenuItemStatusTitle:), @[title, mId, isConnected]);
 }
 
 void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool template) {

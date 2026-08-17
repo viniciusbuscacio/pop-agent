@@ -963,3 +963,8 @@ func hideMenuItem(item *MenuItem) {
 func showMenuItem(item *MenuItem) {
 	addOrUpdateMenuItem(item)
 }
+
+// SetStatusTitle falls back to an ordinary text glyph on Windows.
+func (item *MenuItem) SetStatusTitle(title string, connected bool) {
+	item.SetTitle("● " + title)
+}

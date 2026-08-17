@@ -36,3 +36,8 @@ func (item *MenuItem) SetTemplateIcon(templateIconBytes []byte, regularIconBytes
 	cstr := (*C.char)(unsafe.Pointer(&templateIconBytes[0]))
 	C.setMenuItemIcon(cstr, (C.int)(len(templateIconBytes)), C.int(item.id), true)
 }
+
+// SetStatusTitle renders a crisp native status glyph without relying on an emoji or bitmap.
+func (item *MenuItem) SetStatusTitle(title string, connected bool) {
+	C.setMenuItemStatusTitle(C.int(item.id), C.CString(title), C.bool(connected))
+}
