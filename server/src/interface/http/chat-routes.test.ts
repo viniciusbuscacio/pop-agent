@@ -306,6 +306,31 @@ describe('sending a message', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
   });
 
+  it('accepts a stable machine selection after the tray reconnects', async () => {
+    fixture.localConnections.attach({
+      id: 'local-current',
+      role: 'background',
+      machine: {
+        machineId: 'machine-m1',
+        hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
+      },
+      send: () => undefined,
+      close: () => undefined,
+    });
+
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'slow: use the selected Mac' },
+      headers: { [LOCAL_CONNECTION_HEADER]: 'machine-m1' },
+    });
+
+    expect(response.status).toBe(202);
+    expect(fixture.runs.canSteer(chat.id, 'machine-m1')).toBe(true);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
   it('never lends a background local connection to a PWA that did not select it', async () => {
     fixture.localConnections.attach({
       id: 'local-managed',

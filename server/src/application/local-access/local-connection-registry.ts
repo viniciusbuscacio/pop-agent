@@ -81,16 +81,18 @@ export class LocalConnectionRegistry {
     if (entry !== undefined) entry.unanswered = 0;
   }
 
-  connection(connectionId: string | undefined): LocalConnection | undefined {
-    if (connectionId === undefined) return undefined;
-    const entry = this.entries.get(connectionId);
-    if (entry === undefined || this.expired(entry.connection)) return undefined;
-    return entry.connection;
+  /** Resolves either one live connection ID or the computer's stable machine ID. */
+  connection(selector: string | undefined): LocalConnection | undefined {
+    if (selector === undefined) return undefined;
+    const direct = this.entries.get(selector)?.connection;
+    if (direct !== undefined && !this.expired(direct)) return direct;
+    return this.connections()
+      .filter((connection) => connection.machine.machineId === selector)
+      .sort((a, b) => Number(b.role === 'background') - Number(a.role === 'background'))[0];
   }
 
-
-  has(connectionId: string): boolean {
-    return this.connection(connectionId) !== undefined;
+  has(selector: string): boolean {
+    return this.connection(selector) !== undefined;
   }
 
   call(
@@ -99,8 +101,8 @@ export class LocalConnectionRegistry {
     onOutput: (chunk: string) => void,
     signal?: AbortSignal,
   ): Promise<LocalResult> {
-    const entry = this.entries.get(connectionId);
     const connection = this.connection(connectionId);
+    const entry = connection === undefined ? undefined : this.entries.get(connection.id);
     if (entry === undefined || connection === undefined) {
       return Promise.reject(new Error('The local connection is no longer available.'));
     }

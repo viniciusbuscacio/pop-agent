@@ -43,16 +43,30 @@ describe('Settings installation guide', () => {
 
   it('explains local computer access without platform jargon', async () => {
     connectionsMock.mockResolvedValue({
-      connections: [{
-        id: 'mac-connection',
-        role: 'background',
-        machine: {
-          hostname: 'm1',
-          platform: 'darwin',
-          arch: 'arm64',
-          clientVersion: '0.2.34',
+      connections: [
+        {
+          id: 'mac-terminal',
+          role: 'interactive',
+          machine: {
+            machineId: 'machine-m1',
+            hostname: 'm1',
+            platform: 'darwin',
+            arch: 'arm64',
+            clientVersion: '0.2.34',
+          },
         },
-      }],
+        {
+          id: 'mac-connection',
+          role: 'background',
+          machine: {
+            machineId: 'machine-m1',
+            hostname: 'm1',
+            platform: 'darwin',
+            arch: 'arm64',
+            clientVersion: '0.2.34',
+          },
+        },
+      ],
     });
     const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
@@ -62,12 +76,13 @@ describe('Settings installation guide', () => {
       'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
     )).toBeTruthy();
     expect(select.textContent).toContain('Disabled — server only');
-    expect(select.textContent).toContain('m1 — Mac (connected)');
+    expect(screen.getAllByRole('option', { name: 'm1 — Mac (connected)' })).toHaveLength(1);
     expect(select.textContent).not.toContain('darwin');
     expect(select.textContent).not.toContain('arm64');
 
-    await user.selectOptions(select, 'mac-connection');
+    await user.selectOptions(select, 'machine-m1');
 
+    expect(window.localStorage.getItem('pop-agent.local-connection')).toBe('machine-m1');
     expect(screen.getByText('Enabled — Pop Agent can access and edit files on m1.')).toBeTruthy();
   });
 

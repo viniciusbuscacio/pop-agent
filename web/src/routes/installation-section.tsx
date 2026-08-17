@@ -28,14 +28,17 @@ export function InstallationSection() {
   const [pwaDismissed, setPwaDismissed] = useState(false);
   const [connections, setConnections] = useState<LocalConnectionDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
-  const selectedMachine = connections.find(
-    (connection) => connection.id === selectedConnection,
+  const selectableConnections = uniqueMachines(connections);
+  const selectedMachine = selectableConnections.find(
+    (connection) => connectionSelector(connection) === selectedConnection,
   )?.machine.hostname;
 
   useEffect(() => {
     void localAccessService.connections().then(({ connections: live }) => {
       setConnections(live);
-      if (selectedConnection !== '' && !live.some((connection) => connection.id === selectedConnection)) {
+      if (selectedConnection !== '' && !live.some(
+        (connection) => connectionSelector(connection) === selectedConnection,
+      )) {
         selectLocalConnection(undefined);
         setSelectedConnection('');
       }
@@ -111,8 +114,8 @@ export function InstallationSection() {
           }}
         >
           <option value="">{t('settings.installation.localAccessServerOnly')}</option>
-          {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
+          {selectableConnections.map((connection) => (
+            <option key={connection.id} value={connectionSelector(connection)}>
               {connection.machine.hostname} — {platformName(connection.machine.platform)} ({t('settings.installation.localAccessConnected')})
             </option>
           ))}
@@ -151,6 +154,20 @@ export function InstallationSection() {
 
     </div>
   );
+}
+
+function connectionSelector(connection: LocalConnectionDTO): string {
+  return connection.machine.machineId ?? connection.id;
+}
+
+function uniqueMachines(connections: LocalConnectionDTO[]): LocalConnectionDTO[] {
+  const selected = new Map<string, LocalConnectionDTO>();
+  for (const connection of connections) {
+    const selector = connectionSelector(connection);
+    const current = selected.get(selector);
+    if (current === undefined || connection.role === 'background') selected.set(selector, connection);
+  }
+  return [...selected.values()];
 }
 
 function platformName(platform: string): string {

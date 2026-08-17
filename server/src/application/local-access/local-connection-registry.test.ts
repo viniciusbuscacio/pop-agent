@@ -37,6 +37,20 @@ describe('LocalConnectionRegistry', () => {
     expect(registry.connection('c1')).toBe(mac.connection);
   });
 
+  it('resolves a stable machine selection after its connection changes', () => {
+    const registry = new LocalConnectionRegistry();
+    const terminal = fake('connection-terminal', 'm1');
+    terminal.connection.machine.machineId = 'machine-m1';
+    terminal.connection.role = 'interactive';
+    const tray = fake('connection-tray', 'm1');
+    tray.connection.machine.machineId = 'machine-m1';
+    tray.connection.role = 'background';
+    registry.attach(terminal.connection);
+    registry.attach(tray.connection);
+
+    expect(registry.connection('machine-m1')).toBe(tray.connection);
+  });
+
   it('has nothing for a message that named nobody', () => {
     // Every message from the PWA. Not an error: the run simply has the
     // server's tools, which is what a phone session always had.
