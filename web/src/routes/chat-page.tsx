@@ -243,9 +243,9 @@ export function ChatPage() {
     };
   }, [chatId]);
 
-  // scroll events alone do not reveal intent: inserting the run-status line or
-  // resizing Safari can reduce scrollTop too. Wheel and passive touch listeners
-  // suspend following; scrolling toward and reaching the end resumes it.
+  // The scroll position is the source of truth for the floating control, no
+  // matter whether the reader used touch, a wheel, the keyboard or a scrollbar.
+  // The tolerance absorbs Safari bounce and small viewport adjustments.
   function onScroll(): void {
     const element = scroller.current;
     if (element === null) return;
@@ -253,6 +253,12 @@ export function ChatPage() {
     const current = element.scrollTop;
     const distance = distanceFromBottom();
     lastScrollTop.current = current;
+
+    if (distance >= BOTTOM_TOLERANCE_PX) {
+      atBottom.current = false;
+      setShowJump(true);
+      return;
+    }
 
     if (!atBottom.current && shouldResumeFollowing(previous, current, distance, BOTTOM_TOLERANCE_PX)) {
       atBottom.current = true;
@@ -440,7 +446,7 @@ export function ChatPage() {
             data-testid="jump-to-latest"
             onClick={jumpToLatest}
             aria-label={t('chat.jumpToLatest')}
-            className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
+            className="absolute right-4 bottom-2 z-10 flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
           >
             <span aria-hidden="true">↓</span>
             {missed > 0 ? (

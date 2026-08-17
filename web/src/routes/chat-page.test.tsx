@@ -355,7 +355,30 @@ describe('chat transcript', () => {
     expect(scroller.style.touchAction).toBe('pan-y');
   });
 
-  it('stops following as soon as an iOS reading gesture starts', async () => {
+  it('shows the jump control at the right whenever scrolling leaves the latest messages', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
+
+    const scroller = screen.getByTestId('chat-scroller');
+    Object.defineProperties(scroller, {
+      scrollHeight: { value: 1_000, configurable: true },
+      clientHeight: { value: 500, configurable: true },
+      scrollTop: { value: 500, writable: true, configurable: true },
+    });
+
+    scroller.scrollTop = 300;
+    fireEvent.scroll(scroller);
+
+    const jump = screen.getByTestId('jump-to-latest');
+    expect(jump.className).toContain('right-4');
+    expect(jump.className).not.toContain('left-1/2');
+
+    scroller.scrollTop = 500;
+    fireEvent.scroll(scroller);
+    expect(screen.queryByTestId('jump-to-latest')).toBeNull();
+  });
+
+  it('stops following and shows the jump control when an iOS reading gesture scrolls', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-chat-icon')).toBeTruthy());
 
@@ -369,7 +392,9 @@ describe('chat transcript', () => {
     expect(scroller.style.touchAction).toBe('pan-y');
     fireEvent.touchStart(scroller, { touches: [{ clientY: 100 }] });
     fireEvent.touchMove(scroller, { touches: [{ clientY: 110 }] });
-    expect(screen.queryByTestId('jump-to-latest')).toBeNull();
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    expect(screen.getByTestId('jump-to-latest')).toBeTruthy();
 
     useChatStore.setState({
       live: {
@@ -385,7 +410,7 @@ describe('chat transcript', () => {
     });
 
     await waitFor(() => expect(screen.getByTestId('jump-to-latest')).toBeTruthy());
-    expect(scroller.scrollTop).toBe(500);
+    expect(scroller.scrollTop).toBe(400);
   });
 
   it('reserves the run-status height before, during and after an answer', async () => {
