@@ -41,8 +41,8 @@ func TestStatusIconsStaySmallAndUseConnectedGreen(t *testing.T) {
 				}
 			}
 		}
-		if opaque < 40 || opaque > 55 {
-			t.Fatalf("%s dot size = %d opaque pixels", test.path, opaque)
+		if opaque < 115 || opaque > 140 {
+			t.Fatalf("%s dot size = %d visible pixels", test.path, opaque)
 		}
 	}
 }
