@@ -32,6 +32,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   concurrency, Stop, compaction, failover, native commands, SDK update contracts
   and test obligations. The supporting end-to-end agent flow now describes the
   current durable FIFO and SDK behavior without historical build phases.
+- **The real-time events specification is now a complete synchronization guide.**
+  It defines the SSE/HTTP/PLA boundaries, ticket and revocation lifecycle,
+  connection uniqueness, retries and foreground recovery, event catalog,
+  ordering and batching, bounded backpressure, snapshot convergence, polling
+  policy, Local Access integration, security and test obligations.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -77,6 +82,12 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   selected local computer now reopen the same JSONL before the next operation.
   The pi candidate gate also verifies the complete session, tree, resource,
   local-tool, completion and auth API surface Pop Agent actually uses.
+- **The shared SSE channel now survives lifecycle races without stale access.**
+  Ticket requests and EventSources are generation-controlled, foreground/BFCache
+  recovery replaces suspended sockets, old sources cannot trigger extra retries,
+  and ticket-bound session revocation stops existing streams. Slow clients have
+  a bounded backlog, while archive and provider/model changes now converge on
+  every connected device. The unused software-update wire event was removed.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.

@@ -5,6 +5,8 @@ import { z } from 'zod';
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
+  EVENT_STREAM_VERSION,
+  EVENT_STREAM_VERSION_HEADER,
   LOCAL_CONNECTION_HEADER,
   isClientKind,
   type ChatDTO,
@@ -13,6 +15,8 @@ import {
   type QueuedMessageDTO,
 } from '@pop-agent/shared';
 import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/chat/chat.js';
+import type { AuthService } from '../../application/auth/auth-service.js';
+import type { TokenPayload } from '../../application/auth/token.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
@@ -31,6 +35,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import type { EventTickets } from './event-tickets.js';
 import type { SseHub } from './sse-hub.js';
+import { SsePendingBuffer } from './sse-pending-buffer.js';
 
 /**
  * Conversations, runs and the event stream (docs/specs/Spec-Pop-General.md §13).
@@ -90,6 +95,7 @@ const sendSchema = z
   .strict();
 
 export interface ChatRoutesDeps {
+  auth: AuthService;
   chats: ChatService;
   files: FilesService;
   runs: RunService;
@@ -112,6 +118,19 @@ export interface ChatRoutesDeps {
  * Forgeable by anyone holding the token, which on a single-user install means
  * the owner. It is context, never a security decision.
  */
+function eventStreamVersion(c: Context): number {
+  const parsed = Number.parseInt(c.req.header(EVENT_STREAM_VERSION_HEADER) ?? '1', 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.min(parsed, EVENT_STREAM_VERSION) : 1;
+}
+
+function authenticatedSession(c: Context, auth: AuthService): TokenPayload | undefined {
+  const header = c.req.header('Authorization') ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+  if (token.length === 0) return undefined;
+  const verified = auth.verifySession(token);
+  return verified.ok ? verified.payload : undefined;
+}
+
 function readClient(c: Context): MessageClient | undefined {
   const kind = c.req.header(CLIENT_HEADER);
   if (kind === undefined || !isClientKind(kind)) return undefined;
@@ -482,54 +501,79 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     return c.json({ models: catalog.models.map(toModelDto), source: catalog.source });
   });
 
-  /** Trades a session for a short-lived ticket the EventSource URL can carry. */
-  routes.post('/events/ticket', (c) => c.json({ ticket: deps.tickets.issue() }));
+  /** Trades the current session for a short-lived ticket EventSource can carry. */
+  routes.post('/events/ticket', (c) => {
+    const session = authenticatedSession(c, deps.auth);
+    if (session === undefined) return apiError(c, 401, 'invalid_session', 'This request needs a valid session token.');
+    return c.json({ ticket: deps.tickets.issue(session, eventStreamVersion(c)) });
+  });
 
   routes.get('/events', (c) => {
-    if (!deps.tickets.consume(c.req.query('ticket'))) {
+    const grant = deps.tickets.consume(c.req.query('ticket'));
+    if (grant === undefined || !deps.auth.isSessionCurrent(grant.session)) {
       return apiError(c, 401, 'invalid_session', 'This stream needs a fresh ticket.');
     }
+    const { session, eventVersion } = grant;
 
     return streamSSE(c, async (stream) => {
-      const pending: string[] = [];
+      const pending = new SsePendingBuffer();
       let notify: (() => void) | undefined;
-
-      const unsubscribe = deps.hub.subscribe((payload) => {
-        pending.push(payload);
-        notify?.();
-      });
-
       let open = true;
-      stream.onAbort(() => {
+      let unsubscribe = (): void => undefined;
+
+      const close = (): void => {
+        if (!open) return;
         open = false;
         unsubscribe();
         notify?.();
-      });
+      };
 
-      while (open) {
-        while (pending.length > 0) {
-          const payload = pending.shift();
-          if (payload !== undefined) await stream.writeSSE({ data: payload });
+      unsubscribe = deps.hub.subscribe((payload) => {
+        if (!deps.auth.isSessionCurrent(session)) {
+          close();
+          return;
         }
-        if (!open) break;
+        if (!pending.push(payload)) {
+          // A slow connection cannot own unbounded server memory. SSE has no
+          // replay, so close it; the client obtains a new ticket and snapshots.
+          close();
+          return;
+        }
+        notify?.();
+      }, eventVersion);
 
-        // Wake on the next event, or on the heartbeat -- a comment line that
-        // keeps proxies from deciding an idle stream is a dead one.
-        const woken = await new Promise<boolean>((resolve) => {
-          const timer = setTimeout(() => {
-            notify = undefined;
-            resolve(false);
-          }, HEARTBEAT_MS);
-          notify = () => {
-            clearTimeout(timer);
-            notify = undefined;
-            resolve(true);
-          };
-        });
-        if (!woken && open) await stream.write(':ka\n\n');
+      stream.onAbort(close);
+
+      try {
+        while (open) {
+          while (pending.length > 0) {
+            const payload = pending.shift();
+            if (payload !== undefined) await stream.writeSSE({ data: payload });
+          }
+          if (!open) break;
+
+          // Wake on the next event, or on the heartbeat. The heartbeat both
+          // keeps proxies alive and bounds how long a revoked session remains.
+          const woken = await new Promise<boolean>((resolve) => {
+            const timer = setTimeout(() => {
+              notify = undefined;
+              resolve(false);
+            }, HEARTBEAT_MS);
+            notify = () => {
+              clearTimeout(timer);
+              notify = undefined;
+              resolve(true);
+            };
+          });
+          if (!woken && open) {
+            if (!deps.auth.isSessionCurrent(session)) close();
+            else await stream.write(':ka\n\n');
+          }
+        }
+      } finally {
+        close();
+        unsubscribe();
       }
-
-      unsubscribe();
     });
   });
 

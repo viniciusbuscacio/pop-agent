@@ -42,20 +42,25 @@ ends up in access logs, proxy traces and browser history. So
 queued item and is returned in its DTO; clients and rows predating 1.96 default
 to normal.
 
-A reconnect asks for a new one. The hub broadcasts every event to every
+A reconnect asks for a new one. The hub broadcasts every event to every valid
 connection — one user, several tabs — and sends a `:ka` comment every 25s so
-a proxy does not mistake an idle stream for a dead one.
+a proxy does not mistake an idle stream for a dead one. Tickets are bound to
+the issuing session; epoch revocation or expiry closes an existing stream by
+the next event or heartbeat. Backlog is bounded and overflow reconnects through
+snapshot recovery. `x-pop-agent-event-version` gates additive kinds away from
+cached legacy clients. Exact lifecycle, event catalog, ordering and recovery
+rules live in `Spec-Pop-Events-Synchronization.md`.
 
 `GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
 document and the schema is strict, so a field Pop Agent does not know is a 400
-rather than something silently dropped. Public (no session):
-`auth/state`, `setup`, `login`, `auth/recover`, `healthz`, `health` — and
-`/v1/events`, until Phase 2 decides how to authenticate a stream that
-EventSource cannot attach a header to. Any response may carry a refreshed
-`x-pop-agent-token` (§9).
+rather than something silently dropped. Public/session-establishing paths are
+declared in `interface/http/route-registry.ts`. `/v1/events` is bearer-exempt
+only because its one-use ticket is the complete authorization; ticket issuance
+remains session-guarded. Any ordinary authenticated response may carry a
+refreshed `x-pop-agent-token` (§9).
 
-SSE events (typed in `shared/`): `delta`, `thinking`, `tool` (with
-start/output/done/error — `output` streams stdout in real time), `done`,
-`error`, `title`, `run-status` (`queued` | `running`, so the UI can say a
-run is waiting for a slot rather than looking stalled), `update`. Every run has a `runId`; the frontend discards
-events from stale runs.
+SSE events are typed in `shared/` and divided into chat lifecycle, live run,
+durable queue/timeline and snapshot-invalidation events. Run events carry a
+`runId`; fragments also carry monotonic `seq`, allowing the frontend to discard
+stale runs and data already covered by a live snapshot. Software update state
+is not part of this channel.

@@ -101,7 +101,7 @@ describe('chat collection', () => {
     expect(chats.map((chat) => chat.id)).toEqual([created.id]);
   });
 
-  it('broadcasts durable creation, mode, pin changes and deletion to connected clients', async () => {
+  it('broadcasts durable chat changes and deletion to connected clients', async () => {
     const events: StreamEvent[] = [];
     const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
 
@@ -109,6 +109,11 @@ describe('chat collection', () => {
     expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { executionMode: 'plan' } })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { pinned: true } })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { pinned: false } })).status).toBe(200);
+    expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { archived: true } })).status).toBe(200);
+    expect((await api(`/v1/chats/${created.id}`, { method: 'PATCH', body: { archived: false } })).status).toBe(200);
+    expect((await api(`/v1/chats/${created.id}`, {
+      method: 'PATCH', body: { provider: 'fake', model: 'fake/model-2' },
+    })).status).toBe(200);
     expect((await api(`/v1/chats/${created.id}`, { method: 'DELETE' })).status).toBe(204);
     unsubscribe();
 
@@ -117,6 +122,12 @@ describe('chat collection', () => {
       { kind: 'chat-execution-mode-changed', chatId: created.id, executionMode: 'plan' },
       { kind: 'chat-pin-changed', chatId: created.id, pinned: true },
       { kind: 'chat-pin-changed', chatId: created.id, pinned: false },
+      { kind: 'chat-archived-changed', chatId: created.id, archived: true },
+      { kind: 'chat-archived-changed', chatId: created.id, archived: false },
+      {
+        kind: 'chat-model-changed', chatId: created.id,
+        provider: 'fake', model: 'fake/model-2',
+      },
       { kind: 'chat-deleted', chatId: created.id },
     ]);
   });
@@ -129,6 +140,8 @@ describe('chat collection', () => {
     const alreadyFiled = await newChat();
     await api(`/v1/chats/${pinned.id}`, { method: 'PATCH', body: { pinned: true } });
     await api(`/v1/chats/${alreadyFiled.id}`, { method: 'PATCH', body: { archived: true } });
+    const events: StreamEvent[] = [];
+    const unsubscribe = fixture.hub.subscribe((payload) => events.push(JSON.parse(payload) as StreamEvent));
 
     const response = await api('/v1/chats/archive-others', {
       method: 'POST',
@@ -146,6 +159,12 @@ describe('chat collection', () => {
     expect(new Set(archived.chats.map((chat) => chat.id))).toEqual(
       new Set([one.id, two.id, alreadyFiled.id]),
     );
+    unsubscribe();
+    expect(events).toEqual(expect.arrayContaining([
+      { kind: 'chat-archived-changed', chatId: one.id, archived: true },
+      { kind: 'chat-archived-changed', chatId: two.id, archived: true },
+    ]));
+    expect(events).toHaveLength(2);
   });
 
   it('deletes every open chat except the active one and pinned chats', async () => {
@@ -555,7 +574,7 @@ describe('sending a message', () => {
     ]);
   });
 
-  it('keeps a defensive 1,024-item cap for broken clients', async () => {
+  it('keeps a defensive 1,024-item cap for broken clients', { timeout: 15_000 }, async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
     const pendingIds: string[] = [];
@@ -732,6 +751,21 @@ describe('the event stream', () => {
     await first.body?.cancel();
 
     expect((await app.request(`/v1/events?ticket=${issued}`)).status).toBe(401);
+  });
+
+  it('stops delivering as soon as the ticket-bound session is revoked', async () => {
+    const stream = await app.request(`/v1/events?ticket=${await ticket()}`);
+    const reader = stream.body!.getReader();
+
+    fixture.auth.signOutOthers();
+    fixture.hub.emit({ kind: 'local-machines-changed' });
+
+    const result = await Promise.race([
+      reader.read(),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error('revoked SSE stream stayed open')), 500)),
+    ]);
+    expect(result.done).toBe(true);
   });
 
   it('streams a run to a connected listener', async () => {

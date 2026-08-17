@@ -202,6 +202,15 @@ export class AuthService {
   }
 
   /**
+   * Revalidates a payload that was authenticated when an SSE ticket was
+   * issued. The ticket store, not an untrusted caller, supplies this object.
+   */
+  isSessionCurrent(payload: TokenPayload): boolean {
+    const record = this.record();
+    return record !== undefined && payload.epoch === record.epoch && this.deps.clock.now() < payload.exp;
+  }
+
+  /**
    * Sliding renewal: a token past its first day is swapped for a fresh one, so
    * somebody who opens Pop Agent every week never meets the login screen, while a
    * token that has been idle for the full week still dies.

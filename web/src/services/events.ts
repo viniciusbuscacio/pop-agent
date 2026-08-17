@@ -3,162 +3,224 @@ import { apiRequest } from './api';
 import { createStreamEventBatcher } from './stream-event-batcher';
 
 /**
- * The single EventSource (docs/specs/Spec-Pop-General.md §14). Components never see it: they read
- * the store, which this file feeds.
+ * The session-wide EventSource. Components subscribe to this service rather
+ * than opening connections of their own.
  *
- * Connecting takes two steps because EventSource cannot send a header — ask
- * for a one-time ticket with the session, then open the stream with it. A
- * reconnect needs a fresh ticket, since each one is spent on use.
- *
- * Coming back from the background is its own case. iOS suspends a backgrounded
- * PWA: the connection dies and the retry timer freezes with it, so waiting for
- * the backoff would leave the app looking frozen for as long as it slept. The
- * page becoming visible reconnects immediately and tells the app to refetch,
- * because whatever happened while it slept was never delivered.
+ * EventSource cannot carry the session header, so every connection first asks
+ * the authenticated API for a one-use ticket. Pop owns retry instead of
+ * EventSource because a spent ticket cannot be replayed.
  */
 
 type Listener = (event: StreamEvent) => void;
 type ResumeListener = () => void;
+type ConnectReason = 'initial' | 'retry' | 'resume';
 
 const FIRST_RETRY_MS = 500;
 const MAX_RETRY_MS = 15_000;
 
-let source: EventSource | undefined;
-let retryMs = FIRST_RETRY_MS;
-let retryTimer: ReturnType<typeof setTimeout> | undefined;
-let stopped = true;
-let watchingVisibility = false;
-/** Whether the stream has ever opened; a later open is a reconnection. */
-let everConnected = false;
-const listeners = new Set<Listener>();
-const resumeListeners = new Set<ResumeListener>();
-const bufferedEvents = createStreamEventBatcher((event) => {
-  for (const listener of listeners) listener(event);
-});
+export interface EventStreamEnvironment {
+  issueTicket(): Promise<string>;
+  open(url: string): EventSource;
+  document?: Document;
+  window?: Window;
+  schedule(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  cancel(handle: ReturnType<typeof setTimeout>): void;
+}
 
-export const eventStream = {
-  /** Idempotent: calling it twice keeps the one connection. */
-  start(): void {
-    stopped = false;
-    watchVisibility();
-    if (source !== undefined) return;
-    void connect();
-  },
+export interface EventStreamService {
+  start(): void;
+  stop(): void;
+  subscribe(listener: Listener): () => void;
+  onResume(listener: ResumeListener): () => void;
+}
 
-  stop(): void {
-    stopped = true;
-    if (retryTimer !== undefined) clearTimeout(retryTimer);
-    retryTimer = undefined;
-    source?.close();
-    source = undefined;
-    bufferedEvents.clear();
-    retryMs = FIRST_RETRY_MS;
-    // A fresh start (after a logout/login) must treat its first open as a
-    // first connection, not a reconnection, so it does not fire a catch-up.
-    everConnected = false;
-  },
+/** Creates an isolated stream controller; exported so lifecycle races are testable. */
+export function createEventStream(environment: EventStreamEnvironment): EventStreamService {
+  let source: EventSource | undefined;
+  let retryMs = FIRST_RETRY_MS;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = true;
+  let connectingAttempt: number | undefined;
+  let generation = 0;
+  let watchingVisibility = false;
+  let wasHidden = false;
+  const listeners = new Set<Listener>();
+  const resumeListeners = new Set<ResumeListener>();
+  const bufferedEvents = createStreamEventBatcher((event) => {
+    for (const listener of listeners) listener(event);
+  });
 
-  subscribe(listener: Listener): () => void {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  },
-
-  /** Fires when the app comes back to the foreground and has to catch up. */
-  onResume(listener: ResumeListener): () => void {
-    resumeListeners.add(listener);
-    return () => {
-      resumeListeners.delete(listener);
-    };
-  },
-};
-
-function watchVisibility(): void {
-  if (watchingVisibility || typeof document === 'undefined') return;
-  watchingVisibility = true;
-
-  const wake = (): void => {
-    if (stopped || document.visibilityState !== 'visible') return;
-
-    retryMs = FIRST_RETRY_MS;
-    if (retryTimer !== undefined) {
-      clearTimeout(retryTimer);
-      retryTimer = undefined;
-    }
-
-    // A connection that survived is kept; one the system tore down is
-    // replaced right away instead of after a backoff that never ticked.
-    if (source === undefined || source.readyState === EventSource.CLOSED) {
-      source?.close();
-      source = undefined;
-      void connect();
-    }
-
+  const notifyResume = (): void => {
     for (const listener of resumeListeners) listener();
   };
 
-  document.addEventListener('visibilitychange', wake);
-  // Safari restoring from the back/forward cache does not always fire
-  // visibilitychange, but it does fire pageshow.
-  window.addEventListener('pageshow', wake);
-}
+  const cancelRetry = (): void => {
+    if (retryTimer !== undefined) environment.cancel(retryTimer);
+    retryTimer = undefined;
+  };
 
-async function connect(): Promise<void> {
-  if (stopped) return;
-
-  let ticket: string;
-  try {
-    ({ ticket } = await apiRequest<EventTicketResponse>('/events/ticket', { method: 'POST' }));
-  } catch {
-    // No session, or the server is down. Either way, back off and retry: the
-    // api layer has already redirected to login if the session was the problem.
-    scheduleRetry();
-    return;
-  }
-  if (stopped) return;
-
-  const connection = new EventSource(`/v1/events?ticket=${encodeURIComponent(ticket)}`);
-  source = connection;
-
-  connection.addEventListener('open', () => {
-    retryMs = FIRST_RETRY_MS;
-    // A later open is a reconnection: the stream was down for a while -- a
-    // server restart, a network blip -- and any events in that gap were
-    // missed. Tell the app to catch up, exactly like returning from the
-    // background, so a run the server ended while we were disconnected is
-    // reconciled instead of spinning forever. A foreground desktop tab never
-    // fires visibilitychange, so without this its stuck run would never clear.
-    if (everConnected) {
-      for (const listener of resumeListeners) listener();
-    }
-    everConnected = true;
-  });
-
-  connection.addEventListener('message', (message: MessageEvent<string>) => {
-    let parsed: StreamEvent;
-    try {
-      parsed = JSON.parse(message.data) as StreamEvent;
-    } catch {
+  const scheduleRetry = (): void => {
+    if (stopped || retryTimer !== undefined || connectingAttempt !== undefined || source !== undefined) {
       return;
     }
-    bufferedEvents.push(parsed);
-  });
+    const delay = retryMs;
+    retryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+    retryTimer = environment.schedule(() => {
+      retryTimer = undefined;
+      beginConnect('retry');
+    }, delay);
+  };
 
-  connection.addEventListener('error', () => {
-    // EventSource retries on its own, but it would replay the spent ticket, so
-    // take over: close, wait, ask for a new one.
-    connection.close();
-    if (source === connection) source = undefined;
-    scheduleRetry();
-  });
+  const connect = async (attempt: number, reason: ConnectReason): Promise<void> => {
+    let ticket: string;
+    try {
+      ticket = await environment.issueTicket();
+    } catch {
+      if (connectingAttempt !== attempt || stopped) return;
+      connectingAttempt = undefined;
+      scheduleRetry();
+      return;
+    }
+
+    // A stop, foreground replacement or newer attempt can win while the ticket
+    // request is in flight. Such a ticket is simply left to expire unused.
+    if (stopped || connectingAttempt !== attempt) return;
+    connectingAttempt = undefined;
+
+    const connection = environment.open(`/v1/events?ticket=${encodeURIComponent(ticket)}`);
+    source = connection;
+
+    connection.addEventListener('open', () => {
+      if (source !== connection || stopped) return;
+      retryMs = FIRST_RETRY_MS;
+      // A retry may cover an arbitrarily long gap. Consumers need a canonical
+      // snapshot after the replacement is actually open. Foreground recovery
+      // already notified them immediately and must not duplicate that fetch.
+      if (reason === 'retry') notifyResume();
+    });
+
+    connection.addEventListener('message', (message: MessageEvent<string>) => {
+      if (source !== connection || stopped) return;
+      let parsed: StreamEvent;
+      try {
+        parsed = JSON.parse(message.data) as StreamEvent;
+      } catch {
+        return;
+      }
+      bufferedEvents.push(parsed);
+    });
+
+    connection.addEventListener('error', () => {
+      connection.close();
+      // A superseded EventSource may report its close after the replacement is
+      // already live. It must not clear that source or schedule a third one.
+      if (source !== connection || stopped) return;
+      source = undefined;
+      scheduleRetry();
+    });
+  };
+
+  const beginConnect = (reason: ConnectReason): void => {
+    if (stopped || source !== undefined || connectingAttempt !== undefined) return;
+    const attempt = ++generation;
+    connectingAttempt = attempt;
+    void connect(attempt, reason);
+  };
+
+  const replaceAfterResume = (): void => {
+    if (stopped) return;
+    retryMs = FIRST_RETRY_MS;
+    cancelRetry();
+    // Invalidate a ticket request as well as a live source. iOS can leave a
+    // suspended EventSource reporting OPEN even though no more events arrive.
+    generation += 1;
+    connectingAttempt = undefined;
+    source?.close();
+    source = undefined;
+    beginConnect('resume');
+    notifyResume();
+  };
+
+  const onVisibilityChange = (): void => {
+    const document = environment.document;
+    if (document === undefined) return;
+    if (document.visibilityState !== 'visible') {
+      wasHidden = true;
+      return;
+    }
+    if (!wasHidden) return;
+    wasHidden = false;
+    replaceAfterResume();
+  };
+
+  const onPageShow = (event: PageTransitionEvent): void => {
+    // Initial pageshow is not a resume. `persisted` identifies a document
+    // restored from Safari's/another browser's back-forward cache.
+    if (event.persisted) replaceAfterResume();
+  };
+
+  const watchVisibility = (): void => {
+    if (watchingVisibility) return;
+    const document = environment.document;
+    const window = environment.window;
+    if (document === undefined || window === undefined) return;
+    watchingVisibility = true;
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pageshow', onPageShow);
+  };
+
+  const unwatchVisibility = (): void => {
+    if (!watchingVisibility) return;
+    environment.document?.removeEventListener('visibilitychange', onVisibilityChange);
+    environment.window?.removeEventListener('pageshow', onPageShow);
+    watchingVisibility = false;
+    wasHidden = false;
+  };
+
+  return {
+    /** Idempotent even while the ticket request is still in flight. */
+    start(): void {
+      stopped = false;
+      watchVisibility();
+      beginConnect('initial');
+    },
+
+    stop(): void {
+      stopped = true;
+      generation += 1;
+      connectingAttempt = undefined;
+      cancelRetry();
+      source?.close();
+      source = undefined;
+      bufferedEvents.clear();
+      retryMs = FIRST_RETRY_MS;
+      unwatchVisibility();
+    },
+
+    subscribe(listener: Listener): () => void {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+
+    onResume(listener: ResumeListener): () => void {
+      resumeListeners.add(listener);
+      return () => resumeListeners.delete(listener);
+    },
+  };
 }
 
-function scheduleRetry(): void {
-  if (stopped || retryTimer !== undefined) return;
-  retryTimer = setTimeout(() => {
-    retryTimer = undefined;
-    void connect();
-  }, retryMs);
-  retryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+function browserEnvironment(): EventStreamEnvironment {
+  return {
+    issueTicket: async () => {
+      const { ticket } = await apiRequest<EventTicketResponse>('/events/ticket', { method: 'POST' });
+      return ticket;
+    },
+    open: (url) => new EventSource(url),
+    ...(typeof document === 'undefined' ? {} : { document }),
+    ...(typeof window === 'undefined' ? {} : { window }),
+    schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+    cancel: (handle) => clearTimeout(handle),
+  };
 }
+
+export const eventStream = createEventStream(browserEnvironment());

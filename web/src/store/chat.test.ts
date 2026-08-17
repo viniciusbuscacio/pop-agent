@@ -561,15 +561,44 @@ describe('chat lifecycle events', () => {
     expect(useChatStore.getState().chats.map((chat) => chat.id)).toEqual([newer.id, created.id]);
   });
 
-  it('applies a remote execution mode change to open and archived chats', () => {
+  it('moves remotely archived and restored chats between lists', () => {
+    useChatStore.setState({ chats: [created], archived: [] });
+
+    apply({ kind: 'chat-archived-changed', chatId: created.id, archived: true });
+    apply({ kind: 'chat-archived-changed', chatId: created.id, archived: true });
+    expect(useChatStore.getState().chats).toEqual([]);
+    expect(useChatStore.getState().archived[0]).toMatchObject({ id: created.id, archived: true });
+
+    apply({ kind: 'chat-archived-changed', chatId: created.id, archived: false });
+    expect(useChatStore.getState().archived).toEqual([]);
+    expect(useChatStore.getState().chats[0]).toMatchObject({ id: created.id, archived: false });
+  });
+
+  it('applies remote model and execution mode changes to open and archived chats', () => {
     const archived = { ...created, id: 'chat-archived', archived: true };
     useChatStore.setState({ chats: [created], archived: [archived] });
 
+    apply({
+      kind: 'chat-model-changed',
+      chatId: created.id,
+      provider: 'openai-codex',
+      model: 'gpt-5.6',
+    });
+    apply({
+      kind: 'chat-model-changed',
+      chatId: archived.id,
+      provider: 'openrouter',
+      model: 'moonshotai/kimi-k3',
+    });
     apply({ kind: 'chat-execution-mode-changed', chatId: created.id, executionMode: 'plan' });
     apply({ kind: 'chat-execution-mode-changed', chatId: archived.id, executionMode: 'plan' });
 
-    expect(useChatStore.getState().chats[0]?.executionMode).toBe('plan');
-    expect(useChatStore.getState().archived[0]?.executionMode).toBe('plan');
+    expect(useChatStore.getState().chats[0]).toMatchObject({
+      provider: 'openai-codex', model: 'gpt-5.6', executionMode: 'plan',
+    });
+    expect(useChatStore.getState().archived[0]).toMatchObject({
+      provider: 'openrouter', model: 'moonshotai/kimi-k3', executionMode: 'plan',
+    });
   });
 
   it('uses the PATCH result to update the initiating device execution mode', async () => {
@@ -633,26 +662,28 @@ describe('chat lifecycle events', () => {
 });
 
 describe('titles', () => {
-  it('renames the chat in the list when the server names it', () => {
+  it('renames an open or archived chat when the server names it', () => {
+    const chat = {
+      id: CHAT,
+      title: 'New chat',
+      model: '',
+      provider: '',
+      archived: false,
+      pinned: false,
+      createdAt: '',
+      updatedAt: '',
+      preview: '',
+    };
     useChatStore.setState({
-      chats: [
-        {
-          id: CHAT,
-          title: 'New chat',
-          model: '',
-          provider: '',
-          archived: false,
-          pinned: false,
-          createdAt: '',
-          updatedAt: '',
-          preview: '',
-        },
-      ],
+      chats: [chat],
+      archived: [{ ...chat, id: 'chat-archived', archived: true }],
     });
 
     apply({ kind: 'title', chatId: CHAT, title: 'Deploy Server' });
+    apply({ kind: 'title', chatId: 'chat-archived', title: 'Old deployment' });
 
     expect(useChatStore.getState().chats[0]?.title).toBe('Deploy Server');
+    expect(useChatStore.getState().archived[0]?.title).toBe('Old deployment');
   });
 });
 

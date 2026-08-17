@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import type { TokenPayload } from '../../application/auth/token.js';
 import type { Clock } from '../../application/ports/clock.js';
 
 /**
@@ -17,40 +18,52 @@ import type { Clock } from '../../application/ports/clock.js';
 const TICKET_BYTES = 32;
 const DEFAULT_TTL_MS = 30_000;
 
+export interface EventTicketGrant {
+  session: TokenPayload;
+  /** Additive wire schema declared by the client; legacy/absent is version 1. */
+  eventVersion: number;
+}
+
+interface IssuedTicket extends EventTicketGrant {
+  expiresAt: number;
+}
+
 export class EventTickets {
-  private readonly issued = new Map<string, number>();
+  private readonly issued = new Map<string, IssuedTicket>();
 
   constructor(
     private readonly clock: Clock,
     private readonly ttlMs: number = DEFAULT_TTL_MS,
   ) {}
 
-  issue(): string {
+  issue(session: TokenPayload, eventVersion = 1): string {
     this.prune();
     const ticket = randomBytes(TICKET_BYTES).toString('base64url');
-    this.issued.set(ticket, this.clock.now() + this.ttlMs);
+    this.issued.set(ticket, { expiresAt: this.clock.now() + this.ttlMs, session, eventVersion });
     return ticket;
   }
 
-  /** Accepts a ticket at most once, and only inside its window. */
-  consume(candidate: string | undefined): boolean {
-    if (candidate === undefined || candidate.length === 0) return false;
+  /** Accepts a ticket at most once and returns the session it was issued for. */
+  consume(candidate: string | undefined): EventTicketGrant | undefined {
+    if (candidate === undefined || candidate.length === 0) return undefined;
     this.prune();
 
     // Compare against stored tickets in constant time. The set is tiny (one
     // per open tab), so walking it costs nothing.
-    for (const [ticket, expiresAt] of this.issued) {
+    for (const [ticket, issued] of this.issued) {
       if (!equals(ticket, candidate)) continue;
       this.issued.delete(ticket);
-      return expiresAt > this.clock.now();
+      return issued.expiresAt > this.clock.now()
+        ? { session: issued.session, eventVersion: issued.eventVersion }
+        : undefined;
     }
-    return false;
+    return undefined;
   }
 
   private prune(): void {
     const now = this.clock.now();
-    for (const [ticket, expiresAt] of this.issued) {
-      if (expiresAt <= now) this.issued.delete(ticket);
+    for (const [ticket, issued] of this.issued) {
+      if (issued.expiresAt <= now) this.issued.delete(ticket);
     }
   }
 }

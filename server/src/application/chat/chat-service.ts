@@ -90,7 +90,10 @@ export class ChatService {
   setArchived(id: string, archived: boolean): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setArchived(id, archived);
-    return this.deps.chats.get(id);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({ kind: 'chat-archived-changed', chatId: id, archived: chat.archived });
+    return chat;
   }
 
   setPinned(id: string, pinned: boolean): Chat | undefined {
@@ -119,7 +122,15 @@ export class ChatService {
   archiveOthers(keepChatId: string): number | undefined {
     const keep = this.deps.chats.get(keepChatId);
     if (keep === undefined || keep.archived) return undefined;
-    return this.deps.chats.archiveOthers(keepChatId);
+    const changed = this.deps.chats
+      .list({ archived: false })
+      .filter((chat) => chat.id !== keepChatId && !chat.pinned)
+      .map((chat) => chat.id);
+    const count = this.deps.chats.archiveOthers(keepChatId);
+    for (const chatId of changed) {
+      this.deps.sink?.emit({ kind: 'chat-archived-changed', chatId, archived: true });
+    }
+    return count;
   }
 
   /** Permanently deletes every open conversation except the active one and pinned chats. */
@@ -138,7 +149,15 @@ export class ChatService {
     if (this.deps.chats.get(id) === undefined) return undefined;
     this.deps.chats.setModel(id, model, provider);
     this.deps.chats.recordRecentModel({ provider, model, usedAt: new Date(this.deps.clock.now()).toISOString() });
-    return this.deps.chats.get(id);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({
+      kind: 'chat-model-changed',
+      chatId: id,
+      provider: chat.provider,
+      model: chat.model,
+    });
+    return chat;
   }
 
   recentModels(): { provider: string; model: string; usedAt: string }[] {
@@ -173,8 +192,10 @@ export class ChatService {
     const source = this.deps.chats.get(sourceId);
     if (source === undefined) return undefined;
     const fork = this.create();
-    this.deps.chats.setModel(fork.id, source.model, source.provider);
-    this.deps.chats.setExecutionMode(fork.id, source.executionMode ?? 'normal');
+    // The create event carries defaults; publish the inherited pair and mode
+    // through the same paths as any other durable cross-device change.
+    this.setModel(fork.id, source.model, source.provider);
+    this.setExecutionMode(fork.id, source.executionMode ?? 'normal');
     this.deps.chats.setPiSessionId(fork.id, piSessionId);
     this.rename(fork.id, `${source.title} fork`);
 

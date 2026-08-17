@@ -1,6 +1,8 @@
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
+  EVENT_STREAM_VERSION,
+  EVENT_STREAM_VERSION_HEADER,
   LOCAL_CONNECTION_HEADER,
   SESSION_TOKEN_HEADER,
 } from '@pop-agent/shared';
@@ -120,6 +122,7 @@ export class PopAgentApi {
       // ones nobody has written yet (docs/specs/Spec-Pop-General.md §13).
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
+      [EVENT_STREAM_VERSION_HEADER]: String(EVENT_STREAM_VERSION),
     };
     const localConnectionId = this.options.localConnectionId?.();
     if (localConnectionId !== undefined) headers[LOCAL_CONNECTION_HEADER] = localConnectionId;

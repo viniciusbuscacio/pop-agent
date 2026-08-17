@@ -11,8 +11,12 @@ export type RunEvent =
   | { kind: 'chat-created'; chatId: string; chat: Chat }
   /** A conversation was durably deleted and must disappear from every client. */
   | { kind: 'chat-deleted'; chatId: string }
+  /** A conversation moved between the open and archived lists. */
+  | { kind: 'chat-archived-changed'; chatId: string; archived: boolean }
   /** A conversation's durable pinned state changed. */
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
+  /** The selected provider/model pair changed. */
+  | { kind: 'chat-model-changed'; chatId: string; provider: string; model: string }
   /** The composer policy changed and every connected device must follow it. */
   | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
   /** A computer connected, disconnected, or changed its synchronized access permission. */

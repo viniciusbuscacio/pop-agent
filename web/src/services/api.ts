@@ -1,6 +1,8 @@
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
+  EVENT_STREAM_VERSION,
+  EVENT_STREAM_VERSION_HEADER,
   LOCAL_CONNECTION_HEADER,
   SESSION_TOKEN_HEADER,
 } from '@pop-agent/shared';
@@ -100,6 +102,7 @@ function clientHeaders(): Record<string, string> {
   return {
     [CLIENT_HEADER]: client.kind,
     [CLIENT_PLATFORM_HEADER]: client.platform,
+    [EVENT_STREAM_VERSION_HEADER]: String(EVENT_STREAM_VERSION),
   };
 }
 

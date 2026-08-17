@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chat } from '../../domain/chat/chat.js';
-import { toStreamEvent } from './sse-hub.js';
+import { SseHub, toStreamEvent } from './sse-hub.js';
 
 const chat: Chat = {
   id: 'chat-lifecycle',
@@ -16,6 +16,40 @@ const chat: Chat = {
   createdAt: '2026-08-10T12:00:00.000Z',
   updatedAt: '2026-08-10T12:00:00.000Z',
 };
+
+describe('SSE broadcast', () => {
+  it('delivers to every subscriber even when one connection throws', () => {
+    const hub = new SseHub();
+    const received: string[] = [];
+    hub.subscribe(() => { throw new Error('connection closed'); });
+    hub.subscribe((payload) => received.push(payload));
+
+    hub.emit({ kind: 'local-machines-changed' });
+
+    expect(received.map((payload) => JSON.parse(payload))).toEqual([
+      { kind: 'local-machines-changed' },
+    ]);
+  });
+
+  it('withholds additive events from a legacy cached client', () => {
+    const hub = new SseHub();
+    const legacy: string[] = [];
+    const current: string[] = [];
+    hub.subscribe((payload) => legacy.push(payload), 1);
+    hub.subscribe((payload) => current.push(payload), 2);
+
+    hub.emit({ kind: 'chat-archived-changed', chatId: chat.id, archived: true });
+    hub.emit({ kind: 'chat-pin-changed', chatId: chat.id, pinned: true });
+
+    expect(legacy.map((payload) => JSON.parse(payload))).toEqual([
+      { kind: 'chat-pin-changed', chatId: chat.id, pinned: true },
+    ]);
+    expect(current.map((payload) => JSON.parse(payload))).toEqual([
+      { kind: 'chat-archived-changed', chatId: chat.id, archived: true },
+      { kind: 'chat-pin-changed', chatId: chat.id, pinned: true },
+    ]);
+  });
+});
 
 describe('chat lifecycle events on the SSE wire', () => {
   it('sends a complete list-ready chat when one is created', () => {
@@ -65,6 +99,25 @@ describe('chat lifecycle events on the SSE wire', () => {
       kind: 'chat-pin-changed',
       chatId: chat.id,
       pinned: true,
+    });
+  });
+
+  it('sends archive and model changes without requiring a full chat payload', () => {
+    expect(toStreamEvent({
+      kind: 'chat-archived-changed',
+      chatId: chat.id,
+      archived: true,
+    })).toEqual({ kind: 'chat-archived-changed', chatId: chat.id, archived: true });
+    expect(toStreamEvent({
+      kind: 'chat-model-changed',
+      chatId: chat.id,
+      provider: 'openai-codex',
+      model: 'gpt-5.6',
+    })).toEqual({
+      kind: 'chat-model-changed',
+      chatId: chat.id,
+      provider: 'openai-codex',
+      model: 'gpt-5.6',
     });
   });
 });

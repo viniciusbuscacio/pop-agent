@@ -108,6 +108,31 @@ describe('Settings installation guide', () => {
     expect(localAccessMocks.machines).toHaveBeenCalledTimes(2);
   });
 
+  it('does not let an older machine snapshot overwrite a newer SSE refresh', async () => {
+    const machine = {
+      machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',
+      clientVersion: '0.2.35', enabled: false, connected: true,
+    };
+    let resolveFirst!: (value: { machines: (typeof machine)[] }) => void;
+    let resolveSecond!: (value: { machines: (typeof machine)[] }) => void;
+    localAccessMocks.machines
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+    await waitFor(() => expect(localAccessMocks.machines).toHaveBeenCalledOnce());
+
+    await act(async () => {
+      for (const listener of eventMocks.listeners) listener({ kind: 'local-machines-changed' });
+    });
+    await waitFor(() => expect(localAccessMocks.machines).toHaveBeenCalledTimes(2));
+    await act(async () => resolveSecond({ machines: [{ ...machine, enabled: true }] }));
+    const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
+    expect(toggle).toHaveProperty('checked', true);
+
+    await act(async () => resolveFirst({ machines: [machine] }));
+    expect(toggle).toHaveProperty('checked', true);
+  });
+
   it('opens the browser-owned PWA installation prompt', async () => {
     const user = userEvent.setup();
     const prompt = vi.fn().mockResolvedValue(undefined);

@@ -121,6 +121,35 @@ function setChatExecutionMode(
   return chats.map((chat) => (chat.id === chatId ? { ...chat, executionMode } : chat));
 }
 
+function setChatModel(
+  chats: ChatDTO[],
+  chatId: string,
+  provider: string,
+  model: string,
+): ChatDTO[] {
+  return chats.map((chat) => (chat.id === chatId ? { ...chat, provider, model } : chat));
+}
+
+function moveChatArchive(
+  chats: ChatDTO[],
+  archivedChats: ChatDTO[],
+  chatId: string,
+  archived: boolean,
+): { chats: ChatDTO[]; archived: ChatDTO[] } {
+  const known = [...chats, ...archivedChats].find((chat) => chat.id === chatId);
+  if (known === undefined) return { chats, archived: archivedChats };
+  const updated = { ...known, archived };
+  return archived
+    ? {
+        chats: chats.filter((chat) => chat.id !== chatId),
+        archived: upsertChat(archivedChats, updated),
+      }
+    : {
+        chats: upsertChat(chats, updated),
+        archived: archivedChats.filter((chat) => chat.id !== chatId),
+      };
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   chats: [],
   archived: [],
@@ -371,7 +400,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   async setModel(chatId, model, provider) {
     // The pair is the identity (docs/specs/Spec-Pop-General.md §15): they always travel together.
     const updated = await chatsService.patch(chatId, { model, provider });
-    set((state) => ({ chats: state.chats.map((chat) => (chat.id === chatId ? updated : chat)) }));
+    set((state) => ({
+      chats: setChatModel(state.chats, chatId, updated.provider, updated.model),
+      archived: setChatModel(state.archived, chatId, updated.provider, updated.model),
+    }));
   },
 
   async setExecutionMode(chatId, executionMode) {
@@ -465,10 +497,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
       return;
     }
+    if (event.kind === 'chat-archived-changed') {
+      set((state) => moveChatArchive(state.chats, state.archived, event.chatId, event.archived));
+      return;
+    }
     if (event.kind === 'chat-pin-changed') {
       set((state) => ({
         chats: setChatPinned(state.chats, event.chatId, event.pinned),
         archived: setChatPinned(state.archived, event.chatId, event.pinned),
+      }));
+      return;
+    }
+    if (event.kind === 'chat-model-changed') {
+      set((state) => ({
+        chats: setChatModel(state.chats, event.chatId, event.provider, event.model),
+        archived: setChatModel(state.archived, event.chatId, event.provider, event.model),
       }));
       return;
     }
@@ -482,6 +525,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.kind === 'title') {
       set((state) => ({
         chats: state.chats.map((chat) =>
+          chat.id === event.chatId ? { ...chat, title: event.title } : chat,
+        ),
+        archived: state.archived.map((chat) =>
           chat.id === event.chatId ? { ...chat, title: event.title } : chat,
         ),
       }));
@@ -589,7 +635,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
-    if (event.kind === 'update' || event.kind === 'local-machines-changed') return;
+    if (event.kind === 'local-machines-changed') return;
 
     const { chatId, runId } = event;
     const current = get().live[chatId];

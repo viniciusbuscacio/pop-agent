@@ -64,11 +64,12 @@ export class Transcript {
    */
   apply(event: StreamEvent): boolean {
     if (
-      event.kind === 'update' ||
       event.kind === 'queue' ||
       event.kind === 'chat-created' ||
       event.kind === 'chat-deleted' ||
+      event.kind === 'chat-archived-changed' ||
       event.kind === 'chat-pin-changed' ||
+      event.kind === 'chat-model-changed' ||
       event.kind === 'chat-execution-mode-changed' ||
       event.kind === 'local-machines-changed'
     ) return false;

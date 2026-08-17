@@ -38,6 +38,9 @@ export const SESSION_TOKEN_HEADER = 'x-pop-agent-token';
  */
 export const CLIENT_HEADER = 'x-pop-agent-client';
 export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
+/** Additive SSE schema understood by this client; absent means legacy v1. */
+export const EVENT_STREAM_VERSION_HEADER = 'x-pop-agent-event-version';
+export const EVENT_STREAM_VERSION = 2;
 
 /**
  * The terminal that typed this message, named by the id its local-tools channel
@@ -1041,7 +1044,9 @@ export interface EventTicketResponse {
 export type StreamEvent =
   | { kind: 'chat-created'; chatId: string; chat: ChatDTO }
   | { kind: 'chat-deleted'; chatId: string }
+  | { kind: 'chat-archived-changed'; chatId: string; archived: boolean }
   | { kind: 'chat-pin-changed'; chatId: string; pinned: boolean }
+  | { kind: 'chat-model-changed'; chatId: string; provider: string; model: string }
   | { kind: 'chat-execution-mode-changed'; chatId: string; executionMode: ExecutionMode }
   | { kind: 'local-machines-changed' }
   | { kind: 'delta'; chatId: string; runId: string; seq: number; text: string }
@@ -1083,5 +1088,4 @@ export type StreamEvent =
       /** Incremental FIFO change; `message` remains the current head for older clients. */
       change?: { kind: 'upsert'; message: QueuedMessageDTO } | { kind: 'remove'; id: string };
       started?: { runId: string; userMessageId: string; text: string; attachments: AttachmentDTO[]; createdAt: string };
-    }
-  | { kind: 'update'; status: 'available' | 'installing' | 'done' | 'error' };
+    };

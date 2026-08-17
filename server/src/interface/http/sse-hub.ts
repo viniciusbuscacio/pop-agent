@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@pop-agent/shared';
+import { EVENT_STREAM_VERSION, type StreamEvent } from '@pop-agent/shared';
 import type { EventSink, RunEvent } from '../../application/ports/event-sink.js';
 
 /**
@@ -13,11 +13,14 @@ import type { EventSink, RunEvent } from '../../application/ports/event-sink.js'
 export type Subscriber = (payload: string) => void;
 
 export class SseHub implements EventSink {
-  private readonly subscribers = new Set<Subscriber>();
+  private readonly subscribers = new Map<Subscriber, number>();
 
   emit(event: RunEvent): void {
-    const payload = JSON.stringify(toStreamEvent(event));
-    for (const send of this.subscribers) {
+    const wire = toStreamEvent(event);
+    const payload = JSON.stringify(wire);
+    const requiredVersion = minimumEventVersion(wire);
+    for (const [send, eventVersion] of this.subscribers) {
+      if (eventVersion < requiredVersion) continue;
       try {
         send(payload);
       } catch {
@@ -28,8 +31,8 @@ export class SseHub implements EventSink {
   }
 
   /** Registers a connection and returns the function that removes it. */
-  subscribe(send: Subscriber): () => void {
-    this.subscribers.add(send);
+  subscribe(send: Subscriber, eventVersion = EVENT_STREAM_VERSION): () => void {
+    this.subscribers.set(send, eventVersion);
     return () => {
       this.subscribers.delete(send);
     };
@@ -38,6 +41,11 @@ export class SseHub implements EventSink {
   get connectionCount(): number {
     return this.subscribers.size;
   }
+}
+
+/** New additive event kinds are withheld from legacy cached web bundles. */
+function minimumEventVersion(event: StreamEvent): number {
+  return event.kind === 'chat-archived-changed' || event.kind === 'chat-model-changed' ? 2 : 1;
 }
 
 /**
@@ -66,8 +74,17 @@ export function toStreamEvent(event: RunEvent): StreamEvent {
       };
     case 'chat-deleted':
       return { kind: 'chat-deleted', chatId: event.chatId };
+    case 'chat-archived-changed':
+      return { kind: 'chat-archived-changed', chatId: event.chatId, archived: event.archived };
     case 'chat-pin-changed':
       return { kind: 'chat-pin-changed', chatId: event.chatId, pinned: event.pinned };
+    case 'chat-model-changed':
+      return {
+        kind: 'chat-model-changed',
+        chatId: event.chatId,
+        provider: event.provider,
+        model: event.model,
+      };
     case 'chat-execution-mode-changed':
       return {
         kind: 'chat-execution-mode-changed',

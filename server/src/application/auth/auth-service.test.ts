@@ -120,6 +120,24 @@ describe('sessions', () => {
     expect(auth.verifySession(result.token)).toEqual({ ok: false, reason: 'expired' });
   });
 
+  it('revalidates a ticket-bound payload against expiry and epoch', async () => {
+    const result = await auth.setup(PASSWORD);
+    if (!result.ok) throw new Error('setup failed');
+    const verified = auth.verifySession(result.token);
+    if (!verified.ok) throw new Error('token should verify');
+
+    expect(auth.isSessionCurrent(verified.payload)).toBe(true);
+    auth.signOutOthers();
+    expect(auth.isSessionCurrent(verified.payload)).toBe(false);
+
+    const current = await auth.login(PASSWORD);
+    if (!current.ok) throw new Error('login failed');
+    const currentPayload = auth.verifySession(current.token);
+    if (!currentPayload.ok) throw new Error('token should verify');
+    clock.advance(7 * DAY);
+    expect(auth.isSessionCurrent(currentPayload.payload)).toBe(false);
+  });
+
   it('renews only once the token is over a day old', async () => {
     const result = await auth.setup(PASSWORD);
     if (!result.ok) throw new Error('setup failed');

@@ -131,6 +131,9 @@ describe('Transcript', () => {
     expect(transcript.apply(delta('a', 0))).toBe(true);
     expect(transcript.apply(delta('a', 0))).toBe(false);
     expect(transcript.apply({ kind: 'chat-pin-changed', chatId: CHAT, pinned: true })).toBe(false);
-    expect(transcript.apply({ kind: 'update', status: 'available' })).toBe(false);
+    expect(transcript.apply({ kind: 'chat-archived-changed', chatId: CHAT, archived: true })).toBe(false);
+    expect(transcript.apply({
+      kind: 'chat-model-changed', chatId: CHAT, provider: 'fake', model: 'fake/model-2',
+    })).toBe(false);
   });
 });
