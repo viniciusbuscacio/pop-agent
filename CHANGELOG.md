@@ -8,6 +8,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Changed
 
+- **Worker delegation can now fan out up to five implementation tasks.** Each
+  packaged worker runs concurrently in its own Pop-managed worktree from the
+  same source HEAD, returns an independent patch handoff and records its own
+  usage row; the single-task facade remains compatible.
 - **Worker delegations now have their own Subagents card in the chat timeline.**
   Progress, completion, failure and handoff details no longer mix with the
   agent's ordinary tool-run card.

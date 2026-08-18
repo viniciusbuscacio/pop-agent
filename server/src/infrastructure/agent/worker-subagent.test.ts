@@ -37,6 +37,14 @@ function makeRepository(): string {
   return repository;
 }
 
+function workflowChildren(params: Record<string, unknown>): Array<Record<string, unknown>> {
+  const script = String(params.workflowScript);
+  const prefix = 'return runs.all(';
+  expect(script.startsWith(prefix)).toBe(true);
+  expect(script.endsWith(');')).toBe(true);
+  return JSON.parse(script.slice(prefix.length, -2)) as Array<Record<string, unknown>>;
+}
+
 describe('worker subagent runtime paths', () => {
   it('finds the CLI beside bundled paths and isolated runtime file URLs', () => {
     const entry = '/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/index.js';
@@ -75,7 +83,7 @@ describe('worker subagent facade', () => {
 
     expect(result.content[0]).toEqual({ type: 'text', text: 'handoff ready' });
     expect(result.content[1]?.type === 'text' ? result.content[1].text : '').toContain(
-      'Worker patch captured',
+      'patch captured',
     );
     const handoff = (result.details as { workerHandoff?: { patchPath: string } }).workerHandoff;
     expect(readFileSync(handoff?.patchPath ?? '', 'utf8')).toContain('worker-proof.txt');
@@ -91,6 +99,150 @@ describe('worker subagent facade', () => {
     });
     expect(received?.cwd).not.toBe(repository);
     expect(existsSync(String(received?.cwd))).toBe(false);
+    expect(execFileSync('git', ['-C', repository, 'status', '--short'], { encoding: 'utf8' }))
+      .toBe('');
+  });
+
+  it('launches five workers concurrently with distinct worktrees and child usage', async () => {
+    let peak = 0;
+    let active = 0;
+    let children: Array<Record<string, unknown>> = [];
+    const execute: ToolDefinition['execute'] = vi.fn(async (_id, params) => {
+      children = workflowChildren(params as Record<string, unknown>);
+      await Promise.all(children.map(async (child, index) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await Promise.resolve();
+        writeFileSync(join(String(child.cwd), `worker-${String(index + 1)}.txt`), 'ok\n');
+        active -= 1;
+      }));
+      return {
+        content: [{ type: 'text' as const, text: 'parallel handoffs ready' }],
+        details: {
+          totalChildUsage: { input: 1_500, output: 150, cost: 0.05 },
+          results: children.map((_child, index) => ({
+            usage: { input: 100 + index, output: 10 + index, cost: 0.001 + index / 1_000 },
+          })),
+        },
+      };
+    });
+    const onUsage = vi.fn();
+    const tool = buildDelegateWorkerTool(define, { execute }, { oauthReady: () => true, onUsage });
+    const repository = makeRepository();
+    writeFileSync(join(repository, 'README.md'), 'source checkout change\n');
+    const sourceStatus = execFileSync('git', ['-C', repository, 'status', '--short'], { encoding: 'utf8' });
+    const sourceDiff = execFileSync('git', ['-C', repository, 'diff', '--binary'], { encoding: 'utf8' });
+    const tasks = Array.from({ length: 5 }, (_unused, index) => `Implement slice ${String(index + 1)}.`);
+
+    const result = await tool.execute(
+      'tool-five',
+      { repository, tasks },
+      new AbortController().signal,
+      undefined,
+      context,
+    );
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(peak).toBe(5);
+    expect(children).toHaveLength(5);
+    expect(new Set(children.map((child) => child.cwd)).size).toBe(5);
+    for (const [index, child] of children.entries()) {
+      expect(child).toMatchObject({
+        key: `worker-${String(index + 1)}`,
+        agent: 'worker',
+        task: tasks[index],
+        context: 'fresh',
+        async: false,
+        agentScope: 'user',
+        timeoutMs: 1_800_000,
+        maxRuntimeMs: 1_800_000,
+        toolBudget: { hard: 80, block: '*' },
+        artifacts: true,
+        includeProgress: true,
+      });
+      expect(child.cwd).not.toBe(repository);
+      expect(existsSync(String(child.cwd))).toBe(false);
+    }
+    expect(onUsage).toHaveBeenCalledTimes(5);
+    expect(onUsage).not.toHaveBeenCalledWith({ inputTokens: 1_500, outputTokens: 150, cost: 0.05 });
+    const handoffs = (result.details as {
+      workerHandoffs: Array<{ baseCommit: string; patchPath: string; manifestPath: string }>;
+    }).workerHandoffs;
+    expect(handoffs).toHaveLength(5);
+    expect(new Set(handoffs.map((handoff) => handoff.patchPath)).size).toBe(5);
+    expect(new Set(handoffs.map((handoff) => handoff.baseCommit)).size).toBe(1);
+    for (const [index, handoff] of handoffs.entries()) {
+      expect(readFileSync(handoff.patchPath, 'utf8')).toContain(`worker-${String(index + 1)}.txt`);
+      expect(JSON.parse(readFileSync(handoff.manifestPath, 'utf8'))).toMatchObject({
+        repository,
+        baseCommit: handoff.baseCommit,
+        childIndex: index + 1,
+      });
+    }
+    expect(execFileSync('git', ['-C', repository, 'status', '--short'], { encoding: 'utf8' }))
+      .toBe(sourceStatus);
+    expect(execFileSync('git', ['-C', repository, 'diff', '--binary'], { encoding: 'utf8' }))
+      .toBe(sourceDiff);
+  });
+
+  it.each([
+    ['neither task input', {}],
+    ['both task inputs', { task: 'one', tasks: ['two'] }],
+    ['more than five tasks', { tasks: ['1', '2', '3', '4', '5', '6'] }],
+    ['an empty tasks array', { tasks: [] }],
+  ])('rejects %s before creating worktrees or invoking pi-subagents', async (_label, input) => {
+    const execute = vi.fn();
+    const tool = buildDelegateWorkerTool(define, { execute }, { oauthReady: () => true });
+    const repository = makeRepository();
+    const worktreesBefore = execFileSync('git', ['-C', repository, 'worktree', 'list'], { encoding: 'utf8' });
+
+    const result = await tool.execute(
+      'tool-invalid',
+      { repository, ...input },
+      undefined,
+      undefined,
+      context,
+    );
+
+    expect(result.details).toEqual({ code: 'worker_tasks_invalid' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(execFileSync('git', ['-C', repository, 'worktree', 'list'], { encoding: 'utf8' }))
+      .toBe(worktreesBefore);
+  });
+
+  it('propagates cancellation and cleans every prepared worktree', async () => {
+    let releaseStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { releaseStarted = resolve; });
+    let receivedSignal: AbortSignal | undefined;
+    let worktrees: string[] = [];
+    const execute: ToolDefinition['execute'] = vi.fn((_id, params, signal) => {
+      worktrees = workflowChildren(params as Record<string, unknown>).map((child) => String(child.cwd));
+      receivedSignal = signal;
+      releaseStarted?.();
+      return new Promise<never>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('child workflow aborted')), { once: true });
+      });
+    });
+    const tool = buildDelegateWorkerTool(define, { execute }, { oauthReady: () => true });
+    const repository = makeRepository();
+    const controller = new AbortController();
+
+    const running = tool.execute(
+      'tool-cancel',
+      { repository, tasks: ['one', 'two', 'three', 'four', 'five'] },
+      controller.signal,
+      undefined,
+      context,
+    );
+    await started;
+    controller.abort();
+
+    await expect(running).rejects.toThrow('child workflow aborted');
+    expect(receivedSignal).toBe(controller.signal);
+    expect(worktrees).toHaveLength(5);
+    expect(worktrees.every((worktree) => !existsSync(worktree))).toBe(true);
+    expect(execFileSync('git', ['-C', repository, 'worktree', 'list'], { encoding: 'utf8' }))
+      .not.toContain('pop-worker-tool-cancel');
     expect(execFileSync('git', ['-C', repository, 'status', '--short'], { encoding: 'utf8' }))
       .toBe('');
   });
@@ -154,8 +306,10 @@ describe('worker subagent runtime', () => {
       expect(config).toMatchObject({
         asyncByDefault: false,
         maxSubagentDepth: 1,
-        maxSubagentSpawnsPerRun: 1,
-        globalConcurrencyLimit: 1,
+        maxSubagentSpawnsPerRun: 5,
+        maxActiveAsyncRunsPerSession: 1,
+        globalConcurrencyLimit: 5,
+        parallel: { maxTasks: 5, concurrency: 5 },
         scheduledRuns: { enabled: false, maxPending: 0 },
       });
     } finally {

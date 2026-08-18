@@ -6,31 +6,46 @@
 
 ## Purpose and first scope
 
-Pop Agent may delegate one bounded implementation task to the `worker` profile
-provided by the exactly pinned `pi-subagents` package. This first slice is
-foreground-only and exists to isolate implementation work from the parent
-conversation and checkout. It does not deliver arbitrary user-defined agents,
-parallel workers, background missions, schedules or A2A.
+Pop Agent may delegate one bounded implementation task, or fan out one request
+into at most five independent tasks, to the `worker` profile provided by the
+exactly pinned `pi-subagents` package. Delegation is foreground-only and exists
+to isolate implementation work from the parent conversation and checkout. It
+does not deliver arbitrary user-defined agents, background missions, schedules
+or A2A.
 
-The model sees only the Pop-owned `delegate_worker` facade. The package's broad
-`subagent`, management, scheduling and fleet tools remain inactive. The facade
-fixes the agent to `worker`, context to `fresh`, execution to foreground and
-managed Git worktree isolation to true. Callers cannot relax those decisions.
+The model sees only the Pop-owned `delegate_worker` facade. Its parameters
+require an absolute `repository` and exactly one of `task: string` or
+`tasks: string[]`; the array contains 1–5 tasks. Single-task calls remain
+compatible. Invalid neither/both/empty/over-five input fails before worktree
+creation or package invocation. The package's broad `subagent`, management,
+scheduling and fleet tools remain inactive.
+
+The facade fixes every child to packaged `worker`, context `fresh`, user agent
+scope, foreground execution, a 30-minute runtime, a hard 80-call tool budget
+and Pop-managed Git worktree isolation. Callers cannot relax those decisions.
+For fan-out Pop generates a trusted `workflowScript` itself and uses the
+package's audited `runs.all` workflow API; model-authored workflow scripts and
+package-native tools are never exposed.
 
 ## Isolation and authority
 
-The worker operates in a temporary managed worktree created by Pop around the
-foreground `pi-subagents` worker call. After the child settles, Pop captures a
-bounded binary patch and private handoff manifest, removes the worktree and
-returns the handoff paths to the parent. The handoff is not final product state.
-The parent agent must inspect and integrate the patch, run the repository's
-final validation and satisfy ordinary commit/delivery rules.
+Each worker operates in a distinct temporary managed worktree created by Pop
+around the foreground `pi-subagents` call. All worktrees in one fan-out detach
+from the same source `HEAD`; workers never share a mutable checkout. After the
+children settle, Pop captures one bounded binary patch and private handoff
+manifest per child, removes every worktree, and returns all handoff paths to the
+parent. Preparation failure, package failure and parent cancellation use the
+same capture-and-cleanup path. The source checkout remains unchanged.
+
+Handoffs are not final product state. The parent agent must inspect and
+integrate each patch, resolve any overlap, run the repository's final validation
+and satisfy ordinary commit/delivery rules.
 
 The child receives neither the parent's transcript nor Pop's Files, Notes,
 memory, MCP capabilities, PLA tools or ambient host extensions. Nested
-subagents, schedules and parallel fanout are disabled. Initial policy admits at
-most one child for a run, one active child globally through the extension, a
-30-minute runtime and a bounded tool-call budget.
+subagents, schedules and background runs are disabled. Runtime policy admits at
+most five children per delegated run and at most five tasks with concurrency
+five in the package parallel runtime. Depth remains one.
 
 `delegate_worker` is absent in Plan Mode. Worker output is still tool output and
 therefore passes through the ordinary external-content sanitizer and per-turn
@@ -60,9 +75,11 @@ the packaged worker under user scope and keeps the package pinned and reviewed.
 Stopping the parent run propagates its abort signal through the facade into the
 foreground extension call and child process group. A failure, timeout, invalid
 repository or missing OAuth credential returns a tool failure/result to the
-parent without silently falling back to direct writes. Child-reported usage is
-booked as a separate `subagent:worker` chat ledger row; subscription token counts
-remain visible while their billed cost remains zero.
+parent without silently falling back to direct writes. Each child's reported
+usage is booked exactly once as its own `subagent:worker` chat ledger row; the
+aggregate is used only as a single-worker compatibility fallback when child
+detail is unavailable. Subscription token counts remain visible while their
+billed cost remains zero.
 
 The existing tool event stream is the first UI surface and its wire and durable
 `ToolCallDTO` shape remains unchanged. In the assistant timeline, calls named
@@ -82,12 +99,18 @@ change, never an automatic package self-update.
 
 Tests must prove that:
 
-- the facade hard-codes worker, fresh context and foreground mode;
-- the worker runs outside the source checkout and cleanup leaves it unchanged;
+- the facade accepts exactly one of one task or 1–5 tasks and rejects invalid
+  bounds before worktree creation or package invocation;
+- five tasks use trusted `runs.all`, launch concurrently and receive hard-coded
+  worker, fresh-context, user-scope, foreground, runtime and tool-budget policy;
+- every child receives a distinct worktree at the same source `HEAD`, every
+  patch and manifest is captured, cleanup leaves the source checkout unchanged,
+  and cancellation reaches the upstream call;
 - relative repository paths and missing OAuth fail before child launch;
 - package-native model-facing tools are removed from the active catalogue;
 - Plan Mode excludes delegation;
-- policy caps depth, spawn count, concurrency, schedules and task delivery;
-- the auth link targets only Pop's isolated OAuth store;
-- cancellation reaches the upstream call and no API key is persisted;
-- child usage is recorded separately from the parent model call.
+- policy caps depth, spawn count, global and parallel concurrency, disables
+  background/schedules and keeps private-file task delivery;
+- the auth link targets only Pop's isolated OAuth store and no API key is
+  persisted;
+- five child usages create five separate rows without booking their aggregate.

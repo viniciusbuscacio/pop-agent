@@ -607,6 +607,34 @@ describe('accounting', () => {
     });
   });
 
+  it('books one attributed ledger row for each parallel worker without an aggregate row', async () => {
+    const chatId = newChat();
+    bridge.usage = USAGE;
+    bridge.additionalUsage = Array.from({ length: 5 }, (_unused, index) => ({
+      provider: 'openai-codex',
+      model: 'gpt-worker',
+      inputTokens: 100 + index,
+      outputTokens: 20 + index,
+      cost: 0,
+      purpose: 'subagent:worker',
+    }));
+
+    const started = runs.startRun(chatId, 'delegate five implementation slices');
+    await runs.whenIdle();
+
+    const rows = db.prepare(
+      'SELECT id, purpose, tokens_in, tokens_out FROM llm_runs WHERE purpose = ? ORDER BY id',
+    ).all('subagent:worker') as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(5);
+    expect(rows.map((row) => row.id)).toEqual(
+      Array.from(
+        { length: 5 },
+        (_unused, index) => `${started.ok ? started.runId : ''}-subagent-${String(index + 1)}`,
+      ),
+    );
+    expect(rows.map((row) => row.tokens_in)).toEqual([100, 101, 102, 103, 104]);
+  });
+
   it('books a failed run that still reached the model', async () => {
     // pi bills every model call, including the ones inside a run that ended
     // badly -- the record has to say so.
