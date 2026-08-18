@@ -2,65 +2,169 @@
 
 **Status:** normative
 **Legacy coverage:** §13
-**Primary implementation:** shared/src, server/src/interface/http
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Primary implementation:** `shared/src/`, `server/src/interface/http/`, `web/src/services/`, `cli/src/infrastructure/api.ts`
+**Related:** [`Spec-Pop-Events-Synchronization.md`](Spec-Pop-Events-Synchronization.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-## 13. API contract
+## Boundary and conventions
 
-Everything under `/v1`. Errors always structured:
-`{"error":{"code":"…","message":"…","status":401}}` with stable codes
-(`invalid_credentials`, `invalid_session`, `locked`, `rate_limited`,
-`chat_not_found`, `run_in_progress`, `missing_field`, `operation_error`…).
+The PWA and CLI communicate with the personal server through HTTP JSON plus one
+SSE channel. They never import domain objects or pi SDK types. Stable wire DTOs
+live in `@pop-agent/shared`; route adapters validate transport input and map
+application outcomes.
 
-Routes: `GET /v1/auth/state`, `POST /v1/setup`, `POST /v1/login`,
-`POST /v1/auth/recover`, `POST /v1/auth/change-password`,
-`POST /v1/auth/sign-out-others`, `GET /v1/about`, `GET /v1/events` (single
-SSE channel), `GET|POST /v1/chats`, `PATCH|DELETE /v1/chats/:id`,
-`GET|POST /v1/chats/:id/messages`, `POST /v1/chats/:id/stop`,
-`GET|PUT /v1/settings`, `GET /v1/models`, `GET /v1/providers`,
-`PUT|DELETE /v1/providers/:id/key`, `POST /v1/providers/:id/test` (the
-key is write-only: no response anywhere carries it), `GET|PUT /v1/memory`,
-`GET /v1/usage` (§14), `GET /v1/backups` (§16), `GET /v1/update/status`,
-`POST /v1/update/apply`, `GET /v1/ax` (§18), `GET /healthz` (no auth),
-`GET /v1/health` (no auth) — the sidebar's probe: `{server, provider, db}`
-with `ok|error` flags, cheap and cached only (provider = key configured +
-last run's outcome, never a paid call per poll; db = a `SELECT 1`; a
-user-aborted run is not a failure). No answer at all means "Server offline".
-WebAuthn: `POST /v1/auth/webauthn/register`, `POST /v1/auth/webauthn/login`
-(§9, v0.2).
+Product APIs use `/v1`. `/healthz`, signed downloads and immutable bootstrap
+artifacts are explicit exceptions. JSON uses UTF-8, camelCase fields and ISO
+8601 timestamps unless a DTO says otherwise. IDs are opaque strings and must
+not be parsed for meaning.
 
-**The SSE stream is authenticated with a one-time ticket.** `EventSource`
-cannot send an Authorization header, and a session token in a query string
-ends up in access logs, proxy traces and browser history. So
-`POST /v1/events/ticket` (authenticated) returns a CSPRNG ticket good for
-**one connection and 30 seconds**, and `GET /v1/events?ticket=…` spends it.
-`POST /v1/chats/:id/messages` accepts optional
-`executionMode: "normal" | "plan"` (default `normal`). The mode persists on a
-queued item and is returned in its DTO; clients and rows predating 1.96 default
-to normal.
+Unknown routes return JSON 404. Unsupported methods do not mutate state.
+Clients must tolerate additive response fields and event kinds only when their
+negotiated protocol/version allows them.
 
-A reconnect asks for a new one. The hub broadcasts every event to every valid
-connection — one user, several tabs — and sends a `:ka` comment every 25s so
-a proxy does not mistake an idle stream for a dead one. Tickets are bound to
-the issuing session; epoch revocation or expiry closes an existing stream by
-the next event or heartbeat. Backlog is bounded and overflow reconnects through
-snapshot recovery. `x-pop-agent-event-version` gates additive kinds away from
-cached legacy clients. Exact lifecycle, event catalog, ordering and recovery
-rules live in `Spec-Pop-Events-Synchronization.md`.
+## Authentication
 
-`GET|PUT /v1/settings` is a **full replace**: PUT carries the whole
-document and the schema is strict, so a field Pop Agent does not know is a 400
-rather than something silently dropped. Public/session-establishing paths are
-declared in `interface/http/route-registry.ts`. `/v1/events` is bearer-exempt
-only because its one-use ticket is the complete authorization; ticket issuance
-remains session-guarded. Any ordinary authenticated response may carry a
-refreshed `x-pop-agent-token` (§9).
+Ordinary guarded requests send `Authorization: Bearer <session>`. A successful
+response may include `x-pop-agent-token`; clients replace the stored token
+before returning the response to feature code. A 401 clears invalid local
+session state and returns to login.
 
-SSE events are typed in `shared/` and divided into chat lifecycle, live run,
-durable queue/timeline and snapshot-invalidation events. Run events carry a
-`runId`; fragments also carry monotonic `seq`, allowing the frontend to discard
-stale runs and data already covered by a live snapshot. Software update state
-is not part of this channel.
+Public/session-establishing `/v1` paths are declared once in
+`route-registry.ts`. Every other registered route is probed to require a valid
+session. SSE uses a short-lived single-use session-bound ticket because native
+EventSource cannot send Authorization headers. Signed file downloads use their
+own path-and-expiry HMAC authorization.
+
+## Error envelope
+
+All expected API failures use:
+
+```json
+{
+  "error": {
+    "code": "invalid_field",
+    "message": "The request has a field Pop Agent cannot accept.",
+    "status": 400
+  }
+}
+```
+
+`code` is stable machine-readable behavior; `message` is safe owner-facing
+language; `status` matches HTTP. Stack traces, SQL, credentials, provider pages
+and internal paths never enter the envelope. Representative stable codes
+include `invalid_session`, `invalid_credentials`, `locked`, `rate_limited`,
+`missing_field`, `invalid_field`, `not_found`, entity-specific not-found codes,
+`conflict`, `operation_error` and stable run/provider failure codes.
+
+Malformed JSON maps to a body error. Strict Zod schemas reject unknown keys so
+a typo or stale client cannot be silently ignored. Domain/application errors
+are explicitly translated; unexpected exceptions reach centralized logging and
+a generic 5xx response.
+
+## Resource patterns
+
+- `GET` returns an authoritative snapshot and never causes paid model work.
+- `POST` creates or invokes; successful creation returns 201 and asynchronous
+  admission generally returns 202.
+- `PUT` is full replacement unless the route explicitly documents another
+  contract. Settings replacement is strict and complete.
+- `PATCH` changes named mutable fields.
+- `DELETE` is idempotent only where explicitly implemented; 204 has no body.
+
+Collections with owner-visible unbounded growth must use bounded server limits,
+cursors or capped history. Query numbers are normalized to documented ranges.
+The server applies route-appropriate body/file/frame limits before retaining
+input. Missing content length is not permission for unbounded buffering.
+
+State-changing responses return enough identity/revision data for immediate UI
+projection, but the next GET remains authority. Browser services, not React
+components, own fetch and DTO handling.
+
+## Main resource groups
+
+The registered API is organized by capability rather than one hand-maintained
+flat route list:
+
+- auth/setup/recovery/passkeys/session revocation;
+- settings, server/about/health and update control;
+- providers, models, OAuth, usage and credits;
+- chats, messages, durable queue, Stop and session commands;
+- event tickets/SSE synchronization;
+- Files, trash, attachments and signed downloads;
+- living memory, skills, MCP, tasks, voice, storage and backups;
+- PLA machines, policy, WSS and HTTPS fallback;
+- public CLI/launcher/runtime/install artifacts outside guarded product state.
+
+The concrete registry and shared DTOs are implementation authority for exact
+paths. Focused specs define behavior. A proposal route such as `/v1/ax` or an IP
+access-list API is not delivered merely because it appears in historical text.
+
+## Chat admission and queue
+
+Posting a chat message validates attachments, execution mode and optional
+stable local-machine selector before accepting product state. An idle chat
+persists the user message and creates a run. A busy chat appends a durable FIFO
+item rather than returning transient `run_in_progress`. The response includes
+stable message/run or queue identity without waiting for model completion.
+
+Queue edit/delete/reorder semantics, one-run-per-chat and the 1,024 defensive
+pending cap are server-owned. Stop is idempotent over an active/admitted run and
+settles through normal terminal synchronization. Snapshot transcript and queue
+endpoints are the reconnect authority.
+
+## SSE contract
+
+The client first POSTs for a CSPRNG ticket valid for one connection and 30
+seconds, then opens `GET /v1/events?ticket=…`. Tickets are spent atomically and
+bound to session epoch/expiry. Streams send keepalive comments every 25 seconds
+and close after revocation.
+
+Events use schema version 2 and are typed in `shared/`. Live run fragments carry
+`chatId`, `runId` and monotonic `seq`; durable invalidations cause snapshot
+refetch. The hub has no replay log. Backpressure overflow closes the stream and
+clients recover through snapshot reconciliation. Exact event catalog, ordering
+and lifecycle are normative in the Events Synchronization specification.
+
+Software-update state is HTTP/local PWA state, not an SSE product event.
+
+## Files and binary responses
+
+Uploads validate names, paths, type and size before final placement. Downloads
+stream rather than buffering whole files. Active HTML/SVG content is forced to
+download. `Content-Disposition` filenames are server-generated/escaped.
+
+Signed public download URLs bind canonical path and expiry and remain subject to
+the final filesystem jail. Backup downloads are guarded and streamed as gzip.
+Live backup restore always conflicts; offline `popman restore` is the only
+restore path.
+
+## Local Access transport
+
+PLA WebSocket upgrade authenticates the ordinary bearer session, then requires
+a bounded protocol-1 attach frame. HTTPS fallback uses authenticated create,
+poll and event endpoints with the same frames, leases, backpressure and replay
+rules. Frames are not ordinary product DTOs and are fully defined in the Local
+Access specification.
+
+## Caching and compatibility
+
+Authenticated mutable JSON is not treated as a public cache artifact. Public
+manifest/bootstrap endpoints are `no-store`; immutable versioned artifacts may
+be cached permanently only after exact release identity. The PWA service worker
+must not invent API responses.
+
+Root `VERSION`, minimum client/local-access versions and event protocol version
+serve different compatibility purposes. A release bump alone does not imply a
+wire break. Breaking changes require explicit minimum/version movement, shared
+DTO changes, compatibility tests and migration guidance.
+
+## Test obligations
+
+- route inventory rejects unguarded accidental `/v1` surfaces;
+- strict schemas cover missing, invalid and unknown fields;
+- expected errors preserve status/code/message shape without secrets;
+- snapshots and state-changing responses serialize shared DTOs;
+- SSE tickets are one-use/session-bound and streams converge after reconnect;
+- signed downloads reject invalid path/expiry/signature;
+- body/frame/file limits and malformed encodings fail before retention;
+- old supported clients are exercised whenever wire compatibility changes;
+- smoke covers setup, auth, settings, frontend, chat, SSE, tools and Stop.
