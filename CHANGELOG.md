@@ -45,6 +45,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   It defines stable machines versus transient transports, disabled-first policy,
   WSS/HTTPS fallback, selection and routing, tray/CLI lifecycles, local tool
   projection, limits, cancellation, safety, failure behavior and platform tests.
+- **Skills, memory/storage, security and UI style specifications are complete guides.**
+  They now define routing and reviewed learning, durable memory and offline
+  restore, authentication/external-content boundaries, and the enforced
+  responsive/accessibility design system without relying on the legacy monolith.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -109,6 +113,13 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   long-poll queues enforce aggregate bytes, replay IDs and completed call
   results use bounded windows, overflow unregisters the transport, and attach
   protocol/metadata are validated before persistent machine state is written.
+- **Web retrieval is pinned to its screened public DNS answers.** This closes
+  the DNS-rebinding gap between SSRF validation and connection, refuses
+  credential-bearing URLs/redirects, and stops reading at the response cap.
+- **Backup and durable-memory boundaries now fail closed.** SQLite snapshots
+  include committed WAL state through `VACUUM INTO`; live HTTP restore is
+  refused in favor of stop/extract/start through `popman`; and both Settings
+  and agent memory writes redact deterministic credential shapes.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.
