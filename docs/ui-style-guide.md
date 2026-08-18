@@ -69,3 +69,51 @@ These classes describe layout. The following is forbidden because it creates a s
 The root TypeScript lifecycle runs this validator before `tsc`, and the repository gate runs it through `npm run typecheck`. Tests may use native controls in small mocks; production code may not.
 
 When a new visual control is needed, add a typed primitive or variant first, document it here, and then consume it from the feature.
+
+## Product language and hierarchy
+
+Pop Agent is a quiet work surface. Accent color means selected location/state;
+it is not the default action color. Hierarchy comes from spacing, type and
+raised neutral surfaces. Emoji are content, not interface icons. Visible text
+lives in i18n resources and errors describe an actionable next step without
+exposing stacks, internal paths or secrets.
+
+Primary actions use the neutral raised `Button`; ghost actions remain flat and
+danger actions use the danger semantic. Primitive `size` props own density.
+Callers must not compete with them using local padding or text-size utilities.
+
+## Responsive and long-content rules
+
+Every route must work at a narrow phone width, an installed PWA window and a
+wide browser. Navigation may move, but controls do not acquire a second skin.
+Long paths, tool/model names, code and URLs must wrap, truncate or scroll inside
+their own bounded surface rather than widening the page. Touch controls and the
+composer stay reachable around safe areas and mobile browser chrome.
+
+Font-size preferences must scale related controls consistently. Do not mix
+fixed pixels and rem dimensions for controls expected to remain aligned.
+
+## Accessibility and state
+
+Every interactive element is keyboard reachable and programmatically named.
+Icon-only buttons require accessible names. Fields connect hint/error text with
+`aria-describedby`; errors replace hints and set invalid state. Menus expose
+appropriate expanded/selected state, return focus sensibly and close with
+standard pointer/keyboard behavior.
+
+Every feature covers its applicable loading, empty, error, disabled,
+selected/pressed, offline/reconnecting and stale-cache states. Color is never
+the only carrier of meaning. Streamed updates must not steal focus or flood an
+assertive live region. Nonessential motion respects reduced-motion preferences.
+
+Destructive owner actions confirm when permanent or broad and name the true
+blast radius. Recoverable deletion prefers trash/undo. Save/edit flows retain a
+Cancel path and stay in the page rather than moving to a side drawer.
+
+## Review matrix
+
+Automation catches structural drift, not layout truth. Before shipping a new
+pattern, check keyboard and accessible naming, dark and light themes, narrow and
+wide layouts, long real content, larger font preference and the complete set of
+interaction states. Use component tests for behavior and a real browser/device
+for overflow, safe areas and touch reachability.
