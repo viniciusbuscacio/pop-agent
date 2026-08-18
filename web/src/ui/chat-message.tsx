@@ -307,7 +307,7 @@ function ToolCards({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: 
         <span aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span
           data-testid="tool-name"
-          className="min-w-0 flex-1 truncate font-mono text-[var(--key-fg-dim)]"
+          className="min-w-0 flex-1 truncate font-mono text-[var(--muted)]"
         >
           {grouped ? t('chat.ranTools', { count: tools.length }) : (tools[0]?.name ?? '')}
         </span>

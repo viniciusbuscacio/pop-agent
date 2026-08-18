@@ -73,6 +73,22 @@ describe('horizontal overflow containment', () => {
 });
 
 describe('tool status', () => {
+  it('uses the same quiet text color as the thinking card', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          thinking: 'Checking the repository.',
+          tools: [{ name: 'bash', status: 'done', detail: 'done' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('thinking-toggle').className).toContain('text-[var(--muted)]');
+    expect(screen.getByTestId('tool-name').className).toContain('text-[var(--muted)]');
+  });
+
   it('stops an unfinished tool indicator when persisted content says the run was interrupted', () => {
     render(
       <ChatMessage
