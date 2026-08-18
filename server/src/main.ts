@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
@@ -43,6 +43,7 @@ import { mimeOf } from './domain/files/mime.js';
 import { PiAgentBridge } from './infrastructure/agent/pi-bridge.js';
 import { SdkPiEngine } from './infrastructure/agent/pi-engine.js';
 import { buildLocalTools } from './infrastructure/agent/local-tools.js';
+import { piCliPathForSdkEntry } from './infrastructure/agent/worker-subagent.js';
 import { NotesVault } from './infrastructure/notes/notes-vault.js';
 import { SkillsVault } from './infrastructure/skills/skills-vault.js';
 import { TransformersEmbedder } from './infrastructure/embeddings/transformers-embedder.js';
@@ -295,7 +296,7 @@ function piBridge(): PiAgentBridge {
       workspace,
       workerSubagents: {
         extensionPath: fileURLToPath(import.meta.resolve('pi-subagents')),
-        piBinary: join(dirname(piSdkEntry), 'cli.js'),
+        piBinary: piCliPathForSdkEntry(piSdkEntry),
       },
       sessionsDir: join(context.dataDir, 'sessions'),
       // pi's own config, credentials and catalog cache, all inside Pop Agent's data

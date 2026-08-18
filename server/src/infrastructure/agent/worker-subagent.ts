@@ -3,6 +3,7 @@ import { lstatSync, mkdirSync, mkdtempSync, readlinkSync, symlinkSync, writeFile
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import type {
   ExtensionContext,
   LoadExtensionsResult,
@@ -35,6 +36,12 @@ export interface WorkerSubagentRuntimeOptions {
   agentDir: string;
   authPath: string;
   piBinary: string;
+}
+
+/** Resolve the CLI beside either a bundled filesystem SDK entry or an isolated file URL. */
+export function piCliPathForSdkEntry(sdkEntry: string): string {
+  const entryPath = sdkEntry.startsWith('file:') ? fileURLToPath(sdkEntry) : sdkEntry;
+  return join(dirname(entryPath), 'cli.js');
 }
 
 /**

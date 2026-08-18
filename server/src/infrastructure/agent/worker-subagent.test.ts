@@ -3,6 +3,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, writeFi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DefaultResourceLoader,
@@ -12,6 +13,7 @@ import {
 import {
   buildDelegateWorkerTool,
   extensionToolNames,
+  piCliPathForSdkEntry,
   prepareWorkerSubagentRuntime,
   withoutExtensionTools,
 } from './worker-subagent.js';
@@ -34,6 +36,15 @@ function makeRepository(): string {
   execFileSync('git', ['-C', repository, 'commit', '--quiet', '-m', 'initial']);
   return repository;
 }
+
+describe('worker subagent runtime paths', () => {
+  it('finds the CLI beside bundled paths and isolated runtime file URLs', () => {
+    const entry = '/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/index.js';
+    const cli = '/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/cli.js';
+    expect(piCliPathForSdkEntry(entry)).toBe(cli);
+    expect(piCliPathForSdkEntry(pathToFileURL(entry).href)).toBe(cli);
+  });
+});
 
 describe('worker subagent facade', () => {
   it('forces the upstream worker into a foreground managed worktree', async () => {
