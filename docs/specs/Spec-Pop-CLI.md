@@ -1,122 +1,156 @@
-# Pop Agent — CLI and operator CLI
+# Pop Agent — client and operator CLIs
 
 **Status:** normative
 **Legacy coverage:** §17
-**Primary implementation:** launcher, cli, server/src/manager
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Primary implementation:** `launcher/`, `cli/`, `server/src/manager/`
+**Related:** [`Spec-Pop-Installation.md`](Spec-Pop-Installation.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md), [`../cli.md`](../cli.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-## 17. Two CLIs
+## Two programs, two trust boundaries
 
-Not one command with a mode: `pop` and `popman` are separate programs
-with separate audiences, and the split is what keeps the everyday one
-installable. Full design in `docs/cli.md`.
+`pop` is the owner-facing terminal client installed on any computer. `popman`
+is the server operator tool shipped with the checkout. They are separate
+programs, not modes of one privileged binary.
 
-**`pop`** — a native Go launcher in front of the TypeScript chat client. The
-server's no-store `/install.sh` and `/install.ps1` select and SHA-256-check a
-precompiled launcher; users never install Go. On first run it asks for the
-server origin when none exists. Public `/cli/manifest.json` names the latest
-immutable packed `cli-X.Y.Z.tgz`, its size/hash, minimum Node and minimum launcher.
-That packed release may briefly trail the server version; protocol negotiation
-remains the authority on compatibility, so a version bump cannot turn first
-install into a 404 before new artifacts are packed.
-The launcher installs privately and atomically rather than through global npm,
-then execs the active Node CLI. The legacy no-store `/cli-latest.tgz` redirect
-remains for migration. The client carries no server code: no `better-sqlite3`,
-no `argon2`, nothing that knows where `secret.key` lives. It also carries **Pop
-Local Access (PLA)**, an internal library used by the interactive CLI. PLA never
-creates a chat or invokes an LLM. The installed PWA and local access are separate:
-the browser owns the PWA, while the optional Pop Local Access tray owns its own
-lifecycle without introducing a native WebView wrapper. The tray is a minimal
-native host in `local-access/tray`: it supervises the TypeScript PLA runtime from
-the CLI, exposes a server-synchronized per-computer file-access switch plus
-reconnect/start-at-login controls and opens the PWA, but contains no WebView,
-chat UI, agent loop or local-tools protocol.
+The terminal is a normal Pop Agent client: chats, memory, provider execution,
+usage, safety and persistence remain server-side. No model, provider credential,
+agent loop, SQLite repository or server secret runs in `pop`. Its only durable
+credential is an ordinary session token in an owner-only profile.
 
-PLA opens authenticated WSS `/v1/local-tools`; after two pre-attach upgrade
-failures with ordinary authenticated HTTPS still healthy, it falls back to
-the long-poll `/v1/local-tools/connections/*` transport. Both use the same
-Bearer session, application frames, limits, heartbeat, cancellation and
-connection id. An attached WSS connection requires inbound server traffic
-within the 45-second local lease; silence terminates the socket and reconnects,
-so a proxy cannot leave a client attached to a stream the restarted server no
-longer owns.
+`popman` runs only on the server and may control systemd, backups and offline
+account recovery. None of its powers is exposed as a CLI-authenticated HTTP
+shortcut.
 
-An interactive message explicitly names its PLA connection. Browser and PWA
-messages never inherit a background machine implicitly: they must explicitly
-select a live connection once the optional PLA UI exists. Otherwise the run
-honestly receives no local tools. An explicit dead id is rejected
-before a run starts and never falls back to another machine. Disconnects fail
-pending calls and never replay non-idempotent work. Logout, password recovery,
-epoch change and token expiry close attached local access.
+## Native launcher and TypeScript client
 
-    pop | pop "question" | pop -p "…"
-    pop login | logout | servers | chats | update | doctor
-    pop --chat <id>
-    pop --version | --launcher-version
+The installed `pop` executable is a small Go launcher. It must remain useful
+when Node, npm or the active CLI is missing/corrupt. The launcher selects a
+saved server, enforces remote HTTPS (loopback HTTP only), reads public release
+metadata, installs/repairs the exact verified TypeScript CLI and then replaces
+itself with that process.
 
-Leaving the interactive client through Ctrl+C, `/quit` or `/exit` prints
-`Bye!` and, when the conversation has a server id, a ready-to-paste
-`pop --chat <id>` continuation command. The whole farewell block is grey.
-Before the first message creates the chat, only `Bye!` is printed.
+The TypeScript CLI uses pi-tui for terminal rendering but never imports the pi
+agent engine. HTTP/SSE DTOs are shared with the product. Every
+`@pop-agent/*` client import is bundled into the packed release; external public
+runtime dependencies remain installable without the monorepo.
 
-`pop --version` is entirely offline: the launcher reads only its atomic local
-state, finds Node and execs the active CLI's side-effect-free version path. It
-does not read a profile, open PLA, contact a server or create a chat.
-`--launcher-version` needs neither Node nor an installed CLI.
+Launcher `--launcher-version` needs neither profile nor Node. `pop --version`
+is local and side-effect free: no profile read, server request, PLA attach or
+chat creation. Runtime diagnostics/install are launcher-owned commands and may
+bootstrap managed Node from the selected/supplied server.
 
-Local execution notices (`ran here: …`) belong to the live assistant segment,
-after its tool statuses and before its prose. They are never appended as later
-transcript rows: doing that leaves a finished answer above a long tail of local
-commands and makes the response hard to read, especially in Windows Terminal.
+## Installation and update
 
-A machine can bootstrap the native launcher from its own server without
-already having Node, npm or knowing the current CLI version:
+Public same-origin shell/PowerShell bootstrap selects the exact
+OS/architecture launcher, checks size/SHA-256 and installs per user. The
+launcher consumes `/cli/manifest.json`, immutable versioned CLI archives and the
+verified same-origin managed Node release where supported. Exact cache,
+staging, rollback and release rules are normative in Installation.
 
-    curl -fsSL https://<server>/install.sh | sh
-    powershell -c "irm https://<server>/install.ps1 | iex"
+The active CLI lives in a private version directory with atomic active-version
+state. A candidate is downloaded to temporary storage, verified, installed,
+smoke-checked through `--version` and only then activated. A locally newer
+compatible CLI is not silently downgraded. `pop update` requests repair/update;
+failed candidates preserve the prior active version.
 
-The public no-store scripts derive `<server>` from their request origin, select
-a precompiled OS/architecture artifact, verify its embedded SHA-256 and add its
-user-owned directory to PATH. They carry no session, credential or user data.
-The launcher subsequently diagnoses Node `>=22.19.0` and npm; on Windows it
-executes npm's JavaScript entrypoint through `node.exe`, never a shell or a
-`.cmd` wrapper.
+The launcher and CLI use no global npm install, sudo or shell `.cmd` dispatch.
+Windows invokes npm's JavaScript entry through the selected `node.exe`.
 
-**`popman`** — the operator's tool. Ships with the server, runs only
-there, and is the only thing that touches systemd, the SQLite file and
-the backups directory.
+## Profiles and authentication
 
-    popman start | stop | restart | status
-    popman backup | backups | restore <name>
-    popman reset-password
-    popman update
+A named profile stores normalized server origin and bearer session token in an
+owner-only file. `pop login <url>` reads the password interactively without
+argv/environment/history exposure. Any refreshed `x-pop-agent-token` is written
+back atomically. Logout removes the selected token; `servers` lists profiles
+without secrets.
 
-`reset-password` covers "forgot the password AND the recovery key" for
-whoever has shell: no proof is asked for, because owning the machine is
-already the proof, which is also why it exists nowhere else — an HTTP
-route with the same power would be a password reset for anyone who found
-the URL. It bumps the session epoch, so every signed-in device is signed
-out, and prints a new recovery key once.
+Authentication failure stops blind reconnect and gives an actionable login
+message. Profiles never contain provider credentials. Remote plain HTTP is
+refused; `localhost`, `127.0.0.1` and `::1` remain valid development origins.
 
-`access-list` is named in §18 and **not built**: there is no IP access
-list to manage yet. `popman access-list` says so rather than pretending.
+## User commands and chat behavior
 
-**Client/server versions.** Root `VERSION` is the single manually edited global
-release version. A TypeScript consistency check runs before typecheck, build and
-the full gate; it rejects drift in package manifests, lockfile workspace entries,
-the CLI handshake and packed CLI metadata. The PWA is part of the server build
-and follows the service-worker update channel; there is no independently
-versioned native Desktop package.
+Core commands are:
 
-The server holds its own version and the
-oldest client it accepts; the local-tools attach compares them.
-Compatible is silent, merely behind prints one line with the install
-command, and below the minimum is refused with that command. The minimum
-is set by hand and moves only when the wire changes.
+```text
+pop
+pop "question" | pop -p "question"
+pop --chat <id>
+pop login <url> | logout | servers | chats | update
+pop local-access [--status-json]
+pop --version
+```
 
-## Detailed design
+A bare `pop` opens the interactive screen. A non-command argument is a one-shot
+question. Conversations are ordinary server chats and synchronize with the PWA.
+Continuation uses opaque chat IDs. Ctrl+C, `/quit` and `/exit` stop cleanly and
+print a continuation command only after a server chat exists.
 
-See [../cli.md](../cli.md).
+The TUI renders persisted transcript plus live SSE projection, thinking when
+enabled, tool lifecycle, queue/run state and stable failures. It does not poll
+for streamed output or invent local transcript rows. Local execution notices
+belong to the assistant segment that caused them.
+
+## Local Access inside the client
+
+Interactive terminal chat and background tray supervision both reuse the PLA
+library. PLA is not an agent and never creates a chat by itself. Server tools
+retain unprefixed names; selected-computer tools are explicit `local_*` names.
+
+The background command attaches with role `background`, emits line-delimited
+status JSON for the native tray and obeys server policy. Interactive transport
+may use role `interactive`. Stable machine identity, disabled-first permission,
+WSS/HTTPS fallback, heartbeat, replay, limits and cancellation are fully
+normative in Local Access.
+
+The CLI does not implicitly lend local access merely because it sent a chat.
+The message carries the selected stable machine identity according to current
+client policy. Missing selection means server-only; dead/unknown enabled
+selection is rejected and never rerouted.
+
+## Version compatibility
+
+Root `VERSION` is the product/Node CLI release. Launcher release is separate and
+changes when launcher source ships. The server advertises minimum compatible
+client/local-access versions; minimums move only for real wire breaks.
+
+Ordinary launch updates compatible client code before attach when a newer exact
+server release exists. Attach still enforces the minimum as defense in depth.
+A behind-but-compatible version may warn without blocking. Version checks never
+substitute for protocol negotiation.
+
+## `popman`
+
+Supported operator commands are:
+
+```text
+popman start | stop | restart | status
+popman backup | backups | restore <exact-name>
+popman reset-password
+popman update
+```
+
+Service commands name the actual unit. Backup uses the same consistent snapshot
+implementation as Settings. Restore stops the service before extraction and
+starts it in `finally`; live HTTP restore is forbidden.
+
+`reset-password` is shell-owner recovery when password and recovery key are both
+lost. Host access is the proof of authority. It hashes the new password,
+increments session epoch and prints a new recovery key once. There is no HTTP
+equivalent.
+
+`update` performs the operator-managed checkout/build/restart sequence described
+in Deployment. `access-list` is explicitly not implemented and reports that
+fact; historical proposal text must not imply an IP allowlist exists.
+
+## Failure and test obligations
+
+- launcher remains diagnostic without Node/profile/network as applicable;
+- remote HTTP, malformed origins and unverified artifacts fail closed;
+- candidate install failure keeps prior active state;
+- `--version` performs no network/profile/local-access side effect;
+- login hides passwords and persists renewal atomically;
+- one-shot/interactive/continuation and terminal shutdown are tested;
+- SSE reconnect converges to server transcript/queue;
+- PLA transport/policy behavior shares server contract tests;
+- `popman restore` proves stop → extract → start, including failure paths;
+- packed releases install outside the monorepo on all supported platforms.
