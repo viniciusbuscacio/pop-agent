@@ -100,6 +100,18 @@ describe('pending message composition', () => {
     expect(area.className).toContain('overflow-x-hidden');
   });
 
+  it('keeps the model picker visually neutral while a model is active', () => {
+    renderComposer({
+      currentProvider: 'openai-codex',
+      currentProviderLabel: 'OpenAI Codex',
+      currentModel: 'gpt-5.6-sol',
+    });
+
+    const picker = screen.getByRole('combobox', { name: 'Model' });
+    expect(picker.className).toContain('text-[var(--muted)]');
+    expect(picker.className).not.toContain('bg-[var(--input-bg)]');
+  });
+
   it('shows the effective model instead of an opaque default-model selection', () => {
     renderComposer({
       currentProvider: 'openai-codex',

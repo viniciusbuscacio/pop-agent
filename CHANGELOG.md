@@ -77,6 +77,9 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Fixed
 
+- **The composer model picker no longer looks toggled on.** The **M** control
+  keeps the same neutral visual state while the selected model remains active;
+  opening it still shows the active provider/model with its selection mark.
 - **Migration and internal-file collisions now fail safely.** Boot validates all
   migration names and rejects duplicate versions before touching SQLite. Voice
   transcription claims its temporary input/output names exclusively and redraws

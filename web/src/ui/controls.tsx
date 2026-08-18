@@ -516,7 +516,7 @@ export function ModelPicker({
         onClick={toggle}
         className={
           compactLabel !== undefined
-            ? 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] bg-[var(--input-bg)] p-0 text-sm font-semibold text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]'
+            ? 'grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] p-0 text-sm font-semibold text-[var(--muted)] transition-colors hover:bg-[var(--hover-overlay)]'
             : layout === 'field'
               ? fieldClass('md', 'w-full truncate text-left')
               : fieldClass('sm', 'max-w-full truncate')
