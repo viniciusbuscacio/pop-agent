@@ -21,9 +21,14 @@ func TestNormalizeServerURL(t *testing.T) {
 	if err != nil || got != "https://pop.example" {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	for _, value := range []string{"pop.example", "https://pop.example/path", "file:///tmp/pop"} {
+	for _, value := range []string{"pop.example", "https://pop.example/path", "http://pop.example", "file:///tmp/pop"} {
 		if _, err := normalizeServerURL(value); err == nil {
 			t.Fatalf("expected %q to be rejected", value)
+		}
+	}
+	for _, value := range []string{"http://localhost:8787", "http://127.0.0.1:8787", "http://[::1]:8787"} {
+		if _, err := normalizeServerURL(value); err != nil {
+			t.Fatalf("expected loopback URL %q to be accepted: %v", value, err)
 		}
 	}
 }

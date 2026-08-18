@@ -31,7 +31,9 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
 
   routes.get('/install.sh', (c) => {
     const release = readLauncherRelease(deps.cliPack);
-    if (release === undefined) return c.notFound();
+    if (release === undefined || !hasArtifacts(release, [
+      'darwin-arm64', 'darwin-amd64', 'linux-arm64', 'linux-amd64',
+    ])) return c.notFound();
     return c.body(unixInstaller(requestOrigin(c), release), 200, {
       'content-type': 'text/x-shellscript; charset=utf-8',
       'cache-control': 'no-store',
@@ -41,7 +43,7 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
 
   routes.get('/install.ps1', (c) => {
     const release = readLauncherRelease(deps.cliPack);
-    if (release === undefined) return c.notFound();
+    if (release === undefined || !hasArtifacts(release, ['windows-amd64'])) return c.notFound();
     return c.body(windowsInstaller(requestOrigin(c), release), 200, {
       'content-type': 'text/plain; charset=utf-8',
       'cache-control': 'no-store',
@@ -61,7 +63,11 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
 
   routes.get('/install-local-access.ps1', (c) => {
     const release = readLocalAccessRelease(deps.cliPack);
-    if (readLauncherRelease(deps.cliPack) === undefined || release === undefined) return c.notFound();
+    const launcher = readLauncherRelease(deps.cliPack);
+    if (
+      launcher === undefined || !hasArtifacts(launcher, ['windows-amd64']) ||
+      release === undefined || !hasArtifacts(release, ['windows-amd64'])
+    ) return c.notFound();
     return c.body(windowsLocalAccessInstaller(requestOrigin(c), release), 200, {
       'content-type': 'text/plain; charset=utf-8',
       'cache-control': 'no-store',
@@ -199,8 +205,7 @@ trap 'rm -f "$tmp"' EXIT HUP INT TERM
 curl -fsSL --retry 2 "$origin/install.sh" -o "$tmp"
 sh "$tmp"
 if ! command -v node >/dev/null 2>&1 && ! "$pop_bin" runtime doctor >/dev/null 2>&1; then
-  echo 'Pop Local Access requires Node.js 22.19.0 or newer. Install it from https://nodejs.org/ and run this command again.' >&2
-  exit 1
+  "$pop_bin" runtime install --server "$origin"
 fi
 "$pop_bin" login "$origin"
 
@@ -279,44 +284,66 @@ New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 Invoke-WebRequest -UseBasicParsing "$origin/local-access/${powershellLiteral(artifact.file)}" -OutFile $tmp
 $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $tmp).Hash.ToLowerInvariant()
 if ($actual -ne '${artifact.sha256}') { Remove-Item -Force $tmp; throw 'Pop Local Access checksum mismatch.' }
-Move-Item -Force $tmp $tray
+$backup = "$tray.previous"
+$runningTray = @(Get-CimInstance Win32_Process -Filter "Name = 'pop-local-access.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.ExecutablePath -eq $tray })
+$runningTray | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+$runningTray | ForEach-Object { Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }
+Remove-Item -Force -ErrorAction SilentlyContinue $backup
+if (Test-Path -LiteralPath $tray) { Move-Item -Force $tray $backup }
+try {
+  Move-Item -Force $tmp $tray
+  Start-Process -FilePath $tray
+  Remove-Item -Force -ErrorAction SilentlyContinue $backup
+} catch {
+  Remove-Item -Force -ErrorAction SilentlyContinue $tray
+  if (Test-Path -LiteralPath $backup) {
+    Move-Item -Force $backup $tray
+    Start-Process -FilePath $tray
+  }
+  throw
+}
 $run = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 New-Item -Path $run -Force | Out-Null
 Set-ItemProperty -Path $run -Name 'Pop Local Access' -Value ('"' + $tray + '"')
-Get-Process pop-local-access -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Process -FilePath $tray
 Write-Host 'Pop Local Access is installed. Look for it in the Windows tray.' -ForegroundColor Green
 `;
 }
 
 function readLauncherRelease(cliPack: string): LauncherRelease | undefined {
-  try {
-    const release = JSON.parse(
-      readFileSync(join(cliPack, 'launcher', 'manifest.json'), 'utf8'),
-    ) as LauncherRelease;
-    return typeof release.version === 'string' && release.artifacts !== undefined
-      ? release
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return readRelease(join(cliPack, 'launcher', 'manifest.json'));
 }
 
 function readLocalAccessRelease(cliPack: string): LocalAccessRelease | undefined {
+  return readRelease(join(cliPack, 'local-access', 'manifest.json'));
+}
+
+function readRelease(path: string): LauncherRelease | undefined {
   try {
-    const release = JSON.parse(
-      readFileSync(join(cliPack, 'local-access', 'manifest.json'), 'utf8'),
-    ) as LocalAccessRelease;
-    if (typeof release.version !== 'string' || release.artifacts === undefined) return undefined;
-    for (const artifact of Object.values(release.artifacts)) {
-      if (artifact.file.includes('/') || artifact.file.includes('\\') || artifact.size <= 0 || !/^[a-f0-9]{64}$/.test(artifact.sha256)) {
+    const release = JSON.parse(readFileSync(path, 'utf8')) as LauncherRelease;
+    if (!/^\d+\.\d+\.\d+$/.test(release.version) || release.artifacts === undefined) return undefined;
+    const entries = Object.entries(release.artifacts);
+    if (entries.length === 0) return undefined;
+    const files = new Set<string>();
+    for (const [target, artifact] of entries) {
+      if (
+        !/^(?:darwin|linux|windows)-(?:arm64|amd64)$/.test(target) ||
+        artifact.file.includes('/') || artifact.file.includes('\\') || files.has(artifact.file) ||
+        !Number.isSafeInteger(artifact.size) || artifact.size <= 0 ||
+        !/^[a-f0-9]{64}$/.test(artifact.sha256)
+      ) {
         return undefined;
       }
+      files.add(artifact.file);
     }
     return release;
   } catch {
     return undefined;
   }
+}
+
+function hasArtifacts(release: LauncherRelease, targets: string[]): boolean {
+  return targets.every((target) => release.artifacts[target] !== undefined);
 }
 
 function requiredArtifact(release: LauncherRelease, target: string): LauncherArtifact {

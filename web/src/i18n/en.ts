@@ -236,7 +236,7 @@ export const en = {
     'The CLI provides terminal chat and local tools from the computer where it runs.',
   'settings.installation.cliWindows': 'Windows (PowerShell)',
   'settings.installation.cliWindowsHint':
-    'Paste this in PowerShell. It installs a compatible Node.js when needed, installs Pop CLI, and prints the login command.',
+    'Requires Node.js 22.19 or newer. Paste this in PowerShell, then run the login command it prints.',
   'settings.installation.cliUnix': 'macOS or Linux (Terminal)',
   'settings.installation.cliUnixHint':
     'Requires Node.js 22.19 or newer. Run both commands, then enter your Pop Agent password.',

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -50,9 +51,12 @@ func (l *launcher) runtimeCommand(args []string) int {
 	case "doctor":
 		return l.runtimeDoctor()
 	case "install":
-		serverURL, ok := l.profileURL("default")
-		if !ok {
-			fmt.Fprintln(l.stderr, "No Pop Agent server is configured. Run `pop login <server-url>` first.")
+		serverURL := option(args, "--server")
+		if serverURL == "" {
+			serverURL, _ = l.profileURL("default")
+		}
+		if serverURL == "" {
+			fmt.Fprintln(l.stderr, "No Pop Agent server is configured. Run `pop login <server-url>` first or pass `--server <server-url>`.")
 			return 1
 		}
 		serverURL, err := normalizeServerURL(serverURL)
@@ -116,7 +120,7 @@ func (l *launcher) fetchRuntimeManifest(serverURL string) (runtimeManifest, erro
 	return release, nil
 }
 
-func (l *launcher) installManagedRuntime(_ string, release runtimeManifest) error {
+func (l *launcher) installManagedRuntime(serverURL string, release runtimeManifest) error {
 	target := runtime.GOOS + "-" + runtime.GOARCH
 	artifact, ok := release.Packages[target]
 	if !ok {
@@ -131,7 +135,12 @@ func (l *launcher) installManagedRuntime(_ string, release runtimeManifest) erro
 		}
 	}
 
-	packageURL := artifact.SourceURL
+	source, err := url.Parse(artifact.SourceURL)
+	if err != nil {
+		return fmt.Errorf("invalid runtime source URL: %w", err)
+	}
+	file := path.Base(source.Path)
+	packageURL := strings.TrimRight(serverURL, "/") + "/runtime/node/" + release.Version + "/" + url.PathEscape(file)
 	root := l.managedRuntimeRoot()
 	versions := filepath.Join(root, "versions")
 	if err := os.MkdirAll(versions, 0o700); err != nil {

@@ -37,6 +37,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   connection uniqueness, retries and foreground recovery, event catalog,
   ordering and batching, bounded backpressure, snapshot convergence, polling
   policy, Local Access integration, security and test obligations.
+- **The installation specification now covers every delivered channel.** It
+  defines PWA, CLI/launcher, managed Node, Pop Local Access, server checkout,
+  pi candidate and deployment-supervisor boundaries, plus public artifact,
+  caching, integrity, rollback, removal and release-test obligations.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -88,6 +92,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   and ticket-bound session revocation stops existing streams. Slow clients have
   a bounded backlog, while archive and provider/model changes now converge on
   every connected device. The unused software-update wire event was removed.
+- **Client installation now fails closed and repairs running Windows trays.**
+  Release manifests are validated before scripts are rendered, remote launcher
+  profiles require HTTPS, managed Node archives are consumed from the verified
+  same-origin release, Mac PLA bootstrap can install that runtime before login,
+  and Windows tray replacement preserves/restores the previous executable.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.

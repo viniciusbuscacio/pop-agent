@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.1.0"
+const launcherVersion = "1.1.1"
 const requestTimeout = 3 * time.Second
 const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 
@@ -554,7 +554,14 @@ func normalizeServerURL(raw string) (string, error) {
 	if parsed.Path != "" {
 		return "", errors.New("the server URL cannot contain a path")
 	}
+	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
+		return "", errors.New("HTTP is allowed only for a loopback server; use HTTPS for remote Pop Agent servers")
+	}
 	return parsed.String(), nil
+}
+
+func isLoopbackHost(host string) bool {
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func compareVersions(a, b string) int {

@@ -37,6 +37,10 @@ exit 2
 	hash := sha256.Sum256(archive)
 	downloads := 0
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/runtime/node/22.23.2/node-v22.23.2-test.tar.gz" {
+			http.NotFound(response, request)
+			return
+		}
 		downloads++
 		_, _ = response.Write(archive)
 	}))
@@ -46,7 +50,7 @@ exit 2
 	release := runtimeManifest{
 		Version: "22.23.2", Packages: map[string]runtimePackage{
 			runtime.GOOS + "-" + runtime.GOARCH: {
-				SourceURL: server.URL + "/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: hex.EncodeToString(hash[:]),
+				SourceURL: "https://nodejs.org/dist/v22.23.2/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: hex.EncodeToString(hash[:]),
 			},
 		},
 	}
@@ -89,6 +93,10 @@ exit 2
 func TestManagedRuntimeChecksumFailureLeavesNoState(t *testing.T) {
 	archive := []byte("not the expected archive")
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/runtime/node/22.23.2/node-v22.23.2-test.tar.gz" {
+			http.NotFound(response, request)
+			return
+		}
 		_, _ = response.Write(archive)
 	}))
 	defer server.Close()
@@ -96,7 +104,7 @@ func TestManagedRuntimeChecksumFailureLeavesNoState(t *testing.T) {
 	err := launcher.installManagedRuntime(server.URL, runtimeManifest{
 		Version: "22.23.2", Packages: map[string]runtimePackage{
 			runtime.GOOS + "-" + runtime.GOARCH: {
-				SourceURL: server.URL + "/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: strings.Repeat("0", 64),
+				SourceURL: "https://nodejs.org/dist/v22.23.2/node-v22.23.2-test.tar.gz", Size: int64(len(archive)), SHA256: strings.Repeat("0", 64),
 			},
 		},
 	})

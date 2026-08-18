@@ -80,11 +80,14 @@ describe('native Pop launcher installers', () => {
     expect(unix).toContain("origin='https://personal-pop.example'");
     expect(unix).toContain('Pop Local Access.app');
     expect(unix).toContain('com.popagent.local-access');
+    expect(unix).toContain('runtime install --server "$origin"');
     expect(unix).toContain('launchctl bootstrap');
     expect(windows).toContain("$origin = 'https://personal-pop.example'");
     expect(windows).toContain('pop-local-access-0.2.30-windows-amd64.exe');
     expect(windows).toContain("Name 'Pop Local Access'");
     expect(windows).toContain('icacls.exe');
+    expect(windows).toContain('$backup = "$tray.previous"');
+    expect(windows.indexOf('Stop-Process -Id')).toBeLessThan(windows.indexOf('Move-Item -Force $tmp $tray'));
     expect(windows).not.toContain('secret-session');
   });
 
@@ -117,5 +120,17 @@ describe('native Pop launcher installers', () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     expect((await routes.request('/install.sh')).status).toBe(404);
     expect((await routes.request('/install.ps1')).status).toBe(404);
+  });
+
+  it('refuses incomplete or unsafe release manifests instead of rendering a broken script', async () => {
+    writeFileSync(join(cliPack, 'launcher', 'manifest.json'), JSON.stringify({
+      version: '1.0.0',
+      artifacts: {
+        'windows-amd64': { file: '../pop.exe', size: 10, sha256: 'e'.repeat(64) },
+      },
+    }));
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
+    expect((await routes.request('/install.ps1')).status).toBe(404);
+    expect((await routes.request('/install.sh')).status).toBe(404);
   });
 });
