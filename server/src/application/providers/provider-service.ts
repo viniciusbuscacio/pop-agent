@@ -18,6 +18,8 @@ import {
   type ProviderDefinition,
 } from './provider-definitions.js';
 import type { ProviderCooldown } from './provider-cooldown.js';
+import { resolveProviderCatalog, type CatalogCache, type ModelCatalogSource } from './provider-catalog.js';
+export type { ModelCatalogSource } from './provider-catalog.js';
 
 /**
  * The providers as the rest of the app sees them (docs/specs/Spec-Pop-General.md §15): where the
@@ -29,8 +31,6 @@ import type { ProviderCooldown } from './provider-cooldown.js';
  * historical seed). A stored key beating the environment is deliberate -- it
  * is the one the user can see and change from the UI.
  */
-
-const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** The unlimited-customs registry (docs/specs/Spec-Pop-General.md §15): pure data, never a key. */
 const CUSTOM_REGISTRY_KEY = 'provider.custom.registry';
@@ -80,14 +80,6 @@ export interface ProviderStatus {
   enabled: boolean;
   /** When set, the last run failed with an auth-class error (docs/specs/Spec-Pop-General.md §15). */
   authErrorAt?: string;
-}
-
-/** Where a catalog answer came from, freshest first. */
-export type ModelCatalogSource = 'live' | 'cache' | 'engine' | 'static';
-
-interface CatalogCache {
-  fetchedAt: number;
-  models: ModelInfo[];
 }
 
 /** The pair that identifies a model (docs/specs/Spec-Pop-General.md §15). */
@@ -157,9 +149,8 @@ export interface ProviderServiceDeps {
   /** The global default pair from Settings. Read late; it is a setting. */
   defaults: () => { provider: string; model: string };
   /**
-   * Writes the elected head of the list back as the global default. Without
-   * it the numbered list and the default drift apart, which is the bug aw
-   * fixed by making activation and #1 the same lever.
+   * Writes the elected head back as the global default so list order and new
+   * chats cannot disagree.
    */
   setDefaultProvider?: (providerId: string, model: string) => void;
 }
@@ -377,13 +368,8 @@ export class ProviderService {
     input: { name?: string; baseURL?: string; defaultModel?: string },
   ): CustomProviderInstance | undefined {
     const registry = this.listCustom();
-    // How many can exist AT ONCE, never how many have ever existed: the
-    // registry is the live list, so deleting one frees its place and an
-    // install that adds and removes for years never creeps toward the ceiling
-    // (Vinicius, 03/08). 256 is far past any real install and still stops a
-    // runaway loop from writing thousands of rows into one settings value --
-    // the priority list is a 1..N dropdown, and N has to stay a number a
-    // person can hold.
+    // The cap applies to the live registry, so deleting one frees its place.
+    // It prevents runaway writes while remaining far above normal usage.
     if (registry.length >= MAX_CUSTOM_PROVIDERS) return undefined;
     let id: string;
     do {
@@ -497,19 +483,14 @@ export class ProviderService {
       // Empty means "back to the definition's default" (no delete on the repo).
       this.deps.settings.set(`provider.${providerId}.defaultModel`, model);
     }
-    // electDefault keeps "#1" and "what a new chat uses" the same statement,
-    // but it returns early when the provider is ALREADY the default -- so
-    // editing the default provider's own model updated the card and nothing
-    // else, and every new run kept asking for the model the card no longer
-    // showed. Maritaca configured sabiazinho-4, runs asking sabia-4
-    // (Vinicius, 05/08). The elected pair follows the card it points at.
+    // Keep the elected pair synchronized when its provider card changes.
     if (this.canonicalId(this.deps.defaults().provider) === definition.id) {
       this.deps.setDefaultProvider?.(definition.id, this.ref(definition.id, '').modelId);
     }
   }
 
   /**
-   * The Service Model of one provider (docs/specs/Spec-Pop-General.md §15, corrected 07/08).
+   * The Service Model of one provider (docs/specs/Spec-Pop-General.md §15).
    *
    * Pop Agent runs two kinds of call: the Chat Model, which the user talks to, and
    * the Service Model, which does Pop Agent's own work -- naming a conversation,
@@ -559,7 +540,7 @@ export class ProviderService {
   }
 
   /**
-   * Which pair a service task should run on (the note of 07/08, §7): the
+   * Which pair a service task should run on: the
    * provider is inherited from whatever the task serves -- a title inherits its
    * chat's -- and a job with no parent chat falls through to the global
    * default, which is the head of the priority list. The model is that
@@ -583,8 +564,8 @@ export class ProviderService {
   }
 
   /**
-   * Runs one of Pop Agent's own completions over that chain (docs/specs/Spec-Pop-General.md §15 fase 2,
-   * confirmed 07/08). A service task is not special: when the provider it
+   * Runs one of Pop Agent's own completions over that chain
+   * (docs/specs/Spec-Pop-General.md §15). When the provider it
    * inherited refuses, it moves down the same list a chat run would.
    *
    * It tries every remaining provider rather than consulting `shouldFailOver`,
@@ -620,7 +601,7 @@ export class ProviderService {
       // credential. Requiring a gateway AND a key here is what kept titles,
       // distilled skills and voice cleanup off a provider the user had put
       // first in the chain, silently, for as long as a paid provider sat
-      // behind it to absorb the fall-through (Vinicius, 08/08).
+      // behind it to absorb the fall-through.
       if (!viaGateway && !this.deps.engineHasAuth(ref.providerId)) {
         last = new ProviderGatewayError(`No usable credential for "${ref.providerId}".`);
         continue;
@@ -773,8 +754,7 @@ export class ProviderService {
    *
    * The engine registers a provider with exactly these models and refuses
    * anything else, so the list has to travel all the way there. Passing only
-   * `defaultModel` is what made five of Maritaca's six models unusable
-   * (Vinicius, 05/08).
+   * `defaultModel` would make every other configured model unusable.
    */
   customProvidersForEngine(): {
     id: string;
@@ -858,8 +838,8 @@ export class ProviderService {
 
   /**
    * A real, paid-for round trip with the candidate key -- the only proof a
-   * key works that does not involve waiting for a chat to fail. Costs a few
-   * tokens by design (aw's Test button, ported), and reports how long the
+   * key works that does not involve waiting for a chat to fail. It intentionally
+   * spends a few tokens and reports how long the
    * provider took to answer. Saving never runs this; activating does.
    */
   async test(
@@ -868,12 +848,8 @@ export class ProviderService {
   ): Promise<{ ok: boolean; message?: string; latencyMs?: number }> {
     const definition = this.definition(providerId);
     if (definition !== undefined && definition.authType === 'oauth') {
-      // The same test every other provider gets: one tiny request, timed. It
-      // used to read the stored credential instead and report no latency,
-      // because a figure for a round trip that never happened would be a lie
-      // (Vinicius, 04/08) -- true, so the trip is made rather than the number
-      // invented. Two ways of answering "does this provider work?" was one
-      // too many (Vinicius, 08/08). A subscription is not billed per token,
+      // Use the same timed round trip as every provider rather than inventing
+      // latency from a credential lookup. A subscription is not billed per token,
       // so it costs nothing but the moment.
       const startedAuth = this.deps.clock.now();
       try {
@@ -942,55 +918,20 @@ export class ProviderService {
     }
   }
 
-  /**
-   * The catalog, freshest first: live when there is a key, then the last
-   * good fetch (24 h), then the engine's offline list, then the static one
-   * from the definition. `source` says which layer answered, so the picker is
-   * never empty and never pretends to be fresher than it is. CI and the
-   * smoke run keyless, so they never touch the network here.
-   */
+  /** Resolves models without coupling fallback policy to provider settings. */
   async models(providerId: string): Promise<{ models: ModelInfo[]; source: ModelCatalogSource }> {
     const definition = this.definition(providerId);
     if (definition === undefined) return { models: [], source: 'static' };
     const cacheKey = `models.${definition.id}`;
-    const gateway = this.gatewayFor(definition);
-
-    const key = this.apiKey(definition.id);
-    if (key !== undefined && gateway !== undefined) {
-      const cached = this.deps.settings.get<CatalogCache>(cacheKey);
-      if (
-        cached !== undefined &&
-        cached.models.length > 0 &&
-        this.deps.clock.now() - cached.fetchedAt < CATALOG_TTL_MS
-      ) {
-        return { models: cached.models, source: 'cache' };
-      }
-      try {
-        const models = await gateway.listModels(key);
-        if (models.length > 0) {
-          this.deps.settings.set<CatalogCache>(cacheKey, {
-            fetchedAt: this.deps.clock.now(),
-            models,
-          });
-          return { models, source: 'live' };
-        }
-      } catch {
-        // A stale cache is better than no catalog at all.
-        if (cached !== undefined && cached.models.length > 0) {
-          return { models: cached.models, source: 'cache' };
-        }
-      }
-    }
-
-    try {
-      const models = await this.deps.engineModels(definition.id);
-      if (models.length > 0) return { models, source: 'engine' };
-    } catch {
-      // The engine failing to list models must not take the catalog down.
-    }
-    // A custom instance's static catalog is its configured model, already
-    // synthesized into the definition.
-    return { models: [...definition.staticModels], source: 'static' };
+    return resolveProviderCatalog({
+      definition,
+      gateway: this.gatewayFor(definition),
+      apiKey: this.apiKey(definition.id),
+      now: () => this.deps.clock.now(),
+      readCache: () => this.deps.settings.get<CatalogCache>(cacheKey),
+      writeCache: (cache) => this.deps.settings.set<CatalogCache>(cacheKey, cache),
+      engineModels: (id) => this.deps.engineModels(id),
+    });
   }
 }
 

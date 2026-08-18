@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import type { SessionForkPoint, SessionStatsResult } from '../../application/ports/session-command-bridge.js';
 import type {
-  AgentSession,
   AgentSessionEvent,
   ExtensionAPI,
   ModelRuntime,
@@ -15,7 +14,6 @@ import type {
   ModelInfo,
   ProviderAuthInteraction,
   ProviderSubscriptionUsage,
-  ProviderUsageWindow,
   RunUsage,
 } from '../../application/ports/agent-bridge.js';
 import { DEFAULT_MODEL_ID, OPENROUTER_PROVIDER_ID } from '../../application/providers/openrouter.js';
@@ -35,6 +33,8 @@ import { buildSkillTools } from '../skills/skill-tools.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
+import { parseOpenAISubscriptionUsage } from './pi-subscription-usage.js';
+import { SdkPiSession } from './sdk-pi-session.js';
 
 /**
  * pi as the rest of the server is allowed to see it: open a session, prompt it,
@@ -626,7 +626,7 @@ export class SdkPiEngine implements PiEngine {
     // The truth is the auth file, not the runtime's snapshot: the snapshot only
     // learns a credential when pi's post-login refresh finishes, and that
     // refresh can stall on a network fetch -- the credential on disk, the
-    // provider invisible in Settings (Vinicius, 08/08).
+    // provider invisible in Settings.
     return this.readCredentialEntry(providerId) !== undefined;
   }
 
@@ -638,7 +638,7 @@ export class SdkPiEngine implements PiEngine {
    * The promise resolves when the credential LANDS, not when pi's login call
    * returns: after saving, pi runs a catalog/availability refresh whose fetches
    * carry no timeout, and one stalled request used to hold the sign-in hostage
-   * forever -- credential on disk, card still spinning (Vinicius, 08/08). The
+   * forever -- credential on disk, card still spinning. The
    * bookkeeping continues in the background and only journals its outcome.
    */
   async providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {
@@ -659,7 +659,7 @@ export class SdkPiEngine implements PiEngine {
         landed.promise,
         // Only failures propagate. A pi login that resolves before the
         // credential lands must not finish the sign-in -- that was marking
-        // "Signed in" with an empty pi-auth.json (Vinicius, 09/08).
+        // "Signed in" with an empty pi-auth.json.
         login.then(
           () => new Promise<void>(() => undefined),
           (error: unknown) => Promise.reject(error),
@@ -841,7 +841,7 @@ export class SdkPiEngine implements PiEngine {
     // Every model the endpoint serves, not just the configured one: pi
     // refuses any id it was not registered with, so a model the picker
     // offered would fail at open() -- which surfaced as a hung run, since
-    // the session is opened before anything streams (Vinicius, 05/08).
+    // the session is opened before anything streams.
     const models =
       instance.models !== undefined && instance.models.length > 0
         ? instance.models
@@ -869,7 +869,7 @@ export class SdkPiEngine implements PiEngine {
         // it does not know -- Maritaca answers 422 "extra fields not
         // permitted" to `store` -- while a lenient one never misses what was
         // not sent. Plain `max_tokens` and the `system` role are the two
-        // spellings every compatible endpoint understands (Vinicius, 05/08).
+        // spellings every compatible endpoint understands.
         compat: {
           supportsStore: false,
           supportsDeveloperRole: false,
@@ -905,203 +905,5 @@ export class SdkPiEngine implements PiEngine {
       modelsStorePath: this.options.modelsStorePath,
       allowModelNetwork: false,
     });
-  }
-}
-
-/** Keep the unstable provider payload at the edge and discard identity fields. */
-function parseOpenAISubscriptionUsage(value: unknown): ProviderSubscriptionUsage {
-  const root = record(value);
-  const rateLimit = record(root['rate_limit']);
-  const primary = parseUsageWindow(rateLimit['primary_window']);
-  const secondaryValue = rateLimit['secondary_window'];
-  const secondary =
-    secondaryValue === null || secondaryValue === undefined
-      ? undefined
-      : parseUsageWindow(secondaryValue);
-  const plan = root['plan_type'];
-  const allowed = rateLimit['allowed'];
-  const limitReached = rateLimit['limit_reached'];
-  if (typeof plan !== 'string' || typeof allowed !== 'boolean' || typeof limitReached !== 'boolean') {
-    throw new Error('OpenAI subscription usage response was malformed');
-  }
-  return {
-    plan,
-    allowed,
-    limitReached,
-    primary,
-    ...(secondary === undefined ? {} : { secondary }),
-  };
-}
-
-function parseUsageWindow(value: unknown): ProviderUsageWindow {
-  const window = record(value);
-  const usedPercent = window['used_percent'];
-  const windowSeconds = window['limit_window_seconds'];
-  const resetAt = window['reset_at'];
-  if (
-    typeof usedPercent !== 'number' ||
-    !Number.isFinite(usedPercent) ||
-    typeof windowSeconds !== 'number' ||
-    !Number.isFinite(windowSeconds) ||
-    typeof resetAt !== 'number' ||
-    !Number.isFinite(resetAt)
-  ) {
-    throw new Error('OpenAI subscription usage window was malformed');
-  }
-  return { usedPercent, windowSeconds, resetAt };
-}
-
-function record(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('OpenAI subscription usage response was malformed');
-  }
-  return value as Record<string, unknown>;
-}
-
-class SdkPiSession implements PiSession {
-  constructor(
-    private readonly session: AgentSession,
-    private readonly runtime: ModelRuntime,
-    private readonly guardSlot: { current: ToolGuard | undefined },
-    private readonly normalToolNames: string[],
-    private readonly planToolNames: string[],
-    public supportsImages: boolean = false,
-  ) {}
-
-  setExecutionMode(mode: ExecutionMode): void {
-    this.session.setActiveToolsByName(mode === 'plan' ? this.planToolNames : this.normalToolNames);
-  }
-
-  setGuard(guard: ToolGuard | undefined): void {
-    this.guardSlot.current = guard;
-  }
-
-  subscribe(listener: (event: AgentSessionEvent) => void): () => void {
-    return this.session.subscribe(listener);
-  }
-
-  prompt(text: string, images?: PiImage[]): Promise<void> {
-    if (images === undefined || images.length === 0) return this.session.prompt(text);
-    // Only reached when the model accepts image input (the bridge checks
-    // supportsImages first): send the images inline as multimodal content.
-    return this.session.prompt(text, {
-      images: images.map((image) => ({
-        type: 'image' as const,
-        data: image.data,
-        mimeType: image.mimeType,
-      })),
-    });
-  }
-
-  steer(text: string, images?: PiImage[]): Promise<void> {
-    return this.session.steer(
-      text,
-      images?.map((image) => ({
-        type: 'image' as const,
-        data: image.data,
-        mimeType: image.mimeType,
-      })),
-    );
-  }
-
-  setSteeringMode(mode: 'all' | 'one-at-a-time'): void {
-    this.session.setSteeringMode(mode);
-  }
-
-  clearQueue(): { steering: string[]; followUp: string[] } {
-    return this.session.clearQueue();
-  }
-
-  abort(): Promise<void> {
-    return this.session.abort();
-  }
-
-  async compact(instructions?: string): Promise<void> {
-    await this.session.compact(instructions);
-  }
-
-  stats(): SessionStatsResult {
-    const stats = this.session.getSessionStats();
-    const context = stats.contextUsage;
-    return {
-      sessionId: stats.sessionId,
-      ...(stats.sessionFile === undefined ? {} : { sessionFile: stats.sessionFile }),
-      userMessages: stats.userMessages,
-      assistantMessages: stats.assistantMessages,
-      toolCalls: stats.toolCalls,
-      toolResults: stats.toolResults,
-      totalMessages: stats.totalMessages,
-      tokens: stats.tokens,
-      cost: stats.cost,
-      ...(context?.tokens === null || context?.percent === null || context === undefined
-        ? {}
-        : { context: { tokens: context.tokens, contextWindow: context.contextWindow, percent: context.percent } }),
-    };
-  }
-
-  setName(name: string): void {
-    if (this.session.sessionName !== name) this.session.setSessionName(name);
-  }
-
-  export(format: 'html' | 'jsonl', outputPath: string): Promise<string> {
-    return format === 'html'
-      ? this.session.exportToHtml(outputPath)
-      : Promise.resolve(this.session.exportToJsonl(outputPath));
-  }
-
-  forkPoints(): SessionForkPoint[] {
-    const active = new Set(
-      this.session.sessionManager.getBranch()
-        .filter((entry) => entry.type === 'message' && entry.message.role === 'user')
-        .map((entry) => entry.id),
-    );
-    return this.session.getUserMessagesForForking()
-      .filter((point) => active.has(point.entryId))
-      .map((point, userMessageIndex) => ({ ...point, userMessageIndex }));
-  }
-
-  fork(entryId: string): string {
-    const selected = this.session.sessionManager.getEntry(entryId);
-    if (selected?.type !== 'message' || selected.message.role !== 'user') {
-      throw new Error('Invalid user message for fork.');
-    }
-    const file = this.session.sessionFile;
-    if (file === undefined) throw new Error('The session has not been saved yet.');
-    const manager = this.session.sessionManager;
-    const copy = (manager.constructor as typeof import('@earendil-works/pi-coding-agent').SessionManager)
-      .open(file, manager.getSessionDir(), manager.getCwd());
-    const forked = selected.parentId === null
-      ? copy.newSession({ parentSession: file })
-      : copy.createBranchedSession(selected.parentId);
-    if (forked === undefined) throw new Error('Could not create the forked session.');
-    return forked;
-  }
-
-  async setModel(providerId: string, modelId: string): Promise<void> {
-    const model = this.runtime.getModel(providerId, modelId);
-    if (model === undefined) {
-      throw new PiEngineError('model_not_available', `${providerId} has no model "${modelId}"`);
-    }
-    this.supportsImages = model.input.includes('image');
-    await this.session.setModel(model);
-  }
-
-  dispose(): void {
-    this.session.dispose();
-  }
-
-  get sessionFile(): string | undefined {
-    return this.session.sessionFile;
-  }
-
-  getLeafId(): string | null {
-    return this.session.sessionManager.getLeafId();
-  }
-
-  rewindToLeaf(leafId: string | null): void {
-    if (leafId === null) this.session.sessionManager.resetLeaf();
-    else this.session.sessionManager.branch(leafId);
-    const sessionContext = this.session.sessionManager.buildSessionContext();
-    this.session.agent.state.messages = sessionContext.messages;
   }
 }
