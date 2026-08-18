@@ -439,6 +439,7 @@ const runs = new RunService({
   bridge,
   sink: hub,
   clock: systemClock,
+  journal: context.runJournal,
   llmRuns: context.llmRuns,
   // Failover (docs/specs/Spec-Pop-General.md §15, fase 2): the chain of usable pairs, the
   // cooldown a refusing provider is penalized into, and the journal line.
@@ -453,7 +454,7 @@ const runs = new RunService({
   onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
   onRunSteerable: (chatId) => queueDrain.service?.offerSteering(chatId),
   onSteeringDelivered: (chatId, steeringId) =>
-    queueDrain.service?.delivered(chatId, steeringId),
+    queueDrain.service?.deliveredPersisted(chatId, steeringId),
   onLlmStarted: () => queueDrain.service?.drainAll(),
   onActivity: () => noteDeploymentActivity(),
   // When a run ends, tell the phone -- even with the PWA closed (docs/specs/Spec-Pop-General.md §14).
@@ -532,6 +533,8 @@ const queuedMessages = new QueuedMessageService({
   },
 });
 queueDrain.service = queuedMessages;
+// Reconcile potentially-started work before admitting ordinary durable follow-ups.
+runs.recover();
 queuedMessages.drainAll();
 
 // Background tasks (docs/specs/Spec-Pop-General.md §21): the rows, the queue that runs them, and

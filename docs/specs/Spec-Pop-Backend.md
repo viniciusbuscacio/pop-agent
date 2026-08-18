@@ -369,6 +369,11 @@ uses provenance to delete user Files.
 - Pending chat input is a durable per-chat FIFO with a high defensive cap.
   Delivery removes a row only after its corresponding user turn has been
   accepted/persisted; restart must not silently lose accepted input.
+- Every admitted chat run has a SQLite journal row from the same transaction
+  that stores its user turn until the transaction that stores terminal history.
+  Streamed text, thinking and tool projection are persisted before broadcast.
+  Boot resumes only rows still marked queued; rows marked running may already
+  have external effects and are finalized as interrupted, never replayed.
 - Background task and auto-skill state use durable cursors/journals so a restart
   can distinguish not-started, in-progress and completed work.
 - Device connection presence is live in memory; durable permission belongs to

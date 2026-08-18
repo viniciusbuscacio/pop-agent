@@ -4,6 +4,7 @@ import type { ChatRepo } from '../ports/chat-repo.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink } from '../ports/event-sink.js';
 import type { LlmRunsRepo } from '../ports/llm-runs-repo.js';
+import type { RunJournalRepo } from '../ports/run-journal-repo.js';
 
 export const DEFAULT_MAX_CONCURRENT_RUNS = 20;
 
@@ -38,6 +39,8 @@ export interface StartRunOptions {
   localConnectionId?: string;
   /** Defaults to normal; fixed for the whole concrete pi run. */
   executionMode?: ExecutionMode;
+  /** Durable FIFO row consumed in the same transaction as run admission. */
+  queuedMessageId?: string;
 }
 
 export type StartRunResult =
@@ -62,6 +65,7 @@ export interface RunDeps {
   bridge: AgentBridge;
   sink: EventSink;
   clock: Clock;
+  journal: RunJournalRepo;
   maxConcurrentRuns?: number;
   /** Overridable so tests do not wait five minutes for a denial. */
   confirmTimeoutMs?: number;

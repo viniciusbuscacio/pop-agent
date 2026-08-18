@@ -38,6 +38,7 @@ import { FilesService } from '../application/files/files-service.js';
 import { migrate } from '../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteQueuedMessageRepo } from '../infrastructure/db/sqlite-queued-message-repo.js';
+import { SqliteRunJournalRepo } from '../infrastructure/db/sqlite-run-journal-repo.js';
 import { SqliteTaskRepo } from '../infrastructure/db/sqlite-task-repo.js';
 import { SqliteUsageRepo } from '../infrastructure/db/sqlite-usage-repo.js';
 import { SqliteUserMemoryRepo } from '../infrastructure/db/sqlite-user-memory-repo.js';
@@ -316,6 +317,7 @@ export function createTestApp(
   const queueDrain: { service?: QueuedMessageService } = {};
   const runs = new RunService({
     chats: chatRepo,
+    journal: new SqliteRunJournalRepo(db),
     bridge,
     sink: hub,
     clock,
@@ -330,7 +332,7 @@ export function createTestApp(
     onRunSettled: (chatId) => queueDrain.service?.drain(chatId),
     onRunSteerable: (chatId) => queueDrain.service?.offerSteering(chatId),
     onSteeringDelivered: (chatId, steeringId) =>
-      queueDrain.service?.delivered(chatId, steeringId),
+      queueDrain.service?.deliveredPersisted(chatId, steeringId),
     onLlmStarted: () => queueDrain.service?.drainAll(),
   });
   const queuedMessages = new QueuedMessageService({
@@ -355,6 +357,7 @@ export function createTestApp(
     },
   });
   queueDrain.service = queuedMessages;
+  runs.recover();
 
   // Wired exactly the way main.ts wires it (docs/specs/Spec-Pop-General.md §6): a delete stops the
   // chat's work first, then purges what it left in the workspace. The

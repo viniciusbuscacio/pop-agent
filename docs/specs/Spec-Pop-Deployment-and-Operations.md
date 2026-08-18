@@ -56,7 +56,10 @@ model call.
 Shutdown stops new admissions, closes listeners/streams, aborts active runs and
 child process groups, closes MCP/PLA/pi resources and then SQLite. Deployment
 drain pauses task/run admission and waits only within bounded policy; it does
-not leave the service indefinitely half-stopped.
+not leave the service indefinitely half-stopped. Chat-run durability does not
+depend on receiving a shutdown signal: each visible partial projection is
+journaled before broadcast, and boot reconciles journal rows left by SIGKILL,
+process crash or host loss.
 
 ## Observability
 

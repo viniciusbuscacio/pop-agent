@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteRunJournalRepo } from '../../infrastructure/db/sqlite-run-journal-repo.js';
 import { SqliteTaskRepo } from '../../infrastructure/db/sqlite-task-repo.js';
 import type { AgentBridge, AgentRunRequest, AgentRunResult } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
@@ -119,6 +120,7 @@ beforeEach(() => {
   announced = [];
   runs = new RunService({
     chats: chatRepo,
+    journal: new SqliteRunJournalRepo(db),
     bridge,
     sink: new SilentSink(),
     clock,

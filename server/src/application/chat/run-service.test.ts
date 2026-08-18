@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../../infrastructure/db/sqlite-chat-repo.js';
 import { SqliteLlmRunsRepo } from '../../infrastructure/db/sqlite-llm-runs-repo.js';
+import { SqliteRunJournalRepo } from '../../infrastructure/db/sqlite-run-journal-repo.js';
 import type { AgentBridge, AgentRunRequest, AgentRunResult } from '../ports/agent-bridge.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink, RunEvent } from '../ports/event-sink.js';
@@ -90,7 +91,7 @@ beforeEach(() => {
   chats = new ChatService({ chats: repo, clock });
   sink = new RecordingSink();
   bridge = new ScriptedBridge();
-  runs = new RunService({ chats: repo, bridge, sink, clock, llmRuns: new SqliteLlmRunsRepo(db) });
+  runs = new RunService({ chats: repo, journal: new SqliteRunJournalRepo(db), bridge, sink, clock, llmRuns: new SqliteLlmRunsRepo(db) });
 });
 
 describe('starting a run', () => {
@@ -356,7 +357,7 @@ describe('stopping a run', () => {
 describe('the queue', () => {
   beforeEach(() => {
     const clock = new FixedClock();
-    runs = new RunService({ chats: repo, bridge, sink, clock, maxConcurrentRuns: 2 });
+    runs = new RunService({ chats: repo, journal: new SqliteRunJournalRepo(db), bridge, sink, clock, maxConcurrentRuns: 2 });
   });
 
   it('holds runs past the ceiling and reports them as queued', () => {
@@ -742,6 +743,7 @@ describe('confirmation of a risky action', () => {
   it('denies on its own after the timeout', async () => {
     runs = new RunService({
       chats: repo,
+      journal: new SqliteRunJournalRepo(db),
       bridge,
       sink,
       clock: new FixedClock(),
@@ -782,15 +784,17 @@ describe('a process shutdown mid-run', () => {
     expect(assistant?.content).toContain('interrupted by a server restart');
   });
 
-  it('stores nothing for a run that had not streamed a word', () => {
+  it('stores an interruption boundary before the first provider fragment', () => {
     const chatId = newChat();
     bridge.script = () => new Promise(() => undefined);
     runs.startRun(chatId, 'a question');
 
     runs.flushInterrupted();
 
-    const stored = repo.getMessages(chatId, { limit: 10 });
-    expect(stored.some((message) => message.role === 'assistant')).toBe(false);
+    const assistant = repo
+      .getMessages(chatId, { limit: 10 })
+      .find((message) => message.role === 'assistant');
+    expect(assistant?.content).toContain('interrupted by a server restart');
   });
 
   it('never stores the same words twice if the run still finishes', () => {
@@ -809,6 +813,89 @@ describe('a process shutdown mid-run', () => {
   });
 });
 
+describe('recovering the durable run journal after abrupt process loss', () => {
+  it('records an interruption even when the provider had not streamed a fragment', () => {
+    const chatId = newChat();
+    bridge.script = () => new Promise(() => undefined);
+    runs.startRun(chatId, 'a question');
+
+    // A new service over the same SQLite state represents a fresh process. The
+    // old instance never receives SIGTERM and therefore never flushes memory.
+    const restarted = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge: new ScriptedBridge(),
+      sink: new RecordingSink(),
+      clock,
+    });
+    restarted.recover();
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    expect(stored.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(stored.at(-1)?.content).toContain('interrupted by a server restart');
+    expect(new SqliteRunJournalRepo(db).list()).toEqual([]);
+  });
+
+  it('restores the last projection written before an abrupt crash', () => {
+    const chatId = newChat();
+    bridge.script = (request) => {
+      request.onEvent({ kind: 'thinking', text: 'checking' });
+      request.onEvent({ kind: 'delta', text: 'half an answer' });
+      request.onEvent({ kind: 'tool', name: 'read', status: 'output', detail: 'partial file' });
+      return new Promise(() => undefined);
+    };
+    runs.startRun(chatId, 'a question');
+
+    const restarted = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge: new ScriptedBridge(),
+      sink: new RecordingSink(),
+      clock,
+    });
+    restarted.recover();
+
+    const assistant = repo
+      .getMessages(chatId, { limit: 10 })
+      .find((message) => message.role === 'assistant');
+    expect(assistant).toMatchObject({
+      thinking: 'checking',
+      tools: [{ name: 'read', status: 'output', detail: 'partial file' }],
+    });
+    expect(assistant?.content).toContain('half an answer');
+    expect(assistant?.content).toContain('interrupted by a server restart');
+  });
+
+  it('resumes a globally queued run without duplicating its user turn', async () => {
+    const chatId = newChat();
+    const waiting = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge,
+      sink,
+      clock,
+      maxConcurrentRuns: 0,
+    });
+    waiting.startRun(chatId, 'wait safely');
+    expect(new SqliteRunJournalRepo(db).list()[0]?.state).toBe('queued');
+
+    const restarted = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge: new ScriptedBridge(),
+      sink: new RecordingSink(),
+      clock,
+    });
+    restarted.recover();
+    await restarted.whenIdle();
+
+    const stored = repo.getMessages(chatId, { limit: 10 });
+    expect(stored.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(stored.filter((message) => message.role === 'assistant')).toHaveLength(1);
+    expect(new SqliteRunJournalRepo(db).list()).toEqual([]);
+  });
+});
+
 describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, fase 2)', () => {
   let penalized: string[];
   let cleared: string[];
@@ -823,6 +910,7 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     fallbacks = [];
     runs = new RunService({
       chats: repo,
+      journal: new SqliteRunJournalRepo(db),
       bridge,
       sink,
       clock,

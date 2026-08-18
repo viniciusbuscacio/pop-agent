@@ -1,5 +1,12 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { extractText, isPrivateAddress, webFetch, WebFetchError } from './web-fetch.js';
+import {
+  discardResponseBody,
+  extractText,
+  isPrivateAddress,
+  webFetch,
+  WebFetchError,
+} from './web-fetch.js';
 
 /**
  * SSRF is the point (docs/specs/Spec-Pop-General.md §12): the DNS resolver is injected, so a host
@@ -74,6 +81,23 @@ describe('webFetch guards', () => {
 
   it('refuses credentials embedded in URLs', async () => {
     await expect(webFetch('https://owner:secret@example.com')).rejects.toThrow(/credentials/);
+  });
+});
+
+describe('response cancellation', () => {
+  it('absorbs Undici\'s expected abort error when an unread body is discarded', () => {
+    const body = new EventEmitter() as EventEmitter & { destroy(): void };
+    let destroyed = false;
+    body.destroy = () => {
+      destroyed = true;
+    };
+
+    discardResponseBody(body);
+
+    expect(destroyed).toBe(true);
+    // EventEmitter throws an unhandled `error`; the cancellation listener is
+    // therefore the behavior that keeps RequestAbortedError inside the tool.
+    expect(() => body.emit('error', new Error('Request aborted'))).not.toThrow();
   });
 });
 

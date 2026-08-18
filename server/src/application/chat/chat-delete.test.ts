@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../infrastructure/db/migrate.js';
 import { SqliteChatRepo } from '../../infrastructure/db/sqlite-chat-repo.js';
+import { SqliteRunJournalRepo } from '../../infrastructure/db/sqlite-run-journal-repo.js';
 import type { Chat } from '../../domain/chat/chat.js';
 import type { AgentBridge, AgentRunRequest, AgentRunResult } from '../ports/agent-bridge.js';
 import type { ChatPurger } from '../ports/chat-purger.js';
@@ -112,7 +113,7 @@ beforeEach(() => {
 
   bridge = new HangingBridge();
   sink = new SilentSink();
-  runs = new RunService({ chats: repo, bridge, sink: new SilentSink(), clock: new FixedClock() });
+  runs = new RunService({ chats: repo, journal: new SqliteRunJournalRepo(db), bridge, sink: new SilentSink(), clock: new FixedClock() });
   chats = new ChatService({ chats: repo, clock: new FixedClock(), runs, purger, sink });
 });
 
@@ -139,6 +140,7 @@ describe('deleting a chat with a run in flight', () => {
     // A ceiling of one: the second chat's run can only wait.
     const single = new RunService({
       chats: repo,
+      journal: new SqliteRunJournalRepo(db),
       bridge,
       sink: new SilentSink(),
       clock: new FixedClock(),

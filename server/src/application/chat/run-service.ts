@@ -133,7 +133,7 @@ export class RunService {
     // copies of a fact that mattered once.
     const previousClient = this.deps.chats.lastClientKind(chatId);
 
-    const userMessage = this.deps.chats.appendMessage({
+    const userDraft: Message = {
       id: newMessageId(),
       chatId,
       role: 'user',
@@ -143,8 +143,7 @@ export class RunService {
       attachments,
       createdAt: now,
       ...(options.client === undefined ? {} : { client: options.client }),
-    });
-    this.deps.chats.touch(chatId, now);
+    };
 
     const note = channelNote(options.client, previousClient);
 
@@ -170,6 +169,29 @@ export class RunService {
       thinking: '',
       tools: [],
     };
+    const userMessage = this.deps.journal.admit(
+      {
+        runId: run.runId,
+        chatId,
+        userMessageId: userDraft.id,
+        state: 'queued',
+        prompt: run.prompt,
+        model: run.model,
+        provider: run.provider,
+        attachments: run.attachments,
+        notify: run.notify,
+        ...(run.localConnectionId === undefined ? {} : { localConnectionId: run.localConnectionId }),
+        executionMode: run.executionMode,
+        seq: 0,
+        content: '',
+        thinking: '',
+        tools: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+      userDraft,
+      options.queuedMessageId,
+    );
     this.runs.set(run.runId, run);
     this.runIdByChat.set(chatId, run.runId);
     // Broadcast the persisted user turn before any status or fragment. That
@@ -372,7 +394,19 @@ export class RunService {
     if (queuedAt >= 0) this.queue.splice(queuedAt, 1);
     this.runs.delete(runId);
     this.runIdByChat.delete(chatId);
-    this.deps.sink.emit({ kind: 'error', chatId, runId, code: 'aborted' });
+    const stoppedAt = new Date(this.deps.clock.now()).toISOString();
+    const stoppedMessage: Message = {
+      id: newMessageId(),
+      chatId,
+      role: 'system',
+      content: 'You stopped this answer.',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: stoppedAt,
+    };
+    this.deps.journal.settle(runId, [stoppedMessage], stoppedAt);
+    this.deps.sink.emit({ kind: 'error', chatId, runId, code: 'aborted', message: stoppedMessage });
     this.endRun(runId, { ok: false, code: 'aborted' });
     this.settle();
     return true;
@@ -448,6 +482,45 @@ export class RunService {
     return true;
   }
 
+  /**
+   * Reconciles journal rows once composition is complete. Rows marked running
+   * are never replayed because tools may already have started; queued rows are
+   * the only safe work to resume.
+   */
+  recover(): void {
+    for (const entry of this.deps.journal.list()) {
+      if (entry.state === 'running') {
+        this.persistInterrupted(entry.runId, entry.chatId, entry.content, entry.thinking, entry.tools);
+        continue;
+      }
+      if (this.runIdByChat.has(entry.chatId)) continue;
+      const run: PendingRun = {
+        runId: entry.runId,
+        chatId: entry.chatId,
+        prompt: entry.prompt,
+        model: entry.model,
+        provider: entry.provider,
+        attachments: entry.attachments,
+        controller: new AbortController(),
+        notify: entry.notify,
+        localConnectionId: entry.localConnectionId,
+        executionMode: entry.executionMode,
+        control: undefined,
+        steering: new Map(),
+        started: false,
+        startedAtMs: 0,
+        seq: entry.seq,
+        content: entry.content,
+        thinking: entry.thinking,
+        tools: entry.tools,
+      };
+      this.runs.set(run.runId, run);
+      this.runIdByChat.set(run.chatId, run.runId);
+      this.queue.push(run.runId);
+    }
+    this.drain();
+  }
+
   /** Resolves once nothing is running or waiting. Used by tests and shutdown. */
   whenIdle(): Promise<void> {
     if (this.isIdle()) return Promise.resolve();
@@ -484,25 +557,37 @@ export class RunService {
    */
   flushInterrupted(): void {
     for (const run of this.runs.values()) {
-      const somethingArrived =
-        run.content.length > 0 || run.thinking.length > 0 || run.tools.length > 0;
-      if (!run.started || !somethingArrived) continue;
-      const at = new Date(this.deps.clock.now()).toISOString();
-      this.deps.chats.appendMessage({
-        id: newMessageId(),
-        chatId: run.chatId,
-        role: 'assistant',
-        content: `${run.content}\n\n*— interrupted by a server restart —*`,
-        thinking: run.thinking,
-        tools: run.tools,
-        attachments: [],
-        createdAt: at,
-      });
-      this.deps.chats.touch(run.chatId, at);
+      if (!run.started) continue;
+      this.persistInterrupted(run.runId, run.chatId, run.content, run.thinking, run.tools);
       run.content = '';
       run.thinking = '';
       run.tools = [];
     }
+  }
+
+  private persistInterrupted(
+    runId: string,
+    chatId: string,
+    content: string,
+    thinking: string,
+    tools: PendingRun['tools'],
+  ): void {
+    const at = new Date(this.deps.clock.now()).toISOString();
+    // Always persist an assistant boundary, even before the first provider
+    // fragment. Besides making the interruption visible, the established
+    // marker keeps distillation from mistaking an unanswered request for a
+    // completed turn.
+    const interrupted: Message = {
+      id: newMessageId(),
+      chatId,
+      role: 'assistant',
+      content: `${content}\n\n*— interrupted by a server restart —*`,
+      thinking,
+      tools,
+      attachments: [],
+      createdAt: at,
+    };
+    this.deps.journal.settle(runId, [interrupted], at);
   }
 
   /**
@@ -545,6 +630,7 @@ export class RunService {
             case 'delta':
               run.content += event.text;
               run.seq += 1;
+              this.saveProjection(run);
               sink.emit({
                 kind: 'delta',
                 chatId: run.chatId,
@@ -556,6 +642,7 @@ export class RunService {
             case 'thinking':
               run.thinking += event.text;
               run.seq += 1;
+              this.saveProjection(run);
               sink.emit({
                 kind: 'thinking',
                 chatId: run.chatId,
@@ -567,6 +654,7 @@ export class RunService {
             case 'tool':
               recordTool(run.tools, event);
               run.seq += 1;
+              this.saveProjection(run);
               sink.emit({
                 kind: 'tool',
                 chatId: run.chatId,
@@ -636,6 +724,22 @@ export class RunService {
     return failure;
   }
 
+  private saveProjection(run: PendingRun): void {
+    const saved = this.deps.journal.saveProjection(
+      run.runId,
+      {
+        seq: run.seq,
+        content: run.content,
+        thinking: run.thinking,
+        tools: run.tools,
+      },
+      new Date(this.deps.clock.now()).toISOString(),
+    );
+    // Never show a fragment that exists only in SSE/browser memory. A missing
+    // row is an invariant violation, not permission to weaken durability.
+    if (!saved) throw new Error(`run journal disappeared: ${run.runId}`);
+  }
+
   /** Splits the persisted/UI transcript exactly where pi inserts a steering user turn. */
   private acceptDeliveredSteering(run: PendingRun, steeringId: string): void {
     const steering = run.steering.get(steeringId);
@@ -645,7 +749,7 @@ export class RunService {
     const hasAssistant =
       run.content.length > 0 || run.thinking.length > 0 || run.tools.length > 0;
     const assistant: Message | undefined = hasAssistant
-      ? this.deps.chats.appendMessage({
+      ? {
           id: newMessageId(),
           chatId: run.chatId,
           role: 'assistant',
@@ -654,9 +758,9 @@ export class RunService {
           tools: run.tools,
           attachments: [],
           createdAt,
-        })
+        }
       : undefined;
-    const user = this.deps.chats.appendMessage({
+    const user: Message = {
       id: newMessageId(),
       chatId: run.chatId,
       role: 'user',
@@ -666,8 +770,13 @@ export class RunService {
       attachments: steering.attachments,
       createdAt,
       ...(steering.client === undefined ? {} : { client: steering.client }),
-    });
-    this.deps.chats.touch(run.chatId, createdAt);
+    };
+    if (!this.deps.journal.commitSteeringSegment(
+      run.runId,
+      steeringId,
+      assistant === undefined ? [user] : [assistant, user],
+      createdAt,
+    )) return;
 
     run.content = '';
     run.thinking = '';
@@ -685,10 +794,19 @@ export class RunService {
   }
 
   private async execute(run: PendingRun): Promise<void> {
-    this.running += 1;
-    run.started = true;
     const { chats, sink, clock } = this.deps;
     run.startedAtMs = clock.now();
+    const runningAt = new Date(run.startedAtMs).toISOString();
+    // Durable first: after this point a bridge/tool side effect makes replay unsafe.
+    if (!this.deps.journal.markRunning(run.runId, runningAt)) {
+      this.runs.delete(run.runId);
+      this.runIdByChat.delete(run.chatId);
+      this.drain();
+      this.settle();
+      return;
+    }
+    this.running += 1;
+    run.started = true;
 
     sink.emit({ kind: 'run-status', chatId: run.chatId, runId: run.runId, status: 'running' });
 
@@ -788,11 +906,11 @@ export class RunService {
       return;
     }
 
-    // On success the message is always stored, so `done` can carry a real id.
-    // On failure a partial answer is still stored -- a user who watched half
-    // a reply appear should find it after a reload.
+    // Build terminal history in memory, then append it and remove the journal
+    // in one transaction. A repeated settlement sees no journal and writes no duplicate.
+    const terminalMessages: Message[] = [];
     if (failure === undefined || somethingArrived) {
-      messageId = chats.appendMessage({
+      const answer: Message = {
         id: newMessageId(),
         chatId: run.chatId,
         role: 'assistant',
@@ -801,14 +919,13 @@ export class RunService {
         tools,
         attachments: [],
         createdAt: finishedAt,
-      }).id;
+      };
+      terminalMessages.push(answer);
+      messageId = answer.id;
     }
-    // EVERY failure also leaves a persisted system message (docs/specs/Spec-Pop-General.md §6): an
-    // error that existed only as an SSE event vanishes on reload, and the
-    // user who saw it can no longer ask "what happened?". History is forever.
     let failureMessage: Message | undefined;
     if (failure !== undefined) {
-      failureMessage = chats.appendMessage({
+      failureMessage = {
         id: newMessageId(),
         chatId: run.chatId,
         role: 'system',
@@ -833,10 +950,13 @@ export class RunService {
                 },
               },
             }),
-      });
+      };
+      terminalMessages.push(failureMessage);
     }
-    // A message was always appended (the answer, or the error mark).
-    chats.touch(run.chatId, finishedAt);
+    if (!this.deps.journal.settle(run.runId, terminalMessages, finishedAt)) {
+      this.finish(run);
+      return;
+    }
 
     sink.emit(
       failure === undefined

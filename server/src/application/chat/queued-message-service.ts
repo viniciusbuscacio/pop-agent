@@ -155,6 +155,12 @@ export class QueuedMessageService {
     return true;
   }
 
+  /** Journal transaction already consumed this steering row; publish and continue the FIFO. */
+  deliveredPersisted(chatId: string, steeringId: string): void {
+    this.announce(this.deps.repo.get(chatId), chatId, undefined, { kind: 'remove', id: steeringId });
+    this.offerSteering(chatId);
+  }
+
   /** Starts the waiting turn once, after its current run has left the registry. */
   drain(chatId: string): boolean {
     const queued = this.deps.repo.get(chatId);
@@ -181,6 +187,7 @@ export class QueuedMessageService {
           ? {}
           : { localConnectionId: queued.localConnectionId }),
         executionMode: queued.executionMode,
+        queuedMessageId: queued.id,
       },
     );
     if (!started.ok) {

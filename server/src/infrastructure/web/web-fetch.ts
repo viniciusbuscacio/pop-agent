@@ -102,7 +102,7 @@ async function pinnedRequest(url: URL, addresses: readonly string[]): Promise<st
       signal: controller.signal,
     });
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      response.body.destroy();
+      discardResponseBody(response.body);
       throw new WebFetchError(`The page answered ${String(response.statusCode)}.`);
     }
     return await readCapped(response.body);
@@ -170,7 +170,22 @@ async function defaultResolve(host: string): Promise<string[]> {
   return records.map((record) => record.address);
 }
 
-async function readCapped(body: AsyncIterable<Uint8Array> & { destroy(): void }): Promise<string> {
+interface ResponseBody extends AsyncIterable<Uint8Array> {
+  destroy(): void;
+  on(event: 'error', listener: (error: Error) => void): unknown;
+}
+
+/**
+ * Undici deliberately emits RequestAbortedError when an unread BodyReadable is
+ * destroyed. Without a listener that expected cancellation becomes an
+ * uncaught process-level error after the tool call already returned.
+ */
+export function discardResponseBody(body: Pick<ResponseBody, 'destroy' | 'on'>): void {
+  body.on('error', () => undefined);
+  body.destroy();
+}
+
+async function readCapped(body: ResponseBody): Promise<string> {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of body) {
@@ -178,13 +193,13 @@ async function readCapped(body: AsyncIterable<Uint8Array> & { destroy(): void })
     const remaining = MAX_BYTES - bytes;
     if (buffer.byteLength > remaining) {
       if (remaining > 0) chunks.push(buffer.subarray(0, remaining));
-      body.destroy();
+      discardResponseBody(body);
       break;
     }
     chunks.push(buffer);
     bytes += buffer.byteLength;
     if (bytes === MAX_BYTES) {
-      body.destroy();
+      discardResponseBody(body);
       break;
     }
   }

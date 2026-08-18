@@ -291,6 +291,12 @@ settles as aborted. Stopping an active run aborts the SDK session. pi must kill
 the process group of an active bash child so Stop terminates work, not merely
 streaming.
 
+Pop journals admitted runs independently from pi's JSONL. A queued journal row
+is marked running durably before `session.prompt()` or any tool can execute,
+and every visible projection update reaches SQLite before SSE. After process
+loss, queued rows may resume in FIFO order; running rows are rendered as
+interrupted and are never replayed because tool side effects may already exist.
+
 ## 5.11 Steering
 
 The bridge sets pi steering mode to `all`. Every accepted contiguous steering
