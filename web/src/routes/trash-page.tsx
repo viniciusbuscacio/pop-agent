@@ -95,7 +95,7 @@ export function TrashPage() {
             { id: 'trash', name: t('trash.title') },
           ]}
           limit={4}
-          onOpen={() => navigate('/files')}
+          onOpen={() => void navigate('/files')}
         />
         <span className="flex items-center gap-2">
           {entries !== undefined && entries.length > 0 ? (

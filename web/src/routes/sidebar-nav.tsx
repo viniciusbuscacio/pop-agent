@@ -30,16 +30,16 @@ export function SidebarNav() {
 
   function selectMain(value: MainSection): void {
     if (value === 'files') {
-      navigate('/files');
+      void navigate('/files');
     } else if (value === 'agent') {
-      navigate('/tasks');
+      void navigate('/tasks');
     } else {
-      navigate('/');
+      void navigate('/');
     }
   }
 
   function selectAgent(value: AgentSection): void {
-    navigate(`/${value}`);
+    void navigate(`/${value}`);
   }
 
   return (

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { McpServerDTO, McpCapabilityDTO } from '@pop-agent/shared';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
-import { McpService } from '../../application/mcp/mcp-service.js';
+import { type McpService } from '../../application/mcp/mcp-service.js';
 import type { McpCapability, McpServer } from '../../application/ports/mcp-repo.js';
 
 const schema=z.object({name:z.string().min(1).max(120),description:z.string().max(500).default(''),transport:z.enum(['stdio','sse','streamable-http']),endpoint:z.string().max(2000).default(''),command:z.string().max(500).default(''),args:z.array(z.string().max(500)).max(50).default([]),authKind:z.enum(['none','bearer','api-key','custom-header']).default('none'),authHeader:z.string().max(200).default(''),env:z.record(z.string(),z.string().max(4000)).optional(),enabled:z.boolean().default(true),timeoutMs:z.number().int().min(1000).max(300000).default(60000)}).strict();

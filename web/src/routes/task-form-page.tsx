@@ -57,7 +57,7 @@ export function TaskFormPage() {
         setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) navigate('/tasks', { replace: true });
+        if (!cancelled) void navigate('/tasks', { replace: true });
       });
     return () => {
       cancelled = true;
@@ -90,7 +90,7 @@ export function TaskFormPage() {
       if (taskId === undefined) await tasksService.create(body);
       else await tasksService.update(taskId, body);
       await reload();
-      navigate('/tasks');
+      void navigate('/tasks');
     } catch {
       setError(t('tasks.form.saveFailed'));
     } finally {
@@ -105,7 +105,7 @@ export function TaskFormPage() {
           type="button"
           data-testid="task-form-back"
           aria-label={t('common.back')}
-          onClick={() => navigate('/tasks')}
+          onClick={() => void navigate('/tasks')}
           className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
         >
           ←
@@ -233,7 +233,7 @@ export function TaskFormPage() {
                 type="button"
                 variant="ghost"
                 data-testid="task-cancel"
-                onClick={() => navigate('/tasks')}
+                onClick={() => void navigate('/tasks')}
               >
                 {t('common.cancel')}
               </Button>

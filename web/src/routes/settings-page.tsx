@@ -146,19 +146,19 @@ export function SettingsPage() {
   const activeEntry = SETTINGS_ENTRIES.find((entry) => entry.id === section);
 
   function openSection(next: Section): void {
-    navigate(`/settings?section=${next}`, { state: location.state });
+    void navigate(`/settings?section=${next}`, { state: location.state });
   }
 
   // CSS owns the breakpoint as well as the layout. Separate controls ensure
   // the visible split view always gets desktop navigation, without asking a
   // native host's JavaScript matchMedia implementation to classify the window.
   function goBackOnPhone(): void {
-    if (section !== undefined) navigate('/settings', { state: location.state });
-    else navigate('/');
+    if (section !== undefined) void navigate('/settings', { state: location.state });
+    else void navigate('/');
   }
 
   function goBackOnDesktop(): void {
-    navigate(settingsReturnTo(location.state));
+    void navigate(settingsReturnTo(location.state));
   }
 
   return (
@@ -1401,7 +1401,7 @@ function SecuritySection() {
             data-testid="settings-sign-out"
             onClick={() => {
               signOut();
-              navigate('/login');
+              void navigate('/login');
             }}
           >
             {t('settings.security.signOut')}

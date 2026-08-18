@@ -284,7 +284,7 @@ export function ChatPage() {
           type="button"
           data-testid="chat-back"
           aria-label={t('common.back')}
-          onClick={() => navigate('/')}
+          onClick={() => void navigate('/')}
           className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
         >
           ←
@@ -500,7 +500,7 @@ export function ChatPage() {
         onEditingDone={() => setEditingPendingId(undefined)}
         onStop={() => void stop(chatId)}
         onNewChat={() => {
-          void createChat().then((created) => navigate(`/chat/${created.id}`));
+          void createChat().then((created) => void navigate(`/chat/${created.id}`));
         }}
         models={models}
         activeProvider={chat?.provider ?? ''}
@@ -530,7 +530,7 @@ export function ChatPage() {
               } catch {
                 // The fork still exists; only its prefilled draft is unavailable.
               }
-              navigate(`/chat/${result.chat.id}`);
+              void navigate(`/chat/${result.chat.id}`);
               return;
             }
             if (isCompact) {

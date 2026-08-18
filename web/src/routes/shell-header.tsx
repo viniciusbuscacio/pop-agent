@@ -82,7 +82,7 @@ function useOpenSettings(): () => void {
   const navigate = useNavigate();
   const location = useLocation();
   return () =>
-    navigate('/settings', {
+    void navigate('/settings', {
       state: { returnTo: `${location.pathname}${location.search}${location.hash}` },
     });
 }

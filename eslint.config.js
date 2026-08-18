@@ -13,10 +13,8 @@ export default tseslint.config(
     },
   },
   {
-    // Type-aware promise safety starts on the server and CLI production paths.
-    // The PWA has a larger pre-existing async-handler baseline and will migrate
-    // separately rather than hiding 50 findings behind blanket disables.
-    files: ['server/src/**/*.ts', 'cli/src/**/*.ts'],
+    // Type-aware promise safety covers every production TypeScript path.
+    files: ['server/src/**/*.ts', 'cli/src/**/*.ts', 'web/src/**/*.ts', 'web/src/**/*.tsx'],
     ignores: ['**/*.test.ts', '**/*.test.tsx'],
     languageOptions: {
       parserOptions: {
@@ -25,6 +23,10 @@ export default tseslint.config(
       },
     },
     rules: {
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { disallowTypeAnnotations: false, fixStyle: 'inline-type-imports' },
+      ],
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
     },

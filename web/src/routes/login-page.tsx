@@ -39,7 +39,7 @@ export function LoginPage() {
     try {
       const { token } = await authService.login(password);
       signIn(token, keepSignedIn);
-      navigate('/');
+      void navigate('/');
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'locked') {
         setLockedFor(cause.retryAfterSeconds ?? 30);
@@ -62,7 +62,7 @@ export function LoginPage() {
     try {
       const token = await passkeyService.login();
       signIn(token, true);
-      navigate('/');
+      void navigate('/');
     } catch (cause) {
       // A cancel is not an error; a real failure is.
       if (cause instanceof ApiError) setError(t('login.invalid'));

@@ -56,7 +56,7 @@ export function TasksIntro() {
         <h1 className="text-lg font-semibold">{t('tasks.empty.title')}</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">{t('tasks.empty.body')}</p>
         <div className="mt-4 flex justify-center">
-          <Button type="button" data-testid="tasks-intro-new" onClick={() => navigate('/tasks/new')}>
+          <Button type="button" data-testid="tasks-intro-new" onClick={() => void navigate('/tasks/new')}>
             {t('tasks.new')}
           </Button>
         </div>
@@ -120,7 +120,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
           <Pressable
             type="button"
             data-testid="task-open"
-            onClick={() => navigate(`/tasks/${task.id}`)}
+            onClick={() => void navigate(`/tasks/${task.id}`)}
             className="block w-full truncate text-left text-sm font-medium"
           >
             {task.title}
@@ -162,7 +162,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
             label={t('tasks.edit')}
             onClick={() => {
               setMenuOpen(false);
-              navigate(`/tasks/${task.id}`);
+              void navigate(`/tasks/${task.id}`);
             }}
           />
           <MenuItem

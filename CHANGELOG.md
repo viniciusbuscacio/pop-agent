@@ -124,7 +124,13 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 - **TypeScript runtime boundaries are stricter.** API bodies are rejected before
   parsing above the global 30 MiB ceiling, PLA call frames use a discriminated
   runtime parser instead of an unsafe assertion, backup creation leaves the
-  event loop free, and type-aware promise linting covers server/CLI production.
+  event loop free, and type-aware promise/type-import linting covers all
+  production TypeScript, including the PWA.
+- **High-risk TypeScript modules now have narrower responsibilities.** Chat-list
+  explorers, run state, provider catalog resolution, pi event translation,
+  pi session adaptation and shared wire contracts live in focused modules;
+  dated implementation-history comments were removed while current invariants
+  remain next to the code they protect.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.

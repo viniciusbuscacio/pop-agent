@@ -51,7 +51,7 @@ function Boot() {
     // A session that dies mid-use (epoch bump elsewhere, expiry) lands here.
     setSessionLostHandler(() => {
       setStatus('signed-out');
-      navigate('/login');
+      void navigate('/login');
     });
   }, [navigate, setStatus]);
 

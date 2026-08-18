@@ -63,7 +63,7 @@ import { createLocalToolsRoutes } from './local-tools-routes.js';
 import { createStorageRoutes } from './storage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { createServerRoutes } from './server-routes.js';
-import { SseHub } from './sse-hub.js';
+import { type SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
 import { createMcpRoutes } from './mcp-routes.js';
 import { apiError } from './errors.js';

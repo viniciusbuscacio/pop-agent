@@ -76,7 +76,7 @@ export function RecoverPage() {
               type="button"
               data-testid="recover-finish"
               disabled={!saved}
-              onClick={() => navigate('/')}
+              onClick={() => void navigate('/')}
             >
               {t('common.continue')}
             </Button>
@@ -139,7 +139,7 @@ export function RecoverPage() {
             {t('recover.submit')}
           </Button>
 
-          <Button type="button" variant="ghost" onClick={() => navigate('/login')}>
+          <Button type="button" variant="ghost" onClick={() => void navigate('/login')}>
             {t('common.cancel')}
           </Button>
         </form>

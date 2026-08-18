@@ -137,7 +137,7 @@ export function SetupPage() {
               <p className="text-sm text-[var(--key-fg-dim)]">{t('setup.done.body')}</p>
             </header>
 
-            <Button type="button" data-testid="setup-finish" onClick={() => navigate('/')}>
+            <Button type="button" data-testid="setup-finish" onClick={() => void navigate('/')}>
               {t('setup.done.enter')}
             </Button>
           </div>

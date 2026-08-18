@@ -28,7 +28,7 @@ export function SkillsPage() {
   // A dead link (a deleted skill) falls back to the list once skills arrived.
   useEffect(() => {
     if (!isNew && slug !== undefined && skills !== undefined && skill === undefined) {
-      navigate('/skills', { replace: true });
+      void navigate('/skills', { replace: true });
     }
   }, [isNew, slug, skills, skill, navigate]);
 
@@ -52,7 +52,7 @@ export function SkillsPage() {
             skill={skill}
             onDone={() => {
               void reload();
-              navigate('/skills');
+              void navigate('/skills');
             }}
           />
         </div>

@@ -111,7 +111,7 @@ export function FilesPage() {
   // the tree arrived.
   useEffect(() => {
     if (currentPath !== '' && tree !== undefined && openFolder?.kind !== 'dir') {
-      navigate('/files', { replace: true });
+      void navigate('/files', { replace: true });
     }
   }, [currentPath, openFolder, tree, navigate]);
 
@@ -150,7 +150,7 @@ export function FilesPage() {
   }
 
   function openCrumb(id: string): void {
-    navigate(id === '' ? '/files' : `/files/${id}`);
+    void navigate(id === '' ? '/files' : `/files/${id}`);
   }
 
   /**
@@ -262,7 +262,7 @@ export function FilesPage() {
     const removed = await filesService.remove(folder.path);
     await reload();
     announceTrash([removed]);
-    if (folder.path === currentPath) navigate('/files');
+    if (folder.path === currentPath) void navigate('/files');
   }
 
   function toggleSelected(path: string): void {
@@ -315,7 +315,7 @@ export function FilesPage() {
     clearSelection();
     await reload();
     announceTrash(removed);
-    if (closedTheOpenOne) navigate('/files');
+    if (closedTheOpenOne) void navigate('/files');
   }
 
   // Files only: Move to… is hidden while a folder is ticked, so the batch bar
@@ -362,7 +362,7 @@ export function FilesPage() {
           <Pressable
             type="button"
             data-testid="folder-row"
-            onClick={() => navigate(`/files/${folder.path}`)}
+            onClick={() => void navigate(`/files/${folder.path}`)}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <FolderIcon />
@@ -568,7 +568,7 @@ export function FilesPage() {
             data-testid="files-trash"
             aria-label={t('trash.title')}
             title={t('trash.title')}
-            onClick={() => navigate('/files/trash')}
+            onClick={() => void navigate('/files/trash')}
           >
             <TrashIcon />
           </Button>
@@ -675,7 +675,7 @@ export function FilesPage() {
                     <Pressable
                       type="button"
                       data-testid="search-folder-row"
-                      onClick={() => navigate(`/files/${hit.path}`)}
+                      onClick={() => void navigate(`/files/${hit.path}`)}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-[var(--hover-overlay)]"
                     >
                       <FolderIcon />

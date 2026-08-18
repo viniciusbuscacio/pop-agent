@@ -1,7 +1,7 @@
-import { Profiles, normalizeServerUrl, DEFAULT_PROFILE, type Profile } from '../application/profiles.js';
+import { type Profiles, normalizeServerUrl, DEFAULT_PROFILE, type Profile } from '../application/profiles.js';
 import type { Preferences } from '../application/preferences.js';
 import { Transcript, emptyRun } from '../application/transcript.js';
-import { ApiError, PopAgentApi } from '../infrastructure/api.js';
+import { ApiError, type PopAgentApi } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
 import type { LocalAccessOptions } from '../infrastructure/local-access.js';
 import { VERSION } from '../version.js';

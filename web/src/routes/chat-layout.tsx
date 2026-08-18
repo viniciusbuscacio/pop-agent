@@ -54,7 +54,7 @@ export function ChatLayout() {
     return eventStream.subscribe((event) => {
       if (event.kind === 'chat-deleted' && event.chatId === openChat?.params.chatId) {
         forgetLastActiveChat(event.chatId);
-        navigate('/', { replace: true });
+        void navigate('/', { replace: true });
       }
     });
   }, [navigate, openChat?.params.chatId]);
