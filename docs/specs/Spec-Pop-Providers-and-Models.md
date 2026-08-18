@@ -1,280 +1,187 @@
 # Pop Agent — providers and models
 
 **Status:** normative
-**Legacy coverage:** §15 through multi-provider phase 2
-**Primary implementation:** server/src/application/providers, provider adapters, Settings
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Legacy coverage:** §15
+**Primary implementation:** `server/src/application/providers/`, `server/src/infrastructure/providers/`, provider HTTP routes and Settings UI
+**Related:** [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-Deployment-and-Operations.md`](Spec-Pop-Deployment-and-Operations.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-## 15. Providers, models, updates
+## Domain model
 
-### Multi-provider (fase 1)
+A model identity is always `(providerId, modelId)`. A model ID has meaning only
+inside its provider and is never passed down a failover chain unchanged.
+Provider definitions are declarative data; application policy does not grow one
+subclass per vendor.
 
-Design copied conceptually from the Agent Workspace; transport and
-catalog come from pi (`ModelRuntime` + pi-ai `Models`), never
-reimplemented.
+Built-ins include API-key providers (OpenRouter, OpenAI, Anthropic) and pi-native
+subscription providers (OpenAI Codex and GitHub Copilot). OpenRouter is the
+factory default and its shipped fallback/default is currently Kimi K3. Built-in
+catalog defaults are release data, not permanent user state; owner selections
+remain authoritative.
 
-- **Provider is data, not a class**: a declarative list of definitions
-  `{id, name, baseURL, authType, defaultModel, allowCustomModel}`.
-  `authType` is `"api-key"` or `"oauth"` (fase 1.5 below); vendor
-  quirks get a point `if`, not a subclass. Adding a provider = adding
-  a literal.
-  Phase 1 ships: OpenRouter (default, **default model: Kimi K3**),
-  OpenAI and Anthropic. Fase 1.5 adds the OAuth pair pi supports
-  natively: `openai-codex` (ChatGPT subscription) and `github-copilot`
-  (Copilot subscription). Custom OpenAI-compatible endpoints are
-  user-created instances, unlimited (below).
-- **Unlimited custom providers**: the registry (settings key
-  `provider.custom.registry`) holds `{id, name, baseURL, defaultModel}`
-  per instance; ids are `custom-` + 5 random hex bytes, re-rolled on
-  collision. Each instance's key is sealed under its own id
-  (`provider.<id>.apiKey`) and deleted with it. The definition list
-  everything consumes = builtins + one synthesized definition per
-  instance (customs join resolve/chain after the builtins, in registry
-  order); the engine registers each instance with pi lazily on use, so
-  adding or editing one needs no restart. Base URLs are normalized on
-  save (trailing slashes and a trailing `/chat/completions` stripped;
-  the card shows "requests go to" live). Routes:
-  `POST /v1/providers/custom` (create → id),
-  `PATCH|DELETE /v1/providers/custom/:id`; the single-slot era's
-  `PUT /v1/providers/custom/config` is REMOVED. Migration: on boot, a
-  legacy `provider.custom.config` and/or `provider.custom.apiKey`
-  becomes one registry instance (key and all), the legacy entries are
-  cleared, and `provider.custom.alias` remembers the new id so a chat
-  override still saying `custom` resolves to it.
-- **Model identity = the pair `(providerId, modelId)`**, always. No
-  synthetic string of our own; each provider names the model its way.
-  Everywhere that stores `model` today (settings, chats, llm_runs) now
-  stores the pair; migration treats the old value as OpenRouter
-  (backfill `provider='openrouter'`).
-- **Keys are write-only**: the UI never reads the key back (input starts
-  empty, placeholder "••• configured" when one exists); no endpoint
-  returns key material (only `hasKey: boolean`); keys never in logs,
-  model context or tool results. Storage: the existing encrypted
-  secrets column (secret.key), one row per provider.
-- **Saving ≠ activating**: saving a key/config never hits the network.
-  Validation (one real ~5-token completion, "Reply with exactly: ok")
-  runs only on explicit activation/test; if it fails, the typed config
-  IS kept with a warning — a bad key must not destroy what the user
-  typed.
-- **Model catalog in 3 layers**: live (ModelRuntime refresh now) →
-  cache (last good fetch, in SQLite) → static (built-in list per
-  provider). Responses carry `source: live|cache|static` so the UI can
-  say "cached list, endpoint down". Providers with `allowCustomModel`
-  use free input + datalist.
-- **Per-chat override**: `provider`/`model` columns on the chat row;
-  empty = global default. A broken override (provider without key,
-  model gone) degrades silently to the global default, never an error.
-- **Mid-chat model switch**: the conversation is preserved — only the
-  model adapter/session is rebuilt, never the history; the switch shows
-  as a system bubble in the chat (client-side, NEVER sent to the model
-  — chat override is UI state, not a conversation turn).
-- **The global default is never empty**: if the default provider's key
-  is deleted/disabled, the next configured provider is elected (or an
-  explicit warning). An empty slot silently breaks everything that
-  resolves "the default" (restore, title, voice) while chats look fine.
-- **Endpoints**: `GET /v1/providers` (definitions + hasKey +
-  defaultModel, no secrets), `PUT|DELETE /v1/providers/:id/key`,
-  `POST /v1/providers/:id/test` (the validation completion),
-  `GET /v1/models?provider=<id>` (3-layer catalog). `/model` accepts
-  provider + model.
-- **Chat Model and Service Model, one pair PER PROVIDER** (corrected
-  07/08, built 1.60). The Chat Model is what the user talks to; the Service
-  Model is what Pop Agent uses for its own work — naming a conversation,
-  summarizing, tidying a voice transcript. It used to be one global setting,
-  which was mono-provider thinking: a stored value is a *model id*, and a
-  model id only means something inside one provider's catalogue. An install
-  whose service model said `moonshotai/kimi-k3` asked OpenAI for a model
-  OpenAI has never heard of the moment a chat ran there.
-  - Stored beside the credential, per provider: `PUT
-    /v1/providers/:id/service-model`, and a picker on the provider's card.
-  - **Empty means "follow this provider's Chat Model"** — a fallback, not a
-    value copied at setup. A copy is a second thing to keep in sync: change
-    the chat model six months later and the copy still names the model you
-    left behind, which for a custom endpoint may no longer be served at all.
-    Picking the chat model again is what clears the override.
-  - **Resolution**: a service task inherits the provider of whatever it
-    serves — a title takes its chat's — and a job with no parent chat takes
-    the head of the priority list. `resolveServiceModel(context)` and
-    `resolveServiceChain(context)` on `ProviderService`; no consumer reads a
-    global setting any more.
-  - **Failover**: a service task walks the same chain a run does (§15 fase
-    2). It tries every remaining provider rather than consulting
-    `shouldFailOver`, and that difference is deliberate: that predicate
-    reads a status code and the HTTP gateway does not carry one. Given the
-    choice between guessing a class from prose and spending one more very
-    small call, it spends the call.
-  - The `voiceCleanupModel` override in Settings still wins where set, and
-    applies to the FIRST chain entry only — carrying a model id down the
-    chain would ask the fallback provider for a model it never heard of,
-    which is the bug this whole correction removes.
+A provider status exposes id/name, auth type, configured/source flag, default
+chat model, service model, custom-model support, priority, enabled state and
+safe auth-error timestamp. It never exposes credential material.
 
-### Subscription OAuth (fase 1.5)
+## Credentials
 
-- **Subscription auth rides pi's own login flows** — `openai-codex`
-  (ChatGPT Plus/Pro) and `github-copilot` (Copilot seat). Pop Agent never
-  reimplements an OAuth dance: `ModelRuntime.login` runs the flow and
-  persists the credential into Pop Agent's own auth file
-  (`POP_AGENT_DATA_DIR/pi-auth.json`); refresh happens inside pi per
-  request. No key exists anywhere for these providers.
-- **One interactive flow at a time**, server-side
-  (`OAuthFlowService`): `POST /v1/providers/:id/oauth/start` begins it
-  (starting a new flow cancels the previous), `GET .../oauth/state` is
-  the transcript the browser polls (~2 s), `POST .../oauth/input`
-  answers the flow's one pending question, `POST .../oauth/cancel`
-  aborts, `POST .../oauth/logout` disconnects (pi `logout`). A flow
-  nobody finishes times out after 10 minutes. A provider 429 persists a
-  per-provider cooldown deadline under the data directory, honoring numeric
-  `Retry-After` when available and otherwise waiting one hour; restarting the
-  service cannot bypass that brake. OAuth journal lines contain only provider,
-  short flow id, stage, result/status class and duration — never provider HTTP
-  bodies, prompt answers, device codes, URLs or credentials.
-- **No token material ever leaves the server**: the state carries only
-  display events (info / auth_url / device_code / progress) and the
-  pending prompt; credentials go from the flow straight into pi's
-  store. The wire shapes are copied field-by-field, never spread.
-- **Temporary upstream Copilot patch:** pi 0.84.1 launches one policy request
-  per known model in a single `Promise.all` (30 requests today), causing an
-  authorized login to end as 429 at the final `/models` read. Pop carries the
-  compiled form of upstream commit `b3edf017` through `patch-package`, limiting
-  policy updates to four concurrent requests. `postinstall` reapplies it and
-  the gate verifies it. Remove the patch machinery as soon as a published pi
-  version contains that commit.
-- **Subscription allowance belongs to its provider card.** Settings → Model →
-  OpenAI subscription reads the provider's rolling usage windows and reset
-  times through `GET /v1/providers/:id/subscription-usage`; allowance stays on
-  that provider card rather than creating a separate Settings destination. The
-  engine asks pi for fresh OAuth auth first, then calls OpenAI's Codex usage endpoint. Only plan, percentages and
-  reset clocks cross the infrastructure boundary — never email, account id or
-  tokens. Failure hides the optional row rather than breaking Model settings.
-- **Status/resolve semantics**: for an oauth definition `configured`
-  = "the engine holds a credential" (`hasConfiguredAuth`), reported as
-  `source: "oauth"`; resolve treats a signed-in subscription exactly
-  like a stored key when electing the pair; test uses pi `checkAuth`
-  instead of the paid HTTP probe; the model catalog answers from pi's
-  built-in list (no gateway, keyless). Session open for an oauth
-  provider must not demand an API key.
-- **The auth file is the truth, not the snapshot.** pi's refresh
-  (post-login bookkeeping: remote catalogs, availability) is best
-  effort and may stall on the network, and its internal snapshot only
-  moves when that bookkeeping finishes -- so every Pop Agent decision
-  about "is there a credential" (`providerLogin`, `hasProviderAuth`,
-  the authenticated-runtime door) reads `pi-auth.json` directly, and
-  `providerLogin` resolves the moment the credential file lands,
-  letting pi's bookkeeping run in the background. To keep that
-  bookkeeping cheap and non-blocking, the service runs with
-  `PI_OFFLINE=1` (catalog updates ride pi package upgrades instead).
-- **The card outlives the page.** Signing in means leaving for the
-  provider and coming back, and the way back is usually a fresh mount:
-  a new tab, a reload, the PWA resumed from the background. The card
-  therefore asks for the flow state on mount and adopts a running flow,
-  instead of only knowing about flows it started itself.
-- **The method choice is Pop Agent's words, not pi's.** pi offers a
-  subscription two ways and calls the browser redirect "(default)" --
-  but that redirect targets `localhost:1455` on the machine doing the
-  browsing, which on a self-hosted install is not the machine running
-  Pop Agent, so it can only end in a URL copied back by hand. The card
-  relabels the two known methods (`device_code`, `browser`) itself and
-  puts the code one -- no callback, works from any device -- first.
-  Methods pi may add later render unrelabelled, as they arrive.
-- **The redirect path is three steps, each said once**: open and
-  approve, expect a page that does not load, paste that page's address.
-  The warning comes *before* the input, because a user who meets the
-  failed page unwarned reads the whole sign-in as broken and stops
-  there. The steps carry the sign-in link, so the transcript drops its
-  duplicate row, and the input uses Pop Agent's own placeholder -- pi's is
-  the loopback URL itself, which reads like something to type.
+API keys are write-only. A saved key is encrypted through the secrets repository
+under a provider-specific name. Responses use `configured/hasKey` only; inputs
+render empty with a configured placeholder. OpenRouter may use the historical
+environment seed only when no stored key exists; owner-saved key wins.
 
-### Multi-provider (fase 2 — automatic fallback)
+Saving configuration never performs a network request. Test/activation is an
+explicit low-token completion. Failed validation keeps what the owner typed and
+returns a warning rather than destroying configuration. Saving new credentials
+clears stale auth error/cooldown/catalog evidence.
 
-- **The priority list is the only lever** (settings key
-  `provider.order`, ids in order, #1 first). The list the user edits IS
-  the failover order, and its head IS the global default: after every
-  edit `electDefault` writes the first *usable* entry back as
-  `defaultProvider`, so the numbered list can never say one thing while
-  new chats do another. There is no separate "default provider"
-  control. Providers absent from a saved list keep a position at the
-  tail — a provider added later is never orphaned outside the chain —
-  and unknown ids are dropped rather than stored. Routes:
-  `PUT /v1/providers/order` (whole list, never a move).
-- **A per-provider on/off switch** (settings key `provider.disabled`,
-  `PUT /v1/providers/:id/enabled`). Off means out of the chain
-  entirely, even for a chat that names the provider: the run falls
-  through to the next candidate instead of failing. Switching off the
-  head hands the default to the next usable entry; with nothing usable
-  the current default is left alone, because an empty slot breaks more
-  than a stale one.
-- **The chain**: a run's failover chain = chat override (when usable) →
-  the priority list, in order, one entry per provider
-  (`ProviderService.resolveChain`). The global default gets NO entry of
-  its own — it used to sit ahead of the list, a hidden #0 nobody could
-  see or move, so an install whose stored default was a dead endpoint
-  kept starting there however the list was arranged. The default is
-  derived from the list, never a second opinion about order; it still
-  decides the MODEL for its own provider (the list says who answers,
-  the model picker says with what). Only usable providers (key stored
-  or subscription signed in, and switched on) take a place. An install
-  that never edited the list gets its existing default as #1, so
-  removing the old control moved nobody's answers. With nothing usable
-  it degrades to the head of the list, so the run still fails with the
-  error that points at Settings.
-- **Attempt lifetime belongs to pi/provider**: Pop Agent adds no competing
-  silence timeout around `AgentBridge.run`. pi's configured retry policy handles
-  transient failures and only its final outcome reaches the host bridge; the
-  provider transport owns request deadlines. This keeps slow reasoning and long
-  tool turns under the same policy as a native pi session instead of aborting a
-  healthy attempt at an arbitrary host-side minute.
-- **Error classification is TYPED** (`shouldFailOver`, application
-  layer): by code and HTTP status, never substring-only. Fail-forward:
-  401/402/403/404/408/429/5xx, `network_error` (transport: ECONN*,
-  TLS, fetch failed…), `provider_not_configured`, `model_not_available`.
-  Never: 400, the
-  user's Stop (`aborted`), `turn_tainted`. Anything unclassifiable
-  stays put. The bridge supplies the typing: it parses the status out
-  of the code-shaped places providers put it and tags transport
-  failures. Context overflow keeps its own path (§7: compact + retry
-  same provider once, inside the bridge); only a failover-class error
-  on the retry moves on.
-- **Mid-stream failure does NOT fail over** (tokens already rendered)
-  but still penalizes the provider; the run fails in place with the
-  persisted system mark.
-- **Advisory cooldown** (`ProviderCooldown`, in-memory, escalating —
-  1.73): a penalized provider moves behind healthy candidates in the next
-  chains, but remains as a last recovery path if those candidates also fail.
-  If every candidate is penalized, their original order is preserved. The wait
-  lengthens with each consecutive strike (1 min →
-  5 → 15 → 60); a flat 5 minutes both forgave a provider that was
-  down for an hour too early and kept punishing a hiccup too long.
-  Saving a key, completing a sign-in, a green connection test or a
-  successful run forgives the provider; a restart forgives everyone.
-- **Failover is LOUD and chronological**: only when the provider changes, a
-  persisted system message in the transcript ("Answer retried via X after Y
-  failed (code).") is inserted before the replacement answer, plus one journal
-  line (`pop fallback: chat=… from=… to=… code=…`). It is never a floating
-  status detached from message order, and ordinary answers do not repeat their
-  provider/model. Every billed attempt books its own `llm_runs` row (failover
-  attempts under `<runId>-f<n>`), so the accounting shows what each provider
-  really charged.
-- **A retry never replays the user's prompt** (1.73): before a
-  failover hop or an overflow retry, the bridge rewinds the pi session
-  to before the user message (`SessionManager.branch` on the entry
-  id) and resyncs the agent's history — the next provider answers the
-  message once, not twice in the saved context.
-- **Thinking and tool calls gate the failover** (1.73): a run that
-  already streamed either never retries on the next provider —
-  re-executing side effects is worse than failing in place. An
-  abandoned attempt still books whatever usage settles late, and its
-  session is hard-forgotten (`discardSession`) so it is never
-  re-prompted into a shared context.
-- **Auth-class failures surface** (1.73): a refusal the cooldown
-  classifies as auth stamps `authErrorAt` on the provider (DTO +
-  "sign in again" badge in Settings), cleared by a fresh key, a fresh
-  sign-in or a green connection test.
-- **Background work bills like chat work** (1.73): `completeAsService`
-  records a `llm_runs` row per completion (`kind: 'service'`,
-  migration 032; `chatId` empty by convention), with the provider's
-  reported usage and zero cost for a subscription.
-- Still future: a user-editable priority order (today the order is the
-  definition list with the default first).
+OAuth providers use pi `ModelRuntime.login/logout`; Pop does not implement the
+vendor OAuth protocol. Credentials stay in Pop's isolated pi auth store.
+Interactive flow state is server-owned, single active flow per provider,
+cancellable and bounded by timeout. Transcript events are sanitized and never
+contain access/refresh tokens. Provider 429 cooldown is persisted so restart
+does not turn repeated login into abuse.
+
+## Custom OpenAI-compatible providers
+
+The owner may create up to 256 custom instances. Each has random collision-safe
+`custom-…` ID, display name, normalized base URL and default model. Trailing
+slashes and a trailing chat-completions path are normalized. Each key is sealed
+under that instance ID and removed with it.
+
+Instances join the same definition list, priority chain, model resolution and
+usage flow as built-ins. Editing is live; pi registers the current definition
+when opening/using a session. A legacy single custom slot is migrated once to a
+registry instance with an alias for old chat overrides, then legacy settings are
+cleared.
+
+Custom endpoints are owner-authorized network destinations and may intentionally
+be loopback/private when the server itself hosts a model. This is distinct from
+untrusted `web_fetch` SSRF policy. Secrets still cannot enter the URL or logs.
+
+## Priority, enablement and global default
+
+One ordered provider list is both failover order and default election. Position
+1 is the desired global provider. Disabled, unconfigured, auth-broken or
+cooldown-penalized entries are skipped for execution. Unknown/stale IDs are
+removed when writing order; newly added providers append so they remain
+reachable.
+
+After order, enabled state, key or custom-instance deletion changes, the first
+usable entry is elected and written as global default. If none is usable, the
+existing pair remains visible with an actionable configuration error rather
+than an empty invalid setting.
+
+A per-chat `(provider, model)` override persists with the chat. Missing override
+uses global default. Legacy model-only rows migrate as OpenRouter. A stale or
+unusable override resolves through product fallback policy; it never causes a
+model ID to be sent to a different provider.
+
+Changing a chat model preserves product transcript and pi history. It changes
+future execution context/session model and appears as UI state/timeline context,
+not a forged user/model instruction.
+
+## Chat and service models
+
+Each provider has:
+
+- chat/default model: normal conversation for that provider;
+- service-model override: isolated titles, Auto-Skill creator/reviewer, voice
+  cleanup and other internal completions.
+
+An empty service override means “follow this provider's chat model” dynamically,
+not a copied model ID. Service work with a parent chat starts from that chat's
+provider; independent work starts from the provider chain head. Each failover
+entry resolves its own service model.
+
+A feature-specific override such as voice cleanup may replace only the first
+entry's model. It cannot be propagated to another provider. Service completions
+run without chat session/history/tools and book usage under an explicit service
+purpose.
+
+## Model catalogs
+
+Catalog lookup follows freshest available evidence:
+
+1. live authenticated provider gateway where supported;
+2. last good bounded cache (24-hour policy metadata);
+3. pi engine's offline built-in catalog;
+4. static provider fallback.
+
+Responses identify `live | cache | engine | static`. Failed live refresh does
+not erase last-good data. Key/default/custom edits invalidate relevant cache.
+Catalog entries are normalized/deduplicated and bounded. Providers allowing a
+custom model permit validated free input when a model is absent from the list.
+
+The catalog is never fetched on every chat render or health probe. PWA model
+pickers use provider grouping/search and preserve the complete `(provider,id)`
+pair.
+
+## Execution and failover
+
+RunService owns product retry policy; pi adapter executes one resolved pair.
+The provider chain is snapshotted for a run attempt. Failover occurs only for
+classified replay-safe failures and rewinds the rejected pi branch first.
+Unsafe/ambiguous work, owner Stop and deterministic local/tool failures are not
+blindly replayed.
+
+Provider cooldown applies advisory backoff after transient/rate-limit failure.
+Saving credentials/configuration is new evidence and clears it. Auth-class
+failure records a visible marker and prevents health from claiming configured
+means working. A successful OAuth/key test clears the marker.
+
+Service completions may walk remaining providers after a failure because they
+are isolated and replayable. Chat attempts follow the stricter RunService
+classification. Every entry resolves a model belonging to itself.
+
+## Usage, cost and allowance
+
+Every provider call contributing to one product run is accumulated and stored.
+Rows identify provider/model, input/output/cache/reasoning tokens where
+available, cost and whether the call is service work. Missing upstream usage is
+represented as unknown/partial, never fabricated as zero.
+
+OpenRouter API-key credit endpoints and pi-native subscription allowance are
+optional provider-specific snapshots. They expose only allowance/remaining
+fields needed by Settings. Credit/allowance lookup failure does not block chat
+and never logs raw credential/provider pages.
+
+Cost calculation uses provider semantics and model-reported pricing where
+available. Currency formatting is frontend/shared policy; billing estimates are
+labeled honestly and are not invoices.
+
+## API and UI
+
+Guarded provider routes expose status/order/enabled state, key write/delete/test,
+custom CRUD, service model, model catalogs, OAuth start/transcript/answer/cancel,
+credits and subscription usage. Bodies are strict and bounded.
+
+Settings presents providers in priority order with enabled/configured/auth-error
+state. Key values are never prefilled. Saving and testing are distinct actions.
+Custom provider cards show the normalized endpoint. Model selectors do not lose
+provider identity. OAuth UI displays the server-owned transcript/pending
+question and supports cancellation/recovery.
+
+## Failure behavior
+
+- no provider configured: chats fail with actionable stable configuration state;
+- live catalog down: cache/engine/static remains available and source is shown;
+- revoked key/subscription: auth marker appears and unsafe repeated attempts stop;
+- rate limit: provider cooldown honors Retry-After when available;
+- custom endpoint malformed: save validation refuses/normalizes before use;
+- custom deletion: key/cache/order/aliases are cleaned and default re-elected;
+- stale chat model: resolve current provider fallback, never cross-provider ID;
+- provider failure after unsafe work: no automatic replay;
+- OAuth provider page/error: transcript receives safe summary only.
+
+## Test obligations
+
+- built-in definitions, defaults and model-pair migration;
+- write-only key precedence, encryption adapter and no-secret DTO/log paths;
+- order/enable/default election under deletion and no usable provider;
+- 256 custom cap, random collision retry, URL normalization and legacy migration;
+- live/cache/engine/static catalog fallback and invalidation;
+- per-provider service model and cross-provider failover resolution;
+- OAuth lifecycle, cancellation, timeout, 429 persistence and token-free transcript;
+- chat failover replay classification/rewind and cooldown;
+- usage aggregation, service-purpose booking, credits/allowance failure isolation;
+- provider UI keeps saving separate from testing and pair identity intact.
