@@ -10,6 +10,7 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_CHUNK_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 const MAX_TIMEOUT_SECONDS = 86_400;
+const MAX_COMPLETED_CALLS = 1_024;
 const LOCAL_LEASE_MS = 45_000;
 
 export interface LocalAccessOptions {
@@ -286,7 +287,7 @@ export class LocalAccess {
       return;
     }
     await this.run(call, async (event) => {
-      if (event['kind'] === 'result') this.completedCalls.set(call.callId, event);
+      if (event['kind'] === 'result') this.rememberCompleted(call.callId, event);
       await send(event);
     });
   }
@@ -337,6 +338,16 @@ export class LocalAccess {
     } catch (error) {
       const detail = localError(error);
       await reply({ ok: false, output: '', error: detail });
+    }
+  }
+
+  private rememberCompleted(callId: string, event: Record<string, unknown>): void {
+    this.completedCalls.delete(callId);
+    this.completedCalls.set(callId, event);
+    while (this.completedCalls.size > MAX_COMPLETED_CALLS) {
+      const oldest = this.completedCalls.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.completedCalls.delete(oldest);
     }
   }
 

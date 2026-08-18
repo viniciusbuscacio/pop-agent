@@ -2,58 +2,503 @@
 
 **Status:** normative
 **Legacy coverage:** §17.1
-**Primary implementation:** server/src/application/local-access, cli, local-access/tray
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Primary implementation:** `server/src/application/local-access/`, `server/src/interface/http/local-tools-routes.ts`, `server/src/infrastructure/agent/local-tools.ts`, `cli/src/infrastructure/local-access.ts`, `local-access/tray/`, `web/src/routes/installation-section.tsx`
+**Related:** [`Spec-Pop-Installation.md`](Spec-Pop-Installation.md), [`Spec-Pop-Events-Synchronization.md`](Spec-Pop-Events-Synchronization.md), [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`../cli.md`](../cli.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-### 17.1 Installed PWA and optional local access
+## Purpose and product boundary
 
-The desktop product is the existing PWA installed by the browser. Pop Agent
-ships no WKWebView/WebView2 wrapper, tray helper, DMG, Setup app, Windows setup
-executable, native Desktop download route or independently versioned Desktop
-artifact. The browser owns the app window, operating-system registration,
-permissions and removal; the server-owned PWA manifest names the installed app
-**Pop Agent**.
+The desktop-facing Pop Agent product has two independent parts:
 
-Settings → Installation captures Chromium's `beforeinstallprompt` during boot
-and exposes **Install Pop Agent** only while the browser says installation is
-eligible. Safari, iOS and unsupported browsers receive their real Add to Dock or
-Add to Home Screen instructions. PWA updates remain the normal service-worker
-flow in §15 and do not depend on a native release.
+```text
+Pop Agent installed PWA
+  └── browser-owned app window and server UI
 
-Pop Local Access is optional and separate from PWA installation. Installing the
-PWA grants no filesystem or command access. A local connection is outbound and
-authenticated. Each stable computer identity has a persistent server-authoritative
-**Allow access to local files** policy, disabled by default and synchronized
-between every PWA, the tray and the CLI. The transport remains attached while
-access is off so it can receive policy changes, but both server and PLA refuse
-local calls. A disabled stale browser selection continues safely with server
-tools; an unknown or unavailable enabled selection is still rejected.
+Pop Local Access (optional)
+  ├── visible native tray/menu-bar host
+  └── supervised `pop local-access` TypeScript runtime
+       └── authenticated outbound connection to the Pop Agent server
+```
 
-Settings publishes same-origin PowerShell and bash commands. They install the
-checksummed launcher and versioned tray per user, perform an interactive hidden
-password login, protect the CLI profile and register the visible tray at login.
-No password or token appears in argv, environment, URL, script or shell history.
-The first tray release targets Windows and macOS; unsupported platforms are
-refused honestly. The tray supervises `pop local-access --status-json`, shows
-Access enabled/disabled, Connecting, Auth or update failures, and offers the
-same **Allow access to local files** switch as the PWA, Open Pop Agent,
-Reconnect, Start at Login, Diagnostics and Quit. Transport health is not called
-Connected when file access is off.
+The PWA is the application interface. Pop Local Access (PLA) lends the
+server-side agent explicitly selected files and commands on one computer. It
+does not move the agent, model, provider credentials, product database or PWA
+onto that computer.
 
-`GET /v1/local-tools/connections` lists live transports for compatibility and
-`GET /v1/local-tools/machines` lists deduplicated persistent computer identities,
-permission and online state. That GET is the initial/reconnection snapshot;
-attach, detach and permission changes emit `local-machines-changed` over the
-same session-wide SSE channel as `chat-deleted`, so Settings never polls.
-Settings stores only which allowed computer this
-PWA should use when more than one is available; with exactly one allowed online
-computer it selects that computer automatically. API sends
-`x-pop-agent-local-connection` only after that choice. A stable machine id is
-resolved to its current tray-preferred connection after reconnects.
+Pop Agent ships no WKWebView/WebView2 desktop wrapper, native web window, DMG,
+Setup app or native Desktop download. The only native desktop support is the
+small optional PLA tray and stable `pop` launcher. PWA installation alone grants
+no local filesystem or command access; PLA installation alone does not install
+or replace the PWA.
 
-## Related transport and synchronization
+## Architectural roles
 
-See [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md).
+| Component | Responsibility |
+|---|---|
+| PWA | install guidance, machine snapshot, permission switch and device-local machine selection |
+| HTTP/SSE API | authenticated snapshots/actions and `local-machines-changed` invalidation |
+| `LocalAccessPolicyService` | persistent server-authoritative permission for each stable machine |
+| `LocalConnectionRegistry` | live transports, heartbeat, call routing, concurrency/output limits and revocation |
+| local-tools routes | WebSocket/HTTPS transport adapter, frame validation and compatibility negotiation |
+| `LocalAccess` CLI runtime | reconnect/fallback, local operation execution, cancellation and result transport |
+| native tray | visible status/control, start-at-login and supervision of the CLI runtime |
+| pi adapter | registers `local_*` definitions by redirecting pi’s ordinary operations to one selected connection |
+
+Application policy does not import WebSocket, HTTP, Node child-process or pi SDK
+types. The registry owns the live application abstraction; transport parsing is
+at the HTTP interface edge; command/filesystem execution is on the client; pi
+operation adapters remain infrastructure.
+
+## Security and authority model
+
+PLA is a privileged optional capability and follows deny-by-default rules:
+
+1. A new stable machine is remembered with access **disabled**.
+2. A valid authenticated transport may stay connected while disabled so policy
+   changes and health remain visible.
+3. The server refuses calls when the persistent machine policy is disabled.
+4. The client independently refuses `call` frames while its synchronized policy
+   is disabled.
+5. The PWA sends a local selector only after an explicit/automatic valid choice.
+6. No selector means server tools only; the server never chooses an arbitrary
+   connected computer.
+7. An unknown or unavailable enabled selector is rejected before accepting the
+   HTTP message. It never falls through to another computer.
+8. A known selector whose policy was switched off safely becomes server-only.
+9. Local tool names are visibly prefixed (`local_*`); unprefixed tools always
+   continue to mean the Pop Agent server.
+10. Session expiry, password/recovery epoch changes and Sign out other devices
+    terminate affected local transports and pending calls.
+
+The permission is product state stored on the server, not a local tray
+preference. PWA, tray and CLI all mutate the same policy through authenticated
+channels and receive the resulting value. A compromised web view cannot reach a
+local process directly; all routing passes through the authenticated server and
+its selected machine policy.
+
+## Stable machines and transient connections
+
+A **machine** and a **connection** are different identities:
+
+- `machineId` is a random stable identifier persisted per operating-system user;
+- `connectionId` is generated by the server for one attached transport;
+- hostname, platform, architecture, working directory and client version are
+  descriptive metadata, never authority;
+- reconnecting changes `connectionId` but preserves `machineId` and permission;
+- the server updates descriptive metadata without resetting the permission.
+
+The client stores its machine identity in an owner-only local state file:
+
+- macOS: Application Support under the user profile;
+- Windows: Local App Data under the user profile;
+- Linux CLI: XDG state or the user’s local state directory.
+
+A missing or damaged identity is replaced with a new UUID. This intentionally
+appears as a new disabled computer; identity corruption must not inherit another
+machine’s permission by hostname.
+
+One machine may have more than one live transport—for example an interactive CLI
+and the background tray. Stable machine selection resolves to a live transport,
+preferring the `background` role so a short terminal process does not displace
+the persistent tray. No load balancing or failover to a different machine is
+allowed.
+
+## Installation and tray lifecycle
+
+Settings → Installation publishes same-origin PowerShell and bash commands.
+Installation, integrity, runtime requirements, paths and rollback are normative
+in the Installation specification.
+
+The installed tray is intentionally small. It:
+
+- starts `pop local-access --status-json` as a background-role client;
+- parses line-delimited status JSON rather than scraping human output;
+- shows Starting, Connecting, Access enabled/disabled, Authentication required,
+  Update required and disconnected/reconnecting states;
+- exposes the shared access switch;
+- opens the configured Pop Agent origin;
+- reconnects the supervised child;
+- enables/disables start-at-login for the current user;
+- opens the local diagnostic log;
+- quits itself and its child.
+
+The tray does not host the PWA, render Settings, store provider credentials,
+open a local HTTP server or execute arbitrary tray-supplied shell text. Closing
+the PWA does not stop PLA. Quitting PLA does not uninstall or sign out the PWA.
+
+Transport attachment alone is not labeled “access enabled.” The tray waits for
+the authoritative `access_policy` frame before presenting permission state.
+
+## Authentication and session lifecycle
+
+WebSocket upgrade and every HTTPS fallback request use the ordinary Pop Agent
+bearer session. There is no second unauthenticated local-control secret and no
+machine credential in a URL.
+
+The attach records the verified session epoch and expiration. The registry:
+
+- refuses an attach without a valid session;
+- closes an expired connection at the heartbeat boundary;
+- closes every matching epoch when sessions are invalidated;
+- sends a stable closing reason before close when possible;
+- settles pending calls as failed when a connection is revoked or detached.
+
+A persistent background process makes an authenticated refresh request every six
+hours because it otherwise performs no ordinary API calls that would receive a
+sliding token. The refreshed profile token is used on the next reconnect. The
+existing transport still obeys the expiration captured at attach and reconnects
+with the newer token when its lease ends.
+
+Authentication failure stops blind reconnect and tells the tray that sign-in is
+required. Tokens and passwords never appear in tray status JSON or diagnostic
+logs.
+
+## Attach and compatibility negotiation
+
+The first client frame is `attach`:
+
+```json
+{
+  "kind": "attach",
+  "protocol": 1,
+  "role": "background",
+  "machine": {
+    "machineId": "stable-id",
+    "hostname": "MacBook",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cwd": "/Users/owner",
+    "clientVersion": "0.2.35"
+  }
+}
+```
+
+The server accepts protocol 1 (or an absent protocol from a compatible legacy
+client), validates every field, rejects reserved/unsafe identity keys and applies
+byte bounds before persisting machine metadata. Persisted records are rebuilt into
+prototype-free validated maps when read. Unknown protocol revisions and invalid roles are rejected rather than
+interpreted optimistically.
+
+Compatibility uses the hand-maintained shared `MIN_CLIENT_VERSION`:
+
+- below minimum or malformed/empty version: send `outdated` and refuse attach;
+- at/above minimum but behind the server release: attach and send a nonfatal
+  version warning plus the same-origin repair command;
+- equal/newer compatible client: attach without warning.
+
+The minimum changes only when an older client cannot survive the REST/SSE/local
+frame contract. Ordinary server releases do not raise it automatically.
+
+A successful attach returns transient connection identity, heartbeat interval,
+transport and current access state. The server immediately publishes the same
+access policy as a dedicated frame so all clients converge through one contract.
+
+## Transport strategy
+
+### WebSocket primary
+
+PLA first opens authenticated WSS at `/v1/local-tools`, sends one attach and then
+uses bidirectional JSON frames. The server’s WebSocket parser has the same 12 MiB
+maximum payload as the HTTP fallback. An attached client arms a 45-second local
+lease; every valid server frame refreshes it. Silent proxy/socket death therefore
+causes termination and reconnect even if the OS never reports close.
+
+### Authenticated HTTPS fallback
+
+Some reverse proxies do not pass WebSocket upgrades. After two failures before
+attach, PLA probes the ordinary HTTPS session endpoint. Only a successful
+authenticated probe permits fallback to long polling:
+
+1. `POST /v1/local-tools/connections` attaches;
+2. `POST .../:id/poll` receives sequenced server frames and acknowledges the
+   highest handled sequence;
+3. `POST .../:id/events` sends bounded batches of client events;
+4. `DELETE .../:id` closes explicitly.
+
+Every request revalidates the bearer session and epoch. Polls wait for at most 25
+seconds. Calls are handled outside the polling loop so a long command does not
+prevent pings, output or cancellation.
+
+Server frames remain queued until acknowledged. The queue is bounded by all of:
+
+- 1,024 frames;
+- 12 MiB aggregate UTF-8 payload;
+- 12 MiB for any one accepted frame.
+
+Overflow closes and unregisters that transport instead of retaining unbounded
+memory or dropping an arbitrary middle frame. Event uploads contain at most 256
+entries and a 12 MiB decoded request body, including requests without a trusted
+Content-Length.
+
+Client event IDs (maximum 256 UTF-8 bytes) make recent result/output delivery
+idempotent. The server keeps a bounded 4,096-ID replay window; older IDs may be accepted again only after
+they are too old to belong to a legitimate in-flight retry. The client likewise
+keeps at most 1,024 completed call results for replay after duplicate delivery.
+A disconnect kills local children and lets the server settle/retry at the run
+boundary; replay state is not durable product history.
+
+### Reconnect
+
+Network close schedules exponential reconnect with jitter, starting near one
+second and capped at 30 seconds. One outage produces one visible closed event;
+retries do not spam status. A successful attach resets attempt state.
+
+Explicit close, client-outdated refusal and authentication-required refusal do
+not continue automatic reconnect. WSS fallback does not occur when ordinary
+HTTPS is unreachable.
+
+## Heartbeats, leases and detachment
+
+The server sends a numbered ping every 15 seconds. Any valid client traffic
+marks the connection heard; pong is the normal response. After three unanswered
+beats (45 seconds), the registry:
+
+- removes the connection;
+- fails its pending calls;
+- closes the transport;
+- emits machine-state invalidation.
+
+Heartbeats measure transport liveness, not command duration. A command may run
+for minutes or hours while its client continues answering pings. The independent
+client lease catches the opposite failure direction: an attached client that
+stops hearing server frames terminates its own socket.
+
+## Persistent permission lifecycle
+
+On first attach, `LocalAccessPolicyService.remember` writes stable machine
+metadata and preserves any prior `enabled` value. Permission changes may come
+from:
+
+- authenticated PWA `PATCH /v1/local-tools/machines/:id`;
+- tray/CLI `set_access` over the authenticated PLA transport.
+
+A successful change:
+
+1. updates persistent server state;
+2. sends `access_policy` to every live transport for that machine;
+3. cancels every in-flight call when disabling;
+4. emits `local-machines-changed` for all PWA clients.
+
+Unknown machine IDs return 404. Disabling is immediate and idempotent. The
+transport remains present so the machine can display and receive a later enable.
+
+Known machine records remain after disconnect so permission does not disappear
+with a laptop lid close or server restart. Presence is derived separately from
+the live registry.
+
+## Snapshots and PWA synchronization
+
+Two authenticated snapshots have distinct purposes:
+
+- `GET /v1/local-tools/connections` lists current transport instances and roles
+  for compatibility/diagnosis;
+- `GET /v1/local-tools/machines` lists deduplicated stable machines with
+  persistent permission plus derived online state.
+
+The Installation screen uses the machine snapshot initially, after
+`local-machines-changed`, after EventSource reconnect and after foreground/BFCache
+recovery. It does not poll periodically. Overlapping snapshot requests are
+generation-guarded so a slower old response cannot overwrite newer state.
+
+Attach, detach and permission mutation emit only the invalidation event, never a
+partial connection-derived machine list. The Events Synchronization
+specification defines ordering and resume behavior.
+
+## PWA machine selection
+
+Selection belongs to one browser/device and is stored in guarded `localStorage`.
+It is not an account setting and is not inferred from the browser’s OS name.
+
+Rules:
+
+- no allowed online machine: clear selection and use server tools only;
+- exactly one allowed online machine: select its stable `machineId`
+  automatically;
+- multiple allowed online machines: show an explicit selector including
+  **Server only**;
+- selected machine becomes disabled/offline: clear the local choice during
+  snapshot reconciliation;
+- denied browser storage: remain server-only rather than guessing.
+
+The common web API layer adds `x-pop-agent-local-connection` only when a stable
+selection exists. The server resolves that stable ID to its current preferred
+transport. An explicit invalid available-machine selection produces
+`local_connection_unavailable` before a run/queue mutation is accepted.
+
+The selector is captured with the message/queued input, not stored on the chat.
+Two devices can use the same conversation while intentionally targeting
+different machines. A later disconnect never reroutes that work to another
+computer; if no selected connection remains when tools are constructed, the
+`local_*` set is absent and only clearly server-scoped tools remain.
+
+## CLI-originated local access
+
+An interactive TUI keeps an `interactive` PLA connection for its lifetime and
+sends its current transient connection ID with messages only while permission is
+enabled. A one-shot `pop "question"` waits a bounded time for attach before
+sending so its only message does not race its local capability.
+
+The installed tray uses `background` role and remains connected independently of
+PWA/terminal windows. If both interactive and background connections represent
+the same stable machine, stable PWA selection prefers background; direct CLI
+messages continue to name their own interactive connection.
+
+## Agent tool projection
+
+For an allowed selected connection, Pop Agent registers exactly:
+
+- `local_bash` — shell command on the selected computer;
+- `local_read` — read bytes from that computer;
+- `local_write` — write a file on that computer;
+- `local_edit` — edit using delegated read/write/access operations.
+
+These are pi’s own Bash/Read/Write/Edit definitions with their operations
+redirected through `LocalConnectionRegistry`. Schemas, rendering and truncation
+stay aligned with the active pi SDK. The descriptions always name hostname,
+platform/architecture, exact working directory and the fact that unprefixed
+tools remain on the server.
+
+If no permitted connection exists, no `local_*` definitions enter the session.
+A local connection/machine change participates in pi session context revision so
+a cached session cannot retain tools bound to an old transport.
+
+Plan Mode exposes only `local_read`; `local_bash`, `local_write` and `local_edit`
+are absent. External-content taint and command safety classify server and local
+machines separately: local credential locations such as AWS, GitHub, npm, kube
+and SSH files receive local-machine protections, and destructive/exfiltration
+commands are blocked on both.
+
+## Local operation contract and limits
+
+The server permits at most four concurrent calls per connection. Calls have
+unique IDs and support incremental output, final result and cancellation.
+
+Client-side operation limits:
+
+| Operation/property | Limit/behavior |
+|---|---|
+| command string | 64 KiB UTF-8 |
+| path / working directory input | 16 KiB UTF-8 |
+| read file | 8 MiB; result is base64 on JSON wire |
+| write contents | 8 MiB UTF-8 |
+| output per command/call | 50 MiB |
+| output transport chunk | at most 64 KiB source bytes |
+| optional command timeout | greater than zero, at most 86,400 seconds |
+| server aggregate observed output | 50 MiB, independently enforced |
+| live child processes | bounded indirectly by four server calls per connection |
+
+`bash` runs through the platform shell in the requested working directory with a
+sanitized copy of the local environment; Pop-specific token/password/secret/IPC
+variables are removed. `read`, `access`, `mkdir` and `write` use direct Node
+filesystem APIs rather than interpolated shell commands.
+
+Stop, permission disable, transport detach, output overflow and timeout all
+terminate the matching child (the process group on Unix where supported). A
+server Stop sends `cancel`; the registry settles exactly once and decrements
+concurrency. Client-side errors return stable classes such as `invalid_input`,
+`not_found`, `permission_denied`, `spawn_failed`, `timeout`, `output_limit` or
+`io_error` with a human-readable message.
+
+PLA is intentionally not jailed to one directory: the owner enabled computer
+access so the agent can work in explicitly requested local paths. Product safety
+comes from explicit machine selection, visible prefixed tools, Plan Mode,
+external-content taint, secret-path/command guards and user supervision—not from
+pretending the whole computer is under the server’s Files jail.
+
+## Failure behavior
+
+- No session or stale session: reject attach/request and request sign-in.
+- Invalid attach/protocol/metadata: protocol error or HTTP 400; never remember
+  partial machine state.
+- Client below minimum: refuse with actionable update data.
+- Connected but disabled: remain visible, expose no local tools and refuse calls
+  on both ends.
+- Selected unknown/offline enabled machine: reject message with 409.
+- Selected known disabled machine: continue server-only.
+- Busy connection: fail the call rather than queueing unbounded work.
+- Oversized frame/body/output/file: cancel/close with bounded memory.
+- Heartbeat/session expiry: detach and fail pending operations.
+- Proxy blocks WSS: authenticated HTTPS fallback after proof HTTPS works.
+- Network outage: jittered reconnect; never switch machine.
+- Tray child exits: tray reports disconnected and restarts after a delay unless
+  quitting.
+- Damaged stable ID: create a new disabled identity rather than borrowing old
+  permission.
+
+## Privacy, logs and diagnostics
+
+Server journal entries include platform/architecture, role, shortened transient
+connection identity and permission transitions. They do not include bearer
+tokens, password, command output or user file contents.
+
+The tray log records lifecycle/diagnostic errors and child stderr. Structured
+status reports server origin, transport and access state only. The tray sanitizes
+origins before display and never treats an arbitrary URL as executable content.
+
+Hostname, platform, architecture, version and online/permission state are shown
+only to the authenticated owner. The public installer surface contains no
+machine inventory.
+
+## Test obligations
+
+### Policy and identity
+
+- first attach is disabled;
+- permission survives service recreation and metadata refresh;
+- damaged/missing machine identity creates a protected stable UUID;
+- background connection preference is limited to the same machine;
+- multiple machines never cross-route;
+- disable cancels calls and updates every transport.
+
+### Authentication and lifecycle
+
+- every WebSocket/HTTPS endpoint requires the bearer session;
+- epoch revocation and expiration close only affected connections;
+- heartbeat removes silent connections and preserves responsive long commands;
+- explicit close does not reconnect;
+- auth/outdated refusal stops retries;
+- session refresh reaches the persisted profile used by reconnect.
+
+### Protocol and resources
+
+- protocol/role/metadata validation and byte bounds;
+- WebSocket maximum payload;
+- aggregate long-poll frame bytes and count;
+- decoded HTTP body and event-batch bounds;
+- bounded replay ID/result caches and duplicate idempotence;
+- four-call concurrency and 50 MiB output cancellation;
+- read/write/path/timeout limits and structured local errors;
+- Stop and disconnect terminate children.
+
+### Routing and UI
+
+- absent selection remains server-only;
+- unknown/unavailable selector is 409;
+- disabled known selector is safe server-only;
+- stable machine resolves after reconnect and prefers its tray;
+- one usable machine auto-selects, several render the selector;
+- denied localStorage remains server-only;
+- initial/SSE/resume snapshots converge without polling;
+- local tool descriptions identify the exact machine/directory;
+- Plan Mode exposes only `local_read` and taint guards use local secret paths.
+
+### Platform acceptance
+
+Before calling a tray release supported, test on clean Windows and macOS users:
+install, hidden login, disabled-first state, enable from PWA and tray, start at
+login, reconnect after sleep/network loss, WSS-blocked fallback, command output,
+Stop, password/session revocation, repair over a running tray, diagnostics, Quit
+and removal behavior.
+
+## Explicit non-goals
+
+- restoring a native Pop Desktop web wrapper;
+- silently granting access when PWA or tray is installed;
+- auto-selecting an arbitrary one of multiple computers;
+- opening a listening port on the local computer;
+- sending provider credentials or server secret keys to PLA;
+- treating hostname as identity or permission;
+- routing a missing selected machine to another machine;
+- exposing unprefixed tools with location-dependent meaning;
+- using PLA transport as the browser SSE or software-update channel;
+- claiming Linux tray support before a real packaged tray and desktop
+  integration pass platform acceptance.

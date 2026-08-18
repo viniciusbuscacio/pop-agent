@@ -24,7 +24,7 @@ export class LocalAccessPolicyService {
     const machineId = machine.machineId;
     if (machineId === undefined || machineId.length === 0) return;
     const state = this.read();
-    const previous = state.machines[machineId];
+    const previous = Object.hasOwn(state.machines, machineId) ? state.machines[machineId] : undefined;
     state.machines[machineId] = {
       machineId,
       hostname: machine.hostname,
@@ -38,12 +38,13 @@ export class LocalAccessPolicyService {
 
   enabled(machineId: string | undefined): boolean {
     if (machineId === undefined) return false;
-    return this.read().machines[machineId]?.enabled ?? false;
+    const machines = this.read().machines;
+    return Object.hasOwn(machines, machineId) ? machines[machineId]?.enabled ?? false : false;
   }
 
   setEnabled(machineId: string, enabled: boolean): boolean {
     const state = this.read();
-    const machine = state.machines[machineId];
+    const machine = Object.hasOwn(state.machines, machineId) ? state.machines[machineId] : undefined;
     if (machine === undefined) return false;
     state.machines[machineId] = { ...machine, enabled };
     this.write(state);
@@ -56,13 +57,32 @@ export class LocalAccessPolicyService {
 
   private read(): StoredState {
     const stored = this.settings.get<Partial<StoredState>>(SETTINGS_KEY);
-    if (stored === undefined || typeof stored !== 'object' || stored.machines === undefined) {
-      return { machines: {} };
+    const machines: Record<string, KnownLocalMachine> = Object.create(null) as Record<string, KnownLocalMachine>;
+    if (stored === undefined || typeof stored !== 'object' || typeof stored.machines !== 'object' || stored.machines === null) {
+      return { machines };
     }
-    return { machines: { ...stored.machines } };
+    for (const [machineId, candidate] of Object.entries(stored.machines)) {
+      if (!validMachine(machineId, candidate)) continue;
+      machines[machineId] = { ...candidate };
+    }
+    return { machines };
   }
 
   private write(state: StoredState): void {
     this.settings.set(SETTINGS_KEY, state);
   }
+}
+
+function validMachine(machineId: string, value: unknown): value is KnownLocalMachine {
+  if (typeof value !== 'object' || value === null) return false;
+  const machine = value as Partial<KnownLocalMachine>;
+  return (
+    /^(?!__proto__$)(?!prototype$)(?!constructor$)[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(machineId) &&
+    machine.machineId === machineId &&
+    typeof machine.hostname === 'string' &&
+    typeof machine.platform === 'string' &&
+    typeof machine.arch === 'string' &&
+    typeof machine.clientVersion === 'string' &&
+    typeof machine.enabled === 'boolean'
+  );
 }

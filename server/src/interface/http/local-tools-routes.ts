@@ -13,60 +13,74 @@ import { entityId } from '../../domain/ids.js';
 import { apiError } from './errors.js';
 
 const POLL_TIMEOUT_MS = 25_000;
-const MAX_BATCH_BYTES = 12 * 1024 * 1024;
+export const MAX_LOCAL_FRAME_BYTES = 12 * 1024 * 1024;
 const MAX_BATCH_EVENTS = 256;
 const MAX_QUEUED_FRAMES = 1_024;
+const MAX_SEEN_EVENT_IDS = 4_096;
 
-interface AttachFrame {
+export interface AttachFrame {
   kind: 'attach';
   protocol?: number;
   role?: LocalConnectionRole;
   machine: LocalMachine;
 }
 
-interface Envelope {
+export interface Envelope {
   seq: number;
   frame: unknown;
 }
 
-class PollConnection {
+export class PollConnection {
   readonly id = entityId('local');
   private frames: Envelope[] = [];
+  private queuedBytes = 0;
   private nextSeq = 1;
   private waiters = new Set<() => void>();
   private seenEvents = new Set<string>();
+  private seenEventOrder: string[] = [];
   closed = false;
 
   constructor(
     readonly attach: AttachFrame,
     readonly session: TokenPayload,
+    private readonly onClose: (connectionId: string) => void = () => undefined,
   ) {}
 
   send = (frame: unknown): void => {
     if (this.closed) return;
-    const encoded = JSON.stringify(frame);
-    if (encoded.length > MAX_BATCH_BYTES || this.frames.length >= MAX_QUEUED_FRAMES) {
-      this.closed = true;
-      this.wake();
+    const encodedBytes = new TextEncoder().encode(JSON.stringify(frame)).byteLength;
+    if (
+      encodedBytes > MAX_LOCAL_FRAME_BYTES ||
+      this.queuedBytes > MAX_LOCAL_FRAME_BYTES - encodedBytes ||
+      this.frames.length >= MAX_QUEUED_FRAMES
+    ) {
+      this.finish();
       return;
     }
     this.frames.push({ seq: this.nextSeq++, frame });
+    this.queuedBytes += encodedBytes;
     this.wake();
   };
 
-  close = (): void => {
-    this.closed = true;
-    this.wake();
-  };
+  close = (): void => this.finish();
 
   acceptEvent(eventId: string): boolean {
     if (this.seenEvents.has(eventId)) return false;
     this.seenEvents.add(eventId);
+    this.seenEventOrder.push(eventId);
+    if (this.seenEventOrder.length > MAX_SEEN_EVENT_IDS) {
+      const forgotten = this.seenEventOrder.shift();
+      if (forgotten !== undefined) this.seenEvents.delete(forgotten);
+    }
     return true;
   }
 
   async poll(ackSeq: number): Promise<Envelope[]> {
     this.frames = this.frames.filter((entry) => entry.seq > ackSeq);
+    this.queuedBytes = this.frames.reduce(
+      (total, entry) => total + new TextEncoder().encode(JSON.stringify(entry.frame)).byteLength,
+      0,
+    );
     if (this.frames.length > 0 || this.closed) return this.frames;
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -82,6 +96,13 @@ class PollConnection {
       this.waiters.add(done);
     });
     return this.frames;
+  }
+
+  private finish(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.wake();
+    this.onClose(this.id);
   }
 
   private wake(): void {
@@ -208,7 +229,10 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     if (compatibility.outdated !== undefined) {
       return c.json({ error: compatibility.outdated }, 426);
     }
-    const connection = new PollConnection(attach, session);
+    const connection = new PollConnection(attach, session, (connectionId) => {
+      polling.delete(connectionId);
+      deps.localConnections.detach(connectionId);
+    });
     polling.set(connection.id, connection);
     deps.localConnections.attach({
       id: connection.id,
@@ -262,7 +286,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     const acceptedEventIds: string[] = [];
     for (const candidate of events) {
       if (typeof candidate !== 'object' || candidate === null) continue;
-      const eventId = stringField(candidate, 'eventId');
+      const eventId = boundedStringField(candidate, 'eventId', 256);
       const frame = objectField(candidate, 'frame');
       if (eventId === undefined || frame === undefined) continue;
       if (!connection.acceptEvent(eventId)) {
@@ -337,15 +361,19 @@ function validAttach(value: unknown): AttachFrame | undefined {
   if (frame['kind'] !== 'attach') return undefined;
   const machine = objectField(frame, 'machine');
   if (machine === undefined) return undefined;
-  const hostname = stringField(machine, 'hostname');
-  const platform = stringField(machine, 'platform');
-  const arch = stringField(machine, 'arch');
-  const cwd = stringField(machine, 'cwd');
-  const clientVersion = stringField(machine, 'clientVersion');
+  if (frame['protocol'] !== undefined && frame['protocol'] !== 1) return undefined;
+  const hostname = boundedStringField(machine, 'hostname', 255);
+  const platform = boundedStringField(machine, 'platform', 32);
+  const arch = boundedStringField(machine, 'arch', 32);
+  const cwd = boundedStringField(machine, 'cwd', 16 * 1024);
+  const clientVersion = boundedStringField(machine, 'clientVersion', 64);
   if ([hostname, platform, arch, cwd, clientVersion].some((entry) => entry === undefined)) return undefined;
   const role = frame['role'];
   if (role !== undefined && role !== 'interactive' && role !== 'background') return undefined;
-  const machineId = stringField(machine, 'machineId');
+  const machineId = machine['machineId'] === undefined
+    ? undefined
+    : boundedStringField(machine, 'machineId', 256);
+  if (machine['machineId'] !== undefined && (machineId === undefined || !safeMachineId(machineId))) return undefined;
   return {
     kind: 'attach',
     ...(typeof frame['protocol'] === 'number' ? { protocol: frame['protocol'] } : {}),
@@ -395,9 +423,11 @@ function authorizedPolling(
 
 async function jsonWithinLimit(c: Context): Promise<unknown> {
   const length = Number(c.req.header('content-length') ?? '0');
-  if (Number.isFinite(length) && length > MAX_BATCH_BYTES) return undefined;
+  if (Number.isFinite(length) && length > MAX_LOCAL_FRAME_BYTES) return undefined;
   try {
-    return await c.req.json<unknown>();
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_LOCAL_FRAME_BYTES) return undefined;
+    return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
@@ -422,6 +452,17 @@ function stringField(value: unknown, key: string): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === 'string' ? field : undefined;
+}
+
+function boundedStringField(value: unknown, key: string, maxBytes: number): string | undefined {
+  const field = stringField(value, key);
+  return field !== undefined && field.length > 0 && new TextEncoder().encode(field).byteLength <= maxBytes
+    ? field
+    : undefined;
+}
+
+function safeMachineId(value: string): boolean {
+  return /^(?!__proto__$)(?!prototype$)(?!constructor$)[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value);
 }
 
 function booleanField(value: unknown, key: string): boolean | undefined {

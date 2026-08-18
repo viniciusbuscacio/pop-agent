@@ -44,6 +44,20 @@ afterEach(async () => {
 });
 
 describe('LocalAccess reconnection', () => {
+  it('bounds completed-call replay state for a long-lived tray', () => {
+    const localAccess = new LocalAccess({ url: 'https://pop.example', token: 'session', version: '1.0.0' });
+    const internal = localAccess as unknown as {
+      completedCalls: Map<string, Record<string, unknown>>;
+      rememberCompleted(callId: string, event: Record<string, unknown>): void;
+    };
+    for (let index = 0; index < 1_025; index += 1) {
+      internal.rememberCompleted(`call-${String(index)}`, { kind: 'result', ok: true });
+    }
+    expect(internal.completedCalls.size).toBe(1_024);
+    expect(internal.completedCalls.has('call-0')).toBe(false);
+    expect(internal.completedCalls.has('call-1024')).toBe(true);
+  });
+
   it('reattaches after the WebSocket drops and exposes the new connection id', async () => {
     const value = await fixture();
     const events: LocalAccessEvent[] = [];

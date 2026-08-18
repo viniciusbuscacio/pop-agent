@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
 import { LocalConnectionRegistry, PING_EVERY_MS } from './application/local-access/local-connection-registry.js';
+import { MAX_LOCAL_FRAME_BYTES } from './interface/http/local-tools-routes.js';
 import { LocalAccessPolicyService } from './application/local-access/local-access-policy-service.js';
 import { Type } from 'typebox';
 import { envelope } from './domain/safety/sanitize.js';
@@ -810,7 +811,7 @@ automaticDeployment.start();
 
 // The local-tools channel needs a WebSocket server the adaptor can upgrade onto
 // (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_LOCAL_FRAME_BYTES });
 
 // One timer for every attached terminal: 15s between pings, gone after three
 // silences. A closed laptop lid does not close a socket, and a run parked on a

@@ -20,6 +20,19 @@ describe('local access policy', () => {
     expect(restored.machines()).toEqual([expect.objectContaining({ machineId: 'machine-m1', enabled: true })]);
   });
 
+  it('ignores unsafe identities and malformed persisted machine records', () => {
+    const settings = new MemorySettings();
+    const service = new LocalAccessPolicyService(settings);
+    service.remember({ ...machine, machineId: '__proto__' });
+    settings.set('local-machine-access', {
+      machines: {
+        broken: { machineId: 'broken', hostname: 42, enabled: true },
+      },
+    });
+    expect(service.machines()).toEqual([]);
+    expect(service.setEnabled('__proto__', true)).toBe(false);
+  });
+
   it('keeps permission while refreshing machine metadata', () => {
     const service = new LocalAccessPolicyService(new MemorySettings());
     service.remember(machine);

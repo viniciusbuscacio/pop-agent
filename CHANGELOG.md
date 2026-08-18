@@ -41,6 +41,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   defines PWA, CLI/launcher, managed Node, Pop Local Access, server checkout,
   pi candidate and deployment-supervisor boundaries, plus public artifact,
   caching, integrity, rollback, removal and release-test obligations.
+- **The Local Access specification is now a complete privilege-boundary guide.**
+  It defines stable machines versus transient transports, disabled-first policy,
+  WSS/HTTPS fallback, selection and routing, tray/CLI lifecycles, local tool
+  projection, limits, cancellation, safety, failure behavior and platform tests.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
@@ -100,6 +104,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   profiles require HTTPS, managed Node archives are consumed from the verified
   same-origin release, Mac PLA bootstrap can install that runtime before login,
   and Windows tray replacement preserves/restores the previous executable.
+- **Long-lived Local Access transports now have bounded replay and backpressure.**
+  WebSocket frames and decoded fallback bodies share a 12 MiB ceiling,
+  long-poll queues enforce aggregate bytes, replay IDs and completed call
+  results use bounded windows, overflow unregisters the transport, and attach
+  protocol/metadata are validated before persistent machine state is written.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.
