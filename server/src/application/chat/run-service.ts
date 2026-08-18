@@ -598,11 +598,12 @@ export class RunService {
     }
 
     const usage = result.usage;
+    const attemptId = attemptIndex === 0 ? run.runId : `${run.runId}-f${String(attemptIndex)}`;
     if (usage !== undefined && this.deps.llmRuns !== undefined) {
       this.deps.llmRuns.record({
         // The first attempt keeps the run id; a failover attempt gets its own
         // suffixed row -- both were billed, and llm_runs ids are unique.
-        id: attemptIndex === 0 ? run.runId : `${run.runId}-f${String(attemptIndex)}`,
+        id: attemptId,
         chatId: run.chatId,
         provider: usage.provider,
         model: usage.model,
@@ -613,6 +614,22 @@ export class RunService {
         // makes a subscription's usage comparable to a paid one's.
         cost: billsPerToken(usage.provider) ? usage.cost : 0,
         createdAt: new Date(clock.now()).toISOString(),
+      });
+    }
+    if (this.deps.llmRuns !== undefined) {
+      result.additionalUsage?.forEach((delegated, index) => {
+        this.deps.llmRuns?.record({
+          id: `${attemptId}-subagent-${String(index + 1)}`,
+          chatId: run.chatId,
+          provider: delegated.provider,
+          model: delegated.model,
+          tokensIn: delegated.inputTokens,
+          tokensOut: delegated.outputTokens,
+          cost: billsPerToken(delegated.provider) ? delegated.cost : 0,
+          createdAt: new Date(clock.now()).toISOString(),
+          kind: 'chat',
+          purpose: delegated.purpose,
+        });
       });
     }
 

@@ -47,13 +47,17 @@ class ScriptedBridge implements AgentBridge {
     await Promise.resolve();
   };
   usage: AgentRunResult['usage'];
+  additionalUsage: AgentRunResult['additionalUsage'];
   readonly seen: AgentRunRequest[] = [];
   readonly discarded: string[] = [];
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     this.seen.push(request);
     await this.script(request);
-    return this.usage === undefined ? {} : { usage: this.usage };
+    return {
+      ...(this.usage === undefined ? {} : { usage: this.usage }),
+      ...(this.additionalUsage === undefined ? {} : { additionalUsage: this.additionalUsage }),
+    };
   }
 
   listModels(): Promise<{ id: string }[]> {
@@ -571,6 +575,36 @@ describe('accounting', () => {
     expect(rows[0]?.tokens_in).toBe(400);
     expect(rows[0]?.tokens_out).toBe(60);
     expect(rows[0]?.cost).toBeCloseTo(0.0021, 10);
+  });
+
+  it('books delegated worker usage as a separate attributed row', async () => {
+    const chatId = newChat();
+    bridge.usage = USAGE;
+    bridge.additionalUsage = [{
+      provider: 'openai-codex',
+      model: 'gpt-worker',
+      inputTokens: 120,
+      outputTokens: 45,
+      cost: 0.004,
+      purpose: 'subagent:worker',
+    }];
+
+    const started = runs.startRun(chatId, 'delegate this implementation');
+    await runs.whenIdle();
+
+    const rows = db.prepare(
+      'SELECT id, kind, purpose, tokens_in, tokens_out, cost FROM llm_runs ORDER BY id',
+    ).all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    const delegated = rows.find((row) => String(row.id).includes('-subagent-1'));
+    expect(delegated).toMatchObject({
+      id: `${started.ok ? started.runId : ''}-subagent-1`,
+      kind: 'chat',
+      purpose: 'subagent:worker',
+      tokens_in: 120,
+      tokens_out: 45,
+      cost: 0,
+    });
   });
 
   it('books a failed run that still reached the model', async () => {

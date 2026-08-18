@@ -76,6 +76,8 @@ export interface RunUsage {
 export interface AgentRunResult {
   /** Absent when the engine never reached a model. */
   usage?: RunUsage;
+  /** Separately billed delegated model work completed inside this product run. */
+  additionalUsage?: Array<RunUsage & { purpose: string }>;
 }
 
 /** One model the user can pick. Everything past the id is best-effort. */

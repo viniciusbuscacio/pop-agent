@@ -98,12 +98,39 @@ for (const method of modelRuntimeMethods) {
     throw new Error(`pi ModelRuntime contract missing: ${method}`);
   }
 }
-if (!Object.getOwnPropertyNames(sdk.DefaultResourceLoader.prototype).includes('reload')) {
-  throw new Error('pi DefaultResourceLoader contract missing: reload');
+for (const method of ['reload', 'getExtensions']) {
+  if (!Object.getOwnPropertyNames(sdk.DefaultResourceLoader.prototype).includes(method)) {
+    throw new Error(`pi DefaultResourceLoader contract missing: ${method}`);
+  }
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'pop-pi-candidate-'));
 try {
+  const probeAgentDir = join(scratch, 'agent');
+  process.env.PI_CODING_AGENT_DIR = probeAgentDir;
+  const subagentExtensionPath = join(process.cwd(), 'node_modules', 'pi-subagents', 'index.ts');
+  const extensionLoader = new sdk.DefaultResourceLoader({
+    cwd: scratch,
+    agentDir: probeAgentDir,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    additionalExtensionPaths: [subagentExtensionPath],
+  });
+  await extensionLoader.reload();
+  const extensionResult = extensionLoader.getExtensions();
+  if (extensionResult.errors.length > 0) {
+    throw new Error(`pi candidate cannot load pi-subagents: ${extensionResult.errors.map((item) => item.error).join('; ')}`);
+  }
+  const subagentToolNames = extensionResult.extensions
+    .find((item) => item.resolvedPath === subagentExtensionPath || item.path === subagentExtensionPath)
+    ?.tools.keys();
+  if (subagentToolNames === undefined || !new Set(subagentToolNames).has('subagent')) {
+    throw new Error('pi candidate did not receive the pi-subagents tool');
+  }
+
   const runtime = await sdk.ModelRuntime.create({
     authPath: join(scratch, 'auth.json'),
     modelsPath: null,

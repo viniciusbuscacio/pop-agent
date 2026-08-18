@@ -1,4 +1,5 @@
 import type { AgentSession, AgentSessionEvent, ModelRuntime } from '@earendil-works/pi-coding-agent';
+import type { RunUsage } from '../../application/ports/agent-bridge.js';
 import type { ExecutionMode } from '../../domain/chat/chat.js';
 import type { SessionForkPoint, SessionStatsResult } from '../../application/ports/session-command-bridge.js';
 import { PiEngineError, type PiImage, type PiSession, type ToolGuard } from './pi-engine.js';
@@ -11,6 +12,7 @@ export class SdkPiSession implements PiSession {
     private readonly normalToolNames: string[],
     private readonly planToolNames: string[],
     public supportsImages: boolean = false,
+    private readonly takeAdditionalUsage: () => Array<RunUsage & { purpose: string }> = () => [],
   ) {}
 
   setExecutionMode(mode: ExecutionMode): void {
@@ -19,6 +21,10 @@ export class SdkPiSession implements PiSession {
 
   setGuard(guard: ToolGuard | undefined): void {
     this.guardSlot.current = guard;
+  }
+
+  drainAdditionalUsage(): Array<RunUsage & { purpose: string }> {
+    return this.takeAdditionalUsage();
   }
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void {

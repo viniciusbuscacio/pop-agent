@@ -23,7 +23,9 @@ describe('Pop Agent system prompt', () => {
     const tools = buildPlanToolNames(['mcp_weather_forecast']);
     expect(tools).toEqual(expect.arrayContaining(['read', 'grep', 'find', 'ls', 'local_read']));
     expect(tools).toContain('mcp_weather_forecast');
-    expect(tools).not.toEqual(expect.arrayContaining(['bash', 'write', 'edit', 'notes_write', 'delete_file']));
+    expect(tools).not.toEqual(
+      expect.arrayContaining(['bash', 'write', 'edit', 'notes_write', 'delete_file', 'delegate_worker']),
+    );
   });
 
   it('describes explicit skill requests truthfully for both states', () => {

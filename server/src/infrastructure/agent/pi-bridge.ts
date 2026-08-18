@@ -213,6 +213,7 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     // before the next model call.
     entry.session.setSteeringMode('all');
     let translator = new RunTranslator(onEvent);
+    let additionalUsage: Array<RunUsage & { purpose: string }> = [];
     const pendingSteering: { id: string; prompt: string; images?: PiImage[] }[] = [];
     const scheduledSteering = new Map<string, { cancelled: boolean }>();
     let steeringOperations = Promise.resolve();
@@ -411,15 +412,31 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
       if (usage !== undefined && this.deps.onUsage !== undefined) {
         this.deps.onUsage({ chatId, provider: entry.providerId, model: entry.modelId, ...usage });
       }
+      additionalUsage = entry.session.drainAdditionalUsage?.() ?? [];
+      if (this.deps.onUsage !== undefined) {
+        for (const delegated of additionalUsage) {
+          this.deps.onUsage({
+            chatId,
+            provider: delegated.provider,
+            model: delegated.model,
+            inputTokens: delegated.inputTokens,
+            outputTokens: delegated.outputTokens,
+            cost: delegated.cost,
+          });
+        }
+      }
       if (failure !== undefined && this.deps.onFailure !== undefined) {
         this.deps.onFailure({ chatId, ...failure });
       }
     }
 
     const usage = translator.usage;
-    return usage === undefined
-      ? {}
-      : { usage: { provider: entry.providerId, model: entry.modelId, ...usage } };
+    return {
+      ...(usage === undefined
+        ? {}
+        : { usage: { provider: entry.providerId, model: entry.modelId, ...usage } }),
+      ...(additionalUsage.length === 0 ? {} : { additionalUsage }),
+    };
   }
 
   listModels(providerId?: string): Promise<ModelInfo[]> {

@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
@@ -283,6 +283,7 @@ const oauthFlows = new OAuthFlowService({
 });
 
 function piBridge(): PiAgentBridge {
+  const piSdkEntry = activePiRuntime.sdkEntry ?? fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
   return new PiAgentBridge({
     chats: context.chats,
     workspace,
@@ -292,6 +293,10 @@ function piBridge(): PiAgentBridge {
     engine: new SdkPiEngine({
       ...(activePiRuntime.sdkEntry === undefined ? {} : { sdkEntry: activePiRuntime.sdkEntry }),
       workspace,
+      workerSubagents: {
+        extensionPath: fileURLToPath(import.meta.resolve('pi-subagents')),
+        piBinary: join(dirname(piSdkEntry), 'cli.js'),
+      },
       sessionsDir: join(context.dataDir, 'sessions'),
       // pi's own config, credentials and catalog cache, all inside Pop Agent's data
       // directory: a ~/.pi on the host must not reach into this process.

@@ -24,6 +24,7 @@ to silently choose one side.
 |---|---|
 | §§1–4 — identity, stack, repository, runtime data | this document |
 | §5 — pi integration | [Spec-Pop-Pi-Agent-Integration.md](Spec-Pop-Pi-Agent-Integration.md) |
+| Worker subagent delegation | [Spec-Pop-Subagents.md](Spec-Pop-Subagents.md) |
 | §6 — database | [Spec-Pop-Backend.md](Spec-Pop-Backend.md) |
 | §7 — memory | [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md) |
 | §8 — skills | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |

@@ -35,6 +35,12 @@ import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
 import { parseOpenAISubscriptionUsage } from './pi-subscription-usage.js';
 import { SdkPiSession } from './sdk-pi-session.js';
+import {
+  buildDelegateWorkerTool,
+  extensionToolNames,
+  prepareWorkerSubagentRuntime,
+  withoutExtensionTools,
+} from './worker-subagent.js';
 
 /**
  * pi as the rest of the server is allowed to see it: open a session, prompt it,
@@ -166,6 +172,8 @@ export interface PiSession {
   setExecutionMode(mode: ExecutionMode): void;
   /** Sets (or clears) the guard pi consults around each tool call. */
   setGuard(guard: ToolGuard | undefined): void;
+  /** Delegated calls bill separately from the parent assistant's own usage. */
+  drainAdditionalUsage?(): Array<RunUsage & { purpose: string }>;
   dispose(): void;
   /** Path of pi's JSONL file for this session, once it has one. */
   readonly sessionFile: string | undefined;
@@ -235,6 +243,12 @@ export interface SdkPiEngineOptions {
   authPath: string;
   /** Cache for downloaded catalogs. Nothing downloads them today; see below. */
   modelsStorePath: string;
+  /** Explicitly loaded pi-subagents package. Ambient extension discovery stays disabled. */
+  workerSubagents?: {
+    extensionPath: string;
+    /** Exact pi CLI beside the SDK selected for this server runtime. */
+    piBinary: string;
+  };
   /**
    * Optional operator overrides for the built-in catalog (pi models.json).
    * Absent file means no overrides. Exists so a per-model ceiling such as
@@ -377,6 +391,17 @@ export class SdkPiEngine implements PiEngine {
       onMissing: (path) => console.warn(`pop session missing; starting fresh: ${path}`),
     });
 
+    // pi-subagents is an explicit product dependency, not ambient host state.
+    // Its child CLI shares only Pop's isolated OAuth file and exact active pi
+    // binary. Pop-stored API keys remain in memory and are never copied out.
+    if (this.options.workerSubagents !== undefined) {
+      prepareWorkerSubagentRuntime({
+        ...this.options.workerSubagents,
+        agentDir: this.options.agentDir,
+        authPath: this.options.authPath,
+      });
+    }
+
     // The one thing whose output can block a tool: an inline extension that
     // asks the session's current guard before every tool runs, and feeds it
     // every tool result (docs/specs/Spec-Pop-General.md §10). `noExtensions` still keeps pi's own
@@ -391,6 +416,9 @@ export class SdkPiEngine implements PiEngine {
       cwd: this.options.workspace,
       agentDir: this.options.agentDir,
       noExtensions: true,
+      ...(this.options.workerSubagents === undefined
+        ? {}
+        : { additionalExtensionPaths: [this.options.workerSubagents.extensionPath] }),
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
@@ -429,9 +457,36 @@ export class SdkPiEngine implements PiEngine {
     });
     await resourceLoader.reload();
 
+    let hiddenSubagentTools: string[] = [];
+    let delegateWorkerTool: ToolDefinition | undefined;
+    const additionalUsage: Array<RunUsage & { purpose: string }> = [];
+    if (this.options.workerSubagents !== undefined) {
+      const extensions = resourceLoader.getExtensions();
+      hiddenSubagentTools = extensionToolNames(
+        extensions,
+        this.options.workerSubagents.extensionPath,
+      );
+      const registered = extensions.extensions
+        .flatMap((extension) => [...extension.tools.entries()])
+        .find(([name]) => name === 'subagent')?.[1];
+      if (registered === undefined) throw new Error('pi-subagents did not register its subagent tool');
+      delegateWorkerTool = buildDelegateWorkerTool(sdk.defineTool, registered.definition, {
+        oauthReady: () =>
+          providerDefinition(options.providerId)?.authType === 'oauth' &&
+          this.readCredentialEntry(options.providerId) !== undefined,
+        onUsage: (usage) => additionalUsage.push({
+          provider: options.providerId,
+          model: options.modelId,
+          ...usage,
+          purpose: 'subagent:worker',
+        }),
+      });
+    }
+
     // Pop Agent's own tools, built with this session's SDK so pi stays one dynamic
     // import. The built-in read/bash/edit/write stay on; these are added.
     const customTools: ToolDefinition[] = [
+      ...(delegateWorkerTool === undefined ? [] : [delegateWorkerTool]),
       ...(this.options.notesVault === undefined
         ? []
         : buildNoteTools(sdk.defineTool, this.options.notesVault)),
@@ -482,13 +537,22 @@ export class SdkPiEngine implements PiEngine {
     // turn enters the transcript before the next model call.
     session.setSteeringMode('all');
 
+    // pi-subagents remains loaded behind delegate_worker, but none of its broad
+    // model-facing management/orchestration tools are directly callable.
+    const normalToolNames = withoutExtensionTools(
+      session.getActiveToolNames(),
+      hiddenSubagentTools,
+    );
+    session.setActiveToolsByName(normalToolNames);
+
     return new SdkPiSession(
       session,
       runtime,
       guardSlot,
-      session.getActiveToolNames(),
+      normalToolNames,
       this.planToolNames(),
       model.input.includes('image'),
+      () => additionalUsage.splice(0),
     );
   }
 
