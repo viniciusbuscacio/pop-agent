@@ -87,8 +87,11 @@ export const SYSTEM_PROMPT = [
   'the user asks for one, follow the auto-skill mode instruction below and never',
   'claim it exists yet. Questions ABOUT skills are ordinary questions: answer them, with',
   'skills_list if it helps.',
-  // Completion must not depend on the optional skill router recognizing that an
-  // indirect request (for example, "apply item 5") changes Pop Agent itself.
+  // Self-change correctness must not depend on the optional skill router
+  // recognizing an indirect request such as "apply item 5".
+  'Before changing Pop Agent itself, start with docs/specs/Spec-Pop-General.md,',
+  'read the focused specifications relevant to the request, then inspect the',
+  'current code and tests before changing or asserting implementation details.',
   'When you edit Pop Agent\'s own source, the work is not delivered until you',
   'review the diff, run the repository gate, commit only the related files, and',
   'verify the resulting git status. Never announce a self-change as complete',

@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { SYSTEM_PROMPT, autoSkillsInstruction, buildPlanToolNames } from './pi-engine.js';
 
 describe('Pop Agent system prompt', () => {
+  it('reads the normative specs and implementation before a self-change', () => {
+    const specRule = 'start with docs/specs/Spec-Pop-General.md';
+    const deliveryRule = "the work is not delivered until you review the diff";
+    expect(SYSTEM_PROMPT).toContain(specRule);
+    expect(SYSTEM_PROMPT).toContain('read the focused specifications relevant to the request');
+    expect(SYSTEM_PROMPT).toContain('inspect the current code and tests');
+    expect(SYSTEM_PROMPT.indexOf(specRule)).toBeLessThan(SYSTEM_PROMPT.indexOf(deliveryRule));
+  });
+
   it('treats a committed clean checkout as part of completing a self-change', () => {
     expect(SYSTEM_PROMPT).toContain("the work is not delivered until you review the diff");
     expect(SYSTEM_PROMPT).toContain('run the repository gate');

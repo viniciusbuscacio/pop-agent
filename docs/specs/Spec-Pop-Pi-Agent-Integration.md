@@ -135,7 +135,12 @@ contracts. Login may expose safe interaction events and URLs, but never tokens.
 ## 5.5 System prompt and resources
 
 Every opened SDK session uses Pop Agent's system prompt rather than pi's coding
-assistant persona. The resource loader assembles, in order as applicable:
+assistant persona. The permanent prompt requires any self-change to begin at
+`Spec-Pop-General.md`, continue through only the relevant focused specifications,
+and verify those rules against current code and tests before implementation.
+This fail-safe does not depend on per-turn skill routing.
+
+The resource loader assembles, in order as applicable:
 
 - permanent Pop Agent identity and product vocabulary;
 - current Auto-skills policy;

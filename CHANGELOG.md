@@ -126,6 +126,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   runtime parser instead of an unsafe assertion, backup creation leaves the
   event loop free, and type-aware promise/type-import linting covers all
   production TypeScript, including the PWA.
+- **Self-changes now consult the normative specifications by default.** The
+  permanent system prompt starts at `Spec-Pop-General.md`, narrows to relevant
+  focused specs, and requires comparison with current code and tests before
+  implementation, even when no architecture skill is routed for the turn.
 - **High-risk TypeScript modules now have narrower responsibilities.** Chat-list
   explorers, run state, provider catalog resolution, pi event translation,
   pi session adaptation and shared wire contracts live in focused modules;
