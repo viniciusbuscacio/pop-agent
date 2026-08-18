@@ -305,7 +305,10 @@ function ToolCards({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: 
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--hover-overlay)]"
       >
         <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-        <span className="font-mono text-[var(--key-fg-dim)]">
+        <span
+          data-testid="tool-name"
+          className="min-w-0 flex-1 truncate font-mono text-[var(--key-fg-dim)]"
+        >
           {grouped ? t('chat.ranTools', { count: tools.length }) : (tools[0]?.name ?? '')}
         </span>
         <ToolStatusMark tools={tools} interrupted={interrupted} />

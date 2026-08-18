@@ -31,6 +31,27 @@ describe('horizontal overflow containment', () => {
     expect(message.firstElementChild?.className).toContain('[overflow-wrap:anywhere]');
   });
 
+  it('contains a long MCP tool name in the collapsed card', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{
+            name: 'mcp_mcp_M4qrBZjO1ie_microsoft_docs_search'.repeat(20),
+            status: 'done',
+            detail: '',
+          }],
+        }}
+      />,
+    );
+
+    const name = screen.getByTestId('tool-name');
+    expect(name.className).toContain('min-w-0');
+    expect(name.className).toContain('flex-1');
+    expect(name.className).toContain('truncate');
+  });
+
   it('constrains tool output while retaining its local overflow area', async () => {
     render(
       <ChatMessage
