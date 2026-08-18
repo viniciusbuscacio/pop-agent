@@ -393,7 +393,9 @@ not invented model data.
 Chats, Files, Tasks, Skills, MCP and A2A share the route-based explorer
 pattern, but their server authorities remain distinct. A2A lives under the
 Agent settings/integration area next to MCP and uses route/full-pane list and
-editor flows, never a side drawer. Save always has Cancel. Its browser
+editor flows, never a side drawer. Save always has Cancel. The editor supports
+a same-origin relative Agent Card path and Microsoft Entra tenant, client,
+scope and write-only client-secret fields, plus a Foundry v1 preset. Its browser
 projection shows credential presence and bounded persisted task state; only a
 frontend service calls the guarded API, and the browser never contacts a remote
 Agent Card or A2A endpoint directly.

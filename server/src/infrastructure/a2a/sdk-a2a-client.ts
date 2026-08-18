@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ClientSecretCredential } from '@azure/identity';
 import {
   Role,
   TaskState,
@@ -33,6 +34,16 @@ const MAX_REMOTE_TEXT = 64_000;
 
 export interface SdkA2aClientFactoryOptions {
   fetchDeps?: Pick<ScreenedFetchOptions, 'resolve' | 'retrieve'>;
+  entraCredential?: (
+    tenantId: string,
+    clientId: string,
+    clientSecret: string,
+  ) => {
+    getToken(
+      scope: string,
+      options: { abortSignal: AbortSignal },
+    ): Promise<{ token: string } | null>;
+  };
 }
 
 /** Official A2A SDK adapter. Protocol-owned types never leave infrastructure. */
@@ -42,15 +53,21 @@ export class SdkA2aClientFactory implements A2aClientFactory {
   create(agent: A2aAgent, credential: string | undefined): A2aClient {
     const base = parseA2aUrl(agent.baseUrl);
     const operation: { signal: AbortSignal | undefined } = { signal: undefined };
-    const credentialHeader = authHeader(agent, credential);
+    const authentication = authOptions(agent, credential, this.options.entraCredential);
     const fetchImpl = createScreenedA2aFetch({
       timeoutMs: agent.timeoutMs,
       allowedCredentialOrigin: base.origin,
-      ...(credentialHeader === undefined ? {} : { credentialHeader }),
+      ...authentication,
       operationSignal: () => operation.signal,
       ...this.options.fetchDeps,
     });
-    const resolver = new DefaultAgentCardResolver({ fetchImpl });
+    const resolver = new DefaultAgentCardResolver({
+      fetchImpl,
+      path: agent.agentCardPath,
+    });
+    const cardBaseUrl = agent.agentCardPath === '.well-known/agent-card.json'
+      ? agent.baseUrl
+      : `${agent.baseUrl.replace(/\/+$/, '')}/`;
     const factory = new ClientFactory({
       transports: [
         new JsonRpcTransportFactory({ fetchImpl }),
@@ -61,7 +78,7 @@ export class SdkA2aClientFactory implements A2aClientFactory {
     const validateInterface = (url: string) => this.options.fetchDeps?.resolve === undefined
       ? screenA2aUrl(url)
       : screenA2aUrl(url, this.options.fetchDeps.resolve);
-    return new SdkA2aClient(agent.baseUrl, resolver, factory, operation, validateInterface);
+    return new SdkA2aClient(cardBaseUrl, resolver, factory, operation, validateInterface);
   }
 }
 
@@ -157,24 +174,45 @@ class SdkA2aClient implements A2aClient {
   }
 }
 
-function authHeader(
+function authOptions(
   agent: A2aAgent,
   credential: string | undefined,
-): { name: string; value: string } | undefined {
-  if (agent.authKind === 'none') return undefined;
+  entraCredential: SdkA2aClientFactoryOptions['entraCredential'],
+): Pick<ScreenedFetchOptions, 'credentialHeader' | 'credentialHeaderProvider'> {
+  if (agent.authKind === 'none') return {};
   if (credential === undefined || credential === '') {
     throw Object.assign(new Error('The configured A2A credential is missing.'), { code: 'authentication' });
   }
+  if (agent.authKind === 'microsoft-entra') {
+    const tokenCredential = entraCredential?.(
+      agent.entraTenantId,
+      agent.entraClientId,
+      credential,
+    ) ?? new ClientSecretCredential(
+      agent.entraTenantId,
+      agent.entraClientId,
+      credential,
+    );
+    return {
+      credentialHeaderProvider: async (signal) => {
+        const token = await tokenCredential.getToken(agent.entraScope, { abortSignal: signal });
+        if (token === null || token.token === '') {
+          throw new Error('Microsoft Entra returned no access token.');
+        }
+        return { name: 'Authorization', value: `Bearer ${token.token}` };
+      },
+    };
+  }
   if (agent.authKind === 'bearer') {
-    return { name: agent.authHeader || 'Authorization', value: `Bearer ${credential}` };
+    return { credentialHeader: { name: agent.authHeader || 'Authorization', value: `Bearer ${credential}` } };
   }
   if (agent.authKind === 'api-key') {
-    return { name: agent.authHeader || 'X-API-Key', value: credential };
+    return { credentialHeader: { name: agent.authHeader || 'X-API-Key', value: credential } };
   }
   if (agent.authHeader === '') {
     throw Object.assign(new Error('A custom A2A header name is required.'), { code: 'authentication' });
   }
-  return { name: agent.authHeader, value: credential };
+  return { credentialHeader: { name: agent.authHeader, value: credential } };
 }
 
 function sendRequest(text: string, contextId = '', taskId = '') {

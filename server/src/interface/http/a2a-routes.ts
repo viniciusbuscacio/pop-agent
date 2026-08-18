@@ -25,6 +25,8 @@ const MAX_NAME_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_URL_LENGTH = 2_000;
 const MAX_HEADER_LENGTH = 200;
+const MAX_AGENT_CARD_PATH_LENGTH = 500;
+const MAX_ENTRA_FIELD_LENGTH = 500;
 const MAX_CREDENTIAL_LENGTH = 4_000;
 const MAX_TEXT_LENGTH = 32_000;
 const MAX_ID_LENGTH = 1_000;
@@ -43,6 +45,18 @@ const headerSchema = z.string().max(MAX_HEADER_LENGTH).refine(
     && !forbiddenAuthHeaders.has(value.toLowerCase())
   ),
 );
+const agentCardPathSchema = z.string().min(1).max(MAX_AGENT_CARD_PATH_LENGTH).refine((path) => (
+  !path.startsWith('/')
+  && !path.includes('://')
+  && !path.includes('?')
+  && !path.includes('#')
+  && !path.includes('\\')
+  && [...path].every((character) => {
+    const code = character.charCodeAt(0);
+    return code > 31 && code !== 127;
+  })
+  && path.split('/').every((segment) => segment !== '' && segment !== '..')
+));
 const baseUrlSchema = z.string().min(1).max(MAX_URL_LENGTH).refine((value) => {
   try {
     const parsed = new URL(value);
@@ -60,8 +74,12 @@ const createAgentSchema = z.object({
   name: z.string().min(1).max(MAX_NAME_LENGTH).refine((value) => value.trim() !== ''),
   description: z.string().max(MAX_DESCRIPTION_LENGTH).default(''),
   baseUrl: baseUrlSchema,
-  authKind: z.enum(['none', 'bearer', 'api-key', 'custom-header']).default('none'),
+  agentCardPath: agentCardPathSchema.default('.well-known/agent-card.json'),
+  authKind: z.enum(['none', 'bearer', 'api-key', 'custom-header', 'microsoft-entra']).default('none'),
   authHeader: headerSchema.default(''),
+  entraTenantId: z.string().max(MAX_ENTRA_FIELD_LENGTH).default(''),
+  entraClientId: z.string().max(MAX_ENTRA_FIELD_LENGTH).default(''),
+  entraScope: z.string().max(MAX_ENTRA_FIELD_LENGTH).default(''),
   credential: z.string().min(1).max(MAX_CREDENTIAL_LENGTH).optional(),
   enabled: z.boolean().default(true),
   timeoutMs: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).default(60_000),
@@ -71,8 +89,12 @@ const updateAgentSchema = z.object({
   name: z.string().min(1).max(MAX_NAME_LENGTH).refine((value) => value.trim() !== '').optional(),
   description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
   baseUrl: baseUrlSchema.optional(),
-  authKind: z.enum(['none', 'bearer', 'api-key', 'custom-header']).optional(),
+  agentCardPath: agentCardPathSchema.optional(),
+  authKind: z.enum(['none', 'bearer', 'api-key', 'custom-header', 'microsoft-entra']).optional(),
   authHeader: headerSchema.optional(),
+  entraTenantId: z.string().max(MAX_ENTRA_FIELD_LENGTH).optional(),
+  entraClientId: z.string().max(MAX_ENTRA_FIELD_LENGTH).optional(),
+  entraScope: z.string().max(MAX_ENTRA_FIELD_LENGTH).optional(),
   credential: z.string().min(1).max(MAX_CREDENTIAL_LENGTH).nullable().optional(),
   enabled: z.boolean().optional(),
   timeoutMs: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).optional(),
@@ -113,8 +135,12 @@ export function createA2aRoutes(service: A2aHttpService): Hono {
         name: parsed.name,
         description: parsed.description,
         baseUrl: parsed.baseUrl,
+        agentCardPath: parsed.agentCardPath,
         authKind: parsed.authKind,
         authHeader: parsed.authHeader,
+        entraTenantId: parsed.entraTenantId,
+        entraClientId: parsed.entraClientId,
+        entraScope: parsed.entraScope,
         enabled: parsed.enabled,
         timeoutMs: parsed.timeoutMs,
         ...(parsed.credential === undefined ? {} : { credential: parsed.credential }),
@@ -307,8 +333,12 @@ function agentDto(value: A2aAgentWithDiscovery): A2aAgentDTO {
     name: value.name,
     description: value.description,
     baseUrl: value.baseUrl,
+    agentCardPath: value.agentCardPath,
     authKind: value.authKind,
     authHeader: value.authHeader,
+    entraTenantId: value.entraTenantId,
+    entraClientId: value.entraClientId,
+    entraScope: value.entraScope,
     hasCredential: value.hasCredential,
     enabled: value.enabled,
     timeoutMs: value.timeoutMs,

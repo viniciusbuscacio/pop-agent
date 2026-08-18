@@ -8,6 +8,12 @@ import { useA2aStore } from '../store/a2a';
 import { Button, Card, Select, SwitchField, TextArea, TextField } from '../ui/controls';
 import { SidebarNav } from './sidebar-nav';
 
+const DEFAULT_AGENT_CARD_PATH = '.well-known/agent-card.json';
+const MICROSOFT_FOUNDRY_AGENT_CARD_PATH = 'agentCard/v1.0';
+const DEFAULT_ENTRA_SCOPE = 'https://ai.azure.com/.default';
+
+type A2aAuthKind = A2aAgentDTO['authKind'];
+
 export function A2aPage() {
   const { id } = useParams();
   const location = useLocation();
@@ -86,8 +92,16 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
   const [name, setName] = useState(agent?.name ?? '');
   const [description, setDescription] = useState(agent?.description ?? '');
   const [baseUrl, setBaseUrl] = useState(agent?.baseUrl ?? '');
-  const [authKind, setAuthKind] = useState<A2aAgentDTO['authKind']>(agent?.authKind ?? 'none');
+  const [agentCardPath, setAgentCardPath] = useState(
+    agent?.agentCardPath ?? DEFAULT_AGENT_CARD_PATH,
+  );
+  const [authKind, setAuthKind] = useState<A2aAuthKind>(agent?.authKind ?? 'none');
   const [authHeader, setAuthHeader] = useState(agent?.authHeader ?? '');
+  const [entraTenantId, setEntraTenantId] = useState(agent?.entraTenantId ?? '');
+  const [entraClientId, setEntraClientId] = useState(agent?.entraClientId ?? '');
+  const [entraScope, setEntraScope] = useState(
+    agent?.entraScope ?? DEFAULT_ENTRA_SCOPE,
+  );
   const [credential, setCredential] = useState('');
   const [enabled, setEnabled] = useState(agent?.enabled ?? true);
   const [timeoutMs, setTimeoutMs] = useState(String(agent?.timeoutMs ?? 60000));
@@ -96,6 +110,27 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
   const [discovered, setDiscovered] = useState(agent);
   const replaceAgent = useA2aStore((state) => state.replaceAgent);
   const removeAgent = useA2aStore((state) => state.remove);
+  const usesEntra = authKind === 'microsoft-entra';
+  const requiredEntraFieldsPresent = !usesEntra || (
+    entraTenantId.trim().length > 0
+    && entraClientId.trim().length > 0
+    && entraScope.trim().length > 0
+    && (
+      credential.length > 0
+      || (agent?.authKind === 'microsoft-entra' && agent.hasCredential)
+    )
+  );
+  const saveDisabled = busy
+    || name.trim().length === 0
+    || baseUrl.trim().length === 0
+    || agentCardPath.trim().length === 0
+    || !requiredEntraFieldsPresent;
+
+  function applyMicrosoftFoundryPreset(): void {
+    setAgentCardPath(MICROSOFT_FOUNDRY_AGENT_CARD_PATH);
+    setAuthKind('microsoft-entra');
+    setEntraScope(DEFAULT_ENTRA_SCOPE);
+  }
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -105,8 +140,12 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
       name,
       description,
       baseUrl,
+      agentCardPath,
       authKind,
-      authHeader: authKind === 'none' ? '' : authHeader,
+      authHeader: authKind === 'none' || usesEntra ? '' : authHeader,
+      entraTenantId,
+      entraClientId,
+      entraScope,
       enabled,
       timeoutMs: Number(timeoutMs),
       ...(credential.length > 0 ? { credential } : {}),
@@ -182,16 +221,40 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
         </Button>
       </div>
       <Card className="grid gap-4">
+        <div>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={applyMicrosoftFoundryPreset}>
+            {t('a2a.microsoftFoundryPreset')}
+          </Button>
+        </div>
         <TextField id="a2a-name" label={t('a2a.name')} value={name} onChange={(event) => setName(event.target.value)} required />
         <TextArea id="a2a-description" label={t('a2a.description')} value={description} onChange={(event) => setDescription(event.target.value)} />
         <TextField id="a2a-base-url" label={t('a2a.baseUrl')} type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required />
-        <Select id="a2a-auth" label={t('a2a.authentication')} value={authKind} onChange={(event) => setAuthKind(event.target.value as A2aAgentDTO['authKind'])}>
+        <TextField id="a2a-agent-card-path" label={t('a2a.agentCardPath')} value={agentCardPath} onChange={(event) => setAgentCardPath(event.target.value)} required />
+        <Select id="a2a-auth" label={t('a2a.authentication')} value={authKind} onChange={(event) => setAuthKind(event.target.value as A2aAuthKind)}>
           <option value="none">{t('a2a.auth.none')}</option>
           <option value="bearer">{t('a2a.auth.bearer')}</option>
           <option value="api-key">{t('a2a.auth.apiKey')}</option>
           <option value="custom-header">{t('a2a.auth.customHeader')}</option>
+          <option value="microsoft-entra">{t('a2a.auth.microsoftEntra')}</option>
         </Select>
-        {authKind !== 'none' ? (
+        {usesEntra ? (
+          <>
+            <TextField id="a2a-entra-tenant-id" label={t('a2a.entraTenantId')} value={entraTenantId} onChange={(event) => setEntraTenantId(event.target.value)} required />
+            <TextField id="a2a-entra-client-id" label={t('a2a.entraClientId')} value={entraClientId} onChange={(event) => setEntraClientId(event.target.value)} required />
+            <TextField id="a2a-entra-scope" label={t('a2a.entraScope')} value={entraScope} onChange={(event) => setEntraScope(event.target.value)} required />
+            <TextField
+              id="a2a-credential"
+              label={t('a2a.clientSecret')}
+              hint={agent?.authKind === 'microsoft-entra' && agent.hasCredential
+                ? t('a2a.clientSecretStoredHint')
+                : t('a2a.clientSecretHint')}
+              type="password"
+              value={credential}
+              onChange={(event) => setCredential(event.target.value)}
+              required={!(agent?.authKind === 'microsoft-entra' && agent.hasCredential)}
+            />
+          </>
+        ) : authKind !== 'none' ? (
           <>
             <TextField id="a2a-auth-header" label={t('a2a.authHeader')} value={authHeader} onChange={(event) => setAuthHeader(event.target.value)} />
             <TextField id="a2a-credential" label={t('a2a.credential')} hint={agent?.hasCredential === true ? t('a2a.credentialHint') : undefined} type="password" value={credential} onChange={(event) => setCredential(event.target.value)} />
@@ -200,7 +263,7 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
         <TextField id="a2a-timeout" label={t('a2a.timeout')} type="number" min={1000} max={300000} value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} required />
         <SwitchField id="a2a-enabled" label={t('a2a.enabled')} checked={enabled} onChange={setEnabled} />
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy || name.trim().length === 0 || baseUrl.trim().length === 0}>
+          <Button type="submit" disabled={saveDisabled}>
             {busy ? t('a2a.saving') : t('common.save')}
           </Button>
           {agent === undefined ? null : (

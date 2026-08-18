@@ -8,8 +8,12 @@ const agent = {
   name: 'Weather agent',
   description: 'Remote forecasts',
   baseUrl: 'https://agent.test/a2a',
+  agentCardPath: '.well-known/agent-card.json',
   authKind: 'bearer' as const,
   authHeader: '',
+  entraTenantId: '',
+  entraClientId: '',
+  entraScope: '',
   hasCredential: true,
   enabled: true,
   timeoutMs: 10_000,
@@ -153,6 +157,26 @@ describe('outbound A2A routes', () => {
     }));
     expect(JSON.stringify(await created.json())).not.toContain('top-secret');
 
+    const foundry = await api('/v1/a2a/agents', {
+      method: 'POST',
+      body: {
+        name: 'Foundry agent',
+        baseUrl: 'https://foundry.test/a2a',
+        agentCardPath: 'agentCard/v1.0',
+        authKind: 'microsoft-entra',
+        entraTenantId: '0269f5ec-2243-438f-90ec-7a4b9c20ca9c',
+        entraClientId: '9595bd7c-fa1a-4091-85fc-09546dc1306c',
+        entraScope: 'https://ai.azure.com/.default',
+        credential: 'client-secret',
+      },
+    });
+    expect(foundry.status).toBe(201);
+    expect(service.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      agentCardPath: 'agentCard/v1.0', authKind: 'microsoft-entra',
+      entraScope: 'https://ai.azure.com/.default', credential: 'client-secret',
+    }));
+    expect(JSON.stringify(await foundry.json())).not.toContain('client-secret');
+
     const unknown = await api('/v1/a2a/agents', {
       method: 'POST',
       body: { name: 'Remote', baseUrl: 'https://remote.test', typo: true },
@@ -167,6 +191,8 @@ describe('outbound A2A routes', () => {
       { name: 'Remote', baseUrl: 'https://remote.test', timeoutMs: 999 },
       { name: 'Remote', baseUrl: 'https://remote.test', authHeader: 'X-Test\r\nLeak' },
       { name: 'Remote', baseUrl: 'https://remote.test', authHeader: 'Host' },
+      { name: 'Remote', baseUrl: 'https://remote.test', agentCardPath: 'https://evil.test/card' },
+      { name: 'Remote', baseUrl: 'https://remote.test', agentCardPath: '../card' },
     ]) {
       const response = await api('/v1/a2a/agents', { method: 'POST', body: invalid });
       expect(response.status, JSON.stringify(invalid)).toBe(400);

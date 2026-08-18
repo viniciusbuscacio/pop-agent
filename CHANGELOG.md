@@ -12,7 +12,9 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   owner-configured remote agents beside MCP, discovers A2A 1.0 Agent Cards,
   persists foreground text tasks, exposes bounded normal-mode A2A tools and
   protects credentials and network calls with encryption, SSRF screening,
-  DNS pinning, cancellation and external-content taint policy.
+  DNS pinning, cancellation and external-content taint policy. Custom
+  same-origin Agent Card paths and server-renewed Microsoft Entra client
+  credentials add direct Microsoft Foundry v1 interoperability.
 
 ### Changed
 

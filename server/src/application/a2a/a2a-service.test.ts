@@ -137,6 +137,33 @@ describe('A2aService', () => {
     expect(secrets.get(A2aService.secretKey(created.id))).toBeUndefined();
   });
 
+  it('validates Foundry card paths and encrypted Entra client credentials', () => {
+    const created = service.create({
+      name: 'Foundry agent', description: '', baseUrl: 'https://foundry.example/a2a',
+      agentCardPath: 'agentCard/v1.0', authKind: 'microsoft-entra', authHeader: '',
+      entraTenantId: '0269f5ec-2243-438f-90ec-7a4b9c20ca9c',
+      entraClientId: '9595bd7c-fa1a-4091-85fc-09546dc1306c',
+      entraScope: 'https://ai.azure.com/.default',
+      enabled: true, timeoutMs: 120_000, credential: 'client-secret',
+    });
+
+    expect(created).toMatchObject({
+      agentCardPath: 'agentCard/v1.0', authKind: 'microsoft-entra',
+      entraScope: 'https://ai.azure.com/.default', hasCredential: true,
+    });
+    expect(created).not.toHaveProperty('credential');
+    expect(secrets.get(A2aService.secretKey(created.id))).toBe('client-secret');
+
+    for (const agentCardPath of [
+      'https://evil.example/card', '/absolute/card', '../card', 'agentCard/v1.0?x=1',
+    ]) {
+      expect(() => service.create({
+        name: 'Bad', description: '', baseUrl: 'https://foundry.example/a2a',
+        agentCardPath, authKind: 'none', authHeader: '', enabled: true, timeoutMs: 10_000,
+      })).toThrow();
+    }
+  });
+
   it('discovers and persists interfaces, skills, and negotiated versions using the secret', async () => {
     const agent = createAgent();
 

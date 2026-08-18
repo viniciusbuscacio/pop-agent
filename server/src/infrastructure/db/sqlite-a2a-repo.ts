@@ -21,14 +21,19 @@ export class SqliteA2aRepo implements A2aRepo {
 
   create(agent: A2aAgent): A2aAgent {
     this.db.prepare(`INSERT INTO a2a_agents
-      (id,name,description,base_url,auth_kind,auth_header,enabled,timeout_ms,status,last_error,last_connected_at,protocol_version,agent_version,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      (id,name,description,base_url,agent_card_path,auth_kind,auth_provider,auth_header,entra_tenant_id,entra_client_id,entra_scope,enabled,timeout_ms,status,last_error,last_connected_at,protocol_version,agent_version,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       agent.id,
       agent.name,
       agent.description,
       agent.baseUrl,
-      agent.authKind,
+      agent.agentCardPath,
+      persistedAuthKind(agent),
+      agent.authKind === 'microsoft-entra' ? 'microsoft-entra' : 'static',
       agent.authHeader,
+      agent.entraTenantId,
+      agent.entraClientId,
+      agent.entraScope,
       agent.enabled ? 1 : 0,
       agent.timeoutMs,
       agent.status,
@@ -56,13 +61,18 @@ export class SqliteA2aRepo implements A2aRepo {
       updatedAt: new Date().toISOString(),
     } as A2aAgent;
     this.db.prepare(`UPDATE a2a_agents SET
-      name=?,description=?,base_url=?,auth_kind=?,auth_header=?,enabled=?,timeout_ms=?,status=?,last_error=?,last_connected_at=?,protocol_version=?,agent_version=?,updated_at=?
+      name=?,description=?,base_url=?,agent_card_path=?,auth_kind=?,auth_provider=?,auth_header=?,entra_tenant_id=?,entra_client_id=?,entra_scope=?,enabled=?,timeout_ms=?,status=?,last_error=?,last_connected_at=?,protocol_version=?,agent_version=?,updated_at=?
       WHERE id=?`).run(
       next.name,
       next.description,
       next.baseUrl,
-      next.authKind,
+      next.agentCardPath,
+      persistedAuthKind(next),
+      next.authKind === 'microsoft-entra' ? 'microsoft-entra' : 'static',
       next.authHeader,
+      next.entraTenantId,
+      next.entraClientId,
+      next.entraScope,
       next.enabled ? 1 : 0,
       next.timeoutMs,
       next.status,
@@ -197,8 +207,13 @@ interface A2aAgentRow {
   name: string;
   description: string;
   base_url: string;
+  agent_card_path: string;
   auth_kind: string;
+  auth_provider: string;
   auth_header: string;
+  entra_tenant_id: string;
+  entra_client_id: string;
+  entra_scope: string;
   enabled: number;
   timeout_ms: number;
   status: string;
@@ -250,8 +265,14 @@ function toAgent(row: A2aAgentRow): A2aAgent {
     name: row.name,
     description: row.description,
     baseUrl: row.base_url,
-    authKind: row.auth_kind as A2aAgent['authKind'],
+    agentCardPath: row.agent_card_path,
+    authKind: row.auth_provider === 'microsoft-entra'
+      ? 'microsoft-entra'
+      : row.auth_kind as A2aAgent['authKind'],
     authHeader: row.auth_header,
+    entraTenantId: row.entra_tenant_id,
+    entraClientId: row.entra_client_id,
+    entraScope: row.entra_scope,
     enabled: row.enabled === 1,
     timeoutMs: row.timeout_ms,
     status: row.status as A2aAgent['status'],
@@ -313,6 +334,10 @@ function parseStringArray(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function persistedAuthKind(agent: A2aAgent): Exclude<A2aAgent['authKind'], 'microsoft-entra'> {
+  return agent.authKind === 'microsoft-entra' ? 'none' : agent.authKind;
 }
 
 function withoutUndefined<T extends object>(value: T): Partial<T> {

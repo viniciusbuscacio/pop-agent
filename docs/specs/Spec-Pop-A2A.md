@@ -33,7 +33,9 @@ bounded unsupported-content result and keeps the task inspectable.
 ## Configured agents and trust
 
 Each configured agent has a Pop-owned opaque id, owner-visible name, HTTPS base
-URL for Agent Card discovery, enabled state and optional encrypted credential. The discovered card
+URL, a same-origin relative Agent Card path, enabled state and optional encrypted
+credential. The path defaults to `.well-known/agent-card.json`; absolute URLs,
+traversal, query strings, fragments and control characters are rejected. The discovered card
 and skills are cached only as bounded display/call metadata; the configured URL
 and owner decision remain authority. Card changes never silently broaden Pop's
 permissions or enable an agent.
@@ -47,9 +49,12 @@ web and MCP results.
 Credential plaintext is accepted only on create/replacement, encrypted through
 Pop's secret store and never returned by APIs. Snapshots expose only credential
 presence. Credentials are excluded from URLs, logs, tool output, task prose and
-backups that lack `secret.key`. The MVP supports only explicitly implemented
-static HTTP authentication schemes; it does not execute arbitrary
-agent-advertised authentication flows or arbitrary owner-supplied headers.
+backups that lack `secret.key`. The MVP supports explicitly implemented static
+HTTP schemes and Microsoft Entra client credentials. Entra tenant id, client id
+and scope are non-secret configuration; the client secret uses the encrypted
+write-only credential slot. Pop acquires short-lived access tokens server-side,
+never returns or logs them, and does not execute arbitrary agent-advertised
+authentication flows or arbitrary owner-supplied headers.
 
 ## Outbound network policy
 
@@ -66,7 +71,8 @@ new owner configuration and policy decision. The same checks apply to the
 Agent Card URL and any endpoint selected from the card.
 
 Authorization is attached only after the final origin has passed policy and
-only to the configured agent's exact allowed origin. It is never forwarded to
+only to the configured agent's exact allowed origin. Dynamic Entra token
+acquisition occurs only after URL and DNS screening succeeds. It is never forwarded to
 a card-advertised cross-origin endpoint. TLS verification remains enabled.
 
 ## Protocol runtime
@@ -173,7 +179,11 @@ paths ship only with strict shared DTOs and guarded route registration; this
 specification does not make an unimplemented route available.
 
 The PWA destination is **Agent → A2A**, immediately beside MCP in the Agent
-segmented navigation. It uses route/full-pane list and editor flows, never a form
+segmented navigation. Its editor exposes the relative Agent Card path and, for
+Microsoft Entra, tenant id, client id, scope and write-only client secret. A
+Microsoft Foundry preset selects `agentCard/v1.0`, JSON-RPC-compatible Entra
+configuration and `https://ai.azure.com/.default` without replacing the owner’s
+name or base URL. It uses route/full-pane list and editor flows, never a form
 side drawer. Create/edit Save always has Cancel. The UI shows enabled state,
 HTTPS endpoint, credential-present state, last bounded connection/card status,
 skills and persisted foreground tasks without rendering raw HTML. Deleting a

@@ -18,6 +18,10 @@ describe('A2A migration 045', () => {
     expect((db.prepare('SELECT version FROM schema_migrations WHERE version = 45').get() as {
       version: number;
     }).version).toBe(45);
+    const columns = db.prepare('PRAGMA table_info(a2a_agents)').all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'agent_card_path', 'auth_provider', 'entra_tenant_id', 'entra_client_id', 'entra_scope',
+    ]));
     db.close();
   });
 

@@ -19,7 +19,9 @@ export const A2A_LIMITS = {
   name: 120,
   description: 500,
   baseUrl: 2_000,
+  agentCardPath: 500,
   authHeader: 200,
+  entraField: 500,
   credential: 4_000,
   text: 32_000,
   responseText: 64_000,
@@ -43,8 +45,12 @@ export interface CreateA2aAgentInput {
   name: string;
   description: string;
   baseUrl: string;
+  agentCardPath?: string;
   authKind: A2aAuthKind;
   authHeader: string;
+  entraTenantId?: string;
+  entraClientId?: string;
+  entraScope?: string;
   enabled: boolean;
   timeoutMs: number;
   credential?: string;
@@ -53,7 +59,17 @@ export interface CreateA2aAgentInput {
 export type UpdateA2aAgentInput = Partial<
   Pick<
     CreateA2aAgentInput,
-    'name' | 'description' | 'baseUrl' | 'authKind' | 'authHeader' | 'enabled' | 'timeoutMs'
+    | 'name'
+    | 'description'
+    | 'baseUrl'
+    | 'agentCardPath'
+    | 'authKind'
+    | 'authHeader'
+    | 'entraTenantId'
+    | 'entraClientId'
+    | 'entraScope'
+    | 'enabled'
+    | 'timeoutMs'
   >
 > & { credential?: string | null };
 
@@ -79,6 +95,9 @@ export class A2aService {
   create(input: CreateA2aAgentInput): A2aAgentWithDiscovery {
     const fields = validateConfig(input);
     const credential = input.authKind === 'none' ? undefined : validateCredential(input.credential);
+    if (input.authKind === 'microsoft-entra' && credential === undefined) {
+      throw new Error('Microsoft Entra authentication requires a client secret.');
+    }
     const now = new Date().toISOString();
     const agent: A2aAgent = {
       id: entityId('a2a-agent'),
@@ -100,8 +119,12 @@ export class A2aService {
     if (current === undefined) return undefined;
     const patch = validatePatch(input, current);
     const connectionChanged = input.baseUrl !== undefined
+      || input.agentCardPath !== undefined
       || input.authKind !== undefined
       || input.authHeader !== undefined
+      || input.entraTenantId !== undefined
+      || input.entraClientId !== undefined
+      || input.entraScope !== undefined
       || input.credential !== undefined;
     if (connectionChanged) {
       Object.assign(patch, {
@@ -114,6 +137,20 @@ export class A2aService {
     const credential = input.credential === undefined || input.credential === null
       ? input.credential
       : validateCredential(input.credential);
+    const nextAuthKind = input.authKind ?? current.authKind;
+    if (
+      input.authKind !== undefined
+      && input.authKind !== current.authKind
+      && input.authKind !== 'none'
+      && credential === undefined
+    ) {
+      throw new Error('Changing A2A authentication requires a replacement credential.');
+    }
+    const hasCredential = credential !== null
+      && (credential !== undefined || this.deps.secrets.get(secretKey(id)) !== undefined);
+    if (nextAuthKind === 'microsoft-entra' && !hasCredential) {
+      throw new Error('Microsoft Entra authentication requires a client secret.');
+    }
     const updated = this.deps.repo.update(id, patch);
     if (updated === undefined) return undefined;
     if (credential === null || input.authKind === 'none') {
@@ -348,7 +385,8 @@ function validateConfig(input: CreateA2aAgentInput): Omit<
   if (parsed.username !== '' || parsed.password !== '') {
     throw new Error('baseUrl must not contain credentials.');
   }
-  if (!['none', 'bearer', 'api-key', 'custom-header'].includes(input.authKind)) {
+  const agentCardPath = validateAgentCardPath(input.agentCardPath ?? '.well-known/agent-card.json');
+  if (!['none', 'bearer', 'api-key', 'custom-header', 'microsoft-entra'].includes(input.authKind)) {
     throw new Error('Invalid A2A auth kind.');
   }
   if (input.authHeader !== '' && (
@@ -360,6 +398,14 @@ function validateConfig(input: CreateA2aAgentInput): Omit<
   if (input.authKind === 'custom-header' && input.authHeader === '') {
     throw new Error('Custom-header authentication requires a header name.');
   }
+  const entraTenantId = boundedText('entraTenantId', input.entraTenantId ?? '', A2A_LIMITS.entraField);
+  const entraClientId = boundedText('entraClientId', input.entraClientId ?? '', A2A_LIMITS.entraField);
+  const entraScope = boundedText('entraScope', input.entraScope ?? '', A2A_LIMITS.entraField);
+  if (input.authKind === 'microsoft-entra') {
+    if (!GUID_PATTERN.test(entraTenantId)) throw new Error('Invalid Microsoft Entra tenant ID.');
+    if (!GUID_PATTERN.test(entraClientId)) throw new Error('Invalid Microsoft Entra client ID.');
+    validateEntraScope(entraScope);
+  }
   if (!Number.isInteger(input.timeoutMs) || input.timeoutMs < A2A_LIMITS.timeoutMinMs || input.timeoutMs > A2A_LIMITS.timeoutMaxMs) {
     throw new Error('timeoutMs is outside the allowed range.');
   }
@@ -367,8 +413,14 @@ function validateConfig(input: CreateA2aAgentInput): Omit<
     name: requiredText('name', input.name, A2A_LIMITS.name),
     description: boundedText('description', input.description, A2A_LIMITS.description),
     baseUrl,
+    agentCardPath,
     authKind: input.authKind,
-    authHeader: boundedText('authHeader', input.authHeader, A2A_LIMITS.authHeader),
+    authHeader: input.authKind === 'microsoft-entra'
+      ? ''
+      : boundedText('authHeader', input.authHeader, A2A_LIMITS.authHeader),
+    entraTenantId: input.authKind === 'microsoft-entra' ? entraTenantId : '',
+    entraClientId: input.authKind === 'microsoft-entra' ? entraClientId : '',
+    entraScope: input.authKind === 'microsoft-entra' ? entraScope : '',
     enabled: input.enabled,
     timeoutMs: input.timeoutMs,
   };
@@ -379,8 +431,12 @@ function validatePatch(input: UpdateA2aAgentInput, current: A2aAgent): Partial<A
     name: input.name,
     description: input.description,
     baseUrl: input.baseUrl,
+    agentCardPath: input.agentCardPath,
     authKind: input.authKind,
     authHeader: input.authHeader,
+    entraTenantId: input.entraTenantId,
+    entraClientId: input.entraClientId,
+    entraScope: input.entraScope,
     enabled: input.enabled,
     timeoutMs: input.timeoutMs,
   };
@@ -392,8 +448,12 @@ function validatePatch(input: UpdateA2aAgentInput, current: A2aAgent): Partial<A
     name: input.name ?? current.name,
     description: input.description ?? current.description,
     baseUrl: input.baseUrl ?? current.baseUrl,
+    agentCardPath: input.agentCardPath ?? current.agentCardPath,
     authKind: input.authKind ?? current.authKind,
     authHeader: input.authHeader ?? current.authHeader,
+    entraTenantId: input.entraTenantId ?? current.entraTenantId,
+    entraClientId: input.entraClientId ?? current.entraClientId,
+    entraScope: input.entraScope ?? current.entraScope,
     enabled: input.enabled ?? current.enabled,
     timeoutMs: input.timeoutMs ?? current.timeoutMs,
   };
@@ -401,9 +461,47 @@ function validatePatch(input: UpdateA2aAgentInput, current: A2aAgent): Partial<A
   const patch = Object.fromEntries(
     Object.keys(merged).map((key) => [key, validated[key as keyof typeof validated]]),
   ) as Partial<A2aAgent>;
-  if (input.authKind === 'none') patch.authHeader = '';
+  if (input.authKind === 'none' || input.authKind === 'microsoft-entra') patch.authHeader = '';
   return patch;
 }
+
+function validateAgentCardPath(value: string): string {
+  const path = requiredText('agentCardPath', value, A2A_LIMITS.agentCardPath);
+  if (
+    path.startsWith('/')
+    || path.includes('://')
+    || path.includes('?')
+    || path.includes('#')
+    || path.split('/').some((segment) => segment === '..' || segment === '')
+    || path.includes('\\')
+    || [...path].some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })
+  ) {
+    throw new Error('agentCardPath must be a safe same-origin relative path.');
+  }
+  return path;
+}
+
+function validateEntraScope(value: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Invalid Microsoft Entra scope.');
+  }
+  if (
+    parsed.protocol !== 'https:'
+    || parsed.username !== ''
+    || parsed.password !== ''
+    || parsed.search !== ''
+    || parsed.hash !== ''
+    || !parsed.pathname.endsWith('/.default')
+  ) throw new Error('Invalid Microsoft Entra scope.');
+}
+
+const GUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const FORBIDDEN_AUTH_HEADERS = new Set([
   'host', 'content-length', 'connection', 'transfer-encoding', 'cookie', 'set-cookie',

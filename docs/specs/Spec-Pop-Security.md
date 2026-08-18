@@ -184,8 +184,11 @@ MCP, A2A and provider network calls occur only for owner-configured
 capabilities or an active model operation. Outbound A2A additionally requires
 HTTPS, public screened and pinned addresses, no redirects, origin-bound
 authorization and bounded bodies/deadlines; manually trusting an agent does not
-permit private-address access. A2A credentials use encrypted secret storage,
-and all card/task text remains external untrusted content. Update checks are
+permit private-address access. Static A2A credentials and Microsoft Entra
+client secrets use encrypted secret storage. Short-lived Entra tokens are
+acquired only after destination screening, sent only to the configured exact
+origin, and never logged or returned; tenant, client and scope metadata are not
+secrets. All card/task text remains external untrusted content. Update checks are
 explicit product behavior and can be disabled where offered. Zero telemetry
 remains independent of those functional calls.
 

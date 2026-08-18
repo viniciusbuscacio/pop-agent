@@ -9,8 +9,12 @@ function agent(patch: Partial<A2aAgent> = {}): A2aAgent {
     name: 'Remote',
     description: '',
     baseUrl: 'https://agent.example',
+    agentCardPath: '.well-known/agent-card.json',
     authKind: 'bearer',
     authHeader: '',
+    entraTenantId: '',
+    entraClientId: '',
+    entraScope: '',
     enabled: true,
     timeoutMs: 1_000,
     status: 'unknown',
@@ -123,6 +127,55 @@ describe('official A2A SDK adapter', () => {
       'https://agent.example/.well-known/agent-card.json',
       'https://agent.example/a2a',
     ]);
+  });
+
+  it('uses a custom same-origin card path and dynamically acquired Entra token', async () => {
+    let requestedUrl = '';
+    let authorization = '';
+    let requestedScope = '';
+    const factory = new SdkA2aClientFactory({
+      entraCredential: (tenantId, clientId, clientSecret) => {
+        expect([tenantId, clientId, clientSecret]).toEqual(['tenant-id', 'client-id', 'client-secret']);
+        return {
+          getToken: async (scope) => {
+            requestedScope = scope;
+            return { token: 'short-lived-token' };
+          },
+        };
+      },
+      fetchDeps: {
+        resolve: async () => ['8.8.8.8'],
+        retrieve: async (request) => {
+          requestedUrl = request.url;
+          authorization = request.headers.get('authorization') ?? '';
+          return new Response(JSON.stringify({
+            name: 'Foundry Agent', description: 'A Foundry peer',
+            supportedInterfaces: [{
+              url: 'https://agent.example/a2a', protocolBinding: 'JSONRPC',
+              protocolVersion: '1.0', tenant: '',
+            }],
+            version: '1.0.0',
+            capabilities: { streaming: false, pushNotifications: false, extensions: [] },
+            securitySchemes: {}, securityRequirements: [],
+            defaultInputModes: ['text/plain'], defaultOutputModes: ['text/plain'],
+            skills: [], signatures: [],
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      },
+    });
+
+    await factory.create(agent({
+      baseUrl: 'https://agent.example/a2a',
+      agentCardPath: 'agentCard/v1.0',
+      authKind: 'microsoft-entra',
+      entraTenantId: 'tenant-id',
+      entraClientId: 'client-id',
+      entraScope: 'https://ai.azure.com/.default',
+    }), 'client-secret').discover();
+
+    expect(requestedUrl).toBe('https://agent.example/a2a/agentCard/v1.0');
+    expect(requestedScope).toBe('https://ai.azure.com/.default');
+    expect(authorization).toBe('Bearer short-lived-token');
   });
 
   it('maps direct messages and task state/text without exposing unsupported content', () => {

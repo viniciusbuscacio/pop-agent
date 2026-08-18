@@ -50,6 +50,37 @@ describe('screened A2A fetch', () => {
     ]);
   });
 
+  it('acquires dynamic credentials only after screening and only for the exact origin', async () => {
+    const provider = vi.fn(async () => ({ name: 'Authorization', value: 'Bearer dynamic-token' }));
+    const seen: Array<string | null> = [];
+    const fetchImpl = createScreenedA2aFetch({
+      timeoutMs: 1_000,
+      allowedCredentialOrigin: 'https://agent.example',
+      credentialHeaderProvider: provider,
+      resolve: publicDns,
+      retrieve: async (request) => {
+        seen.push(request.headers.get('authorization'));
+        return new Response('{}', { status: 200 });
+      },
+    });
+
+    await fetchImpl('https://other.example/a2a');
+    expect(provider).not.toHaveBeenCalled();
+    await fetchImpl('https://agent.example/a2a');
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([null, 'Bearer dynamic-token']);
+
+    const blockedProvider = vi.fn(async () => ({ name: 'Authorization', value: 'Bearer secret' }));
+    const blocked = createScreenedA2aFetch({
+      timeoutMs: 1_000,
+      allowedCredentialOrigin: 'https://agent.example',
+      credentialHeaderProvider: blockedProvider,
+      resolve: async () => ['127.0.0.1'],
+    });
+    await expect(blocked('https://agent.example/a2a')).rejects.toMatchObject({ code: 'private_address' });
+    expect(blockedProvider).not.toHaveBeenCalled();
+  });
+
   it('propagates caller cancellation and a bounded timeout', async () => {
     const retrieve = async (_request: Request, _addresses: readonly string[], signal: AbortSignal): Promise<Response> =>
       new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));

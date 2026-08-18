@@ -27,14 +27,25 @@ vi.mock('../services/a2a', () => ({
   },
 }));
 
-function agent(overrides: Partial<A2aAgentDTO> = {}): A2aAgentDTO {
+type A2aAgentWithEntraFields = A2aAgentDTO & {
+  agentCardPath: string;
+  entraTenantId: string;
+  entraClientId: string;
+  entraScope: string;
+};
+
+function agent(overrides: Partial<A2aAgentWithEntraFields> = {}): A2aAgentDTO {
   return {
     id: 'agent-1',
     name: 'Research agent',
     description: 'Researches sources',
     baseUrl: 'https://research.example/a2a',
+    agentCardPath: '.well-known/agent-card.json',
     authKind: 'bearer',
     authHeader: 'Authorization',
+    entraTenantId: '',
+    entraClientId: '',
+    entraScope: 'https://ai.azure.com/.default',
     hasCredential: true,
     enabled: true,
     timeoutMs: 45000,
@@ -50,7 +61,7 @@ function agent(overrides: Partial<A2aAgentDTO> = {}): A2aAgentDTO {
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
     ...overrides,
-  };
+  } as A2aAgentWithEntraFields;
 }
 
 const task: A2aTaskDTO = {
@@ -95,6 +106,8 @@ describe('A2A detail presentation', () => {
 
     expect(await screen.findByDisplayValue('Research agent')).toBeTruthy();
     expect(screen.getByDisplayValue('https://research.example/a2a')).toBeTruthy();
+    expect((screen.getByLabelText('Agent Card path') as HTMLInputElement).value)
+      .toBe('.well-known/agent-card.json');
     expect(screen.getByText('JSONRPC · 0.3.0 · https://research.example/a2a')).toBeTruthy();
     expect(screen.getByText('Planning')).toBeTruthy();
     expect(await screen.findByText('Find the source')).toBeTruthy();
@@ -138,11 +151,83 @@ describe('A2A detail presentation', () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({
       name: 'New remote',
       baseUrl: 'https://new.example',
+      agentCardPath: '.well-known/agent-card.json',
       authKind: 'custom-header',
       authHeader: 'X-Agent-Key',
       credential: 'secret-value',
       enabled: true,
       timeoutMs: 60000,
     });
+  });
+
+  it('applies the Microsoft Foundry preset without replacing identity fields', async () => {
+    list.mockResolvedValue({ agents: [] });
+    renderPage('/a2a/new');
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Foundry agent');
+    await userEvent.type(screen.getByLabelText('Base URL'), 'https://foundry.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Use Microsoft Foundry preset' }));
+
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Foundry agent');
+    expect((screen.getByLabelText('Base URL') as HTMLInputElement).value)
+      .toBe('https://foundry.example');
+    expect((screen.getByLabelText('Agent Card path') as HTMLInputElement).value)
+      .toBe('agentCard/v1.0');
+    expect((screen.getByLabelText('Authentication') as HTMLSelectElement).value)
+      .toBe('microsoft-entra');
+    expect((screen.getByLabelText('Scope') as HTMLInputElement).value)
+      .toBe('https://ai.azure.com/.default');
+    expect(screen.queryByLabelText('Header name (optional)')).toBeNull();
+  });
+
+  it('requires Microsoft Entra fields and sends the client secret as the credential', async () => {
+    create.mockResolvedValue({ agent: agent() });
+    list.mockResolvedValue({ agents: [] });
+    renderPage('/a2a/new');
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Foundry agent');
+    await userEvent.type(screen.getByLabelText('Base URL'), 'https://foundry.example');
+    await userEvent.selectOptions(screen.getByLabelText('Authentication'), 'microsoft-entra');
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Scope') as HTMLInputElement).value)
+      .toBe('https://ai.azure.com/.default');
+    expect(screen.getByText('Stored encrypted on your server and never shown again.')).toBeTruthy();
+
+    await userEvent.type(screen.getByLabelText('Tenant ID'), 'tenant-id');
+    await userEvent.type(screen.getByLabelText('Client ID'), 'client-id');
+    await userEvent.type(screen.getByLabelText('Client secret'), 'client-secret');
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+
+    const agentCardPath = screen.getByLabelText('Agent Card path');
+    await userEvent.clear(agentCardPath);
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.type(agentCardPath, '.well-known/agent-card.json');
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(save);
+
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      agentCardPath: '.well-known/agent-card.json',
+      authKind: 'microsoft-entra',
+      authHeader: '',
+      entraTenantId: 'tenant-id',
+      entraClientId: 'client-id',
+      entraScope: 'https://ai.azure.com/.default',
+      credential: 'client-secret',
+    });
+  });
+
+  it('shows server validation errors returned while saving', async () => {
+    create.mockRejectedValue(new Error('The tenant ID is not valid.'));
+    list.mockResolvedValue({ agents: [] });
+    renderPage('/a2a/new');
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Remote');
+    await userEvent.type(screen.getByLabelText('Base URL'), 'https://remote.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect((await screen.findByRole('status')).textContent).toContain('The tenant ID is not valid.');
   });
 });

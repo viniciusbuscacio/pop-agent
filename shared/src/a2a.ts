@@ -1,4 +1,9 @@
-export type A2aAuthKind = 'none' | 'bearer' | 'api-key' | 'custom-header';
+export type A2aAuthKind =
+  | 'none'
+  | 'bearer'
+  | 'api-key'
+  | 'custom-header'
+  | 'microsoft-entra';
 export type A2aAgentStatus = 'unknown' | 'connected' | 'error';
 export type A2aTaskState =
   | 'submitted'
@@ -34,8 +39,12 @@ export interface A2aAgentDTO {
   name: string;
   description: string;
   baseUrl: string;
+  agentCardPath: string;
   authKind: A2aAuthKind;
   authHeader: string;
+  entraTenantId: string;
+  entraClientId: string;
+  entraScope: string;
   hasCredential: boolean;
   enabled: boolean;
   timeoutMs: number;

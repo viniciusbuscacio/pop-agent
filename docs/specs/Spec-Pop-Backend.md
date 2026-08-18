@@ -165,7 +165,8 @@ MCP, outbound A2A, local models, systemd, Git and subprocesses. An adapter may
 translate and retry technology-specific failures, but it must not invent product
 policy. A2A protocol/transport code remains outside pi tool definitions; the
 application service owns persisted task transitions and the adapter owns
-SSRF-safe bounded calls.
+SSRF-safe bounded calls, custom same-origin Agent Card resolution and dynamic
+Microsoft Entra token acquisition. Azure SDK types remain infrastructure-only.
 
 The pi adapter implements `AgentBridge` and related narrow ports. The fake
 adapter implements the same application contract. Switching between them must

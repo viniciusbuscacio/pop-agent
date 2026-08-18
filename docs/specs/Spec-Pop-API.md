@@ -98,8 +98,10 @@ flat route list:
 
 The concrete registry and shared DTOs are implementation authority for exact
 paths. Focused specs define behavior. A2A agent configuration and persisted task
-operations remain guarded, strict and bounded; credentials are write-only and
-snapshots expose presence only. An intended path described in the A2A spec is
+operations remain guarded, strict and bounded. Agent Card paths are bounded
+same-origin relative paths. Static secrets and Microsoft Entra client secrets
+are write-only; snapshots expose presence plus non-secret tenant, client and
+scope metadata only. An intended path described in the A2A spec is
 not delivered until its shared DTO and guarded route are registered. A proposal
 route such as `/v1/ax` or an IP access-list API is not delivered merely because
 it appears in historical text.

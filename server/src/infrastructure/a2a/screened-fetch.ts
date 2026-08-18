@@ -26,6 +26,9 @@ export interface ScreenedFetchOptions {
   timeoutMs: number;
   allowedCredentialOrigin: string;
   credentialHeader?: { name: string; value: string };
+  credentialHeaderProvider?: (
+    signal: AbortSignal,
+  ) => Promise<{ name: string; value: string }>;
   resolve?: (host: string) => Promise<string[]>;
   operationSignal?: () => AbortSignal | undefined;
   retrieve?: (
@@ -45,24 +48,6 @@ export function createScreenedA2aFetch(options: ScreenedFetchOptions): typeof fe
     const url = parseA2aUrl(rawUrl);
     const outgoing = new Request(input, init);
     const addresses = await publicAddresses(url.hostname, options.resolve ?? defaultResolve);
-    const headers = new Headers(outgoing.headers);
-    if (url.origin !== options.allowedCredentialOrigin) {
-      headers.delete('authorization');
-      if (options.credentialHeader !== undefined) headers.delete(options.credentialHeader.name);
-    } else if (options.credentialHeader !== undefined) {
-      headers.set(options.credentialHeader.name, options.credentialHeader.value);
-    } else {
-      headers.delete('authorization');
-    }
-    const body = outgoing.body === null ? undefined : Buffer.from(await outgoing.arrayBuffer());
-    if (body !== undefined && body.byteLength > MAX_REQUEST_BYTES) {
-      throw new A2aNetworkError('response_too_large', 'The A2A request exceeded the allowed size.');
-    }
-    const requestWithHeaders = new Request(url, {
-      method: outgoing.method,
-      headers,
-      ...(body === undefined ? {} : { body }),
-    });
     const timeout = AbortSignal.timeout(options.timeoutMs);
     const operationSignal = options.operationSignal?.();
     const signal = AbortSignal.any([
@@ -72,6 +57,31 @@ export function createScreenedA2aFetch(options: ScreenedFetchOptions): typeof fe
     ]);
     try {
       signal.throwIfAborted();
+      const headers = new Headers(outgoing.headers);
+      if (url.origin !== options.allowedCredentialOrigin) {
+        headers.delete('authorization');
+        if (options.credentialHeader !== undefined) headers.delete(options.credentialHeader.name);
+      } else {
+        const credentialHeader = options.credentialHeaderProvider === undefined
+          ? options.credentialHeader
+          : await options.credentialHeaderProvider(signal).catch(() => {
+              throw new A2aNetworkError(
+                'authentication',
+                'Microsoft Entra could not issue an A2A access token.',
+              );
+            });
+        if (credentialHeader === undefined) headers.delete('authorization');
+        else headers.set(credentialHeader.name, credentialHeader.value);
+      }
+      const body = outgoing.body === null ? undefined : Buffer.from(await outgoing.arrayBuffer());
+      if (body !== undefined && body.byteLength > MAX_REQUEST_BYTES) {
+        throw new A2aNetworkError('response_too_large', 'The A2A request exceeded the allowed size.');
+      }
+      const requestWithHeaders = new Request(url, {
+        method: outgoing.method,
+        headers,
+        ...(body === undefined ? {} : { body }),
+      });
       return await (options.retrieve ?? pinnedRetrieve)(requestWithHeaders, addresses, signal);
     } catch (error) {
       if (error instanceof A2aNetworkError) throw error;
