@@ -72,8 +72,9 @@ a generic 5xx response.
 
 Collections with owner-visible unbounded growth must use bounded server limits,
 cursors or capped history. Query numbers are normalized to documented ranges.
-The server applies route-appropriate body/file/frame limits before retaining
-input. Missing content length is not permission for unbounded buffering.
+The server applies a 30 MiB streaming ceiling to every `/v1` body before
+parsing, then route-specific smaller file/frame limits before retention.
+Missing content length is not permission for unbounded buffering.
 
 State-changing responses return enough identity/revision data for immediate UI
 projection, but the next GET remains authority. Browser services, not React

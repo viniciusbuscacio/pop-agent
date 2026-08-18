@@ -273,7 +273,8 @@ export class LocalAccess {
       return;
     }
     if (frame['kind'] !== 'call') return;
-    const call = frame as unknown as CallFrame;
+    const call = parseCallFrame(frame);
+    if (call === undefined) return;
     if (!this.accessEnabled) {
       await send({
         kind: 'result', callId: call.callId, ok: false, output: '',
@@ -576,6 +577,16 @@ function parseObject(text: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function parseCallFrame(frame: Record<string, unknown>): CallFrame | undefined {
+  const callId = stringField(frame, 'callId');
+  const tool = stringField(frame, 'tool');
+  if (
+    callId === undefined || callId.length === 0 || callId.length > 256 ||
+    tool === undefined || !['bash', 'read', 'write', 'edit'].includes(tool)
+  ) return undefined;
+  return { kind: 'call', callId, tool, input: frame['input'] };
 }
 
 function objectValue(value: unknown): Record<string, unknown> {

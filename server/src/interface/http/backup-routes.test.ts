@@ -5,7 +5,7 @@ import { createBackupRoutes } from './backup-routes.js';
 function service(path: string | undefined): BackupService {
   return {
     list: () => [],
-    create: () => ({ name: 'pop-backup-now.tar.gz', size: 1, createdAt: new Date(0).toISOString() }),
+    create: () => Promise.resolve({ name: 'pop-backup-now.tar.gz', size: 1, createdAt: new Date(0).toISOString() }),
     pathOf: () => path,
     restore: vi.fn(() => true),
     delete: () => false,

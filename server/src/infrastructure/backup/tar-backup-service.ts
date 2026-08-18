@@ -1,6 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { execFile, execFileSync } from 'node:child_process';
+import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { cp, mkdtemp, rm, stat } from 'node:fs/promises';
 import { basename, join, relative } from 'node:path';
+import { promisify } from 'node:util';
 import Database from 'better-sqlite3';
 import type { BackupInfo, BackupService } from '../../application/ports/backup-service.js';
 
@@ -15,6 +17,7 @@ const KEEP = 10;
 const SECRET_KEY_FILE = 'secret.key';
 const DATABASE_FILE = 'pop-agent.db';
 const PREFIX = 'pop-backup-';
+const execFileAsync = promisify(execFile);
 
 export interface TarBackupDeps {
   dataDir: string;
@@ -37,14 +40,14 @@ export class TarBackupService implements BackupService {
       .sort((left, right) => right.name.localeCompare(left.name));
   }
 
-  create(): BackupInfo {
+  async create(): Promise<BackupInfo> {
     const stamp = this.deps.now().replace(/[:.]/g, '-');
     const name = `${PREFIX}${stamp}.tar.gz`;
     const target = join(this.deps.backupsDir, name);
-    const stagingRoot = mkdtempSync(join(this.deps.backupsDir, '.staging-'));
+    const stagingRoot = await mkdtemp(join(this.deps.backupsDir, '.staging-'));
     const stagedData = join(stagingRoot, 'data');
     try {
-      cpSync(this.deps.dataDir, stagedData, {
+      await cp(this.deps.dataDir, stagedData, {
         recursive: true,
         filter: (source) => {
           if (source === this.deps.dataDir) return true;
@@ -55,15 +58,15 @@ export class TarBackupService implements BackupService {
             rootName !== `${DATABASE_FILE}-wal` && rootName !== `${DATABASE_FILE}-shm`;
         },
       });
-      snapshotDatabase(join(this.deps.dataDir, DATABASE_FILE), join(stagedData, DATABASE_FILE));
-      execFileSync('tar', ['-czf', target, '-C', stagedData, '.'], { stdio: 'pipe' });
+      await snapshotDatabase(join(this.deps.dataDir, DATABASE_FILE), join(stagedData, DATABASE_FILE));
+      await execFileAsync('tar', ['-czf', target, '-C', stagedData, '.']);
     } finally {
-      rmSync(stagingRoot, { recursive: true, force: true });
+      await rm(stagingRoot, { recursive: true, force: true });
     }
 
     this.prune();
-    const stat = statSync(target);
-    return { name, size: stat.size, createdAt: stat.mtime.toISOString() };
+    const targetStat = await stat(target);
+    return { name, size: targetStat.size, createdAt: targetStat.mtime.toISOString() };
   }
 
   pathOf(name: string): string | undefined {
@@ -106,10 +109,10 @@ export class TarBackupService implements BackupService {
   }
 }
 
-function snapshotDatabase(source: string, destination: string): void {
+async function snapshotDatabase(source: string, destination: string): Promise<void> {
   const database = new Database(source, { readonly: true, fileMustExist: true });
   try {
-    database.exec(`VACUUM INTO '${destination.replaceAll("'", "''")}'`);
+    await database.backup(destination);
   } finally {
     database.close();
   }

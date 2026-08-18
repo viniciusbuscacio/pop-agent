@@ -15,6 +15,21 @@ async function signedInApp() {
 }
 
 describe('app', () => {
+  it('rejects oversized API bodies before route parsing', async () => {
+    const response = await createTestApp().app.request('/v1/setup', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': String(31 * 1024 * 1024),
+      },
+      body: '{}',
+    });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: { code: 'too_large', message: 'This request body is too large.', status: 413 },
+    });
+  });
+
   it('healthz responds ok without auth', async () => {
     const res = await createTestApp().app.request('/healthz');
     expect(res.status).toBe(200);

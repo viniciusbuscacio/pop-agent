@@ -31,9 +31,9 @@ import {
 import { t } from '../i18n';
 import { InstallationSection } from './installation-section';
 import { ProvidersSection } from './providers-section';
+import { BackupSection } from './backup-section';
 import { ApiError, clientEnvironment } from '../services/api';
 import { authService } from '../services/auth';
-import { backupsService } from '../services/backups';
 import { chatsService } from '../services/chats';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
@@ -572,93 +572,6 @@ function PasskeyControls() {
           {error}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-/** Live backup management; restore is an offline operator action. */
-function BackupSection() {
-  const [backups, setBackups] = useState<import('@pop-agent/shared').BackupDTO[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
-  async function reload(): Promise<void> {
-    try {
-      setBackups((await backupsService.list()).backups);
-    } catch {
-      // Leave the list.
-    }
-  }
-
-  async function create(): Promise<void> {
-    setBusy(true);
-    try {
-      await backupsService.create();
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function download(name: string): Promise<void> {
-    const blob = await backupsService.download(name);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = name;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function remove(name: string): Promise<void> {
-    try {
-      await backupsService.remove(name);
-      await reload();
-    } catch {
-      // Ignore.
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3">
-        <p className="text-sm text-[var(--muted)]">{t('backup.intro')}</p>
-        <div>
-          <Button type="button" data-testid="backup-create" disabled={busy} onClick={() => void create()}>
-            {busy ? t('backup.creating') : t('backup.create')}
-          </Button>
-        </div>
-      </Card>
-
-      {backups.length === 0 ? (
-        <Card>
-          <p className="text-sm text-[var(--muted)]">{t('backup.empty')}</p>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {backups.map((backup) => (
-            <Card key={backup.name} className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate font-mono text-xs text-[var(--key-fg-dim)]">{backup.name}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {(backup.size / 1024).toFixed(0)} KB · {backup.createdAt.slice(0, 16).replace('T', ' ')}
-                </p>
-              </div>
-              <div className="flex max-w-full flex-wrap gap-1">
-                <Button type="button" variant="ghost" onClick={() => void download(backup.name)}>
-                  {t('backup.download')}
-                </Button>
-                <Button type="button" variant="danger" onClick={() => void remove(backup.name)}>
-                  {t('backup.delete')}
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

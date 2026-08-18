@@ -151,8 +151,9 @@ same snapshot implementation rather than copying files itself.
 Creation uses a private staging directory:
 
 1. copy non-database data while excluding `secret.key` and live DB/WAL/SHM;
-2. create `pop-agent.db` through SQLite `VACUUM INTO`, which includes committed
-   WAL content as one consistent database image;
+2. create `pop-agent.db` through SQLite's online backup API, which includes
+   committed WAL content as one consistent database image without blocking the
+   Node event loop;
 3. archive the staged tree;
 4. delete staging in `finally` and prune only completed archives.
 

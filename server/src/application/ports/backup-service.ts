@@ -15,7 +15,7 @@ export interface BackupInfo {
 
 export interface BackupService {
   list(): BackupInfo[];
-  create(): BackupInfo;
+  create(): Promise<BackupInfo>;
   /** Absolute path of a backup, for the download route. Undefined if unknown. */
   pathOf(name: string): string | undefined;
   /** Replaces the live data with a backup's contents. Returns false if unknown. */

@@ -161,7 +161,7 @@ try {
       compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' },
     }],
   });
-  runtime.setRuntimeApiKey(provider, 'candidate-probe-key');
+  await runtime.setRuntimeApiKey(provider, 'candidate-probe-key');
   const model = runtime.getModel(provider, 'probe');
   if (model === undefined) throw new Error('candidate custom provider registration failed');
   const typebox = await import(pathToFileURL(join(packageRoot, 'node_modules', 'typebox', 'build', 'index.mjs')).href) as typeof import('typebox');

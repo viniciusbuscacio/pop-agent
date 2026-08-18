@@ -22,7 +22,7 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
     c.json({ backups: deps.backups.list().map(toDto) } satisfies BackupsResponse),
   );
 
-  routes.post('/backups', (c) => c.json(toDto(deps.backups.create()), 201));
+  routes.post('/backups', async (c) => c.json(toDto(await deps.backups.create()), 201));
 
   routes.get('/backups/:name/download', (c) => {
     const name = c.req.param('name');

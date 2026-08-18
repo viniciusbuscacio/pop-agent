@@ -23,7 +23,7 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
     },
     unit: 'pop-agent-service',
     backups: {
-      create: () => ({ name: 'pop-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
+      create: () => Promise.resolve({ name: 'pop-2026-08-04.tar.gz', size: 5 * 1024 * 1024 }),
       list: () => [],
       restore: (name) => name === 'pop-2026-08-04.tar.gz',
     },
@@ -99,7 +99,7 @@ describe('popman', () => {
         return verb === 'stop' ? 1 : 0;
       },
       backups: {
-        create: () => ({ name: 'unused.tar.gz', size: 0 }),
+        create: () => Promise.resolve({ name: 'unused.tar.gz', size: 0 }),
         list: () => [],
         restore,
       },

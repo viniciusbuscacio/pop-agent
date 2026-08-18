@@ -13,6 +13,23 @@ export default tseslint.config(
     },
   },
   {
+    // Type-aware promise safety starts on the server and CLI production paths.
+    // The PWA has a larger pre-existing async-handler baseline and will migrate
+    // separately rather than hiding 50 findings behind blanket disables.
+    files: ['server/src/**/*.ts', 'cli/src/**/*.ts'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
+  },
+  {
     // Plain-JS build scripts run under Node. TypeScript files get this from
     // the compiler, but no-undef still applies to .mjs.
     files: ['**/*.mjs'],

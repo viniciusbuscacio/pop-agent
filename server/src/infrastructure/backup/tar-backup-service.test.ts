@@ -34,15 +34,15 @@ afterEach(() => {
 });
 
 describe('TarBackupService', () => {
-  it('creates a backup and lists it', () => {
-    const info = service.create();
+  it('creates a backup and lists it', async () => {
+    const info = await service.create();
     expect(info.name).toMatch(/^pop-backup-.*\.tar\.gz$/);
     expect(info.size).toBeGreaterThan(0);
     expect(service.list().map((b) => b.name)).toContain(info.name);
   });
 
-  it('excludes the secret key from the archive', () => {
-    const info = service.create();
+  it('excludes the secret key from the archive', async () => {
+    const info = await service.create();
     // Extract into a fresh dir and confirm the key is not there.
     const out = join(root, 'out');
     mkdirSync(out);
@@ -53,8 +53,8 @@ describe('TarBackupService', () => {
     expect(existsSync(join(out, 'secret.key'))).toBe(false);
   });
 
-  it('restores data over the data directory', () => {
-    const info = service.create();
+  it('restores data over the data directory', async () => {
+    const info = await service.create();
     const changed = new Database(join(dataDir, 'pop-agent.db'));
     changed.prepare('UPDATE facts SET value = ?').run('changed after backup');
     changed.close();
@@ -67,25 +67,25 @@ describe('TarBackupService', () => {
     expect(readFileSync(join(dataDir, 'secret.key'), 'utf8')).toBe('TOP SECRET');
   });
 
-  it('captures committed WAL content through a consistent SQLite snapshot', () => {
+  it('captures committed WAL content through a consistent SQLite snapshot', async () => {
     const live = new Database(join(dataDir, 'pop-agent.db'));
     live.pragma('journal_mode = WAL');
     live.pragma('wal_autocheckpoint = 0');
     live.prepare('INSERT INTO facts VALUES (?)').run('committed in wal');
 
-    const info = service.create();
+    const info = await service.create();
     live.close();
     const out = join(root, 'wal-out');
     mkdirSync(out);
     execFileSync('tar', ['-xzf', service.pathOf(info.name) as string, '-C', out]);
+    expect(existsSync(join(out, 'pop-agent.db-wal'))).toBe(false);
+    expect(existsSync(join(out, 'pop-agent.db-shm'))).toBe(false);
     const snapshot = new Database(join(out, 'pop-agent.db'), { readonly: true });
     expect(snapshot.prepare('SELECT value FROM facts ORDER BY rowid').pluck().all()).toEqual([
       'the database',
       'committed in wal',
     ]);
     snapshot.close();
-    expect(existsSync(join(out, 'pop-agent.db-wal'))).toBe(false);
-    expect(existsSync(join(out, 'pop-agent.db-shm'))).toBe(false);
   });
 
   it('refuses a name with a path traversal', () => {
@@ -93,8 +93,8 @@ describe('TarBackupService', () => {
     expect(service.restore('pop-backup-../x.tar.gz')).toBe(false);
   });
 
-  it('deletes a backup', () => {
-    const info = service.create();
+  it('deletes a backup', async () => {
+    const info = await service.create();
     expect(service.delete(info.name)).toBe(true);
     expect(service.list()).toHaveLength(0);
   });

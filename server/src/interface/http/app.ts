@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type {
   AboutResponse,
   ProviderSubscriptionUsageResponse,
@@ -65,6 +66,7 @@ import { createServerRoutes } from './server-routes.js';
 import { SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
 import { createMcpRoutes } from './mcp-routes.js';
+import { apiError } from './errors.js';
 
 export interface AppDeps {
   auth: AuthService;
@@ -141,8 +143,18 @@ export interface AppDeps {
   cliPack: string;
 }
 
+const MAX_API_BODY_BYTES = 30 * 1024 * 1024;
+
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
+
+  // Bound the bytes before JSON/multipart parsers allocate them. Individual
+  // routes still enforce their smaller semantic limits (Files is 25 MiB; PLA
+  // frames are 12 MiB), while this ceiling catches every forgotten route.
+  app.use('/v1/*', bodyLimit({
+    maxSize: MAX_API_BODY_BYTES,
+    onError: (c) => apiError(c, 413, 'too_large', 'This request body is too large.'),
+  }));
 
   // Liveness and the sidebar's health probe (docs/specs/Spec-Pop-General.md §13), as their own
   // mini-app so the typed registry below can bless them explicitly.

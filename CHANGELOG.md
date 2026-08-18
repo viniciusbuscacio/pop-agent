@@ -118,9 +118,13 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   the DNS-rebinding gap between SSRF validation and connection, refuses
   credential-bearing URLs/redirects, and stops reading at the response cap.
 - **Backup and durable-memory boundaries now fail closed.** SQLite snapshots
-  include committed WAL state through `VACUUM INTO`; live HTTP restore is
-  refused in favor of stop/extract/start through `popman`; and both Settings
-  and agent memory writes redact deterministic credential shapes.
+  include committed WAL state through the asynchronous online backup API; live
+  HTTP restore is refused in favor of stop/extract/start through `popman`; and
+  both Settings and agent memory writes redact deterministic credential shapes.
+- **TypeScript runtime boundaries are stricter.** API bodies are rejected before
+  parsing above the global 30 MiB ceiling, PLA call frames use a discriminated
+  runtime parser instead of an unsafe assertion, backup creation leaves the
+  event loop free, and type-aware promise linting covers server/CLI production.
 - **Login and logout survive denied browser storage.** Session access is guarded
   against browser `SecurityError`/quota failures and falls back to memory for the
   current page, while logout still clears credentials and transcript cache.

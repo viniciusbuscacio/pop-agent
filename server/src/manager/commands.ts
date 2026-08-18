@@ -28,7 +28,7 @@ export interface ManagerDeps extends ManagerIo {
   /** The unit being acted on, so the output says which one. */
   unit: string;
   backups: {
-    create(): { name: string; size: number };
+    create(): Promise<{ name: string; size: number }>;
     list(): { name: string; size: number; createdAt: string }[];
     restore(name: string): boolean;
   };
@@ -77,7 +77,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
       return deps.service(command);
 
     case 'backup': {
-      const made = deps.backups.create();
+      const made = await deps.backups.create();
       deps.out(`${made.name}  ${megabytes(made.size)}`);
       return 0;
     }
