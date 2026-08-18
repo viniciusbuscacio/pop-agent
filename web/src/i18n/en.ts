@@ -171,7 +171,6 @@ export const en = {
   'chat.confirm.allow': 'Allow',
   'chat.confirm.deny': 'Deny',
   'chat.jumpToLatest': 'Jump to the latest messages',
-  'chat.newMessages': 'New messages',
   'chat.model': 'Model',
   'chat.defaultModel': 'Default model',
   'chat.currentModel': 'Provider: {provider} · Model: {model}',

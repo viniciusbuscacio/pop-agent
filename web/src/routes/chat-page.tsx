@@ -54,7 +54,6 @@ export function ChatPage() {
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const lastScrollTop = useRef(0);
-  const [missed, setMissed] = useState(0);
   // The floating "↓" is the visible half of follow mode being off.
   const [showJump, setShowJump] = useState(false);
 
@@ -68,7 +67,6 @@ export function ChatPage() {
     // On mount and on every chat change, the stored history replaces whatever
     // was on screen: a reload mid-run must not show the answer twice.
     void openChat(chatId);
-    setMissed(0);
     setShowJump(false);
     setEditingPendingId(undefined);
     setQueueActionError(false);
@@ -180,9 +178,7 @@ export function ChatPage() {
     if (atBottom.current) {
       element.scrollTop = element.scrollHeight;
       lastScrollTop.current = element.scrollTop;
-      setMissed(0);
     } else {
-      setMissed((count) => count + 1);
       setShowJump(true);
     }
   }, [localSystemMessages.length, messages?.length, pending.length, pending[0]?.id, streamedLength]);
@@ -263,7 +259,6 @@ export function ChatPage() {
     if (!atBottom.current && shouldResumeFollowing(previous, current, distance, BOTTOM_TOLERANCE_PX)) {
       atBottom.current = true;
       setShowJump(false);
-      setMissed(0);
     }
   }
 
@@ -274,7 +269,6 @@ export function ChatPage() {
     element.scrollTop = element.scrollHeight;
     lastScrollTop.current = element.scrollTop;
     setShowJump(false);
-    setMissed(0);
   }
 
   return (
@@ -446,14 +440,9 @@ export function ChatPage() {
             data-testid="jump-to-latest"
             onClick={jumpToLatest}
             aria-label={t('chat.jumpToLatest')}
-            className="absolute right-4 bottom-2 z-10 flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel-bg)] px-3.5 py-1.5 text-sm shadow-lg"
+            className="absolute right-4 bottom-2 z-10 flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--panel-bg)] text-sm shadow-lg"
           >
             <span aria-hidden="true">↓</span>
-            {missed > 0 ? (
-              <span data-testid="jump-to-latest-badge" className="text-xs text-[var(--accent)]">
-                {t('chat.newMessages')}
-              </span>
-            ) : null}
           </Pressable>
         ) : null}
       </div>

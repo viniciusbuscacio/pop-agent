@@ -371,7 +371,10 @@ describe('chat transcript', () => {
 
     const jump = screen.getByTestId('jump-to-latest');
     expect(jump.className).toContain('right-4');
+    expect(jump.className).toContain('size-9');
     expect(jump.className).not.toContain('left-1/2');
+    expect(jump.textContent).toBe('↓');
+    expect(jump.getAttribute('aria-label')).toBe('Jump to the latest messages');
 
     scroller.scrollTop = 500;
     fireEvent.scroll(scroller);
