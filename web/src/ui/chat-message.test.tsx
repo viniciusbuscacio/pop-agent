@@ -285,6 +285,7 @@ describe('tool status', () => {
     );
 
     expect(screen.getByTestId('thinking-toggle').className).toContain('text-[var(--muted)]');
+    expect(screen.getByTestId('tool-toggle').className).toContain('text-[var(--muted)]');
     expect(screen.getByTestId('tool-name').className).toContain('text-[var(--muted)]');
   });
 

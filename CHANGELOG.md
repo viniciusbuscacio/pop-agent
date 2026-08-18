@@ -23,8 +23,8 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 - **Worker delegations now have their own Subagents card in the chat timeline.**
   Progress, completion, failure and handoff details no longer mix with the
   agent's ordinary tool-run card.
-- **Tool-run cards now match the quieter Thinking card color.** Their labels use
-  the same darker muted text instead of the brighter key-text treatment.
+- **Tool-run cards now match the quieter Thinking card color.** Their arrow and
+  labels use the same darker muted text instead of the brighter treatment.
 - **The project specification is now modular.** `docs/specs/Spec-Pop-General.md`
   is the normative entry point, subsystem rules live in focused specifications,
   and detailed decision history is separate from current requirements. The old

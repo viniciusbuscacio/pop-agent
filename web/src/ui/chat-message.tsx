@@ -361,7 +361,7 @@ function ToolCards({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: 
         data-testid="tool-toggle"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--hover-overlay)]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
       >
         <span aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span
