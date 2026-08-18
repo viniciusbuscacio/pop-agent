@@ -25,6 +25,7 @@ function renderComposer(
     currentModel?: string;
     models?: ModelChoice[];
     locked?: boolean;
+    chatId?: string;
   } = {},
 ) {
   const onSend = vi.fn().mockResolvedValue(undefined);
@@ -36,7 +37,7 @@ function renderComposer(
   const onCommand = vi.fn().mockResolvedValue(undefined);
   render(
     <Composer
-      chatId="chat-1"
+      chatId={props.chatId ?? 'chat-1'}
       busy
       {...props}
       onSend={onSend}
@@ -256,5 +257,54 @@ describe('pending message composition', () => {
       expect(onUpdateQueued).toHaveBeenCalledWith(pending.id, 'Edited direction', [], []),
     );
     expect(onEditingDone).toHaveBeenCalled();
+  });
+
+  it('recalls submitted messages from newest to oldest and restores the current draft', async () => {
+    localStorage.setItem(
+      'pop-agent.composerHistory.chat-1',
+      JSON.stringify(['older message', 'newer message']),
+    );
+    localStorage.setItem('pop-agent.draft.chat-1', 'unfinished draft');
+    renderComposer();
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    await waitFor(() => expect(area.value).toBe('unfinished draft'));
+
+    area.setSelectionRange(0, 0);
+    fireEvent.keyDown(area, { key: 'ArrowUp' });
+    expect(area.value).toBe('newer message');
+
+    fireEvent.keyDown(area, { key: 'ArrowUp' });
+    expect(area.value).toBe('older message');
+
+    fireEvent.keyDown(area, { key: 'ArrowDown' });
+    expect(area.value).toBe('newer message');
+    fireEvent.keyDown(area, { key: 'ArrowDown' });
+    expect(area.value).toBe('unfinished draft');
+  });
+
+  it('adds a message to only its chat history after a successful send', async () => {
+    const { onSend } = renderComposer({ chatId: 'chat-specific' });
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: 'remember this' } });
+    fireEvent.keyDown(area, { key: 'Enter' });
+
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(JSON.parse(localStorage.getItem('pop-agent.composerHistory.chat-specific') ?? '[]')).toEqual([
+      'remember this',
+    ]);
+    expect(localStorage.getItem('pop-agent.composerHistory.chat-1')).toBeNull();
+  });
+
+  it('leaves ArrowUp available for caret movement inside an unsent message', () => {
+    renderComposer();
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(area, { target: { value: 'first line\nsecond line' } });
+    area.setSelectionRange(area.value.length, area.value.length);
+
+    const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    area.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(area.value).toBe('first line\nsecond line');
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO, SessionCommandName } from '@pop-agent/shared';
 import { t } from '../i18n';
+import { appendComposerHistory, readComposerHistory } from '../services/composer-history';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
 import { useThinkingStore } from '../store/thinking';
@@ -115,6 +116,9 @@ export function Composer({
   const attachmentsRef = useRef<AttachmentDTO[]>([]);
   const mentionsRef = useRef<{ path: string; name: string }[]>([]);
   const autoSendRef = useRef(false);
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef<number | undefined>(undefined);
+  const historyDraftRef = useRef('');
   const storageKey = `pop-agent.draft.${chatId}`;
 
   textRef.current = text;
@@ -127,6 +131,9 @@ export function Composer({
     } catch {
       setText('');
     }
+    historyRef.current = readComposerHistory(chatId);
+    historyIndexRef.current = undefined;
+    historyDraftRef.current = '';
     setAttachments([]);
     setMentions([]);
     setMentionQuery(undefined);
@@ -134,7 +141,7 @@ export function Composer({
     setSlashMode('commands');
     setNotice(undefined);
     setEditingQueuedId(undefined);
-  }, [storageKey]);
+  }, [chatId, storageKey]);
 
   useEffect(() => {
     if (editRequest === undefined) {
@@ -173,6 +180,41 @@ export function Composer({
     } catch {
       // storage denied; the draft simply will not survive a reload
     }
+  }
+
+  function remember(value: string): void {
+    historyRef.current = appendComposerHistory(chatId, value);
+    historyIndexRef.current = undefined;
+    historyDraftRef.current = '';
+  }
+
+  function recallHistory(direction: 'older' | 'newer'): void {
+    const history = historyRef.current;
+    if (history.length === 0) return;
+
+    const current = historyIndexRef.current;
+    if (direction === 'older') {
+      if (current === undefined) {
+        historyDraftRef.current = text;
+        historyIndexRef.current = history.length - 1;
+      } else {
+        historyIndexRef.current = Math.max(0, current - 1);
+      }
+      persist(history[historyIndexRef.current] ?? text);
+    } else {
+      if (current === undefined) return;
+      if (current < history.length - 1) {
+        historyIndexRef.current = current + 1;
+        persist(history[historyIndexRef.current] ?? text);
+      } else {
+        historyIndexRef.current = undefined;
+        persist(historyDraftRef.current);
+      }
+    }
+    queueMicrotask(() => {
+      const element = area.current;
+      if (element !== null) element.setSelectionRange(element.value.length, element.value.length);
+    });
   }
 
   function updateMention(value: string, caret: number): void {
@@ -330,6 +372,7 @@ export function Composer({
         setNotice(t('chat.sendFailed'));
         return;
       }
+      remember(merged);
       setMentions([]);
       persist('');
       setAttachments([]);
@@ -450,6 +493,7 @@ export function Composer({
       } else {
         await onSend(outgoing.text, attachments, filePaths, outgoing.delivery, executionMode);
       }
+      remember(text);
       persist('');
       setAttachments([]);
       setMentions([]);
@@ -522,6 +566,35 @@ export function Composer({
         setMentionQuery(undefined);
         return;
       }
+    }
+    if (
+      event.key === 'ArrowUp' &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      event.currentTarget.selectionStart === event.currentTarget.selectionEnd &&
+      (historyIndexRef.current !== undefined || event.currentTarget.selectionStart === 0)
+    ) {
+      if (historyRef.current.length > 0) {
+        event.preventDefault();
+        recallHistory('older');
+      }
+      return;
+    }
+    if (
+      event.key === 'ArrowDown' &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      historyIndexRef.current !== undefined &&
+      event.currentTarget.selectionStart === event.currentTarget.selectionEnd &&
+      event.currentTarget.selectionEnd === text.length
+    ) {
+      event.preventDefault();
+      recallHistory('newer');
+      return;
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();

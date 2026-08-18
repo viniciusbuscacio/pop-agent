@@ -337,6 +337,9 @@ Autoscroll is polite:
 The composer owns device-local draft interaction, not delivery authority:
 
 - drafts are keyed by chat in localStorage and survive reload;
+- each chat keeps a device-local history of its latest 100 successfully submitted
+  composer messages; Arrow Up recalls older entries and Arrow Down returns toward
+  newer entries and the preserved draft without taking over multiline caret movement;
 - failed sends retain exact text, attachments and Files references;
 - Enter sends, Shift+Enter inserts a line, and Escape stops a live run;
 - drag/drop, picker and paste support attachments, with frontend limits matching
