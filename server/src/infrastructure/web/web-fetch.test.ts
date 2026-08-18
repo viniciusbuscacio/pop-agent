@@ -18,8 +18,12 @@ describe('isPrivateAddress', () => {
     '0.0.0.0',
     '::1',
     'fe80::1',
+    'fe90::1',
     'fd00::1',
     '::ffff:127.0.0.1',
+    '::ffff:7f00:1',
+    '2001:db8::1',
+    'ff02::1',
   ];
   const publics = ['8.8.8.8', '1.1.1.1', '93.184.216.34', '2606:4700:4700::1111'];
 
@@ -54,6 +58,22 @@ describe('webFetch guards', () => {
   it('refuses a host that does not resolve', async () => {
     const resolve = vi.fn().mockResolvedValue([]);
     await expect(webFetch('http://nowhere.example', { resolve })).rejects.toThrow(/resolved/);
+  });
+
+  it('passes the screened addresses to the connection layer without resolving again', async () => {
+    const resolve = vi.fn().mockResolvedValue(['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']);
+    const retrieve = vi.fn().mockResolvedValue('<title>Safe</title><p>Body</p>');
+    const result = await webFetch('https://example.com/page', { resolve, retrieve });
+    expect(retrieve).toHaveBeenCalledWith(
+      new URL('https://example.com/page'),
+      ['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946'],
+    );
+    expect(resolve).toHaveBeenCalledOnce();
+    expect(result).toEqual({ url: 'https://example.com/page', title: 'Safe', text: 'Safe Body' });
+  });
+
+  it('refuses credentials embedded in URLs', async () => {
+    await expect(webFetch('https://owner:secret@example.com')).rejects.toThrow(/credentials/);
   });
 });
 

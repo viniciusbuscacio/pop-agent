@@ -1,236 +1,231 @@
-# Pop Agent — skills, web and MCP tools
+# Pop Agent — skills and tools
 
 **Status:** normative
 **Legacy coverage:** §§8 and 12
-**Primary implementation:** server/src/domain/skills, server/src/application/skills, tool adapters
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Primary implementation:** `server/src/domain/skills/`, `server/src/application/skills/`, `server/src/infrastructure/skills/`, `server/src/infrastructure/{web,mcp}/`
+**Related:** [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`../mcp.md`](../mcp.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-## 8. Skills with local mini-RAG selection ⭐ (the **Skill Router**)
+## Purpose and authority
 
-Pop Agent ships a small roster of built-in skills (1.74: seven — the manual,
-the codebase self-map, web research, note-taking, shell safety, the daily
-review and code work) but injects only the relevant ones per user message —
-selection is 100% local, no LLM call:
+A skill is durable procedural context, not executable code or a permission. A
+tool is an executable capability with a typed input contract. Skills may help
+the model decide how to use tools, but they cannot grant a tool, bypass Plan
+Mode, change server policy or override the active tool catalogue.
 
-- Skill format: two coexisting shapes in `POP_AGENT_DATA_DIR/skills/` —
-  (a) the original flat `<slug>.md` with `name` + `description` +
-  `whenToUse` frontmatter (built-ins seeded from the repo keep this), and
-  (b) the **Agent Skills standard** (agentskills.io): a directory holding
-  a `SKILL.md`, discovered recursively (a skill directory's inner folders
-  are assets, not skills). Slug = directory name; `whenToUse` falls back
-  to `description`. Flat wins on a slug collision. Decided 01/08: the
-  ecosystem converged on the standard and **pi implements it natively**,
-  so Pop Agent adopts it in her own scanner rather than patching/translating
-  pi (a patch would break on every pi update). New self-authored skills
-  prefer the folder shape; both shapes route identically.
-### Auto-Skills: reviewed background learning (12/08/2026)
+The server owns skill storage, routing, automatic learning and tool projection.
+The PWA owns editing and observability. Pi receives only the selected context
+and tools for the current session/turn.
 
-- **Exactly three sources:** `builtin` (ships with the app), `user` (Personal,
-  controlled by the owner), and `auto` (published by this pipeline). Editing an
-  Auto-Skill promotes it to `user`. Automatic work may revise only `auto`; a
-  Built-in or Personal match is a `protected_duplicate` and stops locally.
-- **One setting:** `autoSkillsEnabled: boolean`, factory default `true`. The old
-  `disabled | medium | full` values migrate as disabled → false and either enabled
-  mode → true. Disabled stops new learning but does not disable existing skills.
-  There is no pending state, approval endpoint, approval filter or revision inbox.
-- **Invisible background process.** The chat agent cannot write skills or narrate
-  internal decisions. An explicit multilingual request only prioritises that chat and
-  skips the idle wait; it never bypasses a safety gate.
-- **Canonical fail-closed pipeline:**
+## Skill sources and formats
 
-  `eligibility → taint → creator → parse/schema/English contract → policy gate →
-  secret scrub → normalization → dedup → review envelope + review_hash → reviewer →
-  final validation → recoverable publication + immediate indexing`.
+Exactly three sources exist:
 
-  On its first evaluation, a conversation whose raw message-content total is below 500
-  characters advances its watermark as `below_minimum_content` without either LLM call;
-  later short increments remain eligible so concise corrections are not lost. A tainted window
-  likewise advances without an LLM call. A conversation whose last implementation run failed
-  or was interrupted without a later completed answer is also ineligible before either LLM:
-  a plan, analysis, authorization or attempted implementation is not evidence of a procedure
-  that worked. The creator and reviewer are fresh, isolated
-  service completions with fixed English prompts. Creator output is
-  marker-delimited Markdown (never JSON), includes stable evidence message ids, and may
-  contain up to five candidates. Both stages require a plausible future need for this user
-  after the current conversation and fix are complete; theoretical reuse by somebody is
-  insufficient, and one-off product fixes already incorporated into code are rejected with
-  `unlikely_future_reuse` unless a credible recurring workflow or independent trigger remains.
-  The reviewer receives the sanitized original window and only surviving candidates as
-  untrusted data; it returns exactly one APPROVE/REJECT block per `review_hash`. Approval
-  requires `evidence_confirmed,reusable,complete`; rejection requires a controlled rejection
-  reason. Missing, inconsistent, duplicate, unknown, truncated or mismatched verdicts publish
-  nothing and do not advance the watermark.
-- **Deterministic policy veto:** normalize NFKC, remove zero-width characters, collapse
-  whitespace and block versioned classic injection/identity-override/future-agent patterns.
-  A match is never rewritten or rescued. False positives are accepted unless real use shows
-  systematic blocking that makes the feature inoperable; no minimum publication rate exists.
-  Secret scrubbing, schema/size limits, source protection and final revalidation are likewise
-  mandatory outside model judgment.
-- **Dedup remains measured:** cosine ≥ 0.88 AND vocabulary overlap ≥ 0.25. The full vault,
-  including archived skills, remains comparison material. A match against `auto` proposes
-  `revision`; a match against `builtin`/`user` ends as `protected_duplicate` without
-  spending the reviewer call. Exact duplicates and likely rewordings (high body-vocabulary
-  overlap without substantial expansion) also terminate locally before review. A published
-  automatic revision starts a 30-day per-slug cooldown before another may be reviewed.
-  Precision beats aggressive merging or revision churn.
-- **Review binding:** the SHA-256 `review_hash` covers normalized sanitized content, action
-  (`new`/`revision`), target slug, target-version hash and nearest dedup neighbour. An
-  approval for creation cannot authorize a revision, and a target changed after review fails.
-- **Recoverable publication:** the vault writes a same-volume temporary file, fsyncs a durable
-  backup for a revision, persists a SQLite `prepared` journal row, atomically renames, updates
-  vectors/history/watermark, then commits and cleans up. Prepared slugs stay invisible to the
-  router. Boot reconciliation rolls back prepared work or finishes committed cleanup. The
-  previous revision remains as one-level rollback history.
-- **Watermark:** advances on taint, valid empty output, deterministic/reviewer rejection,
-  protected duplicate and successful publication. Provider, parser, reviewer/hash, write or
-  transaction failure does not advance and is retryable. One conversation per scheduler tick
-  remains the cost ceiling; creator/reviewer service runs are booked with distinct purposes.
-- **Retention and visibility:** at most 1000 active Auto-Skills; least-used overflow is archived,
-  never deleted. Archived entries leave routing but remain recoverable and deduplicable. Learning
-  activity stays internal rather than appearing in the Skills navigation; failures that require
-  user action should surface as specific, actionable notices. Existing router selection remains
-  local and injects only its small top-N, so vault size does not equal prompt size.
+- `builtin`: shipped with Pop Agent and refreshed only while unmodified;
+- `user`: created or edited by the owner;
+- `auto`: published by the reviewed background pipeline.
 
-- **Skill language**: skills the agent writes for itself are English —
-  name, slug, frontmatter, body — same rule as the repo. Skills the end
-  user uploads may be in any language; the router's semantic leg is
-  multilingual and the lexical leg leans on translation-stable tokens.
-- pi's native behavior (progressive disclosure: ALL descriptions in the
-  system prompt) does not scale to dozens of skills and models often skip
-  reading them. Pop Agent's selector replaces it.
-- **Selector (built; 1.60 describes what exists).** Two rankings, fused
-  with the same `fuseRankings` (RRF) the memory search uses — one function,
-  not a second mechanism:
-  - **lexical**: IDF-weighted token overlap between the message and each
-    skill's name/description/`whenToUse`, computed in JS over the vault.
-    Not FTS5: skills are markdown files in a folder, not rows, so there is
-    no index to query.
-  - **semantic**: cosine over `skill_embeddings`, one vector per skill.
-  A skill enters a ranking only by clearing that ranking's bar. **RRF orders
-  candidates; it does not create them** — that is what keeps an unrelated
-  message selecting nothing at all. Either signal alone qualifies a skill;
-  one both agree on outranks one only a single ranking found.
-- **The semantic bar is relative, not absolute** (measured 07/08 against
-  the real 24-skill vault). Over 192 query/skill pairs e5 cosines ran
-  0.70–0.84 with p90 at 0.80, and the right skill for "the square root of
-  1444" scored *below* that noise — there is no absolute line to draw. The
-  gate is therefore a z-score over the spread of that one request:
-  `z ≥ 2.1`, with 0.75 kept as a floor beneath it. On ten labelled requests
-  that admitted five of eight real matches and neither of the two noise
-  hits. Precision first: the lexical ranking is there to catch the rest, and
-  a wrong skill costs one of three slots on every turn.
-  **Too few measured skills for a z (< 5) does not mean the bare floor**
-  (1.72): 0.75 sits inside the noise band, so a small vault would admit its
-  luckiest member. The small sample gets the band's own p90 instead —
-  `max(floor, 0.80)`.
-- **Vectors are persisted** (`skill_embeddings`, migration 028). Keyed by
-  slug and stamped with the routing text they came from, so editing a skill
-  invalidates its vector and nothing else. A vector whose length disagrees
-  with the current embedder is dropped rather than compared. Cold start
-  16.3s, warm 2.0s on the real install.
-- **The index covers the vault; the filter is on the selection** (1.65,
-  found in production). `skill_embeddings` answers two questions, not one:
-  which skills may take a slot this turn, and what the distiller's dedup
-  compares a candidate against. Routing excludes pinned and disabled skills;
-  **indexing excludes nothing.** Historically the router filtered before it
-  indexed, so a then-pending skill never got a vector, and the distiller — whose
-  whole dedup leg reads this table — compared every candidate against a set its
-  own recent work was missing from. A background task opening a fresh chat every
-  hour turned that into nine copies of one procedure. The reviewed pipeline has
-  no pending state, but the full-vault indexing invariant remains.
-- **The distiller stores the vector of the skill it writes** (1.65), rather
-  than leaving it for the next user message: `candidateRoutingText` and the
-  router's `routingText` are the same string, so the vector the dedup just
-  computed is exactly the one the router would compute. Nothing else would
-  store it in time — the router indexes when a message arrives, and the
-  distiller runs on a timer. A tick every ten minutes cannot dedup against
-  work that only gets indexed when somebody happens to chat. It is stored
-  even when the table was empty and nothing was compared: returning early on
-  an empty table is why the first skill of a fresh install was never indexed
-  and the second could not be measured against it.
-- **`use_count` / `last_used_at`** (`skill_usage`, migration 029): the
-  router records every skill it injects. A counter and a stamp, not a
-  boolean — a skill used twice a year must be distinguishable from one used
-  never, which is what a fixed "90 days idle" rule cannot do. This is the
-  evidence the archiving collector reads when the 1000-Auto-Skill safety cap
-  is exceeded.
-- Verify while coding: whether the SDK can scope which skills pi exposes
-  per session/turn; if not, Pop Agent injects the selected skills as its own
-  context and disables pi's native listing.
+The vault is `POP_AGENT_DATA_DIR/skills/` and accepts:
 
-**Self-knowledge hardening** (designed in 1.25–1.26, built in 1.27):
+1. legacy flat `<slug>.md` files with Pop front matter;
+2. recursively discovered Agent Skills directories containing `SKILL.md`.
 
-- **Pinned skills.** A skill can be marked `pinned`. Pinned skills bypass
-  the router and enter the **session system prompt once** (provider-cache
-  friendly) — never the per-turn prepend, which would repeat them through
-  the history. Identity is a prerequisite of every answer, not a
-  situational skill: `know-thyself` ships pinned. The pinned set stays
-  tiny and short (guideline: ≤2 skills, each about the size of today's
-  know-thyself) — a fat pinned set recreates the scaling problem the
-  router exists to solve.
-- **Router observability.** The skill-router service logs, per turn, which
-  skills were selected and with what scores. It logs **both components**,
-  not just the fused one — `slug(rrf=0.0323 lex=3.22 cos=0.775)` — because
-  the bars live on the component scales and a log of RRF alone could not
-  tune either. Thresholds are tuned from these distributions, never
-  guessed: e5-family embeddings compress cosine into a narrow band
-  (unrelated pairs often score 0.70–0.80), so intuitions like "0.75 is too
-  strict" do not transfer.
-- **PT/EN routing gap — and what it actually costs.** User messages arrive
-  in Portuguese; skill descriptions are English (repo language rule).
-  Measured 07/08 on ten labelled requests: the lexical half alone found
-  **two**, and both were requests whose right answer was "nothing" — its
-  single real hit was `web-browsing` on "procura na internet", and only
-  because "internet" is spelled the same in both languages. The fused
-  router found seven. **No better lexical engine would change that** —
-  FTS5, bm25, a real stemmer all rank word matches, and across languages
-  there are no word matches to rank. The semantic leg is what carries
-  recall here, which is the standing answer to "why not just match words?".
-  `whenToUse` texts must still carry translation-stable trigger tokens
-  ("typescript", "stack", "skill", "architecture"…), and a trigger that has
-  to fire on an exact sentence carries that sentence in several languages
-  (see `skill-creator`). Real PT dialogues that misrouted become test cases.
-- **`self-architecture` skill** (routed, not pinned): the deep self-map —
-  clean-architecture layers and the dependency rule, the monorepo layout,
-  where Pop Agent's own source lives on the server (Pop Agent has bash; it can read
-  its own code once it knows the path), and the decision rule: **Pop Agent's
-  extensions are TypeScript on Pop Agent's own runtime**. The repo-map section
-  is **generated from the code by a script** (runs with the gate), never
-  hand-written — the spec stays the normative source; the map is derived.
-- **UI map (navigation self-knowledge).** The agent runs server-side: it
-  has no browser, no DOM, no accessibility (AX) tree of the PWA it fronts
-  — a live AX tree exists only in the user's browser, out of reach by
-  design. The equivalent knowledge is static and derivable: router paths
-  in `web/src/App.tsx` and every visible label in `web/src/i18n/en.ts`
-  are the source of truth for screens, menus and Settings sections. The
-  self-map generator therefore also emits a **UI map** — routes, Settings
-  sections, what each does — so Pop Agent directs the user through its own
-  interface ("Settings → Model") instead of guessing. Same rule as the
-  repo map: generated, never hand-written.
+A discovered skill directory is a boundary; nested asset directories are not
+scanned as separate skills. Hidden folders and `_archive/` are excluded. Flat
+files win a slug collision. Slugs are lowercase alphanumeric/dash identifiers,
+and invalid or incomplete documents do not enter the active vault.
 
-## 12. Web access (`infrastructure/web/`)
+Editing an Auto-Skill promotes it to `user`. Built-ins may be edited or
+disabled but not deleted or archived. User and auto skills may be deleted.
+Archiving removes a skill from routing without destroying it and is reversible.
 
-- v0.1: `web_fetch(url)` — fetch + Readability extraction + safety envelope
-  (§10). pi has NO native web tools (confirmed) — this is a Pop Agent custom
-  tool.
-- Later: `web_search` (engine TBD) and Playwright for dynamic pages.
+## Built-ins and self-knowledge
 
-### MCP clients (`infrastructure/mcp/`)
+Pop Agent ships a small, code-owned built-in set. Seeding is content-hash aware:
+an untouched seed follows product updates while a user-modified copy is
+preserved. The generated repository/UI map is produced by the gate and must not
+be hand-maintained.
 
-MCP protocol mechanics belong to the official TypeScript SDK v2, behind the
-application-owned `McpClientFactory` port — no hand-written JSON-RPC framing.
-`stdio` and Streamable HTTP negotiate with `server/discover` first, selecting
-the stateless 2026-07-28 era when available and falling back to the legacy
-`initialize` era otherwise. Explicit HTTP/SSE remains legacy-only. Era verdicts
-are cached for ten minutes per server configuration and authorization scope;
-failures evict them. Settings records and shows `modern/stateless` or `legacy`
-and the negotiated version. Discovery covers tools, resources/templates and
-prompts. The SDK owns pagination, request-scoped SSE, cancellation, modern
-per-request metadata and required HTTP headers, sessions for legacy servers,
-and stdio child cleanup. A stdio child inherits only the SDK safe environment
-plus that server's encrypted variables, never the full Pop Agent environment.
-MCP results remain untrusted external content under §10. Full rationale and
-contract cases: `docs/mcp.md`.
+Pinned skills enter the session instruction block once. They do not compete for
+per-turn routing slots. The pinned set must remain tiny; broad procedural
+knowledge belongs in routed skills. Changes to pinned skills, the vault or its
+policy participate in pi session-context revisioning.
+
+## Local Skill Router
+
+Selection is local and spends no LLM call. It combines:
+
+- IDF-weighted lexical overlap over name, description and `whenToUse`;
+- optional semantic cosine ranking over persisted routing-text embeddings;
+- reciprocal-rank fusion to order candidates admitted by either signal.
+
+RRF orders candidates; it never creates eligibility. The router injects at most
+the configured small top set and may correctly select nothing. Disabled and
+pinned skills cannot take a routed slot.
+
+The semantic gate is distribution-relative because embedding cosine values are
+model-dependent and compressed. With at least five vectors, candidates require
+the configured z-score and floor; a smaller vault uses the conservative
+small-sample floor. Vector dimension mismatches are discarded. Editing routing
+text invalidates only that skill's vector.
+
+The embedding index covers the complete active vault, including entries that
+cannot route. Auto-Skill deduplication consumes the same index, so selection
+filters must never be applied before indexing. Every injected skill increments
+its use count and last-used timestamp. Route logs contain slugs and lexical,
+semantic and fused scores, never the user's message.
+
+## Prompt placement
+
+Pinned bodies are session instructions. Routed bodies are prompt-only context
+for the applicable user/steering message. Neither is persisted into the owner's
+original chat message. Pi native host skill discovery is disabled; otherwise it
+would expose every description and defeat Pop's bounded router.
+
+Skill text is context, not authority above product instructions. User-supplied
+skill content remains owner-controlled data and still cannot alter the active
+tool catalogue or deterministic guards.
+
+## Owner-facing skill management
+
+The authenticated Skills API/UI provides:
+
+- active and archived skill snapshots;
+- create/edit, enable/disable, delete and restore actions according to source;
+- use counts and last-used time;
+- Auto-Skill status and bounded distillation history;
+- retry only for retryable failed/invalid immutable windows.
+
+Saving validates field lengths and slug syntax. Automatic publication is not an
+approval inbox: a skill is active only after all mandatory checks. Editing it is
+ordinary owner control and promotes an auto source to user.
+
+The agent receives only `skills_list`. It has no live `skill_write` tool and
+must not narrate internal learning decisions. An explicit request for a skill
+prioritizes that completed conversation for the same background pipeline; it
+does not bypass review or safety.
+
+## Auto-Skills policy
+
+`autoSkillsEnabled` defaults to true. Disabling it stops new learning but does
+not disable already published skills. Legacy multi-level values migrate to this
+boolean.
+
+One conversation is evaluated per scheduler tick. Explicit multilingual skill
+requests skip idle waiting; ordinary conversations must first become idle. An
+initial unread window below 500 raw characters advances as
+`below_minimum_content` without a model call. Later concise additions remain
+eligible. A tainted window or unresolved failed/interrupted implementation also
+advances without a model call.
+
+The fail-closed pipeline is:
+
+```text
+eligibility → taint check → isolated creator → parse/schema/English contract
+→ deterministic policy → secret scrub → normalization → dedup
+→ review envelope/hash → isolated reviewer → final validation
+→ recoverable publication → immediate vector indexing
+```
+
+Creator output is marker-delimited Markdown, not JSON, and contains stable
+source-message evidence IDs. At most five candidates are accepted. Candidates
+must describe a complete, reusable procedure with a credible future trigger
+for this owner; one-off fixes already landed in product code are not reusable by
+default.
+
+Automatic skill prose and metadata are English. Owner-uploaded skills may use
+any language. Deterministic policy normalizes Unicode, removes zero-width text,
+enforces schema/size limits, blocks instruction-override/future-agent patterns
+and scrubs credentials. A deterministic veto cannot be rewritten or rescued by
+a model.
+
+## Deduplication, review and publication
+
+Dedup requires both semantic similarity (currently cosine ≥ 0.88) and lexical
+vocabulary overlap (currently ≥ 0.25), plus exact/rewording checks. The complete
+vault and archive remain comparison material.
+
+- a builtin/user match becomes `protected_duplicate` before reviewer spend;
+- an auto match may become a revision;
+- automatic revisions have a 30-day per-slug cooldown;
+- precision takes priority over aggressive merging.
+
+The review hash binds normalized sanitized content, action, target slug, target
+version and nearest dedup neighbour. The reviewer receives the sanitized source
+window and candidates as untrusted data, in a fresh completion. It must return
+exactly one valid verdict per expected hash. Missing, extra, duplicate,
+truncated, inconsistent or mismatched verdicts publish nothing.
+
+Publication writes a same-volume temporary file, durably records a prepared
+SQLite journal, keeps a durable prior version for revision, atomically renames,
+updates vectors/history/watermark, commits and cleans up. Prepared slugs stay
+invisible. Boot recovery rolls back prepared work and completes committed
+cleanup. The archive cap is 1,000 active Auto-Skills; least-used overflow is
+archived, never deleted.
+
+The watermark advances for deterministic completed outcomes, including taint,
+empty output, protected duplicate, rejection and successful publication.
+Provider, parser/truncation, reviewer/hash, filesystem or transaction failures
+remain retryable and do not silently skip the window. Creator and reviewer usage
+is booked under distinct service purposes.
+
+## Tool projection and execution modes
+
+Pop-owned tools are built from application ports when a pi session opens.
+Ordinary server `read`, `bash`, `edit` and `write` retain their server meaning;
+PLA operations are explicitly prefixed `local_*`. Enabled MCP and selected
+local tools participate in session-context revisioning.
+
+Normal Mode restores the captured catalogue. Plan Mode starts with a reduced,
+fail-closed catalogue: server read-only tools plus MCP tools explicitly marked
+`readOnlyHint: true`. Missing MCP annotations mean denial. A prompt instruction
+is never the only enforcement.
+
+Every tool has a typed schema, bounded output where applicable, explicit error
+mapping and cancellation through the run signal. Tool output is untrusted and
+passes through the external-content envelope/taint path before it can influence
+a later dangerous tool call.
+
+## `web_fetch`
+
+`web_fetch(url)` accepts only credential-free HTTP(S) URLs. It:
+
+- resolves every address and rejects loopback, private, link-local, CGNAT,
+  multicast, reserved and cloud-metadata ranges;
+- pins the HTTP connection to the exact screened address set, preventing DNS
+  rebinding between validation and connect;
+- refuses redirects, because a new destination needs a new policy decision;
+- applies a 20-second timeout and stops reading after 5 MiB;
+- extracts bounded readable text and treats the result as untrusted data.
+
+Interactive JavaScript pages may be researched through Playwright launched by
+server bash when relevant. Browser artifacts requested by the owner belong in
+`Files/`; browser processes must be closed. Neither path receives secrets.
+
+## MCP
+
+MCP mechanics use the official TypeScript SDK behind `McpClientFactory`; Pop
+must not hand-roll protocol framing. Stdio and Streamable HTTP negotiate modern
+stateless discovery first and fall back to legacy initialization. Explicit
+HTTP/SSE remains legacy-only. Negotiation verdicts are scoped by configuration
+and authorization and expire; failures evict them.
+
+The SDK owns pagination, sessions, required headers, request SSE, cancellation,
+metadata and stdio cleanup. A stdio child receives only the SDK safe environment
+plus that server's encrypted variables, never Pop Agent's full environment.
+Tools, resources/templates and prompts are discovered and projected with stable
+names. MCP outputs and errors are always external untrusted content. Detailed
+wire behavior and compatibility cases live in `docs/mcp.md`.
+
+## Failure and test obligations
+
+- Missing embeddings degrade to lexical routing; they do not disable skills.
+- Invalid skill files are skipped without escaping the vault.
+- Creator/reviewer/provider failure cannot publish partial work.
+- A crash during publication is reconciled on boot.
+- MCP failure is isolated to that server/call.
+- Web retrieval never falls back to an unchecked address or redirect.
+
+Focused tests cover vault formats/collisions/jails, built-in upgrade behavior,
+routing thresholds/indexing/usage, every Auto-Skill gate and recovery phase,
+web SSRF/address pinning/limits, MCP negotiation and tool mapping. The full gate
+must pass before these contracts ship.
