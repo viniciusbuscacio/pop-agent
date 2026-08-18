@@ -45,10 +45,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   It defines stable machines versus transient transports, disabled-first policy,
   WSS/HTTPS fallback, selection and routing, tray/CLI lifecycles, local tool
   projection, limits, cancellation, safety, failure behavior and platform tests.
-- **Skills, memory/storage, security and UI style specifications are complete guides.**
-  They now define routing and reviewed learning, durable memory and offline
-  restore, authentication/external-content boundaries, and the enforced
-  responsive/accessibility design system without relying on the legacy monolith.
+- **Every modular normative specification has completed the final code review.**
+  API, background tasks, CLI, providers/models and deployment/operations now
+  join the previously reviewed subsystem guides. Stale proposal claims such as
+  a delivered IP allowlist, `/v1/ax` control plane or live HTTP restore were
+  removed; the 16-document set now describes the shipped product boundaries.
 - **Pop Local Access has one synchronized permission per computer.** The PWA,
   tray and CLI now share the same persistent **Allow access to local files**
   switch. Access is disabled by default and enforced by both server and PLA;
