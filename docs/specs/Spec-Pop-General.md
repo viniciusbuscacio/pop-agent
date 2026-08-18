@@ -30,6 +30,7 @@ to silently choose one side.
 | §§9–10 — auth, secrets and external-content safety | [Spec-Pop-Security.md](Spec-Pop-Security.md) |
 | §11 — Notes | [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md) |
 | §12 — web and MCP access | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
+| MCP integration ownership and pi extension boundary | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
 | §13 — API contract | [Spec-Pop-API.md](Spec-Pop-API.md) |
 | §14 — PWA/frontend | [Spec-Pop-Frontend.md](Spec-Pop-Frontend.md) |
 | §15 — providers and models | [Spec-Pop-Providers-and-Models.md](Spec-Pop-Providers-and-Models.md) |
@@ -83,6 +84,11 @@ Permanent product rules:
 - **The brain stays on the server.** Pop Agent embeds pi in-process through its
   TypeScript SDK. Providers, prompts, sessions, memory, policy, accounting and
   product persistence remain server-side.
+- **MCP remains a Pop-owned capability.** Pop owns MCP configuration,
+  credentials, authorization, safety, lifecycle and tool projection. The
+  official TypeScript MCP SDK owns protocol mechanics, and pi receives the
+  resulting tools through its supported SDK APIs. Host-installed or third-party
+  pi extensions are not the MCP product boundary.
 - **Clients are views and optional hands.** The PWA and CLI present the product;
   optional Pop Local Access lends explicitly selected local tools without
   creating another agent.

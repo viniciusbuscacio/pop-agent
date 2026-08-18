@@ -203,18 +203,35 @@ server bash when relevant. Browser artifacts requested by the owner belong in
 
 ## MCP
 
+MCP is a native Pop product integration, not a host-installed pi extension.
+Pop owns server configuration, encrypted credentials, authorization, persisted
+capabilities and status, lifecycle policy, PWA/API observability and per-session
+tool projection. Pi receives enabled MCP tools through its supported custom-tool
+SDK boundary. Host extension discovery remains disabled, and a third-party pi
+package must not create a parallel MCP configuration, credential or update
+boundary.
+
 MCP mechanics use the official TypeScript SDK behind `McpClientFactory`; Pop
 must not hand-roll protocol framing. Stdio and Streamable HTTP negotiate modern
 stateless discovery first and fall back to legacy initialization. Explicit
 HTTP/SSE remains legacy-only. Negotiation verdicts are scoped by configuration
 and authorization and expire; failures evict them.
 
+A Pop-owned inline pi extension is appropriate only when a concrete integration
+requires pi lifecycle events that custom tools cannot provide; extension-based
+tool registration alone is not a reason to move MCP out of the product-owned
+adapter. Adopting a third-party MCP extension requires a new normative decision
+and proof that all Pop security, Plan Mode, cancellation, isolation,
+observability and session-freshness contracts remain enforced.
+
 The SDK owns pagination, sessions, required headers, request SSE, cancellation,
 metadata and stdio cleanup. A stdio child receives only the SDK safe environment
 plus that server's encrypted variables, never Pop Agent's full environment.
 Tools, resources/templates and prompts are discovered and projected with stable
 names. MCP outputs and errors are always external untrusted content. Detailed
-wire behavior and compatibility cases live in `docs/mcp.md`.
+wire behavior and compatibility cases live in `docs/mcp.md`. The non-normative
+trade-off analysis is preserved in
+[`Research-Pop-MCP-Pi-Integration-Strategy.md`](Research-Pop-MCP-Pi-Integration-Strategy.md).
 
 ## Failure and test obligations
 
