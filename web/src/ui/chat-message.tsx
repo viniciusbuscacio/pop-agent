@@ -95,7 +95,7 @@ function ChatMessageView({
         <ThinkingCard text={message.thinking} answered={message.content.length > 0} />
       ) : null}
 
-      {message.tools.length > 0 ? (
+      {showThinking && message.tools.length > 0 ? (
         <ToolTimeline
           tools={message.tools}
           interrupted={/interrupted by a server restart/i.test(message.content)}

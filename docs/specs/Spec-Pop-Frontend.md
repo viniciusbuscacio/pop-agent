@@ -207,7 +207,7 @@ one deployment's URL or advertises a native wrapper that does not exist.
 | Auth routing status | Zustand auth store | current page plus token presence |
 | Session token | local/session storage or memory fallback | server-issued credential |
 | Transcript warm cache | IndexedDB | disposable device cache |
-| Theme, font, thinking visibility | localStorage-backed stores | device preference |
+| Theme, font, thinking visibility | localStorage-backed stores | device preference; thinking visibility covers reasoning, ordinary tools and subagents |
 | Update-check preference | localStorage-backed store | device preference |
 | Per-chat draft | localStorage | device-local unsent text |
 | Last active chat / selected local computer | browser storage | device navigation/context |

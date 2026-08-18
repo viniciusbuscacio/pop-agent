@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from './chat-message';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useThinkingStore.setState({ show: true });
+});
 
 const base = { role: 'system' as const, content: '', thinking: '', tools: [], attachments: [] };
 
@@ -69,6 +73,36 @@ describe('horizontal overflow containment', () => {
     expect(output.className).toContain('max-w-full');
     expect(output.className).toContain('overflow-x-auto');
     expect(output.className).toContain('[overflow-wrap:anywhere]');
+  });
+});
+
+describe('thinking visibility', () => {
+  it('hides thinking, ordinary tools, and subagents together', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          content: 'Final answer',
+          thinking: 'Reasoning',
+          tools: [
+            { name: 'bash', status: 'done', detail: 'ordinary result' },
+            { name: 'delegate_worker', status: 'done', detail: 'worker result' },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('thinking-card')).toBeTruthy();
+    expect(screen.getByTestId('tool-card')).toBeTruthy();
+    expect(screen.getByTestId('subagents-card')).toBeTruthy();
+
+    act(() => useThinkingStore.setState({ show: false }));
+
+    expect(screen.queryByTestId('thinking-card')).toBeNull();
+    expect(screen.queryByTestId('tool-card')).toBeNull();
+    expect(screen.queryByTestId('subagents-card')).toBeNull();
+    expect(screen.getByText('Final answer')).toBeTruthy();
   });
 });
 

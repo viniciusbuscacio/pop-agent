@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
 /**
- * Whether thinking cards render at all. A property of the device, like the
- * theme and the font size: localStorage only, so the phone can hide the
- * reasoning the desktop shows. Default on -- hiding is the opt-in.
+ * Whether execution details render at all: reasoning, ordinary tools, and
+ * subagents are presented as one thinking surface. This is a device property,
+ * like theme and font size: localStorage only. Default on -- hiding is opt-in.
  */
 
 const STORAGE_KEY = 'pop-agent.showThinking';
