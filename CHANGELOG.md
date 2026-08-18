@@ -6,6 +6,14 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ## Unreleased
 
+### Added
+
+- **Outbound Agent2Agent (A2A) client integration.** Agent → A2A now manages
+  owner-configured remote agents beside MCP, discovers A2A 1.0 Agent Cards,
+  persists foreground text tasks, exposes bounded normal-mode A2A tools and
+  protects credentials and network calls with encryption, SSRF screening,
+  DNS pinning, cancellation and external-content taint policy.
+
 ### Changed
 
 - **Worker delegation can now fan out up to five implementation tasks.** Each

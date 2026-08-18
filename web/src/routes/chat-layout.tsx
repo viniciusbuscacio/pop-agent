@@ -23,18 +23,20 @@ export function ChatLayout() {
   const filesOpen = useMatch('/files/*');
   // On a phone, Files is its own screen (back returns to the list), exactly
   // like a conversation; on a wide screen the sidebar stays as the tree.
-  // Tasks, Skills and MCP are explorers now too: the bare list route stays the
-  // sidebar, and a selected item's pane becomes the screen. /skills/:slug
+  // Tasks, Skills, MCP and A2A are explorers now too: the bare list route stays
+  // in the sidebar, and a selected item's pane becomes the screen. /skills/:slug
   // covers /skills/new, /tasks/:taskId covers /tasks/new -- both the detail.
   const skillDetail = useMatch('/skills/:slug');
   const taskDetail = useMatch('/tasks/:taskId');
   const mcpDetail = useMatch('/mcp/:id');
+  const a2aDetail = useMatch('/a2a/:id');
   const contentOpen =
     openChat !== null ||
     filesOpen !== null ||
     skillDetail !== null ||
     taskDetail !== null ||
-    mcpDetail !== null;
+    mcpDetail !== null ||
+    a2aDetail !== null;
 
   useEffect(() => {
     const chatId = openChat?.params.chatId;

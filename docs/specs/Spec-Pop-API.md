@@ -3,7 +3,7 @@
 **Status:** normative
 **Legacy coverage:** §13
 **Primary implementation:** `shared/src/`, `server/src/interface/http/`, `web/src/services/`, `cli/src/infrastructure/api.ts`
-**Related:** [`Spec-Pop-Events-Synchronization.md`](Spec-Pop-Events-Synchronization.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
+**Related:** [`Spec-Pop-Events-Synchronization.md`](Spec-Pop-Events-Synchronization.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-A2A.md`](Spec-Pop-A2A.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
 
 ## Boundary and conventions
 
@@ -91,13 +91,18 @@ flat route list:
 - chats, messages, durable queue, Stop and session commands;
 - event tickets/SSE synchronization;
 - Files, trash, attachments and signed downloads;
-- living memory, skills, MCP, tasks, voice, storage and backups;
+- living memory, skills, MCP, outbound A2A agents/tasks, scheduled tasks,
+  voice, storage and backups;
 - PLA machines, policy, WSS and HTTPS fallback;
 - public CLI/launcher/runtime/install artifacts outside guarded product state.
 
 The concrete registry and shared DTOs are implementation authority for exact
-paths. Focused specs define behavior. A proposal route such as `/v1/ax` or an IP
-access-list API is not delivered merely because it appears in historical text.
+paths. Focused specs define behavior. A2A agent configuration and persisted task
+operations remain guarded, strict and bounded; credentials are write-only and
+snapshots expose presence only. An intended path described in the A2A spec is
+not delivered until its shared DTO and guarded route are registered. A proposal
+route such as `/v1/ax` or an IP access-list API is not delivered merely because
+it appears in historical text.
 
 ## Chat admission and queue
 

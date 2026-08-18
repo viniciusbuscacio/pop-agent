@@ -32,6 +32,7 @@ to silently choose one side.
 | §11 — Notes | [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md) |
 | §12 — web and MCP access | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
 | MCP integration ownership and pi extension boundary | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
+| Outbound Agent2Agent (A2A) client | [Spec-Pop-A2A.md](Spec-Pop-A2A.md) |
 | §13 — API contract | [Spec-Pop-API.md](Spec-Pop-API.md) |
 | §14 — PWA/frontend | [Spec-Pop-Frontend.md](Spec-Pop-Frontend.md) |
 | §15 — providers and models | [Spec-Pop-Providers-and-Models.md](Spec-Pop-Providers-and-Models.md) |
@@ -90,6 +91,9 @@ Permanent product rules:
   official TypeScript MCP SDK owns protocol mechanics, and pi receives the
   resulting tools through its supported SDK APIs. Host-installed or third-party
   pi extensions are not the MCP product boundary.
+- **A2A is outbound and owner-configured.** The MVP calls manually configured
+  trusted remote agents as a client; Pop exposes no public A2A server and treats
+  every remote result as untrusted external content.
 - **Clients are views and optional hands.** The PWA and CLI present the product;
   optional Pop Local Access lends explicitly selected local tools without
   creating another agent.
@@ -111,7 +115,8 @@ Permanent product rules:
 - Conversation search, semantic retrieval and a living user-memory document.
 - A shared Files tree, private Notes vault and local embeddings.
 - Built-in, personal and reviewed automatic skills selected locally per turn.
-- Server tools, web access, MCP tools and optional selected-computer tools.
+- Server tools, web access, MCP and outbound A2A tools, and optional
+  selected-computer tools.
 - Scheduled agent tasks and internal maintenance jobs.
 - PWA installation, terminal access, backups, update channels and recovery.
 - Authentication, passkeys, encrypted secrets, external-content taint and

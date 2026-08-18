@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SYSTEM_PROMPT, autoSkillsInstruction, buildPlanToolNames } from './pi-engine.js';
+import { A2A_TOOL_NAMES } from './a2a-tools.js';
 
 describe('Pop Agent system prompt', () => {
   it('reads the normative specs and implementation before a self-change', () => {
@@ -26,6 +27,7 @@ describe('Pop Agent system prompt', () => {
     expect(tools).not.toEqual(
       expect.arrayContaining(['bash', 'write', 'edit', 'notes_write', 'delete_file', 'delegate_worker']),
     );
+    for (const a2aTool of A2A_TOOL_NAMES) expect(tools).not.toContain(a2aTool);
   });
 
   it('describes explicit skill requests truthfully for both states', () => {

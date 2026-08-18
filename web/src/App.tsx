@@ -17,6 +17,7 @@ import { SetupPage } from './routes/setup-page';
 import { TaskFormPage } from './routes/task-form-page';
 import { TasksIntro } from './routes/tasks-list';
 import { McpPage } from './routes/mcp-page';
+import { A2aPage } from './routes/a2a-page';
 import { SkillsPage } from './routes/skills-page';
 import { UpdatePrompt } from './ui/update-prompt';
 import { ConnectionBanner } from './ui/connection-banner';
@@ -131,6 +132,9 @@ function Boot() {
         <Route path="mcp" element={<McpPage />} />
         <Route path="mcp/new" element={<McpPage />} />
         <Route path="mcp/:id" element={<McpPage />} />
+        <Route path="a2a" element={<A2aPage />} />
+        <Route path="a2a/new" element={<A2aPage />} />
+        <Route path="a2a/:id" element={<A2aPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

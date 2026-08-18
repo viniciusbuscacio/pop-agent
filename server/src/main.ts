@@ -90,6 +90,9 @@ import {
 import { WhisperTranscriber } from './infrastructure/voice/whisper-transcriber.js';
 import { createApp } from './interface/http/app.js';
 import { McpService } from './application/mcp/mcp-service.js';
+import { A2aService } from './application/a2a/a2a-service.js';
+import { SdkA2aClientFactory } from './infrastructure/a2a/sdk-a2a-client.js';
+import { buildA2aTools } from './infrastructure/agent/a2a-tools.js';
 import { OfficialMcpClientFactory } from './infrastructure/mcp/official-mcp-client.js';
 import { SseHub } from './interface/http/sse-hub.js';
 
@@ -176,6 +179,11 @@ const mcp = new McpService({
   secrets: context.secrets,
   clients: new OfficialMcpClientFactory(),
   dataDir: context.dataDir,
+});
+const a2a = new A2aService({
+  repo: context.a2a,
+  secrets: context.secrets,
+  clients: new SdkA2aClientFactory(),
 });
 // The agent's own notes vault (docs/specs/Spec-Pop-General.md §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
@@ -321,6 +329,7 @@ function piBridge(): PiAgentBridge {
       files,
       skills: skillsVault,
       autoSkillsEnabled: () => settings.read().autoSkillsEnabled,
+      a2aTools: (defineTool) => buildA2aTools(defineTool, a2a),
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: mcpToolName(server.id, capability.name),
         label: `${server.name}: ${capability.name}`,
@@ -700,6 +709,7 @@ const app = createApp({
   distillation: context.distillation,
   distillerEnabled: () => settings.read().autoSkillsEnabled,
   mcp,
+  a2a,
   usage: context.usage,
   localConnections,
   storage: new StorageService({

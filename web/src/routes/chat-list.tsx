@@ -7,19 +7,20 @@ import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
 import { ShellFooter } from './shell-header';
 import { useNotificationsStore } from '../store/notifications';
+import { useA2aStore } from '../store/a2a';
 import { useMcpStore } from '../store/mcp';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
 import { Button, SearchField, TextField, Pressable, Menu } from '../ui/controls';
 import { PullToRefresh } from '../ui/pull-to-refresh';
-import { FolderTree, McpSidebar, SkillsList } from './chat-list-explorers';
+import { A2aSidebar, FolderTree, McpSidebar, SkillsList } from './chat-list-explorers';
 
 /**
  * What the sidebar is showing. Every main destination is now an explorer: a
  * list here, the selected item in the right-hand pane -- chats, files, tasks,
  * skills, and MCP.
  */
-type Segment = 'chats' | 'files' | 'tasks' | 'skills' | 'mcp';
+type Segment = 'chats' | 'files' | 'tasks' | 'skills' | 'mcp' | 'a2a';
 
 // Both controls must follow the device's root font scale together. A fixed
 // 38px search button became smaller than the rem-based menu on larger phone text.
@@ -42,6 +43,7 @@ export function ChatList() {
   const [deletingOthers, setDeletingOthers] = useState(false);
   const [purging, setPurging] = useState(false);
   const createChat = useChatStore((state) => state.createChat);
+  const reloadA2a = useA2aStore((state) => state.reload);
   const reloadMcp = useMcpStore((state) => state.reload);
 
   const location = useLocation();
@@ -55,7 +57,9 @@ export function ChatList() {
         ? 'skills'
         : path.startsWith('/mcp')
           ? 'mcp'
-          : 'chats';
+          : path.startsWith('/a2a')
+            ? 'a2a'
+            : 'chats';
   const [filter, setFilter] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -108,7 +112,8 @@ export function ChatList() {
   useEffect(() => {
     setFilter('');
     setSearchOpen(false);
-  }, [segment]);
+    if (segment === 'a2a') void reloadA2a();
+  }, [reloadA2a, segment]);
 
   useEffect(() => {
     if (searchOpen) searchInput.current?.focus();
@@ -247,6 +252,20 @@ export function ChatList() {
             </Button>
           ) : null}
 
+          {segment === 'a2a' ? (
+            <Button
+              type="button"
+              data-testid="shell-new-a2a"
+              className="flex-1"
+              onClick={() => {
+                void reloadA2a();
+                void navigate('/a2a/new');
+              }}
+            >
+              {t('a2a.new')}
+            </Button>
+          ) : null}
+
           {segment === 'chats' ? (
             <Pressable
               type="button"
@@ -353,7 +372,7 @@ export function ChatList() {
             aria-label={t('shell.filter')}
           />
         ) : null}
-        {segment === 'tasks' || segment === 'skills' || segment === 'mcp' ? (
+        {segment === 'tasks' || segment === 'skills' || segment === 'mcp' || segment === 'a2a' ? (
           <SearchField
             id="list-filter"
             data-testid="list-filter"
@@ -364,14 +383,18 @@ export function ChatList() {
                 ? 'shell.searchTasks'
                 : segment === 'skills'
                   ? 'shell.searchSkills'
-                  : 'shell.searchMcp',
+                  : segment === 'mcp'
+                    ? 'shell.searchMcp'
+                    : 'shell.searchA2a',
             )}
             aria-label={t(
               segment === 'tasks'
                 ? 'shell.searchTasks'
                 : segment === 'skills'
                   ? 'shell.searchSkills'
-                  : 'shell.searchMcp',
+                  : segment === 'mcp'
+                    ? 'shell.searchMcp'
+                    : 'shell.searchA2a',
             )}
           />
         ) : null}
@@ -386,6 +409,8 @@ export function ChatList() {
         <SkillsList filter={filter} />
       ) : segment === 'mcp' ? (
         <McpSidebar filter={filter} />
+      ) : segment === 'a2a' ? (
+        <A2aSidebar filter={filter} />
       ) : (
         <PullToRefresh onRefresh={refreshChats} className="pb-20">
           {viewArchived && !searching ? (

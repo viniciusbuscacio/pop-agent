@@ -1,12 +1,13 @@
 {
   "name": "@pop-agent/server",
-  "version": "0.2.38",
+  "version": "0.2.39",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc -b && chmod +x dist/manager/main.js"
   },
   "dependencies": {
+    "@a2a-js/sdk": "1.0.1",
     "@earendil-works/pi-coding-agent": "0.84.1",
     "@hono/node-server": "^2.0.12",
     "@huggingface/transformers": "^3.0.2",

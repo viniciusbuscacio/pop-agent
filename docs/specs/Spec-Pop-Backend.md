@@ -34,6 +34,8 @@ Focused specifications retain their own detail:
 - providers and models: [Spec-Pop-Providers-and-Models.md](Spec-Pop-Providers-and-Models.md);
 - memory, Notes, Files storage and backup: [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md);
 - skills and tools: [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md);
+- outbound A2A client and persisted foreground remote tasks:
+  [Spec-Pop-A2A.md](Spec-Pop-A2A.md);
 - auth, encrypted secrets and external-content safety: [Spec-Pop-Security.md](Spec-Pop-Security.md);
 - scheduled work: [Spec-Pop-Background-Tasks.md](Spec-Pop-Background-Tasks.md).
 
@@ -159,8 +161,11 @@ behavior depends on time.
 ### Infrastructure
 
 Infrastructure adapts application ports to SQLite, pi, filesystems, providers,
-MCP, local models, systemd, Git and subprocesses. An adapter may translate and
-retry technology-specific failures, but it must not invent product policy.
+MCP, outbound A2A, local models, systemd, Git and subprocesses. An adapter may
+translate and retry technology-specific failures, but it must not invent product
+policy. A2A protocol/transport code remains outside pi tool definitions; the
+application service owns persisted task transitions and the adapter owns
+SSRF-safe bounded calls.
 
 The pi adapter implements `AgentBridge` and related narrow ports. The fake
 adapter implements the same application contract. Switching between them must

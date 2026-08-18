@@ -3,7 +3,7 @@
 **Status:** normative
 **Legacy coverage:** §§9–10
 **Primary implementation:** `server/src/application/auth/`, `server/src/domain/safety/`, `server/src/interface/http/`, `server/src/infrastructure/{auth,crypto,agent,web}/`
-**Related:** [`Spec-Pop-General.md`](Spec-Pop-General.md), [`Spec-Pop-API.md`](Spec-Pop-API.md), [`Spec-Pop-Installation.md`](Spec-Pop-Installation.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
+**Related:** [`Spec-Pop-General.md`](Spec-Pop-General.md), [`Spec-Pop-API.md`](Spec-Pop-API.md), [`Spec-Pop-A2A.md`](Spec-Pop-A2A.md), [`Spec-Pop-Installation.md`](Spec-Pop-Installation.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
 
 ## Threat model and permanent rules
 
@@ -180,10 +180,14 @@ screened address set so DNS rebinding cannot swap the destination after policy
 validation. Redirects are refused and body/time limits stop resource abuse.
 Results are untrusted.
 
-MCP and provider network calls occur only for owner-configured capabilities or
-an active model operation. Update checks are explicit product behavior and can
-be disabled where offered. Zero telemetry remains independent of those
-functional calls.
+MCP, A2A and provider network calls occur only for owner-configured
+capabilities or an active model operation. Outbound A2A additionally requires
+HTTPS, public screened and pinned addresses, no redirects, origin-bound
+authorization and bounded bodies/deadlines; manually trusting an agent does not
+permit private-address access. A2A credentials use encrypted secret storage,
+and all card/task text remains external untrusted content. Update checks are
+explicit product behavior and can be disabled where offered. Zero telemetry
+remains independent of those functional calls.
 
 PLA opens authenticated outbound connections to the personal server; it does
 not expose a local listener. Machine selection, disabled-first permission,

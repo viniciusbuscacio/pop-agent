@@ -35,6 +35,7 @@ import type { StorageService } from '../../application/storage/storage-service.j
 import type { LocalConnectionRegistry } from '../../application/local-access/local-connection-registry.js';
 import type { HealthService } from '../../application/health/health-service.js';
 import type { McpService } from '../../application/mcp/mcp-service.js';
+import type { A2aHttpService } from './a2a-routes.js';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import type { SettingsService } from '../../application/settings/settings-service.js';
 import { authMiddleware } from './auth-middleware.js';
@@ -66,6 +67,7 @@ import { createServerRoutes } from './server-routes.js';
 import { type SseHub } from './sse-hub.js';
 import { createStaticSite } from './static-site.js';
 import { createMcpRoutes } from './mcp-routes.js';
+import { createA2aRoutes } from './a2a-routes.js';
 import { apiError } from './errors.js';
 
 export interface AppDeps {
@@ -102,6 +104,8 @@ export interface AppDeps {
   distillation?: DistillationRepo;
   distillerEnabled?: () => boolean;
   mcp: McpService;
+  /** Outbound Agent2Agent management; omitted until its runtime adapter is wired. */
+  a2a?: A2aHttpService;
   usage: UsageRepo;
   storage: StorageService;
   localConnections: LocalConnectionRegistry;
@@ -208,6 +212,7 @@ export function createApp(deps: AppDeps): Hono {
         }),
       ),
       sessionGuarded(createMcpRoutes(deps.mcp)),
+      ...(deps.a2a === undefined ? [] : [sessionGuarded(createA2aRoutes(deps.a2a))]),
       sessionGuarded(createUsageRoutes(deps)),
       sessionGuarded(createStorageRoutes(deps)),
       sessionGuarded(createLocalToolsRoutes(deps)),

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { A2aRepo } from '../application/ports/a2a-repo.js';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
 import type { EmbeddingsRepo } from '../application/ports/embeddings-repo.js';
 import type { LlmRunsRepo } from '../application/ports/llm-runs-repo.js';
@@ -24,6 +25,7 @@ import type { WebAuthnRepo } from '../application/ports/webauthn-repo.js';
 import { ensureDataDir, ensureFilesDir, resolveDataDir, resolveArtifactsDir } from './config/data-dir.js';
 import { loadOrCreateSecretKey } from './crypto/secret-key-file.js';
 import { openDatabase } from './db/database.js';
+import { SqliteA2aRepo } from './db/sqlite-a2a-repo.js';
 import { SqliteChatRepo } from './db/sqlite-chat-repo.js';
 import { SqliteEmbeddingsRepo } from './db/sqlite-embeddings-repo.js';
 import { SqliteLlmRunsRepo } from './db/sqlite-llm-runs-repo.js';
@@ -79,6 +81,8 @@ export interface AppContext {
   storage: StorageRepo;
   /** Background tasks (docs/specs/Spec-Pop-General.md §21). */
   tasks: TaskRepo;
+  /** Outbound A2A agent configuration, discovery cache, and remote tasks. */
+  a2a: A2aRepo;
   mcp: McpRepo;
   push: PushRepo;
   webauthn: WebAuthnRepo;
@@ -124,6 +128,7 @@ export function bootstrap(): AppContext {
     usage: new SqliteUsageRepo(db),
     storage: new SqliteStorageRepo(db),
     tasks: new SqliteTaskRepo(db),
+    a2a: new SqliteA2aRepo(db),
     mcp: new SqliteMcpRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),

@@ -98,14 +98,17 @@ export function isBlockedUnderTaint(command: string, machine: GuardedMachine = '
 }
 
 /**
- * Tools a tainted turn refuses outright, whatever their arguments (docs/specs/Spec-Pop-General.md
- * §8, §10). Writing a skill is the one action whose blast radius outlives the
- * turn: a skill the router likes comes back on its own in every future
- * conversation it judges relevant, so a page that can write one has bought a
- * standing place in the system prompt. Nothing in the arguments could make
- * that safe, which is why this list is by tool name and not by pattern.
+ * Tools a tainted turn refuses outright, whatever their arguments. Writing a
+ * skill creates standing future context; mutating A2A calls send data or
+ * commands to another agent. Nothing in their arguments can make those actions
+ * safe after prompt-injection content was consumed, so tool identity decides.
  */
-const REFUSED_UNDER_TAINT = new Set(['skill_write']);
+const REFUSED_UNDER_TAINT = new Set([
+  'skill_write',
+  'a2a_send_message',
+  'a2a_continue_task',
+  'a2a_cancel_task',
+]);
 
 /** Which machine a tool runs on. Local tools carry the prefix; nothing else. */
 export function machineOfTool(tool: string): GuardedMachine | undefined {
@@ -132,6 +135,12 @@ const SKILL_BLOCK_REASON =
   'prompt-injection safeguard (docs/specs/Spec-Pop-General.md §8, §10): a skill written now would come ' +
   'back on its own in future conversations. If the user asked for this themselves, ' +
   'write it in a new turn that has not read outside content.';
+
+const A2A_BLOCK_REASON =
+  'This turn read untrusted external content, so mutating a remote A2A task is blocked as a ' +
+  'prompt-injection safeguard (docs/specs/Spec-Pop-A2A.md): a tainted turn cannot send data or ' +
+  'commands to another agent. If the user asked for this themselves, run it in a new turn that ' +
+  'has not read outside content.';
 
 export class TaintGuard implements ToolGuard {
   private tainted = false;
@@ -163,7 +172,10 @@ export class TaintGuard implements ToolGuard {
         risk: 'high',
         warnings: [`blocked ${tool} in a tainted turn`],
       });
-      return Promise.resolve({ block: true, reason: SKILL_BLOCK_REASON });
+      return Promise.resolve({
+        block: true,
+        reason: tool === 'skill_write' ? SKILL_BLOCK_REASON : A2A_BLOCK_REASON,
+      });
     }
 
     const machine = machineOfTool(tool);

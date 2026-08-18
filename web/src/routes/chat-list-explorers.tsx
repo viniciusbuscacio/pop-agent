@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
+import type { A2aAgentDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { useTrashUndo } from '../lib/trash-undo';
@@ -8,6 +8,7 @@ import { ApiError } from '../services/api';
 import { filesService } from '../services/artifacts';
 import { skillsService } from '../services/skills';
 import { joinPath, parentDir, useFilesStore } from '../store/files';
+import { useA2aStore } from '../store/a2a';
 import { useMcpStore } from '../store/mcp';
 import { useNotificationsStore } from '../store/notifications';
 import { matchesSourceFilter, skillEnabled, type SkillSourceFilter, useSkillsStore } from '../store/skills';
@@ -393,6 +394,47 @@ export function SkillsList({ filter }: { filter: string }) {
         </ul>
       )}
       </div>
+    </div>
+  );
+}
+
+export function A2aSidebar({ filter }: { filter: string }) {
+  const navigate = useNavigate();
+  const agents = useA2aStore((state) => state.agents);
+  const query = filter.trim().toLowerCase();
+  const rows = (agents ?? []).filter((agent) =>
+    `${agent.name} ${agent.description} ${agent.baseUrl} ${agent.status}`.toLowerCase().includes(query),
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto pb-20" data-testid="a2a-list">
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('a2a.none')}</p>
+      ) : (
+        <ul>
+          {rows.map((agent: A2aAgentDTO) => (
+            <li key={agent.id}>
+              <Pressable
+                type="button"
+                data-testid="a2a-row"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+                onClick={() => void navigate(`/a2a/${agent.id}`)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm">{agent.name}</span>
+                  <span className="block truncate text-xs text-[var(--muted)]">
+                    {[agent.protocolVersion, agent.agentVersion].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end text-xs text-[var(--muted)]">
+                  <span>{agent.status}</span>
+                  <span>{agent.enabled ? t('a2a.enabled') : t('a2a.disabled')}</span>
+                </span>
+              </Pressable>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

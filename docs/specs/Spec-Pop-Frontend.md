@@ -42,6 +42,8 @@ Focused specifications retain subsystem detail:
 - Files and backup authority: [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md);
 - auth and browser-visible security: [Spec-Pop-Security.md](Spec-Pop-Security.md);
 - optional selected-computer access: [Spec-Pop-Local-Access.md](Spec-Pop-Local-Access.md);
+- outbound trusted-agent configuration and task views:
+  [Spec-Pop-A2A.md](Spec-Pop-A2A.md);
 - pi run and queue semantics: [Spec-Pop-Pi-Agent-Integration.md](Spec-Pop-Pi-Agent-Integration.md).
 
 ## 14. Frontend architecture
@@ -176,7 +178,8 @@ Pop Agent uses route-based navigation, not hidden drawers:
 
 Settings is a searchable hierarchy, not a row of tabs:
 
-- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills;
+- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills,
+  MCP, A2A;
 - **App:** Appearance, Notifications, Updates, Installation;
 - **Data:** Storage, Backup;
 - **System:** Server & Connections, Security, About.
@@ -387,8 +390,13 @@ not invented model data.
 
 ## Files and other explorers
 
-Chats, Files, Tasks, Skills and MCP share the route-based explorer pattern, but
-their server authorities remain distinct.
+Chats, Files, Tasks, Skills, MCP and A2A share the route-based explorer
+pattern, but their server authorities remain distinct. A2A lives under the
+Agent settings/integration area next to MCP and uses route/full-pane list and
+editor flows, never a side drawer. Save always has Cancel. Its browser
+projection shows credential presence and bounded persisted task state; only a
+frontend service calls the guarded API, and the browser never contacts a remote
+Agent Card or A2A endpoint directly.
 
 The Files UI:
 

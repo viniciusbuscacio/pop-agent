@@ -1,6 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { createTestApp } from '../../testing/app-fixture.js';
+import type { A2aHttpService } from './a2a-routes.js';
 import { PUBLIC_V1_PATHS, publicV1PathSet } from './route-registry.js';
+
+const inventoryA2a: A2aHttpService = {
+  list: () => [],
+  get: () => undefined,
+  create: () => { throw new Error('not reached'); },
+  update: () => undefined,
+  delete: () => false,
+  test: () => Promise.reject(new Error('not reached')),
+  listTasks: () => [],
+  task: () => undefined,
+  sendText: () => Promise.reject(new Error('not reached')),
+  getTask: () => Promise.reject(new Error('not reached')),
+  cancelTask: () => Promise.reject(new Error('not reached')),
+  continueTask: () => Promise.reject(new Error('not reached')),
+};
 
 /**
  * The probe half of the route-guard invariant (docs/specs/Spec-Pop-General.md §9): walk every
@@ -19,7 +35,7 @@ function probePath(routePath: string): string {
 
 describe('route guard', () => {
   it('answers 401 without a session on every /v1 route not declared public', async () => {
-    const { app } = createTestApp();
+    const { app } = createTestApp(undefined, { a2a: inventoryA2a });
     const publicPaths = publicV1PathSet();
     const seen = new Set<string>();
     const unguarded: string[] = [];
@@ -39,6 +55,7 @@ describe('route guard', () => {
     }
 
     expect(seen.size).toBeGreaterThan(20); // the walk found the real API, not an empty app
+    expect([...seen].filter((route) => route.includes(' /v1/a2a/'))).toHaveLength(11);
     expect(unguarded).toEqual([]);
   });
 

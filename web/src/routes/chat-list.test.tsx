@@ -3,8 +3,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatDTO } from '@pop-agent/shared';
+import type { A2aAgentDTO, ChatDTO } from '@pop-agent/shared';
 import { ChatList } from './chat-list';
+import { useA2aStore } from '../store/a2a';
 import { useChatStore } from '../store/chat';
 
 const archiveOthers = vi.fn();
@@ -49,6 +50,12 @@ vi.mock('../services/chats', () => ({
   },
 }));
 
+vi.mock('../services/a2a', () => ({
+  a2aService: {
+    list: () => Promise.resolve({ agents: useA2aStore.getState().agents ?? [] }),
+  },
+}));
+
 vi.mock('../services/health', () => {
   const healthy = { kind: 'ok' as const };
   return {
@@ -75,6 +82,7 @@ function renderList(path = '/') {
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  useA2aStore.setState({ agents: undefined, tasksByAgent: {} });
   localStorage.clear();
   activeList = active.map((chat) => ({ ...chat }));
   archivedList = [];
@@ -117,6 +125,41 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+describe('A2A explorer controls', () => {
+  it('shows its list, search and new-agent action in the shared sidebar', async () => {
+    const remote: A2aAgentDTO = {
+      id: 'agent-1',
+      name: 'Research agent',
+      description: 'Finds sources',
+      baseUrl: 'https://agent.example',
+      authKind: 'none',
+      authHeader: '',
+      hasCredential: false,
+      enabled: true,
+      timeoutMs: 60000,
+      status: 'connected',
+      lastError: '',
+      protocolVersion: '0.3.0',
+      agentVersion: '1.0.0',
+      interfaces: [],
+      skills: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+    useA2aStore.setState({ agents: [remote] });
+    renderList('/a2a');
+
+    expect(screen.getByTestId('shell-new-a2a').textContent).toBe('New A2A agent');
+    expect(screen.getByTestId('list-filter').getAttribute('placeholder')).toBe('Search A2A agents');
+    expect(screen.getByText('Research agent')).toBeTruthy();
+    await userEvent.type(screen.getByTestId('list-filter'), 'missing');
+    expect(screen.queryByText('Research agent')).toBeNull();
+
+    await userEvent.click(screen.getByTestId('shell-new-a2a'));
+    expect(screen.getByTestId('location').textContent).toBe('/a2a/new');
+  });
 });
 
 describe('archive one chat', () => {

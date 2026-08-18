@@ -56,6 +56,7 @@ import { McpService } from '../application/mcp/mcp-service.js';
 import type { McpClientFactory } from '../application/ports/mcp-client.js';
 import { OfficialMcpClientFactory } from '../infrastructure/mcp/official-mcp-client.js';
 import { createApp } from '../interface/http/app.js';
+import type { A2aHttpService } from '../interface/http/a2a-routes.js';
 import { SseHub } from '../interface/http/sse-hub.js';
 import { mimeOf } from '../domain/files/mime.js';
 
@@ -223,6 +224,8 @@ export interface TestAppOptions {
   timer?: Timer;
   /** Replace the official MCP transport with a deterministic contract fake. */
   mcpClients?: McpClientFactory;
+  /** Mount outbound A2A routes against a deterministic application-service fake. */
+  a2a?: A2aHttpService;
 }
 
 export function createTestApp(
@@ -432,6 +435,7 @@ export function createTestApp(
     distillation,
     distillerEnabled: () => true,
     mcp,
+    ...(options.a2a === undefined ? {} : { a2a: options.a2a }),
     usage: new SqliteUsageRepo(db),
     localConnections,
     // A real service over a throwaway directory: the report has to survive

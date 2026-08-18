@@ -3,7 +3,7 @@
 **Status:** normative
 **Legacy coverage:** §§8 and 12
 **Primary implementation:** `server/src/domain/skills/`, `server/src/application/skills/`, `server/src/infrastructure/skills/`, `server/src/infrastructure/{web,mcp}/`
-**Related:** [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`../mcp.md`](../mcp.md)
+**Related:** [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-A2A.md`](Spec-Pop-A2A.md), [`../mcp.md`](../mcp.md)
 
 ## Purpose and authority
 
@@ -177,7 +177,8 @@ local tools participate in session-context revisioning.
 
 Normal Mode restores the captured catalogue. Plan Mode starts with a reduced,
 fail-closed catalogue: server read-only tools plus MCP tools explicitly marked
-`readOnlyHint: true`. Missing MCP annotations mean denial. A prompt instruction
+`readOnlyHint: true`. Missing MCP annotations mean denial. All outbound A2A
+tools are Normal Mode only and never enter this allowlist. A prompt instruction
 is never the only enforcement.
 
 Every tool has a typed schema, bounded output where applicable, explicit error
@@ -232,6 +233,15 @@ names. MCP outputs and errors are always external untrusted content. Detailed
 wire behavior and compatibility cases live in `docs/mcp.md`. The non-normative
 trade-off analysis is preserved in
 [`Research-Pop-MCP-Pi-Integration-Strategy.md`](Research-Pop-MCP-Pi-Integration-Strategy.md).
+
+## A2A
+
+Outbound A2A is a separate Pop-owned integration. It projects five fixed
+client tools through the same pi custom-tool boundary, uses only manually
+configured trusted agents and persists foreground text tasks. It does not reuse
+MCP capability names or `readOnlyHint`, and every A2A tool is excluded from Plan
+Mode. Protocol, SSRF, credential, persistence and MVP exclusions are normative
+in [Spec-Pop-A2A.md](Spec-Pop-A2A.md).
 
 ## Failure and test obligations
 

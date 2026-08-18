@@ -3,7 +3,7 @@ import { t } from '../i18n';
 import { Segmented } from '../ui/controls';
 
 type MainSection = 'chat' | 'files' | 'agent';
-type AgentSection = 'tasks' | 'skills' | 'mcp';
+type AgentSection = 'tasks' | 'skills' | 'mcp' | 'a2a';
 
 /** The two-level segmented navigation shared by the sidebar and mobile Files view. */
 export function SidebarNav() {
@@ -17,7 +17,7 @@ export function SidebarNav() {
   // opening a skill (/skills/know-thyself) or a task (/tasks/new) dropped the
   // highlight back onto Chat, which is not even where you were (Vinicius,
   // 03/08).
-  const AGENT_SECTIONS: AgentSection[] = ['tasks', 'skills', 'mcp'];
+  const AGENT_SECTIONS: AgentSection[] = ['tasks', 'skills', 'mcp', 'a2a'];
   const agentSection = AGENT_SECTIONS.find(
     (section) =>
       location.pathname === `/${section}` || location.pathname.startsWith(`/${section}/`),
@@ -64,6 +64,7 @@ export function SidebarNav() {
             { value: 'tasks', label: t('shell.navTasks'), testId: 'sidebar-tasks' },
             { value: 'skills', label: t('shell.navSkills'), testId: 'sidebar-skills' },
             { value: 'mcp', label: t('shell.navMcp'), testId: 'sidebar-mcp' },
+            { value: 'a2a', label: t('shell.navA2a'), testId: 'sidebar-a2a' },
           ]}
         />
       ) : null}
