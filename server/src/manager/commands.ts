@@ -101,13 +101,26 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
         return 1;
       }
       // Not confirmed here, and that is deliberate: restore is reached by
-      // typing a specific filename that had to be read off `backups` first,
-      // which is a longer path than any y/N prompt.
-      if (!deps.backups.restore(name)) {
+      // typing a specific filename that had to be read off `backups` first.
+      // The database must not be replaced while repositories hold it open.
+      if (deps.service('stop') !== 0) {
+        deps.err(`Could not stop ${deps.unit}; nothing was restored.`);
+        return 1;
+      }
+      let restored = false;
+      let restarted = false;
+      try {
+        restored = deps.backups.restore(name);
+      } finally {
+        restarted = deps.service('start') === 0;
+        if (!restarted) deps.err(`Could not restart ${deps.unit}.`);
+      }
+      if (!restored) {
         deps.err(`No such backup: ${name}`);
         return 1;
       }
-      deps.out(`Restored ${name}. Restart the service: popman restart`);
+      if (!restarted) return 1;
+      deps.out(`Restored ${name} and restarted ${deps.unit}.`);
       return 0;
     }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { run, systemctlArgv, type ManagerDeps } from './commands.js';
 
 /**
@@ -77,16 +77,35 @@ describe('popman', () => {
     expect(h.err.join('\n')).toContain('popman backups');
   });
 
-  it('reports a backup name that does not exist', async () => {
+  it('reports a backup name that does not exist and brings the service back', async () => {
     const h = harness();
     expect(await run(['restore', 'nope.tar.gz'], h.deps)).toBe(1);
     expect(h.err.join('\n')).toContain('No such backup');
+    expect(h.calls).toEqual(['stop', 'start']);
   });
 
-  it('tells you to restart after a restore, because it does not', async () => {
+  it('stops the service around restore and starts it after extraction', async () => {
     const h = harness();
     expect(await run(['restore', 'pop-2026-08-04.tar.gz'], h.deps)).toBe(0);
-    expect(h.out.join('\n')).toContain('popman restart');
+    expect(h.calls).toEqual(['stop', 'start']);
+    expect(h.out.join('\n')).toContain('restarted pop-agent-service');
+  });
+
+  it('does not extract when the service cannot be stopped', async () => {
+    const restore = vi.fn(() => true);
+    const h = harness({
+      service: (verb) => {
+        h.calls.push(verb);
+        return verb === 'stop' ? 1 : 0;
+      },
+      backups: {
+        create: () => ({ name: 'unused.tar.gz', size: 0 }),
+        list: () => [],
+        restore,
+      },
+    });
+    expect(await run(['restore', 'pop-2026-08-04.tar.gz'], h.deps)).toBe(1);
+    expect(restore).not.toHaveBeenCalled();
   });
 
   it('shows the new recovery key once, and says it is once', async () => {

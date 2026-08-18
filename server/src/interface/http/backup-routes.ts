@@ -6,8 +6,10 @@ import { apiError } from './errors.js';
 
 /**
  * Backup and restore over HTTP (docs/specs/Spec-Pop-General.md §16). Settings → Backup lists the
- * snapshots, makes one, downloads one, restores one (a restart applies it) and
- * deletes one. The download streams the tar.gz straight off disk.
+ * snapshots, makes one, downloads one and deletes one. Restore is deliberately
+ * unavailable in the live process: replacing SQLite beneath open repositories
+ * can combine old in-memory state with restored files. `popman restore` stops
+ * the service around extraction instead.
  */
 export interface BackupRoutesDeps {
   backups: BackupService;
@@ -37,11 +39,15 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
   });
 
   routes.post('/backups/:name/restore', (c) => {
-    if (!deps.backups.restore(c.req.param('name'))) {
+    if (deps.backups.pathOf(c.req.param('name')) === undefined) {
       return apiError(c, 404, 'not_found', 'No such backup.');
     }
-    // The data is on disk; the running process still holds the old database.
-    return c.json({ restored: true, restartRequired: true });
+    return apiError(
+      c,
+      409,
+      'operation_error',
+      'Restore requires the offline operator command: popman restore <backup>.',
+    );
   });
 
   routes.delete('/backups/:name', (c) =>

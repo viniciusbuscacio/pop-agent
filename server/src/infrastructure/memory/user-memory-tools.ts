@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
+import { scrubSecrets } from '../../domain/safety/secret-scrub.js';
 
 /**
  * The living user-memory tools (docs/specs/Spec-Pop-General.md §7): the agent reads and rewrites a
@@ -15,15 +16,7 @@ import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js
 type DefineTool = (tool: ToolDefinition) => ToolDefinition;
 
 const MAX_DOC = 8_000;
-const SECRET_LINE = /(password|token|secret|api[_-]?key|bearer)\s*[:=]/i;
-
-/** Replaces lines that smell of a credential; exported for the test. */
-export function scrubSecrets(text: string): string {
-  return text
-    .split('\n')
-    .map((line) => (SECRET_LINE.test(line) ? '[redacted secret]' : line))
-    .join('\n');
-}
+export { scrubSecrets };
 
 function text(body: string): { content: [{ type: 'text'; text: string }]; details: undefined } {
   return { content: [{ type: 'text', text: body }], details: undefined };

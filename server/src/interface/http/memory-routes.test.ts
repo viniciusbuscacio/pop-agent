@@ -53,6 +53,14 @@ describe('/v1/memory', () => {
     expect((await restored.json()).doc).toBe('likes Elixir');
   });
 
+  it('scrubs credentials from direct Settings edits before persistence', async () => {
+    const response = await authed('/v1/memory', {
+      method: 'PUT',
+      body: JSON.stringify({ doc: 'likes tea\nghp_abcdefghijklmnopqrstuvwxyz123456' }),
+    });
+    expect(await response.json()).toEqual({ doc: 'likes tea\n[redacted secret]', hasBackup: false });
+  });
+
   it('rejects a document over the cap', async () => {
     const res = await authed('/v1/memory', {
       method: 'PUT',

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserMemoryDTO } from '@pop-agent/shared';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
+import { scrubSecrets } from '../../domain/safety/secret-scrub.js';
 import { badBody, readJson, schemaError } from './body.js';
 
 /**
@@ -28,7 +29,7 @@ export function createMemoryRoutes(deps: MemoryRoutesDeps): Hono {
     const parsed = putSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    deps.userMemory.write(parsed.data.doc);
+    deps.userMemory.write(scrubSecrets(parsed.data.doc));
     return c.json(toDto(deps.userMemory.read()));
   });
 

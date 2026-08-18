@@ -9,7 +9,7 @@ export const SELF_MAP = [
   "server/src, clean architecture -- dependencies point inward only:",
   "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (79 modules)",
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
-  "- `domain/` -- entities, value objects and pure services -- the innermost layer (15 modules)",
+  "- `domain/` -- entities, value objects and pure services -- the innermost layer (16 modules)",
   "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (74 modules)",
   "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (33 modules)",
   "- `manager/` -- see docs/specs/Spec-Pop-General.md (3 modules)",

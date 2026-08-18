@@ -576,11 +576,10 @@ function PasskeyControls() {
   );
 }
 
-/** Backup and restore (docs/specs/Spec-Pop-General.md §16). */
+/** Live backup management; restore is an offline operator action. */
 function BackupSection() {
   const [backups, setBackups] = useState<import('@pop-agent/shared').BackupDTO[]>([]);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void reload();
@@ -596,7 +595,6 @@ function BackupSection() {
 
   async function create(): Promise<void> {
     setBusy(true);
-    setNotice(undefined);
     try {
       await backupsService.create();
       await reload();
@@ -613,15 +611,6 @@ function BackupSection() {
     anchor.download = name;
     anchor.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function restore(name: string): Promise<void> {
-    try {
-      await backupsService.restore(name);
-      setNotice(t('backup.restored'));
-    } catch {
-      setNotice(t('error.generic'));
-    }
   }
 
   async function remove(name: string): Promise<void> {
@@ -642,11 +631,6 @@ function BackupSection() {
             {busy ? t('backup.creating') : t('backup.create')}
           </Button>
         </div>
-        {notice !== undefined ? (
-          <p role="status" className="text-sm text-[var(--success)]">
-            {notice}
-          </p>
-        ) : null}
       </Card>
 
       {backups.length === 0 ? (
@@ -666,9 +650,6 @@ function BackupSection() {
               <div className="flex max-w-full flex-wrap gap-1">
                 <Button type="button" variant="ghost" onClick={() => void download(backup.name)}>
                   {t('backup.download')}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => void restore(backup.name)}>
-                  {t('backup.restore')}
                 </Button>
                 <Button type="button" variant="danger" onClick={() => void remove(backup.name)}>
                   {t('backup.delete')}

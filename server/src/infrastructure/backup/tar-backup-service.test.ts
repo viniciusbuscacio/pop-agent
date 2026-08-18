@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TarBackupService } from './tar-backup-service.js';
 
@@ -16,7 +17,9 @@ beforeEach(() => {
   dataDir = join(root, 'data');
   backupsDir = join(root, 'backups');
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(join(dataDir, 'pop-agent.db'), 'the database');
+  const database = new Database(join(dataDir, 'pop-agent.db'));
+  database.exec('CREATE TABLE facts (value TEXT); INSERT INTO facts VALUES (\'the database\')');
+  database.close();
   writeFileSync(join(dataDir, 'secret.key'), 'TOP SECRET');
   clock = 1_700_000_000_000;
   service = new TarBackupService({
@@ -52,12 +55,37 @@ describe('TarBackupService', () => {
 
   it('restores data over the data directory', () => {
     const info = service.create();
-    writeFileSync(join(dataDir, 'pop-agent.db'), 'changed after backup');
+    const changed = new Database(join(dataDir, 'pop-agent.db'));
+    changed.prepare('UPDATE facts SET value = ?').run('changed after backup');
+    changed.close();
 
     expect(service.restore(info.name)).toBe(true);
-    expect(readFileSync(join(dataDir, 'pop-agent.db'), 'utf8')).toBe('the database');
+    const restored = new Database(join(dataDir, 'pop-agent.db'), { readonly: true });
+    expect(restored.prepare('SELECT value FROM facts').pluck().get()).toBe('the database');
+    restored.close();
     // The secret key, never in the backup, is left untouched.
     expect(readFileSync(join(dataDir, 'secret.key'), 'utf8')).toBe('TOP SECRET');
+  });
+
+  it('captures committed WAL content through a consistent SQLite snapshot', () => {
+    const live = new Database(join(dataDir, 'pop-agent.db'));
+    live.pragma('journal_mode = WAL');
+    live.pragma('wal_autocheckpoint = 0');
+    live.prepare('INSERT INTO facts VALUES (?)').run('committed in wal');
+
+    const info = service.create();
+    live.close();
+    const out = join(root, 'wal-out');
+    mkdirSync(out);
+    execFileSync('tar', ['-xzf', service.pathOf(info.name) as string, '-C', out]);
+    const snapshot = new Database(join(out, 'pop-agent.db'), { readonly: true });
+    expect(snapshot.prepare('SELECT value FROM facts ORDER BY rowid').pluck().all()).toEqual([
+      'the database',
+      'committed in wal',
+    ]);
+    snapshot.close();
+    expect(existsSync(join(out, 'pop-agent.db-wal'))).toBe(false);
+    expect(existsSync(join(out, 'pop-agent.db-shm'))).toBe(false);
   });
 
   it('refuses a name with a path traversal', () => {

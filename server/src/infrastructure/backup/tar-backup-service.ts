@@ -1,27 +1,24 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { basename, join, relative } from 'node:path';
+import Database from 'better-sqlite3';
 import type { BackupInfo, BackupService } from '../../application/ports/backup-service.js';
 
 /**
- * Backups as tar.gz files (docs/specs/Spec-Pop-General.md §16), made and restored with the system
- * tar. The secret key file is excluded on the way in, so a backup carries data
- * but no keys. The newest few are kept; older ones are pruned.
- *
- * Restore is deliberately blunt: extract over the data directory. Anything the
- * backup did not contain (the secret key, a newer file) is left in place. A
- * restart is needed for the running process to see it, which the route says.
+ * Portable tar.gz snapshots. The live SQLite database is copied with SQLite's
+ * own snapshot machinery; raw db/WAL/SHM files are never copied independently.
+ * Everything else is staged, excluding the encryption key. Restore is exposed
+ * only to the offline manager command.
  */
 
 const KEEP = 10;
 const SECRET_KEY_FILE = 'secret.key';
+const DATABASE_FILE = 'pop-agent.db';
 const PREFIX = 'pop-backup-';
 
 export interface TarBackupDeps {
   dataDir: string;
-  /** Where the tar.gz files live. Kept outside dataDir so a backup is not in a backup. */
   backupsDir: string;
-  /** ISO timestamp for the file name; injected so it is not `new Date()` here. */
   now: () => string;
 }
 
@@ -44,13 +41,25 @@ export class TarBackupService implements BackupService {
     const stamp = this.deps.now().replace(/[:.]/g, '-');
     const name = `${PREFIX}${stamp}.tar.gz`;
     const target = join(this.deps.backupsDir, name);
-
-    // -C data dir, exclude the key, everything else in.
-    execFileSync(
-      'tar',
-      ['-czf', target, '-C', this.deps.dataDir, `--exclude=${SECRET_KEY_FILE}`, '.'],
-      { stdio: 'pipe' },
-    );
+    const stagingRoot = mkdtempSync(join(this.deps.backupsDir, '.staging-'));
+    const stagedData = join(stagingRoot, 'data');
+    try {
+      cpSync(this.deps.dataDir, stagedData, {
+        recursive: true,
+        filter: (source) => {
+          if (source === this.deps.dataDir) return true;
+          const path = relative(this.deps.dataDir, source);
+          if (path.includes('..')) return false;
+          const rootName = path.split(/[\\/]/, 1)[0];
+          return rootName !== SECRET_KEY_FILE && rootName !== DATABASE_FILE &&
+            rootName !== `${DATABASE_FILE}-wal` && rootName !== `${DATABASE_FILE}-shm`;
+        },
+      });
+      snapshotDatabase(join(this.deps.dataDir, DATABASE_FILE), join(stagedData, DATABASE_FILE));
+      execFileSync('tar', ['-czf', target, '-C', stagedData, '.'], { stdio: 'pipe' });
+    } finally {
+      rmSync(stagingRoot, { recursive: true, force: true });
+    }
 
     this.prune();
     const stat = statSync(target);
@@ -83,12 +92,10 @@ export class TarBackupService implements BackupService {
   }
 
   private valid(name: string): boolean {
-    // A name is only ever one of our files: no path separators, right shape.
     return (
+      basename(name) === name &&
       name.startsWith(PREFIX) &&
       name.endsWith('.tar.gz') &&
-      !name.includes('/') &&
-      !name.includes('\\') &&
       !name.includes('..')
     );
   }
@@ -96,5 +103,14 @@ export class TarBackupService implements BackupService {
   private prune(): void {
     const extra = this.list().slice(KEEP);
     for (const backup of extra) this.delete(backup.name);
+  }
+}
+
+function snapshotDatabase(source: string, destination: string): void {
+  const database = new Database(source, { readonly: true, fileMustExist: true });
+  try {
+    database.exec(`VACUUM INTO '${destination.replaceAll("'", "''")}'`);
+  } finally {
+    database.close();
   }
 }

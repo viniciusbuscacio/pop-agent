@@ -1,98 +1,204 @@
 # Pop Agent — memory and storage
 
 **Status:** normative
-**Legacy coverage:** §§7, 11 and 16
-**Primary implementation:** server/src/application/memory, storage/notes/backup adapters
-**Normative set:** all documents under `docs/specs/`, entered through `Spec-Pop-General.md`
+**Legacy coverage:** §§7, 11, 14 and 16
+**Primary implementation:** `server/src/application/{memory,files,storage}/`, `server/src/infrastructure/{db,memory,notes,files,backup}/`
+**Related:** [`Spec-Pop-Backend.md`](Spec-Pop-Backend.md), [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md)
 
-> Section numbers are preserved from the former monolithic specification so
-> existing code comments remain traceable. Cross-section references resolve
-> through the legacy section map in `Spec-Pop-General.md`.
-## 7. Infinite memory (`application/memory/`)
+## Storage authority and layout
 
-Hybrid search from day one: FTS5 (lexical) + vector similarity (semantic,
-a dot product over `message_embeddings`), fused with RRF (`fuseRankings` in
-`domain/memory/rank-fusion.ts`). Three layers, aw's design rewritten:
+SQLite plus the server data directory are durable product authority. Browser
+storage is only a cache. The workspace is operational scratch and the `Files/`
+subdirectory is the user-visible Files tab; these are not interchangeable.
 
-1. **History search** — agent tools `memory_search(query)` (hits grouped by
-   conversation, ≤3 snippets + context), `memory_open(chatId)`,
-   `memory_recent()`. A catalog of recent conversations + summaries is
-   injected into the system prompt inside untrusted-data delimiters.
-2. **Living user document** — one markdown doc of durable facts. The agent
-   updates it via tool; ~8k chars cap in prompt; above ~6k an LLM condenses
-   (max 1×/day, one-level backup, secret-scrub before persisting).
-   Editable in Settings → Memory. Ships EMPTY — no personal seed; Pop Agent is
-   a product for anyone to deploy.
-3. **Long-chat compaction & restore** (aw's layered design, adapted 01/08 —
-   pi ALREADY does the heavy lifting, Pop Agent wraps the policy):
-   - **Compaction = pi's native auto-compaction**, explicitly configured via
-     `SettingsManager` (before 01/08 it ran on implicit defaults):
-     `contextTokens > contextWindow - reserveTokens` (reserve 16384,
-     keepRecent 20k) → pi summarizes the old span with iterative context
-     (previous summary composes in), cuts at turn boundaries (never inside a
-     tool pair), and persists a `CompactionEntry` in the session JSONL.
-     Pop Agent builds no summarizer of her own.
-   - **Proactive trigger**: pi's own threshold check before each turn.
-   - **Reactive trigger = Pop Agent's layer**: pi does NOT retry on a
-     context-overflow error (its `retry.*` covers transient failures only).
-     The bridge catches an overflow error, calls `session.compact()` and
-     retries the SAME turn once — token accounting always errs a little,
-     this is the safety net.
-   - **Summary authority**: model-generated text never returns with system
-     authority. Pi renders its summary as conversation context (verified
-     01/08); anything Pop Agent adds herself follows the house pattern — inside
-     the untrusted-data envelope, never bare system.
-   - **Restore after restart/idle-unload = pi's session resume** (replays
-     the JSONL honouring compaction entries), plus Pop Agent's **continuity
-     note** (untrusted envelope): real numbers ("the N newest of M stored
-     messages"), how to page back (memory_open/memory_search), and the rule
-     that kills a class of hallucination — "tool results from before the
-     restart may not have survived: re-run the tool instead of answering
-     from memory".
-   - **Memory humility**: the prompt states "never claim you have no memory
-     before searching" — matching the existing memory/files tools.
-4. **Files awareness** (designed in 1.28, built in 1.29) — the agent must
-   know *that* a file exists without being handed it. Two halves, same
-   progressive-disclosure move as pinned skills and the recent-chats
-   catalog — presence is cheap, content is on demand:
-   - **Catalog**: a compact list of Files (names + folders, most recent N,
-     inside untrusted-data delimiters — filenames are user data) joins the
-     session instructions; the bridge already reopens a session when that
-     string changes. Names only for now; per-file descriptions wait for a
-     real case that needs them.
-   - **Instinct**: know-thyself gains the rule — an unrecognized name,
-     project or term means `files_search` + `memory_search` *before* the
-     web and before answering "I don't know".
-   Content still enters context only by attachment, @-mention, or the
-   agent's own tools. Explicitly **no per-turn RAG injection** of file
-   chunks: an agent with a real filesystem fetches; it is not fed.
-   Motivated by the OffSchool dialogue (2026-07-31): the answer sat in a
-   filename the agent had no way to see (`pop skills: none` in the log),
-   and it went to the web instead of its own files_search.
+Canonical locations are derived from configured data/workspace roots:
 
-## 11. Notes (`infrastructure/notes/`)
+- `POP_AGENT_DATA_DIR/pop-agent.db`: product database;
+- `POP_AGENT_DATA_DIR/secret.key`: encryption key, owner-only and never backed up;
+- `POP_AGENT_DATA_DIR/notes/`: agent notes;
+- `POP_AGENT_DATA_DIR/skills/`: skills;
+- `POP_AGENT_DATA_DIR/sessions/`: pi JSONL session state;
+- `POP_AGENT_WORKSPACE/Files/`: user files;
+- `POP_AGENT_WORKSPACE/attachments/`: accepted chat attachments;
+- sibling `pop-backups/`: backup archives, outside their own source tree.
 
-Pop Agent owns its notes: a vault of plain markdown files at
-`POP_AGENT_DATA_DIR/notes/`, created and maintained by the agent. No external
-vault integration — Obsidian-compatible by being plain .md; users may
-sync/open it externally.
+The database runs WAL with foreign keys enabled. Numbered migrations are the
+schema authority and run transactionally before repositories serve traffic.
+Migration failure is fatal; code must not guess around a partially upgraded
+schema.
 
-- Agent tools: `notes_list`, `notes_read` (size cap), `notes_search`
-  (snippets + file-count guard), `notes_write`, `notes_append`.
-- **`notes_append` is a real operation, not sugar over write.** `read` is
-  capped, so read-glue-write on a note past the cap saves the truncated
-  copy and deletes the rest; append writes straight to the end and cannot
-  lose what it never read. It creates the note when absent, and inserts a
-  newline first when the note does not end in one, so an added heading can
-  never land on the end of the previous paragraph.
-- Path jail, ported line-by-line as a concept from aw: resolve real path
-  (symlinks) against the notes root, reject `..` and absolute escapes.
+## Conversation history and search memory
 
-## 16. Backup and restore
+SQLite owns chats, ordered messages, queue items, run projections and archived
+state. Pi JSONL owns engine/session continuation, not product history. Product
+messages are persisted independently so a missing/corrupt pi session does not
+erase the transcript.
 
-- Automatic snapshots: tar.gz of `POP_AGENT_DATA_DIR` (minus `secret.key`,
-  minus `backups/` itself), consistent SQLite copy via the backup API
-  (never a raw copy of a hot WAL db). Retention: daily × 7 + weekly × 4
-  (tunable). Settings → Backup lists snapshots for download.
-- **Restore only with the server stopped**: `pop restore <file>`. Never
-  over a running server. Restore UI: maybe later.
+The agent's history tools are:
+
+- `memory_search(query)`: hybrid search grouped by conversation, at most three
+  snippets per hit and a bounded chat count;
+- `memory_open(chatId)`: bounded transcript window;
+- `memory_recent()`: bounded recent chat catalog and summaries.
+
+All returned historical text is sanitized and wrapped as untrusted data. A
+compact recent catalog is included in session context so the agent knows what
+can be opened without receiving every transcript.
+
+Search combines FTS5 lexical rows and optional semantic cosine ranking through
+shared reciprocal-rank fusion. Semantic absence/failure degrades to FTS; it
+must not make memory unavailable. Message embeddings are written after durable
+message persistence and backfilled in bounded batches. Deleting a message also
+removes dependent embedding/index state through schema/repository invariants.
+
+## Living user document
+
+The living user document is one Markdown record for durable preferences,
+projects and response style. It ships empty, is editable in Settings and is
+available through `memory_user_read` / `memory_user_update`.
+
+The document is capped at 8,000 characters in API, tool and prompt paths. Every
+write keeps one previous version for immediate restore. Both direct Settings
+edits and agent-tool writes pass through deterministic credential scrubbing
+before persistence; labeled secrets, known token shapes and private-key blocks
+are replaced rather than retained. Secret storage belongs to encrypted provider
+settings, never memory.
+
+The complete document enters the session instruction block. Changes therefore
+invalidate captured pi context. No automatic LLM condensation job is currently
+shipped; the hard cap and owner/agent replacement flow are the delivered bound.
+A future condenser must be at most daily, keep the one-level backup, scrub again
+and use an isolated service completion.
+
+## Long-chat compaction and continuity
+
+Pi's explicit native compaction policy triggers before a turn near the model
+window, reserves 16,384 tokens and keeps a 20,000-token recent tail. Pi cuts at
+valid turn/tool boundaries and persists compaction entries in its JSONL.
+
+On a provider context-overflow refusal, Pop rewinds the rejected branch,
+requests one compaction and retries the identical turn once. A second overflow
+is terminal. Model-generated summaries remain conversation context, never
+system authority.
+
+After restart or idle unload, pi resumes its JSONL and Pop adds an untrusted
+continuity note with the real stored-message count, memory paging instructions
+and a requirement to rerun tools whose old results may no longer be present.
+The agent must search before claiming it has no memory.
+
+## Files awareness and durable files
+
+The session instruction block contains a bounded, newest-first catalog of file
+names/folders inside an untrusted envelope. Content is not injected eagerly.
+Unknown names/projects trigger `files_search` and memory search before web
+research. Content enters through attachment, mention or explicit tool read.
+
+Files routes and tools enforce safe relative paths and server-side root jails.
+Downloads use validated file identities/paths. Deletion inside `Files/` moves
+entries to a recoverable trash; agents must use `delete_file`, never shell `rm`.
+Folder deletion reports the full subtree blast radius to owner-facing
+confirmation. Restore refuses name collisions rather than overwriting.
+
+Accepted chat attachments are copied to chat-scoped workspace paths with
+sanitized names. Provenance tracks durable user files derived from tools or
+session exports. A database reference is not proof that a filesystem path still
+exists; missing files return an explicit not-found outcome.
+
+## Notes vault
+
+Notes are plain Markdown under `POP_AGENT_DATA_DIR/notes/` and may be opened by
+Obsidian or external sync, but Pop provides no privileged external-vault bridge.
+Tools include list, bounded read, bounded substring search, full replace and
+append.
+
+Every note path passes through a real-path jail. Absolute paths, traversal and
+symlink escapes are refused. Hidden entries are excluded from listing. Reads
+are capped at 64 KiB, lists at 500 notes and search at 20 hits with bounded line
+snippets.
+
+`notes_append` writes directly to the file end, creates missing notes and adds a
+separator newline when needed. It must never be implemented as capped
+read–concatenate–replace because that would truncate a large note.
+
+Note content returned to the model is external untrusted data. Notes and memory
+must never be used to retain passwords, tokens or private keys.
+
+## Storage accounting
+
+Settings → Storage reports what Pop Agent is responsible for:
+
+- Files bytes/count;
+- search-index logical contribution;
+- database plus WAL/SHM bytes;
+- downloaded model weights;
+- workspace bytes/count;
+- notes/skills/sessions and other data;
+- backups outside the data directory;
+- filesystem free/total capacity when available.
+
+Physical totals must not double-count the logical search index already inside
+SQLite. Measurements are observational and may change during the scan; totals
+must never become negative. Model weights stay visible as a separate category
+because they commonly dominate disk use.
+
+## Backup creation and retention
+
+Settings and `popman backup` create an on-demand `tar.gz` snapshot. The shipped
+retention policy keeps the ten newest archives. Pop currently does not claim a
+built-in automatic daily/weekly scheduler; an operator scheduler must invoke the
+same snapshot implementation rather than copying files itself.
+
+Creation uses a private staging directory:
+
+1. copy non-database data while excluding `secret.key` and live DB/WAL/SHM;
+2. create `pop-agent.db` through SQLite `VACUUM INTO`, which includes committed
+   WAL content as one consistent database image;
+3. archive the staged tree;
+4. delete staging in `finally` and prune only completed archives.
+
+Backups are data-sensitive even without the key: they contain conversations,
+files, notes and metadata. Excluding `secret.key` means encrypted provider
+credentials and session signing material cannot be decrypted from the archive
+alone; it does not make all backup content public-safe. A new host requires
+re-entering credentials.
+
+Archive names are generated server-side and path-validated for listing,
+download and deletion. A failed snapshot must not replace a previous archive or
+leave staging as a visible backup.
+
+## Offline restore
+
+Restore is forbidden through the live HTTP process. Replacing SQLite while
+repositories hold it open can combine restored disk state with old process
+state.
+
+The operator command is:
+
+```text
+popman restore <exact-backup-name>
+```
+
+It stops `pop-agent-service`, extracts the selected known archive, and starts
+the service in `finally`, including when the archive name is invalid. Failure to
+stop prevents extraction; failure to restart is reported as failure. The key is
+not in the archive and the existing host key is left in place.
+
+Restore does not silently migrate or validate with a running server. Normal boot
+then opens the restored database, runs any newer migrations and performs other
+boot reconciliation. Cross-version restoration must be tested against the
+oldest supported backup.
+
+## Failure and test obligations
+
+- lexical memory works while embedding is unavailable;
+- indexing failure never loses the durable message;
+- malformed/escaped note and Files paths fail closed;
+- secret-shaped memory content is scrubbed through every write surface;
+- backup tests prove committed WAL rows are present without WAL/SHM sidecars;
+- live HTTP restore returns a conflict and performs no extraction;
+- operator restore proves stop → extract → start ordering;
+- backup archives exclude the encryption key and their own staging/backups;
+- storage totals avoid double counting and include external backup bytes.
+
+The full repository gate must pass after any schema, storage, backup or restore
+change.
