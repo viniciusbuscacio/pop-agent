@@ -96,7 +96,7 @@ function ChatMessageView({
       ) : null}
 
       {message.tools.length > 0 ? (
-        <ToolCards
+        <ToolTimeline
           tools={message.tools}
           interrupted={/interrupted by a server restart/i.test(message.content)}
         />
@@ -285,6 +285,65 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
         >
           {text}
         </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolTimeline({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
+  const delegated = tools.filter((tool) => tool.name === 'delegate_worker');
+  const ordinary = tools.filter((tool) => tool.name !== 'delegate_worker');
+  const groups = [
+    ...(ordinary.length > 0
+      ? [{ kind: 'ordinary' as const, tools: ordinary, firstIndex: tools.findIndex((tool) => tool.name !== 'delegate_worker') }]
+      : []),
+    ...(delegated.length > 0
+      ? [{ kind: 'delegated' as const, tools: delegated, firstIndex: tools.findIndex((tool) => tool.name === 'delegate_worker') }]
+      : []),
+  ].sort((left, right) => left.firstIndex - right.firstIndex);
+
+  return groups.map((group) =>
+    group.kind === 'delegated' ? (
+      <SubagentsCard key={group.kind} tools={group.tools} interrupted={interrupted} />
+    ) : (
+      <ToolCards key={group.kind} tools={group.tools} interrupted={interrupted} />
+    ),
+  );
+}
+
+/** Worker delegation stays visible without mixing its progress into ordinary tools. */
+function SubagentsCard({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]"
+      data-testid="subagents-card"
+    >
+      <Pressable
+        type="button"
+        data-testid="subagents-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+      >
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span className="min-w-0 flex-1 truncate">{t('chat.subagents')}</span>
+        <ToolStatusMark tools={tools} interrupted={interrupted} />
+      </Pressable>
+
+      {open ? (
+        <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">
+          {tools.map((tool, index) => (
+            <pre
+              key={`${tool.name}-${String(index)}`}
+              data-testid="subagent-output"
+              className="max-w-full overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]"
+            >
+              {tool.detail}
+            </pre>
+          ))}
+        </div>
       ) : null}
     </div>
   );

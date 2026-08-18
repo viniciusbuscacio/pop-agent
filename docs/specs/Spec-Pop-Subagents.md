@@ -64,9 +64,14 @@ parent without silently falling back to direct writes. Child-reported usage is
 booked as a separate `subagent:worker` chat ledger row; subscription token counts
 remain visible while their billed cost remains zero.
 
-The existing tool event stream is the first UI surface: the PWA receives one
-`delegate_worker` card with progress and final handoff. A dedicated fleet UI or
-durable background-run table is outside this slice.
+The existing tool event stream is the first UI surface and its wire and durable
+`ToolCallDTO` shape remains unchanged. In the assistant timeline, calls named
+exactly `delegate_worker` render in a dedicated quiet, collapsible **Subagents**
+card instead of the ordinary **Ran tools** card. The inline card shows the
+existing active spinner, done check, failure or interrupted state and reveals
+worker progress and the final handoff when expanded. It remains ordered by the
+first delegation call relative to the ordinary tool group. A floating fleet UI
+or durable background-run table is outside this slice.
 
 ## Update and test obligations
 

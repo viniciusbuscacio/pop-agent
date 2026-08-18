@@ -317,8 +317,12 @@ frontend must not assume or simulate one.
   frames.
 - Thinking is visible by default and the device preference redraws live and
   settled answers without deleting reasoning.
-- Tool fragments fold into one record per call and consecutive calls present as
-  a compact group.
+- Tool fragments fold into one record per call and consecutive ordinary calls
+  present as a compact group. Calls named exactly `delegate_worker` are excluded
+  from that group and render in a dedicated quiet, collapsible **Subagents** card
+  inline at their first position relative to the ordinary tool group. The card
+  uses the existing active, done, failed and interrupted status semantics and
+  reveals bounded progress or result detail when expanded.
 - Markdown, tool output and long paths cannot widen the transcript. Code/table
   surfaces scroll internally when wrapping would destroy meaning.
 

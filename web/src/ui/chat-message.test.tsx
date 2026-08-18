@@ -72,6 +72,171 @@ describe('horizontal overflow containment', () => {
   });
 });
 
+describe('worker delegation tools', () => {
+  it('separates delegation from ordinary tools and exposes each card detail', async () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [
+            { name: 'bash', status: 'done', detail: 'ordinary result' },
+            { name: 'delegate_worker', status: 'done', detail: 'worker progress and handoff' },
+            { name: 'read', status: 'done', detail: 'another ordinary result' },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('tool-name').textContent).toBe('Ran 2 tools');
+    expect(screen.getByTestId('subagents-card').textContent).toContain('Subagents');
+    expect(screen.getByTestId('tool-card').textContent).not.toContain('delegate_worker');
+
+    await userEvent.click(screen.getByTestId('subagents-toggle'));
+    await userEvent.click(screen.getByTestId('tool-toggle'));
+
+    const delegatedOutput = screen.getByTestId('subagent-output');
+    expect(delegatedOutput.textContent).toBe('worker progress and handoff');
+    expect(delegatedOutput.className).toContain('max-w-full');
+    expect(delegatedOutput.className).toContain('overflow-x-auto');
+    expect(screen.getAllByTestId('tool-output').map((output) => output.textContent)).toEqual([
+      'ordinary result',
+      'another ordinary result',
+    ]);
+  });
+
+  it('orders the cards by the first tool call of each kind', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [
+            { name: 'bash', status: 'done', detail: '' },
+            { name: 'delegate_worker', status: 'done', detail: '' },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      Array.from(screen.getByTestId('message-assistant').children).map((child) =>
+        child.getAttribute('data-testid'),
+      ),
+    ).toEqual(['tool-card', 'subagents-card']);
+  });
+
+  it('places a delegation card first when delegation was the first tool call', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [
+            { name: 'delegate_worker', status: 'done', detail: '' },
+            { name: 'bash', status: 'done', detail: '' },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      Array.from(screen.getByTestId('message-assistant').children).map((child) =>
+        child.getAttribute('data-testid'),
+      ),
+    ).toEqual(['subagents-card', 'tool-card']);
+  });
+
+  it('uses the existing active, done, and failure status semantics', () => {
+    const { rerender } = render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'delegate_worker', status: 'start', detail: 'launching' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('subagents-card').querySelector('.animate-spin')).not.toBeNull();
+
+    rerender(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'delegate_worker', status: 'done', detail: 'complete' }],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('subagents-card').querySelector('.animate-spin')).toBeNull();
+    expect(screen.getByTestId('subagents-card').textContent).toContain('✓');
+
+    rerender(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'delegate_worker', status: 'error', detail: 'worker failed' }],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('subagents-card').querySelector('.animate-spin')).toBeNull();
+    expect(screen.getByTestId('subagents-card').textContent).toContain('failed');
+  });
+
+  it('has an accessible expansion state and reveals progress only when expanded', async () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'delegate_worker', status: 'output', detail: 'tests are running' }],
+        }}
+      />,
+    );
+
+    const toggle = screen.getByTestId('subagents-toggle');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('subagent-output')).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByTestId('subagent-output').textContent).toBe('tests are running');
+  });
+
+  it('does not render an empty ordinary tool card for delegation-only runs', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          tools: [{ name: 'delegate_worker', status: 'done', detail: 'handoff' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('subagents-card')).toBeTruthy();
+    expect(screen.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('stops delegated work spinning when persisted content says the run was interrupted', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'assistant',
+          content: 'Partial answer\n\n*— interrupted by a server restart —*',
+          tools: [{ name: 'delegate_worker', status: 'output', detail: 'partial progress' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('tool-interrupted').textContent).toBe('interrupted');
+    expect(screen.getByTestId('subagents-card').querySelector('.animate-spin')).toBeNull();
+  });
+});
+
 describe('tool status', () => {
   it('uses the same quiet text color as the thinking card', () => {
     render(

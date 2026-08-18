@@ -129,6 +129,7 @@ export const en = {
   'chat.attachRemove': 'Remove {name}',
   'chat.attachTooLarge': '{name} is too large to attach (limit 16 MB).',
   'chat.thinking': 'Thinking',
+  'chat.subagents': 'Subagents',
   'chat.ranTools': 'Ran {count} tools',
   'chat.toolFailed': 'failed',
   'chat.toolInterrupted': 'interrupted',
