@@ -635,6 +635,50 @@ describe('sending a message', () => {
     ]);
   });
 
+  it('accepts attachment-only queued input and keeps attachment-only edits valid', async () => {
+    const chat = await newChat();
+    fixture.files.write('reports/context.txt', Buffer.from('server file'));
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
+
+    const queued = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: {
+        text: '',
+        delivery: 'follow_up',
+        attachments: [
+          { name: 'upload.txt', type: 'text/plain', dataUri: 'data:text/plain;base64,dXBsb2Fk' },
+        ],
+      },
+    });
+    expect(queued.status).toBe(202);
+    const messageId = ((await queued.json()) as { message: { id: string } }).message.id;
+    expect(fixture.queuedMessages.get(chat.id)).toMatchObject({
+      id: messageId,
+      text: '',
+      attachments: [{ name: 'upload.txt' }],
+    });
+
+    const updated = await api(`/v1/chats/${chat.id}/queue/${messageId}`, {
+      method: 'PUT',
+      body: { text: '', filePaths: ['reports/context.txt'] },
+    });
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      message: { id: messageId, text: '', attachments: [], filePaths: ['reports/context.txt'] },
+    });
+
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+    const { messages } = (await (await api(`/v1/chats/${chat.id}/messages`)).json()) as {
+      messages: MessageDTO[];
+    };
+    expect(messages).toContainEqual(expect.objectContaining({
+      role: 'user',
+      content: '',
+      attachments: [expect.objectContaining({ name: 'context.txt' })],
+    }));
+  });
+
   it('edits and cancels the queued message from any client', async () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: one' } });
@@ -686,12 +730,21 @@ describe('sending a message', () => {
     expect(queueEvents.map((event) => event.message?.text)).toEqual(['two', 'edited', undefined]);
   });
 
-  it('rejects an empty message', async () => {
+  it('rejects a truly empty message', async () => {
     const chat = await newChat();
 
-    expect(
-      (await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: '' } })).status,
-    ).toBe(400);
+    for (const { body, code } of [
+      { body: {}, code: 'missing_field' },
+      { body: { text: '' }, code: 'invalid_field' },
+      { body: { text: '   ' }, code: 'invalid_field' },
+    ]) {
+      const response = await api(`/v1/chats/${chat.id}/messages`, {
+        method: 'POST',
+        body,
+      });
+      expect(response.status).toBe(400);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(code);
+    }
   });
 
   it('keeps the starter title after the first message', async () => {

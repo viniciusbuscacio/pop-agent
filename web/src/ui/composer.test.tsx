@@ -231,6 +231,34 @@ describe('pending message composition', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalledWith('another direction', [], [], 'steer', 'normal'));
   });
 
+  it('sends an attachment-only message with Enter', async () => {
+    const { onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+
+    fireEvent.change(screen.getByTestId('composer-file-input'), {
+      target: { files: [file] },
+    });
+    await waitFor(() => expect(screen.getByTestId('attachment-tray')).toBeTruthy());
+    fireEvent.keyDown(area, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        '',
+        [
+          expect.objectContaining({
+            name: 'photo.png',
+            type: 'image/png',
+            dataUri: expect.stringMatching(/^data:image\/png/),
+          }),
+        ],
+        [],
+        'steer',
+        'normal',
+      ),
+    );
+  });
+
   it('requests a synchronized mode change and sends the controlled Plan value', async () => {
     const { onSend, onSetExecutionMode } = renderComposer({ executionMode: 'plan' });
     expect(screen.getByTestId('plan-mode').getAttribute('aria-pressed')).toBe('true');

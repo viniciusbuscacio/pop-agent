@@ -18,6 +18,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Changed
 
+- **Chat messages can contain attachments without text.** The PWA composer and
+  HTTP API now accept uploaded attachments or Files references on their own,
+  including durable queued input and queued-message edits, while still rejecting
+  a completely empty message.
 - **Worker delegation can now fan out up to five implementation tasks.** Each
   packaged worker runs concurrently in its own Pop-managed worktree from the
   same source HEAD, returns an independent patch handoff and records its own

@@ -109,10 +109,12 @@ it appears in historical text.
 ## Chat admission and queue
 
 Posting a chat message validates attachments, execution mode and optional
-stable local-machine selector before accepting product state. An idle chat
-persists the user message and creates a run. A busy chat appends a durable FIFO
-item rather than returning transient `run_in_progress`. The response includes
-stable message/run or queue identity without waiting for model completion.
+stable local-machine selector before accepting product state. Text may be blank
+when at least one uploaded attachment or Files reference is present; a request
+with neither text nor an attachment is rejected. An idle chat persists the user
+message and creates a run. A busy chat appends a durable FIFO item rather than
+returning transient `run_in_progress`. The response includes stable message/run
+or queue identity without waiting for model completion.
 
 Queue edit/delete/reorder semantics, one-run-per-chat and the 1,024 defensive
 pending cap are server-owned. Stop is idempotent over an active/admitted run and

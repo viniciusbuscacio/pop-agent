@@ -35,6 +35,24 @@ describe('horizontal overflow containment', () => {
     expect(message.firstElementChild?.className).toContain('[overflow-wrap:anywhere]');
   });
 
+  it('renders attachments without inventing content for an attachment-only user message', () => {
+    render(
+      <ChatMessage
+        message={{
+          ...base,
+          role: 'user',
+          attachments: [
+            { name: 'photo.png', type: 'image/png', dataUri: 'data:image/png;base64,aW1hZ2U=' },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('message-attachments')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'photo.png' })).toBeTruthy();
+    expect(screen.getByTestId('message-user').children).toHaveLength(1);
+  });
+
   it('contains a long MCP tool name in the collapsed card', () => {
     render(
       <ChatMessage

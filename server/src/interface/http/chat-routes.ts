@@ -73,7 +73,7 @@ const confirmSchema = z.object({ runId: z.string().min(1).max(80), allow: z.bool
 
 const sendSchema = z
   .object({
-    text: z.string().min(1).max(MAX_MESSAGE_LENGTH),
+    text: z.string().max(MAX_MESSAGE_LENGTH),
     /** Default joins the live loop; follow_up is the explicit /queue command. */
     delivery: z.enum(['steer', 'follow_up']).optional(),
     executionMode: z.enum(['normal', 'plan']).optional(),
@@ -92,7 +92,20 @@ const sendSchema = z
     /** Files already in Files, referenced by @ in the composer -- no re-upload. */
     filePaths: z.array(z.string().min(1).max(1024)).max(MAX_ATTACHMENTS).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((message, context) => {
+    if (
+      message.text.trim().length === 0 &&
+      (message.attachments?.length ?? 0) === 0 &&
+      (message.filePaths?.length ?? 0) === 0
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['text'],
+        message: 'A message needs text or at least one attachment.',
+      });
+    }
+  });
 
 export interface ChatRoutesDeps {
   auth: AuthService;

@@ -349,6 +349,8 @@ The composer owns device-local draft interaction, not delivery authority:
   newer entries and the preserved draft without taking over multiline caret movement;
 - failed sends retain exact text, attachments and Files references;
 - Enter sends, Shift+Enter inserts a line, and Escape stops a live run;
+- attachment-only input can be sent with blank text, while a completely empty
+  composer cannot be submitted;
 - drag/drop, picker and paste support attachments, with frontend limits matching
   API limits (eight items, 16 MB each);
 - `@` references existing Files paths without uploading them again;

@@ -439,7 +439,7 @@ export function Composer({
   }, [chatId]);
 
   const canSend =
-    text.trim().length > 0 || attachments.length > 0 || voice !== 'idle';
+    text.trim().length > 0 || attachments.length > 0 || mentions.length > 0 || voice !== 'idle';
 
   async function submit(): Promise<void> {
     if (locked) return;
@@ -487,7 +487,7 @@ export function Composer({
     try {
       const filePaths = mentions.map((mention) => mention.path);
       const outgoing = parseComposerDelivery(text);
-      if (outgoing.text.length === 0) return;
+      if (outgoing.text.length === 0 && attachments.length === 0 && filePaths.length === 0) return;
       if (editingQueuedId !== undefined) {
         await onUpdateQueued(editingQueuedId, outgoing.text, attachments, filePaths);
       } else {
