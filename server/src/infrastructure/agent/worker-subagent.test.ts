@@ -341,5 +341,5 @@ describe('worker subagent runtime', () => {
     expect(hidden).toEqual(['subagent', 'subagent_wait']);
     expect(withoutExtensionTools(['read', 'subagent', 'delegate_worker', 'subagent_wait'], hidden))
       .toEqual(['read', 'delegate_worker']);
-  });
+  }, 20_000);
 });

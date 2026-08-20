@@ -66,6 +66,7 @@
   "overrides": {
     "@huggingface/transformers": {
       "sharp": "0.35.3"
-    }
+    },
+    "@levischuck/tiny-cbor": "0.2.11"
   }
 }
