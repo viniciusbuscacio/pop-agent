@@ -52,6 +52,7 @@ export interface InstallerDependencies {
   username: string;
   nodeVersion: string;
   nodeExecutable: string;
+  goExecutable: string;
   systemdRuntimeDir: string;
   healthCheck: (url: string, timeoutMs: number) => Promise<boolean>;
 }
@@ -82,20 +83,37 @@ function defaultDependencies(): InstallerDependencies {
     username: userInfo().username,
     nodeVersion: process.versions.node,
     nodeExecutable: realpathSync(process.execPath),
+    goExecutable: executableOnPath('go'),
     systemdRuntimeDir: '/run/systemd/system',
     healthCheck: boundedHealthCheck,
   };
 }
 
-export function renderSystemdUnit(options: InstallOptions, username: string, nodeExecutable: string): string {
+export function renderSystemdUnit(
+  options: InstallOptions,
+  username: string,
+  nodeExecutable: string,
+  goExecutable: string,
+): string {
   const checkout = safeAbsolutePath('checkout', options.checkout);
   const dataDir = safeAbsolutePath('data directory', options.dataDir);
   const workspace = safeAbsolutePath('workspace', options.workspace);
   const node = safeAbsolutePath('Node executable', nodeExecutable);
+  const go = safeAbsolutePath('Go executable', goExecutable);
   validateUsername(username);
   validatePort(options.port);
 
-  const servicePath = `${dirname(node)}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
+  const pathDirectories = [
+    dirname(node),
+    dirname(go),
+    '/usr/local/sbin',
+    '/usr/local/bin',
+    '/usr/sbin',
+    '/usr/bin',
+    '/sbin',
+    '/bin',
+  ];
+  const servicePath = [...new Set(pathDirectories)].join(':');
 
   return `[Unit]\nDescription=Pop Agent server\nAfter=network-online.target\nWants=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=${username}\nWorkingDirectory=${checkout}\nEnvironment=NODE_ENV=production\nEnvironment=PATH=${servicePath}\nEnvironment=POP_AGENT_BIND=127.0.0.1\nEnvironment=POP_AGENT_PORT=${String(options.port)}\nEnvironment=POP_AGENT_DATA_DIR=${dataDir}\nEnvironment=POP_AGENT_WORKSPACE=${workspace}\nExecStart=${node} ${checkout}/server/dist/main.js\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=90s\nUMask=0077\nSyslogIdentifier=pop-agent-service\n\n[Install]\nWantedBy=multi-user.target\n`;
 }
@@ -161,7 +179,12 @@ export async function installPreparedCheckout(
   ensureSeparateDirectories(backupsDir, workspace);
 
   const finalOptions = { ...options, dataDir, workspace };
-  const unit = renderSystemdUnit(finalOptions, dependencies.username, dependencies.nodeExecutable);
+  const unit = renderSystemdUnit(
+    finalOptions,
+    dependencies.username,
+    dependencies.nodeExecutable,
+    dependencies.goExecutable,
+  );
   const stagingDirectory = mkdtempSync(join(tmpdir(), 'pop-agent-systemd-'));
   const stagedUnit = join(stagingDirectory, UNIT_NAME);
 
@@ -188,6 +211,20 @@ export async function installPreparedCheckout(
   console.log(`Pop Agent is healthy. The service remains loopback-only at http://127.0.0.1:${String(options.port)}.`);
 }
 
+function executableOnPath(name: string): string {
+  for (const directory of (process.env['PATH'] ?? '').split(':')) {
+    if (!isAbsolute(directory)) continue;
+    const candidate = join(directory, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      if (statSync(candidate).isFile()) return realpathSync(candidate);
+    } catch {
+      // Keep looking through the explicit absolute PATH entries.
+    }
+  }
+  throw new Error(`required command not found on PATH: ${name}`);
+}
+
 function validatePreflight(requested: InstallOptions, dependencies: InstallerDependencies): InstallOptions {
   if (dependencies.platform !== 'linux') throw new Error('server service installation is supported only on Linux with systemd');
   if (dependencies.uid < 0) throw new Error('could not determine the current Unix user ID');
@@ -196,6 +233,7 @@ function validatePreflight(requested: InstallOptions, dependencies: InstallerDep
   }
   validateUsername(dependencies.username);
   requireVersion('Node', dependencies.nodeVersion, MINIMUM_NODE);
+  safeAbsolutePath('Go executable', dependencies.goExecutable);
 
   const checkout = realpathSync(safeAbsolutePath('checkout', requested.checkout));
   const checkoutStat = statSync(checkout);

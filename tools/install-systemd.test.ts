@@ -82,6 +82,7 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
       username: 'popowner',
       nodeVersion: '22.19.0',
       nodeExecutable: '/usr/bin/node',
+      goExecutable: '/usr/local/go/bin/go',
       systemdRuntimeDir: systemdRuntime,
       healthCheck: async () => true,
     },
@@ -105,15 +106,15 @@ describe('systemd server installer', () => {
       dataDir: '/srv/pop-agent/data',
       workspace: '/srv/pop-agent/workspace',
       port: 9123,
-    }, 'popowner', '/usr/bin/node');
+    }, 'popowner', '/opt/pop-node/bin/node', '/opt/pop-go/bin/go');
 
     expect(unit).toContain('User=popowner\n');
     expect(unit).toContain('WorkingDirectory=/srv/pop-agent/source\n');
-    expect(unit).toContain('Environment=PATH=/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
+    expect(unit).toContain('Environment=PATH=/opt/pop-node/bin:/opt/pop-go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
     expect(unit).toContain('Environment=POP_AGENT_BIND=127.0.0.1\n');
     expect(unit).toContain('Environment=POP_AGENT_DATA_DIR=/srv/pop-agent/data\n');
     expect(unit).toContain('Environment=POP_AGENT_WORKSPACE=/srv/pop-agent/workspace\n');
-    expect(unit).toContain('ExecStart=/usr/bin/node /srv/pop-agent/source/server/dist/main.js\n');
+    expect(unit).toContain('ExecStart=/opt/pop-node/bin/node /srv/pop-agent/source/server/dist/main.js\n');
     expect(unit).toContain('Restart=on-failure\nRestartSec=5s\n');
     expect(unit).toContain('StartLimitIntervalSec=60\nStartLimitBurst=5\n');
     expect(unit).not.toContain('tsx');

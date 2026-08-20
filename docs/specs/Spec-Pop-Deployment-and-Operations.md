@@ -8,13 +8,17 @@
 ## Delivered deployment model
 
 The current server is an operator-managed Node/TypeScript checkout on Linux,
-normally supervised by `pop-agent-service` under systemd. The delivered
-prepared-checkout installer validates the already provisioned host, runs locked
-dependency installation and the full gate as the non-root checkout owner,
-generates/activates the production unit through narrowly scoped sudo, and
-verifies loopback health. Pop does not ship a universal bootstrap that
-provisions Linux, Node, Go, Git, DNS, TLS, firewall, reverse proxy or repository.
-Documentation must not present this step or the client/PLA installers as one.
+normally supervised by `pop-agent-service` under systemd. For an existing
+checkout, the delivered non-root Ubuntu/Debian amd64/arm64 bootstrap can install
+an exact repository-pinned Node/Go toolchain per user and, only with explicit
+opt-in, narrowly scoped apt build/download prerequisites. It then hands the
+explicit data/workspace/port values to the prepared-checkout installer. That
+installer validates the host, runs locked dependency installation and the full
+gate as the non-root checkout owner, generates/activates the production unit
+through narrowly scoped sudo, and verifies loopback health. Pop does not ship a
+universal bootstrap that provisions Linux, obtains the repository, or configures
+DNS, TLS, firewall, reverse proxy, Tailscale, Caddy or an account. Documentation
+must not present this step or the client/PLA installers as one.
 
 A production checkout is built and gated before activation. Runtime data lives
 outside the checkout through `POP_AGENT_DATA_DIR` and workspace configuration.
@@ -46,8 +50,9 @@ password/passkey session auth plus the network boundary chosen by the operator.
 ## Service process
 
 The generated systemd unit runs `server/dist/main.js` with the checkout owner's
-absolute Node executable under that non-root user, a fixed absolute checkout
-working directory, explicit data/workspace paths and loopback binding. It
+absolute Node executable under that non-root user, keeps the validated Node and
+Go directories on the service `PATH`, and uses a fixed absolute checkout working
+directory, explicit data/workspace paths and loopback binding. It
 restarts unexpected failures with bounded backoff/start limits, receives SIGTERM
 on planned stop and journals stdout/stderr. Rerunning the installer regenerates,
 reinstalls and restarts the same named unit rather than accumulating services.
@@ -170,6 +175,9 @@ exposure should be the proxy/tunnel only, not the loopback application port.
 ## Test and release obligations
 
 - clean candidate checkout passes full gate and production build;
+- host-bootstrap tests exercise platform/root refusal, explicit apt opt-in,
+  pinned archive integrity and unsafe-link refusal, idempotent activation,
+  prepare-only behavior and managed-PATH handoff through local fixtures/fakes;
 - installer tests exercise systemd generation, prerequisite/dirty-checkout
   refusal, non-root build ordering, exact sudo calls and bounded health failure
   through fakes that never mutate the host service manager;

@@ -8,6 +8,13 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **Existing Ubuntu/Debian checkouts can prepare a private server toolchain before systemd installation.**
+  A small non-root POSIX bootstrap supports Linux amd64/arm64, optionally installs
+  narrowly scoped apt prerequisites only after explicit opt-in, and stages exact
+  repository-pinned official Node/Go archives after size, SHA-256, path/link and
+  executable checks. It preserves matching verified runtimes, puts managed npm
+  and Go on the installer `PATH`, supports preparation without systemd handoff,
+  and does not acquire source or configure network exposure or accounts.
 - **Prepared Linux/systemd checkouts now have a real production installation step.**
   The non-root TypeScript installer validates the existing host and clean
   checkout, runs locked dependencies and the full gate, generates and activates
