@@ -8,10 +8,13 @@
 ## Delivered deployment model
 
 The current server is an operator-managed Node/TypeScript checkout on Linux,
-normally supervised by `pop-agent-service` under systemd. Pop does not yet ship
-a universal server bootstrap that provisions Linux, DNS, TLS, firewall,
-reverse proxy, repository and service in one command. Documentation must not
-present the client/PLA installers as a server installer.
+normally supervised by `pop-agent-service` under systemd. The delivered
+prepared-checkout installer validates the already provisioned host, runs locked
+dependency installation and the full gate as the non-root checkout owner,
+generates/activates the production unit through narrowly scoped sudo, and
+verifies loopback health. Pop does not ship a universal bootstrap that
+provisions Linux, Node, Go, Git, DNS, TLS, firewall, reverse proxy or repository.
+Documentation must not present this step or the client/PLA installers as one.
 
 A production checkout is built and gated before activation. Runtime data lives
 outside the checkout through `POP_AGENT_DATA_DIR` and workspace configuration.
@@ -42,10 +45,12 @@ password/passkey session auth plus the network boundary chosen by the operator.
 
 ## Service process
 
-The systemd unit runs the built server under a dedicated non-root user with a
-fixed checkout working directory and explicit environment/data paths. It should
-restart on unexpected failure with bounded backoff, receive SIGTERM on planned
-stop and journal stdout/stderr.
+The generated systemd unit runs `server/dist/main.js` with the checkout owner's
+absolute Node executable under that non-root user, a fixed absolute checkout
+working directory, explicit data/workspace paths and loopback binding. It
+restarts unexpected failures with bounded backoff/start limits, receives SIGTERM
+on planned stop and journals stdout/stderr. Rerunning the installer regenerates,
+reinstalls and restarts the same named unit rather than accumulating services.
 
 The process opens/migrates SQLite, reconciles recoverable publications/state,
 loads services, starts HTTP, then starts timers/background admission. Startup
@@ -165,6 +170,9 @@ exposure should be the proxy/tunnel only, not the loopback application port.
 ## Test and release obligations
 
 - clean candidate checkout passes full gate and production build;
+- installer tests exercise systemd generation, prerequisite/dirty-checkout
+  refusal, non-root build ordering, exact sudo calls and bounded health failure
+  through fakes that never mutate the host service manager;
 - service smoke covers setup/auth/settings/frontend/chat/SSE/tool/Stop;
 - deployment tests cover serialization, pause/drain, timeout and rollback;
 - supervisor tests cover crash/reboot state reconciliation and health failure;

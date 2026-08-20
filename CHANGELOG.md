@@ -8,6 +8,12 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **Prepared Linux/systemd checkouts now have a real production installation step.**
+  The non-root TypeScript installer validates the existing host and clean
+  checkout, runs locked dependencies and the full gate, generates and activates
+  a loopback-only production unit through narrowly scoped sudo, and performs a
+  bounded health check. It does not bootstrap system packages or network/TLS
+  infrastructure; the old ubuntu-home source-level development unit was removed.
 - **Outbound Agent2Agent (A2A) client integration.** Agent → A2A now manages
   owner-configured remote agents beside MCP, discovers A2A 1.0 Agent Cards,
   persists foreground text tasks, exposes bounded normal-mode A2A tools and

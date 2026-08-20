@@ -71,7 +71,7 @@ script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | operator-managed Git checkout, npm workspace and systemd unit | Node 22.19+ host; production service shape is Linux/systemd |
+| Server | operator-managed Git checkout plus the prepared-checkout systemd installer | Linux/systemd with Node 22.19+, npm, Git and Go 1.23+ already installed |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -84,23 +84,39 @@ packed. Source support in Go is not sufficient to claim a released platform.
 
 ## Fresh server installation
 
-The current server installation is operator-managed rather than a public
-one-command installer:
+Server installation remains operator-managed rather than a public universal
+bootstrap. For an existing prepared checkout, the delivered Linux/systemd step
+is:
 
-1. create or obtain the intended repository checkout;
-2. install the required Node/npm version and workspace dependencies;
-3. build and run the full repository gate;
-4. configure absolute paths, user identity, data/workspace roots and environment;
-5. install the production systemd unit and any narrowly scoped sudo policy;
-6. bind locally and configure one supported HTTPS exposure shape;
-7. complete first-run account setup through the PWA;
-8. verify local and public health before treating the installation as complete.
+```text
+npm run install:server -- --data-dir /absolute/data/path --workspace /absolute/workspace/path
+```
 
-The checked-in service unit is a template, not a portable universal installer.
-A future server bootstrap must be specified and tested separately before the UI
-or documentation presents it as delivered. It must not silently install or own
-Tailscale, Caddy, FFmpeg, Git or system-wide Node. Those environment tools retain
-their own package and security-update channels.
+The command runs as the intended non-root service/checkout owner. Before
+activation it validates Linux with a running systemd, Node 22.19+, npm, Git, Go
+1.23+ (required by the full gate), the required host commands, absolute separate
+paths outside the clean checkout and checkout ownership. It runs `npm ci` and
+`npm run gate` without root privileges, requires the built
+`server/dist/main.js`, creates owner-controlled data/workspace roots, then uses
+sudo only for the explicit unit-file install, daemon reload, enable and restart
+commands. It installs an idempotent production unit with loopback binding,
+explicit data/workspace paths, the invoking non-root user, the selected Node
+directory on the service `PATH` and bounded restart. The owner-only backup
+sibling used by the server is prepared with the data root, then the installer
+performs a bounded `/healthz` check and confirms that systemd still reports the
+unit active.
+
+The installer does not accept or generate a secrets environment file. Provider
+and account secrets remain in Pop-owned storage rather than argv, installer
+logs or the unit. The removed ubuntu-home development unit is not a production
+template; the TypeScript generator is the unit source of truth.
+
+The operator must still create or obtain the intended checkout, install and
+maintain host prerequisites, configure a supported HTTPS exposure shape,
+complete first-run account setup and verify public health. The installer does
+not install or own Linux, DNS, TLS, a firewall, Tailscale, Caddy, FFmpeg, Git,
+Go, npm or system-wide Node. Those tools retain their own package and security
+update channels.
 
 ## Installation guide in the PWA
 
@@ -451,6 +467,9 @@ gate and packaging process must cover:
 
 ### Installers and manifests
 
+- prepared-checkout systemd rendering, preflight refusal, command ordering,
+  narrowly scoped sudo activation and bounded health failure without touching
+  a real systemd instance;
 - origin derivation behind the supported reverse proxy;
 - shell and PowerShell escaping;
 - target/architecture selection;

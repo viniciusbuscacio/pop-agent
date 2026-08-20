@@ -16,6 +16,7 @@
     "postinstall": "patch-package --error-on-fail",
     "predev": "npm run version:check",
     "dev": "npm run build -w shared && tsx watch server/src/main.ts",
+    "install:server": "node tools/install-systemd.mjs",
     "lint": "eslint .",
     "version:check": "tsx tools/check-version-consistency.ts",
     "pi-patch:check": "tsx tools/check-pi-patches.ts",
