@@ -71,7 +71,7 @@ script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | operator-managed existing Git checkout plus the non-root host bootstrap and prepared-checkout systemd installer | Ubuntu/Debian systemd on Linux amd64/arm64; pinned private Node/Go toolchain or compatible pre-provisioned prerequisites |
+| Server | verified local Git bundle acquisition, non-root host bootstrap and prepared-checkout systemd installer | Ubuntu/Debian systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go toolchain |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -85,8 +85,23 @@ packed. Source support in Go is not sufficient to claim a released platform.
 ## Fresh server installation
 
 Server installation remains operator-managed rather than a public universal
-installer. The delivered host bootstrap starts only from an **existing Pop
-Agent checkout** on Ubuntu or Debian Linux amd64/arm64:
+installer. A clean committed source worktree can produce an immutable local Git
+bundle and SHA file through `npm run pack:server-source`. The packager refuses a
+dirty worktree, requires repository-wide version consistency, names output by
+version and full commit, verifies the bundle, stages output outside the checkout
+and never replaces different bytes at an existing versioned path.
+
+`deploy/install-server-bundle.sh` accepts only a local regular bundle plus an
+explicit lowercase SHA-256 and full commit. It verifies the hash and Git bundle,
+clones into staging, checks out that exact detached commit, requires a complete
+clean Pop checkout, atomically activates a previously absent destination, then
+hands explicit paths and options to the host bootstrap. It refuses root,
+symlink bundles, unsafe paths, corruption, absent commits and existing
+destinations. This acquisition layer performs no HTTP request and has no remote
+manifest behavior; local file transfer or bind mounting is operator-owned.
+
+The delivered host bootstrap then starts from that **existing Pop Agent
+checkout** on Ubuntu or Debian Linux amd64/arm64:
 
 ```text
 deploy/bootstrap-server.sh \

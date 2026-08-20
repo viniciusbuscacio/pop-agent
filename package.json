@@ -35,7 +35,8 @@
     "selfmap:check": "tsx tools/generate-self-map.ts --check",
     "safety:scan": "tsx tools/safety-scan.ts .",
     "smoke": "tsx tools/smoke.ts",
-    "pack:cli": "npm run version:check && tsx tools/pack-cli.ts && tsx tools/pack-node-runtime.ts"
+    "pack:cli": "npm run version:check && tsx tools/pack-cli.ts && tsx tools/pack-node-runtime.ts",
+    "pack:server-source": "npm run version:check && tsx tools/pack-server-release.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -8,8 +8,11 @@
 ## Delivered deployment model
 
 The current server is an operator-managed Node/TypeScript checkout on Linux,
-normally supervised by `pop-agent-service` under systemd. For an existing
-checkout, the delivered non-root Ubuntu/Debian amd64/arm64 bootstrap can install
+normally supervised by `pop-agent-service` under systemd. A fixed clean commit
+can be moved into the host as an immutable local Git bundle: Pop verifies the
+operator-supplied SHA-256, bundle integrity and exact commit before atomically
+activating a new checkout, with no network acquisition behavior. For that
+existing checkout, the delivered non-root Ubuntu/Debian amd64/arm64 bootstrap can install
 an exact repository-pinned Node/Go toolchain per user and, only with explicit
 opt-in, narrowly scoped apt build/download prerequisites. It then hands the
 explicit data/workspace/port values to the prepared-checkout installer. That
@@ -175,6 +178,9 @@ exposure should be the proxy/tunnel only, not the loopback application port.
 ## Test and release obligations
 
 - clean candidate checkout passes full gate and production build;
+- local source-release tests cover clean deterministic packing, immutable output,
+  SHA corruption, bundle verification, exact-commit checkout, unsafe paths and
+  refusal to overwrite an existing destination;
 - host-bootstrap tests exercise platform/root refusal, explicit apt opt-in,
   pinned archive integrity and unsafe-link refusal, idempotent activation,
   prepare-only behavior and managed-PATH handoff through local fixtures/fakes;

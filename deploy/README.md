@@ -1,5 +1,39 @@
 # Server deployment files
 
+## Local source acquisition
+
+A clean committed checkout can be packed into an immutable local Git bundle:
+
+```sh
+npm run pack:server-source -- --output-dir /absolute/release-directory
+```
+
+The command writes a commit/version-named `.bundle` and matching `.sha256` file
+outside the source checkout, and prints the exact bundle path, SHA-256, commit
+and version. Existing versioned output is accepted only when every byte matches.
+
+Copy or bind-mount the bundle and the small installer into the target machine,
+then acquire exactly that commit without any network request:
+
+```sh
+deploy/install-server-bundle.sh \
+  --bundle /absolute/pop-agent.bundle \
+  --sha256 <lowercase-sha256> \
+  --commit <full-git-commit> \
+  --destination /absolute/new-checkout \
+  --data-dir /absolute/data \
+  --workspace /absolute/workspace \
+  --install-apt-packages
+```
+
+The installer verifies the local file hash, runs `git bundle verify`, clones to
+staging, checks out the exact detached commit, verifies a complete clean Pop
+checkout, atomically activates a previously absent destination, then hands off
+to the host bootstrap below. It refuses root, symlink bundles, unsafe paths,
+corruption, absent commits and existing destinations. The apt opt-in installs
+Git for acquisition and is forwarded to the host bootstrap. This layer has no
+HTTP client, remote manifest or source download behavior.
+
 ## Existing-checkout host bootstrap
 
 For an **existing Pop Agent checkout**, Ubuntu/Debian Linux operators on amd64

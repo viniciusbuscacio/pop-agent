@@ -8,6 +8,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **Clean commits can be acquired from verified local Git bundles.** A release
+  packager emits immutable commit/version-named bundle and SHA files, while the
+  non-root local installer verifies SHA-256 and bundle integrity, clones exactly
+  the requested commit through staging, and hands the clean checkout to the
+  existing host bootstrap without HTTP or remote manifests.
 - **Existing Ubuntu/Debian checkouts can prepare a private server toolchain before systemd installation.**
   A small non-root POSIX bootstrap supports Linux amd64/arm64, optionally installs
   narrowly scoped apt prerequisites only after explicit opt-in, and stages exact
