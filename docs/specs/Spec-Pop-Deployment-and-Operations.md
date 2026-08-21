@@ -8,20 +8,36 @@
 ## Delivered deployment model
 
 The current server is an operator-managed Node/TypeScript checkout on Linux,
-normally supervised by `pop-agent-service` under systemd. A fixed clean commit
-can be moved into the host as an immutable local Git bundle: Pop verifies the
-operator-supplied SHA-256, bundle integrity and exact commit before atomically
-activating a new checkout, with no network acquisition behavior. For that
-existing checkout, the delivered non-root Ubuntu/Debian amd64/arm64 bootstrap can install
-an exact repository-pinned Node/Go toolchain per user and, only with explicit
-opt-in, narrowly scoped apt build/download prerequisites. It then hands the
-explicit data/workspace/port values to the prepared-checkout installer. That
-installer validates the host, runs locked dependency installation and the full
-gate as the non-root checkout owner, generates/activates the production unit
-through narrowly scoped sudo, and verifies loopback health. Pop does not ship a
-universal bootstrap that provisions Linux, obtains the repository, or configures
-DNS, TLS, firewall, reverse proxy, Tailscale, Caddy or an account. Documentation
-must not present this step or the client/PLA installers as one.
+normally supervised by `pop-agent-service` under systemd. The root
+`server-install.sh` is the GitHub fresh-host entry point. For the current private
+repository it prefers an already authenticated GitHub CLI for `gh repo clone`
+and `gh api` exact-commit confirmation. Without authenticated gh it safely
+attempts non-interactive public HTTPS Git, allowing future public use without
+changing the downloaded script. Each route resolves a branch, tag, or full
+commit from a completed clone, checks out one exact detached commit, validates a
+complete clean non-symlinked checkout (including its pinned toolchain manifest)
+before and after no-replace activation, validates secure destination ancestry,
+and retains an activated checkout if downstream setup fails. The script never
+puts tokens in URLs, argv, or logs. Handoff and retry use a minimal explicit
+environment without inherited token/askpass/Git-config/SSH-agent variables, but
+do not claim to hide host credential files. A fixed clean commit can
+alternatively be moved into the host as an
+immutable local Git bundle: Pop verifies the operator-supplied SHA-256, bundle
+integrity and exact commit before atomically activating a new checkout without
+network acquisition.
+
+Both acquisition paths hand explicit checkout/data/workspace/port values to the
+delivered non-root Ubuntu/Debian amd64/arm64 bootstrap. The one-command path
+explicitly opts in to the same narrowly scoped apt build/download prerequisite
+allowlist needed for a fresh supported host. The bootstrap installs an exact
+repository-pinned Node/Go toolchain per user, then hands the checkout to the
+prepared-checkout installer. That installer validates the host, runs locked
+dependency installation and the full gate as the non-root checkout owner,
+generates/activates the production unit through narrowly scoped sudo, and
+verifies loopback health. This server installer does not provision Linux or
+configure DNS, TLS, firewall, reverse proxy, Tailscale, Caddy or an account.
+Documentation must not present those operator-owned steps or client/PLA
+installers as part of it.
 
 A production checkout is built and gated before activation. Runtime data lives
 outside the checkout through `POP_AGENT_DATA_DIR` and workspace configuration.
@@ -178,6 +194,11 @@ exposure should be the proxy/tunnel only, not the loopback application port.
 ## Test and release obligations
 
 - clean candidate checkout passes full gate and production build;
+- GitHub installer tests use only fakes/local fixtures and cover authenticated
+  and public-fallback acquisition, deterministic exact branch/tag/commit
+  resolution, root/platform/tool refusal, secure destination parents, existing
+  destinations, dirty/incomplete/symlinked clones, credential-environment scrub,
+  exact bootstrap arguments and actionable downstream retry;
 - local source-release tests cover clean deterministic packing, immutable output,
   SHA corruption, bundle verification, exact-commit checkout, unsafe paths and
   refusal to overwrite an existing destination;

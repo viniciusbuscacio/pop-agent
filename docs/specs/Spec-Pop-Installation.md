@@ -71,7 +71,7 @@ script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | verified local Git bundle acquisition, non-root host bootstrap and prepared-checkout systemd installer | Ubuntu/Debian systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go toolchain |
+| Server | authenticated/private or public-HTTPS GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu/Debian systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go toolchain |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -84,12 +84,71 @@ packed. Source support in Go is not sufficient to claim a released platform.
 
 ## Fresh server installation
 
-Server installation remains operator-managed rather than a public universal
-installer. A clean committed source worktree can produce an immutable local Git
-bundle and SHA file through `npm run pack:server-source`. The packager refuses a
-dirty worktree, requires repository-wide version consistency, names output by
-version and full commit, verifies the bundle, stages output outside the checkout
-and never replaces different bytes at an existing versioned path.
+The default fresh-server path is the root `server-install.sh`. While the
+repository is private, retrieve it through an already authenticated GitHub CLI
+session into a mode-0600 temporary file, execute only after a complete successful
+download, and clean the file on every subshell exit:
+
+```sh
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; gh api --hostname github.com -H "Accept: application/vnd.github.raw+json" repos/viniciusbuscacio/pop-agent/contents/server-install.sh >"$file" && sh "$file")
+```
+
+Options are passed to `sh` after the downloaded filename: for example, replace
+the final invocation with `sh "$file" --prepare-only`, `sh "$file" --ref
+<full-commit>`, or `sh "$file" --no-install-apt-packages`. Once the repository
+is public, public documentation must keep the same fail-closed temporary-file
+shape and change only retrieval to `curl -q --fail --silent --show-error
+--location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file"
+https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/main/server-install.sh`.
+A producer-to-shell pipeline is not an installation command.
+
+With no arguments the script targets `viniciusbuscacio/pop-agent` at `main`,
+installs the checkout at `$HOME/pop-agent`, keeps durable data at
+`$HOME/.pop-agent`, uses `$HOME/pop-agent-workspace`, and binds port 8787.
+Explicit `--repo`, `--ref`, `--destination`, `--data-dir`, `--workspace`,
+`--port`, and `--prepare-only` options support operator overrides and offline
+testing. `--ref` accepts a branch, tag, or full lowercase 40-character commit;
+branch names deterministically take precedence over same-named tags. Resolution
+uses only refs present in the completed clone, then pins one exact detached
+commit, so a mutable branch advancing afterward cannot change activation. The
+fresh-server invocation opts in to the host bootstrap's fixed apt prerequisite
+allowlist by default; `--no-install-apt-packages` is available when the host is
+already prepared.
+
+Authenticated `gh repo clone` plus exact-commit `gh api` confirmation is the
+preferred current-private acquisition. If gh is missing or unauthenticated, the
+same script attempts a public HTTPS Git clone in an isolated Git home with
+interactive prompting, askpass and credential helpers disabled. That fallback
+supports future publication without internal gh/auth requirements; while the
+repository remains private, failure tells the operator to install/authenticate
+gh. Neither path puts tokens in URLs, argv, or installer logs.
+
+The acquisition script refuses root, unsupported hosts, missing Git, unsafe or
+overlapping paths, an existing destination, and insecure destination ancestry.
+The canonical parent must be invoking-user-owned; every ancestor must be root-
+or invoking-user-owned and non-writable by group/others, except a root-owned
+sticky directory such as `/tmp`. Source staging is owner-only. Before and
+immediately after no-replace activation it requires the exact commit, a clean
+checkout, regular non-symlink required files including the pinned toolchain
+manifest, and a canonical executable bootstrap inside that checkout. Staging is removed on
+every exit. Once source activation succeeds, the checkout is intentionally
+retained if later host preparation, gate, systemd activation, or health
+verification fails. The failure output prints the exact direct-bootstrap retry
+command; the acquisition command itself continues to refuse the now-existing
+destination.
+
+Bootstrap handoff uses a minimal explicit environment containing only the
+service identity, home, PATH and locale; the printed retry command reproduces
+that boundary. This excludes inherited token, askpass, Git-configuration and
+SSH-agent variables. It does not make host credential/configuration files
+inaccessible, and host permissions remain authoritative.
+
+A verified local bundle remains an offline acquisition alternative. A clean
+committed source worktree can produce an immutable local Git bundle and SHA file
+through `npm run pack:server-source`. The packager refuses a dirty worktree,
+requires repository-wide version consistency, names output by version and full
+commit, verifies the bundle, stages output outside the checkout and never
+replaces different bytes at an existing versioned path.
 
 `deploy/install-server-bundle.sh` accepts only a local regular bundle plus an
 explicit lowercase SHA-256 and full commit. It verifies the hash and Git bundle,
@@ -97,11 +156,14 @@ clones into staging, checks out that exact detached commit, requires a complete
 clean Pop checkout, atomically activates a previously absent destination, then
 hands explicit paths and options to the host bootstrap. It refuses root,
 symlink bundles, unsafe paths, corruption, absent commits and existing
-destinations. This acquisition layer performs no HTTP request and has no remote
-manifest behavior; local file transfer or bind mounting is operator-owned.
+destinations. This alternative acquisition layer performs no HTTP request and
+has no remote manifest behavior; local file transfer or bind mounting is
+operator-owned.
 
-The delivered host bootstrap then starts from that **existing Pop Agent
-checkout** on Ubuntu or Debian Linux amd64/arm64:
+Both acquisition paths hand explicit checkout/data/workspace/port values and
+the selected apt/prepare options to the acquired checkout's delivered host
+bootstrap. That bootstrap starts from an **existing Pop Agent checkout** on
+Ubuntu or Debian Linux amd64/arm64:
 
 ```text
 deploy/bootstrap-server.sh \
@@ -153,12 +215,12 @@ account secrets remain in Pop-owned storage rather than argv, installer logs or
 the unit. The removed ubuntu-home development unit is not a production
 template; the TypeScript generator is the unit source of truth.
 
-The operator must still create or obtain the intended checkout, maintain the
-host and apt security channel, configure a supported HTTPS exposure shape,
-complete first-run account setup and verify public health. The bootstrap does
-not install or own Linux, repository/source acquisition, DNS, TLS, a firewall,
-Tailscale, Caddy, FFmpeg or account setup, and it does not modify system-wide
-Node or Go.
+The operator must maintain the host, the source access needed for a private
+repository, and the apt security channel; configure a supported HTTPS exposure
+shape; complete first-run account setup; and verify public health. The host
+bootstrap itself does not install or own Linux, repository/source acquisition,
+DNS, TLS, a firewall, Tailscale, Caddy, FFmpeg or account setup, and it does not
+modify system-wide Node or Go.
 
 ## Installation guide in the PWA
 

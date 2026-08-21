@@ -205,6 +205,42 @@ missing or traversal-like entries. Remote origins require HTTPS. Staging,
 transactional replacement and rollback precede cleanup. Pi candidates remain
 isolated until package, SDK-contract and behavioral probes pass.
 
+GitHub source acquisition prefers an already authenticated GitHub CLI for the
+current private repository, but Pop's installer accepts no token argument and
+puts no token in source URLs, argv, or logs. When authenticated gh is unavailable,
+it attempts public HTTPS Git in an isolated Git home with prompting, askpass,
+and credential helpers disabled; this is the future-public path and a current-
+private failure gives gh login instructions. Both paths clone first,
+deterministically resolve a branch, tag,
+or full commit from that completed clone, check out one exact detached commit,
+and verify the commit and clean tree before activation. Mutable refs changing
+after clone cannot change the selected commit.
+
+The canonical destination parent must be owned by the invoking uid. Every
+ancestor is root- or invoking-user-owned and not group/world writable, except a
+root-owned sticky directory. Source staging is owner-only, activation cannot
+replace an existing destination, and exact commit/cleanliness are revalidated
+immediately afterward. Required files, including the pinned toolchain manifest,
+must be regular non-symlinks, and the canonical bootstrap must stay inside the
+activated checkout. Source staging is
+always removed, while the activated checkout remains available with an exact
+retry command if the pinned toolchain, full gate, service activation, or health
+check later fails.
+
+Handoff and its printed retry command use the same minimal explicit environment,
+excluding inherited GitHub token, askpass, Git configuration, Git SSH, and SSH-
+agent variables. This does not make host credential files inaccessible; host
+access controls remain authoritative. The
+verified SHA-256 local Git bundle remains the credential-free, no-network
+acquisition alternative.
+
+The network acquisition entry point stays non-root and supports only the same
+Ubuntu/Debian amd64/arm64 boundary as the downstream bootstrap. Its explicit
+fresh-host invocation opts in only to the bootstrap's fixed apt allowlist. Node
+and Go remain pinned by repository size/hash metadata and smoke verification;
+the prepared-checkout installer must still run the complete repository gate
+before narrowly scoped systemd activation.
+
 Secrets never enter package-manager URLs or bootstrap scripts. Stdio MCP
 children receive a safe environment plus only that server's encrypted
 variables. Child processes are cleaned up on cancellation/shutdown.
@@ -223,6 +259,9 @@ The gate must include focused tests for:
 - credential scrub through every durable-memory write surface;
 - SSRF private ranges, credential URLs and screened-address connection pinning;
 - PLA revocation, limits and policy;
+- authenticated/private and public-fallback exact-commit acquisition,
+  missing/invalid auth behavior, mutable refs, bad/incomplete/dirty/symlinked
+  clones, secure destination parents, handoff environment and arguments;
 - malformed release metadata and rollback.
 
 Security-sensitive changes require the complete repository gate, not only their

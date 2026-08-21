@@ -8,6 +8,16 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **Fresh GitHub servers now have a fail-closed installer.** The root POSIX
+  installer prefers authenticated GitHub CLI access for the current private
+  repository and safely falls back to non-interactive public HTTPS Git for
+  future publication. It resolves a completed clone to one exact branch, tag,
+  or commit; validates secure destination ancestry plus a clean non-symlinked
+  checkout before and after no-replace activation; uses a minimal explicit
+  environment for bootstrap handoff and retry; and preserves failures with an
+  exact retry command. The
+  documented retrieval uses an owner-only temporary file instead of a
+  producer-to-shell pipeline, and offline fixtures cover both acquisition paths.
 - **Clean commits can be acquired from verified local Git bundles.** A release
   packager emits immutable commit/version-named bundle and SHA files, while the
   non-root local installer verifies SHA-256 and bundle integrity, clones exactly

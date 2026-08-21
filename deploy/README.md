@@ -1,5 +1,52 @@
 # Server deployment files
 
+## GitHub fresh install
+
+After installing and authenticating GitHub CLI as the intended non-root service
+owner, retrieve the installer from the current private repository into an
+owner-only temporary file. The download must complete successfully before the
+file is executed, and the subshell always removes it:
+
+```sh
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; gh api --hostname github.com -H "Accept: application/vnd.github.raw+json" repos/viniciusbuscacio/pop-agent/contents/server-install.sh >"$file" && sh "$file")
+```
+
+Options belong after the temporary filename. For example, the same fail-closed
+command can end with `&& sh "$file" --prepare-only`, `&& sh "$file" --ref
+<full-commit>`, or `&& sh "$file" --no-install-apt-packages`. After the
+repository becomes public, only replace the `gh api ... >"$file"` retrieval
+step with `curl -q --fail --silent --show-error --location --proto '=https'
+--proto-redir '=https' --tlsv1.2 --output "$file"
+https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/main/server-install.sh`;
+the temporary-file, trap, and `sh "$file" [options]` steps stay unchanged.
+Never use a producer-to-shell pipeline.
+
+The root `server-install.sh` prefers authenticated `gh repo clone` plus `gh api`
+confirmation. When authenticated gh is unavailable, it attempts a
+non-interactive public HTTPS Git clone, which makes the same script usable after
+publication without gh authentication. Each path clones without a checkout,
+resolves a branch, tag, or full commit from that clone (branch names take
+precedence over same-named tags), checks out one exact detached commit, and
+validates a complete clean tree before activation. The defaults are
+`$HOME/pop-agent`, `$HOME/.pop-agent`, `$HOME/pop-agent-workspace`, port 8787,
+and opt-in to the bootstrap's fixed apt prerequisite allowlist.
+
+The acquisition command refuses root, unsupported Ubuntu/Debian hosts, unsafe
+or overlapping paths, insecure destination ancestry, symlinked required files
+(including the pinned toolchain manifest), and every existing destination. A
+private-repository HTTPS failure directs the operator to authenticate gh. The
+public fallback isolates Git configuration and disables ambient credential
+helpers. Temporary owner-only staging is always removed.
+If downstream bootstrap fails, the activated checkout remains and the installer
+prints the exact bootstrap retry command; rerunning acquisition is intentionally
+refused because its destination now exists. Before handoff the script unsets
+common token, askpass, and SSH-agent environment variables. It neither puts
+tokens in URLs/argv/logs nor makes host credential files inaccessible; those
+files remain governed by host permissions and credential-tool configuration.
+DNS, TLS, firewall/proxy/tunnel configuration and account setup remain separate
+operator steps. The bootstrap handoff and printed retry command use the same
+minimal explicit environment rather than inherited Git/token/agent variables.
+
 ## Local source acquisition
 
 A clean committed checkout can be packed into an immutable local Git bundle:
