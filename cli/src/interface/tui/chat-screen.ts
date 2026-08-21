@@ -46,7 +46,7 @@ import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
  * undiscoverable (Vinicius, 04/08).
  */
 const COMMANDS: SlashCommand[] = [
-  { name: 'new', description: 'Start a fresh conversation' },
+  { name: 'new', description: 'Start fresh (or press Escape twice)' },
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
@@ -66,6 +66,8 @@ const HELP = COMMANDS.map(
 /** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
 const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const WORKING_FRAME_MS = 140;
+/** Long enough for an intentional double tap, short enough not to surprise later. */
+const DOUBLE_ESCAPE_MS = 500;
 const localRunNotice = (command: string): string =>
   `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
@@ -189,6 +191,8 @@ export class ChatScreen {
   private spoken = false;
   private exited = false;
   private title: string;
+  /** Timestamp of a first, screen-owned Escape awaiting a consecutive tap. */
+  private lastEscapeAt: number | undefined;
 
   constructor(private readonly options: ScreenOptions) {
     this.terminal = options.terminal ?? new ProcessTerminal();
@@ -223,14 +227,28 @@ export class ChatScreen {
         return { consume: true };
       }
       // The inline picker owns Escape before the screen does. Let SelectList
-      // receive it so cancelling /chats never also interrupts the current answer.
-      if (matchesKey(data, 'escape') && this.picker !== undefined) return undefined;
-      // Escape stops the run, not the program: the run is what a person wants
-      // to interrupt, and Ctrl+C is already the way out.
+      // receive it so cancelling /chats never also interrupts the current answer
+      // or counts toward the clean-conversation shortcut.
+      if (matchesKey(data, 'escape') && this.picker !== undefined) {
+        this.lastEscapeAt = undefined;
+        return undefined;
+      }
       if (matchesKey(data, 'escape')) {
-        void this.options.session.stop();
+        const now = Date.now();
+        const elapsed = this.lastEscapeAt === undefined ? undefined : now - this.lastEscapeAt;
+        if (elapsed !== undefined && elapsed >= 0 && elapsed <= DOUBLE_ESCAPE_MS) {
+          this.lastEscapeAt = undefined;
+          this.startNewConversation();
+        } else {
+          // The first Escape always stops immediately. Waiting for the possible
+          // second tap would make the established interrupt shortcut feel broken.
+          this.lastEscapeAt = now;
+          void this.options.session.stop();
+        }
         return { consume: true };
       }
+      // A double tap is consecutive, not merely two Escapes near other input.
+      this.lastEscapeAt = undefined;
       return undefined;
     });
   }
@@ -311,6 +329,22 @@ export class ChatScreen {
   setTitle(title: string): void {
     this.title = title;
     this.paintHeader();
+  }
+
+  /** Reset both the server selection and every replaceable part of the screen. */
+  private startNewConversation(): void {
+    this.options.session.open(undefined);
+    this.clearRunStatus(false);
+    this.streaming = undefined;
+    this.assistantSegments = [];
+    this.transcript.clear();
+    this.spoken = false;
+    this.setTitle('New conversation');
+    this.say(paint.dim('New conversation.'));
+    this.tui.setFocus(this.editor);
+    // Remove the previous conversation from terminal scrollback in one frame,
+    // just as switching to an existing conversation does.
+    this.tui.requestRender(true);
   }
 
   /** Replace the visible transcript with the authoritative server history. */
@@ -596,9 +630,7 @@ export class ChatScreen {
         this.say(paint.dim(this.thinkingShown ? 'Reasoning shown.' : 'Reasoning hidden.'));
         return;
       case '/new':
-        this.options.session.open(undefined);
-        this.setTitle('New conversation');
-        this.say(paint.dim('New conversation.'));
+        this.startNewConversation();
         return;
       case '/compact':
       case '/session':

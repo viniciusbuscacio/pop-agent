@@ -67,6 +67,8 @@ export class ChatSession {
   private shownMessageIds = new Set<string>();
   /** Events for the destination chat that arrive while its snapshot is loading. */
   private loading: { chatId: string; events: StreamEvent[] } | undefined;
+  /** Invalidates ask continuations when `/new` abandons their conversation. */
+  private openRevision = 0;
 
   constructor(
     private readonly ports: SessionPorts,
@@ -81,9 +83,15 @@ export class ChatSession {
     return this.transcript !== undefined && !this.transcript.finished;
   }
 
-  /** Opens on an existing chat, or on a new one at the first message. */
+  /** Opens on an existing chat, or on a clean new one at the first message. */
   open(chatId: string | undefined): void {
+    this.openRevision += 1;
     this.chatId = chatId;
+    this.transcript = undefined;
+    this.ownRunIds.clear();
+    this.ownQueuedTexts.length = 0;
+    this.shownMessageIds.clear();
+    this.loading = undefined;
   }
 
   /** The canonical open-chat list, already ordered by the server like the web. */
@@ -156,11 +164,16 @@ export class ChatSession {
 
   async ask(text: string): Promise<void> {
     const pending = { text };
+    const openRevision = this.openRevision;
     this.pendingSends.push(pending);
     try {
       const chatId = this.chatId ?? (await this.ports.createChat()).id;
+      if (openRevision !== this.openRevision) return;
       this.chatId = chatId;
       const response = await this.ports.send(chatId, text);
+      // `/new` may have cleared the screen while this request was in flight.
+      // Its late response must not restore the abandoned run as live state.
+      if (openRevision !== this.openRevision) return;
       if (response.queued === true) {
         this.ownQueuedTexts.push(response.message.text);
         this.listener.onQueued(response.message.text);

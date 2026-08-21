@@ -221,10 +221,11 @@ describe('ChatScreen', () => {
     expect(ports.loadChat).toHaveBeenCalledWith('chat-2');
   });
 
-  it('lets the chat picker consume Escape without stopping the current run', async () => {
+  it('lets the chat picker consume Escape without stopping or arming the screen shortcut', async () => {
     const { terminal, send } = recorder();
-    const { screen, ports } = screenWith(terminal);
+    const { screen, session, ports } = screenWith(terminal);
     vi.mocked(ports.listChats).mockResolvedValueOnce([chatDto()]);
+    await session.ask('keep running');
     screen.start();
 
     await (screen as unknown as { submit(text: string): Promise<void> }).submit('/chats');
@@ -236,6 +237,71 @@ describe('ChatScreen', () => {
     const internals = screen as unknown as { picker?: unknown; tui: { hasOverlay(): boolean } };
     expect(internals.picker).toBeUndefined();
     expect(internals.tui.hasOverlay()).toBe(false);
+
+    send('\u001b');
+    expect(ports.stop).toHaveBeenCalledOnce();
+    expect(session.currentChatId).toBe('chat-1');
+  });
+
+  it('starts a visually and session-clean conversation on double Escape', async () => {
+    const { terminal, plain, writes, send, repaint } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    await session.ask('old question');
+    screen.start();
+    screen.setTitle('Old conversation');
+    screen.onRun({
+      ...emptyRun('chat-1', 'run-1'),
+      text: 'old partial answer',
+      status: 'running',
+    });
+    await flush();
+
+    send('\u001b');
+    expect(ports.stop).toHaveBeenCalledOnce();
+    send('\u001b');
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(session.currentChatId).toBeUndefined();
+    expect(session.busy).toBe(false);
+    expect(ports.stop).toHaveBeenCalledOnce();
+    expect(plain()).toContain('New conversation');
+    expect(plain()).not.toContain('Old conversation');
+    expect(plain()).not.toContain('old partial answer');
+    expect(plain()).not.toContain('Working…');
+  });
+
+  it('stops immediately on a single Escape without starting a new conversation', async () => {
+    const { terminal, send } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    await session.ask('keep this conversation');
+    screen.start();
+
+    send('\u001b');
+
+    expect(ports.stop).toHaveBeenCalledOnce();
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.busy).toBe(true);
+  });
+
+  it('does not start a new conversation when Escape presses are spaced apart', async () => {
+    const { terminal, send } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    await session.ask('keep this conversation');
+    screen.start();
+    const clock = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(2_000);
+
+    send('\u001b');
+    send('\u001b');
+    clock.mockRestore();
+
+    expect(ports.stop).toHaveBeenCalledTimes(2);
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.busy).toBe(true);
   });
 
   it('replaces the old transcript when a loaded chat is painted', async () => {

@@ -83,7 +83,11 @@ pop --version
 A bare `pop` opens the interactive screen. A non-command argument is a one-shot
 question. Conversations are ordinary server chats and synchronize with the PWA.
 Continuation uses opaque chat IDs. Ctrl+C, `/quit` and `/exit` stop cleanly and
-print a continuation command only after a server chat exists.
+print a continuation command only after a server chat exists. Escape immediately
+stops an active run; two consecutive Escape presses within a short double-tap
+window use the same path as `/new` and replace the transcript, live state,
+activity indicator and title with a clean new conversation. Escape remains owned
+by an open picker until that picker closes.
 
 The TUI renders persisted transcript plus live SSE projection, thinking when
 enabled, tool lifecycle, queue/run state and stable failures. It does not poll

@@ -122,6 +122,37 @@ describe('ChatSession', () => {
     expect(ports.send).toHaveBeenCalledWith('chat-9', 'hello');
   });
 
+  it('clears the selected chat and live run when opening a new conversation', async () => {
+    const { session } = harness();
+    await session.ask('first');
+    expect(session.busy).toBe(true);
+
+    session.open(undefined);
+
+    expect(session.currentChatId).toBeUndefined();
+    expect(session.busy).toBe(false);
+  });
+
+  it('does not restore an abandoned run from a late send response', async () => {
+    const { session, ports, seen } = harness();
+    let finishSend: (response: { runId: string }) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishSend = resolve;
+      }),
+    );
+    const asking = session.ask('first');
+    await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+
+    session.open(undefined);
+    finishSend({ runId: 'run-1' });
+    await asking;
+
+    expect(session.currentChatId).toBeUndefined();
+    expect(session.busy).toBe(false);
+    expect(seen.runs).toEqual([]);
+  });
+
   it('loads stored history and seeds the live run when switching chats', async () => {
     const { session, ports, seen } = harness();
     vi.mocked(ports.loadChat).mockResolvedValueOnce({
