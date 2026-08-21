@@ -175,7 +175,27 @@ if ($actual -ne $expected) {
   Remove-Item -Force $temporary
   throw "Pop launcher checksum mismatch: got $actual, expected $expected"
 }
-Move-Item -Force $temporary $destination
+if (Test-Path -LiteralPath $destination) {
+  $backup = "$destination.previous"
+  Remove-Item -Force -ErrorAction SilentlyContinue $backup
+  try {
+    [IO.File]::Replace($temporary, $destination, $backup)
+  } catch {
+    $activationError = $_
+    Remove-Item -Force -ErrorAction SilentlyContinue $temporary
+    if (Test-Path -LiteralPath $backup) {
+      if (Test-Path -LiteralPath $destination) {
+        [IO.File]::Replace($backup, $destination, $null)
+      } else {
+        Move-Item -LiteralPath $backup -Destination $destination
+      }
+    }
+    throw $activationError
+  }
+  Remove-Item -Force -ErrorAction SilentlyContinue $backup
+} else {
+  Move-Item -LiteralPath $temporary -Destination $destination
+}
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $parts = @($userPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 if ($parts -notcontains $installDir) {

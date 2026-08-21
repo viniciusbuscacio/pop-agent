@@ -59,6 +59,21 @@ describe('native Pop launcher installers', () => {
     expect(script).toContain('Next: pop login $origin');
   });
 
+  it('replaces an existing Windows launcher without relying on Move-Item overwrite', () => {
+    const script = windowsInstaller('https://personal-pop.example', release);
+    const verifiedAt = script.indexOf('if ($actual -ne $expected)');
+    const replacementAt = script.indexOf('[IO.File]::Replace($temporary, $destination, $backup)');
+
+    expect(script).toContain('if (Test-Path -LiteralPath $destination) {');
+    expect(script).toContain('$backup = "$destination.previous"');
+    expect(script).toContain('if (Test-Path -LiteralPath $backup) {');
+    expect(script).toContain('[IO.File]::Replace($backup, $destination, $null)');
+    expect(script).toContain('Move-Item -LiteralPath $backup -Destination $destination');
+    expect(script).toContain('} else {\n  Move-Item -LiteralPath $temporary -Destination $destination\n}');
+    expect(script).not.toContain('Move-Item -Force $temporary $destination');
+    expect(replacementAt).toBeGreaterThan(verifiedAt);
+  });
+
   it('serves a checksum-validating Unix installer', async () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     const response = await routes.request('https://personal-pop.example/install.sh');
