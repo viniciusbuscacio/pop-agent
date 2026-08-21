@@ -1,8 +1,19 @@
 const KEY = 'pop-agent.local-connection';
+const LEGACY_TRANSIENT_PREFIX = 'local-';
 
 export function selectedLocalConnection(): string | undefined {
   try {
-    return localStorage.getItem(KEY) ?? undefined;
+    const selected = localStorage.getItem(KEY) ?? undefined;
+    // Before stable machine identities, the PWA persisted the server-generated
+    // `local-*` transport ID. It becomes invalid whenever PLA reconnects and
+    // would otherwise reject every send, including queue edits. Do not guess a
+    // replacement machine: clear it so the request safely uses server tools
+    // until Settings selects an available stable machine again.
+    if (selected?.startsWith(LEGACY_TRANSIENT_PREFIX) === true) {
+      localStorage.removeItem(KEY);
+      return undefined;
+    }
+    return selected;
   } catch {
     return undefined;
   }

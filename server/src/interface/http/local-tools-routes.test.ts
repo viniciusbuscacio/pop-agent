@@ -118,6 +118,22 @@ describe('HTTPS local-tools fallback', () => {
     });
   });
 
+  it('deduplicates the machine menu when CLI and tray connect from the same computer', async () => {
+    await attach();
+    await request('/v1/local-tools/connections', 'POST', {
+      kind: 'attach', protocol: 1, role: 'background',
+      machine: {
+        machineId: 'machine-test', hostname: 'test-mac', platform: 'darwin', arch: 'arm64',
+        cwd: '/tmp', clientVersion: '99.0.0',
+      },
+    });
+
+    const body = (await (await request('/v1/local-tools/machines', 'GET')).json()) as {
+      machines: { machineId: string }[];
+    };
+    expect(body.machines.map((machine) => machine.machineId)).toEqual(['machine-test']);
+  });
+
   it('synchronizes and persists per-computer access while the transport stays attached', async () => {
     const connected = await attach();
     const id = ((await connected.json()) as { connectionId: string }).connectionId;

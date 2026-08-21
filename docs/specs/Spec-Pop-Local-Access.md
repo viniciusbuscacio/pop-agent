@@ -100,7 +100,9 @@ One machine may have more than one live transport—for example an interactive C
 and the background tray. Stable machine selection resolves to a live transport,
 preferring the `background` role so a short terminal process does not displace
 the persistent tray. No load balancing or failover to a different machine is
-allowed.
+allowed. PWA upgrades clear legacy persisted `local-*` transport selections;
+those transient values must never be sent after migration or presented as a
+second machine.
 
 ## Installation and tray lifecycle
 

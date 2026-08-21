@@ -38,8 +38,8 @@ describe('apiRequest', () => {
     await expect(apiRequest<void>('/chats/chat-1', { method: 'DELETE' })).resolves.toBeUndefined();
   });
 
-  it('sends only the machine the user selected explicitly', async () => {
-    localStorage.setItem('pop-agent.local-connection', 'local-mac');
+  it('sends only the stable machine the user selected explicitly', async () => {
+    localStorage.setItem('pop-agent.local-connection', 'machine-mac');
     const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(new Response('{}', { status: 200 })),
     );
@@ -48,9 +48,24 @@ describe('apiRequest', () => {
     await apiRequest('/chats/chat-1/messages', { method: 'POST', body: { text: 'hello' } });
 
     expect((fetch.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({
-      'x-pop-agent-local-connection': 'local-mac',
+      'x-pop-agent-local-connection': 'machine-mac',
       'x-pop-agent-event-version': '2',
     });
+  });
+
+  it('does not send an obsolete temporary connection selected by an older PWA', async () => {
+    localStorage.setItem('pop-agent.local-connection', 'local-gone');
+    const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await apiRequest('/chats/chat-1/messages', { method: 'POST', body: { text: 'hello' } });
+
+    expect((fetch.mock.calls[0]?.[1] as RequestInit).headers).not.toHaveProperty(
+      'x-pop-agent-local-connection',
+    );
+    expect(localStorage.getItem('pop-agent.local-connection')).toBeNull();
   });
 
   it('turns an error envelope into a typed ApiError', async () => {

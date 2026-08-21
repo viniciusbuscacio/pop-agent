@@ -339,18 +339,21 @@ describe('sending a message', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
   });
 
-  it('accepts a stable machine selection after the tray reconnects', async () => {
+  it('accepts a stable machine selection after the tray reconnects with a new connection ID', async () => {
+    const machine = {
+      machineId: 'machine-m1',
+      hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
+    };
     fixture.localConnections.attach({
-      id: 'local-current',
-      role: 'background',
-      machine: {
-        machineId: 'machine-m1',
-        hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
-      },
-      send: () => undefined,
-      close: () => undefined,
+      id: 'local-before-restart', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
     });
     fixture.localAccessPolicy.setEnabled('machine-m1', true);
+    fixture.localConnections.detach('local-before-restart');
+    fixture.localConnections.attach({
+      id: 'local-after-restart', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
+    });
 
     const chat = await newChat();
     const response = await api(`/v1/chats/${chat.id}/messages`, {
@@ -361,6 +364,43 @@ describe('sending a message', () => {
 
     expect(response.status).toBe(202);
     expect(fixture.runs.canSteer(chat.id, 'machine-m1')).toBe(true);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('updates a queued message through the reconnected tray selected by stable machine ID', async () => {
+    const machine = {
+      machineId: 'machine-queue',
+      hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
+    };
+    fixture.localConnections.attach({
+      id: 'local-queue-old', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localAccessPolicy.setEnabled(machine.machineId, true);
+
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'slow: keep running' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+    });
+    const queued = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'queued before reconnect', delivery: 'follow_up' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+    });
+    const queuedBody = (await queued.json()) as { message: { id: string } };
+
+    fixture.localConnections.detach('local-queue-old');
+    fixture.localConnections.attach({
+      id: 'local-queue-new', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    const updated = await api(`/v1/chats/${chat.id}/queue/${queuedBody.message.id}`, {
+      method: 'PUT', body: { text: 'queued after reconnect' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+    });
+
+    expect(updated.status).toBe(200);
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });
