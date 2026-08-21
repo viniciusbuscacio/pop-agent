@@ -141,11 +141,12 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Fixed
 
-- **Installed-PWA sends now survive short Local Access restarts.** Message sends
-  and queue edits retain one stable selected machine through a bounded reconnect
-  grace window, distinguish an offline known machine from an unknown stale
-  selection, preserve exact drafts/attachments with actionable notices and log
-  rejection diagnostics without message content or credentials.
+- **Installed-PWA sends no longer depend on Local Access automatically.** PWA
+  upgrades migrate former automatic selections to Server only; enabling access
+  does not route messages until the user explicitly chooses a computer. Explicit
+  local sends and queue edits retain one stable machine through a bounded
+  30-second reconnect window, distinguish offline from unknown selections,
+  preserve exact drafts/attachments and emit content-free diagnostics.
 - **The composer model picker no longer looks toggled on.** The **M** control
   keeps the same neutral visual state while the selected model remains active;
   opening it still shows the active provider/model with its selection mark.

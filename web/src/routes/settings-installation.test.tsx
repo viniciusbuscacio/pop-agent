@@ -84,12 +84,17 @@ describe('Settings installation guide', () => {
     await user.click(toggle);
 
     expect(localAccessMocks.setEnabled).toHaveBeenCalledWith('machine-m1', true);
-    expect(window.localStorage.getItem('pop-agent.local-connection')).toBe('machine-m1');
+    expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
     expect(toggle).toHaveProperty('checked', true);
+
+    const selector = await screen.findByRole('combobox', { name: 'Use files from' });
+    expect(selector).toHaveProperty('value', '');
+    await user.selectOptions(selector, 'machine-m1');
+    expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m1');
   });
 
-  it('keeps an enabled stable machine selected while its tray reconnects', async () => {
-    window.localStorage.setItem('pop-agent.local-connection', 'machine-m1');
+  it('keeps an explicitly selected stable machine while its tray reconnects', async () => {
+    window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-m1');
     localAccessMocks.machines.mockResolvedValueOnce({
       machines: [{
         machineId: 'machine-m1', hostname: 'm1', platform: 'win32', arch: 'x64',
@@ -100,17 +105,17 @@ describe('Settings installation guide', () => {
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
     await screen.findByText('Windows PC — Offline');
-    expect(window.localStorage.getItem('pop-agent.local-connection')).toBe('machine-m1');
+    expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m1');
   });
 
   it('clears an unknown persisted stable machine during snapshot reconciliation', async () => {
-    window.localStorage.setItem('pop-agent.local-connection', 'machine-removed');
+    window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-removed');
     localAccessMocks.machines.mockResolvedValueOnce({ machines: [] });
 
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
     await waitFor(() => {
-      expect(window.localStorage.getItem('pop-agent.local-connection')).toBeNull();
+      expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
     });
   });
 

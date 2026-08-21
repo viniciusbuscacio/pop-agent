@@ -1,19 +1,14 @@
-const KEY = 'pop-agent.local-connection';
-const LEGACY_TRANSIENT_PREFIX = 'local-';
+const KEY = 'pop-agent.local-machine-selection-v2';
+const LEGACY_KEY = 'pop-agent.local-connection';
 
 export function selectedLocalConnection(): string | undefined {
   try {
-    const selected = localStorage.getItem(KEY) ?? undefined;
-    // Before stable machine identities, the PWA persisted the server-generated
-    // `local-*` transport ID. It becomes invalid whenever PLA reconnects and
-    // would otherwise reject every send, including queue edits. Do not guess a
-    // replacement machine: clear it so the request safely uses server tools
-    // until Settings selects an available stable machine again.
-    if (selected?.startsWith(LEGACY_TRANSIENT_PREFIX) === true) {
-      localStorage.removeItem(KEY);
-      return undefined;
-    }
-    return selected;
+    // Older builds could automatically persist a machine merely because it was
+    // the only one online. That made every ordinary send depend on PLA without
+    // an explicit user choice. Drop the old key once; v2 stores only selections
+    // made through the visible Server only / computer control.
+    localStorage.removeItem(LEGACY_KEY);
+    return localStorage.getItem(KEY) ?? undefined;
   } catch {
     return undefined;
   }
@@ -21,6 +16,7 @@ export function selectedLocalConnection(): string | undefined {
 
 export function selectLocalConnection(id: string | undefined): void {
   try {
+    localStorage.removeItem(LEGACY_KEY);
     if (id === undefined || id === '') localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, id);
   } catch {

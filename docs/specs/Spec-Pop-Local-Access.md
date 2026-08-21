@@ -58,7 +58,7 @@ PLA is a privileged optional capability and follows deny-by-default rules:
 3. The server refuses calls when the persistent machine policy is disabled.
 4. The client independently refuses `call` frames while its synchronized policy
    is disabled.
-5. The PWA sends a local selector only after an explicit/automatic valid choice.
+5. The PWA sends a local selector only after an explicit choice in the visible machine selector.
 6. No selector means server tools only; the server never chooses an arbitrary
    connected computer.
 7. An unknown selector and a known enabled-but-offline selector are rejected
@@ -313,11 +313,14 @@ It is not an account setting and is not inferred from the browser’s OS name.
 
 Rules:
 
-- no allowed online machine: clear selection and use server tools only;
-- exactly one allowed online machine: select its stable `machineId`
-  automatically;
-- multiple allowed online machines: show an explicit selector including
-  **Server only**;
+- server-only is the default, even when exactly one enabled computer is online;
+- enabling local access grants permission but does not select that computer for
+  message routing;
+- whenever at least one computer is enabled, show an explicit selector including
+  **Server only** and the online/offline state of each choice;
+- only a choice made through that visible selector stores a stable `machineId`;
+- PWA upgrades clear the former selection key because older builds could fill it
+  automatically; the user may explicitly select the machine again;
 - selected machine becomes disabled or is no longer known: clear the local
   choice during snapshot reconciliation;
 - selected enabled machine becomes temporarily offline: retain its stable
@@ -331,8 +334,9 @@ without a live transport produces `local_connection_unavailable`; a selector
 absent from persistent machine policy produces `local_connection_unknown`.
 
 For installed-PWA message POSTs and queue PUTs only, the common API layer retries
-`local_connection_unavailable` over an approximately 11-second bounded grace
-window. Every attempt retains the same stable machine selector, allowing a tray
+`local_connection_unavailable` over an approximately 30-second bounded grace
+window, covering the observed 28-second Windows PLA recovery after a server
+restart. Every attempt retains the same stable machine selector, allowing a tray
 to reconnect with a new transport ID without rerouting the request. It does not
 retry unknown selectors, arbitrary failures, browser-only web requests or other
 API actions. An unknown persisted selector is cleared after its rejected
@@ -503,7 +507,8 @@ machine inventory.
 - unknown persisted selectors clear while known offline selections remain;
 - disabled known selector is safe server-only;
 - stable machine resolves after reconnect and prefers its tray;
-- one usable machine auto-selects, several render the selector;
+- one or several enabled machines render the selector and remain server-only
+  until the user explicitly chooses one;
 - denied localStorage remains server-only;
 - initial/SSE/resume snapshots converge without polling;
 - local tool descriptions identify the exact machine/directory;

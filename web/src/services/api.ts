@@ -119,7 +119,10 @@ function platformName(): string {
   return '';
 }
 
-const LOCAL_RECONNECT_DELAYS_MS = [500, 1_000, 1_500, 2_000, 2_000, 2_000, 2_000] as const;
+// A real server restart on the owner's Windows machine took 28 seconds before
+// the interactive PLA transport returned. Keep explicit local routing through
+// that observed recovery window without retrying forever.
+const LOCAL_RECONNECT_DELAYS_MS = [1_000, 2_000, 3_000, 4_000, 5_000, 5_000, 5_000, 5_000] as const;
 
 interface ApiRequestRuntime {
   sleep?: (milliseconds: number) => Promise<void>;

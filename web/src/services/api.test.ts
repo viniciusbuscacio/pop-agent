@@ -47,7 +47,7 @@ describe('apiRequest', () => {
   });
 
   it('sends only the stable machine the user selected explicitly', async () => {
-    localStorage.setItem('pop-agent.local-connection', 'machine-mac');
+    localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-mac');
     const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(new Response('{}', { status: 200 })),
     );
@@ -61,8 +61,8 @@ describe('apiRequest', () => {
     });
   });
 
-  it('does not send an obsolete temporary connection selected by an older PWA', async () => {
-    localStorage.setItem('pop-agent.local-connection', 'local-gone');
+  it('does not send an automatic or temporary selection persisted by an older PWA', async () => {
+    localStorage.setItem('pop-agent.local-connection', 'machine-legacy');
     const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(new Response('{}', { status: 200 })),
     );
@@ -74,6 +74,7 @@ describe('apiRequest', () => {
       'x-pop-agent-local-connection',
     );
     expect(localStorage.getItem('pop-agent.local-connection')).toBeNull();
+    expect(localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
   });
 
   it.each([
@@ -81,7 +82,7 @@ describe('apiRequest', () => {
     ['PUT', '/chats/chat-1/queue/queued-1'],
   ])('retries only transient local-machine failures for PWA %s %s', async (method, path) => {
     useInstalledPwa();
-    localStorage.setItem('pop-agent.local-connection', 'machine-windows');
+    localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-windows');
     const fetch = vi.fn()
       .mockImplementationOnce(() => Promise.resolve(apiFailure('local_connection_unavailable')))
       // The stable machine has reattached under a new server connection ID;
@@ -102,12 +103,12 @@ describe('apiRequest', () => {
         'x-pop-agent-local-connection': 'machine-windows',
       });
     }
-    expect(localStorage.getItem('pop-agent.local-connection')).toBe('machine-windows');
+    expect(localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-windows');
   });
 
   it('bounds the PWA reconnect grace window with injected delays', async () => {
     useInstalledPwa();
-    localStorage.setItem('pop-agent.local-connection', 'machine-windows');
+    localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-windows');
     const fetch = vi.fn(() => Promise.resolve(apiFailure('local_connection_unavailable')));
     vi.stubGlobal('fetch', fetch);
     const sleeps: number[] = [];
@@ -119,12 +120,12 @@ describe('apiRequest', () => {
 
     expect(sleeps).toEqual([2_000, 3_000, 5_000]);
     expect(fetch).toHaveBeenCalledTimes(4);
-    expect(localStorage.getItem('pop-agent.local-connection')).toBe('machine-windows');
+    expect(localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-windows');
   });
 
   it('clears an unknown persisted machine without retrying the rejected request', async () => {
     useInstalledPwa();
-    localStorage.setItem('pop-agent.local-connection', 'machine-removed');
+    localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-removed');
     const fetch = vi.fn(() => Promise.resolve(apiFailure('local_connection_unknown')));
     vi.stubGlobal('fetch', fetch);
 
@@ -134,11 +135,11 @@ describe('apiRequest', () => {
     })).rejects.toMatchObject({ code: 'local_connection_unknown' });
 
     expect(fetch).toHaveBeenCalledOnce();
-    expect(localStorage.getItem('pop-agent.local-connection')).toBeNull();
+    expect(localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
   });
 
   it('does not retry local-machine failures for web, non-chat, or arbitrary errors', async () => {
-    localStorage.setItem('pop-agent.local-connection', 'machine-mac');
+    localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-mac');
     const fetch = vi.fn(() => Promise.resolve(apiFailure('local_connection_unavailable')));
     vi.stubGlobal('fetch', fetch);
     await expect(apiRequest('/chats/chat-1/messages', { method: 'POST', body: { text: 'web' } }))

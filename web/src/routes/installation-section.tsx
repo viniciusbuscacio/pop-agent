@@ -29,7 +29,7 @@ export function InstallationSection() {
   const [pwaDismissed, setPwaDismissed] = useState(false);
   const [machines, setMachines] = useState<LocalMachineAccessDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
-  const usableMachines = machines.filter((machine) => machine.enabled && machine.connected);
+  const selectableMachines = machines.filter((machine) => machine.enabled);
 
   useEffect(() => {
     let active = true;
@@ -40,18 +40,17 @@ export function InstallationSection() {
         const response = await localAccessService.machines();
         if (!active || current !== request) return;
         setMachines(response.machines);
-        const usable = response.machines.filter((machine) => machine.enabled && machine.connected);
         const selectedId = selectedLocalConnection();
         const selected = response.machines.find((machine) => machine.machineId === selectedId);
-        // An enabled stable machine remains the user's choice while its tray is
-        // reconnecting. Unknown or disabled choices are no longer routable;
-        // clear them, then retain the existing one-usable-machine convenience.
-        if (selectedId === undefined || selected === undefined || !selected.enabled) {
-          const automatic = usable.length === 1 ? usable[0]?.machineId : undefined;
-          selectLocalConnection(automatic);
-          setSelectedConnection(automatic ?? '');
+        // Permission and routing are separate choices. Never make ordinary
+        // messages depend on PLA merely because one enabled computer exists.
+        // An explicit enabled selection survives a reconnect; an unknown or
+        // disabled selection returns visibly to Server only.
+        if (selectedId !== undefined && (selected === undefined || !selected.enabled)) {
+          selectLocalConnection(undefined);
+          setSelectedConnection('');
         } else {
-          setSelectedConnection(selectedId);
+          setSelectedConnection(selectedId ?? '');
         }
       } catch {
         if (active && current === request) setMachines([]);
@@ -77,10 +76,7 @@ export function InstallationSection() {
     }
     setMachines((current) => current.map((machine) =>
       machine.machineId === machineId ? { ...machine, enabled } : machine));
-    if (enabled && selectedConnection === '') {
-      selectLocalConnection(machineId);
-      setSelectedConnection(machineId);
-    } else if (!enabled && selectedConnection === machineId) {
+    if (!enabled && selectedConnection === machineId) {
       selectLocalConnection(undefined);
       setSelectedConnection('');
     }
@@ -157,7 +153,7 @@ export function InstallationSection() {
             />
           </div>
         ))}
-        {usableMachines.length > 1 ? (
+        {selectableMachines.length > 0 ? (
           <Select
             id="local-access-machine"
             label={t('settings.installation.localAccessUseFrom')}
@@ -169,9 +165,11 @@ export function InstallationSection() {
             }}
           >
             <option value="">{t('settings.installation.localAccessServerOnly')}</option>
-            {usableMachines.map((machine) => (
+            {selectableMachines.map((machine) => (
               <option key={machine.machineId} value={machine.machineId}>
-                {machine.hostname} — {platformName(machine.platform)}
+                {machine.hostname} — {platformName(machine.platform)} — {machine.connected
+                  ? t('settings.installation.localAccessOnline')
+                  : t('settings.installation.localAccessOffline')}
               </option>
             ))}
           </Select>
