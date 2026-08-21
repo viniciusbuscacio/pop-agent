@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,10 +7,9 @@ import { createCliDownloadRoutes } from './cli-download-routes.js';
 
 /**
  * The one public route npm can reach (docs/cli.md, Distribution). What is
- * worth testing is not that a file downloads, but that ONLY this server's
- * own version does: an old URL answering with the new tarball is the exact
- * mismatch the version in the filename exists to prevent, and npm would cache
- * the lie by URL.
+ * worth testing is not only that a file downloads, but that the mutable
+ * discovery routes select one current release while every retained historical
+ * URL continues to return only its own immutable bytes.
  */
 describe('cli download', () => {
   let pack: string;
@@ -89,10 +88,23 @@ describe('cli download', () => {
     expect(await response.text()).toBe('tarball');
   });
 
-  it('refuses a package that is not the immutable release named by the pack manifest', async () => {
-    writeFileSync(join(pack, 'cli-0.3.0.tgz'), 'newer');
-    const response = await routes('0.3.0').request('/cli-0.3.0.tgz');
-    expect(response.status).toBe(404);
+  it('keeps historical immutable releases downloadable without selecting them as latest', async () => {
+    const archive = mkdtempSync(join(tmpdir(), 'pop-cli-archive-'));
+    writeFileSync(join(archive, 'cli-0.1.0.tgz'), 'historical');
+
+    const app = createCliDownloadRoutes({
+      cliPack: pack,
+      cliArchive: archive,
+      versions: { popAgentVersion: '0.2.0' },
+    });
+    const historical = await app.request('/cli-0.1.0.tgz');
+    expect(historical.status).toBe(200);
+    expect(historical.headers.get('cache-control')).toContain('immutable');
+    expect(await historical.text()).toBe('historical');
+
+    const alias = await app.request('/cli-latest.tgz', { redirect: 'manual' });
+    expect(alias.headers.get('location')).toBe('/cli-0.2.0.tgz');
+    rmSync(archive, { recursive: true, force: true });
   });
 
   it('404s when the server was never packed', async () => {
@@ -102,9 +114,13 @@ describe('cli download', () => {
     expect(response.status).toBe(404);
   });
 
-  it('cannot be walked out of the pack directory', async () => {
-    const response = await routes('0.2.0').request('/cli-..%2F..%2Fetc%2Fpasswd.tgz');
-    expect(response.status).toBe(404);
+  it('rejects unsafe, malformed and nonexistent archive names', async () => {
+    symlinkSync(join(pack, 'cli-0.2.0.tgz'), join(pack, 'cli-0.1.0.tgz'));
+
+    expect((await routes('0.2.0').request('/cli-..%2F..%2Fetc%2Fpasswd.tgz')).status).toBe(404);
+    expect((await routes('0.2.0').request('/cli-0.2.tgz')).status).toBe(404);
+    expect((await routes('0.2.0').request('/cli-0.1.0.tgz')).status).toBe(404);
+    expect((await routes('0.2.0').request('/cli-9.9.9.tgz')).status).toBe(404);
   });
 
   it('marks the URL immutable, because the version is in the name', async () => {

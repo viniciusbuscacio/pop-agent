@@ -1,6 +1,6 @@
 /**
- * Builds the tarball the server hands out: `npm i -g <server>/cli-X.Y.Z.tgz`
- * (docs/cli.md, Distribution).
+ * Builds the tarball the server hands out through `/cli-latest.tgz` and the
+ * immutable `/cli-X.Y.Z.tgz` release URLs (docs/cli.md, Distribution).
  *
  * The rule, stated generally so it survives the CLI growing into `shared`:
  * **every `@pop-agent/*` import is bundled into `dist/`, and the public
@@ -34,10 +34,11 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync, renameSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { prepareCliPackDirectory, publishCliArchive } from './cli-pack-files.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const cli = join(root, 'cli');
@@ -55,8 +56,9 @@ async function main(): Promise<void> {
   const cliPkg = read(join(cli, 'package.json'));
   const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
 
-  // The published version is the SERVER's, because the whole point is that a
-  // client cannot be paired with a server it did not come from.
+  // This invocation packs the checkout's product version. Previously packed
+  // CLI releases remain immutable and available while package.json selects
+  // this release for the manifest and latest alias.
   const external = ['@earendil-works/pi-tui', 'ws'];
   const dependencies = Object.fromEntries(
     external.map((name) => {
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
     }),
   );
 
-  rmSync(out, { recursive: true, force: true });
+  prepareCliPackDirectory(out);
   mkdirSync(join(out, 'dist'), { recursive: true });
 
   const result = await build({
@@ -121,12 +123,9 @@ async function main(): Promise<void> {
 
   execFileSync('npm', ['pack', '--pack-destination', out], { cwd: out, stdio: 'inherit' });
 
-  // npm names it pop-agent-X.Y.Z.tgz; the served name is cli-X.Y.Z.tgz, because
-  // npm caches by URL and the version has to be in the path.
-  const packed = readdirSync(out).find((name) => name.endsWith('.tgz'));
-  if (packed === undefined) throw new Error('npm pack produced no tarball');
-  const served = `cli-${version}.tgz`;
-  if (packed !== served) renameSync(join(out, packed), join(out, served));
+  // npm names it pop-agent-X.Y.Z.tgz. Publish it under an immutable URL
+  // without replacing historical releases, even when packaging is rerun.
+  const served = publishCliArchive(out, version);
 
   const launcherSource = readFileSync(join(root, 'launcher', 'main.go'), 'utf8');
   const launcherVersion = /const launcherVersion = "([^"]+)"/.exec(launcherSource)?.[1];

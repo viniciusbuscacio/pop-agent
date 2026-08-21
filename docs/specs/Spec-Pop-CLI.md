@@ -49,8 +49,13 @@ staging, rollback and release rules are normative in Installation.
 The active CLI lives in a private version directory with atomic active-version
 state. A candidate is downloaded to temporary storage, verified, installed,
 smoke-checked through `--version` and only then activated. A locally newer
-compatible CLI is not silently downgraded. `pop update` requests repair/update;
-failed candidates preserve the prior active version.
+compatible CLI is not silently downgraded. Launcher-owned `pop update` requests
+repair/update and failed candidates preserve the prior active version. For a
+legacy npm-global CLI, `pop update` installs the same-origin non-cacheable
+`/cli-latest.tgz` alias without deriving a versioned filename from server update
+status. Generated npm-global migration commands use the same alias, and legacy
+success text refers to the latest packed CLI because that release may trail the
+server version.
 
 The launcher and CLI use no global npm install, sudo or shell `.cmd` dispatch.
 Windows invokes npm's JavaScript entry through the selected `node.exe`.

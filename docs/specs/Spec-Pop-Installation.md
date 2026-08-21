@@ -268,8 +268,8 @@ The following routes intentionally do not require an authenticated session:
 | `/cli/manifest.json` | `no-store` | active packed CLI metadata and compatibility minimums |
 | `/cli/launcher/manifest.json` | `no-store` | exact launcher release metadata |
 | versioned launcher binaries | one year, `immutable` | precompiled native launcher |
-| versioned CLI tarball | one year, `immutable` | bundled CLI application package |
-| `/cli-latest.tgz` | `no-store` redirect | migration alias to the exact current tarball |
+| versioned CLI tarball | one year, `immutable` | bundled CLI application package; retained releases remain downloadable at their original URLs |
+| `/cli-latest.tgz` | `no-store` redirect | migration alias to the exact release selected by the current pack manifest |
 | `/runtime/node/manifest.json` | `no-store` | pinned official Node provenance and same-origin package metadata |
 | versioned managed Node archive | one year, `immutable` | verified private runtime bytes |
 | versioned `/local-access/*` binary | one year, `immutable` | native tray release |
@@ -282,8 +282,13 @@ interactively after trusted bootstrap bytes are installed.
 Release manifests are strict data boundaries. Versions, targets, filenames,
 sizes and lowercase SHA-256 values are validated before a script or artifact is
 served. Unknown targets, duplicate filenames, path separators, missing required
-platforms and malformed manifests are refused. Artifact handlers serve only a
-filename named by the accepted manifest and verify the on-disk size.
+platforms and malformed manifests are refused. Manifest-selected artifact
+handlers serve only accepted filenames and verify the on-disk size. Retained
+CLI tarballs are the exception to single-manifest selection: before serving,
+checkout-local releases are copied without replacement into the durable data
+root, so an exact safe `cli-X.Y.Z.tgz` regular file remains available at its
+immutable historical URL across checkout replacement. Malformed, symlinked,
+conflicting and nonexistent names are refused.
 
 ## Native launcher and CLI installation
 
@@ -325,8 +330,13 @@ considered stale; concurrent healthy installs wait for the owner. Candidate
 files live under `~/.pop/cli/<version>` and activation state under `~/.pop/`.
 Nothing is installed globally.
 
-`pop update` forces the same verified installation path as repair. `pop doctor`
-reports launcher, CLI, Node/npm and server state without entering the TUI.
+Launcher-owned `pop update` forces the same verified installation path as
+repair. The legacy npm-global CLI's `pop update` installs the same-origin
+`/cli-latest.tgz` alias directly and does not derive a tarball name from the
+server version in `/v1/update/status`; its output identifies the server's latest
+packed CLI rather than claiming that package equals the server version. Generated
+npm-global migration commands use that alias as well. `pop doctor` reports
+launcher, CLI, Node/npm and server state without entering the TUI.
 `pop --version` is local-only. An unreachable server stops a normal start because
 the chat client has no useful offline mode.
 
@@ -579,8 +589,9 @@ gate and packaging process must cover:
 - target/architecture selection;
 - malformed, incomplete, duplicate and traversal-like manifest entries;
 - missing pack behavior;
-- no-store discovery and immutable versioned responses;
-- size/hash mismatch and undeclared artifact refusal.
+- no-store discovery/alias responses and immutable versioned responses;
+- retention and exact serving of historical CLI archives across later packs;
+- size/hash mismatch and unsafe, nonexistent or undeclared artifact refusal.
 
 ### Launcher and runtimes
 

@@ -218,21 +218,19 @@ describe('token renewal', () => {
 });
 
 describe('pop update', () => {
-  it('installs the server CLI directly without creating a chat', async () => {
+  it('installs through the latest packed alias without assuming the server version', async () => {
     const profiles = new Profiles(new MemoryStore({ default: { url: 'https://pop.example', token: 't' } }));
-    const http = vi.fn((input: RequestInfo | URL) => {
-      expect(String(input)).toBe('https://pop.example/v1/update/status');
-      return Promise.resolve(json({ popAgent: { current: '0.3.0' } }));
-    });
+    const http = vi.fn();
     const context = contextWith(http as never, profiles);
     const install = vi.fn(() => Promise.resolve(0));
     context.installCli = install;
 
     expect(await update(context)).toBe(0);
-    expect(install).toHaveBeenCalledWith('https://pop.example/cli-0.3.0.tgz');
-    expect(http).toHaveBeenCalledTimes(1);
-    expect(said()).toContain('Pop Agent CLI 0.3.0 installed successfully.');
-    expect(said()).toContain('Restart pop to use the updated version.');
+    expect(install).toHaveBeenCalledWith('https://pop.example/cli-latest.tgz');
+    expect(http).not.toHaveBeenCalled();
+    expect(said()).toContain("This server's latest packed Pop Agent CLI installed successfully.");
+    expect(said()).not.toContain('0.3.0');
+    expect(said()).toContain('Restart pop to use the installed version.');
   });
 
   it('reports npm failure in English and exits non-zero', async () => {

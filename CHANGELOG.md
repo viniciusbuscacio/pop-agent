@@ -46,6 +46,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Changed
 
+- **Legacy npm-global CLI updates now follow the packed release instead of the server version.**
+  `pop update` and generated migration commands use the same-origin non-cacheable
+  `/cli-latest.tgz` alias, with truthful output when the packed CLI trails the
+  server. CLI packaging retains immutable historical tarballs at their existing
+  versioned URLs while the manifest and alias select the current pack.
 - **The interactive CLI now starts a clean conversation on double Escape.** A
   single Escape still stops an active run immediately, picker cancellation keeps
   ownership of Escape, and `/new` plus the shortcut now clear the old transcript,

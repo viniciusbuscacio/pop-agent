@@ -120,11 +120,11 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** The command that installs this server's own client (docs/cli.md). */
-export function installCommand(origin: string, version: string): string {
-  // The version is in the FILENAME because npm caches by URL: without it an
-  // update silently reinstalls whatever was fetched the first time.
-  return `npm i -g ${origin.replace(/\/$/, '')}/cli-${version}.tgz`;
+/** The legacy npm-global command that installs this server's current packed client. */
+export function installCommand(origin: string, _serverVersion: string): string {
+  // The non-cacheable alias resolves to the pack manifest's immutable release.
+  // That release may intentionally trail the server version passed by callers.
+  return `npm i -g ${origin.replace(/\/$/, '')}/cli-latest.tgz`;
 }
 
 /**

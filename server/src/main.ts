@@ -74,6 +74,7 @@ import {
 import { WebPushService } from './infrastructure/push/web-push-service.js';
 import { WebAuthnService } from './infrastructure/auth/webauthn-service.js';
 import { isNewerVersion, NpmUpdateChecker } from './infrastructure/update/npm-update-checker.js';
+import { archiveCliReleases } from './infrastructure/update/cli-release-archive.js';
 import { readEnvironmentVersions } from './infrastructure/update/environment-versions.js';
 import {
   JsonPiCandidateStateStore,
@@ -104,7 +105,7 @@ const hostname = process.env['POP_AGENT_BIND'] ?? '127.0.0.1';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const runningCommit = gitCommit(repoRoot);
 const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
-/** Where `npm run pack:cli` leaves the tarball the server hands out. */
+/** Where `npm run pack:cli` leaves the current release and public manifests. */
 const cliPack = fileURLToPath(new URL('../../cli/pack', import.meta.url));
 /** Built before activation; this process only launches it as an external unit. */
 const deploymentSupervisorScript = fileURLToPath(
@@ -124,6 +125,8 @@ const piActivationSupervisorScript = compiledServerArtifact(
 
 // Composition root: the one place that knows every layer (docs/specs/Spec-Pop-General.md §3).
 const context = bootstrap();
+const cliArchive = join(context.dataDir, 'releases', 'cli');
+archiveCliReleases(cliPack, cliArchive);
 
 const auth = new AuthService({
   settings: context.settings,
@@ -792,6 +795,7 @@ const app = createApp({
   })(),
   webDist,
   cliPack,
+  cliArchive,
 });
 
 // The notify-only update channel (docs/specs/Spec-Pop-General.md §15, Vinicius 31/07): when a

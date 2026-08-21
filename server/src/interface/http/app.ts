@@ -148,8 +148,10 @@ export interface AppDeps {
   ) => Promise<ProviderSubscriptionUsageResponse | undefined>;
   /** Directory holding the built frontend (web/dist). */
   webDist: string;
-  /** Directory holding the packed CLI tarball (cli/pack); see Distribution. */
+  /** Directory holding the current packed CLI release and public manifests. */
   cliPack: string;
+  /** Durable history of immutable CLI tarballs across checkout replacement. */
+  cliArchive?: string;
 }
 
 const MAX_API_BODY_BYTES = 30 * 1024 * 1024;

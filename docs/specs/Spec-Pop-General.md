@@ -232,6 +232,7 @@ with `POP_AGENT_DATA_DIR`.
 ├── notes/                 # private Markdown notes vault
 ├── skills/                # personal and automatic skill vaults
 ├── pi-runtime/            # validated isolated pi candidates and pointer
+├── releases/              # durable immutable client release history
 ├── pi-agent/              # pi runtime support state
 ├── pi-auth.json           # pi-managed subscription credentials
 ├── models/                # local embedding model cache

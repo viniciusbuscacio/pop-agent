@@ -165,23 +165,21 @@ export async function chats(context: Context): Promise<number> {
   }
 }
 
-/** Updates the terminal client directly. No chat, local-tools channel or LLM run. */
+/** Legacy npm-global update path. No chat, local-tools channel or LLM run. */
 export async function update(context: Context): Promise<number> {
   const connected = connect(context);
   if (connected === undefined) return 1;
 
   try {
-    const status = await connected.api.updateStatus();
-    const version = status.popAgent.current;
-    const packageUrl = `${connected.profile.url}/cli-${version}.tgz`;
-    context.terminal.line(`Updating Pop Agent CLI to ${version}...`);
+    const packageUrl = `${connected.profile.url}/cli-latest.tgz`;
+    context.terminal.line("Installing this server's latest packed Pop Agent CLI...");
     const code = await context.installCli(packageUrl);
     if (code !== 0) {
       context.terminal.line(`CLI update failed (npm exited with code ${String(code)}).`);
       return 1;
     }
-    context.terminal.line(`Pop Agent CLI ${version} installed successfully.`);
-    context.terminal.line('Restart pop to use the updated version.');
+    context.terminal.line("This server's latest packed Pop Agent CLI installed successfully.");
+    context.terminal.line('Restart pop to use the installed version.');
     return 0;
   } catch (error) {
     context.terminal.line(describe(error));
