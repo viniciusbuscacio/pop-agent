@@ -695,16 +695,28 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('Naming things');
   });
 
-  it('reports a dropped stream and immediately exits through the /quit path', async () => {
+  it('tears down the TUI before reporting a dropped stream and exits synchronously', () => {
     const { terminal, plain } = recorder();
-    const { screen, onExit } = screenWith(terminal);
+    const lifecycle: string[] = [];
+    const write = terminal.write.bind(terminal);
+    terminal.stop = () => lifecycle.push('tui stopped');
+    terminal.write = (data) => {
+      write(data);
+      if (data.includes('connection to the server dropped')) lifecycle.push('drop reported');
+    };
+    const onExit = vi.fn(() => lifecycle.push('exit'));
+    const timeout = vi.spyOn(globalThis, 'setTimeout');
+    const { screen } = screenWith(terminal, onExit);
     screen.start();
-    screen.onStreamEnd();
-    await flush();
 
+    screen.onStreamEnd();
+
+    expect(lifecycle).toEqual(['tui stopped', 'drop reported', 'exit']);
     expect(plain()).toContain('dropped');
     expect(plain()).toContain('Bye!');
     expect(onExit).toHaveBeenCalledOnce();
+    expect(timeout.mock.calls.some(([, delay]) => delay === 60 * 60 * 1_000)).toBe(false);
+    timeout.mockRestore();
   });
 
   it('shows reasoning by default and preserves it after the run settles', async () => {
