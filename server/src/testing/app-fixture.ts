@@ -186,6 +186,12 @@ export interface TestApp {
   queuedMessages: QueuedMessageService;
   localConnections: LocalConnectionRegistry;
   localAccessPolicy: LocalAccessPolicyService;
+  rejectedLocalSelections: {
+    selector: string;
+    reason: 'unknown' | 'offline';
+    clientKind?: string;
+    clientPlatform?: string;
+  }[];
   tasks: TaskService;
   taskScheduler: TaskScheduler;
   mcp: McpService;
@@ -235,6 +241,7 @@ export function createTestApp(
 ): TestApp {
   const settingsRepo = new MemorySettings();
   const secrets = new MemorySecrets();
+  const rejectedLocalSelections: TestApp['rejectedLocalSelections'] = [];
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   migrate(db);
@@ -441,6 +448,7 @@ export function createTestApp(
     ...(options.a2a === undefined ? {} : { a2a: options.a2a }),
     usage: new SqliteUsageRepo(db),
     localConnections,
+    onRejectedLocalSelection: (diagnostic) => rejectedLocalSelections.push(diagnostic),
     // A real service over a throwaway directory: the report has to survive
     // folders that do not exist, which is exactly the fixture's shape.
     storage: new StorageService({
@@ -524,6 +532,7 @@ export function createTestApp(
     queuedMessages,
     localConnections,
     localAccessPolicy,
+    rejectedLocalSelections,
     tasks,
     taskScheduler,
     mcp,

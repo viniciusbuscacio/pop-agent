@@ -41,11 +41,17 @@ export function InstallationSection() {
         if (!active || current !== request) return;
         setMachines(response.machines);
         const usable = response.machines.filter((machine) => machine.enabled && machine.connected);
-        const selectedStillWorks = usable.some((machine) => machine.machineId === selectedLocalConnection());
-        if (!selectedStillWorks) {
+        const selectedId = selectedLocalConnection();
+        const selected = response.machines.find((machine) => machine.machineId === selectedId);
+        // An enabled stable machine remains the user's choice while its tray is
+        // reconnecting. Unknown or disabled choices are no longer routable;
+        // clear them, then retain the existing one-usable-machine convenience.
+        if (selectedId === undefined || selected === undefined || !selected.enabled) {
           const automatic = usable.length === 1 ? usable[0]?.machineId : undefined;
           selectLocalConnection(automatic);
           setSelectedConnection(automatic ?? '');
+        } else {
+          setSelectedConnection(selectedId);
         }
       } catch {
         if (active && current === request) setMachines([]);

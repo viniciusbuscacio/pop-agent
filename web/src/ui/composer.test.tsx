@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
+import { ApiError } from '../services/api';
 import { Composer } from './composer';
 import type { ModelChoice } from './slash-menu';
 
@@ -26,10 +27,12 @@ function renderComposer(
     models?: ModelChoice[];
     locked?: boolean;
     chatId?: string;
+    onSend?: ReturnType<typeof vi.fn>;
+    onUpdateQueued?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
-  const onSend = vi.fn().mockResolvedValue(undefined);
-  const onUpdateQueued = vi.fn().mockResolvedValue(undefined);
+  const onSend = props.onSend ?? vi.fn().mockResolvedValue(undefined);
+  const onUpdateQueued = props.onUpdateQueued ?? vi.fn().mockResolvedValue(undefined);
   const onEditingDone = vi.fn();
   const onSetExecutionMode = vi.fn().mockResolvedValue(undefined);
   const onShowSystemMessage = vi.fn();
@@ -285,6 +288,48 @@ describe('pending message composition', () => {
       expect(onUpdateQueued).toHaveBeenCalledWith(pending.id, 'Edited direction', [], []),
     );
     expect(onEditingDone).toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'local_connection_unavailable',
+      'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
+    ],
+    [
+      'local_connection_unknown',
+      'The saved local machine selection no longer exists and was reset. Choose a computer again in Settings, then retry. Your draft and attachments were kept.',
+    ],
+  ])('keeps the exact draft and attachment with an actionable %s notice', async (code, notice) => {
+    const onSend = vi.fn().mockRejectedValue(new ApiError(code, 'rejected', 409));
+    renderComposer({ onSend });
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const file = new File(['image'], 'keep.png', { type: 'image/png' });
+    fireEvent.change(area, { target: { value: 'keep this exact draft' } });
+    fireEvent.change(screen.getByTestId('composer-file-input'), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByTestId('attachment-tray')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('composer-send'));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(notice));
+    expect(area.value).toBe('keep this exact draft');
+    expect(screen.getByText('keep.png')).toBeTruthy();
+    expect(localStorage.getItem('pop-agent.draft.chat-1')).toBe('keep this exact draft');
+  });
+
+  it('shows the local-machine notice for a failed queued-message update', async () => {
+    const onUpdateQueued = vi.fn().mockRejectedValue(
+      new ApiError('local_connection_unavailable', 'offline', 409),
+    );
+    renderComposer({ editRequest: pending, onUpdateQueued });
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    await waitFor(() => expect(area.value).toBe('Change course'));
+    fireEvent.change(area, { target: { value: 'keep queued edit' } });
+    fireEvent.click(screen.getByTestId('composer-send'));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(
+      'The selected local machine is offline.',
+    ));
+    expect(area.value).toBe('keep queued edit');
   });
 
   it('recalls submitted messages from newest to oldest and restores the current draft', async () => {

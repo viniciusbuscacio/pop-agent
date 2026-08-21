@@ -88,6 +88,32 @@ describe('Settings installation guide', () => {
     expect(toggle).toHaveProperty('checked', true);
   });
 
+  it('keeps an enabled stable machine selected while its tray reconnects', async () => {
+    window.localStorage.setItem('pop-agent.local-connection', 'machine-m1');
+    localAccessMocks.machines.mockResolvedValueOnce({
+      machines: [{
+        machineId: 'machine-m1', hostname: 'm1', platform: 'win32', arch: 'x64',
+        clientVersion: '0.2.35', enabled: true, connected: false,
+      }],
+    });
+
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await screen.findByText('Windows PC — Offline');
+    expect(window.localStorage.getItem('pop-agent.local-connection')).toBe('machine-m1');
+  });
+
+  it('clears an unknown persisted stable machine during snapshot reconciliation', async () => {
+    window.localStorage.setItem('pop-agent.local-connection', 'machine-removed');
+    localAccessMocks.machines.mockResolvedValueOnce({ machines: [] });
+
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('pop-agent.local-connection')).toBeNull();
+    });
+  });
+
   it('refreshes computer access from the shared SSE stream without polling', async () => {
     const machine = {
       machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',

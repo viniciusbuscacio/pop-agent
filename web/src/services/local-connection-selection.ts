@@ -27,3 +27,12 @@ export function selectLocalConnection(id: string | undefined): void {
     // Storage denied: the user can still send with server tools only.
   }
 }
+
+/** Clears a rejected persisted selector without overwriting a newer user choice. */
+export function clearLocalConnection(id: string): void {
+  try {
+    if (localStorage.getItem(KEY) === id) localStorage.removeItem(KEY);
+  } catch {
+    // Storage denied already behaves as server-only.
+  }
+}

@@ -61,8 +61,9 @@ PLA is a privileged optional capability and follows deny-by-default rules:
 5. The PWA sends a local selector only after an explicit/automatic valid choice.
 6. No selector means server tools only; the server never chooses an arbitrary
    connected computer.
-7. An unknown or unavailable enabled selector is rejected before accepting the
-   HTTP message. It never falls through to another computer.
+7. An unknown selector and a known enabled-but-offline selector are rejected
+   with distinct typed errors before accepting the HTTP message. Neither ever
+   falls through to server-only execution or another computer.
 8. A known selector whose policy was switched off safely becomes server-only.
 9. Local tool names are visibly prefixed (`local_*`); unprefixed tools always
    continue to mean the Pop Agent server.
@@ -317,14 +318,26 @@ Rules:
   automatically;
 - multiple allowed online machines: show an explicit selector including
   **Server only**;
-- selected machine becomes disabled/offline: clear the local choice during
-  snapshot reconciliation;
+- selected machine becomes disabled or is no longer known: clear the local
+  choice during snapshot reconciliation;
+- selected enabled machine becomes temporarily offline: retain its stable
+  choice while PLA reconnects;
 - denied browser storage: remain server-only rather than guessing.
 
 The common web API layer adds `x-pop-agent-local-connection` only when a stable
 selection exists. The server resolves that stable ID to its current preferred
-transport. An explicit invalid available-machine selection produces
-`local_connection_unavailable` before a run/queue mutation is accepted.
+transport. Before a run/queue mutation is accepted, an enabled known machine
+without a live transport produces `local_connection_unavailable`; a selector
+absent from persistent machine policy produces `local_connection_unknown`.
+
+For installed-PWA message POSTs and queue PUTs only, the common API layer retries
+`local_connection_unavailable` over an approximately 11-second bounded grace
+window. Every attempt retains the same stable machine selector, allowing a tray
+to reconnect with a new transport ID without rerouting the request. It does not
+retry unknown selectors, arbitrary failures, browser-only web requests or other
+API actions. An unknown persisted selector is cleared after its rejected
+request; an offline known selector is retained. Grace expiry remains a rejected
+send/update and preserves the exact composer draft and attachments.
 
 The selector is captured with the message/queued input, not stored on the chat.
 Two devices can use the same conversation while intentionally targeting
@@ -414,7 +427,13 @@ pretending the whole computer is under the server’s Files jail.
 - Client below minimum: refuse with actionable update data.
 - Connected but disabled: remain visible, expose no local tools and refuse calls
   on both ends.
-- Selected unknown/offline enabled machine: reject message with 409.
+- Selected unknown machine: reject message/queue update with 409
+  `local_connection_unknown`; the PWA clears that stale selection and explains
+  the reset.
+- Selected offline enabled machine: reject with 409
+  `local_connection_unavailable`; the installed PWA retries only message sends
+  and queue updates for a bounded reconnect grace window, then explains that PLA
+  is offline while preserving the draft and attachments.
 - Selected known disabled machine: continue server-only.
 - Busy connection: fail the call rather than queueing unbounded work.
 - Oversized frame/body/output/file: cancel/close with bounded memory.
@@ -429,8 +448,10 @@ pretending the whole computer is under the server’s Files jail.
 ## Privacy, logs and diagnostics
 
 Server journal entries include platform/architecture, role, shortened transient
-connection identity and permission transitions. They do not include bearer
-tokens, password, command output or user file contents.
+connection identity and permission transitions. Rejected chat local selectors
+also record the bounded selector, caller client kind/platform and whether the
+selector was unknown or temporarily offline. They do not include bearer tokens,
+password, message/attachment content, command output or user file contents.
 
 The tray log records lifecycle/diagnostic errors and child stderr. Structured
 status reports server origin, transport and access state only. The tray sanitizes
@@ -474,7 +495,12 @@ machine inventory.
 ### Routing and UI
 
 - absent selection remains server-only;
-- unknown/unavailable selector is 409;
+- unknown and known-enabled-but-offline selectors have distinct 409 errors and
+  neither silently becomes server-only;
+- installed-PWA message/queue retries retain one stable selector across a new
+  transport ID, stop at the bounded grace deadline and do not retry other
+  failures/actions;
+- unknown persisted selectors clear while known offline selections remain;
 - disabled known selector is safe server-only;
 - stable machine resolves after reconnect and prefers its tray;
 - one usable machine auto-selects, several render the selector;

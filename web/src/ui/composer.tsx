@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO, SessionCommandName } from '@pop-agent/shared';
 import { t } from '../i18n';
+import { ApiError } from '../services/api';
 import { appendComposerHistory, readComposerHistory } from '../services/composer-history';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
@@ -364,12 +365,12 @@ export function Composer({
           'steer',
           executionMode,
         );
-      } catch {
+      } catch (error) {
         // The transcription succeeded; it is the send/queue that failed. Put
         // the merged words into the durable draft instead of misreporting a
         // transcription failure or dropping the voice note.
         persist(merged);
-        setNotice(t('chat.sendFailed'));
+        setNotice(sendFailureNotice(error));
         return;
       }
       remember(merged);
@@ -499,10 +500,10 @@ export function Composer({
       setMentions([]);
       setEditingQueuedId(undefined);
       onEditingDone();
-    } catch {
+    } catch (error) {
       // Most importantly, do not clear anything: the exact draft and its files
       // remain available for another tap.
-      setNotice(t('chat.sendFailed'));
+      setNotice(sendFailureNotice(error));
     } finally {
       setSending(false);
     }
@@ -862,6 +863,14 @@ export function Composer({
       </div>
     </div>
   );
+}
+
+function sendFailureNotice(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'local_connection_unavailable') return t('chat.localMachineOffline');
+    if (error.code === 'local_connection_unknown') return t('chat.localMachineReset');
+  }
+  return t('chat.sendFailed');
 }
 
 /** Per-chat execution policy; the server still enforces the selected mode. */

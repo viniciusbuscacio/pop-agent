@@ -107,6 +107,13 @@ const sendSchema = z
     }
   });
 
+export interface RejectedLocalSelectionDiagnostic {
+  selector: string;
+  reason: 'unknown' | 'offline';
+  clientKind?: MessageClient['kind'];
+  clientPlatform?: string;
+}
+
 export interface ChatRoutesDeps {
   auth: AuthService;
   chats: ChatService;
@@ -118,6 +125,7 @@ export interface ChatRoutesDeps {
   hub: SseHub;
   tickets: EventTickets;
   localConnections: LocalConnectionRegistry;
+  onRejectedLocalSelection: (diagnostic: RejectedLocalSelectionDiagnostic) => void;
 }
 
 /**
@@ -167,18 +175,53 @@ function readClient(c: Context): MessageClient | undefined {
 function selectLocalConnection(
   c: Context,
   registry: LocalConnectionRegistry,
-): { ok: true; connectionId?: string } | { ok: false } {
+):
+  | { ok: true; connectionId?: string }
+  | { ok: false; selector: string; reason: 'unknown' | 'offline' } {
   const explicit = c.req.header(LOCAL_CONNECTION_HEADER);
   if (explicit !== undefined && explicit.length > 0) {
     if (registry.has(explicit)) return { ok: true, connectionId: explicit };
     // A synchronized Off switch means "continue with server tools", not
-    // "reject the user's message". Unknown or unavailable enabled machines
-    // remain an error so no request silently falls through to another computer.
-    return registry.knownAndDisabled(explicit) ? { ok: true } : { ok: false };
+    // "reject the user's message". An enabled stable machine that is merely
+    // between transports is distinct from a selector the server has never
+    // known, so the PWA can retry only the transient case.
+    if (registry.knownAndDisabled(explicit)) return { ok: true };
+    return {
+      ok: false,
+      selector: explicit,
+      reason: registry.knownAndEnabled(explicit) ? 'offline' : 'unknown',
+    };
   }
   // A browser/PWA must select a machine explicitly. Holding a web session alone
   // never grants whichever computer happens to be connected in the background.
   return { ok: true };
+}
+
+function rejectLocalSelection(
+  c: Context,
+  selected: { selector: string; reason: 'unknown' | 'offline' },
+  client: MessageClient | undefined,
+  onDiagnostic: ChatRoutesDeps['onRejectedLocalSelection'],
+) {
+  onDiagnostic({
+    selector: selected.selector.slice(0, 256),
+    reason: selected.reason,
+    ...(client === undefined ? {} : { clientKind: client.kind }),
+    ...(client?.platform === undefined ? {} : { clientPlatform: client.platform }),
+  });
+  return selected.reason === 'offline'
+    ? apiError(
+        c,
+        409,
+        'local_connection_unavailable',
+        'The selected local machine is temporarily offline.',
+      )
+    : apiError(
+        c,
+        409,
+        'local_connection_unknown',
+        'The selected local machine is no longer known.',
+      );
 }
 
 /** The socket's own address, when the adapter can say. */
@@ -363,7 +406,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const client = readClient(c);
     const selected = selectLocalConnection(c, deps.localConnections);
     if (!selected.ok) {
-      return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
+      return rejectLocalSelection(c, selected, client, deps.onRejectedLocalSelection);
     }
     const chatId = c.req.param('id');
     const origin = {
@@ -428,7 +471,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const client = readClient(c);
     const selected = selectLocalConnection(c, deps.localConnections);
     if (!selected.ok) {
-      return apiError(c, 409, 'local_connection_unavailable', 'The selected local connection is unavailable.');
+      return rejectLocalSelection(c, selected, client, deps.onRejectedLocalSelection);
     }
     const chatId = c.req.param('id');
     if (chatId === undefined) return chatNotFound(c);

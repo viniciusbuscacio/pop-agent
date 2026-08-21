@@ -1,7 +1,14 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CLIENT_HEADER, LOCAL_CONNECTION_HEADER, type ChatDTO, type MessageDTO, type StreamEvent } from '@pop-agent/shared';
+import {
+  CLIENT_HEADER,
+  CLIENT_PLATFORM_HEADER,
+  LOCAL_CONNECTION_HEADER,
+  type ChatDTO,
+  type MessageDTO,
+  type StreamEvent,
+} from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
@@ -328,15 +335,51 @@ describe('chat collection', () => {
 });
 
 describe('sending a message', () => {
-  it('rejects an explicit stale local connection before creating a run', async () => {
+  it('rejects and diagnoses an unknown local selector before creating a run', async () => {
     const chat = await newChat();
     const response = await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST',
       body: { text: 'hello' },
-      headers: { [LOCAL_CONNECTION_HEADER]: 'local-gone' },
+      headers: {
+        [LOCAL_CONNECTION_HEADER]: 'machine-gone',
+        [CLIENT_HEADER]: 'pwa',
+        [CLIENT_PLATFORM_HEADER]: 'windows',
+      },
     });
     expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unavailable' } });
+    expect(await response.json()).toMatchObject({ error: { code: 'local_connection_unknown' } });
+    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
+    expect(fixture.rejectedLocalSelections).toEqual([{
+      selector: 'machine-gone', reason: 'unknown', clientKind: 'pwa', clientPlatform: 'windows',
+    }]);
+  });
+
+  it('distinguishes an enabled stable machine that is temporarily offline', async () => {
+    const machine = {
+      machineId: 'machine-offline',
+      hostname: 'm1', platform: 'win32', arch: 'x64', cwd: 'C:\\Users\\vini', clientVersion: '0.2.34',
+    };
+    fixture.localConnections.attach({
+      id: 'local-before-restart', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localAccessPolicy.setEnabled(machine.machineId, true);
+    fixture.localConnections.detach('local-before-restart');
+
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'keep local routing' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'local_connection_unavailable' },
+    });
+    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
+    expect(fixture.rejectedLocalSelections).toEqual([{
+      selector: machine.machineId, reason: 'offline',
+    }]);
   });
 
   it('accepts a stable machine selection after the tray reconnects with a new connection ID', async () => {
@@ -391,6 +434,16 @@ describe('sending a message', () => {
     const queuedBody = (await queued.json()) as { message: { id: string } };
 
     fixture.localConnections.detach('local-queue-old');
+    const offline = await api(`/v1/chats/${chat.id}/queue/${queuedBody.message.id}`, {
+      method: 'PUT', body: { text: 'must not become server-only' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+    });
+    expect(offline.status).toBe(409);
+    expect(await offline.json()).toMatchObject({
+      error: { code: 'local_connection_unavailable' },
+    });
+    expect(fixture.queuedMessages.list(chat.id)[0]?.text).toBe('queued before reconnect');
+
     fixture.localConnections.attach({
       id: 'local-queue-new', role: 'background', machine,
       send: () => undefined, close: () => undefined,

@@ -111,9 +111,11 @@ export class LocalConnectionRegistry {
   }
 
   knownAndDisabled(selector: string): boolean {
-    if (this.accessPolicy === undefined) return false;
-    const machineId = this.transportConnection(selector)?.machine.machineId ?? selector;
-    return this.accessPolicy.machines().some((machine) => machine.machineId === machineId && !machine.enabled);
+    return this.knownWithAccess(selector, false);
+  }
+
+  knownAndEnabled(selector: string): boolean {
+    return this.knownWithAccess(selector, true);
   }
 
   setAccessEnabled(machineId: string, enabled: boolean): boolean {
@@ -249,6 +251,14 @@ export class LocalConnectionRegistry {
       entry.pingId += 1;
       entry.connection.send({ kind: 'ping', pingId: entry.pingId });
     }
+  }
+
+  private knownWithAccess(selector: string, enabled: boolean): boolean {
+    if (this.accessPolicy === undefined) return false;
+    const machineId = this.transportConnection(selector)?.machine.machineId ?? selector;
+    return this.accessPolicy.machines().some(
+      (machine) => machine.machineId === machineId && machine.enabled === enabled,
+    );
   }
 
   private expired(connection: LocalConnection): boolean {

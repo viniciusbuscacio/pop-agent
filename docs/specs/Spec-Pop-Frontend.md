@@ -347,7 +347,10 @@ The composer owns device-local draft interaction, not delivery authority:
 - each chat keeps a device-local history of its latest 100 successfully submitted
   composer messages; Arrow Up recalls older entries and Arrow Down returns toward
   newer entries and the preserved draft without taking over multiline caret movement;
-- failed sends retain exact text, attachments and Files references;
+- failed sends retain exact text, attachments and Files references; an expired
+  reconnect grace reports the selected local machine as offline, while an
+  unknown persisted selector reports that the selection was reset instead of
+  hiding either typed failure behind the generic send notice;
 - Enter sends, Shift+Enter inserts a line, and Escape stops a live run;
 - attachment-only input can be sent with blank text, while a completely empty
   composer cannot be submitted;

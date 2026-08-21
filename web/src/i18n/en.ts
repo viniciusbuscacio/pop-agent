@@ -111,6 +111,10 @@ export const en = {
   'chat.planChangeFailed': 'Could not synchronize Plan mode',
   'chat.send': 'Send',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
+  'chat.localMachineOffline':
+    'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
+  'chat.localMachineReset':
+    'The saved local machine selection no longer exists and was reset. Choose a computer again in Settings, then retry. Your draft and attachments were kept.',
   'chat.queue': 'Queue message',
   'chat.queueSave': 'Save queued message',
   'chat.queueCancelFailed': 'Could not cancel the queued message.',

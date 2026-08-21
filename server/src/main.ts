@@ -715,6 +715,11 @@ const app = createApp({
   a2a,
   usage: context.usage,
   localConnections,
+  onRejectedLocalSelection: (diagnostic) => {
+    // JSON escaping keeps an untrusted selector on one journal line. The hook
+    // intentionally receives no body, token, attachment, or message content.
+    console.warn(`pop local access: rejected selection ${JSON.stringify(diagnostic)}`);
+  },
   storage: new StorageService({
     repo: context.storage,
     disk: new NodeDiskUsage(),

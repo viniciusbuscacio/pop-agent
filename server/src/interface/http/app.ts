@@ -52,7 +52,10 @@ import type { PiCandidateService } from '../../application/update/pi-candidate-s
 import type { PiActivationService } from '../../application/update/pi-activation-service.js';
 import { createVoiceRoutes } from './voice-routes.js';
 import { createWebAuthnRoutes } from './webauthn-routes.js';
-import { createChatRoutes } from './chat-routes.js';
+import {
+  createChatRoutes,
+  type RejectedLocalSelectionDiagnostic,
+} from './chat-routes.js';
 import { EventTickets } from './event-tickets.js';
 import { createMemoryRoutes } from './memory-routes.js';
 import { createProviderRoutes } from './provider-routes.js';
@@ -109,6 +112,8 @@ export interface AppDeps {
   usage: UsageRepo;
   storage: StorageService;
   localConnections: LocalConnectionRegistry;
+  /** Journal-safe diagnostics for chat requests rejected before mutation. */
+  onRejectedLocalSelection: (diagnostic: RejectedLocalSelectionDiagnostic) => void;
   backups: BackupService;
   push: PushService;
   webauthn: WebAuthnGateway;

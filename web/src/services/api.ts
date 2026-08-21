@@ -8,7 +8,10 @@ import {
 } from '@pop-agent/shared';
 import { healthMonitor } from './health';
 import { session } from './session';
-import { selectedLocalConnection } from './local-connection-selection';
+import {
+  clearLocalConnection,
+  selectedLocalConnection,
+} from './local-connection-selection';
 
 /**
  * The only module in the app that calls `fetch` (docs/specs/Spec-Pop-General.md §14, enforced by
@@ -97,8 +100,7 @@ export function clientEnvironment(): ClientEnvironment {
   };
 }
 
-function clientHeaders(): Record<string, string> {
-  const client = clientEnvironment();
+function clientHeaders(client = clientEnvironment()): Record<string, string> {
   return {
     [CLIENT_HEADER]: client.kind,
     [CLIENT_PLATFORM_HEADER]: client.platform,
@@ -117,45 +119,87 @@ function platformName(): string {
   return '';
 }
 
+const LOCAL_RECONNECT_DELAYS_MS = [500, 1_000, 1_500, 2_000, 2_000, 2_000, 2_000] as const;
+
+interface ApiRequestRuntime {
+  sleep?: (milliseconds: number) => Promise<void>;
+  reconnectDelaysMs?: readonly number[];
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function retriesLocalReconnect(path: string, method: string): boolean {
+  return (
+    (method === 'POST' && /^\/chats\/[^/]+\/messages$/.test(path)) ||
+    (method === 'PUT' && /^\/chats\/[^/]+\/queue(?:\/[^/]+)?$/.test(path))
+  );
+}
+
 export async function apiRequest<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
+  runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
-  const headers: Record<string, string> = clientHeaders();
+  const client = clientEnvironment();
+  const headers: Record<string, string> = clientHeaders(client);
+  const method = init.method ?? 'GET';
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
+  // Capture one stable selector for the whole operation. A reconnect changes
+  // only the server-side transport ID; retries must neither lose local routing
+  // nor jump to a different machine selected in another UI interaction.
   const localConnection = selectedLocalConnection();
   if (localConnection !== undefined) headers[LOCAL_CONNECTION_HEADER] = localConnection;
+  const reconnectDelays =
+    client.kind === 'pwa' &&
+    localConnection !== undefined &&
+    retriesLocalReconnect(path, method)
+      ? [...(runtime.reconnectDelaysMs ?? LOCAL_RECONNECT_DELAYS_MS)]
+      : [];
 
-  const response = await probed(() =>
-    fetch(`${BASE}${path}`, {
-      method: init.method ?? 'GET',
-      headers,
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-    }),
-  );
+  for (;;) {
+    const response = await probed(() =>
+      fetch(`${BASE}${path}`, {
+        method,
+        headers,
+        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      }),
+    );
 
-  // The server hands back a fresh token once the current one is a day old.
-  const renewed = response.headers.get(SESSION_TOKEN_HEADER);
-  if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+    // The server hands back a fresh token once the current one is a day old.
+    const renewed = response.headers.get(SESSION_TOKEN_HEADER);
+    if (renewed !== null && renewed.length > 0) session.refresh(renewed);
 
-  // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
-  // (POST /files/folders answers created with nothing to add).
-  if (response.status === 204) return undefined as T;
-  if (response.ok) {
-    const text = await response.text();
-    return (text.length === 0 ? undefined : JSON.parse(text)) as T;
+    // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
+    // (POST /files/folders answers created with nothing to add).
+    if (response.status === 204) return undefined as T;
+    if (response.ok) {
+      const text = await response.text();
+      return (text.length === 0 ? undefined : JSON.parse(text)) as T;
+    }
+
+    const error = await toApiError(response);
+    if (error.code === 'local_connection_unknown' && localConnection !== undefined) {
+      clearLocalConnection(localConnection);
+    }
+    if (error.code === 'local_connection_unavailable' && reconnectDelays.length > 0) {
+      const delay = reconnectDelays.shift();
+      if (delay !== undefined) {
+        await (runtime.sleep ?? wait)(delay);
+        continue;
+      }
+    }
+    // Only an expired or forged session sends the user back to the login
+    // screen; a wrong password on the login form is not that.
+    if (error.code === 'invalid_session') {
+      session.clear();
+      onSessionLost();
+    }
+    throw error;
   }
-
-  const error = await toApiError(response);
-  // Only an expired or forged session sends the user back to the login
-  // screen; a wrong password on the login form is not that.
-  if (error.code === 'invalid_session') {
-    session.clear();
-    onSessionLost();
-  }
-  throw error;
 }
 
 /** A binary GET (e.g. a backup archive), returned as a Blob with the bearer token. */
