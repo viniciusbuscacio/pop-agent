@@ -10,8 +10,8 @@ import type { HealthResponse } from '@pop-agent/shared';
  *
  * The cadence follows the answer. Healthy, this is a keepalive -- one cheap
  * GET a minute, enough to notice a server that went away while the user sat
- * reading. Unreachable, it is a retry: 5s doubling to 30s, because the only
- * thing anyone wants then is the moment it comes back.
+ * reading. Unreachable, it retries after 1s and exponentially backs off to a
+ * 10s cap, because short deployment restarts should unlock the app promptly.
  *
  * Nothing runs while the page is hidden. iOS freezes a backgrounded PWA within
  * seconds anyway, so a timer that survived would only resume holding a verdict
@@ -33,9 +33,9 @@ export type HealthState =
 
 /** Healthy: a keepalive, not a heartbeat. */
 const KEEPALIVE_MS = 60_000;
-/** Unreachable: try soon, then ease off, so a long outage is not a busy loop. */
-const FIRST_RETRY_MS = 5_000;
-const MAX_RETRY_MS = 30_000;
+/** Unreachable: recover quickly from a restart, then cap at one probe per 10 seconds. */
+const FIRST_RETRY_MS = 1_000;
+const MAX_RETRY_MS = 10_000;
 
 type Listener = () => void;
 

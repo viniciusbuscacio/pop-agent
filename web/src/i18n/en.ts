@@ -92,9 +92,9 @@ export const en = {
 
   // The connection banner. It names the culprit on purpose: without it the
   // first thing anyone blames is their own wi-fi.
-  'connection.serverOffline': 'Server is offline.',
+  'connection.serverOffline': 'Server reconnecting…',
   'connection.serverOfflineDetail':
-    'Your internet is working — the problem is on the server. Nothing you typed was lost. Trying to reconnect…',
+    'Your internet is working — the server is temporarily unavailable. Actions are paused and nothing you typed was lost.',
   'connection.deviceOffline': "You're offline.",
   'connection.deviceOfflineDetail':
     'This device has no internet connection. Pop Agent reconnects on its own once it does.',
@@ -111,6 +111,8 @@ export const en = {
   'chat.planChangeFailed': 'Could not synchronize Plan mode',
   'chat.send': 'Send',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
+  'chat.serverReconnecting':
+    'Server reconnecting… Your draft and attachments were kept. Sending will unlock automatically when the server is back.',
   'chat.localMachineOffline':
     'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
   'chat.localMachineReset':

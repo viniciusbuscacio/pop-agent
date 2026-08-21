@@ -156,6 +156,32 @@ describe('apiRequest', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('turns a transport failure into a stable server-reconnecting error', async () => {
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('Failed to fetch')));
+
+    await expect(apiRequest('/chats/chat-1/messages', {
+      method: 'POST', body: { text: 'keep me' },
+    })).rejects.toMatchObject({ code: 'server_unreachable', status: 0 });
+  });
+
+  it('treats a bare reverse-proxy gateway response as server reconnecting', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('Bad Gateway', { status: 502 })));
+
+    await expect(apiRequest('/chats/chat-1/messages', {
+      method: 'POST', body: { text: 'keep me' },
+    })).rejects.toMatchObject({ code: 'server_unreachable', status: 502 });
+  });
+
+  it('keeps an application 503 envelope as the server error it actually returned', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify({
+      error: { code: 'llm_stopped', message: 'Start it again.' },
+    }), { status: 503 })));
+
+    await expect(apiRequest('/chats/chat-1/messages', {
+      method: 'POST', body: { text: 'hello' },
+    })).rejects.toMatchObject({ code: 'llm_stopped', status: 503 });
+  });
+
   it('turns an error envelope into a typed ApiError', async () => {
     vi.stubGlobal('fetch', () =>
       Promise.resolve(

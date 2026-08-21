@@ -22,6 +22,7 @@ import { SkillsPage } from './routes/skills-page';
 import { UpdatePrompt } from './ui/update-prompt';
 import { ConnectionBanner } from './ui/connection-banner';
 import { Toasts } from './ui/toasts';
+import { ServerAvailabilityGate } from './ui/server-availability-gate';
 
 /**
  * Boot decides the screen (docs/specs/Spec-Pop-General.md §9): a server with no account goes to the
@@ -38,7 +39,9 @@ export function App() {
       <ConnectionBanner />
       <UpdatePrompt />
       <Toasts />
-      <Boot />
+      <ServerAvailabilityGate>
+        <Boot />
+      </ServerAvailabilityGate>
     </BrowserRouter>
   );
 }

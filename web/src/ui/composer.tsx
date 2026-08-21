@@ -867,6 +867,7 @@ export function Composer({
 
 function sendFailureNotice(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === 'server_unreachable') return t('chat.serverReconnecting');
     if (error.code === 'local_connection_unavailable') return t('chat.localMachineOffline');
     if (error.code === 'local_connection_unknown') return t('chat.localMachineReset');
   }

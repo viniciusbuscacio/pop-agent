@@ -84,7 +84,7 @@ describe('healthMonitor', () => {
     unsubscribe();
   });
 
-  it('retries in seconds while unreachable, not once a minute', async () => {
+  it('retries quickly after a restart and caps at ten seconds', async () => {
     const monitor = await freshMonitor();
     vi.useFakeTimers();
     const fetchMock = vi.fn(() => Promise.reject(new TypeError('failed to fetch')));
@@ -95,8 +95,16 @@ describe('healthMonitor', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(monitor.getState()).toEqual({ kind: 'offline' });
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     unsubscribe();
   });
 

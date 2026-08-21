@@ -429,25 +429,33 @@ A connection banner above the route tree distinguishes:
 - internet available but personal server unreachable;
 - recovery (“Back online” briefly).
 
-An unreachable server is a full-width non-modal banner with a real retry and
-“Try now”, not a subtle status dot. Already loaded content stays readable. A
-reachable but degraded server uses the sidebar health diagnosis for provider or
-DB trouble.
+An unreachable server is a full-width non-modal **Server reconnecting…** banner
+with a real retry and “Try now”, not a subtle status dot. Already loaded content
+stays readable, but the route tree is inert so no server-owned action can be
+started while success is impossible; the banner remains interactive. A failed
+send names the reconnect state and preserves its exact draft and attachments
+instead of showing the generic delivery error. A reachable but degraded server
+uses the sidebar health diagnosis for provider or DB trouble.
 
 Health cadence:
 
 - reachable/degraded: one cheap `/v1/health` keepalive per minute;
-- unreachable: retry after 5 seconds, exponential to 30 seconds;
+- unreachable: retry after 1 second, exponential to a 10-second cap;
 - hidden/pagehide: stop polling;
 - visible/pageshow/online/offline: probe immediately;
 - device definitely offline: skip impossible network requests.
 
-Every ordinary API request also updates reachability evidence immediately. The
-health probe uses `no-store`; cached health is not health.
+Every ordinary API request also updates reachability evidence immediately.
+Fetch transport failures and bare reverse-proxy 502/503/504 responses mean the
+Pop server is unreachable; a structured application error at the same status
+still proves the server answered. The health probe uses `no-store`; cached
+health is not health.
 
 The service worker may keep the shell readable offline, but no UI may imply
-that server-owned actions succeeded while disconnected. Failed send/draft state
-must remain recoverable.
+that server-owned actions succeeded while disconnected. Mutation requests are
+not automatically replayed because a transport failure cannot prove that a
+non-idempotent request was never committed; the unlocked user retries after
+recovery. Failed send/draft state must remain recoverable.
 
 ## PWA installation
 

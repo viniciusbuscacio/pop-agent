@@ -46,17 +46,22 @@ export function setSessionLostHandler(handler: SessionLostHandler): void {
  * Every request doubles as a connection probe. A fetch that never reached the
  * server is the loudest evidence there is, and waiting for the next keepalive
  * to rediscover it would leave the user watching a send that did nothing with
- * nothing on screen to explain it. An answer -- any answer, a 500 included --
- * proves the opposite just as fast.
+ * nothing on screen to explain it. An application error envelope proves the
+ * server answered; a bare reverse-proxy 502/503/504 is classified below as an
+ * unreachable Pop server rather than healthy reachability.
  */
 async function probed(request: () => Promise<Response>): Promise<Response> {
   try {
     const response = await request();
     healthMonitor.reportReachable();
     return response;
-  } catch (error) {
+  } catch {
     healthMonitor.reportUnreachable();
-    throw error;
+    throw new ApiError(
+      'server_unreachable',
+      'The server is temporarily unreachable. Pop Agent is reconnecting.',
+      0,
+    );
   }
 }
 
@@ -184,7 +189,7 @@ export async function apiRequest<T>(
       return (text.length === 0 ? undefined : JSON.parse(text)) as T;
     }
 
-    const error = await toApiError(response);
+    const error = classifyServerReachability(await toApiError(response));
     if (error.code === 'local_connection_unknown' && localConnection !== undefined) {
       clearLocalConnection(localConnection);
     }
@@ -212,7 +217,7 @@ export async function apiDownload(path: string): Promise<Blob> {
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
   const response = await probed(() => fetch(`${BASE}${path}`, { headers }));
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) throw classifyServerReachability(await toApiError(response));
   return response.blob();
 }
 
@@ -230,7 +235,17 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   if (renewed !== null && renewed.length > 0) session.refresh(renewed);
 
   if (response.ok) return (await response.json()) as T;
-  throw await toApiError(response);
+  throw classifyServerReachability(await toApiError(response));
+}
+
+function classifyServerReachability(error: ApiError): ApiError {
+  if (error.code !== 'operation_error' || ![502, 503, 504].includes(error.status)) return error;
+  healthMonitor.reportUnreachable();
+  return new ApiError(
+    'server_unreachable',
+    'The server is temporarily unreachable. Pop Agent is reconnecting.',
+    error.status,
+  );
 }
 
 async function toApiError(response: Response): Promise<ApiError> {

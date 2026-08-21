@@ -292,6 +292,10 @@ describe('pending message composition', () => {
 
   it.each([
     [
+      'server_unreachable',
+      'Server reconnecting… Your draft and attachments were kept. Sending will unlock automatically when the server is back.',
+    ],
+    [
       'local_connection_unavailable',
       'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
     ],

@@ -141,6 +141,11 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Fixed
 
+- **Web clients now surface deployment restarts as connection recovery.** A
+  failed transport immediately shows **Server reconnecting…**, keeps loaded
+  content readable but actions inert, preserves send drafts/attachments with a
+  specific notice and probes after 1 second with exponential backoff capped at
+  10 seconds. Unsafe non-idempotent requests are never replayed automatically.
 - **Installed-PWA sends no longer depend on Local Access automatically.** PWA
   upgrades migrate former automatic selections to Server only; enabling access
   does not route messages until the user explicitly chooses a computer. Explicit
