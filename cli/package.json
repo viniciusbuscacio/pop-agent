@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@pop-agent/shared": "*",
-    "@earendil-works/pi-tui": "0.83.0",
-    "ws": "^8.21.1"
+    "@earendil-works/pi-tui": "0.84.2",
+    "ws": "^8.21.3"
   }
 }
