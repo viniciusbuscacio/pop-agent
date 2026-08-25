@@ -51,10 +51,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   `/cli-latest.tgz` alias, with truthful output when the packed CLI trails the
   server. CLI packaging retains immutable historical tarballs at their existing
   versioned URLs while the manifest and alias select the current pack.
-- **The interactive CLI now starts a clean conversation on double Escape.** A
-  single Escape still stops an active run immediately, picker cancellation keeps
-  ownership of Escape, and `/new` plus the shortcut now clear the old transcript,
-  live output, activity indicator and title before starting fresh.
+- **The interactive CLI now reserves Escape for interrupting runs.** Escape
+  never starts a new chat, while an open picker retains ownership of it. Ctrl+C
+  first clears the editor and only a second consecutive press within 500 ms uses
+  the clean quit path; `/new` remains the genuinely clean conversation action.
 - **Chat messages can contain attachments without text.** The PWA composer and
   HTTP API now accept uploaded attachments or Files references on their own,
   including durable queued input and queued-message edits, while still rejecting

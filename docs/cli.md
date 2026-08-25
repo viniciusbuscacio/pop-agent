@@ -603,11 +603,13 @@ A bare argument meaning one-shot is what pi and Claude Code do, and what
 the hand expects. `-i` was rejected: it reads as *interactive*, the
 opposite of the scripting case it was proposed for.
 
-Leaving the interactive screen with Ctrl+C, `/quit`, or `/exit` prints the
-current chat id as a ready-to-paste `pop --chat <id>` command. The farewell and
-continuation command are grey so they remain useful without competing with the
-transcript. A conversation that has not sent its first message has no server id
-yet, so it only says `Bye!`.
+Leaving the interactive screen with `/quit`, `/exit`, or two consecutive Ctrl+C
+presses within 500 ms prints the current chat id as a ready-to-paste
+`pop --chat <id>` command. The first Ctrl+C clears the editor without exiting;
+any other input or an expired interval requires a fresh first press. The farewell
+and continuation command are grey so they remain useful without competing with
+the transcript. A conversation that has not sent its first message has no server
+id yet, so it only says `Bye!`.
 
 **Profiles and preferences.** `~/.config/pop-agent/profiles.json` keeps one
 entry per server: URL + token. `preferences.json` is deliberately separate:
@@ -620,7 +622,10 @@ arriving word by word. `/chats` opens the server's canonical unarchived list
 (pinned first, then recent) as an inline keyboard picker immediately above the
 editor, pushing older transcript lines upward instead of covering them; arrows
 move, Enter replaces the visible transcript with the selected chat's latest
-history and live snapshot, and Escape cancels without stopping the run.
+history and live snapshot, and Escape cancels without stopping the run. Outside
+an open picker, Escape always interrupts the current run and never starts a new
+chat. `/new` remains the clean-new-conversation action and replaces the prior
+transcript and live state.
 `/think` immediately shows or hides reasoning in live and historical assistant
 segments, persists that choice for the machine, and reasoning remains visible
 after a run settles.

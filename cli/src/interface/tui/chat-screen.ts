@@ -46,7 +46,7 @@ import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
  * undiscoverable (Vinicius, 04/08).
  */
 const COMMANDS: SlashCommand[] = [
-  { name: 'new', description: 'Start fresh (or press Escape twice)' },
+  { name: 'new', description: 'Start a fresh conversation' },
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
@@ -56,7 +56,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'export', description: 'Export the pi session to Files' },
   { name: 'fork', description: 'Fork from an earlier user message' },
   { name: 'help', description: 'List these commands' },
-  { name: 'quit', description: 'Leave (or Ctrl+C)' },
+  { name: 'quit', description: 'Leave (or press Ctrl+C twice)' },
 ];
 
 const HELP = COMMANDS.map(
@@ -66,8 +66,8 @@ const HELP = COMMANDS.map(
 /** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
 const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const WORKING_FRAME_MS = 140;
-/** Long enough for an intentional double tap, short enough not to surprise later. */
-const DOUBLE_ESCAPE_MS = 500;
+/** Conventional double-press window for the explicit terminal quit gesture. */
+const DOUBLE_CTRL_C_MS = 500;
 const localRunNotice = (command: string): string =>
   `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
 
@@ -191,8 +191,8 @@ export class ChatScreen {
   private spoken = false;
   private exited = false;
   private title: string;
-  /** Timestamp of a first, screen-owned Escape awaiting a consecutive tap. */
-  private lastEscapeAt: number | undefined;
+  /** Timestamp of the first Ctrl+C awaiting an immediate second press. */
+  private lastCtrlCAt: number | undefined;
 
   constructor(private readonly options: ScreenOptions) {
     this.terminal = options.terminal ?? new ProcessTerminal();
@@ -218,37 +218,32 @@ export class ChatScreen {
     };
 
     // Raw mode swallows SIGINT, so Ctrl+C has to be caught by hand or the
-    // screen becomes a room with no door. Both keys are CONSUMED: an escape
-    // that also reached the editor would clear what the user was typing while
-    // interrupting the run, which is two surprises for one keypress.
+    // screen becomes a room with no door. The first press clears the editor;
+    // only an immediate, uninterrupted second press leaves through `quit()`.
+    // Escape is consumed so interrupting a run never also clears the draft.
     this.tui.addInputListener((data: string) => {
       if (matchesKey(data, 'ctrl+c')) {
-        this.quit();
-        return { consume: true };
-      }
-      // The inline picker owns Escape before the screen does. Let SelectList
-      // receive it so cancelling /chats never also interrupts the current answer
-      // or counts toward the clean-conversation shortcut.
-      if (matchesKey(data, 'escape') && this.picker !== undefined) {
-        this.lastEscapeAt = undefined;
-        return undefined;
-      }
-      if (matchesKey(data, 'escape')) {
         const now = Date.now();
-        const elapsed = this.lastEscapeAt === undefined ? undefined : now - this.lastEscapeAt;
-        if (elapsed !== undefined && elapsed >= 0 && elapsed <= DOUBLE_ESCAPE_MS) {
-          this.lastEscapeAt = undefined;
-          this.startNewConversation();
+        const elapsed = this.lastCtrlCAt === undefined ? undefined : now - this.lastCtrlCAt;
+        if (elapsed !== undefined && elapsed >= 0 && elapsed <= DOUBLE_CTRL_C_MS) {
+          this.lastCtrlCAt = undefined;
+          this.quit();
         } else {
-          // The first Escape always stops immediately. Waiting for the possible
-          // second tap would make the established interrupt shortcut feel broken.
-          this.lastEscapeAt = now;
-          void this.options.session.stop();
+          this.lastCtrlCAt = now;
+          this.editor.setText('');
         }
         return { consume: true };
       }
-      // A double tap is consecutive, not merely two Escapes near other input.
-      this.lastEscapeAt = undefined;
+
+      // Any other input makes a later Ctrl+C a fresh first press.
+      this.lastCtrlCAt = undefined;
+      // The inline picker owns Escape before the screen does. Let SelectList
+      // receive it so cancelling /chats never also interrupts the current answer.
+      if (matchesKey(data, 'escape') && this.picker !== undefined) return undefined;
+      if (matchesKey(data, 'escape')) {
+        void this.options.session.stop();
+        return { consume: true };
+      }
       return undefined;
     });
   }

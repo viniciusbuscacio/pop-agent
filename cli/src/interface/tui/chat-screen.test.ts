@@ -138,6 +138,19 @@ describe('ChatScreen', () => {
     expect(plain()).toContain('/help');
   });
 
+  it('describes the current new-chat and quit shortcuts in /help', async () => {
+    const { terminal, plain } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/help');
+    await flush();
+
+    expect(plain()).toContain('Start a fresh conversation');
+    expect(plain()).toContain('Leave (or press Ctrl+C twice)');
+    expect(plain()).not.toContain('Escape twice');
+  });
+
   it('runs pi session commands locally instead of sending them as prompts', async () => {
     const { terminal, plain } = recorder();
     const { screen, ports } = screenWith(terminal);
@@ -221,7 +234,7 @@ describe('ChatScreen', () => {
     expect(ports.loadChat).toHaveBeenCalledWith('chat-2');
   });
 
-  it('lets the chat picker consume Escape without stopping or arming the screen shortcut', async () => {
+  it('lets the chat picker consume Escape without stopping the current run', async () => {
     const { terminal, send } = recorder();
     const { screen, session, ports } = screenWith(terminal);
     vi.mocked(ports.listChats).mockResolvedValueOnce([chatDto()]);
@@ -243,9 +256,9 @@ describe('ChatScreen', () => {
     expect(session.currentChatId).toBe('chat-1');
   });
 
-  it('starts a visually and session-clean conversation on double Escape', async () => {
-    const { terminal, plain, writes, send, repaint } = recorder();
-    const { screen, session, ports } = screenWith(terminal);
+  it('keeps /new as a visually and session-clean conversation', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen, session } = screenWith(terminal);
     await session.ask('old question');
     screen.start();
     screen.setTitle('Old conversation');
@@ -256,9 +269,7 @@ describe('ChatScreen', () => {
     });
     await flush();
 
-    send('\u001b');
-    expect(ports.stop).toHaveBeenCalledOnce();
-    send('\u001b');
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/new');
     await flush();
     writes.length = 0;
     repaint();
@@ -266,42 +277,100 @@ describe('ChatScreen', () => {
 
     expect(session.currentChatId).toBeUndefined();
     expect(session.busy).toBe(false);
-    expect(ports.stop).toHaveBeenCalledOnce();
     expect(plain()).toContain('New conversation');
     expect(plain()).not.toContain('Old conversation');
     expect(plain()).not.toContain('old partial answer');
     expect(plain()).not.toContain('Working…');
   });
 
-  it('stops immediately on a single Escape without starting a new conversation', async () => {
+  it('stops the current run on every Escape, including two immediate presses', async () => {
     const { terminal, send } = recorder();
-    const { screen, session, ports } = screenWith(terminal);
+    const { screen, session, ports, onExit } = screenWith(terminal);
     await session.ask('keep this conversation');
     screen.start();
 
     send('\u001b');
-
-    expect(ports.stop).toHaveBeenCalledOnce();
-    expect(session.currentChatId).toBe('chat-1');
-    expect(session.busy).toBe(true);
-  });
-
-  it('does not start a new conversation when Escape presses are spaced apart', async () => {
-    const { terminal, send } = recorder();
-    const { screen, session, ports } = screenWith(terminal);
-    await session.ask('keep this conversation');
-    screen.start();
-    const clock = vi.spyOn(Date, 'now')
-      .mockReturnValueOnce(1_000)
-      .mockReturnValueOnce(2_000);
-
     send('\u001b');
-    send('\u001b');
-    clock.mockRestore();
 
     expect(ports.stop).toHaveBeenCalledTimes(2);
     expect(session.currentChatId).toBe('chat-1');
     expect(session.busy).toBe(true);
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('clears the editor on the first Ctrl+C without exiting', () => {
+    const { terminal, send } = recorder();
+    const { screen, onExit } = screenWith(terminal);
+    screen.start();
+    send('unfinished draft');
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(editor.getText()).toBe('unfinished draft');
+
+    send('\u0003');
+
+    expect(editor.getText()).toBe('');
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('exits on a second immediate Ctrl+C', () => {
+    const { terminal, send } = recorder();
+    const { screen, onExit } = screenWith(terminal);
+    screen.start();
+    const clock = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(1_500);
+
+    send('\u0003');
+    send('\u0003');
+    clock.mockRestore();
+
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it('does not exit when Ctrl+C presses are more than 500ms apart', () => {
+    const { terminal, send } = recorder();
+    const { screen, onExit } = screenWith(terminal);
+    screen.start();
+    const clock = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(1_501);
+
+    send('\u0003');
+    send('\u0003');
+    clock.mockRestore();
+
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('requires a fresh first Ctrl+C after intervening input', () => {
+    const { terminal, send } = recorder();
+    const { screen, onExit } = screenWith(terminal);
+    screen.start();
+
+    send('\u0003');
+    send('x');
+    send('\u0003');
+
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(editor.getText()).toBe('');
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('uses the clean quit path for a double Ctrl+C', async () => {
+    const { terminal, plain, send } = recorder();
+    const stopped = vi.fn();
+    terminal.stop = stopped;
+    const { screen, session, onExit } = screenWith(terminal);
+    session.open('chat-clean-quit');
+    screen.start();
+
+    send('\u0003');
+    send('\u0003');
+    await flush();
+
+    expect(stopped).toHaveBeenCalledOnce();
+    expect(plain()).toContain('Bye!\nTo continue this chat, use:\npop --chat chat-clean-quit');
+    expect(onExit).toHaveBeenCalledOnce();
   });
 
   it('replaces the old transcript when a loaded chat is painted', async () => {
