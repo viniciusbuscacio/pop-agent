@@ -46,6 +46,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Changed
 
+- **PWA local access on macOS and Windows now requires the visible tray runtime.**
+  Interactive CLI connections no longer make those machines appear online to
+  the PWA or receive PWA-selected local tool calls; tray reconnects preserve the
+  selected machine without ever falling back to an interactive connection.
 - **Legacy npm-global CLI updates now follow the packed release instead of the server version.**
   `pop update` and generated migration commands use the same-origin non-cacheable
   `/cli-latest.tgz` alias, with truthful output when the packed CLI trails the

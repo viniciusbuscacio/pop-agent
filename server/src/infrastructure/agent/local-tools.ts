@@ -26,7 +26,7 @@ export function buildLocalTools(
   localConnections: LocalConnectionRegistry,
   connectionId: string | undefined,
 ): ToolDefinition[] {
-  const connection = localConnections.connection(connectionId);
+  const connection = localConnections.executionConnection(connectionId);
   // No terminal, no second pair: the tools are absent from the prompt rather
   // than present and failing, so she can say she has no access to that
   // machine instead of trying and apologising. Both cases land here -- a

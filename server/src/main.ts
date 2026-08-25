@@ -367,7 +367,7 @@ function piBridge(): PiAgentBridge {
     // session opens. Their product state can change without changing the
     // instruction string above, so make that state part of the cache key too.
     contextRevision: (_chatId, localConnectionId) => {
-      const localConnection = localConnections.connection(localConnectionId);
+      const localConnection = localConnections.executionConnection(localConnectionId);
       return JSON.stringify({
         autoSkillsEnabled: settings.read().autoSkillsEnabled,
         userMemory: context.userMemory.read().doc,

@@ -129,18 +129,18 @@ describe('HTTPS local-tools fallback', () => {
     });
 
     const body = (await (await request('/v1/local-tools/machines', 'GET')).json()) as {
-      machines: { machineId: string }[];
+      machines: { machineId: string; connected: boolean }[];
     };
-    expect(body.machines.map((machine) => machine.machineId)).toEqual(['machine-test']);
+    expect(body.machines).toMatchObject([{ machineId: 'machine-test', connected: true }]);
   });
 
-  it('synchronizes and persists per-computer access while the transport stays attached', async () => {
+  it('does not show a macOS machine as PWA-online with only an interactive connection', async () => {
     const connected = await attach();
     const id = ((await connected.json()) as { connectionId: string }).connectionId;
     expect(await (await request('/v1/local-tools/machines', 'GET')).json()).toEqual({
       machines: [{
         machineId: 'machine-test', hostname: 'test-mac', platform: 'darwin', arch: 'arm64',
-        clientVersion: '99.0.0', enabled: false, connected: true,
+        clientVersion: '99.0.0', enabled: false, connected: false,
       }],
     });
     const trayChange = {

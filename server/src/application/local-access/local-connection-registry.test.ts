@@ -49,6 +49,42 @@ describe('LocalConnectionRegistry', () => {
     registry.attach(tray.connection);
 
     expect(registry.connection('machine-m1')).toBe(tray.connection);
+    expect(registry.pwaConnection('machine-m1')).toBe(tray.connection);
+  });
+
+  it('requires a background connection for PWA access on macOS and Windows', () => {
+    const registry = new LocalConnectionRegistry();
+    const mac = fake('mac-interactive');
+    mac.connection.machine.machineId = 'machine-mac';
+    mac.connection.role = 'interactive';
+    const windows = fake('windows-interactive');
+    windows.connection.machine.machineId = 'machine-windows';
+    windows.connection.machine.platform = 'win32';
+    windows.connection.role = 'interactive';
+    registry.attach(mac.connection);
+    registry.attach(windows.connection);
+
+    expect(registry.pwaConnection('machine-mac')).toBeUndefined();
+    expect(registry.pwaConnection('machine-windows')).toBeUndefined();
+    expect(registry.connection('mac-interactive')).toBe(mac.connection);
+  });
+
+  it('keeps Linux PWA selection role-independent', () => {
+    const registry = new LocalConnectionRegistry();
+    const linux = fake('linux-interactive');
+    linux.connection.machine.machineId = 'machine-linux';
+    linux.connection.machine.platform = 'linux';
+    linux.connection.role = 'interactive';
+    registry.attach(linux.connection);
+
+    expect(registry.pwaConnection('machine-linux')).toBe(linux.connection);
+    expect(registry.pwaConnections()).toContain(linux.connection);
+    registry.detach(linux.connection.id);
+    const reconnected = fake('linux-reconnected');
+    reconnected.connection.machine = { ...linux.connection.machine };
+    reconnected.connection.role = 'interactive';
+    registry.attach(reconnected.connection);
+    expect(registry.executionConnection('machine-linux')).toBe(reconnected.connection);
   });
 
   it('has nothing for a message that named nobody', () => {
@@ -127,6 +163,25 @@ describe('LocalConnectionRegistry', () => {
     return expect(
       registry.call('ghost', { tool: 'bash', input: {} }, () => undefined),
     ).rejects.toThrow();
+  });
+
+  it('never falls back to an interactive connection after the tray disconnects', async () => {
+    const registry = new LocalConnectionRegistry();
+    const tray = fake('tray');
+    tray.connection.machine.machineId = 'machine-m1';
+    tray.connection.role = 'background';
+    registry.attach(tray.connection);
+    registry.detach(tray.connection.id);
+
+    const terminal = fake('terminal');
+    terminal.connection.machine.machineId = 'machine-m1';
+    terminal.connection.role = 'interactive';
+    registry.attach(terminal.connection);
+
+    expect(registry.connection('machine-m1')).toBe(terminal.connection);
+    await expect(
+      registry.call(tray.connection.id, { tool: 'read', input: { path: '/tmp/a' } }, () => undefined),
+    ).rejects.toThrow('no longer available');
   });
 
   it('lists what is attached, for the prompt and the log', () => {

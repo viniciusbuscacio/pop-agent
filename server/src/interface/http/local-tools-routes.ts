@@ -197,7 +197,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
 
   routes.get('/local-tools/machines', (c) => {
     const liveMachineIds = new Set(
-      deps.localConnections.connections()
+      deps.localConnections.pwaConnections()
         .map((connection) => connection.machine.machineId)
         .filter((machineId): machineId is string => machineId !== undefined),
     );

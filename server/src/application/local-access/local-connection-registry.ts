@@ -89,11 +89,39 @@ export class LocalConnectionRegistry {
 
   /** Resolves an allowed live connection ID or stable machine ID. */
   connection(selector: string | undefined): LocalConnection | undefined {
+    return this.allowed(this.transportConnection(selector));
+  }
+
+  /** Resolves a PWA selector, requiring the visible tray on macOS and Windows. */
+  pwaConnection(selector: string | undefined): LocalConnection | undefined {
     const connection = this.transportConnection(selector);
     if (connection === undefined) return undefined;
-    return this.accessPolicy === undefined || this.accessPolicy.enabled(connection.machine.machineId)
-      ? connection
-      : undefined;
+    if (this.requiresBackground(connection) && connection.role !== 'background') {
+      const machineId = connection.machine.machineId;
+      if (machineId === undefined) return undefined;
+      const background = this.connections().find(
+        (candidate) =>
+          candidate.machine.machineId === machineId &&
+          candidate.role === 'background',
+      );
+      return this.allowed(background);
+    }
+    return this.allowed(connection);
+  }
+
+  /** Resolves only an exact live transport ID, without stable-machine fallback. */
+  connectionById(connectionId: string | undefined): LocalConnection | undefined {
+    if (connectionId === undefined) return undefined;
+    const connection = this.entries.get(connectionId)?.connection;
+    return this.allowed(
+      connection === undefined || this.expired(connection) ? undefined : connection,
+    );
+  }
+
+  /** Resolves a run binding while preserving the PWA's desktop tray requirement. */
+  executionConnection(selector: string | undefined): LocalConnection | undefined {
+    const direct = this.connectionById(selector);
+    return direct ?? this.pwaConnection(selector);
   }
 
   /** Resolves the secure transport even while file access is disabled. */
@@ -104,6 +132,13 @@ export class LocalConnectionRegistry {
     return this.connections()
       .filter((connection) => connection.machine.machineId === selector)
       .sort((a, b) => Number(b.role === 'background') - Number(a.role === 'background'))[0];
+  }
+
+  /** Connections whose presence can make a machine available to the PWA. */
+  pwaConnections(): LocalConnection[] {
+    return this.connections().filter(
+      (connection) => !this.requiresBackground(connection) || connection.role === 'background',
+    );
   }
 
   accessEnabled(machineId: string | undefined): boolean {
@@ -149,7 +184,7 @@ export class LocalConnectionRegistry {
     onOutput: (chunk: string) => void,
     signal?: AbortSignal,
   ): Promise<LocalResult> {
-    const connection = this.connection(connectionId);
+    const connection = this.connectionById(connectionId);
     const entry = connection === undefined ? undefined : this.entries.get(connection.id);
     if (entry === undefined || connection === undefined) {
       return Promise.reject(new Error('The local connection is no longer available.'));
@@ -259,6 +294,17 @@ export class LocalConnectionRegistry {
     return this.accessPolicy.machines().some(
       (machine) => machine.machineId === machineId && machine.enabled === enabled,
     );
+  }
+
+  private allowed(connection: LocalConnection | undefined): LocalConnection | undefined {
+    if (connection === undefined) return undefined;
+    return this.accessPolicy === undefined || this.accessPolicy.enabled(connection.machine.machineId)
+      ? connection
+      : undefined;
+  }
+
+  private requiresBackground(connection: LocalConnection): boolean {
+    return connection.machine.platform === 'darwin' || connection.machine.platform === 'win32';
   }
 
   private expired(connection: LocalConnection): boolean {

@@ -39,4 +39,30 @@ describe('local tools', () => {
       expect(tool.description).toContain('Relative paths start there.');
     }
   });
+
+  it('waits for a reconnected tray instead of rebuilding tools on an interactive fallback', () => {
+    const { registry, connection: tray } = attachedTerminal('/Users/vinicius');
+    tray.role = 'background';
+    tray.machine.machineId = 'machine-m1';
+    registry.detach(tray.id);
+    registry.attach({
+      id: 'local-interactive',
+      role: 'interactive',
+      machine: { ...tray.machine },
+      send: () => undefined,
+      close: () => undefined,
+    });
+
+    expect(registry.connection('machine-m1')?.id).toBe('local-interactive');
+    expect(buildLocalTools(sdk, registry, 'machine-m1')).toEqual([]);
+
+    registry.attach({
+      id: 'local-reconnected-tray',
+      role: 'background',
+      machine: { ...tray.machine },
+      send: () => undefined,
+      close: () => undefined,
+    });
+    expect(buildLocalTools(sdk, registry, 'machine-m1')).toHaveLength(4);
+  });
 });

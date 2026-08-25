@@ -175,12 +175,22 @@ function readClient(c: Context): MessageClient | undefined {
 function selectLocalConnection(
   c: Context,
   registry: LocalConnectionRegistry,
+  client: MessageClient | undefined,
 ):
   | { ok: true; connectionId?: string }
   | { ok: false; selector: string; reason: 'unknown' | 'offline' } {
   const explicit = c.req.header(LOCAL_CONNECTION_HEADER);
   if (explicit !== undefined && explicit.length > 0) {
-    if (registry.has(explicit)) return { ok: true, connectionId: explicit };
+    const connection = client?.kind === 'pwa'
+      ? registry.pwaConnection(explicit)
+      : registry.connection(explicit);
+    if (connection !== undefined) {
+      // Keep the PWA's stable machine selector so queued work survives a tray
+      // reconnect. Execution resolves it through pwaConnection again, which
+      // can select only a background transport on macOS and Windows. CLI
+      // requests keep their exact interactive transport selector.
+      return { ok: true, connectionId: explicit };
+    }
     // A synchronized Off switch means "continue with server tools", not
     // "reject the user's message". An enabled stable machine that is merely
     // between transports is distinct from a selector the server has never
@@ -404,7 +414,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     }
 
     const client = readClient(c);
-    const selected = selectLocalConnection(c, deps.localConnections);
+    const selected = selectLocalConnection(c, deps.localConnections, client);
     if (!selected.ok) {
       return rejectLocalSelection(c, selected, client, deps.onRejectedLocalSelection);
     }
@@ -469,7 +479,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       }
     }
     const client = readClient(c);
-    const selected = selectLocalConnection(c, deps.localConnections);
+    const selected = selectLocalConnection(c, deps.localConnections, client);
     if (!selected.ok) {
       return rejectLocalSelection(c, selected, client, deps.onRejectedLocalSelection);
     }

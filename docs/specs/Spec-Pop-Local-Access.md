@@ -98,12 +98,14 @@ appears as a new disabled computer; identity corruption must not inherit another
 machine’s permission by hostname.
 
 One machine may have more than one live transport—for example an interactive CLI
-and the background tray. Stable machine selection resolves to a live transport,
-preferring the `background` role so a short terminal process does not displace
-the persistent tray. No load balancing or failover to a different machine is
-allowed. PWA upgrades clear legacy persisted `local-*` transport selections;
-those transient values must never be sent after migration or presented as a
-second machine.
+and the background tray. On macOS and Windows, PWA local access requires a live
+`background` transport supervised by the visible tray; an interactive CLI
+transport alone never makes that machine available to the PWA. If both roles are
+connected, stable PWA selection resolves to the background transport. Linux
+selection keeps its existing role-independent behavior. No load balancing or
+failover to a different machine is allowed. PWA upgrades clear legacy persisted
+`local-*` transport selections; those transient values must never be sent after
+migration or presented as a second machine.
 
 ## Installation and tray lifecycle
 
@@ -295,7 +297,8 @@ Two authenticated snapshots have distinct purposes:
 - `GET /v1/local-tools/connections` lists current transport instances and roles
   for compatibility/diagnosis;
 - `GET /v1/local-tools/machines` lists deduplicated stable machines with
-  persistent permission plus derived online state.
+  persistent permission plus derived PWA-online state; on macOS and Windows,
+  only a live background transport counts as online.
 
 The Installation screen uses the machine snapshot initially, after
 `local-machines-changed`, after EventSource reconnect and after foreground/BFCache
@@ -328,9 +331,14 @@ Rules:
 - denied browser storage: remain server-only rather than guessing.
 
 The common web API layer adds `x-pop-agent-local-connection` only when a stable
-selection exists. The server resolves that stable ID to its current preferred
-transport. Before a run/queue mutation is accepted, an enabled known machine
-without a live transport produces `local_connection_unavailable`; a selector
+selection exists. The accepted PWA run or queue item keeps that stable machine
+ID so a tray reconnect does not lose the user's routing choice. On macOS and
+Windows, tool construction resolves the ID only to an eligible background
+transport, then binds each operation to that exact transport; a later disconnect
+removes local tools or fails an in-flight call and never falls back to an
+interactive transport. Linux retains role-independent stable-machine resolution.
+Before a run/queue mutation is accepted, an enabled known machine without an
+eligible live transport produces `local_connection_unavailable`; a selector
 absent from persistent machine policy produces `local_connection_unknown`.
 
 For installed-PWA message POSTs and queue PUTs only, the common API layer retries

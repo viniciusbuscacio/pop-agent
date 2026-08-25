@@ -402,11 +402,99 @@ describe('sending a message', () => {
     const response = await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST',
       body: { text: 'slow: use the selected Mac' },
-      headers: { [LOCAL_CONNECTION_HEADER]: 'machine-m1' },
+      headers: { [LOCAL_CONNECTION_HEADER]: 'machine-m1', [CLIENT_HEADER]: 'pwa' },
     });
 
     expect(response.status).toBe(202);
     expect(fixture.runs.canSteer(chat.id, 'machine-m1')).toBe(true);
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('rejects a PWA selection when a macOS machine has only an interactive CLI', async () => {
+    const machine = {
+      machineId: 'machine-interactive-only',
+      hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
+    };
+    fixture.localConnections.attach({
+      id: 'local-interactive-only', role: 'interactive', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localAccessPolicy.setEnabled(machine.machineId, true);
+
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'do not use the terminal' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'local_connection_unavailable' },
+    });
+    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
+
+    const queueResponse = await api(`/v1/chats/${chat.id}/queue`, {
+      method: 'PUT', body: { text: 'still do not use the terminal' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
+    });
+    expect(queueResponse.status).toBe(409);
+    expect(await queueResponse.json()).toMatchObject({
+      error: { code: 'local_connection_unavailable' },
+    });
+  });
+
+  it('pins a PWA selection to background when interactive and tray transports coexist', async () => {
+    const machine = {
+      machineId: 'machine-two-roles',
+      hostname: 'm1', platform: 'win32', arch: 'x64', cwd: 'C:\\Users\\vini', clientVersion: '0.2.34',
+    };
+    fixture.localConnections.attach({
+      id: 'local-interactive', role: 'interactive', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localConnections.attach({
+      id: 'local-background', role: 'background', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localAccessPolicy.setEnabled(machine.machineId, true);
+
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'slow: use the tray' },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
+    });
+
+    expect(response.status).toBe(202);
+    expect(fixture.runs.canSteer(chat.id, machine.machineId)).toBe(true);
+    expect(fixture.localConnections.executionConnection(machine.machineId)?.id).toBe('local-background');
+    fixture.localConnections.detach('local-background');
+    expect(fixture.localConnections.connectionById('local-background')).toBeUndefined();
+    expect(fixture.localConnections.connection(machine.machineId)?.id).toBe('local-interactive');
+    expect(fixture.localConnections.executionConnection(machine.machineId)).toBeUndefined();
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('keeps direct interactive local access for CLI-originated messages', async () => {
+    const machine = {
+      machineId: 'machine-cli',
+      hostname: 'm1', platform: 'win32', arch: 'x64', cwd: 'C:\\Users\\vini', clientVersion: '0.2.34',
+    };
+    fixture.localConnections.attach({
+      id: 'local-cli', role: 'interactive', machine,
+      send: () => undefined, close: () => undefined,
+    });
+    fixture.localAccessPolicy.setEnabled(machine.machineId, true);
+
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST', body: { text: 'slow: use this CLI' },
+      headers: { [LOCAL_CONNECTION_HEADER]: 'local-cli', [CLIENT_HEADER]: 'cli' },
+    });
+
+    expect(response.status).toBe(202);
+    expect(fixture.runs.canSteer(chat.id, 'local-cli')).toBe(true);
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });
@@ -425,18 +513,18 @@ describe('sending a message', () => {
     const chat = await newChat();
     await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST', body: { text: 'slow: keep running' },
-      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
     const queued = await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST', body: { text: 'queued before reconnect', delivery: 'follow_up' },
-      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
     const queuedBody = (await queued.json()) as { message: { id: string } };
 
     fixture.localConnections.detach('local-queue-old');
     const offline = await api(`/v1/chats/${chat.id}/queue/${queuedBody.message.id}`, {
       method: 'PUT', body: { text: 'must not become server-only' },
-      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
     expect(offline.status).toBe(409);
     expect(await offline.json()).toMatchObject({
@@ -450,10 +538,12 @@ describe('sending a message', () => {
     });
     const updated = await api(`/v1/chats/${chat.id}/queue/${queuedBody.message.id}`, {
       method: 'PUT', body: { text: 'queued after reconnect' },
-      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
+      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
 
     expect(updated.status).toBe(200);
+    expect(fixture.queuedMessages.list(chat.id)[0]?.localConnectionId).toBe(machine.machineId);
+    expect(fixture.localConnections.executionConnection(machine.machineId)?.id).toBe('local-queue-new');
     await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
     await fixture.runs.whenIdle();
   });
