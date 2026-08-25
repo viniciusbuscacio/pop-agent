@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const trayVersion = "0.2.40"
+const trayVersion = "0.2.41"
 
 type childEvent struct {
 	Kind      string `json:"kind"`
