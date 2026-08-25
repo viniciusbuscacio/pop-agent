@@ -1,43 +1,123 @@
 # Pop Agent
 
-A self-hosted personal agent platform. Clone it, deploy it on a VPS, and
-your personal agent is live — reachable from any browser as a PWA, on
-desktop and mobile.
+Pop Agent is a self-hosted, single-user personal agent platform. It combines a
+browser PWA and terminal client with the [pi agent](https://pi.dev) running on
+your server.
+Conversations, memory, files, notes, skills, schedules, and provider settings
+remain under your control.
 
-Pop Agent embeds the [pi agent](https://pi.dev) as its engine and builds the
-product around it:
+- Durable chat over HTTP + SSE with attachments, voice, image input, and usage
+  tracking
+- Searchable conversation history, living memory, Files, and private Notes
+- Multiple model providers, server tools, web access, MCP, and outbound A2A
+- Installable PWA, the `pop` terminal client, and optional Pop Local Access
+- Single-user by design and zero telemetry; outbound traffic is limited to
+  configured or explicitly used product features
 
-- **Chat** over HTTP + SSE — streaming, attachments, voice notes, image
-  input, cost tracking per run.
-- **Infinite memory** — search over every past conversation, and a living
-  document the agent keeps about you.
-- **Files** — a plain folder you and the agent share, rendered as a tab in
-  the app, with signed download links and a restorable trash.
-- **Notes**, **skills** picked per turn by a local router, **scheduled
-  tasks**, backups, Web Push, passkeys.
-- **A terminal client** — `pop` chats from any machine and lends the
-  agent local hands there; `popman` operates the service on the server.
+> [!WARNING]
+> Pop Agent is pre-1.0. It is used in active development and may make intentional
+> compatibility changes. Review the changelog and keep current backups before
+> updating.
 
-Principles:
+## Install a server
 
-- **Single user per installation** — by design, permanently.
-- **Zero telemetry, no phone-home.** The only outbound traffic is the LLM
-  provider calls you configure and an opt-in update check (off by default).
-- Multi-provider: OpenRouter, GitHub Copilot, OpenAI, Azure OpenAI and
-  OpenAI-compatible endpoints.
+The supported server host is a fresh **Ubuntu or Debian systemd** machine on
+**amd64 or arm64**. Use a non-root account with narrowly scoped `sudo` access,
+and ensure `curl`, Git, and outbound HTTPS are available. The installer prepares
+repository-pinned Node and Go toolchains, installs build prerequisites from a
+fixed apt allowlist, runs the complete gate, and creates a loopback-only systemd
+service.
 
-## Status
+The following example is pinned to the planned `v0.2.41` tag. Run it only after
+the repository is public and that tag is published; inspect the tagged script
+first if desired.
 
-In active development, running daily for its maintainer. Pre-1.0: things
-still move without compatibility promises.
+```sh
+version=v0.2.41
+(
+  umask 077
+  file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit
+  trap 'status=$?; rm -f "$file"; exit "$status"' 0
+  trap 'exit 1' 1 2 3 15
+  curl -q --fail --silent --show-error --location \
+    --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    --output "$file" \
+    "https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/$version/server-install.sh" \
+    && sh "$file" --ref "$version"
+)
+```
+
+Do not run the installer as root or pipe a remote script directly into a shell.
+See the [installation specification](docs/specs/Spec-Pop-Installation.md) for
+options, offline bundle acquisition, exact trust boundaries, and recovery from
+a partial installation.
+
+### First run and HTTPS
+
+The installer deliberately stops at a healthy service bound to
+`127.0.0.1:8787`. The operator must separately configure DNS, firewall policy,
+and a reverse proxy or tunnel that provides a stable HTTPS origin. Do **not**
+expose port 8787 directly. The proxy must preserve SSE streaming and WebSocket
+upgrades; Caddy or `tailscale serve` are the documented deployment shapes.
+Remote plain HTTP is unsupported.
+
+After HTTPS is working:
+
+1. Open the HTTPS origin and create the single owner password.
+2. Save the one-time recovery key somewhere separate and secure.
+3. Add provider access through Pop Agent's settings; do not put credentials in
+   installer arguments, environment examples, issues, or logs.
+4. Configure and test backups. The host's `secret.key` is intentionally excluded
+   from backup archives and needs a separate secure recovery plan.
+
+Pop Agent does not provision Linux, DNS, TLS, a firewall, a reverse proxy,
+Tailscale, provider accounts, or host backups. The operator remains responsible
+for those systems and for OS security updates. See
+[Deployment and Operations](docs/specs/Spec-Pop-Deployment-and-Operations.md).
+
+## Development
+
+Prerequisites are Node.js `>=22.19.0`, npm, Go `>=1.23`, Git, and the native
+build tools required by the locked npm dependencies.
+
+```sh
+git clone https://github.com/viniciusbuscacio/pop-agent.git
+cd pop-agent
+npm ci
+npm run build
+dev_root=$(mktemp -d)
+POP_AGENT_DATA_DIR="$dev_root/data" \
+  POP_AGENT_WORKSPACE="$dev_root/workspace" \
+  npm run dev
+```
+
+For frontend rebuilds while the server is running, use another terminal:
+
+```sh
+npm run dev -w @pop-agent/web
+```
+
+Before opening a pull request, run the same repository gate used by CI:
+
+```sh
+npm run gate
+```
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before making a change.
 
 ## Documentation
 
-The normative specification is modular. Start at
-`docs/specs/Spec-Pop-General.md`; it routes each subsystem to its specification.
-`CHANGELOG.md` tracks what shipped, and focused explanatory deep-dives live in
-`docs/`.
+- [General specification and normative index](docs/specs/Spec-Pop-General.md)
+- [Installation, distribution, and updates](docs/specs/Spec-Pop-Installation.md)
+- [Deployment guide](deploy/README.md)
+- [Deployment and operations](docs/specs/Spec-Pop-Deployment-and-Operations.md)
+- [Security model](docs/specs/Spec-Pop-Security.md)
+- [CLI and Local Access guide](docs/cli.md)
+- [Changelog](CHANGELOG.md)
+- [Security reporting](SECURITY.md)
+- [Support policy](SUPPORT.md)
+- [Maintainer release runbook](docs/RELEASING.md)
 
 ## License
 
-MIT — see `LICENSE`.
+[MIT](LICENSE) © 2026 Vinicius Buscacio.

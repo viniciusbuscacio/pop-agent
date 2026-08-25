@@ -8,16 +8,22 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **The repository is prepared for a deliberate public launch.** Public
+  onboarding, support/security/contribution policies, issue and pull-request
+  templates, a release/cutover runbook, least-privilege commit-pinned CI,
+  Dependabot, package metadata and a gate-enforced publication-readiness check
+  are included without changing repository visibility or publishing a release.
 - **Fresh GitHub servers now have a fail-closed installer.** The root POSIX
-  installer prefers authenticated GitHub CLI access for the current private
-  repository and safely falls back to non-interactive public HTTPS Git for
-  future publication. It resolves a completed clone to one exact branch, tag,
-  or commit; validates secure destination ancestry plus a clean non-symlinked
-  checkout before and after no-replace activation; uses a minimal explicit
-  environment for bootstrap handoff and retry; and preserves failures with an
-  exact retry command. The
-  documented retrieval uses an owner-only temporary file instead of a
-  producer-to-shell pipeline, and offline fixtures cover both acquisition paths.
+  installer supports ordinary non-interactive public HTTPS Git acquisition and
+  optional authenticated GitHub CLI access for private repositories and forks.
+  It resolves a completed clone to one exact branch, tag, or commit; validates
+  secure destination ancestry plus a clean non-symlinked checkout before and
+  after no-replace activation; uses a minimal explicit environment for bootstrap
+  handoff and retry; and preserves failures with an exact retry command. Public
+  v0.2.41 instructions retrieve the planned immutable installer into an
+  owner-only temporary file and invoke it with the same release ref instead of
+  using a producer-to-shell pipeline; offline fixtures cover both acquisition
+  paths.
 - **Clean commits can be acquired from verified local Git bundles.** A release
   packager emits immutable commit/version-named bundle and SHA files, while the
   non-root local installer verifies SHA-256 and bundle integrity, clones exactly

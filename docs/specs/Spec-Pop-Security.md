@@ -205,16 +205,16 @@ missing or traversal-like entries. Remote origins require HTTPS. Staging,
 transactional replacement and rollback precede cleanup. Pi candidates remain
 isolated until package, SDK-contract and behavioral probes pass.
 
-GitHub source acquisition prefers an already authenticated GitHub CLI for the
-current private repository, but Pop's installer accepts no token argument and
-puts no token in source URLs, argv, or logs. When authenticated gh is unavailable,
-it attempts public HTTPS Git in an isolated Git home with prompting, askpass,
-and credential helpers disabled; this is the future-public path and a current-
-private failure gives gh login instructions. Both paths clone first,
-deterministically resolve a branch, tag,
-or full commit from that completed clone, check out one exact detached commit,
-and verify the commit and clean tree before activation. Mutable refs changing
-after clone cannot change the selected commit.
+GitHub source acquisition accepts no token argument and puts no token in source
+URLs, argv, or logs. Public HTTPS Git works in an isolated Git home with
+prompting, askpass, and credential helpers disabled. An already authenticated
+GitHub CLI session is optional and enables private or access-controlled
+repositories and forks; when available, acquisition uses `gh repo clone` and
+exact-commit `gh api` confirmation. Both paths clone first, deterministically
+resolve a branch, tag, or full commit from that completed clone, reject a name
+shared by a branch and tag, check out one exact detached commit, and verify the
+commit and clean tree before activation.
+Mutable refs changing after clone cannot change the selected commit.
 
 The canonical destination parent must be owned by the invoking uid. Every
 ancestor is root- or invoking-user-owned and not group/world writable, except a
@@ -259,7 +259,7 @@ The gate must include focused tests for:
 - credential scrub through every durable-memory write surface;
 - SSRF private ranges, credential URLs and screened-address connection pinning;
 - PLA revocation, limits and policy;
-- authenticated/private and public-fallback exact-commit acquisition,
+- public-HTTPS and authenticated private/access-controlled exact-commit acquisition,
   missing/invalid auth behavior, mutable refs, bad/incomplete/dirty/symlinked
   clones, secure destination parents, handoff environment and arguments;
 - malformed release metadata and rollback.

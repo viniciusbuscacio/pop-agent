@@ -28,6 +28,13 @@ interface Fixture {
 }
 
 const script = resolve(import.meta.dirname, '../server-install.sh');
+const sourceAcquisitionDocs = [
+  resolve(import.meta.dirname, '../deploy/README.md'),
+  resolve(import.meta.dirname, '../docs/specs/Spec-Pop-Installation.md'),
+  resolve(import.meta.dirname, '../docs/specs/Spec-Pop-Security.md'),
+  resolve(import.meta.dirname, '../docs/specs/Spec-Pop-Deployment-and-Operations.md'),
+];
+const publicInstallDocs = sourceAcquisitionDocs.slice(0, 2);
 const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
 const roots: string[] = [];
 const scrubbedVariables = [
@@ -94,7 +101,6 @@ exit 0
   execFileSync(realGit, ['commit', '--quiet', '-m', 'first fixture'], { cwd: source });
   const firstCommit = git(source, ['rev-parse', 'HEAD']);
   execFileSync(realGit, ['tag', 'fixture-tag'], { cwd: source });
-  execFileSync(realGit, ['tag', 'main'], { cwd: source });
   writeFileSync(join(source, 'later'), 'branch state at clone time\n');
   execFileSync(realGit, ['add', '.'], { cwd: source });
   execFileSync(realGit, ['commit', '--quiet', '-m', 'branch fixture'], { cwd: source });
@@ -238,6 +244,31 @@ function runAsDownloadedFile(input: Fixture, extra: string[] = [], env: NodeJS.P
 }
 
 describe('GitHub fresh-server installer', () => {
+  it('presents publication-ready public and optional authenticated acquisition help', () => {
+    const result = spawnSync('sh', [script, '--help'], { encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Public repositories require only Git');
+    expect(result.stdout).toContain('authenticated GitHub CLI session is optional');
+    expect(result.stdout).toContain('Neither path accepts a token argument');
+    expect(result.stdout).not.toMatch(/current[- ]private|future[- ]public/i);
+  });
+
+  it('keeps public installation docs pinned, fail-closed, and free of transitional wording', () => {
+    const version = readFileSync(resolve(import.meta.dirname, '../VERSION'), 'utf8').trim();
+    const transitionalWording = /current[- ]private|future[- ]public|repository becomes public|once the repository is public/i;
+
+    for (const path of sourceAcquisitionDocs) {
+      expect(readFileSync(path, 'utf8'), path).not.toMatch(transitionalWording);
+    }
+    for (const path of publicInstallDocs) {
+      const documentation = readFileSync(path, 'utf8');
+      expect(documentation, path).toContain(`/v${version}/server-install.sh`);
+      expect(documentation, path).toContain(`&& sh "$file" --ref v${version}`);
+      expect(documentation, path).toContain('mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX"');
+      expect(documentation, path).not.toMatch(/curl[^\n|]*\|\s*(?:sh|bash)/);
+    }
+  });
+
   it('runs from a downloaded file with options and forwards the documented defaults', () => {
     const input = createFixture();
     const result = runAsDownloadedFile(input, ['--prepare-only']);
@@ -282,7 +313,18 @@ describe('GitHub fresh-server installer', () => {
     expect(git(commit.destination, ['rev-parse', 'HEAD'])).toBe(commit.firstCommit);
   });
 
-  it('falls back to isolated non-interactive public HTTPS Git when gh is absent or unauthenticated', () => {
+  it('rejects a ref shared by a branch and tag instead of shadowing the tag', () => {
+    const input = createFixture();
+    execFileSync(realGit, ['branch', 'v1.2.3', input.branchCommit], { cwd: input.source });
+    execFileSync(realGit, ['tag', 'v1.2.3', input.firstCommit], { cwd: input.source });
+
+    const result = run(input, ['--ref', 'v1.2.3']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("ref 'v1.2.3' is ambiguous: both a branch and tag exist");
+    expect(existsSync(input.destination)).toBe(false);
+  });
+
+  it('uses isolated non-interactive public HTTPS Git when gh is absent or unauthenticated', () => {
     const absent = createFixture();
     const noGhBin = join(absent.root, 'no-gh-bin');
     mkdirSync(noGhBin);
@@ -293,7 +335,7 @@ describe('GitHub fresh-server installer', () => {
     });
     expect(absentResult.status, absentResult.stderr).toBe(0);
     expect(git(absent.destination, ['rev-parse', 'HEAD'])).toBe(absent.firstCommit);
-    expect(absentResult.stdout).toContain('attempting public HTTPS Git acquisition');
+    expect(absentResult.stdout).toContain('over public HTTPS Git');
 
     const unauthenticated = createFixture();
     const injectedGlobal = join(unauthenticated.root, 'injected-global-gitconfig');
@@ -318,7 +360,7 @@ describe('GitHub fresh-server installer', () => {
     expect(git(unauthenticated.destination, ['rev-parse', 'HEAD'])).toBe(unauthenticated.branchCommit);
   });
 
-  it('makes a current private-repository HTTPS failure actionable', () => {
+  it('makes a public HTTPS access failure actionable for private repositories', () => {
     const input = createFixture();
     const result = run(input, [], {
       ...input.env,
@@ -326,7 +368,8 @@ describe('GitHub fresh-server installer', () => {
       FAKE_PUBLIC_CLONE_FAIL: '1',
     });
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("Install GitHub CLI, run 'gh auth login', and retry");
+    expect(result.stderr).toContain('verify repository access');
+    expect(result.stderr).toContain("install GitHub CLI, run 'gh auth login', and retry");
     expect(existsSync(input.destination)).toBe(false);
   });
 

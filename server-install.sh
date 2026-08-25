@@ -44,12 +44,11 @@ Options:
   --no-install-apt-packages    Do not opt in to the bootstrap's fixed apt prerequisite allowlist
   -h, --help                   Show this help
 
-For the current private repository, install and authenticate GitHub CLI first.
-Authenticated gh API/clone access is preferred. If authenticated gh is not
-available, the script safely tries public HTTPS Git without interactive
-credential prompting; a private-repository failure explains how to proceed.
-The destination must not already exist. The script does not configure DNS, TLS,
-a firewall, proxy, tunnel, or Pop account.
+Public repositories require only Git and are acquired over non-interactive
+HTTPS. An authenticated GitHub CLI session is optional and enables private or
+access-controlled repositories and forks. Neither path accepts a token argument
+or puts credentials in source URLs. The destination must not already exist. The
+script does not configure DNS, TLS, a firewall, proxy, tunnel, or Pop account.
 EOF
 }
 
@@ -208,10 +207,18 @@ clean_git() {
 
 resolve_cloned_ref() {
   checkout=$1
-  if clean_git -C "$checkout" show-ref --verify --quiet "refs/remotes/origin/$REF"; then
-    candidate=refs/remotes/origin/$REF
-  elif clean_git -C "$checkout" show-ref --verify --quiet "refs/tags/$REF"; then
-    candidate=refs/tags/$REF
+  branch_ref=refs/remotes/origin/$REF
+  tag_ref=refs/tags/$REF
+  branch_exists=0
+  tag_exists=0
+  clean_git -C "$checkout" show-ref --verify --quiet "$branch_ref" && branch_exists=1
+  clean_git -C "$checkout" show-ref --verify --quiet "$tag_ref" && tag_exists=1
+  if [ "$branch_exists" -eq 1 ] && [ "$tag_exists" -eq 1 ]; then
+    die "ref '$REF' is ambiguous: both a branch and tag exist; use a full commit or remove the ambiguity"
+  elif [ "$branch_exists" -eq 1 ]; then
+    candidate=$branch_ref
+  elif [ "$tag_exists" -eq 1 ]; then
+    candidate=$tag_ref
   else
     case $REF in
       [a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]) candidate=$REF ;;
@@ -233,7 +240,7 @@ if [ "$AUTHENTICATED_GH" -eq 1 ]; then
   gh repo clone "$REPOSITORY" "$STAGING/checkout" -- --no-checkout --quiet \
     || die "authenticated repository clone failed; verify 'gh auth status' and repository access"
 else
-  say "Authenticated GitHub CLI is unavailable; attempting public HTTPS Git acquisition..."
+  say "Cloning $REPOSITORY over public HTTPS Git..."
   PUBLIC_GIT_HOME=$STAGING/public-git-home
   (umask 077 && mkdir -- "$PUBLIC_GIT_HOME") || die "could not create isolated public Git home"
   (
@@ -244,7 +251,7 @@ else
     HOME=$PUBLIC_GIT_HOME GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=Never \
       git -c credential.helper= -c core.askPass= clone --quiet --no-checkout -- \
       "https://github.com/$REPOSITORY.git" "$STAGING/checkout"
-  ) || die "public HTTPS clone failed without interactive credentials; the repository may still be private. Install GitHub CLI, run 'gh auth login', and retry"
+  ) || die "public HTTPS clone failed without interactive credentials; verify repository access, or for a private/access-controlled repository install GitHub CLI, run 'gh auth login', and retry"
 fi
 
 RESOLVED_COMMIT=$(resolve_cloned_ref "$STAGING/checkout") \

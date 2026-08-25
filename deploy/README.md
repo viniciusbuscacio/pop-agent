@@ -2,31 +2,27 @@
 
 ## GitHub fresh install
 
-After installing and authenticating GitHub CLI as the intended non-root service
-owner, retrieve the installer from the current private repository into an
-owner-only temporary file. The download must complete successfully before the
-file is executed, and the subshell always removes it:
+Retrieve the planned immutable v0.2.41 installer over HTTPS into an owner-only
+temporary file. The download must complete successfully before the file is
+executed, the installer and acquired source use the same release ref, and the
+subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; gh api --hostname github.com -H "Accept: application/vnd.github.raw+json" repos/viniciusbuscacio/pop-agent/contents/server-install.sh >"$file" && sh "$file")
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.41/server-install.sh && sh "$file" --ref v0.2.41)
 ```
 
-Options belong after the temporary filename. For example, the same fail-closed
-command can end with `&& sh "$file" --prepare-only`, `&& sh "$file" --ref
-<full-commit>`, or `&& sh "$file" --no-install-apt-packages`. After the
-repository becomes public, only replace the `gh api ... >"$file"` retrieval
-step with `curl -q --fail --silent --show-error --location --proto '=https'
---proto-redir '=https' --tlsv1.2 --output "$file"
-https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/main/server-install.sh`;
-the temporary-file, trap, and `sh "$file" [options]` steps stay unchanged.
-Never use a producer-to-shell pipeline.
+Options belong after the temporary filename. For example, add `--prepare-only`
+or `--no-install-apt-packages` to the final `sh` invocation. An operator can
+instead select a reviewed full commit with `--ref <full-commit>`. Keep the
+temporary-file, trap, complete-download, and `sh "$file" [options]` steps; never
+use a producer-to-shell pipeline.
 
-The root `server-install.sh` prefers authenticated `gh repo clone` plus `gh api`
-confirmation. When authenticated gh is unavailable, it attempts a
-non-interactive public HTTPS Git clone, which makes the same script usable after
-publication without gh authentication. Each path clones without a checkout,
-resolves a branch, tag, or full commit from that clone (branch names take
-precedence over same-named tags), checks out one exact detached commit, and
+Public repositories need only Git for source acquisition. An authenticated
+GitHub CLI session is optional and supports private or access-controlled
+repositories and forks; when it is available, `server-install.sh` uses `gh repo
+clone` plus `gh api` confirmation instead. Each path clones without a checkout,
+resolves a branch, tag, or full commit from that clone, rejects a name shared
+by both a branch and tag, checks out one exact detached commit, and
 validates a complete clean tree before activation. The defaults are
 `$HOME/pop-agent`, `$HOME/.pop-agent`, `$HOME/pop-agent-workspace`, port 8787,
 and opt-in to the bootstrap's fixed apt prerequisite allowlist.
@@ -34,9 +30,10 @@ and opt-in to the bootstrap's fixed apt prerequisite allowlist.
 The acquisition command refuses root, unsupported Ubuntu/Debian hosts, unsafe
 or overlapping paths, insecure destination ancestry, symlinked required files
 (including the pinned toolchain manifest), and every existing destination. A
-private-repository HTTPS failure directs the operator to authenticate gh. The
-public fallback isolates Git configuration and disables ambient credential
-helpers. Temporary owner-only staging is always removed.
+public HTTPS failure reports repository access and identifies authenticated gh
+as the private/access-controlled alternative. Public Git acquisition isolates
+Git configuration and disables ambient credential helpers. Temporary owner-only
+staging is always removed.
 If downstream bootstrap fails, the activated checkout remains and the installer
 prints the exact bootstrap retry command; rerunning acquisition is intentionally
 refused because its destination now exists. Before handoff the script unsets

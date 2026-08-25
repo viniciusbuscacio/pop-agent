@@ -9,19 +9,20 @@
 
 The current server is an operator-managed Node/TypeScript checkout on Linux,
 normally supervised by `pop-agent-service` under systemd. The root
-`server-install.sh` is the GitHub fresh-host entry point. For the current private
-repository it prefers an already authenticated GitHub CLI for `gh repo clone`
-and `gh api` exact-commit confirmation. Without authenticated gh it safely
-attempts non-interactive public HTTPS Git, allowing future public use without
-changing the downloaded script. Each route resolves a branch, tag, or full
-commit from a completed clone, checks out one exact detached commit, validates a
+`server-install.sh` is the GitHub fresh-host entry point. Public repositories can
+be acquired through non-interactive public HTTPS Git. An already authenticated
+GitHub CLI session is optional for private or access-controlled repositories and
+forks; when available, the installer uses `gh repo clone` and `gh api`
+exact-commit confirmation. Each route resolves a branch, tag, or full commit
+from a completed clone, rejects branch/tag name ambiguity, checks out one exact
+detached commit, validates a
 complete clean non-symlinked checkout (including its pinned toolchain manifest)
 before and after no-replace activation, validates secure destination ancestry,
-and retains an activated checkout if downstream setup fails. The script never
-puts tokens in URLs, argv, or logs. Handoff and retry use a minimal explicit
-environment without inherited token/askpass/Git-config/SSH-agent variables, but
-do not claim to hide host credential files. A fixed clean commit can
-alternatively be moved into the host as an
+and retains an activated checkout if downstream setup fails. The script accepts
+no token argument and never puts tokens in URLs, argv, or logs. Handoff and retry
+use a minimal explicit environment without inherited token/askpass/Git-config/
+SSH-agent variables, but do not claim to hide host credential files. A fixed
+clean commit can alternatively be moved into the host as an
 immutable local Git bundle: Pop verifies the operator-supplied SHA-256, bundle
 integrity and exact commit before atomically activating a new checkout without
 network acquisition.
@@ -194,10 +195,11 @@ exposure should be the proxy/tunnel only, not the loopback application port.
 ## Test and release obligations
 
 - clean candidate checkout passes full gate and production build;
-- GitHub installer tests use only fakes/local fixtures and cover authenticated
-  and public-fallback acquisition, deterministic exact branch/tag/commit
-  resolution, root/platform/tool refusal, secure destination parents, existing
-  destinations, dirty/incomplete/symlinked clones, credential-environment scrub,
+- GitHub installer tests use only fakes/local fixtures and cover public HTTPS
+  and authenticated private/access-controlled acquisition, deterministic exact
+  branch/tag/commit resolution, root/platform/tool refusal, secure destination
+  parents, existing destinations, dirty/incomplete/symlinked clones,
+  credential-environment scrub,
   exact bootstrap arguments and actionable downstream retry;
 - local source-release tests cover clean deterministic packing, immutable output,
   SHA corruption, bundle verification, exact-commit checkout, unsafe paths and

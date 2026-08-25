@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a focused improvement to Pop Agent
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pop Agent is single-user by design, pre-1.0, and intentionally avoids telemetry and unasked network calls. Explain the user problem before proposing an implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What owner or operator problem would this solve? Who encounters it and when?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the smallest user-visible outcome that would solve the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include current workarounds and why they are insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Security, compatibility, and operator impact
+      description: Note new network calls, permissions, stored data, migration needs, or deployment changes. Write "none known" if none apply.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues, pull requests, and the normative specification index.
+          required: true
+        - label: This request preserves the permanent single-user and zero-telemetry boundaries.
+          required: true
+        - label: I did not include credentials, private content, or personal information.
+          required: true

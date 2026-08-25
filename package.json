@@ -3,6 +3,15 @@
   "private": true,
   "version": "0.2.41",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viniciusbuscacio/pop-agent.git"
+  },
+  "homepage": "https://github.com/viniciusbuscacio/pop-agent#readme",
+  "bugs": {
+    "url": "https://github.com/viniciusbuscacio/pop-agent/issues"
+  },
   "engines": {
     "node": ">=22.19.0"
   },
@@ -21,6 +30,7 @@
     "version:check": "tsx tools/check-version-consistency.ts",
     "pi-patch:check": "tsx tools/check-pi-patches.ts",
     "specs:check": "tsx tools/check-specifications.ts",
+    "public:check": "tsx tools/check-public-readiness.ts",
     "pretypecheck": "npm run version:check && npm run ui:check",
     "ui:check": "tsx tools/check-ui-primitives.ts",
     "typecheck": "tsc -b && npm run typecheck -w @pop-agent/web && tsc --noEmit -p tools",
@@ -29,7 +39,7 @@
     "build": "tsc -b && chmod +x server/dist/manager/main.js && npm run build -w @pop-agent/web",
     "launcher:check": "cd launcher && test -z \"$(gofmt -l .)\" && go vet ./... && go test ./...",
     "local-access:check": "cd local-access/tray && test -z \"$(gofmt -l *.go)\" && go vet ./... && go test ./... && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/pop-local-access-gate.exe .",
-    "gate": "tsx tools/gate-receipt.ts begin && npm run version:check && npm run pi-patch:check && npm run specs:check && npm run selfmap:check && npm run lint && npm run typecheck && npm run launcher:check && npm run local-access:check && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
+    "gate": "tsx tools/gate-receipt.ts begin && npm run version:check && npm run pi-patch:check && npm run specs:check && npm run public:check && npm run selfmap:check && npm run lint && npm run typecheck && npm run launcher:check && npm run local-access:check && npm run build && npm run test && npm run smoke && tsx tools/gate-receipt.ts complete",
     "selfmap": "tsx tools/generate-self-map.ts",
     "ui:crawl": "tsx tools/ui-crawl.ts",
     "selfmap:check": "tsx tools/generate-self-map.ts --check",

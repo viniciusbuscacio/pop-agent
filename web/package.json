@@ -3,6 +3,16 @@
   "version": "0.2.41",
   "private": true,
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viniciusbuscacio/pop-agent.git",
+    "directory": "web"
+  },
+  "homepage": "https://github.com/viniciusbuscacio/pop-agent#readme",
+  "bugs": {
+    "url": "https://github.com/viniciusbuscacio/pop-agent/issues"
+  },
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",

@@ -3,6 +3,16 @@
   "private": true,
   "version": "0.2.41",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viniciusbuscacio/pop-agent.git",
+    "directory": "tools"
+  },
+  "homepage": "https://github.com/viniciusbuscacio/pop-agent#readme",
+  "bugs": {
+    "url": "https://github.com/viniciusbuscacio/pop-agent/issues"
+  },
   "engines": {
     "node": ">=22.19.0"
   },

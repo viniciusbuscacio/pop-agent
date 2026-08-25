@@ -84,44 +84,43 @@ packed. Source support in Go is not sufficient to claim a released platform.
 
 ## Fresh server installation
 
-The default fresh-server path is the root `server-install.sh`. While the
-repository is private, retrieve it through an already authenticated GitHub CLI
-session into a mode-0600 temporary file, execute only after a complete successful
-download, and clean the file on every subshell exit:
+The default fresh-server path is the root `server-install.sh`. Public
+instructions retrieve the planned immutable v0.2.41 installer over HTTPS into a
+mode-0600 temporary file, execute it only after a complete successful download,
+select the same immutable source ref, and clean the file on every subshell exit:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; gh api --hostname github.com -H "Accept: application/vnd.github.raw+json" repos/viniciusbuscacio/pop-agent/contents/server-install.sh >"$file" && sh "$file")
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.41/server-install.sh && sh "$file" --ref v0.2.41)
 ```
 
-Options are passed to `sh` after the downloaded filename: for example, replace
-the final invocation with `sh "$file" --prepare-only`, `sh "$file" --ref
-<full-commit>`, or `sh "$file" --no-install-apt-packages`. Once the repository
-is public, public documentation must keep the same fail-closed temporary-file
-shape and change only retrieval to `curl -q --fail --silent --show-error
---location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file"
-https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/main/server-install.sh`.
-A producer-to-shell pipeline is not an installation command.
+Options are passed to `sh` after the downloaded filename: for example, append
+`--prepare-only` or `--no-install-apt-packages`, or deliberately replace the ref
+with a reviewed full commit. The owner-only temporary file, traps, complete
+successful download, and separate `sh "$file" [options]` execution are
+mandatory. A producer-to-shell pipeline is not an installation command.
 
 With no arguments the script targets `viniciusbuscacio/pop-agent` at `main`,
 installs the checkout at `$HOME/pop-agent`, keeps durable data at
 `$HOME/.pop-agent`, uses `$HOME/pop-agent-workspace`, and binds port 8787.
 Explicit `--repo`, `--ref`, `--destination`, `--data-dir`, `--workspace`,
 `--port`, and `--prepare-only` options support operator overrides and offline
-testing. `--ref` accepts a branch, tag, or full lowercase 40-character commit;
-branch names deterministically take precedence over same-named tags. Resolution
-uses only refs present in the completed clone, then pins one exact detached
-commit, so a mutable branch advancing afterward cannot change activation. The
+testing. `--ref` accepts a branch, tag, or full lowercase 40-character commit.
+A name present as both branch and tag is rejected as ambiguous rather than
+letting a mutable branch shadow a release-looking tag. Resolution uses only refs
+present in the completed clone, then pins one exact detached commit, so a mutable
+branch advancing afterward cannot change activation. The
 fresh-server invocation opts in to the host bootstrap's fixed apt prerequisite
 allowlist by default; `--no-install-apt-packages` is available when the host is
 already prepared.
 
-Authenticated `gh repo clone` plus exact-commit `gh api` confirmation is the
-preferred current-private acquisition. If gh is missing or unauthenticated, the
-same script attempts a public HTTPS Git clone in an isolated Git home with
-interactive prompting, askpass and credential helpers disabled. That fallback
-supports future publication without internal gh/auth requirements; while the
-repository remains private, failure tells the operator to install/authenticate
-gh. Neither path puts tokens in URLs, argv, or installer logs.
+Public repositories are acquired over HTTPS Git in an isolated Git home with
+interactive prompting, askpass and credential helpers disabled. An already
+authenticated GitHub CLI session is an optional source-access path for private
+or access-controlled repositories and forks; when available, the script uses
+`gh repo clone` plus exact-commit `gh api` confirmation. A public HTTPS failure
+reports repository access and points private/access-controlled operators to gh
+authentication. Neither path accepts a token argument or puts tokens in URLs,
+argv, or installer logs.
 
 The acquisition script refuses root, unsupported hosts, missing Git, unsafe or
 overlapping paths, an existing destination, and insecure destination ancestry.
@@ -215,10 +214,10 @@ account secrets remain in Pop-owned storage rather than argv, installer logs or
 the unit. The removed ubuntu-home development unit is not a production
 template; the TypeScript generator is the unit source of truth.
 
-The operator must maintain the host, the source access needed for a private
-repository, and the apt security channel; configure a supported HTTPS exposure
-shape; complete first-run account setup; and verify public health. The host
-bootstrap itself does not install or own Linux, repository/source acquisition,
+The operator must maintain the host, any required private or access-controlled
+source credentials, and the apt security channel; configure a supported HTTPS
+exposure shape; complete first-run account setup; and verify public health. The
+host bootstrap itself does not install or own Linux, repository/source acquisition,
 DNS, TLS, a firewall, Tailscale, Caddy, FFmpeg or account setup, and it does not
 modify system-wide Node or Go.
 
