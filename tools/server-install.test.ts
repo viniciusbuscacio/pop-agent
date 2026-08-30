@@ -36,6 +36,7 @@ const sourceAcquisitionDocs = [
 ];
 const publicInstallDocs = sourceAcquisitionDocs.slice(0, 2);
 const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+const invokingUid = process.getuid?.() ?? 1000;
 const roots: string[] = [];
 const scrubbedVariables = [
   'GH_TOKEN',
@@ -106,7 +107,9 @@ exit 0
   execFileSync(realGit, ['commit', '--quiet', '-m', 'branch fixture'], { cwd: source });
   const branchCommit = git(source, ['rev-parse', 'HEAD']);
 
-  executable(join(fakeBin, 'id'), '#!/bin/sh\ncase "$1" in -u) printf "%s\\n" "${FAKE_UID:-1000}";; -un) printf "installer-test\\n";; *) exit 2;; esac\n');
+  executable(join(fakeBin, 'id'), `#!/bin/sh
+case "$1" in -u) printf '%s\\n' "\${FAKE_UID:-${invokingUid}}";; -un) printf 'installer-test\\n';; *) exit 2;; esac
+`);
   executable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "${FAKE_UNAME_S:-Linux}";; -m) printf "%s\\n" "${FAKE_UNAME_M:-x86_64}";; *) exit 2;; esac\n');
   executable(join(fakeBin, 'git'), `#!/bin/sh
 REAL_GIT='${realGit}'
