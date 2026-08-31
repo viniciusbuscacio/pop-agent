@@ -115,7 +115,7 @@ export function renderSystemdUnit(
   ];
   const servicePath = [...new Set(pathDirectories)].join(':');
 
-  return `[Unit]\nDescription=Pop Agent server\nAfter=network-online.target\nWants=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=${username}\nWorkingDirectory=${checkout}\nEnvironment=NODE_ENV=production\nEnvironment=PATH=${servicePath}\nEnvironment=POP_AGENT_BIND=127.0.0.1\nEnvironment=POP_AGENT_PORT=${String(options.port)}\nEnvironment=POP_AGENT_DATA_DIR=${dataDir}\nEnvironment=POP_AGENT_WORKSPACE=${workspace}\nExecStart=${node} ${checkout}/server/dist/main.js\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=90s\nUMask=0077\nSyslogIdentifier=pop-agent-service\n\n[Install]\nWantedBy=multi-user.target\n`;
+  return `[Unit]\nDescription=Pop Agent server\nAfter=network-online.target\nWants=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=${username}\nWorkingDirectory=${checkout}\nEnvironment=NODE_ENV=production\nEnvironment=PATH=${servicePath}\nEnvironment=PI_OFFLINE=1\nEnvironment=POP_AGENT_BIND=127.0.0.1\nEnvironment=POP_AGENT_PORT=${String(options.port)}\nEnvironment=POP_AGENT_DATA_DIR=${dataDir}\nEnvironment=POP_AGENT_WORKSPACE=${workspace}\nExecStart=${node} ${checkout}/server/dist/main.js\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=90s\nUMask=0077\nSyslogIdentifier=pop-agent-service\n\n[Install]\nWantedBy=multi-user.target\n`;
 }
 
 export function parseInstallArguments(args: readonly string[], checkout: string): InstallOptions | 'help' {

@@ -111,6 +111,7 @@ describe('systemd server installer', () => {
     expect(unit).toContain('User=popowner\n');
     expect(unit).toContain('WorkingDirectory=/srv/pop-agent/source\n');
     expect(unit).toContain('Environment=PATH=/opt/pop-node/bin:/opt/pop-go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
+    expect(unit).toContain('Environment=PI_OFFLINE=1\n');
     expect(unit).toContain('Environment=POP_AGENT_BIND=127.0.0.1\n');
     expect(unit).toContain('Environment=POP_AGENT_DATA_DIR=/srv/pop-agent/data\n');
     expect(unit).toContain('Environment=POP_AGENT_WORKSPACE=/srv/pop-agent/workspace\n');

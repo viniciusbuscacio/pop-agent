@@ -204,7 +204,8 @@ paths outside the clean checkout and checkout ownership. It runs `npm ci` and
 sudo only for the explicit unit-file install, daemon reload, enable and restart
 commands. It installs an idempotent production unit with loopback binding,
 explicit data/workspace paths, the invoking non-root user, the selected Node
-and Go directories on the service `PATH` and bounded restart. The owner-only backup
+and Go directories on the service `PATH`, offline pi catalog bookkeeping and
+bounded restart. The owner-only backup
 sibling used by the server is prepared with the data root, then the installer
 performs a bounded `/healthz` check and confirms that systemd still reports the
 unit active.

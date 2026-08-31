@@ -52,6 +52,9 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Changed
 
+- **Production systemd installs keep pi catalog bookkeeping offline.** The
+  generated unit now carries the required `PI_OFFLINE=1` setting, matching the
+  runtime contract and avoiding a network-dependent post-login stall.
 - **PWA local access on macOS and Windows now requires the visible tray runtime.**
   Interactive CLI connections no longer make those machines appear online to
   the PWA or receive PWA-selected local tool calls; tray reconnects preserve the

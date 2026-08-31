@@ -72,7 +72,8 @@ password/passkey session auth plus the network boundary chosen by the operator.
 The generated systemd unit runs `server/dist/main.js` with the checkout owner's
 absolute Node executable under that non-root user, keeps the validated Node and
 Go directories on the service `PATH`, and uses a fixed absolute checkout working
-directory, explicit data/workspace paths and loopback binding. It
+directory, explicit data/workspace paths, loopback binding and `PI_OFFLINE=1`
+so pi catalog bookkeeping cannot stall service-side subscription sign-in. It
 restarts unexpected failures with bounded backoff/start limits, receives SIGTERM
 on planned stop and journals stdout/stderr. Rerunning the installer regenerates,
 reinstalls and restarts the same named unit rather than accumulating services.
