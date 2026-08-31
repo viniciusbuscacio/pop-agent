@@ -4,7 +4,7 @@ import type { McpAuthKind, McpServerDTO, McpTransport } from '@pop-agent/shared'
 import { mcpService } from '../services/mcp';
 import { useMcpStore } from '../store/mcp';
 import { SidebarNav } from './sidebar-nav';
-import { Button, Card, CheckField, Select, TextArea, TextField } from '../ui/controls';
+import { Button, Card, CheckField, Select, SwitchField, TextArea, TextField } from '../ui/controls';
 
 export function McpPage() {
   const { id } = useParams();
@@ -21,7 +21,7 @@ export function McpPage() {
       {id === undefined && !isNew ? (
         <div className="p-6">
           <div className="mb-5 flex items-center justify-between"><div><h1 className="text-xl font-semibold">MCP</h1><p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p></div></div>
-          <div className="grid gap-3">{servers?.map((server) => <Card key={server.id} className="flex items-center justify-between gap-4"><div><div className="font-medium">{server.name}</div><div className="text-sm text-[var(--muted)]">{server.transport} · {server.status}{server.protocolEra === undefined ? '' : ` · ${server.protocolEra === 'modern' ? 'stateless' : 'legacy'} ${server.protocolVersion ?? ''}`}</div></div><div className="flex gap-2"><Button variant="ghost" onClick={() => void mcpService.toggle(server.id).then(() => reload())}>{server.enabled ? 'OFF' : 'ON'}</Button><Button variant="ghost" onClick={() => void navigate(`/mcp/${server.id}`)}>Edit</Button></div></Card>)}{servers?.length === 0 ? <p className="py-8 text-center text-sm text-[var(--muted)]">No MCP servers yet.</p> : null}</div>
+          <div className="grid gap-3">{servers?.map((server) => <Card key={server.id} className="flex items-center justify-between gap-4"><div><div className="font-medium">{server.name}</div><div className="text-sm text-[var(--muted)]">{server.transport} · {server.status}{server.protocolEra === undefined ? '' : ` · ${server.protocolEra === 'modern' ? 'stateless' : 'legacy'} ${server.protocolVersion ?? ''}`}</div></div><div className="flex items-center gap-2"><SwitchField id={`mcp-enabled-${server.id}`} label={`${server.name} enabled`} checked={server.enabled} onChange={() => void mcpService.toggle(server.id).then(() => reload())} /><Button variant="ghost" onClick={() => void navigate(`/mcp/${server.id}`)}>Edit</Button></div></Card>)}{servers?.length === 0 ? <p className="py-8 text-center text-sm text-[var(--muted)]">No MCP servers yet.</p> : null}</div>
         </div>
       ) : current !== undefined || isNew || id === 'new' ? <McpEditor server={current} onDone={async () => { await reload(); void navigate('/mcp'); }} /> : null}
     </div>
