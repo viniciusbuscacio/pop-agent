@@ -5,6 +5,7 @@ import type {
   PiCandidateActivateResponse,
   PiCandidatePrepareResponse,
   SettingsDTO,
+  SettingsPatchDTO,
   UpdateStatusResponse,
   StorageResponse,
   UsageResponse,
@@ -20,6 +21,11 @@ export const settingsService = {
   /** Full replace: the server takes the whole document, never a patch. */
   write(settings: SettingsDTO): Promise<SettingsDTO> {
     return apiRequest<SettingsDTO>('/settings', { method: 'PUT', body: settings });
+  },
+
+  /** Merge only the fields owned by the control that changed. */
+  update(patch: SettingsPatchDTO): Promise<SettingsDTO> {
+    return apiRequest<SettingsDTO>('/settings', { method: 'PATCH', body: patch });
   },
 
   about(): Promise<AboutResponse> {

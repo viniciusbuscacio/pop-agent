@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { pendingRecovery } from '../services/pending-recovery';
 import { providersService } from '../services/providers';
+import { session } from '../services/session';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
@@ -20,12 +22,13 @@ type Step = 'password' | 'recovery' | 'provider' | 'done';
 
 export function SetupPage() {
   const navigate = useNavigate();
-  const signIn = useAuthStore((state) => state.signIn);
+  const setStatus = useAuthStore((state) => state.setStatus);
+  const pendingKey = pendingRecovery.read('setup');
 
-  const [step, setStep] = useState<Step>('password');
+  const [step, setStep] = useState<Step>(pendingKey === undefined ? 'password' : 'recovery');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [recoveryKey, setRecoveryKey] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState(pendingKey ?? '');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -42,10 +45,27 @@ export function SetupPage() {
     setError(undefined);
     try {
       const result = await authService.setup(password);
-      // The first device is trusted by definition: it just created the account.
-      signIn(result.token, true);
+      // Keep the token page-scoped and leave auth routing in setup mode until
+      // the one-time recovery key is explicitly acknowledged.
+      session.start(result.token, false);
+      pendingRecovery.write('setup', result.recoveryKey);
       setRecoveryKey(result.recoveryKey);
       setStep('recovery');
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : t('error.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acknowledgeRecovery(): Promise<void> {
+    if (!saved || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await authService.acknowledgeSetup();
+      pendingRecovery.clear();
+      setStep('provider');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : t('error.generic'));
     } finally {
@@ -109,6 +129,12 @@ export function SetupPage() {
 
             <RecoveryKeyPanel recoveryKey={recoveryKey} idPrefix="setup" />
 
+            {error !== undefined ? (
+              <p role="alert" className="text-sm text-[var(--danger)]">
+                {error}
+              </p>
+            ) : null}
+
             <CheckField
               id="setup-saved-key"
               testId="setup-saved-key"
@@ -121,7 +147,7 @@ export function SetupPage() {
               type="button"
               data-testid="setup-recovery-continue"
               disabled={!saved}
-              onClick={() => setStep('provider')}
+              onClick={() => void acknowledgeRecovery()}
             >
               {t('common.continue')}
             </Button>
@@ -137,7 +163,14 @@ export function SetupPage() {
               <p className="text-sm text-[var(--key-fg-dim)]">{t('setup.done.body')}</p>
             </header>
 
-            <Button type="button" data-testid="setup-finish" onClick={() => void navigate('/')}>
+            <Button
+              type="button"
+              data-testid="setup-finish"
+              onClick={() => {
+                setStatus('signed-in');
+                void navigate('/');
+              }}
+            >
               {t('setup.done.enter')}
             </Button>
           </div>

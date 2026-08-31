@@ -11,7 +11,7 @@ import {
 } from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
-import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -39,12 +39,7 @@ async function newChat(): Promise<ChatDTO> {
 beforeEach(async () => {
   fixture = createTestApp();
   app = fixture.app;
-  const setup = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  token = ((await setup.json()) as { token: string }).token;
+  token = await setupTestSession(app, PASSWORD);
 });
 
 describe('pi session commands', () => {
@@ -816,6 +811,24 @@ describe('sending a message', () => {
       'upload.txt',
       'context.txt',
     ]);
+  });
+
+  it('rejects attachments over the aggregate limit before the global body ceiling', { timeout: 15_000 }, async () => {
+    const chat = await newChat();
+    const twelveMiB = Buffer.alloc(12 * 1024 * 1024).toString('base64');
+    const res = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: {
+        text: 'two individually valid files',
+        attachments: [
+          { name: 'first.bin', type: 'application/octet-stream', dataUri: `data:application/octet-stream;base64,${twelveMiB}` },
+          { name: 'second.bin', type: 'application/octet-stream', dataUri: `data:application/octet-stream;base64,${twelveMiB}` },
+        ],
+      },
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('invalid_field');
   });
 
   it('accepts attachment-only queued input and keeps attachment-only edits valid', async () => {

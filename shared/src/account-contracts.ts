@@ -14,6 +14,11 @@ export interface SetupResponse {
   token: string;
 }
 
+/** `POST /v1/setup/acknowledge` — completes first-run setup after the key was saved. */
+export interface SetupAcknowledgeResponse {
+  setupDone: true;
+}
+
 /** `POST /v1/login` — vault-style: password only, no user name. */
 export interface LoginRequest {
   password: string;
@@ -43,6 +48,8 @@ export interface ChangePasswordRequest {
 
 export interface ChangePasswordResponse {
   token: string;
+  /** Password changes burn the previous recovery key. */
+  recoveryKey: string;
 }
 
 /** `POST /v1/auth/sign-out-others` — every other session ends. */
@@ -51,8 +58,8 @@ export interface SignOutOthersResponse {
 }
 
 /**
- * `GET`/`PUT /v1/settings`. PUT takes the whole document -- there is no
- * partial merge -- and rejects any field it does not know.
+ * `GET`/`PUT`/`PATCH /v1/settings`. PUT replaces the document; PATCH applies
+ * an atomic field merge so independent controls cannot overwrite each other.
  *
  * Theme is absent by design: it belongs to the device, not the account
  * (docs/specs/Spec-Pop-General.md §14).
@@ -82,6 +89,9 @@ export interface SettingsDTO {
   /** Minutes of total inactivity (no runs or tasks) before an automatic restart triggers. */
   autoRestartIdleMinutes: number;
 }
+
+/** Atomic field merge used by Settings controls; omitted fields are preserved. */
+export type SettingsPatchDTO = Partial<SettingsDTO>;
 
 /** `GET`/`PUT /v1/memory` — the living document Pop Agent keeps about the user. */
 export interface UserMemoryDTO {

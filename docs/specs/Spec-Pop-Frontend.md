@@ -148,6 +148,7 @@ Protected application routes:
 | `/tasks`, `/tasks/new`, `/tasks/:taskId` | task explorer/editor |
 | `/skills`, `/skills/new`, `/skills/:slug` | skill explorer/editor |
 | `/mcp`, `/mcp/new`, `/mcp/:id` | MCP explorer/editor |
+| `/a2a`, `/a2a/new`, `/a2a/:id` | outbound A2A explorer/editor |
 | `/settings/*?section=<id>` | Settings index or destination |
 
 Unknown routes replace to `/`. Route order keeps `/files/trash` ahead of the
@@ -178,11 +179,13 @@ Pop Agent uses route-based navigation, not hidden drawers:
 
 Settings is a searchable hierarchy, not a row of tabs:
 
-- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills,
-  MCP, A2A;
+- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills;
 - **App:** Appearance, Notifications, Updates, Installation;
 - **Data:** Storage, Backup;
 - **System:** Server & Connections, Security, About.
+
+MCP and A2A remain first-class shell explorers beside Skills rather than
+Settings destinations.
 
 A destination deep-links as `/settings?section=<id>`. On a phone, Back returns
 from destination to Settings index and then to the unselected app list. On a
@@ -227,6 +230,8 @@ re-render.
 - optional selected-local-connection header;
 - JSON encoding and structured `ApiError` mapping;
 - renewed-session header handling;
+- identical renewal and invalid-session handling for JSON, binary downloads and
+  multipart uploads;
 - connection-monitor evidence from every success/failure;
 - binary download and multipart upload variants.
 
@@ -355,7 +360,7 @@ The composer owns device-local draft interaction, not delivery authority:
 - attachment-only input can be sent with blank text, while a completely empty
   composer cannot be submitted;
 - drag/drop, picker and paste support attachments, with frontend limits matching
-  API limits (eight items, 16 MB each);
+  API limits (eight items, 16 MB each and 20 MB raw in total);
 - `@` references existing Files paths without uploading them again;
 - model and Plan controls snapshot their current values into each send;
 - Plan styling and announcement make mode visible, but only the server enforces
@@ -371,8 +376,8 @@ server state proves they are safe to remove.
 Voice uses the browser's `MediaRecorder`, uploads a data URI through the voice
 service and receives cleaned text. A successful transcription is sent together
 with any existing draft; if send/queue fails, the merged text becomes the
-recoverable draft. Leaving the chat stops an active recorder and its media
-tracks.
+recoverable draft. Audio is capped at 25 MB and only one transcription may run
+at a time. Leaving the chat stops an active recorder and its media tracks.
 
 Slash/session commands are recognized client-side only where they invoke a
 specific API/UI action. Local command output is visible transcript UI but never
@@ -409,6 +414,9 @@ The Files UI:
 
 - renders the live server tree by real path;
 - supports folders, upload, search, preview/download and selection;
+- uploads files sequentially with a 25 MB per-file cap, continues after an
+  individual failure, reports the failed subset and reloads the authoritative
+  tree after every batch;
 - moves delete requests to Garbage and shows an immediate undo action using the
   exact returned Garbage handle;
 - restores parent selections before separately selected children;

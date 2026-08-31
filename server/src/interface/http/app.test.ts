@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createTestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
 async function signedInApp() {
   const fixture = createTestApp();
-  const res = await fixture.app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  const { token } = (await res.json()) as { token: string };
+  const token = await setupTestSession(fixture.app, PASSWORD);
   return { ...fixture, token };
 }
 
@@ -20,7 +15,7 @@ describe('app', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'content-length': String(31 * 1024 * 1024),
+        'content-length': String(37 * 1024 * 1024),
       },
       body: '{}',
     });

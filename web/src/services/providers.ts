@@ -1,9 +1,11 @@
 import type {
   CreateCustomProviderResponse,
+  CreateConfiguredCustomProviderRequest,
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
   ProviderSubscriptionUsageResponse,
+  ProviderConfigurationRequest,
   ProvidersResponse,
   TestProviderResponse,
   TranscribeResponse,
@@ -123,6 +125,22 @@ export const providersService = {
     return apiRequest<ProvidersResponse>(`/providers/custom/${id}`, {
       method: 'PATCH',
       body: patch,
+    });
+  },
+
+  saveConfiguration(id: string, configuration: ProviderConfigurationRequest): Promise<ProvidersResponse> {
+    return apiRequest<ProvidersResponse>(`/providers/${id}/configuration`, {
+      method: 'PUT',
+      body: configuration,
+    });
+  },
+
+  createConfiguredCustom(
+    configuration: CreateConfiguredCustomProviderRequest,
+  ): Promise<CreateCustomProviderResponse> {
+    return apiRequest<CreateCustomProviderResponse>('/providers/custom/configuration', {
+      method: 'POST',
+      body: configuration,
     });
   },
 

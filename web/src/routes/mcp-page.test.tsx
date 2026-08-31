@@ -9,11 +9,13 @@ import { McpPage } from './mcp-page';
 
 const list = vi.fn();
 const toggle = vi.fn();
+const create = vi.fn();
 
 vi.mock('../services/mcp', () => ({
   mcpService: {
     list: () => list() as Promise<unknown>,
     toggle: (id: string) => toggle(id) as Promise<unknown>,
+    create: (body: unknown) => create(body) as Promise<unknown>,
   },
 }));
 
@@ -40,7 +42,8 @@ function server(enabled: boolean): McpServerDTO {
 beforeEach(() => {
   list.mockReset();
   toggle.mockReset();
-  useMcpStore.setState({ servers: undefined });
+  create.mockReset();
+  useMcpStore.setState({ servers: undefined, error: undefined });
 });
 
 afterEach(cleanup);
@@ -68,5 +71,44 @@ describe('MCP server list', () => {
 
     expect(toggle).toHaveBeenCalledWith('mcp-learn');
     await waitFor(() => expect(enabledSwitch).toHaveProperty('checked', false));
+  });
+
+  it('reports a failed toggle and leaves the visible state unchanged', async () => {
+    list.mockResolvedValue({ servers: [server(true)] });
+    toggle.mockRejectedValue(new Error('toggle failed'));
+    render(
+      <MemoryRouter initialEntries={['/mcp']}>
+        <Routes><Route path="/mcp" element={<McpPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    const enabledSwitch = await screen.findByRole('switch', { name: 'Microsoft Learn enabled' });
+    await userEvent.click(enabledSwitch);
+
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'toggle failed');
+    expect(enabledSwitch).toHaveProperty('checked', true);
+  });
+
+  it('preserves spaces inside stdio arguments by treating one line as one argv item', async () => {
+    list.mockResolvedValue({ servers: [] });
+    create.mockResolvedValue({ server: server(true) });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/mcp/new']}>
+        <Routes><Route path="/mcp/*" element={<McpPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(await screen.findByLabelText('Name'), 'Local tools');
+    await user.selectOptions(screen.getByLabelText('Transport'), 'stdio');
+    await user.type(screen.getByLabelText('Command'), 'node');
+    await user.type(screen.getByLabelText('Arguments (one per line)'), '--root\n/path with spaces');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({ args: ['--root', '/path with spaces'] }),
+      ),
+    );
   });
 });

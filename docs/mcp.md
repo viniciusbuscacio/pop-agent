@@ -26,6 +26,10 @@ stateless: no `initialize`, no `Mcp-Session-Id`, no GET notification stream. The
 adds per-request `_meta`, protocol/method/name headers, handles request-scoped SSE,
 modern cancellation, `resultType`, caching rules and `x-mcp-header` validation.
 
+For stdio configuration, the editor treats each Arguments line as one exact
+argv item. Spaces inside an argument are preserved; the UI does not imitate a
+shell parser or silently discard quoting.
+
 ## Lifecycle and capabilities
 
 A connection is short-lived for Test and for one tool call. Closing it is mandatory in

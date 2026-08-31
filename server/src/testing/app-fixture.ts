@@ -235,6 +235,28 @@ export interface TestAppOptions {
   a2a?: A2aHttpService;
 }
 
+/** Complete the real first-run HTTP flow and return its now-usable session. */
+export async function setupTestSession(
+  app: Hono,
+  password = 'correct horse battery',
+): Promise<string> {
+  const setup = await app.request('/v1/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!setup.ok) throw new Error(`test setup failed with ${setup.status}`);
+  const { token } = (await setup.json()) as { token: string };
+  const acknowledged = await app.request('/v1/setup/acknowledge', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!acknowledged.ok) {
+    throw new Error(`test setup acknowledgement failed with ${acknowledged.status}`);
+  }
+  return token;
+}
+
 export function createTestApp(
   clock: FakeClock = new FakeClock(),
   options: TestAppOptions = {},

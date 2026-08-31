@@ -40,6 +40,13 @@ symbols in six groups, uses an ambiguity-free 31-symbol alphabet and rejection
 sampling, and carries roughly 118 bits. Input is case/separator normalized.
 Only its SHA-256 digest is stored.
 
+Before acknowledgement, the account remains explicitly pending and password or
+passkey login cannot turn it into a completed setup. The page-scoped token
+issued beside the displayed key may only acknowledge that pending setup while
+the account is pending; after acknowledgement it becomes usable as the first
+session. If the tab loses the one-time key, submitting the same password resumes
+setup by burning the lost key and issuing a new one.
+
 Successful recovery spends the key, sets the new password, increments the
 session epoch and returns a new one-time recovery key. Password change does the
 same. Recovery material is never retrievable later.
@@ -52,7 +59,8 @@ days. An authenticated request using a token older than 24 hours may receive a
 replacement in `x-pop-agent-token`; clients atomically replace their stored
 copy.
 
-The PWA defaults to `sessionStorage`. “Keep me signed in” uses `localStorage`.
+The PWA defaults to `sessionStorage`. “Keep me signed in” uses `localStorage`
+for both password and passkey unlock.
 Denied/quota browser storage falls back to page memory without breaking login
 or logout. Bearer tokens are never cookies and therefore never rely on ambient
 cookie CSRF behavior.

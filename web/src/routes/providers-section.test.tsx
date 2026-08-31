@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { ProvidersSection } from './providers-section';
 
 const list = vi.fn();
 const subscriptionUsage = vi.fn();
+const saveConfiguration = vi.fn();
+const createConfiguredCustom = vi.fn();
 
 vi.mock('../services/providers', () => ({
   normalizeBaseUrl: (value: string) => value,
@@ -22,13 +25,21 @@ vi.mock('../services/providers', () => ({
     setServiceModel: vi.fn(),
     createCustom: vi.fn(),
     updateCustom: vi.fn(),
+    saveConfiguration: (id: string, configuration: unknown) =>
+      saveConfiguration(id, configuration) as Promise<unknown>,
+    createConfiguredCustom: (configuration: unknown) =>
+      createConfiguredCustom(configuration) as Promise<unknown>,
     deleteCustom: vi.fn(),
     oauthStart: vi.fn(),
-    oauthState: vi.fn(),
+    oauthState: vi.fn(() => Promise.reject(new Error('no active flow'))),
     oauthInput: vi.fn(),
     oauthCancel: vi.fn(),
     oauthLogout: vi.fn(),
   },
+}));
+
+vi.mock('../services/chats', () => ({
+  chatsService: { models: () => Promise.resolve({ models: [], source: 'static' }) },
 }));
 
 const CODEX: ProviderStatusDTO = {
@@ -56,6 +67,8 @@ beforeEach(() => {
     limitReached: false,
     primary: { usedPercent: 3, windowSeconds: 604_800, resetAt: 1_786_894_871 },
   });
+  saveConfiguration.mockReset().mockResolvedValue({ providers: [CODEX] });
+  createConfiguredCustom.mockReset();
 });
 
 describe('OpenAI subscription card', () => {
@@ -73,5 +86,39 @@ describe('OpenAI subscription card', () => {
     const progress = screen.getByRole('progressbar', { name: 'Weekly usage' });
     expect(progress.getAttribute('aria-valuenow')).toBe('3');
     await waitFor(() => expect(subscriptionUsage).toHaveBeenCalledWith('openai-codex'));
+  });
+});
+
+describe('provider configuration flow', () => {
+  it('saves one provider card through one request', async () => {
+    const user = userEvent.setup();
+    render(<ProvidersSection />);
+    await user.click(await screen.findByTestId('provider-edit'));
+
+    fireEvent.change(screen.getByTestId('provider-model'), {
+      target: { value: 'gpt-5.6-terra' },
+    });
+    await user.click(screen.getByTestId('provider-save'));
+
+    await waitFor(() =>
+      expect(saveConfiguration).toHaveBeenCalledWith(
+        'openai-codex',
+        expect.objectContaining({ defaultModel: 'gpt-5.6-terra', priority: 1 }),
+      ),
+    );
+  });
+
+  it('does not create an invisible custom provider when the draft is cancelled', async () => {
+    list.mockResolvedValue({ providers: [] });
+    const user = userEvent.setup();
+    render(<ProvidersSection />);
+
+    await user.click(await screen.findByTestId('provider-add'));
+    await user.click(screen.getByText('Custom (OpenAI-compatible) — API key'));
+    expect(screen.getByTestId('provider-name')).toBeTruthy();
+    await user.click(screen.getByTestId('provider-back'));
+
+    expect(createConfiguredCustom).not.toHaveBeenCalled();
+    expect(await screen.findByText('No providers yet. Add one and Pop Agent can start answering.')).toBeTruthy();
   });
 });

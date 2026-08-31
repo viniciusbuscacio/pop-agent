@@ -6,6 +6,7 @@ import {
   FakeProviderAuth,
   FakeTranscriber,
   createTestApp,
+  setupTestSession,
   type TestApp,
 } from '../../testing/app-fixture.js';
 
@@ -31,12 +32,7 @@ let token: string;
 beforeEach(async () => {
   fixture = createTestApp(undefined, { gateway: new OneKeyGateway('sk-good') });
   app = fixture.app;
-  const res = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  token = ((await res.json()) as { token: string }).token;
+  token = await setupTestSession(app, PASSWORD);
 });
 
 function authed(path: string, init: RequestInit = {}): Promise<Response> {
@@ -143,12 +139,7 @@ describe('GET /v1/providers/:id/subscription-usage', () => {
         primary: { usedPercent: 3, windowSeconds: 604_800, resetAt: 1_786_894_871 },
       },
     });
-    const login = await local.app.request('/v1/setup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: PASSWORD }),
-    });
-    const localToken = ((await login.json()) as { token: string }).token;
+    const localToken = await setupTestSession(local.app, PASSWORD);
     const res = await local.app.request('/v1/providers/openai-codex/subscription-usage', {
       headers: { Authorization: `Bearer ${localToken}` },
     });
@@ -355,12 +346,7 @@ describe('POST /v1/transcribe', () => {
   async function rebuild(options: Parameters<typeof createTestApp>[1]): Promise<void> {
     fixture = createTestApp(undefined, options);
     app = fixture.app;
-    const res = await app.request('/v1/setup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: PASSWORD }),
-    });
-    token = ((await res.json()) as { token: string }).token;
+    token = await setupTestSession(app, PASSWORD);
   }
 
   it('answers the words whisper heard', async () => {
@@ -400,6 +386,17 @@ describe('POST /v1/transcribe', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects decoded audio over 25 MB with a specific size error', { timeout: 15_000 }, async () => {
+    const overLimitBase64 = 'A'.repeat(34_952_540);
+    const res = await authed('/v1/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ dataUri: `data:audio/webm;base64,${overLimitBase64}` }),
+    });
+
+    expect(res.status).toBe(413);
+    expect((await res.json()).error.code).toBe('too_large');
+  });
+
   it('needs a session', async () => {
     const res = await app.request('/v1/transcribe', {
       method: 'POST',
@@ -432,6 +429,44 @@ describe('PUT /v1/providers/:id/default-model', () => {
     });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('PUT /v1/providers/:id/configuration', () => {
+  it('saves credential, models, and priority in one request', async () => {
+    const res = await authed('/v1/providers/anthropic/configuration', {
+      method: 'PUT',
+      body: JSON.stringify({
+        defaultModel: 'claude-haiku-4-5',
+        serviceModel: 'claude-haiku-4-5',
+        priority: 1,
+        apiKey: 'sk-anthropic',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      providers: { id: string; configured: boolean; defaultModel: string; order: number }[];
+    };
+    expect(body.providers.find((provider) => provider.id === 'anthropic')).toMatchObject({
+      configured: true,
+      defaultModel: 'claude-haiku-4-5',
+      order: 1,
+    });
+    expect(fixture.secrets.get('provider.anthropic.apiKey')).toBe('sk-anthropic');
+  });
+
+  it('validates the complete request before changing an unconfigured provider', async () => {
+    const res = await authed('/v1/providers/anthropic/configuration', {
+      method: 'PUT',
+      body: JSON.stringify({ defaultModel: 'changed', serviceModel: '', priority: 1 }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(fixture.providers.status('anthropic')).toMatchObject({
+      configured: false,
+      defaultModel: 'claude-sonnet-4-5',
+    });
   });
 });
 
@@ -509,12 +544,7 @@ describe('subscription sign-in routes', () => {
           providerAuth.authed.add('github-copilot');
         });
     const local = createTestApp(undefined, { providerAuth });
-    const login = await local.app.request('/v1/setup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: PASSWORD }),
-    });
-    const localToken = ((await login.json()) as { token: string }).token;
+    const localToken = await setupTestSession(local.app, PASSWORD);
 
     await local.app.request('/v1/providers/github-copilot/oauth/start', {
       method: 'POST',
@@ -618,6 +648,42 @@ describe('custom provider instances (docs/specs/Spec-Pop-General.md §15)', () =
     expect(body.id).toMatch(/^custom-[0-9a-f]{10}$/);
     const card = body.providers.find((provider) => provider.id === body.id);
     expect(card).toMatchObject({ name: 'Ollama', custom: true });
+  });
+
+  it('creates a configured custom provider only from a complete saved form', async () => {
+    const refused = await authed('/v1/providers/custom/configuration', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Incomplete',
+        baseURL: 'http://localhost:11434/v1',
+        defaultModel: 'llama4',
+        serviceModel: '',
+        priority: 1,
+      }),
+    });
+    expect(refused.status).toBe(400);
+    expect(fixture.providers.listCustom()).toEqual([]);
+
+    const saved = await authed('/v1/providers/custom/configuration', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Ollama',
+        baseURL: 'http://localhost:11434/v1',
+        defaultModel: 'llama4',
+        serviceModel: '',
+        priority: 1,
+        apiKey: 'local-key',
+      }),
+    });
+    expect(saved.status).toBe(200);
+    const body = (await saved.json()) as {
+      id: string;
+      providers: { id: string; configured: boolean; order: number }[];
+    };
+    expect(body.providers.find((provider) => provider.id === body.id)).toMatchObject({
+      configured: true,
+      order: 1,
+    });
   });
 
   it('edits an instance in place, normalizing the pasted endpoint', async () => {

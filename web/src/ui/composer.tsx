@@ -30,7 +30,9 @@ import { FileInput, ModelPicker, TextArea, Pressable } from './controls';
  */
 
 const MAX_ATTACH_BYTES = 16 * 1024 * 1024;
+const MAX_ATTACH_TOTAL_BYTES = 20 * 1024 * 1024;
 const MAX_ATTACHMENTS = 8;
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 export function Composer({
   chatId,
@@ -111,6 +113,7 @@ export function Composer({
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
+  const voiceJob = useRef(false);
   // Live mirrors, because MediaRecorder.onstop closes over stale state (aw's
   // fix): what was typed or attached DURING the recording must survive it.
   const textRef = useRef('');
@@ -318,18 +321,50 @@ export function Composer({
   function addFiles(files: FileList | null): void {
     if (files === null) return;
     setNotice(undefined);
+    let plannedCount = attachments.length;
+    let plannedBytes = attachments.reduce(
+      (total, attachment) => total + dataUriPayloadBytes(attachment.dataUri),
+      0,
+    );
     for (const file of Array.from(files)) {
       // An audio file is a voice note that arrived as a file (aw's routing):
       // it goes to transcription, not to the attachment tray.
       if (file.type.startsWith('audio/')) {
-        readAsDataUri(file, (dataUri) => void transcribe(dataUri));
+        if (file.size > MAX_AUDIO_BYTES) {
+          setNotice(t('chat.audioTooLarge', { name: file.name }));
+          continue;
+        }
+        if (voice !== 'idle' || voiceJob.current) {
+          setNotice(t('chat.audioOneAtATime'));
+          continue;
+        }
+        voiceJob.current = true;
+        setVoice('transcribing');
+        readAsDataUri(
+          file,
+          (dataUri) => void transcribe(dataUri),
+          () => {
+            voiceJob.current = false;
+            setVoice('idle');
+            setNotice(t('chat.transcribeFailed', { message: '' }));
+          },
+        );
         continue;
       }
-      if (attachments.length >= MAX_ATTACHMENTS) return;
+      if (plannedCount >= MAX_ATTACHMENTS) {
+        setNotice(t('chat.attachCount'));
+        continue;
+      }
       if (file.size > MAX_ATTACH_BYTES) {
         setNotice(t('chat.attachTooLarge', { name: file.name }));
         continue;
       }
+      if (plannedBytes + file.size > MAX_ATTACH_TOTAL_BYTES) {
+        setNotice(t('chat.attachTotalTooLarge'));
+        continue;
+      }
+      plannedCount += 1;
+      plannedBytes += file.size;
       readAsDataUri(file, (dataUri) => {
         const attachment: AttachmentDTO = {
           name: file.name,
@@ -344,6 +379,7 @@ export function Composer({
   }
 
   async function transcribe(dataUri: string): Promise<void> {
+    voiceJob.current = true;
     setVoice('transcribing');
     try {
       const result = await providersService.transcribe(dataUri);
@@ -381,6 +417,7 @@ export function Composer({
       setNotice(t('chat.transcribeFailed', { message: '' }));
       autoSendRef.current = false;
     } finally {
+      voiceJob.current = false;
       setVoice('idle');
     }
   }
@@ -415,12 +452,22 @@ export function Composer({
         for (const track of stream.getTracks()) track.stop();
         recorder.current = null;
         const blob = new Blob(chunks, { type: recording.mimeType || 'audio/webm' });
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === 'string') void transcribe(reader.result);
-          else setVoice('idle');
-        };
-        reader.readAsDataURL(blob);
+        if (blob.size > MAX_AUDIO_BYTES) {
+          setNotice(t('chat.audioTooLarge', { name: 'Voice note' }));
+          setVoice('idle');
+          return;
+        }
+        voiceJob.current = true;
+        setVoice('transcribing');
+        readAsDataUri(
+          blob,
+          (dataUri) => void transcribe(dataUri),
+          () => {
+            voiceJob.current = false;
+            setVoice('idle');
+            setNotice(t('chat.micFailed'));
+          },
+        );
       };
 
       recorder.current = recording;
@@ -1005,12 +1052,24 @@ function RecordingTimer() {
   );
 }
 
-function readAsDataUri(file: File, onReady: (dataUri: string) => void): void {
+function readAsDataUri(
+  file: Blob,
+  onReady: (dataUri: string) => void,
+  onError: () => void = () => undefined,
+): void {
   const reader = new FileReader();
   reader.onload = () => {
     if (typeof reader.result === 'string') onReady(reader.result);
+    else onError();
   };
+  reader.onerror = onError;
   reader.readAsDataURL(file);
+}
+
+function dataUriPayloadBytes(dataUri: string): number {
+  const payload = dataUri.slice(dataUri.indexOf(',') + 1);
+  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
 }
 
 function MicIcon() {

@@ -7,7 +7,9 @@ import { Button, Card } from '../ui/controls';
 /** Live backup management; restore is an offline operator action. */
 export function BackupSection() {
   const [backups, setBackups] = useState<BackupDTO[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void reload();
@@ -16,37 +18,56 @@ export function BackupSection() {
   async function reload(): Promise<void> {
     try {
       setBackups((await backupsService.list()).backups);
+      setError(undefined);
     } catch {
-      // Keep the last good list.
+      setError(t('backup.loadFailed'));
+    } finally {
+      setLoading(false);
     }
   }
 
   async function create(): Promise<void> {
     setBusy(true);
+    setError(undefined);
     try {
       await backupsService.create();
       await reload();
+    } catch {
+      setError(t('backup.createFailed'));
     } finally {
       setBusy(false);
     }
   }
 
   async function download(name: string): Promise<void> {
-    const blob = await backupsService.download(name);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = name;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    setBusy(true);
+    setError(undefined);
+    try {
+      const blob = await backupsService.download(name);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(t('backup.downloadFailed'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove(name: string): Promise<void> {
+    if (!window.confirm(t('backup.deleteConfirm', { name }))) return;
+    setBusy(true);
+    setError(undefined);
     try {
       await backupsService.remove(name);
       await reload();
     } catch {
-      // Keep the last good list.
+      setError(t('backup.deleteFailed'));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -61,7 +82,13 @@ export function BackupSection() {
         </div>
       </Card>
 
-      {backups.length === 0 ? (
+      {error === undefined ? null : (
+        <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>
+      )}
+
+      {loading ? (
+        <Card>{t('app.loading')}</Card>
+      ) : backups.length === 0 ? (
         <Card>
           <p className="text-sm text-[var(--muted)]">{t('backup.empty')}</p>
         </Card>
@@ -76,10 +103,10 @@ export function BackupSection() {
                 </p>
               </div>
               <div className="flex max-w-full flex-wrap gap-1">
-                <Button type="button" variant="ghost" onClick={() => void download(backup.name)}>
+                <Button type="button" variant="ghost" disabled={busy} onClick={() => void download(backup.name)}>
                   {t('backup.download')}
                 </Button>
-                <Button type="button" variant="danger" onClick={() => void remove(backup.name)}>
+                <Button type="button" variant="danger" disabled={busy} onClick={() => void remove(backup.name)}>
                   {t('backup.delete')}
                 </Button>
               </div>

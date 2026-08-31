@@ -73,12 +73,13 @@ export function ProvidersSection() {
   const [view, setView] = useState<View>({ kind: 'list' });
   const [loaded, setLoaded] = useState(false);
   const [listVersion, setListVersion] = useState(0);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void providersService
       .list()
       .then((response) => absorb(response))
-      .catch(() => undefined)
+      .catch(() => setError(t('provider.loadFailed')))
       .finally(() => setLoaded(true));
   }, []);
 
@@ -99,10 +100,27 @@ export function ProvidersSection() {
       <PickProvider
         configured={configured}
         onCancel={() => setView({ kind: 'list' })}
-        onPicked={(providerId) => setView({ kind: 'configure', providerId, adding: true })}
-        onCreatedCustom={(response, id) => {
-          absorb(response);
-          setView({ kind: 'configure', providerId: id, adding: true });
+        onPicked={(providerId) => {
+          if (providerId === 'custom') {
+            const draft: ProviderStatusDTO = {
+              id: 'custom-draft',
+              name: 'Custom provider',
+              authType: 'api-key',
+              configured: false,
+              source: null,
+              defaultModel: '',
+              serviceModel: '',
+              allowCustomModel: true,
+              baseURL: '',
+              custom: true,
+              order: providers.length + 1,
+              enabled: true,
+            };
+            setProviders((current) => [...current.filter((entry) => entry.id !== draft.id), draft]);
+            setView({ kind: 'configure', providerId: draft.id, adding: true });
+            return;
+          }
+          setView({ kind: 'configure', providerId, adding: true });
         }}
       />
     );
@@ -120,7 +138,12 @@ export function ProvidersSection() {
         configured={configured}
         adding={view.adding}
         onChanged={absorb}
-        onDone={() => setView({ kind: 'list' })}
+        onDone={() => {
+          if (provider.id === 'custom-draft') {
+            setProviders((current) => current.filter((entry) => entry.id !== provider.id));
+          }
+          setView({ kind: 'list' });
+        }}
       />
     );
   }
@@ -132,6 +155,8 @@ export function ProvidersSection() {
           {t('provider.add')}
         </Button>
       </div>
+
+      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
 
       {configured.length === 0 ? (
         <Card>
@@ -146,7 +171,10 @@ export function ProvidersSection() {
             listVersion={listVersion}
             onChanged={absorb}
             onEdit={() => setView({ kind: 'configure', providerId: provider.id, adding: false })}
-            onDelete={() => void remove(provider, absorb)}
+            onDelete={() => {
+              setError(undefined);
+              void remove(provider, absorb).catch(() => setError(t('provider.deleteFailed')));
+            }}
           />
         ))
       )}
@@ -445,15 +473,11 @@ function PickProvider({
   configured,
   onCancel,
   onPicked,
-  onCreatedCustom,
 }: {
   configured: ProviderStatusDTO[];
   onCancel: () => void;
   onPicked: (providerId: string) => void;
-  onCreatedCustom: (response: ProvidersResponse, id: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
   const taken = new Set(configured.map((provider) => provider.id));
 
   return (
@@ -470,20 +494,8 @@ function PickProvider({
               type="button"
               variant="ghost"
               data-testid="provider-choice"
-              disabled={busy || (entry.kind !== 'custom' && taken.has(entry.id))}
-              onClick={() => {
-                if (entry.kind !== 'custom') return onPicked(entry.id);
-                // A custom provider has no identity until the server gives it
-                // one: the id anchors its key and its registry row, so it is
-                // created first and configured second.
-                setBusy(true);
-                setError(undefined);
-                providersService
-                  .createCustom()
-                  .then((created) => onCreatedCustom({ providers: created.providers }, created.id))
-                  .catch(() => setError(t('provider.add.failed')))
-                  .finally(() => setBusy(false));
-              }}
+              disabled={entry.kind !== 'custom' && taken.has(entry.id)}
+              onClick={() => onPicked(entry.id)}
               className="justify-between"
             >
               <span>{t(entry.labelKey)}</span>
@@ -493,7 +505,6 @@ function PickProvider({
             </Button>
           ))}
         </div>
-        {error === undefined ? null : <p className="text-sm text-[var(--danger)]">{error}</p>}
         <div>
           <Button type="button" variant="ghost" onClick={onCancel}>
             {t('common.cancel')}
@@ -592,35 +603,32 @@ function ConfigureProvider({
     }
   }
 
-  /**
-   * One Save writes everything the screen touched, in an order that leaves
-   * nothing half-applied if a later call fails: identity first, then the key,
-   * then the position.
-   */
+  /** One Save is one server request; a network failure cannot split the form. */
   async function save(): Promise<void> {
     setSaving(true);
+    setNote(undefined);
     try {
-      let latest: ProvidersResponse | undefined;
-      if (isCustom) {
-        latest = await providersService.updateCustom(provider.id, {
+      const normalizedServiceModel = serviceModel.trim() === model.trim() ? '' : serviceModel.trim();
+      if (provider.id === 'custom-draft') {
+        const created = await providersService.createConfiguredCustom({
           name: name.trim(),
           baseURL: normalizeBaseUrl(baseURL),
           defaultModel: model.trim(),
+          serviceModel: normalizedServiceModel,
+          priority,
+          apiKey: apiKey.trim(),
         });
-      } else if (model.trim() !== provider.defaultModel) {
-        latest = await providersService.setDefaultModel(provider.id, model.trim());
+        onChanged({ providers: created.providers });
+      } else {
+        const latest = await providersService.saveConfiguration(provider.id, {
+          defaultModel: model.trim(),
+          serviceModel: normalizedServiceModel,
+          priority,
+          ...(apiKey.trim().length === 0 ? {} : { apiKey: apiKey.trim() }),
+          ...(isCustom ? { name: name.trim(), baseURL: normalizeBaseUrl(baseURL) } : {}),
+        });
+        onChanged(latest);
       }
-      if (serviceModel.trim() !== provider.serviceModel) {
-        // Back to the chat model is stored as empty, so the two keep following
-        // each other instead of freezing a copy of today's choice.
-        const next = serviceModel.trim() === model.trim() ? '' : serviceModel.trim();
-        latest = await providersService.setServiceModel(provider.id, next);
-      }
-      if (apiKey.trim().length > 0) {
-        latest = await providersService.setKey(provider.id, apiKey.trim());
-      }
-      latest = await applyPriority(provider.id, priority, configured, latest);
-      if (latest !== undefined) onChanged(latest);
       onDone();
     } catch {
       setNote(t('provider.saveFailed'));
@@ -628,6 +636,12 @@ function ConfigureProvider({
       setSaving(false);
     }
   }
+
+  const missingRequiredConfiguration =
+    adding &&
+    !isOAuth &&
+    (apiKey.trim().length === 0 ||
+      (isCustom && (name.trim().length === 0 || normalizeBaseUrl(baseURL).length === 0)));
 
   return (
     <div className="flex flex-col gap-4">
@@ -796,7 +810,7 @@ function ConfigureProvider({
         </Select>
 
         <div className="flex gap-2">
-          <Button type="button" data-testid="provider-save" disabled={saving} onClick={() => void save()}>
+          <Button type="button" data-testid="provider-save" disabled={saving || missingRequiredConfiguration} onClick={() => void save()}>
             {t('common.save')}
           </Button>
           <Button type="button" variant="ghost" onClick={onDone}>
@@ -806,36 +820,4 @@ function ConfigureProvider({
       </Card>
     </div>
   );
-}
-
-/**
- * Moves one provider to a 1-based position among the configured ones and
- * sends the whole list.
- *
- * The unconfigured providers keep their relative order after the configured
- * ones: the server's list covers everything it knows about, and dropping them
- * here would silently rewrite an order the user never touched.
- */
-async function applyPriority(
-  providerId: string,
-  position: number,
-  configured: ProviderStatusDTO[],
-  latest: ProvidersResponse | undefined,
-): Promise<ProvidersResponse | undefined> {
-  const all = latest?.providers ?? configured;
-  const live = all
-    .filter((entry) => entry.configured || entry.id === providerId)
-    .sort((left, right) => left.order - right.order)
-    .map((entry) => entry.id);
-
-  const without = live.filter((id) => id !== providerId);
-  const index = Math.min(Math.max(position - 1, 0), without.length);
-  const ordered = [...without.slice(0, index), providerId, ...without.slice(index)];
-
-  const rest = (latest?.providers ?? [])
-    .filter((entry) => !ordered.includes(entry.id))
-    .sort((left, right) => left.order - right.order)
-    .map((entry) => entry.id);
-
-  return providersService.setOrder([...ordered, ...rest]);
 }

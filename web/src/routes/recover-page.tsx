@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
+import { pendingRecovery } from '../services/pending-recovery';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
@@ -22,7 +23,9 @@ export function RecoverPage() {
   const [recoveryKey, setRecoveryKey] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [issuedKey, setIssuedKey] = useState<string | undefined>(undefined);
+  const [issuedKey, setIssuedKey] = useState<string | undefined>(() =>
+    pendingRecovery.read('recover'),
+  );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -39,7 +42,8 @@ export function RecoverPage() {
     setError(undefined);
     try {
       const result = await authService.recover(recoveryKey, password);
-      signIn(result.token, true);
+      signIn(result.token, false);
+      pendingRecovery.write('recover', result.recoveryKey);
       setIssuedKey(result.recoveryKey);
     } catch (cause) {
       setError(
@@ -76,7 +80,10 @@ export function RecoverPage() {
               type="button"
               data-testid="recover-finish"
               disabled={!saved}
-              onClick={() => void navigate('/')}
+              onClick={() => {
+                pendingRecovery.clear();
+                void navigate('/');
+              }}
             >
               {t('common.continue')}
             </Button>

@@ -152,14 +152,19 @@ labeled honestly and are not invoices.
 ## API and UI
 
 Guarded provider routes expose status/order/enabled state, key write/delete/test,
-custom CRUD, service model, model catalogs, OAuth start/transcript/answer/cancel,
-credits and subscription usage. Bodies are strict and bounded.
+custom CRUD, single-request card configuration, service model, model catalogs,
+OAuth start/transcript/answer/cancel, credits and subscription usage. Bodies are
+strict and bounded before mutation.
 
 Settings presents providers in priority order with enabled/configured/auth-error
 state. Key values are never prefilled. Saving and testing are distinct actions.
-Custom provider cards show the normalized endpoint. Model selectors do not lose
-provider identity. OAuth UI displays the server-owned transcript/pending
-question and supports cancellation/recovery.
+One Save sends identity, model pair, optional replacement key and priority in a
+single request, so a network failure cannot split a card across several partial
+saves. A new custom provider exists only after its complete form is saved;
+cancelling a draft creates no hidden registry row. Custom provider cards show
+the normalized endpoint. Model selectors do not lose provider identity. OAuth
+UI displays the server-owned transcript/pending question and supports
+cancellation/recovery.
 
 ## Failure behavior
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
 import { PollConnection } from './local-tools-routes.js';
 
 let fixture: TestApp;
@@ -10,12 +10,7 @@ let token: string;
 beforeEach(async () => {
   fixture = createTestApp();
   app = fixture.app;
-  const response = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'correct horse battery' }),
-  });
-  token = ((await response.json()) as { token: string }).token;
+  token = await setupTestSession(app);
 });
 
 const request = (path: string, method: string, body?: unknown, authorization = token) =>

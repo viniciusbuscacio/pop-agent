@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 let fixture: TestApp;
@@ -10,12 +10,7 @@ let token: string;
 beforeEach(async () => {
   fixture = createTestApp();
   app = fixture.app;
-  const res = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  token = ((await res.json()) as { token: string }).token;
+  token = await setupTestSession(app, PASSWORD);
 });
 
 function authed(path: string, init: RequestInit = {}): Promise<Response> {

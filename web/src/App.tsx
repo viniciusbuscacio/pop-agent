@@ -92,7 +92,10 @@ function Boot() {
 
   return (
     <Routes>
-      <Route path="/setup" element={<SetupPage />} />
+      <Route
+        path="/setup"
+        element={status === 'signed-in' ? <Navigate to="/" replace /> : <SetupPage />}
+      />
       <Route
         path="/login"
         element={status === 'signed-in' ? <Navigate to="/" replace /> : <LoginPage />}

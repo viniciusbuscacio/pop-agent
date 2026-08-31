@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession } from '../../testing/app-fixture.js';
 import type { A2aHttpService } from './a2a-routes.js';
 
 const agent = {
@@ -89,12 +89,7 @@ beforeEach(async () => {
     continueTask: vi.fn(() => Promise.resolve({ ...task, responseText: 'Continuing' })),
   };
   app = createTestApp(undefined, { a2a: service }).app;
-  const setup = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'correct horse battery' }),
-  });
-  token = ((await setup.json()) as { token: string }).token;
+  token = await setupTestSession(app);
 });
 
 describe('outbound A2A routes', () => {

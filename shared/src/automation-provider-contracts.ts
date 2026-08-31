@@ -175,6 +175,28 @@ export interface CreateCustomProviderResponse {
   providers: ProviderStatusDTO[];
 }
 
+/** One validated save for every field on an existing provider card. */
+export interface ProviderConfigurationRequest {
+  defaultModel: string;
+  serviceModel: string;
+  priority: number;
+  /** Omitted keeps the write-only credential already stored. */
+  apiKey?: string;
+  /** Custom-provider identity fields; rejected for built-ins. */
+  name?: string;
+  baseURL?: string;
+}
+
+/** Creates a usable custom provider only when the completed form is saved. */
+export interface CreateConfiguredCustomProviderRequest {
+  name: string;
+  baseURL: string;
+  defaultModel: string;
+  serviceModel: string;
+  priority: number;
+  apiKey: string;
+}
+
 /** `PATCH /v1/providers/custom/:id` — any subset of the instance's data. */
 export interface UpdateCustomProviderRequest {
   name?: string;

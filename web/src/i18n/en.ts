@@ -17,6 +17,7 @@ export const en = {
   'common.comingSoon': 'Coming soon',
   'common.edit': 'Edit',
   'common.close': 'Close',
+  'common.remove': 'Remove',
 
   'setup.welcome.title': 'Welcome to Pop Agent',
   'setup.welcome.body':
@@ -135,6 +136,10 @@ export const en = {
   'chat.transcribeFailed': 'Could not transcribe: {message}',
   'chat.attachRemove': 'Remove {name}',
   'chat.attachTooLarge': '{name} is too large to attach (limit 16 MB).',
+  'chat.attachTotalTooLarge': 'Attachments must be 20 MB or less in total.',
+  'chat.attachCount': 'You can attach up to 8 files at once.',
+  'chat.audioTooLarge': '{name} is too large to transcribe (limit 25 MB).',
+  'chat.audioOneAtATime': 'Wait for the current audio note to finish transcribing.',
   'chat.thinking': 'Thinking',
   'chat.subagents': 'Subagents',
   'chat.ranTools': 'Ran {count} tools',
@@ -296,6 +301,8 @@ export const en = {
   'provider.add.copilot': 'GitHub Copilot — subscription',
   'provider.add.custom': 'Custom (OpenAI-compatible) — API key',
   'provider.add.failed': 'That could not be added.',
+  'provider.loadFailed': 'Providers could not be loaded.',
+  'provider.deleteFailed': 'The provider could not be deleted.',
   'provider.alreadyAdded': 'already added',
   'provider.none': 'No providers yet. Add one and Pop Agent can start answering.',
   'provider.priorityBadge': 'Priority {n}',
@@ -340,7 +347,12 @@ export const en = {
   'backup.restoreConfirm': 'Restore this backup? It replaces your current data.',
   'backup.restored': 'Restored. Restart the server to load it.',
   'backup.delete': 'Delete',
+  'backup.deleteConfirm': 'Delete backup “{name}”? This cannot be undone.',
   'backup.empty': 'No backups yet.',
+  'backup.loadFailed': 'The backup list could not be loaded.',
+  'backup.createFailed': 'The backup could not be created.',
+  'backup.downloadFailed': 'The backup could not be downloaded.',
+  'backup.deleteFailed': 'The backup could not be deleted.',
 
   // Storage. Measurement first: the numbers are here so a quota can be chosen
   // by looking rather than guessing.
@@ -377,6 +389,7 @@ export const en = {
     'On by default. Reviewed candidates activate automatically; turning this off stops new learning without disabling skills already active.',
   'settings.autoSkills.protections':
     'Mandatory checks always remain active: suspicious external content is refused, known injection patterns are blocked, secrets are scrubbed, an independent reviewer must approve, and Personal or Built-in skills cannot be replaced.',
+  'settings.autoSkills.saveFailed': 'The Auto-skills setting could not be saved.',
   'skills.distillInterval': 'How often to look',
   'skills.distillIntervalNote': 'One conversation each time, so this is what it can cost.',
   'skills.distillEvery': 'every {minutes} min',
@@ -424,6 +437,9 @@ export const en = {
   'settings.memory.empty': 'Nothing yet. Pop Agent fills this in as it learns about you.',
   'settings.memory.restore': 'Restore previous version',
   'settings.memory.restoreConfirm': 'Restore the previous version of your memory?',
+  'settings.memory.loadFailed': 'Memory could not be loaded.',
+  'settings.memory.saveFailed': 'Memory could not be saved.',
+  'settings.memory.restoreFailed': 'The previous memory could not be restored.',
   'settings.section.security': 'Security',
   'settings.section.about': 'About',
 
@@ -432,6 +448,8 @@ export const en = {
   'settings.general.instructions': 'Custom instructions',
   'settings.general.instructionsHint':
     'Added to every conversation. How you want Pop Agent to answer, in your own words.',
+  'settings.general.loadFailed': 'Settings could not be loaded.',
+  'settings.general.saveFailed': 'Settings could not be saved.',
 
   'provider.title': 'OpenRouter',
   'provider.keyLabel': 'API key',
@@ -675,6 +693,9 @@ export const en = {
   'files.deleteSelectedMixedConfirm':
     'Delete {files} file(s) and {folders} folder(s), with everything inside them? They go to the Trash for 30 days.',
   'files.uploading': 'Uploading {done} of {total}…',
+  'files.uploadTooLarge': '{name} is too large to upload (limit 25 MB).',
+  'files.uploadFailedOne': '{name} could not be uploaded.',
+  'files.uploadFailedMany': '{count} files could not be uploaded. The others were kept.',
   'files.emptyCta': 'Drag files here or tap Upload.',
   'files.renameFolder': 'Rename folder',
   'files.deleteFolder': 'Delete folder',
@@ -734,6 +755,10 @@ export const en = {
   'settings.security.passkeys': 'Passkeys (Face ID / fingerprint)',
   'settings.security.passkeyAdd': 'Add this device',
   'settings.security.passkeyFailed': 'The passkey could not be set up.',
+  'settings.security.passkeyLoadFailed': 'Passkeys could not be loaded.',
+  'settings.security.passkeyRemove': 'Remove passkey',
+  'settings.security.passkeyRemoveConfirm': 'Remove passkey “{name}” from Pop Agent?',
+  'settings.security.passkeyRemoveFailed': 'The passkey could not be removed.',
   'settings.security.passkeyUnsupported': 'This browser does not support passkeys.',
   'login.passkey': 'Unlock with a passkey',
   'settings.security.signOut': 'Sign out',
@@ -764,7 +789,9 @@ export const en = {
   'settings.updates.availableUpdate': 'Available update',
   'settings.updates.none': 'None',
   'settings.updates.checkServerUpdates': 'Check for server updates',
-  'settings.updates.activateAutomatically': 'Activate updates automatically',
+  'settings.updates.activateAutomatically': 'Activate prepared server updates automatically',
+  'settings.updates.preparedOnly':
+    'This only activates a committed checkout that already passed the gate. It does not download, build, or commit a server update.',
   'settings.updates.restartAfter': 'Restart after',
   'settings.updates.minutesInactive': '{count} minutes of inactivity',
   'settings.updates.oneHourInactive': '1 hour of inactivity',
@@ -835,6 +862,9 @@ export const en = {
   'settings.updates.waitingForIdle': 'Waiting for active work…',
   'settings.updates.restartScheduled': 'Safe restart scheduled. Active work will finish first.',
   'settings.updates.restartFailed': 'Could not schedule the safe restart.',
+  'settings.updates.cancelRestart': 'Cancel scheduled restart',
+  'settings.updates.restartCancelled': 'The scheduled restart was cancelled.',
+  'settings.updates.cancelFailed': 'The scheduled restart could not be cancelled.',
   'settings.updates.dirtyTree': 'Commit or discard checkout changes before restarting.',
   'settings.updates.failedRef': 'The failed candidate was preserved as {ref}.',
   'settings.updates.phase.current': 'The running process matches the checkout.',
@@ -860,6 +890,8 @@ export const en = {
   'settings.updates.found': 'An update is ready.',
   'settings.updates.current': 'This app is up to date.',
   'settings.updates.checkUnavailable': 'The service worker is not ready yet. Try again in a moment.',
+  'settings.updates.applyFailed': 'The app update could not be applied. Try again.',
+  'settings.updates.settingFailed': 'The update setting could not be saved.',
   'settings.updates.checkNote':
     'Checks whether a newer Pop Agent app build is available on this device.',
 

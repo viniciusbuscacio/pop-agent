@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession } from '../../testing/app-fixture.js';
 import type { A2aHttpService } from './a2a-routes.js';
 import { PUBLIC_V1_PATHS, publicV1PathSet } from './route-registry.js';
 
@@ -69,12 +69,7 @@ describe('route guard', () => {
 
   it('does not expose the retired native Desktop distribution API', async () => {
     const { app } = createTestApp();
-    const setup = await app.request('/v1/setup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: 'correct horse battery' }),
-    });
-    const token = ((await setup.json()) as { token: string }).token;
+    const token = await setupTestSession(app);
     for (const [path, method] of [
       ['/v1/desktop/release', 'GET'],
       ['/v1/desktop/package/pop-desktop-0.2.27-darwin-arm64.zip', 'GET'],

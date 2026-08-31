@@ -156,6 +156,29 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Fixed
 
+- **First-run and recovery credentials now fail closed.** The setup token can
+  acknowledge the displayed recovery key but cannot reach any other API while
+  setup is pending; resuming setup rotates a lost key, password changes and
+  recovery issue a new one-time key, and passkey sign-in now honors **Keep me
+  signed in**. Browser recovery screens retain a new key only for the page that
+  must acknowledge it.
+- **Uploads now have one consistent, recoverable contract.** Binary downloads
+  and multipart uploads share session renewal and invalid-session handling;
+  Files uploads run sequentially, continue past individual failures and reload
+  authoritative state. Chat enforces eight attachments, 16 MiB each and 20 MiB
+  total, while Files and audio use explicit 25 MiB limits and voice prevents
+  overlapping transcriptions.
+- **Independent Settings controls no longer overwrite each other.** A strict,
+  atomic PATCH contract updates only named fields, provider cards save their
+  credential/models/priority in one validated request, and cancelled custom
+  provider drafts create no hidden provider. Memory, backup, security,
+  Auto-skills, voice, PWA update and server-update actions now expose errors,
+  confirmation and cancellation states instead of failing silently.
+- **MCP and navigation edge cases are now explicit.** MCP is a first-class
+  explorer with loading/not-found/error states and guarded toggles; stdio
+  arguments are one exact argv item per line so spaces are preserved. A2A is
+  documented in the shell route map rather than incorrectly listed as a
+  Settings destination.
 - **Web clients now surface deployment restarts as connection recovery.** A
   failed transport immediately shows **Server reconnecting…**, keeps loaded
   content readable but actions inert, preserves send drafts/attachments with a

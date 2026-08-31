@@ -213,29 +213,43 @@ export async function apiRequest<T>(
 /** A binary GET (e.g. a backup archive), returned as a Blob with the bearer token. */
 export async function apiDownload(path: string): Promise<Blob> {
   const token = session.token();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = clientHeaders();
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
   const response = await probed(() => fetch(`${BASE}${path}`, { headers }));
-  if (!response.ok) throw classifyServerReachability(await toApiError(response));
+  refreshSessionFrom(response);
+  if (!response.ok) throw handleSessionError(classifyServerReachability(await toApiError(response)));
   return response.blob();
 }
 
 /** A multipart upload (e.g. an artifact), returning the parsed JSON reply. */
 export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   const token = session.token();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = clientHeaders();
   // No content-type header: the browser sets the multipart boundary itself.
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
   const response = await probed(() =>
     fetch(`${BASE}${path}`, { method: 'POST', headers, body: form }),
   );
-  const renewed = response.headers.get(SESSION_TOKEN_HEADER);
-  if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+  refreshSessionFrom(response);
 
   if (response.ok) return (await response.json()) as T;
-  throw classifyServerReachability(await toApiError(response));
+  throw handleSessionError(classifyServerReachability(await toApiError(response)));
+}
+
+function refreshSessionFrom(response: Response): void {
+  const renewed = response.headers.get(SESSION_TOKEN_HEADER);
+  if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+}
+
+/** Apply the same invalid-session semantics to non-JSON request helpers. */
+function handleSessionError(error: ApiError): ApiError {
+  if (error.code === 'invalid_session') {
+    session.clear();
+    onSessionLost();
+  }
+  return error;
 }
 
 function classifyServerReachability(error: ApiError): ApiError {

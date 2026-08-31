@@ -17,9 +17,16 @@ export interface TokenPayload {
   iat: number;
   /** Expires at, epoch milliseconds. */
   exp: number;
+  /** Present only on the temporary token returned while first-run setup is pending. */
+  purpose?: 'setup';
 }
 
-export type TokenRejection = 'malformed' | 'bad_signature' | 'expired' | 'stale_epoch';
+export type TokenRejection =
+  | 'malformed'
+  | 'bad_signature'
+  | 'expired'
+  | 'stale_epoch'
+  | 'wrong_purpose';
 
 export type VerifyResult =
   | { ok: true; payload: TokenPayload }
@@ -69,11 +76,12 @@ function decodePayload(encoded: string): TokenPayload | undefined {
   try {
     const parsed: unknown = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (typeof parsed !== 'object' || parsed === null) return undefined;
-    const { epoch, iat, exp } = parsed as Record<string, unknown>;
+    const { epoch, iat, exp, purpose } = parsed as Record<string, unknown>;
     if (typeof epoch !== 'number' || typeof iat !== 'number' || typeof exp !== 'number') {
       return undefined;
     }
-    return { epoch, iat, exp };
+    if (purpose !== undefined && purpose !== 'setup') return undefined;
+    return purpose === 'setup' ? { epoch, iat, exp, purpose } : { epoch, iat, exp };
   } catch {
     return undefined;
   }

@@ -13,11 +13,12 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const { updateStatus, writeSettings, preparePiCandidate, activatePiCandidate } = vi.hoisted(() => ({
+const { updateStatus, writeSettings, preparePiCandidate, activatePiCandidate, cancelRestart } = vi.hoisted(() => ({
   updateStatus: vi.fn(),
   writeSettings: vi.fn(),
   preparePiCandidate: vi.fn(),
   activatePiCandidate: vi.fn(),
+  cancelRestart: vi.fn(),
 }));
 
 const SETTINGS: SettingsDTO = {
@@ -37,10 +38,11 @@ const SETTINGS: SettingsDTO = {
 vi.mock('../services/settings', () => ({
   settingsService: {
     read: vi.fn(() => Promise.resolve(SETTINGS)),
-    write: (settings: SettingsDTO) => writeSettings(settings) as Promise<SettingsDTO>,
+    update: (patch: Partial<SettingsDTO>) => writeSettings(patch) as Promise<SettingsDTO>,
     updateStatus: () => updateStatus() as Promise<UpdateStatusResponse | undefined>,
     preparePiCandidate: () => preparePiCandidate() as Promise<unknown>,
     activatePiCandidate: () => activatePiCandidate() as Promise<unknown>,
+    cancelRestart: () => cancelRestart() as Promise<unknown>,
   },
 }));
 
@@ -49,7 +51,9 @@ beforeEach(() => {
   vi.mocked(checkForUpdateNow).mockReset();
   vi.mocked(applyUpdate).mockReset().mockResolvedValue(undefined);
   updateStatus.mockReset().mockResolvedValue(undefined);
-  writeSettings.mockReset().mockImplementation((settings: SettingsDTO) => Promise.resolve(settings));
+  writeSettings.mockReset().mockImplementation((patch: Partial<SettingsDTO>) =>
+    Promise.resolve({ ...SETTINGS, ...patch }),
+  );
   preparePiCandidate.mockReset().mockResolvedValue({
     ok: true,
     candidate: { phase: 'installing', version: '0.84.1' },
@@ -58,6 +62,7 @@ beforeEach(() => {
     ok: true,
     candidate: { phase: 'waiting-idle', version: '0.85.0' },
   });
+  cancelRestart.mockReset().mockResolvedValue({ ok: true });
   useUpdatesStore.setState({ enabled: true, intervalMinutes: DEFAULT_UPDATE_MINUTES });
 });
 
@@ -72,7 +77,8 @@ describe('Settings PWA update action', () => {
     await user.click(await screen.findByTestId('update-check-now'));
 
     await waitFor(() => expect(applyUpdate).toHaveBeenCalledOnce());
-    expect(screen.getByTestId('update-check-now').textContent).toBe('Updating PWA…');
+    expect(screen.getByTestId('update-check-result').textContent).toBe('Updating PWA…');
+    expect((screen.getByTestId('update-check-now') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('does not reload when the installed PWA is already current', async () => {
@@ -84,6 +90,18 @@ describe('Settings PWA update action', () => {
 
     await screen.findByText('This app is up to date.');
     expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('recovers the update button when applying the new worker fails', async () => {
+    vi.mocked(checkForUpdateNow).mockResolvedValue('update-found');
+    vi.mocked(applyUpdate).mockRejectedValue(new Error('reload failed'));
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(await screen.findByTestId('update-check-now'));
+
+    expect(await screen.findByText('The app update could not be applied. Try again.')).toBeTruthy();
+    expect((screen.getByTestId('update-check-now') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('uses a toggle for automatic app checks and reveals frequency only when enabled', async () => {
@@ -152,7 +170,7 @@ describe('Settings PWA update action', () => {
 
     await user.selectOptions(screen.getByTestId('updates-pi-policy'), 'latest');
     await waitFor(() =>
-      expect(writeSettings).toHaveBeenCalledWith({ ...SETTINGS, piUpdatePolicy: 'latest' }),
+      expect(writeSettings).toHaveBeenCalledWith({ piUpdatePolicy: 'latest' }),
     );
     expect(screen.getByText(/Candidates are validated in isolation/)).toBeTruthy();
 
@@ -176,5 +194,32 @@ describe('Settings PWA update action', () => {
     await user.click(await screen.findByTestId('update-pi-activate'));
     await waitFor(() => expect(activatePiCandidate).toHaveBeenCalledOnce());
     expect(await screen.findByText(/Waiting for active work to finish/)).toBeTruthy();
+  });
+
+  it('can cancel a server restart while it is waiting for idle', async () => {
+    const waiting: UpdateStatusResponse = {
+      popAgent: { current: '0.2.41', latest: '0.2.41' },
+      pi: { current: '0.84.1', recommended: '0.84.1' },
+      node: 'v22.19.0',
+      environment: [],
+      updateCommand: 'update',
+      deployment: {
+        runningCommit: 'old', headCommit: 'new', lastKnownGood: 'old',
+        pending: true, clean: true, prepared: true, phase: 'waiting-idle', requestedBy: 'manual',
+      },
+    };
+    updateStatus
+      .mockResolvedValueOnce(waiting)
+      .mockResolvedValue({
+        ...waiting,
+        deployment: { ...waiting.deployment!, pending: false, phase: 'cancelled' },
+      });
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(await screen.findByTestId('update-cancel-restart'));
+
+    await waitFor(() => expect(cancelRestart).toHaveBeenCalledOnce());
+    expect(await screen.findByText('The scheduled restart was cancelled.')).toBeTruthy();
   });
 });

@@ -154,7 +154,10 @@ export interface AppDeps {
   cliArchive?: string;
 }
 
-const MAX_API_BODY_BYTES = 30 * 1024 * 1024;
+// A 25 MiB audio note becomes just under 35 MiB after base64 encoding. Keep
+// the global parser ceiling above that documented route limit; each route
+// still applies its smaller semantic cap before doing work.
+const MAX_API_BODY_BYTES = 36 * 1024 * 1024;
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();

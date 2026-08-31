@@ -57,11 +57,22 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     const result = await deps.auth.setup(parsed.data.password);
     if (!result.ok) {
-      return result.reason === 'already_setup'
-        ? apiError(c, 409, 'already_setup', 'Pop Agent has already been set up on this server.')
-        : weakPassword(c);
+      if (result.reason === 'already_setup') {
+        return apiError(c, 409, 'already_setup', 'Pop Agent has already been set up on this server.');
+      }
+      if (result.reason === 'invalid_credentials') return invalidCredentials(c);
+      return weakPassword(c);
     }
     return c.json({ recoveryKey: result.recoveryKey, token: result.token });
+  });
+
+  // Guarded by the common bearer middleware: only the token issued alongside
+  // the displayed key can complete this pending setup.
+  routes.post('/setup/acknowledge', (c) => {
+    if (!deps.auth.acknowledgeSetup()) {
+      return apiError(c, 409, 'setup_incomplete', 'No pending setup could be acknowledged.');
+    }
+    return c.json({ setupDone: true as const });
   });
 
   routes.post('/login', async (c) => {
@@ -75,6 +86,9 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     const result = await deps.auth.login(parsed.data.password);
     if (!result.ok) {
+      if (result.reason === 'setup_incomplete') {
+        return apiError(c, 409, 'setup_incomplete', 'Finish saving the recovery key first.');
+      }
       lockout.recordFailure();
       return invalidCredentials(c);
     }
@@ -118,7 +132,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       return result.reason === 'weak_password' ? weakPassword(c) : invalidCredentials(c);
     }
     deps.localConnections?.revokeAll();
-    return c.json({ token: result.token });
+    return c.json({ token: result.token, recoveryKey: result.recoveryKey });
   });
 
   routes.post('/auth/sign-out-others', (c) => {

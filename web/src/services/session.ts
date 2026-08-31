@@ -93,6 +93,11 @@ export const session = {
     write(selectedStore(), TOKEN_KEY, token);
   },
 
+  /** Whether the current token was intentionally chosen to survive the tab. */
+  isPersistent(): boolean {
+    return volatileStore === undefined ? persistent() : volatileStore === 'local';
+  },
+
   clear(): void {
     volatileToken = undefined;
     volatileStore = undefined;

@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createTestApp, FakeClock } from '../../testing/app-fixture.js';
+import { createTestApp, FakeClock, setupTestSession } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
 async function signedIn() {
   const fixture = createTestApp();
-  const res = await fixture.app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  const { token } = (await res.json()) as { token: string };
+  const token = await setupTestSession(fixture.app, PASSWORD);
   return { ...fixture, token };
 }
 
@@ -118,12 +113,7 @@ describe('provider credits route', () => {
 
   it('answers the balance when the provider publishes one', async () => {
     const fixture = createTestApp(new FakeClock(), { credits: { remaining: 8.5, used: 1.5 } });
-    const res = await fixture.app.request('/v1/setup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: PASSWORD }),
-    });
-    const { token } = (await res.json()) as { token: string };
+    const token = await setupTestSession(fixture.app, PASSWORD);
     const found = await fixture.app.request('/v1/providers/openrouter/credits', {
       headers: { authorization: `Bearer ${token}` },
     });

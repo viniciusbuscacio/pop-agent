@@ -1,9 +1,19 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest, clientEnvironment } from './api';
+import {
+  ApiError,
+  apiDownload,
+  apiRequest,
+  apiUpload,
+  clientEnvironment,
+  setSessionLostHandler,
+} from './api';
+import { session } from './session';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setSessionLostHandler(() => undefined);
+  session.clear();
   localStorage.clear();
 });
 
@@ -194,5 +204,43 @@ describe('apiRequest', () => {
     await expect(apiRequest('/chats/nope')).rejects.toMatchObject(
       new ApiError('not_found', 'No such chat.', 404),
     );
+  });
+});
+
+describe('binary and multipart requests', () => {
+  it.each([
+    ['download', () => apiDownload('/backups/test.tar.gz')],
+    ['upload', () => apiUpload('/files', new FormData())],
+  ])('clears the token and announces an invalid session during %s', async (_kind, request) => {
+    session.start('expired-token', false);
+    const lost = vi.fn();
+    setSessionLostHandler(lost);
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ error: { code: 'invalid_session', message: 'expired' } }),
+          { status: 401 },
+        ),
+      ),
+    );
+
+    await expect(request()).rejects.toMatchObject({ code: 'invalid_session' });
+    expect(session.token()).toBeUndefined();
+    expect(lost).toHaveBeenCalledOnce();
+  });
+
+  it('stores a renewed session token returned with a download', async () => {
+    session.start('old-token', false);
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response('backup', {
+          status: 200,
+          headers: { 'x-pop-agent-token': 'renewed-token' },
+        }),
+      ),
+    );
+
+    await apiDownload('/backups/test.tar.gz');
+    expect(session.token()).toBe('renewed-token');
   });
 });

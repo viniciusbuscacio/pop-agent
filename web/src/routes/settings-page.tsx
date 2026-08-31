@@ -34,6 +34,8 @@ import { ProvidersSection } from './providers-section';
 import { BackupSection } from './backup-section';
 import { ApiError, clientEnvironment } from '../services/api';
 import { authService } from '../services/auth';
+import { pendingRecovery } from '../services/pending-recovery';
+import { session } from '../services/session';
 import { chatsService } from '../services/chats';
 import { passkeyService } from '../services/passkey';
 import { pushService } from '../services/push';
@@ -47,7 +49,8 @@ import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
 import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
-import { Button, Card, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
+import { Button, Card, CheckField, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
+import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 import { lastActiveChatPath } from '../lib/last-active-chat';
@@ -354,6 +357,7 @@ function InstructionsSection() {
   const [instructions, setInstructions] = useState('');
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     settingsService
@@ -362,18 +366,20 @@ function InstructionsSection() {
         setSettings(doc);
         setInstructions(doc.customInstructions);
       })
-      .catch(() => setSettings(undefined));
+      .catch(() => setError(t('settings.general.loadFailed')));
   }, []);
 
   async function save(): Promise<void> {
     if (settings === undefined) return;
     setBusy(true);
+    setError(undefined);
     try {
-      const next = await settingsService.write({ ...settings, customInstructions: instructions });
+      const next = await settingsService.update({ customInstructions: instructions });
       setSettings(next);
       setSaved(true);
     } catch {
       setSaved(false);
+      setError(t('settings.general.saveFailed'));
     } finally {
       setBusy(false);
     }
@@ -417,6 +423,7 @@ function InstructionsSection() {
         </Button>
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
+      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
     </Card>
 
     {/* Which model does the work nobody asked for -- titles, summaries. It
@@ -435,41 +442,54 @@ function InstructionsSection() {
  */
 function MemorySection() {
   const [doc, setDoc] = useState('');
+  const [savedDoc, setSavedDoc] = useState('');
   const [hasBackup, setHasBackup] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     settingsService
       .readMemory()
       .then((memory) => {
         setDoc(memory.doc);
+        setSavedDoc(memory.doc);
         setHasBackup(memory.hasBackup);
       })
-      .catch(() => undefined);
+      .catch(() => setError(t('settings.memory.loadFailed')));
   }, []);
 
   async function save(): Promise<void> {
     setBusy(true);
+    setError(undefined);
     try {
       const memory = await settingsService.writeMemory(doc);
       setDoc(memory.doc);
+      setSavedDoc(memory.doc);
       setHasBackup(memory.hasBackup);
       setSaved(true);
     } catch {
       setSaved(false);
+      setError(t('settings.memory.saveFailed'));
     } finally {
       setBusy(false);
     }
   }
 
   async function restore(): Promise<void> {
+    if (!window.confirm(t('settings.memory.restoreConfirm'))) return;
+    setBusy(true);
+    setError(undefined);
     try {
       const memory = await settingsService.restoreMemory();
       setDoc(memory.doc);
+      setSavedDoc(memory.doc);
       setHasBackup(memory.hasBackup);
+      setSaved(false);
     } catch {
-      // Leave what is on screen; the next open tells the truth.
+      setError(t('settings.memory.restoreFailed'));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -496,12 +516,26 @@ function MemorySection() {
           {t('common.save')}
         </Button>
         {hasBackup ? (
-          <Button type="button" variant="ghost" data-testid="settings-memory-restore" onClick={() => void restore()}>
+          <Button type="button" variant="ghost" data-testid="settings-memory-restore" disabled={busy} onClick={() => void restore()}>
             {t('settings.memory.restore')}
           </Button>
         ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="settings-memory-cancel"
+          disabled={busy || doc === savedDoc}
+          onClick={() => {
+            setDoc(savedDoc);
+            setSaved(false);
+            setError(undefined);
+          }}
+        >
+          {t('common.cancel')}
+        </Button>
         {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
       </div>
+      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
     </Card>
   );
 }
@@ -521,7 +555,7 @@ function PasskeyControls() {
     try {
       setCredentials((await passkeyService.list()).credentials);
     } catch {
-      // Leave the list.
+      setError(t('settings.security.passkeyLoadFailed'));
     }
   }
 
@@ -538,12 +572,18 @@ function PasskeyControls() {
     }
   }
 
-  async function remove(id: string): Promise<void> {
+  async function remove(credential: { id: string; label: string }): Promise<void> {
+    const name = credential.label || credential.id.slice(0, 12);
+    if (!window.confirm(t('settings.security.passkeyRemoveConfirm', { name }))) return;
+    setBusy(true);
+    setError(undefined);
     try {
-      await passkeyService.remove(id);
+      await passkeyService.remove(credential.id);
       await reload();
     } catch {
-      // Ignore.
+      setError(t('settings.security.passkeyRemoveFailed'));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -557,8 +597,8 @@ function PasskeyControls() {
       {credentials.map((credential) => (
         <div key={credential.id} className="flex items-center justify-between gap-2 text-sm">
           <span className="truncate text-[var(--muted)]">{credential.label || credential.id.slice(0, 12)}</span>
-          <Button type="button" variant="ghost" onClick={() => void remove(credential.id)}>
-            {t('common.cancel')}
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void remove(credential)}>
+            {t('settings.security.passkeyRemove')}
           </Button>
         </div>
       ))}
@@ -898,6 +938,8 @@ function AudioSection() {
 /** Background learning has one honest switch; safety is never optional. */
 function AutoSkillsSection() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void settingsService
@@ -908,13 +950,17 @@ function AutoSkillsSection() {
 
   if (settings === undefined) return null;
 
-  /** Every control here writes the whole document; the API replaces, not merges. */
-  function save(patch: Partial<SettingsDTO>): void {
-    if (settings === undefined) return;
-    void settingsService
-      .write({ ...settings, ...patch })
-      .then(setSettings)
-      .catch(() => undefined);
+  async function save(patch: Partial<SettingsDTO>): Promise<void> {
+    if (settings === undefined || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      setSettings(await settingsService.update(patch));
+    } catch {
+      setError(t('settings.autoSkills.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -925,11 +971,13 @@ function AutoSkillsSection() {
           testId="settings-auto-skills-enabled"
           label={t('settings.autoSkills.enabled')}
           hint={t('settings.autoSkills.enabledHint')}
+          disabled={busy}
           checked={settings.autoSkillsEnabled}
-          onChange={(autoSkillsEnabled) => save({ autoSkillsEnabled })}
+          onChange={(autoSkillsEnabled) => void save({ autoSkillsEnabled })}
         />
 
         <p className="text-sm text-[var(--muted)]">{t('settings.autoSkills.protections')}</p>
+        {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
       </Card>
     </div>
   );
@@ -938,6 +986,8 @@ function AutoSkillsSection() {
 function VoiceCleanupCard() {
   const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
   const [models, setModels] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void settingsService
@@ -951,9 +1001,16 @@ function VoiceCleanupCard() {
   }, []);
 
   async function save(next: Partial<SettingsDTO>): Promise<void> {
-    if (settings === undefined) return;
-    const written = await settingsService.write({ ...settings, ...next });
-    setSettings(written);
+    if (settings === undefined || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      setSettings(await settingsService.update(next));
+    } catch {
+      setError(t('settings.general.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (settings === undefined) return null;
@@ -965,6 +1022,7 @@ function VoiceCleanupCard() {
         testId="voice-cleanup-toggle"
         label={t('voice.cleanup')}
         hint={t('voice.cleanupNote')}
+        disabled={busy}
         checked={settings.voiceCleanup}
         onChange={(checked) => void save({ voiceCleanup: checked })}
       />
@@ -974,6 +1032,7 @@ function VoiceCleanupCard() {
           data-testid="voice-cleanup-model"
           label={t('voice.cleanupModel')}
           value={settings.voiceCleanupModel}
+          disabled={busy}
           onChange={(event) => void save({ voiceCleanupModel: event.target.value })}
           className="w-full max-w-md"
         >
@@ -985,6 +1044,7 @@ function VoiceCleanupCard() {
           ))}
         </Select>
       ) : null}
+      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
     </Card>
   );
 }
@@ -1119,21 +1179,28 @@ function AppUpdatesCard() {
   async function updateNow(): Promise<void> {
     setChecking(true);
     setResult(undefined);
-    const outcome = await checkForUpdateNow();
-    setChecking(false);
+    try {
+      const outcome = await checkForUpdateNow();
+      setChecking(false);
 
-    if (outcome === 'update-found') {
-      setApplying(true);
-      setResult(t('settings.updates.applying'));
-      await applyUpdate();
-      return;
+      if (outcome === 'update-found') {
+        setApplying(true);
+        setResult(t('settings.updates.applying'));
+        await applyUpdate();
+        return;
+      }
+
+      setResult(
+        outcome === 'up-to-date'
+          ? t('settings.updates.current')
+          : t('settings.updates.checkUnavailable'),
+      );
+    } catch {
+      setResult(t('settings.updates.applyFailed'));
+    } finally {
+      setChecking(false);
+      setApplying(false);
     }
-
-    setResult(
-      outcome === 'up-to-date'
-        ? t('settings.updates.current')
-        : t('settings.updates.checkUnavailable'),
-    );
   }
 
   return (
@@ -1272,6 +1339,10 @@ function SecuritySection() {
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [issuedKey, setIssuedKey] = useState<string | undefined>(() =>
+    pendingRecovery.read('change-password'),
+  );
+  const [recoverySaved, setRecoverySaved] = useState(false);
 
   const canSubmit = current.length > 0 && next.length >= 10 && next === confirmation && !busy;
 
@@ -1284,12 +1355,14 @@ function SecuritySection() {
     setNotice(undefined);
     try {
       // The reply carries a token on the new epoch, so this device stays in.
-      const { token } = await authService.changePassword(current, next);
-      useAuthStore.getState().signIn(token, true);
+      const { token, recoveryKey } = await authService.changePassword(current, next);
+      session.refresh(token);
+      pendingRecovery.write('change-password', recoveryKey);
+      setIssuedKey(recoveryKey);
+      setRecoverySaved(false);
       setCurrent('');
       setNext('');
       setConfirmation('');
-      setNotice(t('settings.security.passwordChanged'));
     } catch (cause) {
       setError(
         cause instanceof ApiError && cause.code === 'invalid_credentials'
@@ -1304,11 +1377,43 @@ function SecuritySection() {
   async function signOutOthers(): Promise<void> {
     try {
       const { token } = await authService.signOutOthers();
-      useAuthStore.getState().signIn(token, true);
+      session.refresh(token);
       setNotice(t('settings.security.signedOutOthers'));
     } catch {
       setError(t('error.generic'));
     }
+  }
+
+  if (issuedKey !== undefined) {
+    return (
+      <Card className="flex flex-col gap-5">
+        <div>
+          <h2 className="text-base font-semibold">{t('recover.newKeyTitle')}</h2>
+          <p className="mt-1 text-sm text-[var(--key-fg-dim)]">{t('recover.newKeyBody')}</p>
+        </div>
+        <RecoveryKeyPanel recoveryKey={issuedKey} idPrefix="password-change" />
+        <CheckField
+          id="password-change-saved-key"
+          testId="password-change-saved-key"
+          label={t('setup.recovery.confirm')}
+          checked={recoverySaved}
+          onChange={setRecoverySaved}
+        />
+        <div>
+          <Button
+            type="button"
+            disabled={!recoverySaved}
+            onClick={() => {
+              pendingRecovery.clear();
+              setIssuedKey(undefined);
+              setNotice(t('settings.security.passwordChanged'));
+            }}
+          >
+            {t('common.continue')}
+          </Button>
+        </div>
+      </Card>
+    );
   }
 
   return (
@@ -1426,10 +1531,12 @@ function UpdatesSection() {
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [cancellingDeployment, setCancellingDeployment] = useState(false);
   const [preparingPi, setPreparingPi] = useState(false);
   const [activatingPi, setActivatingPi] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | undefined>(undefined);
   const [appSettings, setAppSettings] = useState<SettingsDTO | undefined>(undefined);
+  const [savingSetting, setSavingSetting] = useState(false);
 
   async function load(refresh: boolean): Promise<void> {
     if (refresh) {
@@ -1476,12 +1583,17 @@ function UpdatesSection() {
     return () => clearInterval(timer);
   }, [deploymentBusy, piCandidateBusy]);
 
-  function saveAutomaticUpdate(patch: Partial<SettingsDTO>): void {
-    if (appSettings === undefined) return;
-    void settingsService
-      .write({ ...appSettings, ...patch })
-      .then(setAppSettings)
-      .catch(() => undefined);
+  async function saveAutomaticUpdate(patch: Partial<SettingsDTO>): Promise<void> {
+    if (appSettings === undefined || savingSetting) return;
+    setSavingSetting(true);
+    setRefreshNote(undefined);
+    try {
+      setAppSettings(await settingsService.update(patch));
+    } catch {
+      setRefreshNote(t('settings.updates.settingFailed'));
+    } finally {
+      setSavingSetting(false);
+    }
   }
 
   async function preparePiCandidate(): Promise<void> {
@@ -1537,6 +1649,20 @@ function UpdatesSection() {
       setRefreshNote(t('settings.updates.restartFailed'));
     } finally {
       setDeploying(false);
+    }
+  }
+
+  async function cancelRestart(): Promise<void> {
+    setCancellingDeployment(true);
+    setRefreshNote(undefined);
+    try {
+      await settingsService.cancelRestart();
+      await load(false);
+      setRefreshNote(t('settings.updates.restartCancelled'));
+    } catch {
+      setRefreshNote(t('settings.updates.cancelFailed'));
+    } finally {
+      setCancellingDeployment(false);
     }
   }
 
@@ -1600,7 +1726,7 @@ function UpdatesSection() {
           </p>
         ) : null}
         {deployment?.pending ? (
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               data-testid="update-restart-when-idle"
@@ -1611,6 +1737,17 @@ function UpdatesSection() {
                 ? t('settings.updates.waitingForIdle')
                 : t('settings.updates.restartWhenIdle')}
             </Button>
+            {deployment.phase === 'waiting-idle' ? (
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="update-cancel-restart"
+                disabled={cancellingDeployment}
+                onClick={() => void cancelRestart()}
+              >
+                {t('settings.updates.cancelRestart')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
@@ -1633,18 +1770,21 @@ function UpdatesSection() {
               testId="updates-auto-activate"
               label={t('settings.updates.activateAutomatically')}
               hint={t('settings.updates.autoActivateHint')}
+              disabled={savingSetting}
               checked={appSettings.autoActivatePreparedUpdates}
-              onChange={(checked) => saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
+              onChange={(checked) => void saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
             />
+            <p className="text-xs text-[var(--muted)]">{t('settings.updates.preparedOnly')}</p>
             {appSettings.autoActivatePreparedUpdates ? (
               <Select
                 id="updates-idle-minutes"
                 data-testid="updates-idle-minutes"
                 label={t('settings.updates.restartAfter')}
                 hint={t('settings.updates.idleMinutesHint')}
+                disabled={savingSetting}
                 value={String(appSettings.autoRestartIdleMinutes)}
                 onChange={(event) =>
-                  saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
+                  void saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
                 }
               >
                 {[5, 10, 15, 30, 60].map((minutes) => (
@@ -1713,9 +1853,10 @@ function UpdatesSection() {
               data-testid="updates-pi-policy"
               label={t('settings.updates.updatePolicy')}
               hint={t(`settings.updates.piPolicyHint.${appSettings.piUpdatePolicy}`)}
+              disabled={savingSetting}
               value={appSettings.piUpdatePolicy}
               onChange={(event) =>
-                saveAutomaticUpdate({
+                void saveAutomaticUpdate({
                   piUpdatePolicy: event.target.value as SettingsDTO['piUpdatePolicy'],
                 })
               }

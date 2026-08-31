@@ -199,9 +199,16 @@ async function run(base: string): Promise<void> {
   // 4
   const guarded = await call(base, '/v1/settings');
   expect(guarded.status === 401, 'settings without a token', `expected 401, got ${String(guarded.status)}`);
+  const pending = await call(base, '/v1/settings', { token: created.token });
+  expect(pending.status === 401, 'settings with pending setup token', `expected 401, got ${String(pending.status)}`);
+  const acknowledged = await call(base, '/v1/setup/acknowledge', {
+    method: 'POST',
+    token: created.token,
+  });
+  expect(acknowledged.status === 200, 'setup acknowledgement', `expected 200, got ${String(acknowledged.status)}`);
   const settings = await call(base, '/v1/settings', { token: created.token });
   expect(settings.status === 200, 'settings with a token', `expected 200, got ${String(settings.status)}`);
-  pass('settings are refused without a session and served with one');
+  pass('the setup token reaches settings only after recovery-key acknowledgement');
 
   // 5
   const settingsDoc = {
@@ -238,7 +245,8 @@ async function run(base: string): Promise<void> {
     body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
   });
   expect(changed.status === 200, 'change-password', `expected 200, got ${String(changed.status)}`);
-  const afterChange = (changed.body as { token: string }).token;
+  const afterChangeResult = changed.body as { token: string; recoveryKey: string };
+  const afterChange = afterChangeResult.token;
 
   const staleToken = await call(base, '/v1/settings', { token: created.token });
   expect(
@@ -257,18 +265,18 @@ async function run(base: string): Promise<void> {
   // 7
   const recovered = await call(base, '/v1/auth/recover', {
     method: 'POST',
-    body: { recoveryKey: created.recoveryKey, newPassword: PASSWORD },
+    body: { recoveryKey: afterChangeResult.recoveryKey, newPassword: PASSWORD },
   });
   expect(recovered.status === 200, 'recover', `expected 200, got ${String(recovered.status)}`);
   const replacement = recovered.body as { token: string; recoveryKey: string };
   expect(
-    replacement.recoveryKey !== created.recoveryKey,
+    replacement.recoveryKey !== afterChangeResult.recoveryKey,
     'recover',
     'the recovery key was not replaced',
   );
   const spent = await call(base, '/v1/auth/recover', {
     method: 'POST',
-    body: { recoveryKey: created.recoveryKey, newPassword: NEW_PASSWORD },
+    body: { recoveryKey: afterChangeResult.recoveryKey, newPassword: NEW_PASSWORD },
   });
   expect(spent.status === 401, 'spent recovery key', `expected 401, got ${String(spent.status)}`);
   pass('recovery spends the key it was given and issues a new one');

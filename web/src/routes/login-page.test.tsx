@@ -7,9 +7,16 @@ import { ApiError } from '../services/api';
 import { LoginPage } from './login-page';
 
 const login = vi.fn();
+const passkeyLogin = vi.fn();
 vi.mock('../services/auth', () => ({
   authService: {
     login: (password: string) => login(password) as Promise<unknown>,
+  },
+}));
+vi.mock('../services/passkey', () => ({
+  passkeyService: {
+    supported: () => true,
+    login: () => passkeyLogin() as Promise<unknown>,
   },
 }));
 
@@ -27,6 +34,7 @@ afterEach(cleanup);
 
 beforeEach(() => {
   login.mockReset();
+  passkeyLogin.mockReset();
   localStorage.clear();
   sessionStorage.clear();
 });
@@ -54,6 +62,17 @@ describe('login', () => {
     await user.click(screen.getByTestId('login-submit'));
 
     await waitFor(() => expect(localStorage.getItem('pop-agent.token')).toBe('token-2'));
+  });
+
+  it('honors the same persistence choice when unlocking with a passkey', async () => {
+    passkeyLogin.mockResolvedValue('passkey-token');
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.click(screen.getByTestId('login-passkey'));
+
+    await waitFor(() => expect(sessionStorage.getItem('pop-agent.token')).toBe('passkey-token'));
+    expect(localStorage.getItem('pop-agent.token')).toBeNull();
   });
 
   it('reports a wrong password inline and clears the field', async () => {

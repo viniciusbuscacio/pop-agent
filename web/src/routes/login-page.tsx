@@ -41,7 +41,9 @@ export function LoginPage() {
       signIn(token, keepSignedIn);
       void navigate('/');
     } catch (cause) {
-      if (cause instanceof ApiError && cause.code === 'locked') {
+      if (cause instanceof ApiError && cause.code === 'setup_incomplete') {
+        void navigate('/setup');
+      } else if (cause instanceof ApiError && cause.code === 'locked') {
         setLockedFor(cause.retryAfterSeconds ?? 30);
         setError(undefined);
       } else if (cause instanceof ApiError && cause.code === 'rate_limited') {
@@ -61,7 +63,7 @@ export function LoginPage() {
     setError(undefined);
     try {
       const token = await passkeyService.login();
-      signIn(token, true);
+      signIn(token, keepSignedIn);
       void navigate('/');
     } catch (cause) {
       // A cancel is not an error; a real failure is.

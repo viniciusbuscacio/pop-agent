@@ -66,14 +66,17 @@ a generic 5xx response.
 - `POST` creates or invokes; successful creation returns 201 and asynchronous
   admission generally returns 202.
 - `PUT` is full replacement unless the route explicitly documents another
-  contract. Settings replacement is strict and complete.
+  contract. Settings PUT remains strict and complete; Settings PATCH validates
+  and atomically merges only named fields for independent controls.
 - `PATCH` changes named mutable fields.
 - `DELETE` is idempotent only where explicitly implemented; 204 has no body.
 
 Collections with owner-visible unbounded growth must use bounded server limits,
 cursors or capped history. Query numbers are normalized to documented ranges.
-The server applies a 30 MiB streaming ceiling to every `/v1` body before
-parsing, then route-specific smaller file/frame limits before retention.
+The server applies a 36 MiB streaming ceiling to every `/v1` body before
+parsing, large enough for a 25 MiB audio frame after base64 expansion, then
+route-specific smaller limits before retention (25 MiB Files/audio, 16 MiB per
+chat attachment and 20 MiB raw across chat attachments).
 Missing content length is not permission for unbounded buffering.
 
 State-changing responses return enough identity/revision data for immediate UI

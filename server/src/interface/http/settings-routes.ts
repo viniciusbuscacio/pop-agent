@@ -8,9 +8,9 @@ import { badBody, readJson, schemaError } from './body.js';
  * Settings and About (docs/specs/Spec-Pop-General.md §13). Both need a session; the middleware has
  * already run by the time these handlers see a request.
  *
- * PUT replaces the whole document rather than merging: with `.strict()` on the
- * schema, a client sending a field Pop Agent does not know gets told so, instead of
- * having it quietly dropped and believing it was saved.
+ * PUT remains the full-document compatibility API. PATCH is what independent
+ * Settings controls use: each request validates and atomically merges only the
+ * fields it owns, so two open sections cannot restore each other's stale data.
  */
 
 /** Room for instructions, not for essays: the cap from the Phase 3 plan. */
@@ -34,6 +34,8 @@ const settingsSchema = z
   })
   .strict();
 
+const settingsPatchSchema = settingsSchema.partial().refine((patch) => Object.keys(patch).length > 0);
+
 export interface SettingsRoutesDeps {
   settings: SettingsService;
   versions: AboutResponse;
@@ -56,6 +58,21 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
       piUpdatePolicy: parsed.data.piUpdatePolicy ?? deps.settings.read().piUpdatePolicy,
     };
     return c.json(toDto(deps.settings.write(next)));
+  });
+
+  routes.patch('/settings', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+
+    const parsed = settingsPatchSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    // Zod represents optional properties as `T | undefined`; JSON cannot carry
+    // undefined, so normalize that inference before the exact optional app type.
+    const patch = Object.fromEntries(
+      Object.entries(parsed.data).filter((entry) => entry[1] !== undefined),
+    ) as Partial<AppSettings>;
+    return c.json(toDto(deps.settings.update(patch)));
   });
 
   routes.get('/about', (c) => c.json(deps.versions));

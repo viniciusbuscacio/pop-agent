@@ -27,12 +27,16 @@ export function authMiddleware(auth: AuthService): MiddlewareHandler {
       return apiError(c, 401, 'invalid_session', 'This request needs a valid session token.');
     }
 
-    const result = auth.verifySession(token);
+    const setupAcknowledgement = c.req.path === '/v1/setup/acknowledge';
+    const result = setupAcknowledgement
+      ? auth.verifySetupToken(token)
+      : auth.verifySession(token);
     if (!result.ok) {
       return apiError(c, 401, 'invalid_session', 'This session is no longer valid. Sign in again.');
     }
 
-    const renewed = auth.renewIfDue(result.payload);
+    // A pending-setup credential must never be silently upgraded by renewal.
+    const renewed = setupAcknowledgement ? undefined : auth.renewIfDue(result.payload);
     if (renewed !== undefined) c.header(SESSION_TOKEN_HEADER, renewed);
 
     return next();

@@ -20,9 +20,14 @@ async function post(path: string, body?: unknown, token?: string): Promise<Respo
   });
 }
 
-async function setup(): Promise<{ token: string; recoveryKey: string }> {
+async function setup(acknowledge = true): Promise<{ token: string; recoveryKey: string }> {
   const res = await post('/v1/setup', { password: PASSWORD });
-  return (await res.json()) as { token: string; recoveryKey: string };
+  const result = (await res.json()) as { token: string; recoveryKey: string };
+  if (acknowledge) {
+    const acknowledged = await post('/v1/setup/acknowledge', undefined, result.token);
+    expect(acknowledged.status).toBe(200);
+  }
+  return result;
 }
 
 beforeEach(() => {
@@ -52,13 +57,36 @@ describe('POST /v1/session/refresh', () => {
 });
 
 describe('POST /v1/setup', () => {
-  it('creates the account and returns the recovery key once', async () => {
-    const res = await post('/v1/setup', { password: PASSWORD });
-    expect(res.status).toBe(200);
-
-    const body = (await res.json()) as { recoveryKey: string; token: string };
+  it('creates a pending account and completes it only after authenticated acknowledgement', async () => {
+    const body = await setup(false);
     expect(body.recoveryKey).toMatch(/^[A-Z2-9]{4}(-[A-Z2-9]{4}){5}$/);
     expect(body.token.length).toBeGreaterThan(0);
+    expect(await (await app.request('/v1/auth/state')).json()).toEqual({ setupDone: false });
+
+    expect((await post('/v1/setup/acknowledge')).status).toBe(401);
+    expect((await app.request('/v1/settings', {
+      headers: { Authorization: `Bearer ${body.token}` },
+    })).status).toBe(401);
+    const acknowledged = await post('/v1/setup/acknowledge', undefined, body.token);
+    expect(acknowledged.status).toBe(200);
+    expect(await acknowledged.json()).toEqual({ setupDone: true });
+    expect(await (await app.request('/v1/auth/state')).json()).toEqual({ setupDone: true });
+    expect((await app.request('/v1/settings', {
+      headers: { Authorization: `Bearer ${body.token}` },
+    })).status).toBe(200);
+
+    const login = await post('/v1/login', { password: PASSWORD });
+    const sessionToken = ((await login.json()) as { token: string }).token;
+    expect((await post('/v1/setup/acknowledge', undefined, sessionToken)).status).toBe(401);
+  });
+
+  it('can resume a pending setup with the password and invalidates the lost key', async () => {
+    const first = await setup(false);
+    const resumed = await setup(false);
+
+    expect(resumed.recoveryKey).not.toBe(first.recoveryKey);
+    expect((await post('/v1/setup/acknowledge', undefined, first.token)).status).toBe(401);
+    expect((await post('/v1/setup/acknowledge', undefined, resumed.token)).status).toBe(200);
   });
 
   it('refuses to run a second time', async () => {
@@ -89,7 +117,9 @@ describe('POST /v1/setup', () => {
 });
 
 describe('POST /v1/login', () => {
-  beforeEach(setup);
+  beforeEach(async () => {
+    await setup();
+  });
 
   it('returns a token for the right password', async () => {
     const res = await post('/v1/login', { password: PASSWORD });
@@ -101,6 +131,16 @@ describe('POST /v1/login', () => {
     const res = await post('/v1/login', { password: 'wrong password!' });
     expect(res.status).toBe(401);
     expect((await res.json()).error.code).toBe('invalid_credentials');
+  });
+
+  it('does not bypass recovery-key acknowledgement on a pending setup', async () => {
+    fixture = createTestApp();
+    app = fixture.app;
+    await setup(false);
+
+    const res = await post('/v1/login', { password: PASSWORD });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('setup_incomplete');
   });
 });
 
@@ -147,8 +187,8 @@ describe('authentication middleware', () => {
 });
 
 describe('POST /v1/auth/change-password', () => {
-  it('issues a new token and invalidates the old one', async () => {
-    const { token } = await setup();
+  it('issues a new token and recovery key, invalidating both old credentials', async () => {
+    const { token, recoveryKey } = await setup();
 
     const res = await post(
       '/v1/auth/change-password',
@@ -157,9 +197,19 @@ describe('POST /v1/auth/change-password', () => {
     );
     expect(res.status).toBe(200);
 
-    const { token: next } = (await res.json()) as { token: string };
+    const { token: next, recoveryKey: nextRecoveryKey } = (await res.json()) as {
+      token: string;
+      recoveryKey: string;
+    };
+    expect(nextRecoveryKey).not.toBe(recoveryKey);
     expect((await post('/v1/auth/sign-out-others', undefined, token)).status).toBe(401);
     expect((await post('/v1/auth/sign-out-others', undefined, next)).status).toBe(200);
+
+    const oldRecovery = await post('/v1/auth/recover', {
+      recoveryKey,
+      newPassword: PASSWORD,
+    });
+    expect(oldRecovery.status).toBe(401);
   });
 
   it('rejects a wrong current password', async () => {
@@ -248,7 +298,9 @@ describe('POST /v1/auth/sign-out-others', () => {
 });
 
 describe('progressive lockout', () => {
-  beforeEach(setup);
+  beforeEach(async () => {
+    await setup();
+  });
 
   async function failLogin(): Promise<Response> {
     return post('/v1/login', { password: 'wrong password!' });

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { ApiError } from '../services/api';
+import { providersService } from '../services/providers';
 import { Composer } from './composer';
 import type { ModelChoice } from './slash-menu';
 
@@ -66,6 +67,7 @@ function renderComposer(
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   localStorage.clear();
 });
 
@@ -260,6 +262,38 @@ describe('pending message composition', () => {
         'normal',
       ),
     );
+  });
+
+  it('refuses a selection over the 20 MB aggregate attachment limit before sending', async () => {
+    renderComposer();
+    const first = new File(['a'], 'first.bin', { type: 'application/octet-stream' });
+    const second = new File(['b'], 'second.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(first, 'size', { value: 12 * 1024 * 1024 });
+    Object.defineProperty(second, 'size', { value: 12 * 1024 * 1024 });
+
+    fireEvent.change(screen.getByTestId('composer-file-input'), {
+      target: { files: [first, second] },
+    });
+
+    expect(await screen.findByText('Attachments must be 20 MB or less in total.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('first.bin')).toBeTruthy());
+    expect(screen.queryByText('second.bin')).toBeNull();
+  });
+
+  it('starts only one audio transcription from a multi-file selection', async () => {
+    const transcribe = vi
+      .spyOn(providersService, 'transcribe')
+      .mockReturnValue(new Promise<never>(() => undefined));
+    renderComposer();
+    const first = new File(['audio'], 'first.webm', { type: 'audio/webm' });
+    const second = new File(['audio'], 'second.webm', { type: 'audio/webm' });
+
+    fireEvent.change(screen.getByTestId('composer-file-input'), {
+      target: { files: [first, second] },
+    });
+
+    expect(await screen.findByText('Wait for the current audio note to finish transcribing.')).toBeTruthy();
+    await waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
   });
 
   it('requests a synchronized mode change and sends the controlled Plan value', async () => {

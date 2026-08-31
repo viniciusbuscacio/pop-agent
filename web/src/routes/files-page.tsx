@@ -6,6 +6,7 @@ import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
+import { uploadFileBatch, type UploadFailure } from '../lib/file-upload';
 import { useTrashUndo } from '../lib/trash-undo';
 import { ApiError } from '../services/api';
 import { filesService } from '../services/artifacts';
@@ -173,15 +174,19 @@ export function FilesPage() {
     const entries = list === null ? [] : Array.from(list);
     if (entries.length === 0) return;
     setUploading({ done: 0, total: entries.length });
+    let failed: UploadFailure[] = [];
     try {
-      for (const [index, file] of entries.entries()) {
-        setUploading({ done: index, total: entries.length });
-        await filesService.upload(file, currentPath);
-      }
+      failed = await uploadFileBatch(
+        entries,
+        () => currentPath,
+        filesService.upload,
+        (done, total) => setUploading({ done, total }),
+      );
     } finally {
       setUploading(undefined);
+      await reload();
     }
-    await reload();
+    announceUploadFailures(failed, notify);
   }
 
   /**
@@ -195,16 +200,19 @@ export function FilesPage() {
     const entries = list === null ? [] : Array.from(list);
     if (entries.length === 0) return;
     setUploading({ done: 0, total: entries.length });
+    let failed: UploadFailure[] = [];
     try {
-      for (const [index, file] of entries.entries()) {
-        setUploading({ done: index, total: entries.length });
-        const relativeDir = parentDir(file.webkitRelativePath);
-        await filesService.upload(file, joinPath(currentPath, relativeDir));
-      }
+      failed = await uploadFileBatch(
+        entries,
+        (file) => joinPath(currentPath, parentDir(file.webkitRelativePath)),
+        filesService.upload,
+        (done, total) => setUploading({ done, total }),
+      );
     } finally {
       setUploading(undefined);
+      await reload();
     }
-    await reload();
+    announceUploadFailures(failed, notify);
   }
 
   async function download(path: string): Promise<void> {
@@ -851,6 +859,22 @@ function toggled(current: Set<string>, path: string, addOnly = false): Set<strin
   if (next.has(path) && !addOnly) next.delete(path);
   else next.add(path);
   return next;
+}
+
+function announceUploadFailures(
+  failures: UploadFailure[],
+  notify: (message: string) => void,
+): void {
+  const only = failures[0];
+  if (failures.length === 1 && only !== undefined) {
+    notify(
+      only.reason === 'too-large'
+        ? t('files.uploadTooLarge', { name: only.name })
+        : t('files.uploadFailedOne', { name: only.name }),
+    );
+  } else if (failures.length > 1) {
+    notify(t('files.uploadFailedMany', { count: failures.length }));
+  }
 }
 
 function formatSize(bytes: number): string {

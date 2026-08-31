@@ -7,7 +7,7 @@ import type { SettingsDTO } from '@pop-agent/shared';
 import { SettingsPage } from './settings-page';
 
 const read = vi.fn();
-const write = vi.fn();
+const update = vi.fn();
 
 vi.mock('../services/pwa-update', () => ({
   applyUpdate: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('../services/pwa-update', () => ({
 vi.mock('../services/settings', () => ({
   settingsService: {
     read: () => read() as Promise<SettingsDTO>,
-    write: (settings: SettingsDTO) => write(settings) as Promise<SettingsDTO>,
+    update: (patch: Partial<SettingsDTO>) => update(patch) as Promise<SettingsDTO>,
   },
 }));
 
@@ -38,7 +38,9 @@ const SETTINGS: SettingsDTO = {
 beforeEach(() => {
   window.history.replaceState({}, '', '/settings?section=auto-skills');
   read.mockReset().mockResolvedValue(SETTINGS);
-  write.mockReset().mockImplementation((settings: SettingsDTO) => Promise.resolve(settings));
+  update.mockReset().mockImplementation((patch: Partial<SettingsDTO>) =>
+    Promise.resolve({ ...SETTINGS, ...patch }),
+  );
 });
 
 afterEach(cleanup);
@@ -60,7 +62,7 @@ describe('Settings auto-skills section', () => {
     await user.click(await screen.findByTestId('settings-auto-skills-enabled'));
 
     await waitFor(() => {
-      expect(write).toHaveBeenCalledWith({ ...SETTINGS, autoSkillsEnabled: true });
+      expect(update).toHaveBeenCalledWith({ autoSkillsEnabled: true });
       expect(screen.queryByTestId('skills-distill-interval')).toBeNull();
     });
   });

@@ -53,6 +53,13 @@ class FakeClock implements Clock {
 let clock: FakeClock;
 let auth: AuthService;
 
+async function completeSetup(): Promise<{ token: string; recoveryKey: string }> {
+  const result = await auth.setup(PASSWORD);
+  if (!result.ok) throw new Error('setup failed');
+  expect(auth.acknowledgeSetup()).toBe(true);
+  return result;
+}
+
 beforeEach(() => {
   clock = new FakeClock(NOW);
   auth = new AuthService({
@@ -64,22 +71,44 @@ beforeEach(() => {
 });
 
 describe('setup', () => {
-  it('creates the account and returns a working session', async () => {
+  it('creates a pending account and completes only after the key is acknowledged', async () => {
     expect(auth.isSetupDone()).toBe(false);
 
     const result = await auth.setup(PASSWORD);
 
     expect(result.ok).toBe(true);
-    expect(auth.isSetupDone()).toBe(true);
+    expect(auth.isSetupDone()).toBe(false);
     if (result.ok) {
       expect(result.recoveryKey).toMatch(/^[A-Z2-9]{4}(-[A-Z2-9]{4}){5}$/);
+      expect(auth.verifySession(result.token)).toEqual({ ok: false, reason: 'wrong_purpose' });
+      expect(auth.verifySetupToken(result.token).ok).toBe(true);
+      expect(auth.acknowledgeSetup()).toBe(true);
       expect(auth.verifySession(result.token).ok).toBe(true);
+      expect(auth.isSetupDone()).toBe(true);
     }
   });
 
   it('refuses to run twice', async () => {
-    await auth.setup(PASSWORD);
+    await completeSetup();
     expect(await auth.setup(PASSWORD)).toEqual({ ok: false, reason: 'already_setup' });
+  });
+
+  it('resumes an unacknowledged setup only with the same password and rotates the lost key', async () => {
+    const first = await auth.setup(PASSWORD);
+    if (!first.ok) throw new Error('setup failed');
+
+    expect(await auth.setup(OTHER_PASSWORD)).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
+
+    const resumed = await auth.setup(PASSWORD);
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) return;
+    expect(resumed.recoveryKey).not.toBe(first.recoveryKey);
+    expect(auth.verifySession(first.token)).toEqual({ ok: false, reason: 'stale_epoch' });
+    expect(auth.verifySession(resumed.token)).toEqual({ ok: false, reason: 'wrong_purpose' });
+    expect(auth.verifySetupToken(resumed.token).ok).toBe(true);
   });
 
   it('refuses a password under ten characters', async () => {
@@ -90,7 +119,7 @@ describe('setup', () => {
 
 describe('login', () => {
   beforeEach(async () => {
-    await auth.setup(PASSWORD);
+    await completeSetup();
   });
 
   it('accepts the password and issues a valid token', async () => {
@@ -110,8 +139,7 @@ describe('login', () => {
 
 describe('sessions', () => {
   it('expires after seven days', async () => {
-    const result = await auth.setup(PASSWORD);
-    if (!result.ok) throw new Error('setup failed');
+    const result = await completeSetup();
 
     clock.advance(7 * DAY - 1);
     expect(auth.verifySession(result.token).ok).toBe(true);
@@ -121,8 +149,7 @@ describe('sessions', () => {
   });
 
   it('revalidates a ticket-bound payload against expiry and epoch', async () => {
-    const result = await auth.setup(PASSWORD);
-    if (!result.ok) throw new Error('setup failed');
+    const result = await completeSetup();
     const verified = auth.verifySession(result.token);
     if (!verified.ok) throw new Error('token should verify');
 
@@ -139,8 +166,7 @@ describe('sessions', () => {
   });
 
   it('renews only once the token is over a day old', async () => {
-    const result = await auth.setup(PASSWORD);
-    if (!result.ok) throw new Error('setup failed');
+    const result = await completeSetup();
     const verified = auth.verifySession(result.token);
     if (!verified.ok) throw new Error('token should verify');
 
@@ -155,9 +181,8 @@ describe('sessions', () => {
 });
 
 describe('change password', () => {
-  it('drops other sessions but keeps the caller signed in', async () => {
-    const setup = await auth.setup(PASSWORD);
-    if (!setup.ok) throw new Error('setup failed');
+  it('drops other sessions, rotates recovery, and keeps the caller signed in', async () => {
+    const setup = await completeSetup();
 
     const changed = await auth.changePassword(PASSWORD, OTHER_PASSWORD);
 
@@ -165,11 +190,16 @@ describe('change password', () => {
     if (!changed.ok) return;
     expect(auth.verifySession(setup.token)).toEqual({ ok: false, reason: 'stale_epoch' });
     expect(auth.verifySession(changed.token).ok).toBe(true);
+    expect(changed.recoveryKey).not.toBe(setup.recoveryKey);
+    expect(await auth.recover(setup.recoveryKey, PASSWORD)).toEqual({
+      ok: false,
+      reason: 'invalid_credentials',
+    });
     expect((await auth.login(OTHER_PASSWORD)).ok).toBe(true);
   });
 
   it('refuses the wrong current password', async () => {
-    await auth.setup(PASSWORD);
+    await completeSetup();
 
     expect(await auth.changePassword('not the password', OTHER_PASSWORD)).toEqual({
       ok: false,
@@ -179,7 +209,7 @@ describe('change password', () => {
   });
 
   it('refuses a weak new password and keeps the old one', async () => {
-    await auth.setup(PASSWORD);
+    await completeSetup();
 
     expect(await auth.changePassword(PASSWORD, 'short')).toEqual({
       ok: false,
@@ -191,8 +221,7 @@ describe('change password', () => {
 
 describe('recovery', () => {
   it('sets a new password and burns the key it was given', async () => {
-    const setup = await auth.setup(PASSWORD);
-    if (!setup.ok) throw new Error('setup failed');
+    const setup = await completeSetup();
 
     const recovered = await auth.recover(setup.recoveryKey, OTHER_PASSWORD);
 
@@ -210,8 +239,7 @@ describe('recovery', () => {
   });
 
   it('invalidates existing sessions and signs the caller in', async () => {
-    const setup = await auth.setup(PASSWORD);
-    if (!setup.ok) throw new Error('setup failed');
+    const setup = await completeSetup();
 
     const recovered = await auth.recover(setup.recoveryKey, OTHER_PASSWORD);
 
@@ -222,7 +250,7 @@ describe('recovery', () => {
   });
 
   it('rejects a key that was never issued', async () => {
-    await auth.setup(PASSWORD);
+    await completeSetup();
 
     expect(await auth.recover('ABCD-EFGH-JKMN-PQRS-TUVW-XYZ2', OTHER_PASSWORD)).toEqual({
       ok: false,
@@ -231,8 +259,7 @@ describe('recovery', () => {
   });
 
   it('keeps the current password when the new one is too weak', async () => {
-    const setup = await auth.setup(PASSWORD);
-    if (!setup.ok) throw new Error('setup failed');
+    const setup = await completeSetup();
 
     expect(await auth.recover(setup.recoveryKey, 'short')).toEqual({
       ok: false,
@@ -244,9 +271,9 @@ describe('recovery', () => {
 
 describe('sign out other devices', () => {
   it('keeps this device and drops the rest', async () => {
-    const first = await auth.setup(PASSWORD);
+    const first = await completeSetup();
     const second = await auth.login(PASSWORD);
-    if (!first.ok || !second.ok) throw new Error('setup failed');
+    if (!second.ok) throw new Error('setup failed');
 
     const { token } = auth.signOutOthers();
 

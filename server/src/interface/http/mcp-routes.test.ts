@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hono } from 'hono';
 import type { McpClientFactory } from '../../application/ports/mcp-client.js';
-import { createTestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession } from '../../testing/app-fixture.js';
 
 let app: Hono;
 let token: string;
@@ -27,12 +27,7 @@ beforeEach(async () => {
     close: () => Promise.resolve(),
   });
   app = createTestApp(undefined, { mcpClients: { connect } }).app;
-  const setup = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'correct horse battery' }),
-  });
-  token = ((await setup.json()) as { token: string }).token;
+  token = await setupTestSession(app);
 });
 
 describe('MCP routes', () => {

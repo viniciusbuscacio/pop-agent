@@ -38,6 +38,8 @@ interface AuthRecord {
   recoveryKeyHash: string;
   epoch: number;
   createdAt: string;
+  /** Missing on older installs means acknowledged for migration compatibility. */
+  setupAcknowledged?: boolean;
 }
 
 export interface AuthDeps {
@@ -49,28 +51,51 @@ export interface AuthDeps {
 
 export type SetupResult =
   | { ok: true; recoveryKey: string; token: string }
-  | { ok: false; reason: 'already_setup' | 'weak_password' };
+  | { ok: false; reason: 'already_setup' | 'invalid_credentials' | 'weak_password' };
 
-export type LoginResult = { ok: true; token: string } | { ok: false; reason: 'invalid_credentials' };
+export type LoginResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: 'invalid_credentials' | 'setup_incomplete' };
 
 export type RecoverResult =
   | { ok: true; token: string; recoveryKey: string }
   | { ok: false; reason: 'invalid_credentials' | 'weak_password' };
 
 export type ChangePasswordResult =
-  | { ok: true; token: string }
+  | { ok: true; token: string; recoveryKey: string }
   | { ok: false; reason: 'invalid_credentials' | 'weak_password' };
 
 export class AuthService {
   constructor(private readonly deps: AuthDeps) {}
 
   isSetupDone(): boolean {
-    return this.record() !== undefined;
+    const record = this.record();
+    return record !== undefined && record.setupAcknowledged !== false;
   }
 
   async setup(password: string): Promise<SetupResult> {
-    if (this.record() !== undefined) return { ok: false, reason: 'already_setup' };
     if (!isAcceptablePassword(password)) return { ok: false, reason: 'weak_password' };
+
+    const existing = this.record();
+    if (existing !== undefined) {
+      if (existing.setupAcknowledged !== false) return { ok: false, reason: 'already_setup' };
+      if (!(await this.deps.hasher.verify(existing.passwordHash, password))) {
+        return { ok: false, reason: 'invalid_credentials' };
+      }
+
+      // A tab may close before the one-time key is acknowledged. The same
+      // password can resume setup, burning the now-lost key and issuing one
+      // that can actually be shown and saved.
+      const recoveryKey = generateRecoveryKey();
+      const epoch = existing.epoch + 1;
+      this.deps.settings.set(AUTH_KEY, {
+        ...existing,
+        recoveryKeyHash: hashRecoveryKey(recoveryKey),
+        epoch,
+        setupAcknowledged: false,
+      } satisfies AuthRecord);
+      return { ok: true, recoveryKey, token: this.issueSetupToken(epoch) };
+    }
 
     const recoveryKey = generateRecoveryKey();
     const record: AuthRecord = {
@@ -78,6 +103,7 @@ export class AuthService {
       recoveryKeyHash: hashRecoveryKey(recoveryKey),
       epoch: 1,
       createdAt: new Date(this.deps.clock.now()).toISOString(),
+      setupAcknowledged: false,
     };
 
     // The secret is created before the record is written, so a crash in
@@ -85,7 +111,7 @@ export class AuthService {
     this.deps.secrets.set(SESSION_SECRET_KEY, randomBytes(SESSION_SECRET_BYTES).toString('base64'));
     this.deps.settings.set(AUTH_KEY, record);
 
-    return { ok: true, recoveryKey, token: this.issueToken(record.epoch) };
+    return { ok: true, recoveryKey, token: this.issueSetupToken(record.epoch) };
   }
 
   async login(password: string): Promise<LoginResult> {
@@ -94,7 +120,17 @@ export class AuthService {
     if (!(await this.deps.hasher.verify(record.passwordHash, password))) {
       return { ok: false, reason: 'invalid_credentials' };
     }
+    if (record.setupAcknowledged === false) return { ok: false, reason: 'setup_incomplete' };
     return { ok: true, token: this.issueToken(record.epoch) };
+  }
+
+  /** Marks setup complete only after the browser confirmed the one-time key was saved. */
+  acknowledgeSetup(): boolean {
+    const record = this.record();
+    if (record === undefined) return false;
+    if (record.setupAcknowledged !== false) return true;
+    this.deps.settings.set(AUTH_KEY, { ...record, setupAcknowledged: true } satisfies AuthRecord);
+    return true;
   }
 
   /**
@@ -103,7 +139,9 @@ export class AuthService {
    */
   issueSessionToken(): string | undefined {
     const record = this.record();
-    return record === undefined ? undefined : this.issueToken(record.epoch);
+    return record === undefined || record.setupAcknowledged === false
+      ? undefined
+      : this.issueToken(record.epoch);
   }
 
   /**
@@ -174,14 +212,16 @@ export class AuthService {
     }
     if (!isAcceptablePassword(next)) return { ok: false, reason: 'weak_password' };
 
+    const recoveryKey = generateRecoveryKey();
     const epoch = record.epoch + 1;
     this.deps.settings.set(AUTH_KEY, {
       ...record,
       passwordHash: await this.deps.hasher.hash(next),
+      recoveryKeyHash: hashRecoveryKey(recoveryKey),
       epoch,
     } satisfies AuthRecord);
 
-    return { ok: true, token: this.issueToken(epoch) };
+    return { ok: true, token: this.issueToken(epoch), recoveryKey };
   }
 
   /**
@@ -198,7 +238,22 @@ export class AuthService {
   verifySession(token: string): VerifyResult {
     const record = this.record();
     if (record === undefined) return { ok: false, reason: 'stale_epoch' };
-    return verifyToken(token, this.sessionSecret(), this.deps.clock.now(), record.epoch);
+    const result = verifyToken(token, this.sessionSecret(), this.deps.clock.now(), record.epoch);
+    if (result.ok && result.payload.purpose === 'setup' && record.setupAcknowledged === false) {
+      return { ok: false, reason: 'wrong_purpose' };
+    }
+    return result;
+  }
+
+  /** The pending-setup credential is valid only for the acknowledgement hop. */
+  verifySetupToken(token: string): VerifyResult {
+    const record = this.record();
+    if (record === undefined) return { ok: false, reason: 'stale_epoch' };
+    const result = verifyToken(token, this.sessionSecret(), this.deps.clock.now(), record.epoch);
+    if (result.ok && result.payload.purpose !== 'setup') {
+      return { ok: false, reason: 'wrong_purpose' };
+    }
+    return result;
   }
 
   /**
@@ -223,6 +278,14 @@ export class AuthService {
   private issueToken(epoch: number): string {
     const now = this.deps.clock.now();
     return signToken({ epoch, iat: now, exp: now + SESSION_TTL_MS }, this.sessionSecret());
+  }
+
+  private issueSetupToken(epoch: number): string {
+    const now = this.deps.clock.now();
+    return signToken(
+      { epoch, iat: now, exp: now + SESSION_TTL_MS, purpose: 'setup' },
+      this.sessionSecret(),
+    );
   }
 
   private sessionSecret(): Buffer {

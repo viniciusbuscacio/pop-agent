@@ -4,6 +4,7 @@ import type {
   LoginResponse,
   RecoverResponse,
   SetupResponse,
+  SetupAcknowledgeResponse,
   SignOutOthersResponse,
 } from '@pop-agent/shared';
 import { apiRequest } from './api';
@@ -17,6 +18,10 @@ export const authService = {
 
   setup(password: string): Promise<SetupResponse> {
     return apiRequest<SetupResponse>('/setup', { method: 'POST', body: { password } });
+  },
+
+  acknowledgeSetup(): Promise<SetupAcknowledgeResponse> {
+    return apiRequest<SetupAcknowledgeResponse>('/setup/acknowledge', { method: 'POST' });
   },
 
   login(password: string): Promise<LoginResponse> {

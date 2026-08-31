@@ -56,12 +56,31 @@ const patchCustomSchema = z
     defaultModel: z.string().max(200).optional(),
   })
   .strict();
+const providerConfigurationSchema = z
+  .object({
+    defaultModel: z.string().max(200),
+    serviceModel: z.string().max(200),
+    priority: z.number().int().min(1).max(MAX_CUSTOM_PROVIDERS + PROVIDER_DEFINITIONS.length),
+    apiKey: z.string().min(1).max(500).optional(),
+    name: z.string().min(1).max(100).optional(),
+    baseURL: z.string().url().max(500).optional(),
+  })
+  .strict();
+const createConfiguredCustomSchema = providerConfigurationSchema
+  .extend({
+    name: z.string().min(1).max(100),
+    baseURL: z.string().url().max(500),
+    apiKey: z.string().min(1).max(500),
+  })
+  .strict();
 /** A prompt answer during OAuth sign-in: a code or an option id, never a key. */
 const oauthInputSchema = z.object({ value: z.string().max(2000) }).strict();
 
 /** ~25 MB of audio, aw's cap, as base64. */
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_AUDIO_DATA_URI = 35_000_000;
 const transcribeSchema = z
-  .object({ dataUri: z.string().startsWith('data:audio/').max(34_000_000) })
+  .object({ dataUri: z.string().startsWith('data:audio/').max(MAX_AUDIO_DATA_URI) })
   .strict();
 
 export interface ProviderRoutesDeps {
@@ -214,6 +233,38 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
   });
 
+  // One card, one request. All fields are validated before the first write,
+  // so a dropped later browser request cannot leave half the form applied.
+  routes.put('/providers/:id/configuration', async (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = providerConfigurationSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+    if (status.custom !== true && (parsed.data.name !== undefined || parsed.data.baseURL !== undefined)) {
+      return apiError(c, 400, 'invalid_field', 'Built-in providers do not have custom identity fields.');
+    }
+    if (status.authType === 'api-key' && !status.configured && parsed.data.apiKey === undefined) {
+      return apiError(c, 400, 'missing_field', 'An API key is required to add this provider.');
+    }
+
+    if (status.custom === true) {
+      deps.providers.updateCustom(id, {
+        ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }),
+        ...(parsed.data.baseURL === undefined ? {} : { baseURL: parsed.data.baseURL }),
+        defaultModel: parsed.data.defaultModel,
+      });
+    } else {
+      deps.providers.setDefaultModel(id, parsed.data.defaultModel);
+    }
+    deps.providers.setServiceModel(id, parsed.data.serviceModel);
+    if (parsed.data.apiKey !== undefined) deps.providers.setKey(id, parsed.data.apiKey);
+    moveProviderToPriority(deps.providers, id, parsed.data.priority);
+    return c.json({ providers: deps.providers.statuses().map(toStatusDto) } satisfies ProvidersResponse);
+  });
+
   // Unlimited custom providers (docs/specs/Spec-Pop-General.md §15): each instance is pure data --
   // a name, an endpoint, a model -- created first (the id anchors everything),
   // edited in place, deleted with its key. Never a secret in any of these.
@@ -233,6 +284,36 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
         `A Pop Agent install holds at most ${String(MAX_CUSTOM_PROVIDERS)} custom providers.`,
       );
     }
+    return c.json({
+      id: instance.id,
+      providers: deps.providers.statuses().map(toStatusDto),
+    } satisfies CreateCustomProviderResponse);
+  });
+
+  routes.post('/providers/custom/configuration', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = createConfiguredCustomSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    const instance = deps.providers.createCustom({
+      name: parsed.data.name,
+      baseURL: parsed.data.baseURL,
+      defaultModel: parsed.data.defaultModel,
+    });
+    if (instance === undefined) {
+      return apiError(
+        c,
+        409,
+        'too_many_providers',
+        `A Pop Agent install holds at most ${String(MAX_CUSTOM_PROVIDERS)} custom providers.`,
+      );
+    }
+    // These are synchronous repository writes and cannot reject after the
+    // validated registry row is created.
+    deps.providers.setServiceModel(instance.id, parsed.data.serviceModel);
+    deps.providers.setKey(instance.id, parsed.data.apiKey);
+    moveProviderToPriority(deps.providers, instance.id, parsed.data.priority);
     return c.json({
       id: instance.id,
       providers: deps.providers.statuses().map(toStatusDto),
@@ -340,6 +421,9 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     if (match?.[1] === undefined || match[2] === undefined) {
       return apiError(c, 400, 'invalid_field', 'The recording did not arrive as audio.');
     }
+    if (Buffer.byteLength(match[2], 'base64') > MAX_AUDIO_BYTES) {
+      return apiError(c, 413, 'too_large', 'Audio notes must be 25 MB or less.');
+    }
 
     // Local whisper does the work: failures come back as words, never a 500.
     // A cheap LLM pass then cleans the raw transcript, best-effort (§14).
@@ -361,6 +445,21 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
   });
 
   return routes;
+}
+
+/** Move among usable cards, then preserve every remaining provider at the tail. */
+function moveProviderToPriority(providers: ProviderService, providerId: string, priority: number): void {
+  const statuses = providers.statuses().sort((left, right) => left.order - right.order);
+  const live = statuses
+    .filter((entry) => entry.configured || entry.id === providerId)
+    .map((entry) => entry.id);
+  const without = live.filter((id) => id !== providerId);
+  const index = Math.min(Math.max(priority - 1, 0), without.length);
+  const ordered = [...without.slice(0, index), providerId, ...without.slice(index)];
+  providers.setOrder([
+    ...ordered,
+    ...statuses.filter((entry) => !ordered.includes(entry.id)).map((entry) => entry.id),
+  ]);
 }
 
 function providerNotFound(c: Context, id: string): Response {

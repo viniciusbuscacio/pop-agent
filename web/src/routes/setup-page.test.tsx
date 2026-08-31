@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupPage } from './setup-page';
 
 const setup = vi.fn();
+const acknowledgeSetup = vi.fn();
 vi.mock('../services/auth', () => ({
   authService: {
     setup: (password: string) => setup(password) as Promise<unknown>,
+    acknowledgeSetup: () => acknowledgeSetup() as Promise<unknown>,
   },
 }));
 
@@ -32,7 +34,9 @@ afterEach(cleanup);
 
 beforeEach(() => {
   setup.mockReset();
+  acknowledgeSetup.mockReset();
   setup.mockResolvedValue({ recoveryKey: RECOVERY_KEY, token: 'token-1' });
+  acknowledgeSetup.mockResolvedValue({ setupDone: true });
   localStorage.clear();
   sessionStorage.clear();
 });
@@ -85,6 +89,10 @@ describe('setup wizard', () => {
 
     await user.click(screen.getByTestId('setup-saved-key'));
     expect(disabled('setup-recovery-continue')).toBe(false);
+    expect(acknowledgeSetup).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('setup-recovery-continue'));
+    await waitFor(() => expect(acknowledgeSetup).toHaveBeenCalledOnce());
   });
 
   it('reaches the provider step, which can still be skipped', async () => {

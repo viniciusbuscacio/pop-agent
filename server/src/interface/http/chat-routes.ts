@@ -67,6 +67,8 @@ const sessionCommandSchema = z.object({
 
 /** 16 MB of file is ~21.4 MB of base64; the schema allows a little slack. */
 const MAX_ATTACHMENT_DATA_URI = 22_400_000;
+/** 20 MiB raw after base64, leaving JSON overhead below the global body cap. */
+const MAX_ATTACHMENTS_TOTAL_DATA_URI = 28_000_000;
 const MAX_ATTACHMENTS = 8;
 
 const confirmSchema = z.object({ runId: z.string().min(1).max(80), allow: z.boolean() }).strict();
@@ -103,6 +105,16 @@ const sendSchema = z
         code: 'custom',
         path: ['text'],
         message: 'A message needs text or at least one attachment.',
+      });
+    }
+    if (
+      (message.attachments ?? []).reduce((total, attachment) => total + attachment.dataUri.length, 0) >
+      MAX_ATTACHMENTS_TOTAL_DATA_URI
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['attachments'],
+        message: 'Attachments must be 20 MB or less in total.',
       });
     }
   });

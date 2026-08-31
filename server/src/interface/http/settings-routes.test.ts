@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import { createTestApp, type TestApp } from '../../testing/app-fixture.js';
+import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -11,12 +11,7 @@ let token: string;
 beforeEach(async () => {
   fixture = createTestApp();
   app = fixture.app;
-  const res = await app.request('/v1/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  token = ((await res.json()) as { token: string }).token;
+  token = await setupTestSession(app, PASSWORD);
 });
 
 function authed(path: string, init: RequestInit = {}): Promise<Response> {
@@ -172,6 +167,48 @@ describe('PUT /v1/settings', () => {
       body: JSON.stringify({ language: 'en' }),
     });
 
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PATCH /v1/settings', () => {
+  it('merges independent fields without restoring a stale full document', async () => {
+    const [instructions, automaticUpdates] = await Promise.all([
+      authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ customInstructions: 'Keep answers concise.' }),
+      }),
+      authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ autoActivatePreparedUpdates: true }),
+      }),
+    ]);
+
+    expect(instructions.status).toBe(200);
+    expect(automaticUpdates.status).toBe(200);
+    expect(await (await authed('/v1/settings')).json()).toEqual({
+      ...DEFAULT_DOC,
+      customInstructions: 'Keep answers concise.',
+      autoActivatePreparedUpdates: true,
+    });
+  });
+
+  it('rejects empty, unknown, or invalid patches', async () => {
+    for (const patch of [{}, { telemetry: true }, { autoRestartIdleMinutes: 0 }]) {
+      const res = await authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('needs a session', async () => {
+    const res = await app.request('/v1/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ voiceCleanup: true }),
+    });
     expect(res.status).toBe(401);
   });
 });
