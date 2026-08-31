@@ -205,6 +205,14 @@ esac
   executable(externalBootstrap, '#!/bin/sh\nexit 0\n');
   const externalManifest = join(root, 'outside-manifest.tsv');
   writeFileSync(externalManifest, 'outside manifest\n');
+  // actions/checkout intentionally injects a temporary global Git config into
+  // the runner process. It belongs to the checkout under test, not this fake
+  // installer's baseline; the dedicated isolation cases add hostile values
+  // explicitly below.
+  const inheritedEnvironment = { ...process.env };
+  delete inheritedEnvironment['GIT_CONFIG_GLOBAL'];
+  delete inheritedEnvironment['GIT_CONFIG_SYSTEM'];
+  delete inheritedEnvironment['XDG_CONFIG_HOME'];
   return {
     root,
     source,
@@ -216,7 +224,7 @@ esac
     handoffLog,
     ghLog,
     env: {
-      ...process.env,
+      ...inheritedEnvironment,
       PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
       HOME: join(root, 'home'),
       LANG: 'C.UTF-8',
