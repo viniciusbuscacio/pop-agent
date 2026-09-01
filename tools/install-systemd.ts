@@ -20,6 +20,7 @@ const MINIMUM_NODE = [22, 19, 0] as const;
 const MINIMUM_GO = [1, 23, 0] as const;
 const UNIT_NAME = 'pop-agent-service.service';
 const UNIT_DESTINATION = `/etc/systemd/system/${UNIT_NAME}`;
+const POPMAN_DESTINATION = '/usr/local/bin/popman';
 const SAFE_PATH = /^\/[A-Za-z0-9._+@/-]+$/;
 const SAFE_USER = /^[a-z_][a-z0-9_-]*\$?$/;
 
@@ -152,6 +153,21 @@ export function renderSystemdUnit(
   ].join('\n');
 }
 
+export function renderPopmanLauncher(options: InstallOptions, nodeExecutable: string): string {
+  const checkout = safeAbsolutePath('checkout', options.checkout);
+  const dataDir = safeAbsolutePath('data directory', options.dataDir);
+  const workspace = safeAbsolutePath('workspace', options.workspace);
+  const node = safeAbsolutePath('Node executable', nodeExecutable);
+
+  return [
+    '#!/bin/sh',
+    `export POP_AGENT_DATA_DIR=${dataDir}`,
+    `export POP_AGENT_WORKSPACE=${workspace}`,
+    `exec ${node} ${checkout}/server/dist/manager/main.js "$@"`,
+    '',
+  ].join('\n');
+}
+
 export function parseInstallArguments(args: readonly string[], checkout: string): InstallOptions | 'help' {
   let dataDir: string | undefined;
   let workspace: string | undefined;
@@ -202,6 +218,10 @@ export async function installPreparedCheckout(
   if (!existsSync(builtServer) || !statSync(builtServer).isFile()) {
     throw new Error(`the gate did not produce ${builtServer}; inspect the gate output and rerun`);
   }
+  const builtManager = join(options.checkout, 'server/dist/manager/main.js');
+  if (!existsSync(builtManager) || !statSync(builtManager).isFile()) {
+    throw new Error(`the gate did not produce ${builtManager}; inspect the gate output and rerun`);
+  }
 
   const dataDir = prepareOwnedDirectory(options.dataDir, dependencies.uid, 'data directory');
   const workspace = prepareOwnedDirectory(options.workspace, dependencies.uid, 'workspace');
@@ -220,12 +240,16 @@ export async function installPreparedCheckout(
     dependencies.goExecutable,
     dependencies.whisperExecutable,
   );
+  const popmanLauncher = renderPopmanLauncher(finalOptions, dependencies.nodeExecutable);
   const stagingDirectory = mkdtempSync(join(tmpdir(), 'pop-agent-systemd-'));
   const stagedUnit = join(stagingDirectory, UNIT_NAME);
+  const stagedPopman = join(stagingDirectory, 'popman');
 
   try {
     writeFileSync(stagedUnit, unit, { encoding: 'utf8', mode: 0o600 });
-    console.log(`Installing ${UNIT_NAME} through narrowly scoped sudo commands...`);
+    writeFileSync(stagedPopman, popmanLauncher, { encoding: 'utf8', mode: 0o700 });
+    console.log(`Installing popman and ${UNIT_NAME} through narrowly scoped sudo commands...`);
+    runChecked(runner, 'sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0755', stagedPopman, POPMAN_DESTINATION], options.checkout, true);
     runChecked(runner, 'sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0644', stagedUnit, UNIT_DESTINATION], options.checkout, true);
     runChecked(runner, 'sudo', ['--', 'systemctl', 'daemon-reload'], options.checkout, true);
     runChecked(runner, 'sudo', ['--', 'systemctl', 'enable', UNIT_NAME], options.checkout, true);
@@ -428,7 +452,7 @@ function usage(): string {
   return `Install a prepared Pop Agent checkout as a production systemd service.\n\n`
     + `Usage:\n  npm run install:server -- --data-dir /absolute/path --workspace /absolute/path [--port 8787]\n\n`
     + `Run as the non-root checkout owner. This command validates the existing host, runs npm ci and the full gate,\n`
-    + `then uses sudo only to install and activate ${UNIT_NAME}. It does not install system packages or configure TLS.`;
+    + `then uses sudo only to install popman and activate ${UNIT_NAME}. It does not install system packages or configure TLS.`;
 }
 
 export async function runInstallCli(): Promise<void> {

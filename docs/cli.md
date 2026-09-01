@@ -319,18 +319,12 @@ cross-build for macOS.
   `secret.key` and systemd. (`access-list` is in spec §18 and is not
   built; the command says so rather than pretending.)
 
-  **On PATH, once per install:**
-
-  ```
-  npm run build
-  sudo ln -sf "$PWD/server/dist/manager/main.js" /usr/local/bin/popman
-  ```
-
-  There is no `npm i -g` here on purpose -- `popman` is not a package
-  anybody installs, it is the server's own tool, and a symlink to the
-  build is the honest shape of that. The build sets the executable bit,
-  because `tsc` writes a plain file and a fresh clone would otherwise
-  produce a `popman` that exists and cannot run.
+  The production server installer places a small root-owned launcher at
+  `/usr/local/bin/popman`. It invokes the checkout's built manager with the
+  exact managed Node executable and exports the install's canonical data and
+  workspace paths. This is deliberately not an npm-global package or a symlink:
+  a fresh host has no system-wide Node, and custom data paths must not silently
+  fall back to `$HOME/.pop-agent`.
 
 The split is not cosmetic: keeping them together would drag
 `better-sqlite3` and code that knows where `secret.key` lives onto every

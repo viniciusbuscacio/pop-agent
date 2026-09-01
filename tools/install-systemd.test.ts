@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   installPreparedCheckout,
   parseInstallArguments,
+  renderPopmanLauncher,
   renderSystemdUnit,
   type CommandRunner,
   type InstallOptions,
@@ -22,6 +23,7 @@ interface Call {
 class FakeRunner implements CommandRunner {
   readonly calls: Call[] = [];
   installedUnit = '';
+  installedPopman = '';
   dirty = false;
   goVersion = 'go version go1.23.6 linux/amd64\n';
   checkout = '';
@@ -38,7 +40,14 @@ class FakeRunner implements CommandRunner {
     if (key === 'git rev-parse --show-toplevel') return result(`${this.checkout}\n`);
     if (key === 'git status --porcelain=v1 --untracked-files=normal') return result(this.dirty ? '?? unexpected\n' : '');
     if (command === 'sudo' && args[1] === 'install') {
-      this.installedUnit = readFileSync(args[8]!, 'utf8');
+      const source = args[args.length - 2]!;
+      const destination = args[args.length - 1];
+      if (destination === '/etc/systemd/system/pop-agent-service.service') {
+        this.installedUnit = readFileSync(source, 'utf8');
+      }
+      if (destination === '/usr/local/bin/popman') {
+        this.installedPopman = readFileSync(source, 'utf8');
+      }
     }
     return result('');
   }
@@ -59,11 +68,12 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
   root = mkdtempSync(join(tmpdir(), 'pop-systemd-test-'));
   const checkout = join(root, 'checkout');
   const systemdRuntime = join(root, 'run/systemd/system');
-  mkdirSync(join(checkout, 'server/dist'), { recursive: true });
+  mkdirSync(join(checkout, 'server/dist/manager'), { recursive: true });
   mkdirSync(systemdRuntime, { recursive: true });
   writeFileSync(join(checkout, 'package.json'), '{}\n');
   writeFileSync(join(checkout, 'package-lock.json'), '{}\n');
   writeFileSync(join(checkout, 'server/dist/main.js'), 'export {};\n');
+  writeFileSync(join(checkout, 'server/dist/manager/main.js'), 'export {};\n');
 
   const runner = new FakeRunner();
   runner.checkout = checkout;
@@ -124,6 +134,23 @@ describe('systemd server installer', () => {
     expect(unit).not.toContain('vinicius');
   });
 
+  it('renders popman with the managed Node and the installed data paths', () => {
+    const launcher = renderPopmanLauncher({
+      checkout: '/srv/pop-agent/source',
+      dataDir: '/srv/pop-agent/data',
+      workspace: '/srv/pop-agent/workspace',
+      port: 8787,
+    }, '/opt/pop-node/bin/node');
+
+    expect(launcher).toBe([
+      '#!/bin/sh',
+      'export POP_AGENT_DATA_DIR=/srv/pop-agent/data',
+      'export POP_AGENT_WORKSPACE=/srv/pop-agent/workspace',
+      'exec /opt/pop-node/bin/node /srv/pop-agent/source/server/dist/manager/main.js "$@"',
+      '',
+    ].join('\n'));
+  });
+
   it('rejects relative or unit-injection-like paths and invalid ports', () => {
     expect(() => parseInstallArguments(['--data-dir', 'relative', '--workspace', '/srv/work'], '/srv/source'))
       .toThrow('absolute path');
@@ -153,6 +180,11 @@ describe('systemd server installer', () => {
     expect(commandLines.indexOf('npm run gate')).toBeLessThan(commandLines.indexOf('sudo -- systemctl daemon-reload'));
     expect(runner.calls.find((call) => call.command === 'npm' && call.args[0] === 'ci')?.inherit).toBe(true);
     expect(runner.installedUnit).toContain(`WorkingDirectory=${realpathSync(options.checkout)}\n`);
+    expect(runner.installedPopman).toContain(`export POP_AGENT_DATA_DIR=${realpathSync(options.dataDir)}\n`);
+    expect(runner.installedPopman).toContain(`export POP_AGENT_WORKSPACE=${realpathSync(options.workspace)}\n`);
+    expect(runner.installedPopman).toContain(`exec /usr/bin/node ${realpathSync(options.checkout)}/server/dist/manager/main.js "$@"\n`);
+    const popmanInstall = runner.calls.find((call) => call.command === 'sudo' && call.args.at(-1) === '/usr/local/bin/popman');
+    expect(popmanInstall?.args).toContain('0755');
     expect(healthCalls).toEqual([{ url: 'http://127.0.0.1:8787/healthz', timeout: 30_000 }]);
     expect(commandLines).toContain('systemctl is-active --quiet pop-agent-service.service');
     expect(statSync(options.dataDir).mode & 0o777).toBe(0o700);
