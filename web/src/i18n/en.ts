@@ -573,6 +573,7 @@ export const en = {
   'shell.navA2a': 'A2A',
   'mcp.placeholder': 'MCP configuration will be available here.',
   'mcp.none': 'No MCP servers yet.',
+  'mcp.disabled': 'disabled',
   'a2a.title': 'A2A',
   'a2a.intro': 'Connect and manage remote Agent-to-Agent agents.',
   'a2a.new': 'New A2A agent',

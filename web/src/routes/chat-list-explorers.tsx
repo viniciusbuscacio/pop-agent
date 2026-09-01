@@ -462,7 +462,7 @@ export function McpSidebar({ filter }: { filter: string }) {
               >
                 <span className="min-w-0 truncate text-sm">{server.name}</span>
                 <span className="flex shrink-0 flex-col items-end text-xs text-[var(--muted)]">
-                  <span>{server.status}</span>
+                  <span>{server.enabled ? server.status : t('mcp.disabled')}</span>
                   {server.protocolEra === undefined ? null : (
                     <span>
                       {server.protocolEra === 'modern' ? 'stateless' : 'legacy'}{' '}

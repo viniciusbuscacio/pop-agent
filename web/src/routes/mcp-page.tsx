@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { McpAuthKind, McpServerDTO, McpTransport } from '@pop-agent/shared';
+import { t } from '../i18n';
 import { mcpService } from '../services/mcp';
 import { useMcpStore } from '../store/mcp';
 import { SidebarNav } from './sidebar-nav';
@@ -71,7 +72,7 @@ export function McpPage() {
                 <div>
                   <div className="font-medium">{server.name}</div>
                   <div className="text-sm text-[var(--muted)]">
-                    {server.transport} · {server.enabled ? server.status : 'disabled'}
+                    {server.transport} · {server.enabled ? server.status : t('mcp.disabled')}
                     {server.protocolEra === undefined
                       ? ''
                       : ` · ${server.protocolEra === 'modern' ? 'stateless' : 'legacy'} ${server.protocolVersion ?? ''}`}

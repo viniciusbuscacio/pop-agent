@@ -3,10 +3,11 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { A2aAgentDTO, ChatDTO } from '@pop-agent/shared';
+import type { A2aAgentDTO, ChatDTO, McpServerDTO } from '@pop-agent/shared';
 import { ChatList } from './chat-list';
 import { useA2aStore } from '../store/a2a';
 import { useChatStore } from '../store/chat';
+import { useMcpStore } from '../store/mcp';
 
 const archiveOthers = vi.fn();
 const deleteOthers = vi.fn();
@@ -83,6 +84,7 @@ function renderList(path = '/') {
 beforeEach(() => {
   useChatStore.getState().reset();
   useA2aStore.setState({ agents: undefined, tasksByAgent: {} });
+  useMcpStore.setState({ servers: undefined, error: undefined });
   localStorage.clear();
   activeList = active.map((chat) => ({ ...chat }));
   archivedList = [];
@@ -163,6 +165,35 @@ describe('A2A explorer controls', () => {
 
     await userEvent.click(screen.getByTestId('shell-new-a2a'));
     expect(screen.getByTestId('location').textContent).toBe('/a2a/new');
+  });
+});
+
+describe('MCP explorer controls', () => {
+  it('shows disabled instead of the stale connection result in the sidebar', () => {
+    const disabledServer: McpServerDTO = {
+      id: 'mcp-learn',
+      name: 'Microsoft Learn',
+      description: '',
+      transport: 'streamable-http',
+      endpoint: 'https://learn.microsoft.com/api/mcp',
+      command: '',
+      args: [],
+      authKind: 'none',
+      authHeader: '',
+      hasCredential: false,
+      enabled: false,
+      timeoutMs: 60000,
+      status: 'connected',
+      lastError: '',
+      capabilities: [],
+    };
+    useMcpStore.setState({ servers: [disabledServer], error: undefined });
+
+    renderList('/mcp');
+
+    expect(screen.getByText('Microsoft Learn')).toBeTruthy();
+    expect(screen.getByText('disabled')).toBeTruthy();
+    expect(screen.queryByText('connected')).toBeNull();
   });
 });
 
