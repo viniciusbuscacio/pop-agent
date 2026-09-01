@@ -625,7 +625,11 @@ move, Enter replaces the visible transcript with the selected chat's latest
 history and live snapshot, and Escape cancels without stopping the run. Outside
 an open picker, Escape always interrupts the current run and never starts a new
 chat. `/new` remains the clean-new-conversation action and replaces the prior
-transcript and live state.
+transcript and live state. `/archive`, listed in help and autocomplete, archives
+only the current persisted idle chat and then uses that same clean unpersisted
+reset. It does not create a replacement chat: no current chat and active-run
+cases make no request, while an API failure leaves the selection and transcript
+intact.
 `/think` immediately shows or hides reasoning in live and historical assistant
 segments, persists that choice for the machine, and reasoning remains visible
 after a run settles.

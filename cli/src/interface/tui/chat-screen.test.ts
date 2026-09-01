@@ -97,6 +97,7 @@ function screenWith(
     createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
+    archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     sessionCommand: vi.fn((_chatId, command) => Promise.resolve({ kind: command, message: 'Session details' })),
@@ -147,8 +148,22 @@ describe('ChatScreen', () => {
     await flush();
 
     expect(plain()).toContain('Start a fresh conversation');
+    expect(plain()).toContain('Archive the current conversation');
     expect(plain()).toContain('Leave (or press Ctrl+C twice)');
     expect(plain()).not.toContain('Escape twice');
+  });
+
+  it('offers /archive through slash-command autocomplete', async () => {
+    const { terminal, send } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    send('/arc');
+    await flush();
+    send('\t');
+
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(editor.getText()).toBe('/archive ');
   });
 
   it('runs pi session commands locally instead of sending them as prompts', async () => {
@@ -281,6 +296,108 @@ describe('ChatScreen', () => {
     expect(plain()).not.toContain('Old conversation');
     expect(plain()).not.toContain('old partial answer');
     expect(plain()).not.toContain('Working…');
+  });
+
+  it('archives the current chat, clears its transcript, and does not create an empty replacement', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-existing');
+    screen.start();
+    screen.setTitle('Conversation to archive');
+    screen.say('old transcript');
+    await flush();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/archive');
+    await vi.waitFor(() => expect(session.currentChatId).toBeUndefined());
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(ports.archiveChat).toHaveBeenCalledWith('chat-existing');
+    expect(ports.createChat).not.toHaveBeenCalled();
+    expect(session.busy).toBe(false);
+    expect(plain()).toContain('Conversation archived.');
+    expect(plain()).toContain('New conversation.');
+    expect(plain()).not.toContain('Conversation to archive');
+    expect(plain()).not.toContain('old transcript');
+  });
+
+  it('says when there is no persisted chat to archive without making a request', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/archive');
+    await flush();
+
+    expect(plain()).toContain('Nothing to archive yet.');
+    expect(ports.archiveChat).not.toHaveBeenCalled();
+    expect(ports.createChat).not.toHaveBeenCalled();
+  });
+
+  it('refuses to archive a busy chat and points to /stop', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    await session.ask('keep running');
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/archive');
+    await flush();
+
+    expect(plain()).toContain('The answer is still running. Use /stop first.');
+    expect(ports.archiveChat).not.toHaveBeenCalled();
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.busy).toBe(true);
+  });
+
+  it('shows archive errors without clearing the current chat or transcript', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-existing');
+    vi.mocked(ports.archiveChat).mockRejectedValueOnce(new Error('Archive request failed.'));
+    screen.start();
+    screen.setTitle('Conversation preserved');
+    screen.say('transcript preserved');
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/archive');
+    await vi.waitFor(() => expect(ports.archiveChat).toHaveBeenCalledOnce());
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(session.currentChatId).toBe('chat-existing');
+    expect(plain()).toContain('Conversation preserved');
+    expect(plain()).toContain('transcript preserved');
+    expect(plain()).toContain('Archive request failed.');
+    expect(plain()).not.toContain('New conversation.');
+  });
+
+  it('does not let a late archive result alter a newer conversation', async () => {
+    const { terminal, plain, writes, repaint } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-existing');
+    let failArchive: (error: Error) => void = () => undefined;
+    vi.mocked(ports.archiveChat).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => {
+        failArchive = reject;
+      }),
+    );
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/archive');
+    await vi.waitFor(() => expect(ports.archiveChat).toHaveBeenCalledOnce());
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/new');
+    failArchive(new Error('Late archive failure.'));
+    await flush();
+    writes.length = 0;
+    repaint();
+    await flush();
+
+    expect(session.currentChatId).toBeUndefined();
+    expect(plain()).toContain('New conversation.');
+    expect(plain()).not.toContain('Late archive failure.');
   });
 
   it('stops the current run on every Escape, including two immediate presses', async () => {

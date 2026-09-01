@@ -52,6 +52,7 @@ function harness(events: StreamEvent[] = []) {
     createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
+    archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
@@ -131,6 +132,88 @@ describe('ChatSession', () => {
 
     expect(session.currentChatId).toBeUndefined();
     expect(session.busy).toBe(false);
+  });
+
+  it('archives an idle persisted chat and returns to an unpersisted session without creating an empty chat', async () => {
+    const { session, ports } = harness();
+    session.open('chat-existing');
+
+    expect(await session.archiveCurrent()).toBe('archived');
+
+    expect(ports.archiveChat).toHaveBeenCalledWith('chat-existing');
+    expect(ports.createChat).not.toHaveBeenCalled();
+    expect(session.currentChatId).toBeUndefined();
+    expect(session.busy).toBe(false);
+  });
+
+  it('does not make a request when there is no current persisted chat', async () => {
+    const { session, ports } = harness();
+
+    expect(await session.archiveCurrent()).toBe('no-chat');
+
+    expect(ports.archiveChat).not.toHaveBeenCalled();
+    expect(ports.createChat).not.toHaveBeenCalled();
+  });
+
+  it('refuses to archive while the current answer is running', async () => {
+    const { session, ports } = harness();
+    await session.ask('still running');
+
+    expect(await session.archiveCurrent()).toBe('busy');
+
+    expect(ports.archiveChat).not.toHaveBeenCalled();
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.busy).toBe(true);
+  });
+
+  it('refuses to archive while a send request is still being accepted', async () => {
+    const { session, ports } = harness();
+    session.open('chat-existing');
+    let finishSend: (response: { runId: string }) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishSend = resolve;
+      }),
+    );
+
+    const asking = session.ask('not accepted yet');
+    await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+
+    expect(await session.archiveCurrent()).toBe('busy');
+    expect(ports.archiveChat).not.toHaveBeenCalled();
+
+    finishSend({ runId: 'run-1' });
+    await asking;
+  });
+
+  it('preserves the current chat when archiving fails', async () => {
+    const { session, ports } = harness();
+    session.open('chat-existing');
+    vi.mocked(ports.archiveChat).mockRejectedValueOnce(new Error('Archive failed.'));
+
+    await expect(session.archiveCurrent()).rejects.toThrow('Archive failed.');
+
+    expect(session.currentChatId).toBe('chat-existing');
+    expect(session.busy).toBe(false);
+  });
+
+  it('does not let a late archive completion clear a newer selection', async () => {
+    const { session, ports } = harness();
+    session.open('chat-existing');
+    let finishArchive: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.archiveChat).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishArchive = resolve;
+      }),
+    );
+
+    const archiving = session.archiveCurrent();
+    await vi.waitFor(() => expect(ports.archiveChat).toHaveBeenCalledOnce());
+    session.open('chat-newer');
+    finishArchive({ ...chatDto('chat-existing'), archived: true });
+
+    expect(await archiving).toBe('superseded');
+    expect(session.currentChatId).toBe('chat-newer');
   });
 
   it('does not restore an abandoned run from a late send response', async () => {

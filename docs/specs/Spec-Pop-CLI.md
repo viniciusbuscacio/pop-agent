@@ -94,6 +94,13 @@ clean quit path. Any other input or an expired interval requires a fresh first
 Ctrl+C. Escape always interrupts the current run and never starts a new chat;
 an open picker owns Escape until it closes. `/new` replaces the transcript, live
 state, activity indicator and title with a genuinely clean new conversation.
+`/archive` is available in help and autocomplete. It archives the current
+persisted, idle chat with `PATCH /v1/chats/:id` and `{ archived: true }`, then
+uses the same clean unpersisted reset as `/new`. With no persisted current chat
+it makes no request and reports `Nothing to archive yet.`; while a run is active
+it makes no request and points to `/stop`. A failed archive preserves the
+current selection and transcript and reports the server error. The interactive
+command has no confirmation and does not restore or bulk-archive chats.
 
 The TUI renders persisted transcript plus live SSE projection, thinking when
 enabled, tool lifecycle, queue/run state and stable failures. It does not poll

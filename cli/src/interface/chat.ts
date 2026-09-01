@@ -82,6 +82,7 @@ export async function chat(
       createChat: () => api.createChat(),
       listChats: async () => (await api.chats()).chats,
       loadChat: (chatId) => api.messages(chatId),
+      archiveChat: (chatId) => api.patchChat(chatId, { archived: true }),
       send: (chatId, text) => api.send(chatId, text),
       stop: (chatId) => api.stop(chatId),
       sessionCommand: (chatId, command, argument) => api.sessionCommand(chatId, command, argument),

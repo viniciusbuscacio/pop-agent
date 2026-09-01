@@ -12,6 +12,7 @@ import type {
   EventTicketResponse,
   LoginResponse,
   MessagesResponse,
+  PatchChatRequest,
   SendMessageResponse,
   SessionCommandName,
   SessionCommandResponse,
@@ -78,6 +79,10 @@ export class PopAgentApi {
 
   createChat(): Promise<ChatDTO> {
     return this.request<ChatDTO>('/chats', { method: 'POST' });
+  }
+
+  patchChat(chatId: string, patch: PatchChatRequest): Promise<ChatDTO> {
+    return this.request<ChatDTO>(`/chats/${chatId}`, { method: 'PATCH', body: patch });
   }
 
   messages(chatId: string): Promise<MessagesResponse> {

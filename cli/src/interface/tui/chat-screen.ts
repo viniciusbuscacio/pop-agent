@@ -47,6 +47,7 @@ import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
  */
 const COMMANDS: SlashCommand[] = [
   { name: 'new', description: 'Start a fresh conversation' },
+  { name: 'archive', description: 'Archive the current conversation' },
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
@@ -326,20 +327,47 @@ export class ChatScreen {
     this.paintHeader();
   }
 
-  /** Reset both the server selection and every replaceable part of the screen. */
-  private startNewConversation(): void {
-    this.options.session.open(undefined);
+  /** Reset every replaceable part of the screen to a clean conversation. */
+  private resetConversation(notices: string[] = ['New conversation.']): void {
     this.clearRunStatus(false);
     this.streaming = undefined;
     this.assistantSegments = [];
     this.transcript.clear();
     this.spoken = false;
     this.setTitle('New conversation');
-    this.say(paint.dim('New conversation.'));
+    for (const notice of notices) this.say(paint.dim(notice));
     this.tui.setFocus(this.editor);
     // Remove the previous conversation from terminal scrollback in one frame,
     // just as switching to an existing conversation does.
     this.tui.requestRender(true);
+  }
+
+  /** Reset both the server selection and every replaceable part of the screen. */
+  private startNewConversation(): void {
+    this.options.session.open(undefined);
+    this.resetConversation();
+  }
+
+  private async archiveConversation(): Promise<void> {
+    try {
+      const result = await this.options.session.archiveCurrent();
+      if (result === 'no-chat') {
+        this.say(paint.dim('Nothing to archive yet.'));
+        return;
+      }
+      if (result === 'busy') {
+        this.say(paint.yellow('The answer is still running. Use /stop first.'));
+        return;
+      }
+      if (result === 'already-archiving') {
+        this.say(paint.dim('Archiving is already in progress.'));
+        return;
+      }
+      if (result === 'superseded') return;
+      this.resetConversation(['Conversation archived.', 'New conversation.']);
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Conversation was not archived.'));
+    }
   }
 
   /** Replace the visible transcript with the authoritative server history. */
@@ -570,6 +598,12 @@ export class ChatScreen {
       this.command(text);
       return;
     }
+    // Do not let a local send race the archive PATCH. Navigation remains
+    // available through slash commands and safely supersedes the late result.
+    if (this.options.session.archivePending) {
+      this.say(paint.yellow('This conversation is being archived.'));
+      return;
+    }
     // Sending while busy is intentional: the server appends to the durable
     // steering FIFO and feeds its head into pi. Blocking here made the server
     // feature unreachable.
@@ -626,6 +660,9 @@ export class ChatScreen {
         return;
       case '/new':
         this.startNewConversation();
+        return;
+      case '/archive':
+        void this.archiveConversation();
         return;
       case '/compact':
       case '/session':

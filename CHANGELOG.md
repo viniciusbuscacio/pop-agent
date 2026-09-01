@@ -8,6 +8,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **The interactive CLI can archive its current conversation with `/archive`.**
+  The command is discoverable through help and autocomplete, refuses unpersisted
+  or busy sessions without a request, and resets like `/new` only after the
+  archive succeeds.
 - **Fresh Ubuntu installs now include the local voice runtime and an optional
   Tailscale Serve helper.** The recommended public path is clone plus one
   bootstrap command with safe default data/workspace locations. Repository-

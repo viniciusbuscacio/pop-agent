@@ -26,6 +26,7 @@ export interface SessionPorts {
   createChat(): Promise<{ id: string }>;
   listChats(): Promise<ChatDTO[]>;
   loadChat(chatId: string): Promise<MessagesResponse>;
+  archiveChat(chatId: string): Promise<ChatDTO>;
   send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
   sessionCommand?(chatId: string, command: SessionCommandName, argument: string): Promise<SessionCommandResponse>;
@@ -33,6 +34,8 @@ export interface SessionPorts {
   /** Yields until the connection ends. Reconnection is the caller's business. */
   events(): AsyncIterable<StreamEvent>;
 }
+
+export type ArchiveCurrentResult = 'archived' | 'busy' | 'no-chat' | 'already-archiving' | 'superseded';
 
 export interface SessionListener {
   /** Stored history replaced the visible conversation after a chat switch. */
@@ -58,7 +61,9 @@ export class ChatSession {
   private chatId: string | undefined;
   private reading = false;
   /** Requests whose run-started event may race their HTTP response. */
-  private readonly pendingSends: { text: string }[] = [];
+  private readonly pendingSends: { text: string; openRevision: number }[] = [];
+  /** The archive request for the currently selected revision, if any. */
+  private archiving: { chatId: string; openRevision: number } | undefined;
   /** Own responses that arrived before their run-started event. */
   private readonly ownRunIds = new Set<string>();
   /** Durable turns already echoed locally but not consumed by pi yet. */
@@ -81,6 +86,10 @@ export class ChatSession {
 
   get busy(): boolean {
     return this.transcript !== undefined && !this.transcript.finished;
+  }
+
+  get archivePending(): boolean {
+    return this.archiving?.openRevision === this.openRevision;
   }
 
   /** Opens on an existing chat, or on a clean new one at the first message. */
@@ -163,8 +172,11 @@ export class ChatSession {
   }
 
   async ask(text: string): Promise<void> {
-    const pending = { text };
     const openRevision = this.openRevision;
+    if (this.archiving?.openRevision === openRevision) {
+      throw new Error('This conversation is being archived.');
+    }
+    const pending = { text, openRevision };
     this.pendingSends.push(pending);
     try {
       const chatId = this.chatId ?? (await this.ports.createChat()).id;
@@ -198,6 +210,36 @@ export class ChatSession {
     await this.ports.stop(this.chatId);
   }
 
+  /** Archives only a persisted, idle conversation and clears it after success. */
+  async archiveCurrent(): Promise<ArchiveCurrentResult> {
+    const chatId = this.chatId;
+    if (chatId === undefined) return 'no-chat';
+    const openRevision = this.openRevision;
+    if (this.archiving?.openRevision === openRevision) return 'already-archiving';
+    if (
+      this.busy ||
+      this.pendingSends.some((pending) => pending.openRevision === openRevision)
+    ) return 'busy';
+
+    const operation = { chatId, openRevision };
+    this.archiving = operation;
+    try {
+      await this.ports.archiveChat(chatId);
+    } catch (error) {
+      if (this.openRevision !== openRevision || this.chatId !== chatId) return 'superseded';
+      throw error;
+    } finally {
+      if (this.archiving === operation) this.archiving = undefined;
+    }
+
+    // `/new` or `/chats` may have moved the screen while PATCH was pending.
+    // The old chat was archived, but its late completion must not clear or
+    // annotate the newer selection.
+    if (this.openRevision !== openRevision || this.chatId !== chatId) return 'superseded';
+    this.open(undefined);
+    return 'archived';
+  }
+
   async command(command: SessionCommandName, argument: string): Promise<SessionCommandResponse> {
     const chatId = this.chatId ?? (await this.ports.createChat()).id;
     this.chatId = chatId;
@@ -224,7 +266,9 @@ export class ChatSession {
       const queuedIndex = this.ownQueuedTexts.indexOf(event.user.content);
       const own =
         this.ownRunIds.delete(event.runId) ||
-        this.pendingSends.some((pending) => pending.text === event.user.content) ||
+        this.pendingSends.some(
+          (pending) => pending.openRevision === this.openRevision && pending.text === event.user.content,
+        ) ||
         queuedIndex >= 0;
       if (queuedIndex >= 0) this.ownQueuedTexts.splice(queuedIndex, 1);
       const alreadyShown = this.shownMessageIds.has(event.user.id);
