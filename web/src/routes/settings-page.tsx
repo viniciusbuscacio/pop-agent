@@ -48,7 +48,6 @@ import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
-import { UPDATE_INTERVAL_OPTIONS, useUpdatesStore } from '../store/updates';
 import { Button, Card, CheckField, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 import { relativeTime } from '../lib/time';
@@ -1162,15 +1161,11 @@ function FontSizeCard() {
 }
 
 /**
- * How the installed PWA notices a new build (docs/specs/Spec-Pop-General.md §15). Device-scoped
- * like the theme and notifications: the interval lives in localStorage and
- * never reaches the server. "Check now" asks the service worker immediately.
+ * How the installed PWA notices a new build (docs/specs/Spec-Pop-General.md §15).
+ * Automatic checks and activation are fixed product behavior; "Check now"
+ * remains available for an immediate manual check.
  */
 function AppUpdatesCard() {
-  const checksEnabled = useUpdatesStore((state) => state.enabled);
-  const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
-  const setChecksEnabled = useUpdatesStore((state) => state.setEnabled);
-  const setIntervalMinutes = useUpdatesStore((state) => state.setIntervalMinutes);
   const [checking, setChecking] = useState(false);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<string | undefined>(undefined);
@@ -1242,46 +1237,15 @@ function AppUpdatesCard() {
         </Button>
       </div>
       <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
-        <SwitchField
-          id="updates-check-automatically"
-          testId="updates-check-automatically"
+        <Row
           label={t('settings.updates.checkAutomatically')}
-          hint={t('settings.updates.checkAutomaticallyHint')}
-          checked={checksEnabled}
-          onChange={setChecksEnabled}
+          value={t('settings.updates.everyMinutes', { count: 10 })}
+          testId="updates-automatic-status"
         />
-        {checksEnabled ? (
-          <Select
-            id="update-interval"
-            data-testid="update-interval"
-            label={t('settings.updates.checkFrequency')}
-            value={intervalMinutes}
-            onChange={(event) => setIntervalMinutes(Number(event.target.value))}
-            className="w-full max-w-xs"
-          >
-            {UPDATE_INTERVAL_OPTIONS.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {intervalLabel(minutes)}
-              </option>
-            ))}
-          </Select>
-        ) : null}
+        <p className="text-xs text-[var(--muted)]">{t('settings.updates.automaticApplyHint')}</p>
       </div>
     </Card>
   );
-}
-
-function intervalLabel(minutes: number): string {
-  if (minutes === 60) return t('settings.updates.everyHour');
-  if (minutes < 60) return t('settings.updates.everyMinutes', { count: minutes });
-  if (minutes < 1440) return t('settings.updates.everyHours', { count: minutes / 60 });
-  return t('settings.updates.everyDay');
-}
-
-function idleLabel(minutes: number): string {
-  return minutes === 60
-    ? t('settings.updates.oneHourInactive')
-    : t('settings.updates.minutesInactive', { count: minutes });
 }
 
 /** Web Push opt-in (docs/specs/Spec-Pop-General.md §14). Device-scoped, like the theme. */
@@ -1375,6 +1339,7 @@ function SecuritySection() {
   }
 
   async function signOutOthers(): Promise<void> {
+    if (!window.confirm(t('settings.security.signOutOthersConfirm'))) return;
     try {
       const { token } = await authService.signOutOthers();
       session.refresh(token);
@@ -1616,6 +1581,7 @@ function UpdatesSection() {
   }
 
   async function activatePiCandidate(): Promise<void> {
+    if (!window.confirm(t('settings.updates.piActivateConfirm'))) return;
     setActivatingPi(true);
     setRefreshNote(undefined);
     try {
@@ -1635,6 +1601,7 @@ function UpdatesSection() {
   }
 
   async function restartWhenIdle(): Promise<void> {
+    if (!window.confirm(t('settings.updates.restartConfirm'))) return;
     setDeploying(true);
     setRefreshNote(undefined);
     try {
@@ -1730,7 +1697,7 @@ function UpdatesSection() {
             <Button
               type="button"
               data-testid="update-restart-when-idle"
-              disabled={!deployment.clean || deploymentBusy || deploying}
+              disabled={!deployment.clean || !deployment.prepared || deploymentBusy || deploying}
               onClick={() => void restartWhenIdle()}
             >
               {deploymentBusy || deploying
@@ -1762,38 +1729,6 @@ function UpdatesSection() {
             {refreshing ? t('settings.updates.refreshingServer') : t('settings.updates.checkServerUpdates')}
           </Button>
         </div>
-
-        {appSettings === undefined ? null : (
-          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
-            <SwitchField
-              id="updates-auto-activate"
-              testId="updates-auto-activate"
-              label={t('settings.updates.activateAutomatically')}
-              hint={t('settings.updates.autoActivateHint')}
-              disabled={savingSetting}
-              checked={appSettings.autoActivatePreparedUpdates}
-              onChange={(checked) => void saveAutomaticUpdate({ autoActivatePreparedUpdates: checked })}
-            />
-            <p className="text-xs text-[var(--muted)]">{t('settings.updates.preparedOnly')}</p>
-            {appSettings.autoActivatePreparedUpdates ? (
-              <Select
-                id="updates-idle-minutes"
-                data-testid="updates-idle-minutes"
-                label={t('settings.updates.restartAfter')}
-                hint={t('settings.updates.idleMinutesHint')}
-                disabled={savingSetting}
-                value={String(appSettings.autoRestartIdleMinutes)}
-                onChange={(event) =>
-                  void saveAutomaticUpdate({ autoRestartIdleMinutes: Number(event.target.value) })
-                }
-              >
-                {[5, 10, 15, 30, 60].map((minutes) => (
-                  <option key={minutes} value={minutes}>{idleLabel(minutes)}</option>
-                ))}
-              </Select>
-            ) : null}
-          </div>
-        )}
 
         <details className="border-t border-[var(--border)] pt-4">
           <summary className="cursor-pointer text-sm font-medium">{t('settings.updates.manualUpdate')}</summary>

@@ -65,10 +65,10 @@ const sessionCommandSchema = z.object({
   argument: z.string().max(1000).optional(),
 }).strict();
 
-/** 16 MB of file is ~21.4 MB of base64; the schema allows a little slack. */
-const MAX_ATTACHMENT_DATA_URI = 22_400_000;
-/** 20 MiB raw after base64, leaving JSON overhead below the global body cap. */
-const MAX_ATTACHMENTS_TOTAL_DATA_URI = 28_000_000;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENTS_TOTAL_BYTES = 100 * 1024 * 1024;
+/** 25 MiB plus its base64 envelope; decoded byte checks below are authoritative. */
+const MAX_ATTACHMENT_DATA_URI = 35_000_000;
 const MAX_ATTACHMENTS = 8;
 
 const confirmSchema = z.object({ runId: z.string().min(1).max(80), allow: z.boolean() }).strict();
@@ -108,16 +108,59 @@ const sendSchema = z
       });
     }
     if (
-      (message.attachments ?? []).reduce((total, attachment) => total + attachment.dataUri.length, 0) >
-      MAX_ATTACHMENTS_TOTAL_DATA_URI
+      (message.attachments?.length ?? 0) + (message.filePaths?.length ?? 0) > MAX_ATTACHMENTS
     ) {
       context.addIssue({
         code: 'custom',
         path: ['attachments'],
-        message: 'Attachments must be 20 MB or less in total.',
+        message: 'A message can include at most 8 attachments in total.',
+      });
+    }
+    const attachmentSizes: number[] = [];
+    for (const [index, attachment] of (message.attachments ?? []).entries()) {
+      const bytes = dataUriByteLength(attachment.dataUri);
+      if (bytes === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['attachments', index, 'dataUri'],
+          message: 'Attachments must use a valid base64 data URI.',
+        });
+        continue;
+      }
+      attachmentSizes.push(bytes);
+    }
+    const sizeViolation = attachmentSizeViolation(attachmentSizes);
+    if (sizeViolation !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['attachments'],
+        message: sizeViolation === 'per-file'
+          ? 'Each attachment must be 25 MB or less.'
+          : 'Attachments must be 100 MB or less in total.',
       });
     }
   });
+
+function dataUriByteLength(dataUri: string): number | undefined {
+  const comma = dataUri.indexOf(',');
+  if (comma < 0 || !dataUri.slice(0, comma).endsWith(';base64')) return undefined;
+  const payload = dataUri.slice(comma + 1);
+  if (payload.length === 0 || payload.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)) {
+    return undefined;
+  }
+  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+  return base64DecodedByteLength(payload.length, padding);
+}
+
+export function base64DecodedByteLength(encodedLength: number, padding: number): number {
+  return Math.floor((encodedLength * 3) / 4) - padding;
+}
+
+export function attachmentSizeViolation(sizes: readonly number[]): 'per-file' | 'aggregate' | undefined {
+  if (sizes.some((size) => size > MAX_ATTACHMENT_BYTES)) return 'per-file';
+  if (sizes.reduce((total, size) => total + size, 0) > MAX_ATTACHMENTS_TOTAL_BYTES) return 'aggregate';
+  return undefined;
+}
 
 export interface RejectedLocalSelectionDiagnostic {
   selector: string;
@@ -407,6 +450,10 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     // server-side so the bytes never round-trip through the client. The path
     // is the identifier now; the jail refuses the pathological ones.
     const referenced: { name: string; type: string; dataUri: string }[] = [];
+    let attachmentBytes = (parsed.data.attachments ?? []).reduce(
+      (total, attachment) => total + (dataUriByteLength(attachment.dataUri) ?? 0),
+      0,
+    );
     for (const filePath of parsed.data.filePaths ?? []) {
       let bytes;
       try {
@@ -416,6 +463,13 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       }
       if (bytes === undefined) {
         return apiError(c, 404, 'not_found', `No such file: ${filePath}`);
+      }
+      if (bytes.length > MAX_ATTACHMENT_BYTES) {
+        return apiError(c, 413, 'too_large', `Each attachment must be 25 MB or less: ${filePath}`);
+      }
+      attachmentBytes += bytes.length;
+      if (attachmentBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+        return apiError(c, 413, 'too_large', 'Attachments must be 100 MB or less in total.');
       }
       const mime = mimeOf(filePath);
       referenced.push({
@@ -481,10 +535,22 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     if (body === undefined) return badBody(c);
     const parsed = sendSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
+    let attachmentBytes = (parsed.data.attachments ?? []).reduce(
+      (total, attachment) => total + (dataUriByteLength(attachment.dataUri) ?? 0),
+      0,
+    );
     for (const filePath of parsed.data.filePaths ?? []) {
       try {
-        if (deps.files.read(filePath) === undefined) {
+        const bytes = deps.files.read(filePath);
+        if (bytes === undefined) {
           return apiError(c, 404, 'not_found', `No such file: ${filePath}`);
+        }
+        if (bytes.length > MAX_ATTACHMENT_BYTES) {
+          return apiError(c, 413, 'too_large', `Each attachment must be 25 MB or less: ${filePath}`);
+        }
+        attachmentBytes += bytes.length;
+        if (attachmentBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+          return apiError(c, 413, 'too_large', 'Attachments must be 100 MB or less in total.');
         }
       } catch {
         return apiError(c, 404, 'not_found', `No such file: ${filePath}`);

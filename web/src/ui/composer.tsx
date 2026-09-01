@@ -22,15 +22,15 @@ import { FileInput, ModelPicker, TextArea, Pressable } from './controls';
  * and an icon-only send/stop on the right. Enter sends,
  * Shift+Enter breaks a line, Escape stops a run. Files arrive through the
  * picker or by dropping them anywhere on the composer; images show a
- * thumbnail chip, everything else a file chip. aw's 16 MB cap applies here
+ * thumbnail chip, everything else a file chip. The per-file cap applies here
  * before a byte leaves the phone.
  *
  * The draft is kept per chat in localStorage: half-written messages survive a
  * reload, a tab switch, and the phone deciding to reclaim the page.
  */
 
-const MAX_ATTACH_BYTES = 16 * 1024 * 1024;
-const MAX_ATTACH_TOTAL_BYTES = 20 * 1024 * 1024;
+const MAX_ATTACH_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACH_TOTAL_BYTES = 100 * 1024 * 1024;
 const MAX_ATTACHMENTS = 8;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 

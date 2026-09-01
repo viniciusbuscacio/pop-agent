@@ -154,16 +154,16 @@ export interface AppDeps {
   cliArchive?: string;
 }
 
-// A 25 MiB audio note becomes just under 35 MiB after base64 encoding. Keep
-// the global parser ceiling above that documented route limit; each route
-// still applies its smaller semantic cap before doing work.
-const MAX_API_BODY_BYTES = 36 * 1024 * 1024;
+// A 100 MiB chat attachment batch becomes just under 134 MiB after base64
+// encoding. Keep the global parser ceiling above that documented route limit;
+// each route still applies its smaller semantic cap before doing work.
+const MAX_API_BODY_BYTES = 140 * 1024 * 1024;
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
   // Bound the bytes before JSON/multipart parsers allocate them. Individual
-  // routes still enforce their smaller semantic limits (Files is 25 MiB; PLA
+  // routes still enforce their smaller semantic limits (Files is 100 MiB; PLA
   // frames are 12 MiB), while this ceiling catches every forgotten route.
   app.use('/v1/*', bodyLimit({
     maxSize: MAX_API_BODY_BYTES,

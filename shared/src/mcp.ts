@@ -22,6 +22,8 @@ export interface McpServerDTO {
   args: string[];
   authKind: McpAuthKind;
   authHeader: string;
+  /** Whether encrypted authorization/environment material exists; never the value itself. */
+  hasCredential: boolean;
   enabled: boolean;
   timeoutMs: number;
   status: McpServerStatus;
@@ -30,7 +32,6 @@ export interface McpServerDTO {
   /** `modern` is the stateless 2026 protocol; `legacy` uses initialize/session semantics. */
   protocolEra?: 'modern' | 'legacy';
   protocolVersion?: string;
-  cwd: string;
   capabilities: McpCapabilityDTO[];
 }
 

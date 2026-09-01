@@ -37,7 +37,7 @@ Usage:
     --workspace /absolute/workspace [options]
 
 Options:
-  --toolchain-dir PATH         Override the private Node/Go toolchain directory
+  --toolchain-dir PATH         Override the private Node/Go/whisper.cpp toolchain directory
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Install Git now and pass apt opt-in to the host bootstrap
   --prepare-only               Acquire source and prepare toolchain without systemd activation
@@ -93,14 +93,15 @@ case $PORT in ''|*[!0-9]*) die "port must be an integer from 1 to 65535" ;; esac
 [ "$PORT" -ge 1 ] 2>/dev/null && [ "$PORT" -le 65535 ] 2>/dev/null || die "port must be an integer from 1 to 65535"
 
 [ "$(id -u)" -ne 0 ] || die "refusing to run as root"
-[ "$(uname -s)" = Linux ] || die "only Ubuntu/Debian Linux is supported"
+[ "$(uname -s)" = Linux ] || die "only Ubuntu Linux is supported"
 case $(uname -m) in x86_64|amd64|aarch64|arm64) ;; *) die "unsupported architecture" ;; esac
-[ -r /etc/os-release ] || die "cannot identify Linux distribution"
+OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}
+[ -f "$OS_RELEASE_FILE" ] && [ -r "$OS_RELEASE_FILE" ] || die "cannot identify Linux distribution"
 DIST_ID=
 while IFS= read -r line; do
   case $line in ID=*) DIST_ID=${line#ID=}; DIST_ID=${DIST_ID#\"}; DIST_ID=${DIST_ID%\"}; break ;; esac
-done < /etc/os-release
-case $DIST_ID in ubuntu|debian) ;; *) die "only Ubuntu and Debian are supported" ;; esac
+done < "$OS_RELEASE_FILE"
+[ "$DIST_ID" = ubuntu ] || die "only Ubuntu is supported"
 
 require_command() { command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"; }
 if [ "$INSTALL_APT" -eq 1 ]; then

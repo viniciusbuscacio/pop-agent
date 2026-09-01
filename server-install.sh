@@ -119,12 +119,13 @@ esac
 
 INVOKING_UID=$(id -u)
 [ "$INVOKING_UID" -ne 0 ] || die "refusing to run as root; run as the non-root service owner"
-[ "$(uname -s)" = Linux ] || die "unsupported platform: only Ubuntu/Debian Linux is supported"
+[ "$(uname -s)" = Linux ] || die "unsupported platform: only Ubuntu Linux is supported"
 case $(uname -m) in
   x86_64|amd64|aarch64|arm64) ;;
   *) die "unsupported architecture: $(uname -m); supported architectures are amd64 and arm64" ;;
 esac
-[ -r /etc/os-release ] || die "cannot identify the Linux distribution from /etc/os-release"
+OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}
+[ -f "$OS_RELEASE_FILE" ] && [ -r "$OS_RELEASE_FILE" ] || die "cannot identify the Linux distribution from $OS_RELEASE_FILE"
 DIST_ID=
 while IFS= read -r os_line; do
   case $os_line in
@@ -137,11 +138,8 @@ while IFS= read -r os_line; do
       break
       ;;
   esac
-done < /etc/os-release
-case $DIST_ID in
-  ubuntu|debian) ;;
-  *) die "unsupported Linux distribution '$DIST_ID'; only Ubuntu and Debian are supported" ;;
-esac
+done < "$OS_RELEASE_FILE"
+[ "$DIST_ID" = ubuntu ] || die "unsupported Linux distribution '$DIST_ID'; only Ubuntu is supported"
 
 require_command() { command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"; }
 for required in git mktemp mkdir mv realpath rm stat chmod env; do require_command "$required"; done

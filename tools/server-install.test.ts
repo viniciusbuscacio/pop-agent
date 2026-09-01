@@ -35,6 +35,11 @@ const sourceAcquisitionDocs = [
   resolve(import.meta.dirname, '../docs/specs/Spec-Pop-Deployment-and-Operations.md'),
 ];
 const publicInstallDocs = sourceAcquisitionDocs.slice(0, 2);
+const recommendedInstallDocs = [
+  resolve(import.meta.dirname, '../README.md'),
+  resolve(import.meta.dirname, '../deploy/README.md'),
+  resolve(import.meta.dirname, '../docs/specs/Spec-Pop-Installation.md'),
+];
 const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
 const invokingUid = process.getuid?.() ?? 1000;
 const roots: string[] = [];
@@ -213,6 +218,8 @@ esac
   delete inheritedEnvironment['GIT_CONFIG_GLOBAL'];
   delete inheritedEnvironment['GIT_CONFIG_SYSTEM'];
   delete inheritedEnvironment['XDG_CONFIG_HOME'];
+  const osRelease = join(root, 'os-release');
+  writeFileSync(osRelease, 'ID=ubuntu\n');
   return {
     root,
     source,
@@ -233,6 +240,7 @@ esac
       SERVER_INSTALL_TEST_GH_LOG: ghLog,
       SERVER_INSTALL_TEST_EXTERNAL_BOOTSTRAP: externalBootstrap,
       SERVER_INSTALL_TEST_EXTERNAL_MANIFEST: externalManifest,
+      POP_AGENT_OS_RELEASE_FILE: osRelease,
     },
   };
 }
@@ -271,7 +279,12 @@ describe('GitHub fresh-server installer', () => {
     for (const path of sourceAcquisitionDocs) {
       expect(readFileSync(path, 'utf8'), path).not.toMatch(transitionalWording);
     }
-    for (const path of publicInstallDocs) {
+    for (const path of recommendedInstallDocs) {
+      const documentation = readFileSync(path, 'utf8');
+      expect(documentation, path).toContain('git clone https://github.com/viniciusbuscacio/pop-agent.git');
+      expect(documentation, path).toContain('deploy/bootstrap-server.sh --install-apt-packages');
+    }
+    for (const path of publicInstallDocs.slice(0, 1)) {
       const documentation = readFileSync(path, 'utf8');
       expect(documentation, path).toContain(`/v${version}/server-install.sh`);
       expect(documentation, path).toContain(`&& sh "$file" --ref v${version}`);
@@ -429,7 +442,7 @@ describe('GitHub fresh-server installer', () => {
 
     const platform = createFixture();
     expect(run(platform, [], { ...platform.env, FAKE_UNAME_S: 'Darwin' }).stderr)
-      .toContain('only Ubuntu/Debian Linux is supported');
+      .toContain('only Ubuntu Linux is supported');
 
     const missingGit = createFixture();
     const emptyBin = join(missingGit.root, 'empty-bin');
@@ -443,6 +456,18 @@ describe('GitHub fresh-server installer', () => {
     const mismatchResult = run(mismatch, [], { ...mismatch.env, FAKE_API_MISMATCH: '1' });
     expect(mismatchResult.status).not.toBe(0);
     expect(mismatchResult.stderr).toContain('API returned a different commit');
+  });
+
+  it('accepts the standard Ubuntu os-release symlink', () => {
+    const input = createFixture();
+    const osRelease = input.env.POP_AGENT_OS_RELEASE_FILE as string;
+    const target = join(input.root, 'usr-lib-os-release');
+    writeFileSync(target, 'ID=ubuntu\n');
+    rmSync(osRelease);
+    symlinkSync(target, osRelease);
+
+    const result = run(input, ['--prepare-only']);
+    expect(result.status, result.stderr).toBe(0);
   });
 
   it('refuses unsafe, overlapping, existing, and insecure destination parents', () => {

@@ -59,16 +59,20 @@ export function FilesPage() {
   // alone would not say which kind it is.
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<{ done: number; total: number } | undefined>(undefined);
+  const [uploadFailures, setUploadFailures] = useState<UploadFailure[]>([]);
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState<{ path: string; name: string }>();
   const picker = useRef<HTMLInputElement>(null);
   const folderPicker = useRef<HTMLInputElement>(null);
+  const uploadController = useRef<AbortController | undefined>(undefined);
 
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => () => uploadController.current?.abort(), []);
 
   useEffect(() => {
     setSelected(new Set());
@@ -170,23 +174,46 @@ export function FilesPage() {
     }
   }
 
-  async function upload(list: FileList | File[] | null): Promise<void> {
-    const entries = list === null ? [] : Array.from(list);
-    if (entries.length === 0) return;
+  async function runUpload(
+    entries: Array<{ file: File; destination: string }>,
+    preservedFailures: UploadFailure[] = [],
+  ): Promise<void> {
+    if (entries.length === 0 || uploadController.current !== undefined) return;
+    const controller = new AbortController();
+    const destinations = new Map(entries.map((entry) => [entry.file, entry.destination]));
+    uploadController.current = controller;
+    setUploadFailures(preservedFailures);
     setUploading({ done: 0, total: entries.length });
     let failed: UploadFailure[] = [];
+    let cancelled = false;
     try {
-      failed = await uploadFileBatch(
-        entries,
-        () => currentPath,
+      const result = await uploadFileBatch(
+        entries.map((entry) => entry.file),
+        (file) => destinations.get(file) ?? '',
         filesService.upload,
         (done, total) => setUploading({ done, total }),
+        controller.signal,
       );
+      failed = result.failures;
+      cancelled = result.cancelled;
     } finally {
+      if (uploadController.current === controller) uploadController.current = undefined;
       setUploading(undefined);
-      await reload();
+      try {
+        await reload();
+      } catch {
+        // Keep the failed subset/retry controls usable; the normal foreground
+        // refresh path will reconcile the tree when the server returns.
+      }
     }
-    announceUploadFailures(failed, notify);
+    const allFailures = [...preservedFailures, ...failed];
+    setUploadFailures(allFailures);
+    if (!cancelled) announceUploadFailures(failed, notify);
+  }
+
+  async function upload(list: FileList | File[] | null): Promise<void> {
+    const files = list === null ? [] : Array.from(list);
+    await runUpload(files.map((file) => ({ file, destination: currentPath })));
   }
 
   /**
@@ -197,22 +224,20 @@ export function FilesPage() {
    * current folder would lose the shape the user picked.
    */
   async function uploadFolder(list: FileList | null): Promise<void> {
-    const entries = list === null ? [] : Array.from(list);
-    if (entries.length === 0) return;
-    setUploading({ done: 0, total: entries.length });
-    let failed: UploadFailure[] = [];
-    try {
-      failed = await uploadFileBatch(
-        entries,
-        (file) => joinPath(currentPath, parentDir(file.webkitRelativePath)),
-        filesService.upload,
-        (done, total) => setUploading({ done, total }),
-      );
-    } finally {
-      setUploading(undefined);
-      await reload();
-    }
-    announceUploadFailures(failed, notify);
+    const files = list === null ? [] : Array.from(list);
+    await runUpload(files.map((file) => ({
+      file,
+      destination: joinPath(currentPath, parentDir(file.webkitRelativePath)),
+    })));
+  }
+
+  async function retryFailedUploads(): Promise<void> {
+    const retryable = uploadFailures.filter((failure) => failure.reason === 'failed');
+    const tooLarge = uploadFailures.filter((failure) => failure.reason === 'too-large');
+    await runUpload(
+      retryable.map((failure) => ({ file: failure.file, destination: failure.destination })),
+      tooLarge,
+    );
   }
 
   async function download(path: string): Promise<void> {
@@ -549,6 +574,7 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-upload"
+            disabled={uploading !== undefined}
             onClick={() => picker.current?.click()}
           >
             {t('files.uploadFile')}
@@ -558,6 +584,7 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-upload-folder"
+            disabled={uploading !== undefined}
             onClick={() => folderPicker.current?.click()}
           >
             {t('files.uploadFolder')}
@@ -593,9 +620,35 @@ export function FilesPage() {
       </div>
 
       {uploading !== undefined ? (
-        <p className="px-4 pb-2 text-xs text-[var(--accent)]" data-testid="files-uploading" role="status">
-          {t('files.uploading', { done: uploading.done + 1, total: uploading.total })}
-        </p>
+        <div className="flex items-center gap-2 px-4 pb-2">
+          <p className="text-xs text-[var(--accent)]" data-testid="files-uploading" role="status">
+            {t('files.uploading', {
+              done: Math.min(uploading.done + 1, uploading.total),
+              total: uploading.total,
+            })}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-upload-cancel"
+            onClick={() => uploadController.current?.abort()}
+          >
+            {t('files.uploadCancelRemaining')}
+          </Button>
+        </div>
+      ) : uploadFailures.some((failure) => failure.reason === 'failed') ? (
+        <div className="px-3 pb-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="files-upload-retry"
+            onClick={() => void retryFailedUploads()}
+          >
+            {t('files.uploadRetryFailed')}
+          </Button>
+        </div>
       ) : null}
 
       {/* While selecting, the bar is always there: Select all is the point of

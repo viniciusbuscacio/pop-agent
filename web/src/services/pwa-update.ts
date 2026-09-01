@@ -11,7 +11,7 @@ import type { UpdateCheckResult } from './update-signal';
  * fixed. This module keeps the registration and drives three checks the
  * browser will not do on its own:
  *
- *   - a timer on the device-chosen interval (store/updates.ts);
+ *   - a fixed ten-minute timer;
  *   - `visibilitychange -> visible`, so resuming the PWA re-checks (the same
  *     trigger the SSE catch-up already relies on);
  *   - a manual "check now" from Settings.
@@ -24,7 +24,7 @@ let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
 let registration: ServiceWorkerRegistration | undefined;
 let started = false;
 let timer: ReturnType<typeof setInterval> | undefined;
-let intervalMs = 10 * 60 * 1000;
+const UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 
 export function startUpdateChecks(onNeedRefresh: () => void): void {
   if (started) return;
@@ -40,13 +40,8 @@ export function startUpdateChecks(onNeedRefresh: () => void): void {
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (intervalMs > 0 && document.visibilityState === 'visible') void safeUpdate();
+    if (document.visibilityState === 'visible') void safeUpdate();
   });
-}
-
-export function setUpdateIntervalMs(ms: number): void {
-  intervalMs = ms;
-  restartTimer();
 }
 
 export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
@@ -86,8 +81,8 @@ export async function applyUpdate(): Promise<void> {
 function restartTimer(): void {
   if (timer !== undefined) clearInterval(timer);
   timer = undefined;
-  if (registration === undefined || intervalMs <= 0) return;
-  timer = setInterval(() => void safeUpdate(), intervalMs);
+  if (registration === undefined) return;
+  timer = setInterval(() => void safeUpdate(), UPDATE_INTERVAL_MS);
 }
 
 async function safeUpdate(): Promise<void> {

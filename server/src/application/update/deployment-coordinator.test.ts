@@ -54,15 +54,15 @@ describe('DeploymentCoordinator', () => {
     });
   });
 
-  it('requires preparation only for automatic activation', () => {
+  it('requires a green gate receipt before any activation', () => {
     const h = harness({ prepared: false });
     expect(h.coordinator.requestRestartWhenIdle('automatic')).toEqual({ ok: false, reason: 'not_prepared' });
-    expect(h.coordinator.requestRestartWhenIdle('manual')).toMatchObject({ ok: true });
+    expect(h.coordinator.requestRestartWhenIdle('manual')).toEqual({ ok: false, reason: 'not_prepared' });
   });
 
   it('waits passively, then closes task and run admission before hand-off', async () => {
     const h = harness();
-    expect(h.coordinator.requestRestartWhenIdle('automatic')).toMatchObject({ ok: true });
+    expect(h.coordinator.requestRestartWhenIdle('manual')).toMatchObject({ ok: true });
     expect(h.quiesceRuns).not.toHaveBeenCalled();
 
     h.resolve();
@@ -72,13 +72,13 @@ describe('DeploymentCoordinator', () => {
     expect(h.quiesceRuns).toHaveBeenCalledOnce();
     expect(h.supervisor).toHaveBeenCalledWith({
       runningCommit: 'aaaaaaaaaaaaaaaa', targetCommit: 'bbbbbbbbbbbbbbbb',
-      lastKnownGood: 'aaaaaaaaaaaaaaaa', requestedBy: 'automatic',
+      lastKnownGood: 'aaaaaaaaaaaaaaaa', requestedBy: 'manual',
     });
   });
 
   it('reopens admission instead of activating a checkout that changed during the wait', async () => {
     const h = harness();
-    h.coordinator.requestRestartWhenIdle('automatic');
+    h.coordinator.requestRestartWhenIdle('manual');
     h.setHead('cccccccccccccccc');
     h.resolve();
     await flush();
@@ -89,11 +89,11 @@ describe('DeploymentCoordinator', () => {
     expect(h.record()).toMatchObject({ phase: 'superseded' });
   });
 
-  it('can cancel an automatic wait without changing the operator LLM switch', () => {
+  it('can cancel a manual wait without changing the operator LLM switch', () => {
     const h = harness();
-    h.coordinator.requestRestartWhenIdle('automatic');
+    h.coordinator.requestRestartWhenIdle('manual');
 
-    expect(h.coordinator.cancelWaiting('automatic')).toBe(true);
+    expect(h.coordinator.cancelWaiting('manual')).toBe(true);
     expect(h.resumeRuns).toHaveBeenCalledOnce();
     expect(h.resumeTasks).toHaveBeenCalledOnce();
     expect(h.record()).toMatchObject({ phase: 'cancelled' });

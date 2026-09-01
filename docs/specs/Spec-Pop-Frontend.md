@@ -24,7 +24,7 @@ The frontend owns:
 - HTTP/SSE service adapters and snapshot reconciliation;
 - transient live-run state, device preferences, drafts and caches;
 - Markdown/tool/attachment rendering;
-- PWA installation, update prompt, offline shell and push reception;
+- PWA installation, automatic update status/recovery, offline shell and push reception;
 - accessibility, i18n and design-system conformance.
 
 The server remains authoritative for product state and policy. The frontend may
@@ -360,7 +360,8 @@ The composer owns device-local draft interaction, not delivery authority:
 - attachment-only input can be sent with blank text, while a completely empty
   composer cannot be submitted;
 - drag/drop, picker and paste support attachments, with frontend limits matching
-  API limits (eight items, 16 MB each and 20 MB raw in total);
+  API limits (eight items across uploads and Files references, 25 MB each and
+  100 MB raw in total);
 - `@` references existing Files paths without uploading them again;
 - model and Plan controls snapshot their current values into each send;
 - Plan styling and announcement make mode visible, but only the server enforces
@@ -414,9 +415,11 @@ The Files UI:
 
 - renders the live server tree by real path;
 - supports folders, upload, search, preview/download and selection;
-- uploads files sequentially with a 25 MB per-file cap, continues after an
-  individual failure, reports the failed subset and reloads the authoritative
-  tree after every batch;
+- starts uploads immediately after picker/drop, targets the open folder, and
+  uploads sequentially with a 100 MB per-file cap;
+- retries a transient upload once, supports cancelling the active/remaining
+  batch, keeps the failed subset for explicit retry and reloads the
+  authoritative tree after every batch;
 - moves delete requests to Garbage and shows an immediate undo action using the
   exact returned Garbage handle;
 - restores parent selections before separately selected children;
@@ -488,13 +491,14 @@ The generated Workbox service worker precaches only the app shell/assets.
 `/v1/*`, health and signed Files views are network-only or excluded from
 navigation fallback. Product data is not placed in Workbox runtime caches.
 
-Registration occurs exactly once in `services/pwa-update.ts` with prompt mode.
-Device-local Settings controls automatic checks and interval; the current
-default is enabled every 10 minutes. Checks run on the interval, on return to
-visible and on explicit user action. Disabling automatic checks preserves the
-manual action.
+Registration occurs exactly once in `services/pwa-update.ts`. Checks run every
+10 minutes, on return to visible and on explicit user action. A ready build is
+activated automatically; Settings exposes status and **Check for updates**, not
+a device toggle or frequency control. A compact recovery action appears only
+when activation fails.
 
-Applying an update must reach the newest available build with one user action:
+Applying an update must reach the newest available build with one automatic or
+manual activation path:
 
 1. call `registration.update()` at click time;
 2. if a newer worker is still `installing`, wait for its `statechange` to a

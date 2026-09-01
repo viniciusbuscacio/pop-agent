@@ -8,6 +8,13 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 
 ### Added
 
+- **Fresh Ubuntu installs now include the local voice runtime and an optional
+  Tailscale Serve helper.** The recommended public path is clone plus one
+  bootstrap command with safe default data/workspace locations. Repository-
+  pinned, hash-verified whisper.cpp binaries and apt-managed ffmpeg make voice
+  ready with the server, while the separate Tailscale helper acts only after
+  local health and an existing authenticated tailnet are verified.
+
 - **The repository is prepared for a deliberate public launch.** Public
   onboarding, support/security/contribution policies, issue and pull-request
   templates, a release/cutover runbook, least-privilege commit-pinned CI,
@@ -29,10 +36,10 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   non-root local installer verifies SHA-256 and bundle integrity, clones exactly
   the requested commit through staging, and hands the clean checkout to the
   existing host bootstrap without HTTP or remote manifests.
-- **Existing Ubuntu/Debian checkouts can prepare a private server toolchain before systemd installation.**
+- **Existing Ubuntu checkouts can prepare a private server toolchain before systemd installation.**
   A small non-root POSIX bootstrap supports Linux amd64/arm64, optionally installs
   narrowly scoped apt prerequisites only after explicit opt-in, and stages exact
-  repository-pinned official Node/Go archives after size, SHA-256, path/link and
+  repository-pinned official Node/Go/whisper.cpp archives after size, SHA-256, path/link and
   executable checks. It preserves matching verified runtimes, puts managed npm
   and Go on the installer `PATH`, supports preparation without systemd handoff,
   and does not acquire source or configure network exposure or accounts.
@@ -51,6 +58,22 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   credentials add direct Microsoft Foundry v1 interoperability.
 
 ### Changed
+
+- **Uploads have explicit beta limits and recovery controls.** Files accepts
+  100 MiB per file and starts immediately in the open folder, sends
+  sequentially, retries transient failures once, and supports cancel/retry.
+  Chat accepts eight combined uploads/Files references, 25 MiB each and
+  100 MiB total; audio remains capped at 25 MiB.
+- **PWA updates are automatic while server activation is deliberately manual.**
+  Every PWA checks every ten minutes and on foreground resume, activates a ready
+  worker automatically, and shows retry only on failure. Unsafe automatic
+  server activation settings and their background coordinator were removed;
+  manual server and pi activation now require confirmation, and every server
+  candidate requires an exact green-gate receipt.
+- **MCP configuration now matches the A2A security boundary.** Strict transport,
+  endpoint, header and secret validation, write-only credential presence,
+  explicit credential clearing, stable not-found errors, sanitized diagnostics
+  and removal of internal working paths are covered at the HTTP boundary.
 
 - **Production systemd installs keep pi catalog bookkeeping offline.** The
   generated unit now carries the required `PI_OFFLINE=1` setting, matching the

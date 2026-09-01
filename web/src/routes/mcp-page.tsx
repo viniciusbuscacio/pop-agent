@@ -146,6 +146,7 @@ function McpEditor({
   const [authKind, setAuthKind] = useState<McpAuthKind>(server?.authKind ?? 'none');
   const [authHeader, setAuthHeader] = useState(server?.authHeader ?? '');
   const [secret, setSecret] = useState('');
+  const [clearSecret, setClearSecret] = useState(false);
   const [enabled, setEnabled] = useState(server?.enabled ?? true);
   const [timeoutMs, setTimeoutMs] = useState(String(server?.timeoutMs ?? 60000));
   const [busy, setBusy] = useState(false);
@@ -169,13 +170,13 @@ function McpEditor({
         command: transport === 'stdio' ? command : '',
         args:
           transport === 'stdio'
-            ? args.split(/\r?\n/).map((argument) => argument.trim()).filter(Boolean)
+          ? args.split(/\r?\n/).filter((argument) => argument.length > 0)
             : [],
         authKind,
         authHeader,
         enabled,
         timeoutMs: Number(timeoutMs),
-        ...(secret ? { env: { MCP_SECRET: secret } } : {}),
+        ...(clearSecret ? { env: null } : secret ? { env: { MCP_SECRET: secret } } : {}),
       };
       if (server === undefined) await mcpService.create(body);
       else await mcpService.update(server.id, body);
@@ -258,7 +259,25 @@ function McpEditor({
         {authKind !== 'none' ? (
           <>
             <TextField id="mcp-header" label="Header name (optional)" value={authHeader} onChange={(event) => setAuthHeader(event.target.value)} />
-            <TextField id="mcp-secret" label="Secret / token" type="password" value={secret} onChange={(event) => setSecret(event.target.value)} />
+            <TextField
+              id="mcp-secret"
+              label="Secret / token"
+              type="password"
+              hint={server?.hasCredential === true && !clearSecret ? 'A credential is saved. Leave blank to keep it.' : undefined}
+              value={secret}
+              onChange={(event) => {
+                setSecret(event.target.value);
+                setClearSecret(false);
+              }}
+            />
+            {server?.hasCredential === true && !clearSecret ? (
+              <Button type="button" variant="ghost" onClick={() => {
+                setSecret('');
+                setClearSecret(true);
+              }}>
+                Clear saved credential
+              </Button>
+            ) : null}
           </>
         ) : null}
         <TextField id="mcp-timeout" label="Timeout (ms)" type="number" value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} />

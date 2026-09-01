@@ -53,6 +53,7 @@ export interface InstallerDependencies {
   nodeVersion: string;
   nodeExecutable: string;
   goExecutable: string;
+  whisperExecutable: string;
   systemdRuntimeDir: string;
   healthCheck: (url: string, timeoutMs: number) => Promise<boolean>;
 }
@@ -84,6 +85,7 @@ function defaultDependencies(): InstallerDependencies {
     nodeVersion: process.versions.node,
     nodeExecutable: realpathSync(process.execPath),
     goExecutable: executableOnPath('go'),
+    whisperExecutable: executableOnPath('whisper-cli'),
     systemdRuntimeDir: '/run/systemd/system',
     healthCheck: boundedHealthCheck,
   };
@@ -94,18 +96,21 @@ export function renderSystemdUnit(
   username: string,
   nodeExecutable: string,
   goExecutable: string,
+  whisperExecutable: string,
 ): string {
   const checkout = safeAbsolutePath('checkout', options.checkout);
   const dataDir = safeAbsolutePath('data directory', options.dataDir);
   const workspace = safeAbsolutePath('workspace', options.workspace);
   const node = safeAbsolutePath('Node executable', nodeExecutable);
   const go = safeAbsolutePath('Go executable', goExecutable);
+  const whisper = safeAbsolutePath('whisper.cpp executable', whisperExecutable);
   validateUsername(username);
   validatePort(options.port);
 
   const pathDirectories = [
     dirname(node),
     dirname(go),
+    dirname(whisper),
     '/usr/local/sbin',
     '/usr/local/bin',
     '/usr/sbin',
@@ -115,7 +120,36 @@ export function renderSystemdUnit(
   ];
   const servicePath = [...new Set(pathDirectories)].join(':');
 
-  return `[Unit]\nDescription=Pop Agent server\nAfter=network-online.target\nWants=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=${username}\nWorkingDirectory=${checkout}\nEnvironment=NODE_ENV=production\nEnvironment=PATH=${servicePath}\nEnvironment=PI_OFFLINE=1\nEnvironment=POP_AGENT_BIND=127.0.0.1\nEnvironment=POP_AGENT_PORT=${String(options.port)}\nEnvironment=POP_AGENT_DATA_DIR=${dataDir}\nEnvironment=POP_AGENT_WORKSPACE=${workspace}\nExecStart=${node} ${checkout}/server/dist/main.js\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=90s\nUMask=0077\nSyslogIdentifier=pop-agent-service\n\n[Install]\nWantedBy=multi-user.target\n`;
+  return [
+    '[Unit]',
+    'Description=Pop Agent server',
+    'After=network-online.target',
+    'Wants=network-online.target',
+    'StartLimitIntervalSec=60',
+    'StartLimitBurst=5',
+    '',
+    '[Service]',
+    'Type=simple',
+    `User=${username}`,
+    `WorkingDirectory=${checkout}`,
+    'Environment=NODE_ENV=production',
+    `Environment=PATH=${servicePath}`,
+    'Environment=PI_OFFLINE=1',
+    'Environment=POP_AGENT_BIND=127.0.0.1',
+    `Environment=POP_AGENT_PORT=${String(options.port)}`,
+    `Environment=POP_AGENT_DATA_DIR=${dataDir}`,
+    `Environment=POP_AGENT_WORKSPACE=${workspace}`,
+    `ExecStart=${node} ${checkout}/server/dist/main.js`,
+    'Restart=on-failure',
+    'RestartSec=5s',
+    'TimeoutStopSec=90s',
+    'UMask=0077',
+    'SyslogIdentifier=pop-agent-service',
+    '',
+    '[Install]',
+    'WantedBy=multi-user.target',
+    '',
+  ].join('\n');
 }
 
 export function parseInstallArguments(args: readonly string[], checkout: string): InstallOptions | 'help' {
@@ -184,6 +218,7 @@ export async function installPreparedCheckout(
     dependencies.username,
     dependencies.nodeExecutable,
     dependencies.goExecutable,
+    dependencies.whisperExecutable,
   );
   const stagingDirectory = mkdtempSync(join(tmpdir(), 'pop-agent-systemd-'));
   const stagedUnit = join(stagingDirectory, UNIT_NAME);
@@ -234,6 +269,7 @@ function validatePreflight(requested: InstallOptions, dependencies: InstallerDep
   validateUsername(dependencies.username);
   requireVersion('Node', dependencies.nodeVersion, MINIMUM_NODE);
   safeAbsolutePath('Go executable', dependencies.goExecutable);
+  safeAbsolutePath('whisper.cpp executable', dependencies.whisperExecutable);
 
   const checkout = realpathSync(safeAbsolutePath('checkout', requested.checkout));
   const checkoutStat = statSync(checkout);

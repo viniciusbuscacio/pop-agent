@@ -229,7 +229,9 @@ The SDK owns pagination, sessions, required headers, request SSE, cancellation,
 metadata and stdio cleanup. A stdio child receives only the SDK safe environment
 plus that server's encrypted variables, never Pop Agent's full environment.
 Tools, resources/templates and prompts are discovered and projected with stable
-names. MCP outputs and errors are always external untrusted content. Detailed
+names. Credentials remain write-only behind a presence flag; API diagnostics
+are stable and omit secret values and internal host paths. MCP outputs and
+errors are always external untrusted content. Detailed
 wire behavior and compatibility cases live in `docs/mcp.md`. The non-normative
 trade-off analysis is preserved in
 [`Research-Pop-MCP-Pi-Integration-Strategy.md`](Research-Pop-MCP-Pi-Integration-Strategy.md).

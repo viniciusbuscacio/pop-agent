@@ -321,9 +321,11 @@ SQLite repository parses or edits the JSONL.
 
 ### Attachments
 
-- A message may carry at most eight uploaded attachments.
-- The 16 MB product limit is per uploaded attachment. Interface validation also
-  bounds the encoded data URI.
+- A message may carry at most eight total attachments across direct uploads and
+  existing Files references.
+- The 25 MB product limit is per attachment and the combined raw limit is
+  100 MB. Interface validation also bounds each encoded data URI and the global
+  request body before parsing.
 - The data URI is durable message content in `attachments_json`, allowing an
   old conversation to render without a separate blob catalog.
 - The pi adapter writes a tool-readable operational copy under

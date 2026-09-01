@@ -1,6 +1,20 @@
 # Server deployment files
 
-## GitHub fresh install
+## Recommended Git clone install
+
+On a fresh Ubuntu amd64/arm64 host, run as the non-root service owner:
+
+```sh
+git clone https://github.com/viniciusbuscacio/pop-agent.git
+cd pop-agent
+./deploy/bootstrap-server.sh --install-apt-packages
+```
+
+The bootstrap defaults to `$HOME/.pop-agent` for durable data,
+`$HOME/pop-agent-workspace` for the user workspace, and port 8787. Override
+those with `--data-dir`, `--workspace`, and `--port` when needed.
+
+## Fixed-ref GitHub acquisition
 
 Retrieve the planned immutable v0.2.41 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
@@ -27,7 +41,7 @@ validates a complete clean tree before activation. The defaults are
 `$HOME/pop-agent`, `$HOME/.pop-agent`, `$HOME/pop-agent-workspace`, port 8787,
 and opt-in to the bootstrap's fixed apt prerequisite allowlist.
 
-The acquisition command refuses root, unsupported Ubuntu/Debian hosts, unsafe
+The acquisition command refuses root, unsupported non-Ubuntu hosts, unsafe
 or overlapping paths, insecure destination ancestry, symlinked required files
 (including the pinned toolchain manifest), and every existing destination. A
 public HTTPS failure reports repository access and identifies authenticated gh
@@ -80,23 +94,20 @@ HTTP client, remote manifest or source download behavior.
 
 ## Existing-checkout host bootstrap
 
-For an **existing Pop Agent checkout**, Ubuntu/Debian Linux operators on amd64
+For an **existing Pop Agent checkout**, Ubuntu operators on amd64
 or arm64 can prepare the narrowly supported host/toolchain layer and hand off to
 the production systemd installer:
 
 ```sh
-deploy/bootstrap-server.sh \
-  --data-dir /absolute/owner-owned/data \
-  --workspace /absolute/owner-owned/workspace \
-  --port 8787
+deploy/bootstrap-server.sh --install-apt-packages
 ```
 
 Run it as the non-root checkout owner. The bootstrap refuses root, other Linux
 distributions, other operating systems, and unsupported CPU architectures. It
-downloads exact official Node and Go archives declared in
+downloads exact official Node, Go, and `whisper.cpp` archives declared in
 `server-toolchain-manifest.tsv`, verifies pinned sizes and SHA-256 values before
 extraction, screens archive roots/paths/link targets, smokes each staged runtime,
-and atomically points `current/node` and `current/go` at the new generation. The
+and atomically points `current/node`, `current/go`, and `current/whisper` at the new generation. The
 default Pop-owned per-user location is:
 
 ```text
@@ -104,7 +115,7 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/pop-agent/server-toolchain
 ```
 
 Matching verified runtimes and downloaded archives are reused on a rerun. Node,
-npm, and Go are put first on `PATH` only inside the bootstrap/handoff process;
+npm, Go, and `whisper-cli` are put first on `PATH` only inside the bootstrap/handoff process;
 no system-wide runtime or shell profile is modified.
 
 The script does not silently mutate apt. If the host needs the narrow download
@@ -120,7 +131,8 @@ deploy/bootstrap-server.sh \
 
 That flag permits only `sudo apt-get update` and installation of
 `ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`, and
-`python3` (required by native npm package builds).
+`python3` (required by native npm package builds), and `ffmpeg` for local voice
+transcription.
 Runtime downloads use `curl` as archive downloads; no remote script is piped to
 a shell.
 
@@ -129,14 +141,14 @@ To prepare/verify the host without invoking the systemd handoff, add
 is not being run from its own checkout, and `--toolchain-dir /absolute/path` to
 override the per-user toolchain location.
 
-Version/hash maintenance is intentionally data-only: update all four
-amd64/arm64 Node/Go rows in `server-toolchain-manifest.tsv` from the official
-Node `SHASUMS256.txt` and Go download metadata, including byte sizes. The
+Version/hash maintenance is intentionally data-only: update all six
+amd64/arm64 Node/Go/whisper.cpp rows in `server-toolchain-manifest.tsv` from
+the official Node, Go, and whisper.cpp release metadata, including byte sizes. The
 metadata regression test enforces the target matrix, official URL shape, exact
 hash syntax, and compatibility with the repository Node minimum.
 
 This bootstrap does **not** acquire source, provision Linux, configure DNS, TLS,
-firewalls, Tailscale, Caddy, a reverse proxy, FFmpeg, or create a Pop account. It
+firewalls, Tailscale, Caddy, a reverse proxy, or create a Pop account. It
 is not a universal or public installer. Host and apt security updates remain the
 operator's responsibility.
 
@@ -164,3 +176,18 @@ source of the installed unit.
 
 `journald-retention.conf` remains an optional operator-managed journal policy;
 it is not installed by either server installation layer.
+
+## Tailscale Serve helper
+
+After the loopback health check succeeds, an operator who has independently
+installed and authenticated Tailscale can configure tailnet-only HTTPS with:
+
+```sh
+deploy/configure-tailscale.sh --port 8787
+```
+
+The helper first checks `http://127.0.0.1:8787/healthz` and the current
+`tailscale status`, then runs `tailscale serve --bg
+http://127.0.0.1:8787`. It never installs Tailscale, starts an account login,
+changes tailnet policy, or uses Funnel. Pop Agent remains loopback-only while
+Tailscale owns the authenticated HTTPS edge.

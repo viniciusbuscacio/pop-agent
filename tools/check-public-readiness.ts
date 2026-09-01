@@ -21,6 +21,7 @@ const REQUIRED_FILES = [
   'docs/RELEASING.md',
   'docs/specs/Spec-Pop-Installation.md',
   'deploy/README.md',
+  'deploy/configure-tailscale.sh',
   'deploy/server-toolchain-manifest.tsv',
   '.github/pull_request_template.md',
   '.github/ISSUE_TEMPLATE/bug_report.yml',
@@ -56,7 +57,6 @@ export function publicReadinessErrors(root: string): string[] {
   }
   if (errors.length > 0) return errors;
 
-  const version = read('VERSION').trim();
   const readme = read('README.md');
   const security = read('SECURITY.md');
   const workflow = read('.github/workflows/ci.yml');
@@ -64,16 +64,18 @@ export function publicReadinessErrors(root: string): string[] {
   const installer = read('server-install.sh');
   const toolchain = read('deploy/server-toolchain-manifest.tsv');
 
-  if (!readme.includes(`version=v${version}`) || !readme.includes('/$version/server-install.sh')) {
-    errors.push(`README installer is not pinned to v${version}`);
+  if (!readme.includes('git clone https://github.com/viniciusbuscacio/pop-agent.git')) {
+    errors.push('README lacks the public Git clone command');
   }
-  if (!readme.includes(`--ref "$version"`)) errors.push('README installer does not use the fetched release ref');
+  if (!readme.includes('./deploy/bootstrap-server.sh --install-apt-packages')) {
+    errors.push('README lacks the guided Ubuntu bootstrap command');
+  }
   for (const relative of ['README.md', 'deploy/README.md', 'docs/specs/Spec-Pop-Installation.md']) {
     if (hasProducerToShellPipeline(read(relative))) {
       errors.push(`${relative} contains a producer-to-shell installer`);
     }
   }
-  if (!/Do \*\*not\*\*\s+expose port 8787 directly\./.test(readme)) errors.push('README lacks the loopback exposure warning');
+  if (!/Do \*\*not\*\*\s+expose port 8787\s+directly\./.test(readme)) errors.push('README lacks the loopback exposure warning');
   if (!security.includes('/security/advisories/new')) errors.push('SECURITY.md lacks private vulnerability reporting');
   if (!security.includes('Public launch is blocked until')) errors.push('SECURITY.md does not require verifying private reporting');
   if (!security.includes('Never include passwords')) errors.push('SECURITY.md lacks public-report secret guidance');

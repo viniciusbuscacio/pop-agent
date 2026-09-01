@@ -30,11 +30,11 @@ function server(enabled: boolean): McpServerDTO {
     args: [],
     authKind: 'none',
     authHeader: '',
+    hasCredential: false,
     enabled,
     timeoutMs: 60000,
     status: 'connected',
     lastError: '',
-    cwd: '',
     capabilities: [],
   };
 }

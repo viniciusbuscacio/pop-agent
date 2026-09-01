@@ -31,8 +31,6 @@ const SETTINGS: SettingsDTO = {
   voiceCleanupModel: '',
   autoSkillsEnabled: false,
   piUpdatePolicy: 'recommended',
-  autoActivatePreparedUpdates: false,
-  autoRestartIdleMinutes: 10,
 };
 
 beforeEach(() => {

@@ -84,10 +84,6 @@ export interface SettingsDTO {
   autoSkillsEnabled: boolean;
   /** Which pi release channel Pop Agent may evaluate (§15). */
   piUpdatePolicy: PiUpdatePolicyDTO;
-  /** Activate a gate-verified local commit automatically after work drains. */
-  autoActivatePreparedUpdates: boolean;
-  /** Minutes of total inactivity (no runs or tasks) before an automatic restart triggers. */
-  autoRestartIdleMinutes: number;
 }
 
 /** Atomic field merge used by Settings controls; omitted fields are preserved. */

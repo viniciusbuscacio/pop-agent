@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -83,6 +83,7 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
       nodeVersion: '22.19.0',
       nodeExecutable: '/usr/bin/node',
       goExecutable: '/usr/local/go/bin/go',
+      whisperExecutable: '/opt/pop-whisper/whisper-cli',
       systemdRuntimeDir: systemdRuntime,
       healthCheck: async () => true,
     },
@@ -106,11 +107,11 @@ describe('systemd server installer', () => {
       dataDir: '/srv/pop-agent/data',
       workspace: '/srv/pop-agent/workspace',
       port: 9123,
-    }, 'popowner', '/opt/pop-node/bin/node', '/opt/pop-go/bin/go');
+    }, 'popowner', '/opt/pop-node/bin/node', '/opt/pop-go/bin/go', '/opt/pop-whisper/whisper-cli');
 
     expect(unit).toContain('User=popowner\n');
     expect(unit).toContain('WorkingDirectory=/srv/pop-agent/source\n');
-    expect(unit).toContain('Environment=PATH=/opt/pop-node/bin:/opt/pop-go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
+    expect(unit).toContain('Environment=PATH=/opt/pop-node/bin:/opt/pop-go/bin:/opt/pop-whisper:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
     expect(unit).toContain('Environment=PI_OFFLINE=1\n');
     expect(unit).toContain('Environment=POP_AGENT_BIND=127.0.0.1\n');
     expect(unit).toContain('Environment=POP_AGENT_DATA_DIR=/srv/pop-agent/data\n');
@@ -151,7 +152,7 @@ describe('systemd server installer', () => {
     expect(commandLines.indexOf('npm ci')).toBeLessThan(commandLines.indexOf('npm run gate'));
     expect(commandLines.indexOf('npm run gate')).toBeLessThan(commandLines.indexOf('sudo -- systemctl daemon-reload'));
     expect(runner.calls.find((call) => call.command === 'npm' && call.args[0] === 'ci')?.inherit).toBe(true);
-    expect(runner.installedUnit).toContain(`WorkingDirectory=${options.checkout}\n`);
+    expect(runner.installedUnit).toContain(`WorkingDirectory=${realpathSync(options.checkout)}\n`);
     expect(healthCalls).toEqual([{ url: 'http://127.0.0.1:8787/healthz', timeout: 30_000 }]);
     expect(commandLines).toContain('systemctl is-active --quiet pop-agent-service.service');
     expect(statSync(options.dataDir).mode & 0o777).toBe(0o700);

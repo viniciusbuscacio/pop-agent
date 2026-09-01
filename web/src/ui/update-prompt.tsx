@@ -1,32 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable } from './controls';
 import { t } from '../i18n';
 import {
   applyUpdate,
   checkForUpdateNow,
-  setUpdateIntervalMs,
   startUpdateChecks,
 } from '../services/pwa-update';
 import { setUpdateApplier, setUpdateChecker } from '../services/update-signal';
-import { useUpdatesStore } from '../store/updates';
 
 /**
- * Offers the new version instead of waiting for one (docs/specs/Spec-Pop-General.md §14, §15).
+ * Applies a new PWA build as soon as its service worker is ready
+ * (docs/specs/Spec-Pop-General.md §14, §15).
  *
  * With silent auto-update an installed PWA keeps serving the previous build
  * until it is closed and reopened cold -- which on a phone can be days, and
  * looks exactly like an app that stopped being fixed. The actual checking is
- * driven by services/pwa-update (timer + resume + manual); this component only
- * shows the banner and applies the update.
+ * driven by services/pwa-update (timer + resume + manual). The compact banner
+ * is status/recovery UI, not an approval gate.
  */
 export function UpdatePrompt() {
-  const [needsRefresh, setNeedsRefresh] = useState(false);
-  const [reloading, setReloading] = useState(false);
-  const checksEnabled = useUpdatesStore((state) => state.enabled);
-  const intervalMinutes = useUpdatesStore((state) => state.intervalMinutes);
+  const [state, setState] = useState<'idle' | 'applying' | 'failed'>('idle');
+  const activating = useRef(false);
+
+  async function activate(): Promise<void> {
+    if (activating.current) return;
+    activating.current = true;
+    setState('applying');
+    try {
+      await applyUpdate();
+    } catch {
+      activating.current = false;
+      setState('failed');
+    }
+  }
 
   useEffect(() => {
-    startUpdateChecks(() => setNeedsRefresh(true));
+    startUpdateChecks(() => void activate());
     // This component is the app's only door to the virtual PWA module, so it
     // is also where the rest of the app is handed a way to trigger a check --
     // pull-to-refresh asks through services/update-signal.
@@ -34,11 +43,7 @@ export function UpdatePrompt() {
     setUpdateApplier(applyUpdate);
   }, []);
 
-  useEffect(() => {
-    setUpdateIntervalMs(checksEnabled ? intervalMinutes * 60 * 1000 : 0);
-  }, [checksEnabled, intervalMinutes]);
-
-  if (!needsRefresh) return null;
+  if (state === 'idle') return null;
 
   return (
     <div
@@ -46,7 +51,7 @@ export function UpdatePrompt() {
       data-testid="update-prompt"
       className="fixed top-3 right-3 z-50 flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-sm shadow-lg"
     >
-      {reloading ? (
+      {state === 'applying' ? (
         <>
           <span
             aria-hidden="true"
@@ -58,32 +63,18 @@ export function UpdatePrompt() {
         </>
       ) : (
         <>
-          <span>{t('update.available')}</span>
+          <span>{t('update.failed')}</span>
           <Pressable
             type="button"
             data-testid="update-reload"
-            onClick={() => {
-              // The click answers at once: spinner in, buttons out, and any
-              // extra taps land on nothing while the new version takes over.
-              setReloading(true);
-              void applyUpdate();
-            }}
+            onClick={() => void activate()}
             className="rounded bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-fg)]"
           >
-            {t('update.reload')}
-          </Pressable>
-          <Pressable
-            type="button"
-            data-testid="update-dismiss"
-            aria-label={t('update.later')}
-            onClick={() => setNeedsRefresh(false)}
-            className="text-[var(--muted)] hover:text-[var(--screen-fg)]"
-          >
-            ✕
+            {t('update.retry')}
           </Pressable>
         </>
       )}
-      {reloading ? (
+      {state === 'applying' ? (
         <span className="absolute right-0 -bottom-px left-0 h-0.5 overflow-hidden rounded-b-lg">
           <span className="block h-full w-1/3 animate-[updatebar_1s_ease-in-out_infinite] bg-[var(--accent)]" />
         </span>

@@ -30,10 +30,6 @@ export interface AppSettings {
   autoSkillsEnabled: boolean;
   /** Which pi release channel Pop Agent may evaluate (§15). Activation ships later. */
   piUpdatePolicy: PiUpdatePolicy;
-  /** Activate a gate-verified committed checkout once conversations and tasks are idle. */
-  autoActivatePreparedUpdates: boolean;
-  /** Quiet period required before an automatic activation may begin. */
-  autoRestartIdleMinutes: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -46,8 +42,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voiceCleanupModel: '',
   autoSkillsEnabled: true,
   piUpdatePolicy: 'recommended',
-  autoActivatePreparedUpdates: false,
-  autoRestartIdleMinutes: 10,
 };
 
 const SETTINGS_KEY = 'app';
@@ -57,6 +51,8 @@ interface LegacySkillSettings {
   autoApproveSkills?: boolean;
   distillSkills?: boolean;
   distillIntervalMinutes?: number;
+  autoActivatePreparedUpdates?: boolean;
+  autoRestartIdleMinutes?: number;
 }
 
 function migratedAutoSkillsEnabled(settings: LegacySkillSettings): boolean {
@@ -73,6 +69,8 @@ function withoutLegacyFields(
   delete current.autoApproveSkills;
   delete current.distillSkills;
   delete current.distillIntervalMinutes;
+  delete current.autoActivatePreparedUpdates;
+  delete current.autoRestartIdleMinutes;
   return current as Partial<AppSettings>;
 }
 
@@ -99,7 +97,7 @@ export class SettingsService {
     return next;
   }
 
-  /** Internal atomic-looking merge for background policy changes such as rollback disabling auto activation. */
+  /** Internal atomic-looking merge for independent Settings controls. */
   update(patch: Partial<AppSettings>): AppSettings {
     return this.write({ ...this.read(), ...patch });
   }

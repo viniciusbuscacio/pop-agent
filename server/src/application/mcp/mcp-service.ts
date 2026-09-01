@@ -40,7 +40,7 @@ export class McpService {
       | 'cwd'
       | 'protocolEra'
       | 'protocolVersion'
-    > & { env?: Record<string, string> | undefined },
+    > & { env?: Record<string, string> | null | undefined },
   ): McpServer {
     const now = new Date().toISOString();
     const id = entityId('mcp');
@@ -64,9 +64,10 @@ export class McpService {
   update(
     id: string,
     patch: { [K in keyof McpServer]?: McpServer[K] | undefined } & {
-      env?: Record<string, string> | undefined;
+      env?: Record<string, string> | null | undefined;
     },
   ): McpServer | undefined {
+    if (this.deps.repo.get(id) === undefined) return undefined;
     if (patch.env !== undefined) this.saveSecrets(id, patch.env);
     const rest = { ...patch };
     delete (rest as { env?: Record<string, string> }).env;
@@ -140,8 +141,9 @@ export class McpService {
     }
   }
 
-  private saveSecrets(id: string, env: Record<string, string> | undefined): void {
-    if (env !== undefined) this.deps.secrets.set(secretKey(id), JSON.stringify(env));
+  private saveSecrets(id: string, env: Record<string, string> | null | undefined): void {
+    if (env === null) this.deps.secrets.delete(secretKey(id));
+    else if (env !== undefined) this.deps.secrets.set(secretKey(id), JSON.stringify(env));
   }
 
   static secretKey(id: string): string {

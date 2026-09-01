@@ -55,7 +55,8 @@ async function probed(request: () => Promise<Response>): Promise<Response> {
     const response = await request();
     healthMonitor.reportReachable();
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
     healthMonitor.reportUnreachable();
     throw new ApiError(
       'server_unreachable',
@@ -223,14 +224,19 @@ export async function apiDownload(path: string): Promise<Blob> {
 }
 
 /** A multipart upload (e.g. an artifact), returning the parsed JSON reply. */
-export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+export async function apiUpload<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
   const token = session.token();
   const headers: Record<string, string> = clientHeaders();
   // No content-type header: the browser sets the multipart boundary itself.
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
   const response = await probed(() =>
-    fetch(`${BASE}${path}`, { method: 'POST', headers, body: form }),
+    fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: form,
+      ...(signal === undefined ? {} : { signal }),
+    }),
   );
   refreshSessionFrom(response);
 

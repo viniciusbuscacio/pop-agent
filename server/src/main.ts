@@ -28,7 +28,6 @@ import { SettingsService } from './application/settings/settings-service.js';
 import { TaskScheduler } from './application/tasks/task-scheduler.js';
 import { TaskService } from './application/tasks/task-service.js';
 import { DeploymentCoordinator } from './application/update/deployment-coordinator.js';
-import { AutomaticDeploymentService } from './application/update/automatic-deployment.js';
 import { PiCandidateService } from './application/update/pi-candidate-service.js';
 import { PiActivationService } from './application/update/pi-activation-service.js';
 import { intervalTimer } from './application/ports/timer.js';
@@ -436,7 +435,6 @@ const purger = new FsChatPurger({
 });
 const health = new HealthService({ providers, pingDb: context.pingDb });
 const queueDrain: { service?: QueuedMessageService } = {};
-let noteDeploymentActivity = (): void => undefined;
 const runs = new RunService({
   chats: context.chats,
   bridge,
@@ -459,7 +457,6 @@ const runs = new RunService({
   onSteeringDelivered: (chatId, steeringId) =>
     queueDrain.service?.deliveredPersisted(chatId, steeringId),
   onLlmStarted: () => queueDrain.service?.drainAll(),
-  onActivity: () => noteDeploymentActivity(),
   // When a run ends, tell the phone -- even with the PWA closed (docs/specs/Spec-Pop-General.md §14).
   notifyDone: (info) => {
     // Counted either way: a task that runs quietly is still a run that
@@ -649,18 +646,6 @@ const piActivation = new PiActivationService({
   },
   now: () => new Date(systemClock.now()).toISOString(),
 });
-const automaticDeployment = new AutomaticDeploymentService({
-  deployment,
-  state: deploymentState,
-  settings,
-  push,
-  timer: intervalTimer,
-  now: () => new Date(systemClock.now()).toISOString(),
-  nowMs: () => systemClock.now(),
-  onJournal: (line) => console.log(line),
-});
-noteDeploymentActivity = () => automaticDeployment.noteActivity();
-
 // Voice runs on this machine's CPU (aw's whisper.cpp flow): no tokens spent.
 // The model is selected in Settings and downloaded on demand; POP_AGENT_WHISPER_MODEL
 // still pins an explicit path for an operator who wants one.
@@ -835,7 +820,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 // Nothing runs itself until the server is actually up (docs/specs/Spec-Pop-General.md §21).
 taskScheduler.start();
-automaticDeployment.start();
 
 // The local-tools channel needs a WebSocket server the adaptor can upgrade onto
 // (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.

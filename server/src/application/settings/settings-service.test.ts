@@ -30,8 +30,6 @@ describe('settings service', () => {
       voiceCleanupModel: 'openai/gpt-5-mini',
       autoSkillsEnabled: true,
       piUpdatePolicy: 'recommended' as const,
-      autoActivatePreparedUpdates: true,
-      autoRestartIdleMinutes: 15,
     };
 
     expect(service.write(next)).toEqual(next);
@@ -43,6 +41,17 @@ describe('settings service', () => {
     // lose the fields that were invented since.
     const repo = new MemorySettings();
     repo.set('app', { language: 'en' });
+
+    expect(new SettingsService(repo).read()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('drops retired automatic server activation settings from stored documents', () => {
+    const repo = new MemorySettings();
+    repo.set('app', {
+      ...DEFAULT_SETTINGS,
+      autoActivatePreparedUpdates: true,
+      autoRestartIdleMinutes: 5,
+    });
 
     expect(new SettingsService(repo).read()).toEqual(DEFAULT_SETTINGS);
   });

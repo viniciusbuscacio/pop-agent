@@ -7,9 +7,10 @@
 
 ## Delivered deployment model
 
-The current server is an operator-managed Node/TypeScript checkout on Linux,
-normally supervised by `pop-agent-service` under systemd. The root
-`server-install.sh` is the GitHub fresh-host entry point. Public repositories can
+The current server is an operator-managed Node/TypeScript checkout on Ubuntu,
+normally supervised by `pop-agent-service` under systemd. The normal fresh-host
+entry point is a Git clone followed by `deploy/bootstrap-server.sh`. The root
+`server-install.sh` remains a fixed-ref acquisition alternative. Public repositories can
 be acquired through non-interactive public HTTPS Git. An already authenticated
 GitHub CLI session is optional for private or access-controlled repositories and
 forks; when available, the installer uses `gh repo clone` and `gh api`
@@ -28,15 +29,17 @@ integrity and exact commit before atomically activating a new checkout without
 network acquisition.
 
 Both acquisition paths hand explicit checkout/data/workspace/port values to the
-delivered non-root Ubuntu/Debian amd64/arm64 bootstrap. The one-command path
+delivered non-root Ubuntu amd64/arm64 bootstrap. The fresh-host path
 explicitly opts in to the same narrowly scoped apt build/download prerequisite
 allowlist needed for a fresh supported host. The bootstrap installs an exact
-repository-pinned Node/Go toolchain per user, then hands the checkout to the
+repository-pinned Node/Go/whisper.cpp toolchain per user, installs ffmpeg, then hands the checkout to the
 prepared-checkout installer. That installer validates the host, runs locked
 dependency installation and the full gate as the non-root checkout owner,
 generates/activates the production unit through narrowly scoped sudo, and
 verifies loopback health. This server installer does not provision Linux or
-configure DNS, TLS, firewall, reverse proxy, Tailscale, Caddy or an account.
+configure DNS, TLS, firewall, reverse proxy, or an account. A separate explicit
+helper may configure Tailscale Serve only after local health and an existing
+authenticated Tailscale session are verified.
 Documentation must not present those operator-owned steps or client/PLA
 installers as part of it.
 
@@ -167,9 +170,10 @@ worker update/activation is browser-owned and independent from SSE. Native
 launcher, CLI, managed runtime and PLA artifacts have exact immutable manifests
 and may be released only when all required platform packs exist and verify.
 
-A server code activation does not imply every open PWA has reloaded. The update
-prompt waits for the newest service worker installation before activating it;
-old clients remain subject to advertised wire minimum/event version.
+A server code activation does not imply every open PWA has reloaded. The PWA
+waits for the newest service worker installation, activates it automatically
+and reloads once after controller change; old clients remain subject to
+advertised wire minimum/event version.
 
 ## Backup and disaster recovery
 

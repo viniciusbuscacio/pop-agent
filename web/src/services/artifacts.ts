@@ -24,11 +24,11 @@ export const filesService = {
   },
 
   /** Uploads into a folder; empty dir = the root. The server mkdir -p's. */
-  upload(file: File, dir: string): Promise<FileNodeDTO> {
+  upload(file: File, dir: string, signal?: AbortSignal): Promise<FileNodeDTO> {
     const form = new FormData();
     form.append('file', file);
     if (dir.length > 0) form.append('dir', dir);
-    return apiUpload<FileNodeDTO>('/files', form);
+    return apiUpload<FileNodeDTO>('/files', form, signal);
   },
 
   /** Creates the folder and every missing parent on the way (mkdir -p). */
@@ -137,4 +137,3 @@ export const trashService = {
     return apiRequest<{ purged: number }>('/trash', { method: 'DELETE' });
   },
 };
-

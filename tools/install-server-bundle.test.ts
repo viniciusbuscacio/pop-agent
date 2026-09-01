@@ -23,6 +23,8 @@ interface Fixture {
   dataDir: string;
   workspace: string;
   handoffLog: string;
+  fakeBin: string;
+  osRelease: string;
 }
 
 const roots: string[] = [];
@@ -34,7 +36,13 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'pop-local-bundle-test-'));
   roots.push(root);
   const repository = join(root, 'source');
+  const fakeBin = join(root, 'fake-bin');
   mkdirSync(join(repository, 'deploy'), { recursive: true });
+  mkdirSync(fakeBin);
+  writeFileSync(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) printf "Linux\\n";; -m) printf "x86_64\\n";; *) exit 2;; esac\n');
+  chmodSync(join(fakeBin, 'uname'), 0o755);
+  const osRelease = join(root, 'os-release');
+  writeFileSync(osRelease, 'ID=ubuntu\n');
   writeFileSync(join(repository, 'VERSION'), '1.2.3\n');
   writeFileSync(join(repository, 'package.json'), '{"version":"1.2.3"}\n');
   writeFileSync(join(repository, 'package-lock.json'), '{"version":"1.2.3"}\n');
@@ -64,6 +72,8 @@ function fixture(): Fixture {
     dataDir: join(root, 'data'),
     workspace: join(root, 'workspace'),
     handoffLog: join(root, 'handoff.log'),
+    fakeBin,
+    osRelease,
   };
 }
 
@@ -80,7 +90,12 @@ function run(input: Fixture, overrides: Partial<{ bundle: string; sha256: string
     '--prepare-only',
   ], {
     encoding: 'utf8',
-    env: { ...process.env, BUNDLE_TEST_HANDOFF_LOG: input.handoffLog },
+    env: {
+      ...process.env,
+      PATH: `${input.fakeBin}:${process.env.PATH ?? ''}`,
+      BUNDLE_TEST_HANDOFF_LOG: input.handoffLog,
+      POP_AGENT_OS_RELEASE_FILE: input.osRelease,
+    },
   });
 }
 
@@ -97,6 +112,17 @@ describe('local server bundle acquisition', () => {
     expect(handoff).toContain(`<--data-dir> <${input.dataDir}>`);
     expect(handoff).toContain(`<--workspace> <${input.workspace}>`);
     expect(handoff).toContain('<--port> <9123> <--prepare-only>');
+  });
+
+  it('accepts the standard Ubuntu os-release symlink', () => {
+    const input = fixture();
+    const target = join(input.root, 'usr-lib-os-release');
+    writeFileSync(target, 'ID=ubuntu\n');
+    rmSync(input.osRelease);
+    symlinkSync(target, input.osRelease);
+
+    const result = run(input);
+    expect(result.status, result.stderr).toBe(0);
   });
 
   it('refuses corrupted bytes and a commit absent from the verified bundle', () => {

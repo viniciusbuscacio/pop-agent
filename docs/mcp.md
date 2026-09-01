@@ -43,7 +43,15 @@ boundary.
 HTTP credentials are attached through the transport's fetch seam on every request.
 stdio receives only the SDK's safe default environment plus the encrypted variables
 configured for that MCP server — never the whole Pop Agent process environment. Secret
-values are not returned by the API or persisted in capability metadata.
+values are not returned by the API or persisted in capability metadata. The API
+exposes only `hasCredential`, accepts an explicit clear operation, omits the
+server's internal working directory, and maps connection diagnostics to stable
+messages without returning tokens or host paths.
+
+Configuration is strict: stdio requires a command; HTTP transports require an
+HTTP(S) endpoint without embedded credentials; custom header names use the HTTP
+token grammar and reject hop-by-hop, cookie, host and proxy authorization
+headers. Environment names and values are bounded before encrypted storage.
 
 Everything returned by an MCP server remains external, untrusted content under the
 existing taint guard. Adopting the SDK changes protocol ownership, not the safety
@@ -57,4 +65,6 @@ Disposable contract servers verify:
 - legacy Streamable HTTP fallback through `initialize`;
 - modern stdio with fragmented stdout and noisy stderr;
 - missing executables as ordinary connection failures;
-- capability mapping, auth headers, child cleanup and environment isolation.
+- capability mapping, auth headers, child cleanup and environment isolation;
+- guarded CRUD/test/toggle routes, strict configuration, secret redaction and
+  sanitized connection failure responses.

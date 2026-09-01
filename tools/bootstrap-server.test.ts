@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -66,7 +66,7 @@ if [ "\${1:-}" = --version ]; then printf '10.9.0\\n'; exit 0; fi
 {
   printf 'args:'
   printf ' <%s>' "$@"
-  printf '\\nnode:%s\\ngo:%s\\n' "$(node --version)" "$(go version)"
+    printf '\\nnode:%s\\ngo:%s\\nwhisper:%s\\n' "$(node --version)" "$(go version)" "$(whisper-cli --version)"
 } >> "$BOOTSTRAP_TEST_NPM_LOG"
 `);
   if (options.escapingNodeSymlink === true) {
@@ -84,18 +84,26 @@ if [ "\${1:-}" = --version ]; then printf '10.9.0\\n'; exit 0; fi
 
   const nodeArchive = join(fixtures, 'node-v22.23.2-linux-x64.tar.xz');
   const goArchive = join(fixtures, 'go1.24.12.linux-amd64.tar.gz');
+  const whisperRoot = join(source, 'whisper-bin-ubuntu-x64');
+  mkdirSync(whisperRoot, { recursive: true });
+  executable(join(whisperRoot, 'whisper-cli'), '#!/bin/sh\ncase "${1:-}" in --help) exit 0;; --version) printf "whisper.cpp fixture\\n";; *) exit 0;; esac\n');
+  const whisperArchive = join(fixtures, 'whisper-bin-ubuntu-x64.tar.gz');
   archive(source, basename(nodeRoot), nodeArchive, 'xz');
   archive(source, basename(goRoot), goArchive, 'gzip');
+  archive(source, basename(whisperRoot), whisperArchive, 'gzip');
   const nodeHash = options.badNodeHash === true ? '0'.repeat(64) : sha256(nodeArchive);
   writeFileSync(join(deploy, 'server-toolchain-manifest.tsv'), [
     `node|22.23.2|linux|amd64|${basename(nodeArchive)}|${String(readFileSync(nodeArchive).byteLength)}|${nodeHash}|https://fixtures.invalid/${basename(nodeArchive)}`,
     `go|1.24.12|linux|amd64|${basename(goArchive)}|${String(readFileSync(goArchive).byteLength)}|${sha256(goArchive)}|https://fixtures.invalid/${basename(goArchive)}`,
+    `whisper|fixture|linux|amd64|${basename(whisperArchive)}|${String(readFileSync(whisperArchive).byteLength)}|${sha256(whisperArchive)}|https://fixtures.invalid/${basename(whisperArchive)}`,
     '',
   ].join('\n'));
 
   const curlLog = join(root, 'curl.log');
   const sudoLog = join(root, 'sudo.log');
   const npmLog = join(root, 'npm.log');
+  const osRelease = join(root, 'os-release');
+  writeFileSync(osRelease, 'ID=ubuntu\n');
   executable(join(fakeBin, 'curl'), `#!/bin/sh
 output=
 url=
@@ -113,6 +121,7 @@ cp "$BOOTSTRAP_TEST_FIXTURES/\${url##*/}" "$output"
   executable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "${FAKE_UNAME_S:-Linux}";; -m) printf "%s\\n" "${FAKE_UNAME_M:-x86_64}";; *) exit 2;; esac\n');
   executable(join(fakeBin, 'id'), '#!/bin/sh\n[ "$1" = -u ] || exit 2\nprintf "%s\\n" "${FAKE_UID:-1000}"\n');
   executable(join(fakeBin, 'sudo'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$BOOTSTRAP_TEST_SUDO_LOG"\nexit 0\n');
+  executable(join(fakeBin, 'ffmpeg'), '#!/bin/sh\nexit 0\n');
 
   return {
     root,
@@ -132,6 +141,7 @@ cp "$BOOTSTRAP_TEST_FIXTURES/\${url##*/}" "$output"
       BOOTSTRAP_TEST_CURL_LOG: curlLog,
       BOOTSTRAP_TEST_SUDO_LOG: sudoLog,
       BOOTSTRAP_TEST_NPM_LOG: npmLog,
+      POP_AGENT_OS_RELEASE_FILE: osRelease,
     },
   };
 }
@@ -151,21 +161,24 @@ describe('server toolchain bootstrap', () => {
     const fixture = createFixture();
     const first = run(fixture, ['--prepare-only']);
     expect(first.status, first.stderr).toBe(0);
-    expect(first.stdout).toContain('Managed toolchain ready: Node 22.23.2 and Go 1.24.12 (amd64).');
+    expect(first.stdout).toContain('Managed toolchain ready: Node 22.23.2, Go 1.24.12, and whisper.cpp fixture (amd64).');
     expect(first.stdout).toContain('systemd installation was not invoked');
-    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(2);
+    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(3);
 
     const nodeLink = join(fixture.toolchain, 'current/node');
     const goLink = join(fixture.toolchain, 'current/go');
+    const whisperLink = join(fixture.toolchain, 'current/whisper');
     expect(lstatSync(nodeLink).isSymbolicLink()).toBe(true);
     expect(lstatSync(goLink).isSymbolicLink()).toBe(true);
+    expect(lstatSync(whisperLink).isSymbolicLink()).toBe(true);
     expect(readlinkSync(nodeLink)).toMatch(/^\.\.\/runtimes\/node-22\.23\.2-amd64-/);
 
     const second = run(fixture, ['--prepare-only']);
     expect(second.status, second.stderr).toBe(0);
     expect(second.stdout).toContain('Preserving verified node 22.23.2 runtime.');
     expect(second.stdout).toContain('Preserving verified go 1.24.12 runtime.');
-    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(2);
+    expect(second.stdout).toContain('Preserving verified whisper fixture runtime.');
+    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(3);
 
     const firstNodeTarget = readlinkSync(nodeLink);
     const nodeRelease = join(nodeLink, '.pop-toolchain-release');
@@ -174,7 +187,7 @@ describe('server toolchain bootstrap', () => {
     expect(repaired.status, repaired.stderr).toBe(0);
     expect(repaired.stdout).toContain('Activated verified node 22.23.2');
     expect(readlinkSync(nodeLink)).not.toBe(firstNodeTarget);
-    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(2);
+    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(3);
   });
 
   it('hands off explicit paths and port with managed npm, Node, and Go first on PATH', () => {
@@ -186,6 +199,7 @@ describe('server toolchain bootstrap', () => {
     expect(log).toContain(`<${fixture.dataDir}> <--workspace> <${fixture.workspace}> <--port> <9123>`);
     expect(log).toContain('node:v22.23.2');
     expect(log).toContain('go:go version go1.24.12 linux/amd64');
+    expect(log).toContain('whisper:whisper.cpp fixture');
   });
 
   it('runs apt only behind the explicit opt-in and limits sudo to that phase in prepare-only mode', () => {
@@ -194,8 +208,20 @@ describe('server toolchain bootstrap', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(fixture.sudoLog, 'utf8').trim().split('\n')).toEqual([
       '-- env DEBIAN_FRONTEND=noninteractive apt-get update',
-      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3',
+      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg',
     ]);
+  });
+
+  it('accepts the standard Ubuntu os-release symlink', () => {
+    const fixture = createFixture();
+    const osRelease = fixture.env.POP_AGENT_OS_RELEASE_FILE as string;
+    const target = join(fixture.root, 'usr-lib-os-release');
+    writeFileSync(target, 'ID=ubuntu\n');
+    rmSync(osRelease);
+    symlinkSync(target, osRelease);
+
+    const result = run(fixture, ['--prepare-only']);
+    expect(result.status, result.stderr).toBe(0);
   });
 
   it('refuses root, unsupported platforms, and an archive with an escaping symlink', () => {
@@ -207,7 +233,7 @@ describe('server toolchain bootstrap', () => {
     const platformFixture = createFixture();
     const platformResult = run(platformFixture, ['--prepare-only'], { ...platformFixture.env, FAKE_UNAME_S: 'Darwin' });
     expect(platformResult.status).not.toBe(0);
-    expect(platformResult.stderr).toContain('only Ubuntu/Debian Linux is supported');
+    expect(platformResult.stderr).toContain('only Ubuntu Linux is supported');
 
     const archiveFixture = createFixture({ escapingNodeSymlink: true });
     const archiveResult = run(archiveFixture, ['--prepare-only']);
@@ -226,25 +252,28 @@ describe('server toolchain bootstrap', () => {
 });
 
 describe('server toolchain release metadata', () => {
-  it('pins one official Node and Go archive for each supported architecture', () => {
+  it('pins one official Node, Go, and whisper.cpp archive for each supported architecture', () => {
     const manifestPath = resolve(import.meta.dirname, '../deploy/server-toolchain-manifest.tsv');
     const rows = readFileSync(manifestPath, 'utf8').split('\n')
       .filter((line) => line !== '' && !line.startsWith('#'))
       .map((line) => line.split('|'));
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(6);
     expect(rows.map(([component, , os, arch]) => `${component}-${os}-${arch}`).sort()).toEqual([
       'go-linux-amd64', 'go-linux-arm64', 'node-linux-amd64', 'node-linux-arm64',
+      'whisper-linux-amd64', 'whisper-linux-arm64',
     ]);
     for (const [component, version, os, arch, file, size, hash, url, extra] of rows) {
       expect(extra).toBeUndefined();
-      expect(component).toMatch(/^(node|go)$/);
-      expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(component).toMatch(/^(node|go|whisper)$/);
+      expect(version).toMatch(component === 'whisper' ? /^b\d+$/ : /^\d+\.\d+\.\d+$/);
       expect(os).toBe('linux');
       expect(arch).toMatch(/^(amd64|arm64)$/);
       expect(file).toMatch(/^[A-Za-z0-9._-]+\.tar\.(xz|gz)$/);
       expect(Number(size)).toBeGreaterThan(1_000_000);
       expect(hash).toMatch(/^[a-f0-9]{64}$/);
-      expect(url).toBe(`${component === 'node' ? `https://nodejs.org/dist/v${version}` : 'https://go.dev/dl'}/${file}`);
+      if (component === 'node') expect(url).toBe(`https://nodejs.org/dist/v${version}/${file}`);
+      if (component === 'go') expect(url).toBe(`https://go.dev/dl/${file}`);
+      if (component === 'whisper') expect(url).toBe(`https://github.com/ggml-org/whisper.cpp/releases/download/${version}/${file}`);
     }
     const packageJson = JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8')) as { engines: { node: string } };
     const minimumNode = packageJson.engines.node.replace(/^>=/, '').split('.').map(Number);

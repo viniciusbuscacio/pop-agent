@@ -59,7 +59,7 @@ Every installation and update path must preserve these rules:
 9. **Data is separate from replaceable code.** Updates do not overwrite SQLite,
    Files, Notes, skills, secrets or pi sessions as ordinary application bytes.
 10. **Network activity is purposeful.** Update discovery occurs from the Updates
-    screen, an enabled device-local PWA check, normal CLI startup, or an explicit
+    screen, the fixed PWA update lifecycle, normal CLI startup, or an explicit
     operator action—not as telemetry.
 
 Remote client installation requires HTTPS. Plain HTTP is accepted only for a
@@ -71,7 +71,7 @@ script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | authenticated/private or public-HTTPS GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu/Debian systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go toolchain |
+| Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go/whisper.cpp toolchain |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -84,20 +84,24 @@ packed. Source support in Go is not sufficient to claim a released platform.
 
 ## Fresh server installation
 
-The default fresh-server path is the root `server-install.sh`. Public
-instructions retrieve the planned immutable v0.2.41 installer over HTTPS into a
-mode-0600 temporary file, execute it only after a complete successful download,
-select the same immutable source ref, and clean the file on every subshell exit:
+The default fresh-server path is an ordinary Git clone followed by the delivered
+bootstrap. Public instructions are inspectable before execution and use safe
+per-user defaults:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.41/server-install.sh && sh "$file" --ref v0.2.41)
+git clone https://github.com/viniciusbuscacio/pop-agent.git
+cd pop-agent
+./deploy/bootstrap-server.sh --install-apt-packages
 ```
 
-Options are passed to `sh` after the downloaded filename: for example, append
-`--prepare-only` or `--no-install-apt-packages`, or deliberately replace the ref
-with a reviewed full commit. The owner-only temporary file, traps, complete
-successful download, and separate `sh "$file" [options]` execution are
-mandatory. A producer-to-shell pipeline is not an installation command.
+`--data-dir`, `--workspace`, `--port` and `--prepare-only` provide explicit
+overrides. A producer-to-shell pipeline is not an installation command.
+
+The root `server-install.sh` remains the fixed-ref GitHub acquisition path for
+operators who need branch/tag/commit resolution or authenticated private/fork
+access. When distributed as a remote file, it must still be downloaded fully
+into an owner-only temporary file, inspected if desired, and invoked separately;
+it must never be piped from a producer into a shell.
 
 With no arguments the script targets `viniciusbuscacio/pop-agent` at `main`,
 installs the checkout at `$HOME/pop-agent`, keeps durable data at
@@ -159,31 +163,28 @@ destinations. This alternative acquisition layer performs no HTTP request and
 has no remote manifest behavior; local file transfer or bind mounting is
 operator-owned.
 
-Both acquisition paths hand explicit checkout/data/workspace/port values and
+All acquisition paths hand checkout/data/workspace/port values and
 the selected apt/prepare options to the acquired checkout's delivered host
 bootstrap. That bootstrap starts from an **existing Pop Agent checkout** on
-Ubuntu or Debian Linux amd64/arm64:
+Ubuntu Linux amd64/arm64:
 
 ```text
-deploy/bootstrap-server.sh \
-  --data-dir /absolute/data/path \
-  --workspace /absolute/workspace/path \
-  --port 8787
+deploy/bootstrap-server.sh --install-apt-packages
 ```
 
 It refuses root and unsupported platforms. An explicit
 `--install-apt-packages` opt-in permits only apt update/install of
-`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`, and
-`python3` for native npm builds through sudo. Without that flag the bootstrap
-only validates host commands. It
-never pipes downloaded content to a shell. Exact Node and Go archives, URLs,
+`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`,
+`python3`, and `ffmpeg` through sudo. Without that flag the bootstrap
+only validates host commands. It never pipes downloaded content to a shell.
+Exact Node, Go and whisper.cpp archives, URLs,
 sizes and official SHA-256 values are repository-pinned for both architectures;
 archives are downloaded to a Pop-owned per-user toolchain, checked before
 extraction, screened for unsafe roots, paths, link targets and special entries,
 smoked, staged, then activated through an atomic per-runtime symlink. A rerun
-preserves a matching verified runtime. The bootstrap puts its managed Node/npm
-and Go first on `PATH` for the handoff. `--prepare-only` stops after this host
-preparation without touching systemd.
+preserves a matching verified runtime. The bootstrap puts its managed Node/npm,
+Go and `whisper-cli` first on `PATH` for the handoff. `--prepare-only` stops
+after this host preparation without touching systemd.
 
 The normal handoff is the existing prepared-checkout installer, with all paths
 and the port passed explicitly:
@@ -203,9 +204,9 @@ paths outside the clean checkout and checkout ownership. It runs `npm ci` and
 `server/dist/main.js`, creates owner-controlled data/workspace roots, then uses
 sudo only for the explicit unit-file install, daemon reload, enable and restart
 commands. It installs an idempotent production unit with loopback binding,
-explicit data/workspace paths, the invoking non-root user, the selected Node
-and Go directories on the service `PATH`, offline pi catalog bookkeeping and
-bounded restart. The owner-only backup
+explicit data/workspace paths, the invoking non-root user, the selected Node,
+Go and whisper.cpp directories on the service `PATH`, offline pi catalog
+bookkeeping and bounded restart. The owner-only backup
 sibling used by the server is prepared with the data root, then the installer
 performs a bounded `/healthz` check and confirms that systemd still reports the
 unit active.
@@ -219,8 +220,13 @@ The operator must maintain the host, any required private or access-controlled
 source credentials, and the apt security channel; configure a supported HTTPS
 exposure shape; complete first-run account setup; and verify public health. The
 host bootstrap itself does not install or own Linux, repository/source acquisition,
-DNS, TLS, a firewall, Tailscale, Caddy, FFmpeg or account setup, and it does not
+DNS, TLS, a firewall, Caddy or account setup, and it does not
 modify system-wide Node or Go.
+
+`deploy/configure-tailscale.sh` is a separate explicit exposure helper. It may
+run only after the loopback health check passes and the operator has independently
+installed and authenticated Tailscale. It configures Tailscale Serve for the
+loopback origin, never Funnel, installation, login, or tailnet policy.
 
 ## Installation guide in the PWA
 
@@ -418,13 +424,11 @@ PWA updates are browser/service-worker updates, distinct from server, CLI, PLA
 and pi updates.
 
 - `registerSW` runs exactly once from `web/src/services/pwa-update.ts`.
-- Vite uses prompt mode; a found worker raises an explicit reload banner rather
-  than silently swapping the UI during use.
-- Device-local settings control automatic checks and frequency. The current
-  development default is enabled every 10 minutes; the choice lives only in
-  `localStorage` and never becomes an account setting.
-- While enabled, checks run on the interval and when the document becomes
-  visible. Manual **Check for updates** remains available when disabled.
+- Registration is prompt-capable internally, but a found worker activates
+  automatically after its installation completes.
+- Checks run every 10 minutes and when the document becomes visible. There is no
+  device toggle or frequency setting; manual **Check for updates** remains
+  available.
 - Applying an update waits for the newest installing/waiting worker, requests
   activation, and reloads once after `controllerchange`; fallback begins only
   after installation can no longer complete normally.
@@ -452,7 +456,7 @@ running process until activation. Safe activation requires:
 
 1. a committed candidate at `HEAD`;
 2. a clean worktree;
-3. for automatic activation, a gate receipt for the exact Git tree, current Node
+3. a gate receipt for the exact Git tree, current Node
    version and a completion no older than 24 hours;
 4. passive waiting for active runs/tasks before admission closes;
 5. a final identity/cleanliness/gate check after the idle wait;
@@ -470,22 +474,14 @@ must fetch/choose a commit, install dependencies, run the full gate and only
 then restart. The update screen may copy this command but does not imply that
 arbitrary dirty work can be safely activated.
 
-## Automatic server activation
+## Server activation policy during beta
 
-Automatic activation is opt-in through durable server settings. It never means
-a background `git pull`: only a checkout already prepared and proven by the
-gate may be scheduled. The automatic coordinator:
-
-- observes a prepared pending commit;
-- waits for the configured idle interval;
-- asks the same deployment coordinator to activate it;
-- cancels its own waiting request when the setting is disabled or the candidate
-  becomes invalid;
-- cannot bypass clean-tree, exact-tree, idle, external-supervisor, health or
-  rollback requirements.
-
-Manual and automatic requests share one state machine. A service restart cancels
-a process-local idle waiter; it does not pretend the wait survived.
+Server activation is explicit. Settings may inspect a clean prepared commit and
+schedule activation after confirmation, but it does not fetch source or activate
+in the background. Automatic server activation remains out of the beta until a
+pre-update backup plus rollback contract is accepted and tested. A service
+restart cancels a process-local idle waiter; it does not pretend the wait
+survived.
 
 ## pi runtime update channel
 
@@ -608,7 +604,7 @@ gate and packaging process must cover:
 
 - prompt available/installed/unavailable/dismissed states;
 - single service-worker registration and one-reload activation;
-- enabled/disabled interval behavior and denied browser storage;
+- fixed interval/resume behavior and automatic-activation recovery;
 - Windows tray replacement while running and rollback script shape;
 - macOS app/LaunchAgent generation and missing-artifact refusal;
 - no password/token text in installers;

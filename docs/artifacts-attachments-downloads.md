@@ -15,7 +15,7 @@
 ## What exists before this (verified 2026-07-31)
 
 - **Attachments** ride as data URIs on the message row (`attachments_json`,
-  16 MB cap), and the pi bridge also writes each into
+  25 MB per-item / 100 MB combined cap), and the pi bridge also writes each into
   `POP_AGENT_WORKSPACE/attachments/<chatId>/` so the agent's tools can open it.
 - **No artifact model**: a file the agent writes lives in the workspace with no
   record, no download link and no UI. There is no signed-URL mechanism; the one

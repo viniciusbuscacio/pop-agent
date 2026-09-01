@@ -208,6 +208,16 @@ describe('apiRequest', () => {
 });
 
 describe('binary and multipart requests', () => {
+  it('preserves upload cancellation instead of reporting the server unreachable', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', () => Promise.reject(new DOMException('cancelled', 'AbortError')));
+    controller.abort();
+
+    await expect(apiUpload('/files', new FormData(), controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+
   it.each([
     ['download', () => apiDownload('/backups/test.tar.gz')],
     ['upload', () => apiUpload('/files', new FormData())],

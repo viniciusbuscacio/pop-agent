@@ -10,12 +10,19 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const { readMemory, writeMemory, restoreMemory, listPasskeys, removePasskey } = vi.hoisted(() => ({
+const { readMemory, writeMemory, restoreMemory, listPasskeys, removePasskey, signOutOthers } = vi.hoisted(() => ({
   readMemory: vi.fn(),
   writeMemory: vi.fn(),
   restoreMemory: vi.fn(),
   listPasskeys: vi.fn(),
   removePasskey: vi.fn(),
+  signOutOthers: vi.fn(),
+}));
+
+vi.mock('../services/auth', () => ({
+  authService: {
+    signOutOthers: () => signOutOthers() as Promise<unknown>,
+  },
 }));
 
 vi.mock('../services/settings', () => ({
@@ -44,6 +51,7 @@ beforeEach(() => {
     credentials: [{ id: 'credential-1', label: 'MacBook Touch ID' }],
   });
   removePasskey.mockReset().mockResolvedValue(undefined);
+  signOutOthers.mockReset().mockResolvedValue({ token: 'replacement-token' });
   vi.spyOn(window, 'confirm').mockReturnValue(false);
 });
 
@@ -85,5 +93,18 @@ describe('Settings destructive and reversible controls', () => {
     vi.mocked(window.confirm).mockReturnValue(true);
     await user.click(remove);
     await waitFor(() => expect(removePasskey).toHaveBeenCalledWith('credential-1'));
+  });
+
+  it('confirms before invalidating every other session', async () => {
+    window.history.replaceState({}, '', '/settings?section=security');
+    const user = userEvent.setup();
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+
+    await user.click(await screen.findByTestId('settings-sign-out-others'));
+    expect(signOutOthers).not.toHaveBeenCalled();
+
+    vi.mocked(window.confirm).mockReturnValue(true);
+    await user.click(screen.getByTestId('settings-sign-out-others'));
+    await waitFor(() => expect(signOutOthers).toHaveBeenCalledOnce());
   });
 });

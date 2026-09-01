@@ -6,8 +6,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 MANIFEST=$SCRIPT_DIR/server-toolchain-manifest.tsv
 CHECKOUT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)
 TOOLCHAIN_DIR=${XDG_DATA_HOME:-"$HOME/.local/share"}/pop-agent/server-toolchain
-DATA_DIR=
-WORKSPACE=
+DATA_DIR=$HOME/.pop-agent
+WORKSPACE=$HOME/pop-agent-workspace
 PORT=8787
 INSTALL_APT=0
 PREPARE_ONLY=0
@@ -31,23 +31,23 @@ trap cleanup EXIT HUP INT TERM
 
 usage() {
   cat <<'EOF'
-Prepare a supported Linux host for an existing Pop Agent checkout.
+Prepare an Ubuntu host for an existing Pop Agent checkout.
 
 Usage:
-  deploy/bootstrap-server.sh --data-dir /absolute/path --workspace /absolute/path [options]
+  deploy/bootstrap-server.sh [options]
 
 Options:
   --checkout PATH              Existing Pop Agent checkout (default: script's repository)
   --toolchain-dir PATH         Pop-owned per-user runtime directory
-  --data-dir PATH              Required server data directory
-  --workspace PATH             Required server workspace directory
+  --data-dir PATH              Server data directory (default: $HOME/.pop-agent)
+  --workspace PATH             Server workspace directory (default: $HOME/pop-agent-workspace)
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Explicitly allow the narrow apt prerequisite phase
   --prepare-only               Prepare and verify the toolchain without invoking systemd installation
   -h, --help                   Show this help
 
 This is not a source, DNS, TLS, proxy, Tailscale, Caddy, or account installer.
-It never pipes a remote script to a shell and never installs Node or Go system-wide.
+It never pipes a remote script to a shell and never installs Node, Go, or whisper.cpp system-wide.
 EOF
 }
 
@@ -112,8 +112,6 @@ safe_absolute_path() {
   [ "$value" != / ] || die "$label must not be the filesystem root"
 }
 
-[ -n "$DATA_DIR" ] || die "--data-dir is required"
-[ -n "$WORKSPACE" ] || die "--workspace is required"
 safe_absolute_path "checkout" "$CHECKOUT"
 safe_absolute_path "toolchain directory" "$TOOLCHAIN_DIR"
 safe_absolute_path "data directory" "$DATA_DIR"
@@ -125,14 +123,15 @@ esac
   || die "port must be an integer from 1 to 65535: $PORT"
 
 [ "$(id -u)" -ne 0 ] || die "refusing to run as root; run as the non-root checkout owner"
-[ "$(uname -s)" = Linux ] || die "unsupported platform: only Ubuntu/Debian Linux is supported"
+[ "$(uname -s)" = Linux ] || die "unsupported platform: only Ubuntu Linux is supported"
 case $(uname -m) in
   x86_64|amd64) ARCH=amd64 ;;
   aarch64|arm64) ARCH=arm64 ;;
   *) die "unsupported architecture: $(uname -m); supported architectures are amd64 and arm64" ;;
 esac
 
-[ -r /etc/os-release ] || die "cannot identify the Linux distribution from /etc/os-release"
+OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}
+[ -f "$OS_RELEASE_FILE" ] && [ -r "$OS_RELEASE_FILE" ] || die "cannot identify the Linux distribution from $OS_RELEASE_FILE"
 DIST_ID=
 # ID in os-release is specified as shell-compatible data. Read only this field and
 # remove its optional quotes instead of sourcing the whole host-owned file.
@@ -147,11 +146,8 @@ while IFS= read -r os_line; do
       break
       ;;
   esac
-done < /etc/os-release
-case $DIST_ID in
-  ubuntu|debian) ;;
-  *) die "unsupported Linux distribution '$DIST_ID'; only Ubuntu and Debian are supported" ;;
-esac
+done < "$OS_RELEASE_FILE"
+[ "$DIST_ID" = ubuntu ] || die "unsupported Linux distribution '$DIST_ID'; only Ubuntu is supported"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1 (rerun with --install-apt-packages where applicable)"
@@ -162,10 +158,10 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   require_command apt-get
   say "Installing the explicitly approved apt prerequisites..."
   sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
-  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3
+  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg
 fi
 
-for required in curl git tar xz sha256sum find readlink mktemp mv; do
+for required in curl git tar xz sha256sum find readlink mktemp mv ffmpeg; do
   require_command "$required"
 done
 if [ "$PREPARE_ONLY" -eq 0 ]; then
@@ -188,8 +184,14 @@ GO_ARCHIVE=
 GO_SIZE=
 GO_SHA=
 GO_URL=
+WHISPER_VERSION=
+WHISPER_ARCHIVE=
+WHISPER_SIZE=
+WHISPER_SHA=
+WHISPER_URL=
 NODE_MATCHES=0
 GO_MATCHES=0
+WHISPER_MATCHES=0
 while IFS='|' read -r component version os architecture archive size sha url extra; do
   case $component in ''|'#'*) continue ;; esac
   [ -z "${extra:-}" ] || die "invalid extra field in toolchain manifest"
@@ -203,11 +205,16 @@ while IFS='|' read -r component version os architecture archive size sha url ext
         GO_MATCHES=$((GO_MATCHES + 1))
         GO_VERSION=$version GO_ARCHIVE=$archive GO_SIZE=$size GO_SHA=$sha GO_URL=$url
         ;;
+      whisper)
+        WHISPER_MATCHES=$((WHISPER_MATCHES + 1))
+        WHISPER_VERSION=$version WHISPER_ARCHIVE=$archive WHISPER_SIZE=$size WHISPER_SHA=$sha WHISPER_URL=$url
+        ;;
     esac
   fi
 done < "$MANIFEST"
 [ "$NODE_MATCHES" -eq 1 ] || die "manifest must contain exactly one Node entry for linux-$ARCH"
 [ "$GO_MATCHES" -eq 1 ] || die "manifest must contain exactly one Go entry for linux-$ARCH"
+[ "$WHISPER_MATCHES" -eq 1 ] || die "manifest must contain exactly one whisper.cpp entry for linux-$ARCH"
 
 mkdir -p -- "$TOOLCHAIN_DIR" "$TOOLCHAIN_DIR/downloads" "$TOOLCHAIN_DIR/runtimes" "$TOOLCHAIN_DIR/current"
 chmod 700 "$TOOLCHAIN_DIR" "$TOOLCHAIN_DIR/downloads" "$TOOLCHAIN_DIR/runtimes" "$TOOLCHAIN_DIR/current"
@@ -301,6 +308,10 @@ runtime_is_verified() {
       go_output=$("$runtime/bin/go" version 2>/dev/null) || return 1
       case $go_output in "go version go$version linux/$ARCH") ;; *) return 1 ;; esac
       ;;
+    whisper)
+      [ -x "$runtime/whisper-cli" ] || return 1
+      "$runtime/whisper-cli" --help >/dev/null 2>&1 || return 1
+      ;;
     *) return 1 ;;
   esac
 }
@@ -390,14 +401,18 @@ install_runtime node "$NODE_VERSION" "$NODE_ARCHIVE" "$NODE_SIZE" "$NODE_SHA" "$
 ACTIVE_NODE=$ACTIVE_RUNTIME
 install_runtime go "$GO_VERSION" "$GO_ARCHIVE" "$GO_SIZE" "$GO_SHA" "$GO_URL" gzip go
 ACTIVE_GO=$ACTIVE_RUNTIME
+WHISPER_PLATFORM_ARCH=$( [ "$ARCH" = amd64 ] && printf x64 || printf arm64 )
+install_runtime whisper "$WHISPER_VERSION" "$WHISPER_ARCHIVE" "$WHISPER_SIZE" "$WHISPER_SHA" "$WHISPER_URL" gzip "whisper-bin-ubuntu-$WHISPER_PLATFORM_ARCH"
+ACTIVE_WHISPER=$ACTIVE_RUNTIME
 
-PATH=$ACTIVE_NODE/bin:$ACTIVE_GO/bin:$PATH
+PATH=$ACTIVE_NODE/bin:$ACTIVE_GO/bin:$ACTIVE_WHISPER:$PATH
 export PATH
 [ "$(command -v node)" = "$ACTIVE_NODE/bin/node" ] || die "managed Node is not first on PATH"
 [ "$(command -v npm)" = "$ACTIVE_NODE/bin/npm" ] || die "managed npm is not first on PATH"
 [ "$(command -v go)" = "$ACTIVE_GO/bin/go" ] || die "managed Go is not first on PATH"
+[ "$(command -v whisper-cli)" = "$ACTIVE_WHISPER/whisper-cli" ] || die "managed whisper-cli is not first on PATH"
 
-say "Managed toolchain ready: Node $NODE_VERSION and Go $GO_VERSION ($ARCH)."
+say "Managed toolchain ready: Node $NODE_VERSION, Go $GO_VERSION, and whisper.cpp $WHISPER_VERSION ($ARCH)."
 if [ "$PREPARE_ONLY" -eq 1 ]; then
   say "Preparation complete; systemd installation was not invoked (--prepare-only)."
   exit 0

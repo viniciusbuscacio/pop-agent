@@ -243,9 +243,9 @@ verified SHA-256 local Git bundle remains the credential-free, no-network
 acquisition alternative.
 
 The network acquisition entry point stays non-root and supports only the same
-Ubuntu/Debian amd64/arm64 boundary as the downstream bootstrap. Its explicit
-fresh-host invocation opts in only to the bootstrap's fixed apt allowlist. Node
-and Go remain pinned by repository size/hash metadata and smoke verification;
+Ubuntu amd64/arm64 boundary as the downstream bootstrap. Its explicit
+fresh-host invocation opts in only to the bootstrap's fixed apt allowlist. Node,
+Go and whisper.cpp remain pinned by repository size/hash metadata and smoke verification;
 the prepared-checkout installer must still run the complete repository gate
 before narrowly scoped systemd activation.
 

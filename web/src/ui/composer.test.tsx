@@ -264,20 +264,21 @@ describe('pending message composition', () => {
     );
   });
 
-  it('refuses a selection over the 20 MB aggregate attachment limit before sending', async () => {
+  it('refuses a selection over the 100 MB aggregate attachment limit before sending', async () => {
     renderComposer();
-    const first = new File(['a'], 'first.bin', { type: 'application/octet-stream' });
-    const second = new File(['b'], 'second.bin', { type: 'application/octet-stream' });
-    Object.defineProperty(first, 'size', { value: 12 * 1024 * 1024 });
-    Object.defineProperty(second, 'size', { value: 12 * 1024 * 1024 });
-
-    fireEvent.change(screen.getByTestId('composer-file-input'), {
-      target: { files: [first, second] },
+    const files = Array.from({ length: 5 }, (_, index) => {
+      const file = new File(['a'], `file-${String(index)}.bin`, { type: 'application/octet-stream' });
+      Object.defineProperty(file, 'size', { value: 21 * 1024 * 1024 });
+      return file;
     });
 
-    expect(await screen.findByText('Attachments must be 20 MB or less in total.')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('first.bin')).toBeTruthy());
-    expect(screen.queryByText('second.bin')).toBeNull();
+    fireEvent.change(screen.getByTestId('composer-file-input'), {
+      target: { files },
+    });
+
+    expect(await screen.findByText('Attachments must be 100 MB or less in total.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('file-0.bin')).toBeTruthy());
+    expect(screen.queryByText('file-4.bin')).toBeNull();
   });
 
   it('starts only one audio transcription from a multi-file selection', async () => {

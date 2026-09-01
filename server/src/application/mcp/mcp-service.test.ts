@@ -41,6 +41,7 @@ let repo: MemoryMcpRepo;
 let connection: McpConnection;
 let connect: ReturnType<typeof vi.fn<McpClientFactory['connect']>>;
 let service: McpService;
+let secrets: MemorySecrets;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'pop-mcp-test-'));
@@ -55,9 +56,10 @@ beforeEach(() => {
     close: vi.fn(() => Promise.resolve()),
   };
   connect = vi.fn(() => Promise.resolve(connection));
+  secrets = new MemorySecrets();
   service = new McpService({
     repo,
-    secrets: new MemorySecrets(),
+    secrets,
     clients: { connect },
     dataDir: root,
   });
@@ -108,5 +110,10 @@ describe('McpService', () => {
 
     await expect(service.test('mcp-test')).rejects.toThrow('spawn ENOENT');
     expect(repo.server).toMatchObject({ status: 'error', lastError: 'spawn ENOENT' });
+  });
+
+  it('does not create orphaned secrets while updating a missing server', () => {
+    expect(service.update('missing', { env: { MCP_SECRET: 'top-secret' } })).toBeUndefined();
+    expect(secrets.get(McpService.secretKey('missing'))).toBeUndefined();
   });
 });

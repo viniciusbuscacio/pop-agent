@@ -15,7 +15,7 @@ import { apiError } from './errors.js';
 import { badBody, readJson, schemaError } from './body.js';
 
 /** An upload is capped so one request cannot fill the disk (docs/specs/Spec-Pop-General.md §14). */
-const MAX_FILE_MB = 25;
+const MAX_FILE_MB = 100;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 /**

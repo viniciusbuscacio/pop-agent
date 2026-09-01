@@ -86,9 +86,7 @@ export class DeploymentCoordinator {
     const status = this.status();
     if (!status.pending) return { ok: false, reason: 'already_current' };
     if (!status.clean) return { ok: false, reason: 'dirty_tree' };
-    if (requestedBy === 'automatic' && !status.prepared) {
-      return { ok: false, reason: 'not_prepared' };
-    }
+    if (!status.prepared) return { ok: false, reason: 'not_prepared' };
     if (
       this.scheduled !== undefined ||
       status.phase === 'waiting-idle' ||

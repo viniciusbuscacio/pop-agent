@@ -221,8 +221,6 @@ async function run(base: string): Promise<void> {
     voiceCleanupModel: '',
     autoSkillsEnabled: false,
     piUpdatePolicy: 'recommended',
-    autoActivatePreparedUpdates: false,
-    autoRestartIdleMinutes: 10,
   };
   const written = await call(base, '/v1/settings', {
     method: 'PUT',

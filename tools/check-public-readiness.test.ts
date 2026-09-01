@@ -13,7 +13,7 @@ function fixture(): string {
   for (const path of [
     'VERSION', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md', 'server-install.sh', 'SECURITY.md',
     'SUPPORT.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'docs/RELEASING.md',
-    'deploy/server-toolchain-manifest.tsv', 'deploy/README.md',
+    'deploy/server-toolchain-manifest.tsv', 'deploy/README.md', 'deploy/configure-tailscale.sh',
     'docs/specs/Spec-Pop-Installation.md',
     '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/ISSUE_TEMPLATE/config.yml',
@@ -53,11 +53,15 @@ describe('public repository readiness', () => {
     ]));
   });
 
-  it('rejects a mutable installer and unpinned GitHub Action', () => {
+  it('rejects missing guided clone installation and an unpinned GitHub Action', () => {
     const root = fixture();
+    const readme = readFileSync(join(root, 'README.md'), 'utf8').replaceAll(
+      'git clone https://github.com/viniciusbuscacio/pop-agent.git',
+      'git clone https://example.invalid/not-pop.git',
+    );
     writeFileSync(
       join(root, 'README.md'),
-      `${readFileSync(join(root, 'README.md'), 'utf8').replace('version=v0.2.41', 'version=main')}\n\`\`\`sh\ncurl \\\n  https://example.invalid/install |\n  sh\n\`\`\`\n`,
+      `${readme}\n\`\`\`sh\ncurl \\\n  https://example.invalid/install |\n  sh\n\`\`\`\n`,
     );
     writeFileSync(
       join(root, '.github/workflows/ci.yml'),
@@ -67,7 +71,7 @@ describe('public repository readiness', () => {
       ),
     );
     expect(publicReadinessErrors(root)).toEqual(expect.arrayContaining([
-      'README installer is not pinned to v0.2.41',
+      'README lacks the public Git clone command',
       'README.md contains a producer-to-shell installer',
       expect.stringContaining('CI action is not pinned to a full commit'),
     ]));

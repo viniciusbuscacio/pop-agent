@@ -29,8 +29,10 @@ const settingsSchema = z
     // Optional only on input so a stale PWA can still save another setting
     // after the server gains this field. GET always returns the complete DTO.
     piUpdatePolicy: z.enum(['keep-current', 'recommended', 'latest']).optional(),
-    autoActivatePreparedUpdates: z.boolean(),
-    autoRestartIdleMinutes: z.number().int().min(1).max(1440),
+    // Accepted and ignored for one compatibility window so an already-open
+    // pre-beta PWA can save another setting after these unsafe controls vanish.
+    autoActivatePreparedUpdates: z.boolean().optional(),
+    autoRestartIdleMinutes: z.number().int().min(1).max(1440).optional(),
   })
   .strict();
 
@@ -54,7 +56,14 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
     if (!parsed.success) return schemaError(c, parsed.error);
 
     const next: AppSettings = {
-      ...parsed.data,
+      language: parsed.data.language,
+      defaultProvider: parsed.data.defaultProvider,
+      defaultModel: parsed.data.defaultModel,
+      customInstructions: parsed.data.customInstructions,
+      voiceModel: parsed.data.voiceModel,
+      voiceCleanup: parsed.data.voiceCleanup,
+      voiceCleanupModel: parsed.data.voiceCleanupModel,
+      autoSkillsEnabled: parsed.data.autoSkillsEnabled,
       piUpdatePolicy: parsed.data.piUpdatePolicy ?? deps.settings.read().piUpdatePolicy,
     };
     return c.json(toDto(deps.settings.write(next)));
@@ -70,8 +79,13 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
     // Zod represents optional properties as `T | undefined`; JSON cannot carry
     // undefined, so normalize that inference before the exact optional app type.
     const patch = Object.fromEntries(
-      Object.entries(parsed.data).filter((entry) => entry[1] !== undefined),
+      Object.entries(parsed.data).filter(
+        ([key, value]) => value !== undefined
+          && key !== 'autoActivatePreparedUpdates'
+          && key !== 'autoRestartIdleMinutes',
+      ),
     ) as Partial<AppSettings>;
+    if (Object.keys(patch).length === 0) return c.json(toDto(deps.settings.read()));
     return c.json(toDto(deps.settings.update(patch)));
   });
 
@@ -92,7 +106,5 @@ function toDto(settings: AppSettings): SettingsDTO {
     voiceCleanupModel: settings.voiceCleanupModel,
     autoSkillsEnabled: settings.autoSkillsEnabled,
     piUpdatePolicy: settings.piUpdatePolicy,
-    autoActivatePreparedUpdates: settings.autoActivatePreparedUpdates,
-    autoRestartIdleMinutes: settings.autoRestartIdleMinutes,
   };
 }

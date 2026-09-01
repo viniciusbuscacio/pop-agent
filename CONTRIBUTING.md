@@ -10,7 +10,9 @@ By participating, you agree to follow the
 ## Before you start
 
 - Search existing issues and pull requests before proposing duplicate work.
-- Use an issue for a reproducible bug or a focused feature proposal.
+- Use an issue for a reproducible bug. Use GitHub Discussions for questions,
+  early ideas, and proposals that still need scope; open a focused feature
+  issue once the expected behavior is concrete.
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md), not
   in an issue or discussion.
 - Keep a change narrow. Discuss broad product, protocol, security, or

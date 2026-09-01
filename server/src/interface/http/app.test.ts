@@ -15,7 +15,7 @@ describe('app', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'content-length': String(37 * 1024 * 1024),
+        'content-length': String(141 * 1024 * 1024),
       },
       body: '{}',
     });

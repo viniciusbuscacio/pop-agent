@@ -37,8 +37,6 @@ const DEFAULT_DOC = {
   voiceCleanupModel: '',
   autoSkillsEnabled: true,
   piUpdatePolicy: 'recommended',
-  autoActivatePreparedUpdates: false,
-  autoRestartIdleMinutes: 10,
 };
 
 describe('GET /v1/settings', () => {
@@ -173,24 +171,34 @@ describe('PUT /v1/settings', () => {
 
 describe('PATCH /v1/settings', () => {
   it('merges independent fields without restoring a stale full document', async () => {
-    const [instructions, automaticUpdates] = await Promise.all([
+    const [instructions, voiceCleanup] = await Promise.all([
       authed('/v1/settings', {
         method: 'PATCH',
         body: JSON.stringify({ customInstructions: 'Keep answers concise.' }),
       }),
       authed('/v1/settings', {
         method: 'PATCH',
-        body: JSON.stringify({ autoActivatePreparedUpdates: true }),
+        body: JSON.stringify({ voiceCleanup: true }),
       }),
     ]);
 
     expect(instructions.status).toBe(200);
-    expect(automaticUpdates.status).toBe(200);
+    expect(voiceCleanup.status).toBe(200);
     expect(await (await authed('/v1/settings')).json()).toEqual({
       ...DEFAULT_DOC,
       customInstructions: 'Keep answers concise.',
-      autoActivatePreparedUpdates: true,
+      voiceCleanup: true,
     });
+  });
+
+  it('ignores valid retired automatic activation fields from a stale PWA', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ autoActivatePreparedUpdates: true, autoRestartIdleMinutes: 5 }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(DEFAULT_DOC);
   });
 
   it('rejects empty, unknown, or invalid patches', async () => {

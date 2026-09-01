@@ -4,3 +4,5 @@ node|22.23.2|linux|amd64|node-v22.23.2-linux-x64.tar.xz|31058332|d60acfe00a29322
 node|22.23.2|linux|arm64|node-v22.23.2-linux-arm64.tar.xz|30246708|fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8|https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-arm64.tar.xz
 go|1.27.0|linux|amd64|go1.27.0.linux-amd64.tar.gz|70523269|675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685|https://go.dev/dl/go1.27.0.linux-amd64.tar.gz
 go|1.27.0|linux|arm64|go1.27.0.linux-arm64.tar.gz|66988980|51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda|https://go.dev/dl/go1.27.0.linux-arm64.tar.gz
+whisper|b4938|linux|amd64|whisper-bin-ubuntu-x64.tar.gz|9503425|f4cfc1f969a13805908fb72043ce7cc896eb42e0b8afbe841dc8e7298923b061|https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-ubuntu-x64.tar.gz
+whisper|b4938|linux|arm64|whisper-bin-ubuntu-arm64.tar.gz|4572294|94a33318650c57cc3d9a91439e0e3f0b94ba96bacd34203a06db395cf9204e40|https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-ubuntu-arm64.tar.gz

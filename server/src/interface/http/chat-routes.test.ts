@@ -12,6 +12,7 @@ import {
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
+import { attachmentSizeViolation, base64DecodedByteLength } from './chat-routes.js';
 
 const PASSWORD = 'correct horse battery';
 
@@ -813,17 +814,44 @@ describe('sending a message', () => {
     ]);
   });
 
-  it('rejects attachments over the aggregate limit before the global body ceiling', { timeout: 15_000 }, async () => {
+  it('rejects an attachment over the per-file limit before the global body ceiling', { timeout: 15_000 }, async () => {
     const chat = await newChat();
-    const twelveMiB = Buffer.alloc(12 * 1024 * 1024).toString('base64');
+    const twentySixMiB = Buffer.alloc(26 * 1024 * 1024).toString('base64');
     const res = await api(`/v1/chats/${chat.id}/messages`, {
       method: 'POST',
       body: {
-        text: 'two individually valid files',
+        text: 'one oversized file',
         attachments: [
-          { name: 'first.bin', type: 'application/octet-stream', dataUri: `data:application/octet-stream;base64,${twelveMiB}` },
-          { name: 'second.bin', type: 'application/octet-stream', dataUri: `data:application/octet-stream;base64,${twelveMiB}` },
+          { name: 'large.bin', type: 'application/octet-stream', dataUri: `data:application/octet-stream;base64,${twentySixMiB}` },
         ],
+      },
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('invalid_field');
+  });
+
+  it('calculates decoded and aggregate attachment limits without allocating a 100 MiB request', () => {
+    expect(base64DecodedByteLength(8, 1)).toBe(5);
+    expect(attachmentSizeViolation([25 * 1024 * 1024])).toBeUndefined();
+    expect(attachmentSizeViolation([25 * 1024 * 1024 + 1])).toBe('per-file');
+    expect(attachmentSizeViolation(Array.from({ length: 5 }, () => 21 * 1024 * 1024)))
+      .toBe('aggregate');
+  });
+
+  it('applies the eight-item cap across uploads and Files references together', async () => {
+    const chat = await newChat();
+    const attachments = Array.from({ length: 5 }, (_, index) => ({
+      name: `upload-${String(index)}.txt`,
+      type: 'text/plain',
+      dataUri: 'data:text/plain;base64,eA==',
+    }));
+    const res = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: {
+        text: 'too many combined',
+        attachments,
+        filePaths: ['a', 'b', 'c', 'd'],
       },
     });
 

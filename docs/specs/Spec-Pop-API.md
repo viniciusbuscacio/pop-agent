@@ -73,10 +73,11 @@ a generic 5xx response.
 
 Collections with owner-visible unbounded growth must use bounded server limits,
 cursors or capped history. Query numbers are normalized to documented ranges.
-The server applies a 36 MiB streaming ceiling to every `/v1` body before
-parsing, large enough for a 25 MiB audio frame after base64 expansion, then
-route-specific smaller limits before retention (25 MiB Files/audio, 16 MiB per
-chat attachment and 20 MiB raw across chat attachments).
+The server applies a 140 MiB streaming ceiling to every `/v1` body before
+parsing, large enough for a 100 MiB raw chat batch after base64 expansion, then
+route-specific smaller limits before retention (100 MiB per Files upload,
+25 MiB audio, and eight combined chat attachments at 25 MiB each / 100 MiB
+raw total).
 Missing content length is not permission for unbounded buffering.
 
 State-changing responses return enough identity/revision data for immediate UI
