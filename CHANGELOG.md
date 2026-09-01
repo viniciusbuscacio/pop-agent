@@ -4,6 +4,22 @@ All notable changes to Pop Agent. Dates are ISO. Current normative rules start
 at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 `docs/specs/History-Pop-Spec.md`.
 
+## Unreleased
+
+### Changed
+
+- **`pop version` is now the canonical CLI version command.** It prints the
+  installed client version locally before profile, API or local-access setup.
+  The native launcher follows the same offline fast path, while `--version` and
+  `-v` remain available as compatibility paths for existing probes.
+- **Archived conversations are now server-enforced read-only until restored.**
+  New messages are refused without persistence, queueing or agent work, and
+  single or bulk archive actions refuse chats that are still answering or have
+  pending input instead of hiding active work or partially filing a batch.
+- **The interactive CLI keeps an externally archived chat visible and read-only.**
+  Archive events and server refusals retain unsent drafts without false transcript
+  rows, while explicit `/unarchive` restores the same conversation in place.
+
 ## v0.2.42 — 2026-09-01
 
 ### Added

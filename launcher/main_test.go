@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,56 @@ func TestVersionComparisonNeverDowngrades(t *testing.T) {
 	}
 	if compareVersions("0.2.0", "0.2.0") != 0 || compareVersions("0.2.0", "0.2.1") >= 0 {
 		t.Fatal("version ordering is wrong")
+	}
+}
+
+func TestVersionCommandsStartInstalledCLILocally(t *testing.T) {
+	for _, command := range []string{"version", "--version", "-v"} {
+		t.Run(command, func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				http.Error(w, "version must not request the server", http.StatusInternalServerError)
+			}))
+			defer server.Close()
+
+			l := testLauncher(t)
+			writeProfile(t, l, server.URL)
+			st := state{ActiveVersion: "0.2.42"}
+			if err := l.writeState(st); err != nil {
+				t.Fatal(err)
+			}
+			entry := cliEntry(filepath.Join(l.home, ".pop", "cli", st.ActiveVersion))
+			if err := os.MkdirAll(filepath.Dir(entry), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(entry, []byte("installed CLI"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			l.lookPath = func(name string) (string, error) { return "/local/node", nil }
+			var launchedArgs []string
+			l.execute = func(node, gotEntry string, args []string) (int, error) {
+				if node != "/local/node" || gotEntry != entry {
+					t.Fatalf("started %q with %q", gotEntry, node)
+				}
+				launchedArgs = append([]string(nil), args...)
+				fmt.Fprintln(l.stdout, "0.2.42")
+				return 0, nil
+			}
+
+			if code := l.run([]string{command}); code != 0 {
+				t.Fatalf("run returned %d: %s", code, l.stderr.(*strings.Builder).String())
+			}
+			if requests != 0 {
+				t.Fatalf("version made %d server requests", requests)
+			}
+			if strings.Join(launchedArgs, " ") != command {
+				t.Fatalf("CLI started with %#v", launchedArgs)
+			}
+			if got := l.stdout.(*strings.Builder).String(); got != "0.2.42\n" {
+				t.Fatalf("version output = %q", got)
+			}
+		})
 	}
 }
 

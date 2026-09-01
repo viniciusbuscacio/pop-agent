@@ -33,10 +33,12 @@ agent engine. HTTP/SSE DTOs are shared with the product. Every
 `@pop-agent/*` client import is bundled into the packed release; external public
 runtime dependencies remain installable without the monorepo.
 
-Launcher `--launcher-version` needs neither profile nor Node. `pop --version`
-is local and side-effect free: no profile read, server request, PLA attach or
-chat creation. Runtime diagnostics/install are launcher-owned commands and may
-bootstrap managed Node from the selected/supplied server.
+Launcher `--launcher-version` needs neither profile nor Node. `pop version` is
+the canonical user-facing version command and is local and side-effect free: no
+profile read, server request, PLA attach or chat creation. `pop --version` and
+`pop -v` remain undocumented compatibility paths for installed launcher and
+package smoke probes. Runtime diagnostics/install are launcher-owned commands
+and may bootstrap managed Node from the selected/supplied server.
 
 ## Installation and update
 
@@ -82,7 +84,7 @@ pop "question" | pop -p "question"
 pop --chat <id>
 pop login <url> | logout | servers | chats | update
 pop local-access [--status-json]
-pop --version
+pop version
 ```
 
 A bare `pop` opens the interactive screen. A non-command argument is a one-shot
@@ -106,6 +108,19 @@ The TUI renders persisted transcript plus live SSE projection, thinking when
 enabled, tool lifecycle, queue/run state and stable failures. It does not poll
 for streamed output or invent local transcript rows. Local execution notices
 belong to the assistant segment that caused them.
+
+An open transcript consumes `chat-archived-changed` for its own chat. If another
+client archives it, the CLI keeps the transcript visible, marks it read-only and
+shows one clear notice with `/unarchive` guidance; it does not switch chats,
+prompt or restore automatically. A known archived state blocks sends locally
+and retains the submitted text in the editor. A `chat_archived` send rejection
+provides the same convergence for a direct `--chat` or an HTTP/SSE race: no
+false user row remains, the draft is retained and later sends are blocked.
+`/unarchive` is available in help and autocomplete, sends
+`PATCH /v1/chats/:id` with `{ archived: false }`, keeps the transcript in place
+and reenables sends only after success. With no current chat or a current chat
+known to be open it makes no request; failure preserves the archived selection,
+transcript and draft. `/archive` behavior is unchanged.
 
 ## Local Access inside the client
 
@@ -164,7 +179,8 @@ fact; historical proposal text must not imply an IP allowlist exists.
 - launcher remains diagnostic without Node/profile/network as applicable;
 - remote HTTP, malformed origins and unverified artifacts fail closed;
 - candidate install failure keeps prior active state;
-- `--version` performs no network/profile/local-access side effect;
+- `version` and the compatibility version flags perform no
+  network/profile/local-access side effect;
 - login hides passwords and persists renewal atomically;
 - one-shot/interactive/continuation and terminal shutdown are tested;
 - SSE reconnect converges to server transcript/queue;

@@ -102,7 +102,7 @@ func (l *launcher) run(args []string) int {
 	}
 
 	st, _ := l.readState()
-	if hasArg(args, "--version") || hasArg(args, "-v") {
+	if (len(args) > 0 && args[0] == "version") || hasArg(args, "--version") || hasArg(args, "-v") {
 		return l.startLocal(st, args)
 	}
 

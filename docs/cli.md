@@ -204,7 +204,9 @@ request.
 - Equal versions start immediately. A locally newer version starts without a
   downgrade. `pop update` forces a repair/reinstall; `pop doctor` diagnoses the
   launcher, dependencies and server without starting the Node CLI.
-- `--version` remains a local-only path.
+- `version` is the canonical local-only version path. The launcher also keeps
+  `--version` and `-v` as undocumented compatibility paths; candidate smoke
+  validation continues to invoke `--version`.
 
 The attach-time minimum-client check remains a final wire-compatibility guard,
 but ordinary drift is removed before attach rather than merely announced.
@@ -595,7 +597,7 @@ pop login | logout
 pop chats | open <id>
 pop update               # launcher repair/reinstall from the selected server, no LLM
 pop doctor               # launcher, dependency and server diagnostics
-pop --version            # print the installed CLI version offline, then exit
+pop version              # print the installed CLI version offline, then exit
 pop --server <profile>   # pick a saved server
 ```
 
@@ -630,6 +632,18 @@ only the current persisted idle chat and then uses that same clean unpersisted
 reset. It does not create a replacement chat: no current chat and active-run
 cases make no request, while an API failure leaves the selection and transcript
 intact.
+
+If the open chat is archived from another client, its
+`chat-archived-changed` event leaves the transcript in place, marks it read-only
+and shows one notice instead of switching, prompting or restoring it. Submitted
+text stays in the editor when the known state blocks a send. A
+`chat_archived` HTTP rejection covers a missed/racing event and direct
+`--chat`: the CLI removes or avoids the false optimistic user row, retains the
+draft and converges to the same read-only state. `/unarchive` is listed in help
+and autocomplete; it patches `{ archived: false }`, preserves the transcript
+and reenables sends after success. No current chat and a chat already known open
+are no-ops, and failure leaves the archived transcript selected.
+
 `/think` immediately shows or hides reasoning in live and historical assistant
 segments, persists that choice for the machine, and reasoning remains visible
 after a run settles.

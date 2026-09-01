@@ -342,9 +342,10 @@ repair. The legacy npm-global CLI's `pop update` installs the same-origin
 server version in `/v1/update/status`; its output identifies the server's latest
 packed CLI rather than claiming that package equals the server version. Generated
 npm-global migration commands use that alias as well. `pop doctor` reports
-launcher, CLI, Node/npm and server state without entering the TUI.
-`pop --version` is local-only. An unreachable server stops a normal start because
-the chat client has no useful offline mode.
+launcher, CLI, Node/npm and server state without entering the TUI. Canonical
+`pop version` and the compatibility `--version`/`-v` paths are local-only. An
+unreachable server stops a normal start because the chat client has no useful
+offline mode.
 
 A server package newer than active is installed. Equal starts immediately. A
 locally newer version is not downgraded. Attach-time minimum-client negotiation
