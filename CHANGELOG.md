@@ -4,7 +4,7 @@ All notable changes to Pop Agent. Dates are ISO. Current normative rules start
 at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 `docs/specs/History-Pop-Spec.md`.
 
-## Unreleased
+## v0.2.43 — 2026-09-01
 
 ### Changed
 
