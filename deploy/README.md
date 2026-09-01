@@ -16,13 +16,13 @@ those with `--data-dir`, `--workspace`, and `--port` when needed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the planned immutable v0.2.41 installer over HTTPS into an owner-only
+Retrieve the planned immutable v0.2.42 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.41/server-install.sh && sh "$file" --ref v0.2.41)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.42/server-install.sh && sh "$file" --ref v0.2.42)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`

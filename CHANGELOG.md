@@ -4,7 +4,7 @@ All notable changes to Pop Agent. Dates are ISO. Current normative rules start
 at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 `docs/specs/History-Pop-Spec.md`.
 
-## Unreleased
+## v0.2.42 — 2026-09-01
 
 ### Added
 
@@ -31,7 +31,7 @@ at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
   secure destination ancestry plus a clean non-symlinked checkout before and
   after no-replace activation; uses a minimal explicit environment for bootstrap
   handoff and retry; and preserves failures with an exact retry command. Public
-  v0.2.41 instructions retrieve the planned immutable installer into an
+  v0.2.42 instructions retrieve the planned immutable installer into an
   owner-only temporary file and invoke it with the same release ref instead of
   using a producer-to-shell pipeline; offline fixtures cover both acquisition
   paths.
