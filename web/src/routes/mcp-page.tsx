@@ -71,7 +71,7 @@ export function McpPage() {
                 <div>
                   <div className="font-medium">{server.name}</div>
                   <div className="text-sm text-[var(--muted)]">
-                    {server.transport} · {server.status}
+                    {server.transport} · {server.enabled ? server.status : 'disabled'}
                     {server.protocolEra === undefined
                       ? ''
                       : ` · ${server.protocolEra === 'modern' ? 'stateless' : 'legacy'} ${server.protocolVersion ?? ''}`}

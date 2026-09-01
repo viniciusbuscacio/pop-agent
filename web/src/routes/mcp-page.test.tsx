@@ -71,6 +71,8 @@ describe('MCP server list', () => {
 
     expect(toggle).toHaveBeenCalledWith('mcp-learn');
     await waitFor(() => expect(enabledSwitch).toHaveProperty('checked', false));
+    expect(screen.getByText('streamable-http · disabled')).toBeTruthy();
+    expect(screen.queryByText('streamable-http · connected')).toBeNull();
   });
 
   it('reports a failed toggle and leaves the visible state unchanged', async () => {
