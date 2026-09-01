@@ -202,8 +202,11 @@ activation it validates Linux with a running systemd, Node 22.19+, npm, Git, Go
 paths outside the clean checkout and checkout ownership. It runs `npm ci` and
 `npm run gate` without root privileges, requires the built
 `server/dist/main.js`, creates owner-controlled data/workspace roots, then uses
-sudo only for the explicit unit-file install, daemon reload, enable and restart
-commands. It installs an idempotent production unit with loopback binding,
+sudo only for an explicit root-owned `/usr/local/bin/popman` launcher and the
+unit-file install, daemon reload, enable and restart commands. The launcher pins
+the selected managed Node executable and canonical data/workspace paths rather
+than depending on a global Node or `$HOME` defaults. The installer installs an
+idempotent production unit with loopback binding,
 explicit data/workspace paths, the invoking non-root user, the selected Node,
 Go and whisper.cpp directories on the service `PATH`, offline pi catalog
 bookkeeping and bounded restart. The owner-only backup

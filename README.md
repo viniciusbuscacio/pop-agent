@@ -62,6 +62,7 @@ Defaults:
 - data: `$HOME/.pop-agent`;
 - user workspace: `$HOME/pop-agent-workspace`;
 - service: `pop-agent-service.service`;
+- server manager: `/usr/local/bin/popman`;
 - local address: `http://127.0.0.1:8787`.
 
 Do not run the bootstrap as root. Custom paths, ports, preparation-only mode,

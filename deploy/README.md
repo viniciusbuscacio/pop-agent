@@ -12,7 +12,9 @@ cd pop-agent
 
 The bootstrap defaults to `$HOME/.pop-agent` for durable data,
 `$HOME/pop-agent-workspace` for the user workspace, and port 8787. Override
-those with `--data-dir`, `--workspace`, and `--port` when needed.
+those with `--data-dir`, `--workspace`, and `--port` when needed. A successful
+install also places the server manager at `/usr/local/bin/popman`, bound to the
+managed Node runtime and those exact data/workspace paths.
 
 ## Fixed-ref GitHub acquisition
 
@@ -166,8 +168,9 @@ npm run install:server -- \
 
 It validates Linux/systemd, Node 22.19+, npm, Git, Go 1.23+, required commands,
 checkout ownership and cleanliness. It then runs `npm ci` and the complete gate
-without root, uses narrowly scoped sudo for systemd unit activation, and performs
-bounded loopback health verification.
+without root, uses narrowly scoped sudo to install the root-owned `popman`
+launcher and activate the systemd unit, and performs bounded loopback health
+verification.
 
 The former `pop-agent-service.service` was an ubuntu-home development unit with
 machine-specific paths and a source-level `tsx` command. It was removed so it
