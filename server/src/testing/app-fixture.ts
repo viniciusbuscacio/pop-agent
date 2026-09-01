@@ -406,6 +406,7 @@ export function createTestApp(
     runs,
     sink: hub,
     purger: new FsChatPurger({ workspace, forgetSession: () => undefined }),
+    busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
   });
 
   // Background tasks (docs/specs/Spec-Pop-General.md §21). The timer is inert: nothing ticks by

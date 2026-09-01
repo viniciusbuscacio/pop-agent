@@ -48,6 +48,7 @@ import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
 const COMMANDS: SlashCommand[] = [
   { name: 'new', description: 'Start a fresh conversation' },
   { name: 'archive', description: 'Archive the current conversation' },
+  { name: 'unarchive', description: 'Restore this archived conversation' },
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
@@ -99,6 +100,7 @@ export interface ScreenOptions {
 }
 
 type AssistantContent = Pick<RunState, 'text' | 'thinking' | 'tools'>;
+type ShownUser = { components: Component[]; spokenBefore: boolean; spokenRevision: number };
 
 /** One assistant segment that can change while streaming and survive settlement. */
 class AssistantSegment extends Container {
@@ -190,6 +192,8 @@ export class ChatScreen {
   private thinkingShown: boolean;
   /** Whether anything has been asked yet, so the first turn has no gap above. */
   private spoken = false;
+  /** Invalidates optimistic-row rollback when another durable turn arrives. */
+  private spokenRevision = 0;
   private exited = false;
   private title: string;
   /** Timestamp of the first Ctrl+C awaiting an immediate second press. */
@@ -334,6 +338,7 @@ export class ChatScreen {
     this.assistantSegments = [];
     this.transcript.clear();
     this.spoken = false;
+    this.spokenRevision += 1;
     this.setTitle('New conversation');
     for (const notice of notices) this.say(paint.dim(notice));
     this.tui.setFocus(this.editor);
@@ -370,6 +375,38 @@ export class ChatScreen {
     }
   }
 
+  private async unarchiveConversation(): Promise<void> {
+    try {
+      const result = await this.options.session.unarchiveCurrent();
+      if (result === 'no-chat') {
+        this.say(paint.dim('Nothing to restore yet.'));
+        return;
+      }
+      if (result === 'not-archived') {
+        this.say(paint.dim('This conversation is not archived.'));
+        return;
+      }
+      if (result === 'already-unarchiving') {
+        this.say(paint.dim('Restoring is already in progress.'));
+        return;
+      }
+      if (result === 'superseded') return;
+      this.say(paint.dim('Conversation restored. You can send messages again.'));
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Conversation was not restored.'));
+    }
+  }
+
+  /** Keeps an externally archived transcript visible while disabling sends. */
+  onArchivedChanged(archived: boolean, source: 'event' | 'send-rejected'): void {
+    if (!archived) return;
+    this.say(paint.yellow(
+      source === 'event'
+        ? 'This conversation was archived elsewhere and is now read-only. Use /unarchive to restore it.'
+        : 'This conversation is archived and is now read-only. Use /unarchive to restore it.',
+    ));
+  }
+
   /** Replace the visible transcript with the authoritative server history. */
   onChatLoaded(chat: ChatDTO, response: MessagesResponse): void {
     this.clearRunStatus(false);
@@ -377,6 +414,7 @@ export class ChatScreen {
     this.assistantSegments = [];
     this.transcript.clear();
     this.spoken = false;
+    this.spokenRevision += 1;
     this.setTitle(chat.title.length === 0 ? 'Untitled conversation' : chat.title);
 
     if (response.messages.length === 0) {
@@ -404,6 +442,7 @@ export class ChatScreen {
     if (message.role === 'system') {
       if (this.spoken) this.append(new Spacer(1));
       this.spoken = true;
+      this.spokenRevision += 1;
       this.say(paint.red(message.content));
       return;
     }
@@ -411,6 +450,7 @@ export class ChatScreen {
     // A history page can technically begin with an assistant turn when older
     // messages are outside the server's 50-message window.
     this.spoken = true;
+    this.spokenRevision += 1;
     const segment = new AssistantSegment(
       { text: message.content, thinking: message.thinking, tools: message.tools },
       this.thinkingShown,
@@ -604,16 +644,31 @@ export class ChatScreen {
       this.say(paint.yellow('This conversation is being archived.'));
       return;
     }
+    if (this.options.session.readOnly) {
+      this.editor.setText(raw);
+      this.say(paint.yellow('This conversation is archived. Use /unarchive to restore it.'));
+      this.tui.requestRender();
+      return;
+    }
     // Sending while busy is intentional: the server appends to the durable
     // steering FIFO and feeds its head into pi. Blocking here made the server
     // feature unreachable.
 
-    this.showUser(text);
+    const shown = this.showUser(text);
     try {
       await this.options.session.ask(text);
       const chatId = this.options.session.currentChatId;
       if (chatId !== undefined) this.options.onChatOpened?.(chatId);
     } catch (error) {
+      if (this.options.session.readOnly || (error instanceof ApiError && error.code === 'chat_archived')) {
+        // pi-tui clears submitted input before this callback settles. An
+        // archived chat did not accept these words, so remove the optimistic
+        // row, put them back exactly as the draft, and retain the server notice.
+        this.rollbackUser(shown);
+        this.editor.setText(raw);
+        this.tui.requestRender();
+        return;
+      }
       const message =
         error instanceof ApiError && error.code === 'chat_not_found'
           ? `${error.message} Type /new to start a new conversation`
@@ -628,12 +683,24 @@ export class ChatScreen {
    * One user bubble, local or synchronized. A blank line belongs between
    * turns, never between a question and its answer.
    */
-  private showUser(text: string): void {
+  private showUser(text: string): ShownUser {
     // Spacer, not an empty Text: `Text` trims, so whitespace-only content
     // renders zero lines and the separator silently is not there.
-    if (this.spoken) this.append(new Spacer(1));
+    const spokenBefore = this.spoken;
+    const components: Component[] = [];
+    if (spokenBefore) components.push(new Spacer(1));
+    components.push(new Text(paint.cyan(`> ${text}`), 0, 0));
+    for (const component of components) this.append(component);
     this.spoken = true;
-    this.say(paint.cyan(`> ${text}`));
+    this.spokenRevision += 1;
+    return { components, spokenBefore, spokenRevision: this.spokenRevision };
+  }
+
+  private rollbackUser(shown: ShownUser): void {
+    for (const component of shown.components) this.transcript.removeChild(component);
+    if (this.spokenRevision === shown.spokenRevision) this.spoken = shown.spokenBefore;
+    this.spokenRevision += 1;
+    this.tui.requestRender(true);
   }
 
   private command(text: string): void {
@@ -663,6 +730,9 @@ export class ChatScreen {
         return;
       case '/archive':
         void this.archiveConversation();
+        return;
+      case '/unarchive':
+        void this.unarchiveConversation();
         return;
       case '/compact':
       case '/session':

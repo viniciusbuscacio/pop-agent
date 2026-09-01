@@ -21,6 +21,8 @@ const MAX_TITLE_LENGTH = 120;
 export interface ChatDeps {
   chats: ChatRepo;
   clock: Clock;
+  /** True while archiving would hide work that is still running or waiting. */
+  busy?: (chatId: string) => boolean;
   /** Removes a deleted chat's on-disk remains (JSONL, attachments). */
   purger?: ChatPurger;
   /**
@@ -31,6 +33,13 @@ export interface ChatDeps {
   runs?: { discardChat(chatId: string): boolean };
   /** Broadcasts durable chat lifecycle changes to every connected client. */
   sink?: EventSink;
+}
+
+export class ChatArchiveBusyError extends Error {
+  constructor() {
+    super('Wait for the current answer to finish and clear queued messages before archiving.');
+    this.name = 'ChatArchiveBusyError';
+  }
 }
 
 export class ChatService {
@@ -89,6 +98,9 @@ export class ChatService {
 
   setArchived(id: string, archived: boolean): Chat | undefined {
     if (this.deps.chats.get(id) === undefined) return undefined;
+    // Restore is always allowed. Filing a chat is not: a hidden conversation
+    // must never keep answering or retain input that will answer later.
+    if (archived && this.deps.busy?.(id) === true) throw new ChatArchiveBusyError();
     this.deps.chats.setArchived(id, archived);
     const chat = this.deps.chats.get(id);
     if (chat === undefined) return undefined;
@@ -126,6 +138,12 @@ export class ChatService {
       .list({ archived: false })
       .filter((chat) => chat.id !== keepChatId && !chat.pinned)
       .map((chat) => chat.id);
+    // Preflight every candidate before the adapter's single bulk mutation.
+    // This makes one busy chat refuse the whole operation instead of leaving
+    // the open list half archived.
+    if (changed.some((chatId) => this.deps.busy?.(chatId) === true)) {
+      throw new ChatArchiveBusyError();
+    }
     const count = this.deps.chats.archiveOthers(keepChatId);
     for (const chatId of changed) {
       this.deps.sink?.emit({ kind: 'chat-archived-changed', chatId, archived: true });

@@ -170,6 +170,65 @@ describe('chat collection', () => {
     expect(events).toHaveLength(2);
   });
 
+  it('refuses to archive a live chat without partially applying the PATCH', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'slow: still answering' },
+    });
+
+    const response = await api(`/v1/chats/${chat.id}`, {
+      method: 'PATCH',
+      body: { archived: true, title: 'Must not be applied' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'chat_busy' } });
+    expect(fixture.chats.get(chat.id)).toMatchObject({ archived: false, title: chat.title });
+    await api(`/v1/chats/${chat.id}/stop`, { method: 'POST' });
+    await fixture.runs.whenIdle();
+  });
+
+  it('refuses to archive a chat with durable pending input', async () => {
+    const chat = await newChat();
+    expect(fixture.queuedMessages.enqueue(chat.id, {
+      text: 'waiting input',
+      attachments: [],
+      filePaths: [],
+    }).ok).toBe(true);
+
+    const response = await api(`/v1/chats/${chat.id}`, {
+      method: 'PATCH',
+      body: { archived: true },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'chat_busy' } });
+    expect(fixture.chats.get(chat.id)?.archived).toBe(false);
+    expect(fixture.queuedMessages.list(chat.id)).toHaveLength(1);
+  });
+
+  it('refuses archive-others atomically when any candidate is busy', async () => {
+    const keep = await newChat();
+    const idleCandidate = await newChat();
+    const busyCandidate = await newChat();
+    expect(fixture.queuedMessages.enqueue(busyCandidate.id, {
+      text: 'waiting input',
+      attachments: [],
+      filePaths: [],
+    }).ok).toBe(true);
+
+    const response = await api('/v1/chats/archive-others', {
+      method: 'POST',
+      body: { keepChatId: keep.id },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'chat_busy' } });
+    expect(fixture.chats.get(idleCandidate.id)?.archived).toBe(false);
+    expect(fixture.chats.get(busyCandidate.id)?.archived).toBe(false);
+  });
+
   it('deletes every open chat except the active one and pinned chats', async () => {
     const keep = await newChat();
     const pinned = await newChat();
@@ -331,6 +390,31 @@ describe('chat collection', () => {
 });
 
 describe('sending a message', () => {
+  it('refuses archived chats without persisting or queueing the input', async () => {
+    const chat = await newChat();
+    expect((await api(`/v1/chats/${chat.id}`, {
+      method: 'PATCH',
+      body: { archived: true },
+    })).status).toBe(200);
+
+    const response = await api(`/v1/chats/${chat.id}/messages`, {
+      method: 'POST',
+      body: { text: 'must not be accepted' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'chat_archived',
+        message: 'Restore this conversation before sending another message.',
+        status: 409,
+      },
+    });
+    expect(fixture.chats.getMessages(chat.id, { limit: 10 })).toEqual([]);
+    expect(fixture.queuedMessages.list(chat.id)).toEqual([]);
+    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
+  });
+
   it('rejects and diagnoses an unknown local selector before creating a run', async () => {
     const chat = await newChat();
     const response = await api(`/v1/chats/${chat.id}/messages`, {

@@ -17,7 +17,10 @@ import {
 import type { Chat, ChatSummary, Message, MessageClient } from '../../domain/chat/chat.js';
 import type { AuthService } from '../../application/auth/auth-service.js';
 import type { TokenPayload } from '../../application/auth/token.js';
-import type { ChatService } from '../../application/chat/chat-service.js';
+import {
+  ChatArchiveBusyError,
+  type ChatService,
+} from '../../application/chat/chat-service.js';
 import type { RunService } from '../../application/chat/run-service.js';
 import type { QueuedMessageService } from '../../application/chat/queued-message-service.js';
 import {
@@ -317,9 +320,14 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const parsed = keepChatSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
-    const archived = deps.chats.archiveOthers(parsed.data.keepChatId);
-    if (archived === undefined) return chatNotFound(c);
-    return c.json({ archived });
+    try {
+      const archived = deps.chats.archiveOthers(parsed.data.keepChatId);
+      if (archived === undefined) return chatNotFound(c);
+      return c.json({ archived });
+    } catch (error) {
+      if (error instanceof ChatArchiveBusyError) return chatBusy(c);
+      throw error;
+    }
   });
 
   routes.post('/chats/delete-others', async (c) => {
@@ -343,10 +351,17 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     let chat = deps.chats.get(id);
     if (chat === undefined) return chatNotFound(c);
 
-    if (parsed.data.title !== undefined) chat = deps.chats.rename(id, parsed.data.title) ?? chat;
+    // Archive first so a busy refusal cannot leave another field from the same
+    // PATCH partially applied. Restore follows the same path and is always allowed.
     if (parsed.data.archived !== undefined) {
-      chat = deps.chats.setArchived(id, parsed.data.archived) ?? chat;
+      try {
+        chat = deps.chats.setArchived(id, parsed.data.archived) ?? chat;
+      } catch (error) {
+        if (error instanceof ChatArchiveBusyError) return chatBusy(c);
+        throw error;
+      }
     }
+    if (parsed.data.title !== undefined) chat = deps.chats.rename(id, parsed.data.title) ?? chat;
     if (parsed.data.pinned !== undefined) {
       chat = deps.chats.setPinned(id, parsed.data.pinned) ?? chat;
     }
@@ -446,6 +461,10 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const parsed = sendSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
+    const requestedChat = deps.chats.get(c.req.param('id'));
+    if (requestedChat === undefined) return chatNotFound(c);
+    if (requestedChat.archived) return chatArchived(c);
+
     // An @-mentioned file joins the run as a normal attachment, resolved
     // server-side so the bytes never round-trip through the client. The path
     // is the identifier now; the jail refuses the pathological ones.
@@ -497,6 +516,7 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     );
     if (!result.ok) {
       if (result.reason === 'chat_not_found') return chatNotFound(c);
+      if (result.reason === 'chat_archived') return chatArchived(c);
       if (result.reason === 'llm_stopped') {
         return apiError(c, 503, 'llm_stopped', 'The LLM is stopped by the operator (Settings → Server).');
       }
@@ -509,6 +529,8 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
         ...origin,
       });
       if (!queued.ok) {
+        if (queued.reason === 'chat_not_found') return chatNotFound(c);
+        if (queued.reason === 'chat_archived') return chatArchived(c);
         return apiError(
           c,
           409,
@@ -726,6 +748,24 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
 
 function chatNotFound(c: Context): Response {
   return apiError(c, 404, 'chat_not_found', 'That conversation does not exist.');
+}
+
+function chatArchived(c: Context): Response {
+  return apiError(
+    c,
+    409,
+    'chat_archived',
+    'Restore this conversation before sending another message.',
+  );
+}
+
+function chatBusy(c: Context): Response {
+  return apiError(
+    c,
+    409,
+    'chat_busy',
+    'Wait for the current answer to finish and clear queued messages before archiving.',
+  );
 }
 
 function toChatDto(chat: Chat | ChatSummary): ChatDTO {

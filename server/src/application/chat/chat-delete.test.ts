@@ -8,7 +8,7 @@ import type { AgentBridge, AgentRunRequest, AgentRunResult } from '../ports/agen
 import type { ChatPurger } from '../ports/chat-purger.js';
 import type { Clock } from '../ports/clock.js';
 import type { EventSink, RunEvent } from '../ports/event-sink.js';
-import { ChatService } from './chat-service.js';
+import { ChatArchiveBusyError, ChatService } from './chat-service.js';
 import { RunService } from './run-service.js';
 
 /**
@@ -114,7 +114,14 @@ beforeEach(() => {
   bridge = new HangingBridge();
   sink = new SilentSink();
   runs = new RunService({ chats: repo, journal: new SqliteRunJournalRepo(db), bridge, sink: new SilentSink(), clock: new FixedClock() });
-  chats = new ChatService({ chats: repo, clock: new FixedClock(), runs, purger, sink });
+  chats = new ChatService({
+    chats: repo,
+    clock: new FixedClock(),
+    runs,
+    purger,
+    sink,
+    busy: (chatId) => runs.liveRun(chatId) !== undefined,
+  });
 });
 
 describe('deleting a chat with a run in flight', () => {
@@ -198,6 +205,47 @@ describe('deleting a chat with a run in flight', () => {
       chatId: chat.id,
       executionMode: 'plan',
     });
+  });
+
+  it('refuses to archive a chat with a live run', async () => {
+    const chat = chats.create();
+    expect(runs.startRun(chat.id, 'take your time').ok).toBe(true);
+    await bridge.started;
+
+    expect(() => chats.setArchived(chat.id, true)).toThrow(ChatArchiveBusyError);
+    expect(repo.get(chat.id)?.archived).toBe(false);
+
+    runs.stopRun(chat.id);
+    await runs.whenIdle();
+  });
+
+  it('preflights archive-others so one busy candidate prevents every mutation', () => {
+    const busy = new Set<string>();
+    const service = new ChatService({
+      chats: repo,
+      clock: new FixedClock(),
+      busy: (chatId) => busy.has(chatId),
+    });
+    const keep = service.create();
+    const idleCandidate = service.create();
+    const busyCandidate = service.create();
+    busy.add(busyCandidate.id);
+
+    expect(() => service.archiveOthers(keep.id)).toThrow(ChatArchiveBusyError);
+    expect(repo.get(idleCandidate.id)?.archived).toBe(false);
+    expect(repo.get(busyCandidate.id)?.archived).toBe(false);
+  });
+
+  it('allows restoring even when the busy predicate is true', () => {
+    const chat = chats.create();
+    repo.setArchived(chat.id, true);
+    const service = new ChatService({
+      chats: repo,
+      clock: new FixedClock(),
+      busy: () => true,
+    });
+
+    expect(service.setArchived(chat.id, false)?.archived).toBe(false);
   });
 
   it('persists pin and unpin before broadcasting the resulting state', () => {

@@ -147,7 +147,7 @@ other tabs/devices. Abort, overflow and route exit always unsubscribe.
 |---|---|
 | `chat-created` | complete list-ready `ChatDTO` |
 | `chat-deleted` | deleted chat ID; remove every local remnant |
-| `chat-archived-changed` | chat ID plus current archived state; move between lists |
+| `chat-archived-changed` | chat ID plus current archived state; move between lists and make an open CLI transcript read-only or writable |
 | `chat-pin-changed` | chat ID plus current pinned state |
 | `chat-model-changed` | chat ID plus authoritative provider/model pair |
 | `chat-execution-mode-changed` | chat ID plus current Normal/Plan mode |
@@ -221,8 +221,12 @@ per-run `seq` values. A client seeded from a live HTTP snapshot ignores
 fragments at or below the snapshot sequence and ignores stale run IDs.
 
 State-change handlers are idempotent. The same change may be observed first by
-SSE and later by the initiating HTTP response. Terminal/lifecycle events order
-after all earlier fragments delivered to that browser.
+SSE and later by the initiating HTTP response. The CLI filters archive changes
+to its currently open chat, keeps that transcript visible and changes local send
+permission without auto-restoring it. A send rejected with `chat_archived`
+converges to the same state when an event was missed or raced the request.
+Terminal/lifecycle events order after all earlier fragments delivered to that
+browser.
 
 ## Browser delivery classes
 

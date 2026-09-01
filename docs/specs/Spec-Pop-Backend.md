@@ -372,6 +372,11 @@ uses provenance to delete user Files.
 - Pending chat input is a durable per-chat FIFO with a high defensive cap.
   Delivery removes a row only after its corresponding user turn has been
   accepted/persisted; restart must not silently lose accepted input.
+- An archived chat is read-only until restored: run admission refuses it before
+  storing a user turn or run journal, invoking the agent or adding durable
+  pending input. Archiving is refused while the chat has a live/admitted run or
+  any pending queued message. Bulk archive preflights every candidate and makes
+  no mutation when any candidate is busy; restoring remains allowed.
 - Every admitted chat run has a SQLite journal row from the same transaction
   that stores its user turn until the transaction that stores terminal history.
   Streamed text, thinking and tool projection are persisted before broadcast.

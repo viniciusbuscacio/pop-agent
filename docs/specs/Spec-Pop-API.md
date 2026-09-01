@@ -125,6 +125,14 @@ pending cap are server-owned. Stop is idempotent over an active/admitted run and
 settles through normal terminal synchronization. Snapshot transcript and queue
 endpoints are the reconnect authority.
 
+Archived chats accept no new message or run until restored.
+`POST /v1/chats/:id/messages` returns HTTP 409 with code `chat_archived` and a
+restore-first message without retaining or queueing the input. Setting
+`archived: true` returns HTTP 409 with code `chat_busy` when the chat has a live
+run or pending FIFO input; archive-others performs the same preflight across all
+candidates and never partially archives them. Setting `archived: false` remains
+allowed.
+
 ## SSE contract
 
 The client first POSTs for a CSPRNG ticket valid for one connection and 30

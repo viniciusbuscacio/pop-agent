@@ -25,7 +25,7 @@ export const MAX_PENDING_MESSAGES_PER_CHAT = 1024;
 
 export type QueueWriteResult =
   | { ok: true; message: QueuedMessage; head: QueuedMessage }
-  | { ok: false; reason: 'chat_not_found' | 'queue_full' | 'queue_not_found' };
+  | { ok: false; reason: 'chat_not_found' | 'chat_archived' | 'queue_full' | 'queue_not_found' };
 
 /**
  * Owns each chat's durable pending-input FIFO. HTTP may append and may
@@ -53,7 +53,9 @@ export class QueuedMessageService {
   }
 
   enqueue(chatId: string, input: QueueInput): QueueWriteResult {
-    if (this.deps.chats.get(chatId) === undefined) return { ok: false, reason: 'chat_not_found' };
+    const chat = this.deps.chats.get(chatId);
+    if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
+    if (chat.archived) return { ok: false, reason: 'chat_archived' };
     if (this.deps.repo.count(chatId) >= MAX_PENDING_MESSAGES_PER_CHAT) {
       return { ok: false, reason: 'queue_full' };
     }

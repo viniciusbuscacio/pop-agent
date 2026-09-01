@@ -93,6 +93,10 @@ export class RunService {
   ): StartRunResult {
     const chat = this.deps.chats.get(chatId);
     if (chat === undefined) return { ok: false, reason: 'chat_not_found' };
+    // Archived conversations are read-only until restored. Check this before
+    // activity, journal admission, or agent registration so every caller gets
+    // the same refusal without leaving a user turn or run behind.
+    if (chat.archived) return { ok: false, reason: 'chat_archived' };
     if (this.runIdByChat.has(chatId)) return { ok: false, reason: 'run_in_progress' };
     // The HTTP layer turns this into the durable queue; no words are persisted twice here.
     if (this.deploymentDraining) return { ok: false, reason: 'deployment_pending' };
@@ -490,6 +494,13 @@ export class RunService {
   recover(): void {
     for (const entry of this.deps.journal.list()) {
       if (entry.state === 'running') {
+        this.persistInterrupted(entry.runId, entry.chatId, entry.content, entry.thinking, entry.tools);
+        continue;
+      }
+      // Legacy data or a restored backup may contain queued journal work for
+      // a chat archived by an older server. Recovery must obey the same
+      // read-only admission rule as a fresh send and never invoke the agent.
+      if (this.deps.chats.get(entry.chatId)?.archived === true) {
         this.persistInterrupted(entry.runId, entry.chatId, entry.content, entry.thinking, entry.tools);
         continue;
       }

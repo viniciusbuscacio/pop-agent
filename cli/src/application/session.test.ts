@@ -16,6 +16,7 @@ function harness(events: StreamEvent[] = []) {
     steering: number;
     externalUsers: string[];
     titles: string[];
+    archivedChanges: { archived: boolean; source: string }[];
     loaded: string[];
     ended: number;
   } = {
@@ -25,6 +26,7 @@ function harness(events: StreamEvent[] = []) {
     steering: 0,
     externalUsers: [],
     titles: [],
+    archivedChanges: [],
     loaded: [],
     ended: 0,
   };
@@ -37,6 +39,7 @@ function harness(events: StreamEvent[] = []) {
       seen.steering += 1;
     },
     onExternalUser: (text) => seen.externalUsers.push(text),
+    onArchivedChanged: (archived, source) => seen.archivedChanges.push({ archived, source }),
     onTitle: (title) => seen.titles.push(title),
     onStreamEnd: () => {
       seen.ended += 1;
@@ -53,6 +56,7 @@ function harness(events: StreamEvent[] = []) {
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
+    unarchiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: false })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
@@ -195,6 +199,134 @@ describe('ChatSession', () => {
 
     expect(session.currentChatId).toBe('chat-existing');
     expect(session.busy).toBe(false);
+  });
+
+  it('makes only the current transcript read-only on archive events and reenables it on restore', async () => {
+    const { session, ports, seen, release } = harness([
+      { kind: 'chat-archived-changed', chatId: 'chat-other', archived: true },
+      { kind: 'chat-archived-changed', chatId: 'chat-1', archived: true },
+      { kind: 'chat-archived-changed', chatId: 'chat-1', archived: true },
+      { kind: 'chat-archived-changed', chatId: 'chat-1', archived: false },
+    ]);
+    session.open('chat-1');
+
+    const listening = session.listen();
+    release();
+    await listening;
+
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.readOnly).toBe(false);
+    expect(seen.archivedChanges).toEqual([
+      { archived: true, source: 'event' },
+      { archived: false, source: 'event' },
+    ]);
+    await session.ask('enabled again');
+    expect(ports.send).toHaveBeenCalledWith('chat-1', 'enabled again');
+  });
+
+  it('blocks a known archived chat before sending', async () => {
+    const { session, ports, release } = harness([
+      { kind: 'chat-archived-changed', chatId: 'chat-1', archived: true },
+    ]);
+    session.open('chat-1');
+    const listening = session.listen();
+    release();
+    await listening;
+
+    await expect(session.ask('keep this draft')).rejects.toMatchObject({ code: 'chat_archived' });
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(session.busy).toBe(false);
+  });
+
+  it('converges to read-only when an unknown archived chat rejects a send', async () => {
+    const { session, ports, seen } = harness();
+    session.open('chat-archived');
+    vi.mocked(ports.send).mockRejectedValueOnce(Object.assign(new Error('Archived.'), {
+      code: 'chat_archived',
+    }));
+
+    await expect(session.ask('unsent draft')).rejects.toMatchObject({ code: 'chat_archived' });
+
+    expect(session.readOnly).toBe(true);
+    expect(session.busy).toBe(false);
+    expect(seen.runs).toEqual([]);
+    expect(seen.archivedChanges).toEqual([{ archived: true, source: 'send-rejected' }]);
+    await expect(session.ask('still unsent')).rejects.toMatchObject({ code: 'chat_archived' });
+    expect(ports.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('unarchives in place and reenables sends', async () => {
+    const { session, ports } = harness();
+    await session.switchTo({ ...chatDto('chat-archived'), archived: true });
+
+    expect(await session.unarchiveCurrent()).toBe('unarchived');
+
+    expect(ports.unarchiveChat).toHaveBeenCalledWith('chat-archived');
+    expect(session.currentChatId).toBe('chat-archived');
+    expect(session.readOnly).toBe(false);
+    await session.ask('works again');
+    expect(ports.send).toHaveBeenCalledWith('chat-archived', 'works again');
+  });
+
+  it('does not request an unnecessary restore without an archived current chat', async () => {
+    const { session, ports } = harness();
+    expect(await session.unarchiveCurrent()).toBe('no-chat');
+    await session.switchTo(chatDto('chat-open'));
+    expect(await session.unarchiveCurrent()).toBe('not-archived');
+    expect(ports.unarchiveChat).not.toHaveBeenCalled();
+  });
+
+  it('keeps an archived transcript read-only when restore fails', async () => {
+    const { session, ports } = harness();
+    await session.switchTo({ ...chatDto('chat-archived'), archived: true });
+    vi.mocked(ports.unarchiveChat).mockRejectedValueOnce(new Error('Restore failed.'));
+
+    await expect(session.unarchiveCurrent()).rejects.toThrow('Restore failed.');
+
+    expect(session.currentChatId).toBe('chat-archived');
+    expect(session.readOnly).toBe(true);
+  });
+
+  it('does not overwrite a newer archive event with a late restore response', async () => {
+    const { session, ports } = harness();
+    await session.switchTo({ ...chatDto('chat-archived'), archived: true });
+    let finishRestore: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.unarchiveChat).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishRestore = resolve;
+      }),
+    );
+
+    const restoring = session.unarchiveCurrent();
+    await vi.waitFor(() => expect(ports.unarchiveChat).toHaveBeenCalledOnce());
+    (session as unknown as { absorb(event: StreamEvent): void }).absorb({
+      kind: 'chat-archived-changed', chatId: 'chat-archived', archived: true,
+    });
+    finishRestore({ ...chatDto('chat-archived'), archived: false });
+
+    expect(await restoring).toBe('superseded');
+    expect(session.readOnly).toBe(true);
+  });
+
+  it('ignores a late archived-send refusal after navigation', async () => {
+    const { session, ports, seen } = harness();
+    session.open('chat-old');
+    let rejectSend: (error: Error) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => {
+        rejectSend = reject;
+      }),
+    );
+
+    const asking = session.ask('draft for old chat');
+    await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+    session.open('chat-new');
+    rejectSend(Object.assign(new Error('Archived.'), { code: 'chat_archived' }));
+    await asking;
+
+    expect(session.currentChatId).toBe('chat-new');
+    expect(session.readOnly).toBe(false);
+    expect(seen.archivedChanges).toEqual([]);
   });
 
   it('does not let a late archive completion clear a newer selection', async () => {

@@ -47,7 +47,12 @@ export type StartRunResult =
   | { ok: true; runId: string; userMessageId: string }
   | {
       ok: false;
-      reason: 'chat_not_found' | 'run_in_progress' | 'llm_stopped' | 'deployment_pending';
+      reason:
+        | 'chat_not_found'
+        | 'chat_archived'
+        | 'run_in_progress'
+        | 'llm_stopped'
+        | 'deployment_pending';
     };
 
 /**

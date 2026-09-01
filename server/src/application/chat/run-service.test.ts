@@ -117,6 +117,25 @@ describe('starting a run', () => {
     ]);
   });
 
+  it('refuses an archived chat before persisting or invoking the agent', async () => {
+    const chatId = newChat();
+    repo.setArchived(chatId, true);
+
+    expect(runs.startRun(chatId, 'do not accept this')).toEqual({
+      ok: false,
+      reason: 'chat_archived',
+    });
+    await Promise.resolve();
+
+    expect(repo.getMessages(chatId, { limit: 10 })).toEqual([]);
+    expect(
+      (db.prepare('SELECT COUNT(*) AS count FROM chat_run_journal').get() as { count: number }).count,
+    ).toBe(0);
+    expect(bridge.seen).toEqual([]);
+    expect(runs.liveRun(chatId)).toBeUndefined();
+    expect(sink.of('run-started')).toEqual([]);
+  });
+
   it('refuses a chat that does not exist', () => {
     expect(runs.startRun('chat-000000000000', 'hi')).toEqual({
       ok: false,
@@ -864,6 +883,37 @@ describe('recovering the durable run journal after abrupt process loss', () => {
     });
     expect(assistant?.content).toContain('half an answer');
     expect(assistant?.content).toContain('interrupted by a server restart');
+  });
+
+  it('settles legacy queued work without invoking the agent when its chat is archived', () => {
+    const chatId = newChat();
+    const waiting = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge,
+      sink,
+      clock,
+      maxConcurrentRuns: 0,
+    });
+    waiting.startRun(chatId, 'must stay stopped');
+    repo.setArchived(chatId, true);
+    const recoveryBridge = new ScriptedBridge();
+
+    const restarted = new RunService({
+      chats: repo,
+      journal: new SqliteRunJournalRepo(db),
+      bridge: recoveryBridge,
+      sink: new RecordingSink(),
+      clock,
+    });
+    restarted.recover();
+
+    expect(recoveryBridge.seen).toEqual([]);
+    expect(repo.getMessages(chatId, { limit: 10 }).map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
+    expect(new SqliteRunJournalRepo(db).list()).toEqual([]);
   });
 
   it('resumes a globally queued run without duplicating its user turn', async () => {

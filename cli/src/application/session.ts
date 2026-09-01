@@ -27,6 +27,7 @@ export interface SessionPorts {
   listChats(): Promise<ChatDTO[]>;
   loadChat(chatId: string): Promise<MessagesResponse>;
   archiveChat(chatId: string): Promise<ChatDTO>;
+  unarchiveChat(chatId: string): Promise<ChatDTO>;
   send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
   sessionCommand?(chatId: string, command: SessionCommandName, argument: string): Promise<SessionCommandResponse>;
@@ -36,6 +37,23 @@ export interface SessionPorts {
 }
 
 export type ArchiveCurrentResult = 'archived' | 'busy' | 'no-chat' | 'already-archiving' | 'superseded';
+export type UnarchiveCurrentResult =
+  | 'unarchived'
+  | 'no-chat'
+  | 'not-archived'
+  | 'already-unarchiving'
+  | 'superseded';
+
+export type ArchivedChangeSource = 'event' | 'send-rejected';
+
+export class ChatArchivedError extends Error {
+  readonly code = 'chat_archived';
+
+  constructor() {
+    super('This conversation is archived. Use /unarchive to restore it.');
+    this.name = 'ChatArchivedError';
+  }
+}
 
 export interface SessionListener {
   /** Stored history replaced the visible conversation after a chat switch. */
@@ -50,6 +68,8 @@ export interface SessionListener {
   onSteering(): void;
   /** Another client persisted a user turn in the chat this screen is watching. */
   onExternalUser(text: string): void;
+  /** The chat's archive state changed while this transcript remained open. */
+  onArchivedChanged(archived: boolean, source: ArchivedChangeSource): void;
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
@@ -64,6 +84,12 @@ export class ChatSession {
   private readonly pendingSends: { text: string; openRevision: number }[] = [];
   /** The archive request for the currently selected revision, if any. */
   private archiving: { chatId: string; openRevision: number } | undefined;
+  /** The restore request for the currently selected revision, if any. */
+  private unarchiving: { chatId: string; openRevision: number } | undefined;
+  /** Undefined means an existing chat was opened by id without a snapshot. */
+  private archived: boolean | undefined = false;
+  /** Counts every authoritative archive event, including duplicate values. */
+  private archiveEventRevision = 0;
   /** Own responses that arrived before their run-started event. */
   private readonly ownRunIds = new Set<string>();
   /** Durable turns already echoed locally but not consumed by pi yet. */
@@ -92,10 +118,15 @@ export class ChatSession {
     return this.archiving?.openRevision === this.openRevision;
   }
 
+  get readOnly(): boolean {
+    return this.archived === true;
+  }
+
   /** Opens on an existing chat, or on a clean new one at the first message. */
   open(chatId: string | undefined): void {
     this.openRevision += 1;
     this.chatId = chatId;
+    this.archived = chatId === undefined ? false : undefined;
     this.transcript = undefined;
     this.ownRunIds.clear();
     this.ownQueuedTexts.length = 0;
@@ -134,6 +165,7 @@ export class ChatSession {
     if (this.loading !== loading) return;
 
     this.chatId = chat.id;
+    this.archived = chat.archived;
     this.shownMessageIds = new Set(response.messages.map((message) => message.id));
     this.transcript = response.live === undefined
       ? undefined
@@ -173,6 +205,7 @@ export class ChatSession {
 
   async ask(text: string): Promise<void> {
     const openRevision = this.openRevision;
+    if (this.archived === true) throw new ChatArchivedError();
     if (this.archiving?.openRevision === openRevision) {
       throw new Error('This conversation is being archived.');
     }
@@ -182,7 +215,16 @@ export class ChatSession {
       const chatId = this.chatId ?? (await this.ports.createChat()).id;
       if (openRevision !== this.openRevision) return;
       this.chatId = chatId;
-      const response = await this.ports.send(chatId, text);
+      let response: SendMessageResponse;
+      try {
+        response = await this.ports.send(chatId, text);
+      } catch (error) {
+        // Navigation abandoned this optimistic send. Its late refusal belongs
+        // to the old transcript and must not restore that draft in the new one.
+        if (openRevision !== this.openRevision || this.chatId !== chatId) return;
+        if (hasErrorCode(error, 'chat_archived')) this.setArchived(true, 'send-rejected');
+        throw error;
+      }
       // `/new` may have cleared the screen while this request was in flight.
       // Its late response must not restore the abandoned run as live state.
       if (openRevision !== this.openRevision) return;
@@ -240,6 +282,36 @@ export class ChatSession {
     return 'archived';
   }
 
+  /** Restores a known archived conversation without replacing its transcript. */
+  async unarchiveCurrent(): Promise<UnarchiveCurrentResult> {
+    const chatId = this.chatId;
+    if (chatId === undefined) return 'no-chat';
+    if (this.archived === false) return 'not-archived';
+    const openRevision = this.openRevision;
+    if (this.unarchiving?.openRevision === openRevision) return 'already-unarchiving';
+
+    const archiveEventRevision = this.archiveEventRevision;
+    const operation = { chatId, openRevision };
+    this.unarchiving = operation;
+    try {
+      await this.ports.unarchiveChat(chatId);
+    } catch (error) {
+      if (this.openRevision !== openRevision || this.chatId !== chatId) return 'superseded';
+      throw error;
+    } finally {
+      if (this.unarchiving === operation) this.unarchiving = undefined;
+    }
+
+    if (this.openRevision !== openRevision || this.chatId !== chatId) return 'superseded';
+    // The PATCH's own false event may beat its response. A newer true event,
+    // however, is authoritative and must not be overwritten by late HTTP.
+    if (this.archiveEventRevision !== archiveEventRevision && this.archived === true) {
+      return 'superseded';
+    }
+    this.archived = false;
+    return 'unarchived';
+  }
+
   async command(command: SessionCommandName, argument: string): Promise<SessionCommandResponse> {
     const chatId = this.chatId ?? (await this.ports.createChat()).id;
     this.chatId = chatId;
@@ -254,10 +326,27 @@ export class ChatSession {
     return this.ports.forkPoints(this.chatId);
   }
 
+  private setArchived(archived: boolean, source: ArchivedChangeSource): void {
+    if (this.archived === archived) return;
+    this.archived = archived;
+    this.listener.onArchivedChanged(archived, source);
+  }
+
   private absorb(event: StreamEvent): void {
     const loading = this.loading;
     if (loading !== undefined && 'chatId' in event && event.chatId === loading.chatId) {
       loading.events.push(event);
+      return;
+    }
+
+    if (event.kind === 'chat-archived-changed') {
+      if (event.chatId !== this.chatId) return;
+      this.archiveEventRevision += 1;
+      if (event.archived && this.archiving?.openRevision === this.openRevision) {
+        this.archived = true;
+        return;
+      }
+      this.setArchived(event.archived, 'event');
       return;
     }
 
@@ -299,4 +388,8 @@ export class ChatSession {
     this.listener.onRun(state);
     if (transcript.finished) this.listener.onIdle(state);
   }
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }

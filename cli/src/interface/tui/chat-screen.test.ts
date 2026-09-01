@@ -98,6 +98,7 @@ function screenWith(
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
+    unarchiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: false })),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     sessionCommand: vi.fn((_chatId, command) => Promise.resolve({ kind: command, message: 'Session details' })),
@@ -114,6 +115,7 @@ function screenWith(
     onQueued: () => undefined,
     onSteering: () => undefined,
     onExternalUser: () => undefined,
+    onArchivedChanged: (archived, source) => holder.screen?.onArchivedChanged(archived, source),
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
@@ -149,6 +151,7 @@ describe('ChatScreen', () => {
 
     expect(plain()).toContain('Start a fresh conversation');
     expect(plain()).toContain('Archive the current conversation');
+    expect(plain()).toContain('Restore this archived conversation');
     expect(plain()).toContain('Leave (or press Ctrl+C twice)');
     expect(plain()).not.toContain('Escape twice');
   });
@@ -164,6 +167,19 @@ describe('ChatScreen', () => {
 
     const editor = (screen as unknown as { editor: { getText(): string } }).editor;
     expect(editor.getText()).toBe('/archive ');
+  });
+
+  it('offers /unarchive through slash-command autocomplete', async () => {
+    const { terminal, send } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+
+    send('/unar');
+    await flush();
+    send('\t');
+
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(editor.getText()).toBe('/unarchive ');
   });
 
   it('runs pi session commands locally instead of sending them as prompts', async () => {
@@ -398,6 +414,146 @@ describe('ChatScreen', () => {
     expect(session.currentChatId).toBeUndefined();
     expect(plain()).toContain('New conversation.');
     expect(plain()).not.toContain('Late archive failure.');
+  });
+
+  it('keeps an externally archived transcript visible, blocks sends, and retains the draft', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-existing');
+    screen.start();
+    screen.say('transcript stays here');
+    (session as unknown as { absorb(event: unknown): void }).absorb({
+      kind: 'chat-archived-changed', chatId: 'chat-existing', archived: true,
+    });
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    editor.setText('draft that must stay');
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('draft that must stay');
+    await flush();
+
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(editor.getText()).toBe('draft that must stay');
+    expect(plain()).toContain('transcript stays here');
+    expect(plain().split('archived elsewhere')).toHaveLength(2);
+    expect(plain()).toContain('read-only');
+    expect(plain()).toContain('/unarchive');
+    expect(plain()).not.toContain('> draft that must stay');
+  });
+
+  it('rolls back a server-rejected archived send and preserves its draft', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-archived');
+    vi.mocked(ports.send).mockRejectedValueOnce(
+      new ApiError('chat_archived', 'This chat is archived.', 409),
+    );
+    screen.start();
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    editor.setText('server-race draft');
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('server-race draft');
+    await flush();
+
+    expect(session.readOnly).toBe(true);
+    expect(editor.getText()).toBe('server-race draft');
+    expect(plain()).toContain('This conversation is archived and is now read-only.');
+    expect(plain()).toContain('/unarchive');
+    expect(plain()).not.toContain('> server-race draft');
+  });
+
+  it('does not restore an archived draft after the user moves to a new conversation', async () => {
+    const { terminal } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-old');
+    let rejectSend: (error: Error) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => {
+        rejectSend = reject;
+      }),
+    );
+    screen.start();
+
+    const sending = (screen as unknown as { submit(text: string): Promise<void> }).submit('old draft');
+    await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/new');
+    rejectSend(new ApiError('chat_archived', 'Archived.', 409));
+    await sending;
+
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(session.currentChatId).toBeUndefined();
+    expect(editor.getText()).toBe('');
+  });
+
+  it('keeps spacing state owned by a newer synchronized turn during rollback', async () => {
+    const { terminal } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-archived');
+    let rejectSend: (error: Error) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => {
+        rejectSend = reject;
+      }),
+    );
+    screen.start();
+
+    const sending = (screen as unknown as { submit(text: string): Promise<void> }).submit('optimistic');
+    await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+    screen.onExternalUser('newer synchronized turn');
+    rejectSend(new ApiError('chat_archived', 'Archived.', 409));
+    await sending;
+
+    expect((screen as unknown as { spoken: boolean }).spoken).toBe(true);
+  });
+
+  it('unarchives in place and reports that sends are enabled again', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    session.open('chat-archived');
+    screen.start();
+    screen.say('transcript remains');
+    (session as unknown as { absorb(event: unknown): void }).absorb({
+      kind: 'chat-archived-changed', chatId: 'chat-archived', archived: true,
+    });
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/unarchive');
+    await vi.waitFor(() => expect(ports.unarchiveChat).toHaveBeenCalledWith('chat-archived'));
+    await flush();
+
+    expect(session.currentChatId).toBe('chat-archived');
+    expect(session.readOnly).toBe(false);
+    expect(plain()).toContain('transcript remains');
+    expect(plain()).toContain('Conversation restored. You can send messages again.');
+  });
+
+  it('handles no-current, no-op, and failed unarchive without changing the transcript', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/unarchive');
+    await flush();
+    expect(plain()).toContain('Nothing to restore yet.');
+    expect(ports.unarchiveChat).not.toHaveBeenCalled();
+
+    await session.switchTo(chatDto('chat-open'));
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/unarchive');
+    await flush();
+    expect(plain()).toContain('This conversation is not archived.');
+    expect(ports.unarchiveChat).not.toHaveBeenCalled();
+
+    (session as unknown as { absorb(event: unknown): void }).absorb({
+      kind: 'chat-archived-changed', chatId: 'chat-open', archived: true,
+    });
+    screen.say('still selected');
+    vi.mocked(ports.unarchiveChat).mockRejectedValueOnce(new Error('Restore request failed.'));
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/unarchive');
+    await vi.waitFor(() => expect(ports.unarchiveChat).toHaveBeenCalledOnce());
+    await flush();
+
+    expect(session.currentChatId).toBe('chat-open');
+    expect(session.readOnly).toBe(true);
+    expect(plain()).toContain('still selected');
+    expect(plain()).toContain('Restore request failed.');
   });
 
   it('stops the current run on every Escape, including two immediate presses', async () => {

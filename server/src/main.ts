@@ -502,15 +502,6 @@ const runs = new RunService({
   }),
 });
 
-// Built after the run service on purpose: deleting a conversation stops its
-// work first (docs/specs/Spec-Pop-General.md §6), and that is the run service's job.
-const chats = new ChatService({
-  chats: context.chats,
-  clock: systemClock,
-  purger,
-  runs,
-  sink: hub,
-});
 const queuedMessages = new QueuedMessageService({
   repo: context.queuedMessages,
   chats: context.chats,
@@ -531,6 +522,16 @@ const queuedMessages = new QueuedMessageService({
       return undefined;
     }
   },
+});
+// Built after run and queue services on purpose: deletion stops work first,
+// while archiving refuses both live and durable pending work.
+const chats = new ChatService({
+  chats: context.chats,
+  clock: systemClock,
+  purger,
+  runs,
+  sink: hub,
+  busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
 });
 queueDrain.service = queuedMessages;
 // Reconcile potentially-started work before admitting ordinary durable follow-ups.
