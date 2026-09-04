@@ -38,6 +38,8 @@ export interface ManagerDeps extends ManagerIo {
   askPassword(prompt: string): Promise<string | undefined>;
   /** How this install is updated, as one printable block. */
   updateSteps(): string[];
+  /** Rotates the terminal-only code while network onboarding is still pending. */
+  onboardingCode(): Promise<{ code: string; expiresAt: number } | undefined>;
 }
 
 export const USAGE = [
@@ -49,6 +51,7 @@ export const USAGE = [
   '  popman backups                 list what is kept',
   '  popman restore <name>          replace the data with a backup',
   '  popman reset-password          lost the password AND the recovery key',
+  '  popman onboarding-code         replace an expired first-install code',
   '  popman update                  how to move this install forward',
   '',
   'The chat client is a different command: pop. See docs/cli.md.',
@@ -158,6 +161,16 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
 
     case 'update': {
       for (const line of deps.updateSteps()) deps.out(line);
+      return 0;
+    }
+
+    case 'onboarding-code': {
+      const result = await deps.onboardingCode();
+      if (result === undefined) {
+        deps.err('No pending network onboarding can receive a new code.');
+        return 1;
+      }
+      deps.out(`One-time setup code (valid for 15 minutes): ${result.code}`);
       return 0;
     }
 

@@ -11,6 +11,7 @@ import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 import { ProgressiveLockout } from './lockout.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
+import type { ServerOnboardingService } from '../../application/onboarding/server-onboarding-service.js';
 
 /**
  * Auth endpoints (docs/specs/Spec-Pop-General.md §9). Mounted under /v1.
@@ -37,6 +38,8 @@ export interface AuthRoutesDeps {
   auth: AuthService;
   clock: Clock;
   localConnections?: LocalConnectionRegistry;
+  onboarding?: ServerOnboardingService;
+  onSetupComplete?: () => void;
 }
 
 export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
@@ -44,11 +47,28 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
   const limiter = new SlidingWindowRateLimiter(RATE_LIMIT, RATE_WINDOW_MS, deps.clock);
   const lockout = new ProgressiveLockout(deps.clock);
 
-  routes.get('/auth/state', (c) => c.json({ setupDone: deps.auth.isSetupDone() }));
+  routes.get('/auth/state', (c) => {
+    const setupDone = deps.auth.isSetupDone();
+    return c.json({
+      setupDone,
+      ...(!setupDone && deps.onboarding !== undefined
+        ? { setupMode: deps.onboarding.requiresNetworkSetup() ? 'network' as const : 'account' as const }
+        : {}),
+    });
+  });
 
   routes.post('/setup', async (c) => {
     const throttled = enforceRateLimit(c, limiter);
     if (throttled !== undefined) return throttled;
+
+    if (deps.onboarding !== undefined) {
+      if (!deps.onboarding.allowsAccountSetup()) {
+        return apiError(c, 409, 'network_setup_required', 'Finish private HTTPS setup before creating the master password.');
+      }
+      if (c.req.header('X-Forwarded-Proto')?.toLowerCase() !== 'https') {
+        return apiError(c, 403, 'secure_setup_required', 'Create the master password from the private HTTPS address.');
+      }
+    }
 
     const body = await readJson(c);
     if (body === undefined) return badBody(c);
@@ -72,6 +92,8 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
     if (!deps.auth.acknowledgeSetup()) {
       return apiError(c, 409, 'setup_incomplete', 'No pending setup could be acknowledged.');
     }
+    deps.onboarding?.complete();
+    deps.onSetupComplete?.();
     return c.json({ setupDone: true as const });
   });
 

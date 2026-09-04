@@ -2,7 +2,7 @@
 
 **Status:** normative
 **Legacy coverage:** §§9–10
-**Primary implementation:** `server/src/application/auth/`, `server/src/domain/safety/`, `server/src/interface/http/`, `server/src/infrastructure/{auth,crypto,agent,web}/`
+**Primary implementation:** `server/src/application/{auth,onboarding}/`, `server/src/domain/safety/`, `server/src/interface/http/`, `server/src/infrastructure/{auth,crypto,agent,onboarding,web}/`
 **Related:** [`Spec-Pop-General.md`](Spec-Pop-General.md), [`Spec-Pop-API.md`](Spec-Pop-API.md), [`Spec-Pop-A2A.md`](Spec-Pop-A2A.md), [`Spec-Pop-Installation.md`](Spec-Pop-Installation.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)
 
 ## Threat model and permanent rules
@@ -24,8 +24,22 @@ Permanent rules:
 - deterministic controls fail closed and do not depend on model judgment.
 
 Public deployment requires HTTPS at the reverse proxy/origin. Plain HTTP is
-only acceptable for explicit loopback development. Pop serves one same-origin
-PWA/API and does not enable broad cross-origin credential access.
+acceptable only for explicit loopback development and the fresh-install
+private-LAN bootstrap listener. That listener binds one RFC1918 address (or
+loopback for SSH forwarding), runs on a separate port, mounts only bounded
+network-onboarding routes plus static UI, and never accepts a password,
+recovery key, provider credential, product request, download or WebSocket.
+Pop serves one same-origin PWA/API and does not enable broad cross-origin
+credential access.
+
+The installer prints a 12-symbol ambiguity-free one-time pairing code valid for
+15 minutes. Only a salted SHA-256 digest is stored owner-only; the raw code
+never enters a URL, argv, environment, unit or journal. Five failed guesses
+lock pairing for one minute. A successful exchange consumes the code and puts a
+256-bit token only in that origin's `sessionStorage`. The master password route
+remains unavailable until Tailscale Serve HTTPS is verified, and a guided
+install accepts it only through the loopback proxy carrying
+`X-Forwarded-Proto: https`.
 
 ## Password setup and recovery
 

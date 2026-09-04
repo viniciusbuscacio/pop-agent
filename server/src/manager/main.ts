@@ -30,6 +30,16 @@ import { run, systemctlArgv, type ManagerDeps, type ServiceVerb } from './comman
  * `POP_AGENT_SERVICE` still overrides, for a box running two.
  */
 const UNIT = process.env['POP_AGENT_SERVICE'] ?? 'pop-agent-service';
+async function onboardingCode(): Promise<{ code: string; expiresAt: number } | undefined> {
+  const { resolveDataDir } = await import('../infrastructure/config/data-dir.js');
+  const { JsonServerOnboardingRepo, rotateServerOnboardingCode } = await import(
+    '../infrastructure/onboarding/onboarding-state-file.js'
+  );
+  return rotateServerOnboardingCode(
+    new JsonServerOnboardingRepo(join(resolveDataDir(), 'server-onboarding.json')),
+    Date.now(),
+  );
+}
 
 function service(verb: ServiceVerb): number {
   // `sudo` for the verbs that change something. Without it systemd hands the
@@ -123,11 +133,12 @@ async function deps(): Promise<ManagerDeps> {
       'The terminal client updates separately, from this server:',
       '  the Settings → About card shows the current npm command.',
     ],
+    onboardingCode,
   };
 }
 
 // Only the commands that need the database pay for opening it.
-const light = new Set(['start', 'stop', 'restart', 'status', 'help', '-h', '--help', undefined]);
+const light = new Set(['start', 'stop', 'restart', 'status', 'onboarding-code', 'help', '-h', '--help', undefined]);
 const argv = process.argv.slice(2);
 
 const resolved: ManagerDeps = light.has(argv[0])
@@ -146,6 +157,7 @@ const resolved: ManagerDeps = light.has(argv[0])
       resetPassword: () => Promise.resolve({ ok: false as const }),
       askPassword,
       updateSteps: () => [],
+      onboardingCode,
     }
   : await deps();
 

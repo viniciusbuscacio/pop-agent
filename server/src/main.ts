@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, type WebSocketServerLike } from '@hono/node-server';
@@ -95,6 +95,10 @@ import { SdkA2aClientFactory } from './infrastructure/a2a/sdk-a2a-client.js';
 import { buildA2aTools } from './infrastructure/agent/a2a-tools.js';
 import { OfficialMcpClientFactory } from './infrastructure/mcp/official-mcp-client.js';
 import { SseHub } from './interface/http/sse-hub.js';
+import { ServerOnboardingService } from './application/onboarding/server-onboarding-service.js';
+import { JsonServerOnboardingRepo } from './infrastructure/onboarding/onboarding-state-file.js';
+import { TailscaleCliGateway } from './infrastructure/onboarding/tailscale-cli-gateway.js';
+import { createBootstrapApp } from './interface/http/bootstrap-app.js';
 
 const port = Number(process.env['POP_AGENT_PORT'] ?? 8787);
 const hostname = process.env['POP_AGENT_BIND'] ?? '127.0.0.1';
@@ -124,6 +128,24 @@ const piActivationSupervisorScript = compiledServerArtifact(
 
 // Composition root: the one place that knows every layer (docs/specs/Spec-Pop-General.md §3).
 const context = bootstrap();
+const onboardingPath = join(context.dataDir, 'server-onboarding.json');
+const onboardingRepo = new JsonServerOnboardingRepo(onboardingPath);
+const onboardingRecord = onboardingRepo.read();
+if (existsSync(onboardingPath) && onboardingRecord === undefined) {
+  throw new Error(`invalid server onboarding state: ${onboardingPath}`);
+}
+const onboarding = onboardingRecord === undefined
+  ? undefined
+  : new ServerOnboardingService({
+      repo: onboardingRepo,
+      tailscale: new TailscaleCliGateway(port),
+      clock: systemClock,
+    });
+let bootstrapServer: { close(callback?: (error?: Error) => void): void } | undefined;
+const closeBootstrapServer = (): void => {
+  bootstrapServer?.close();
+  bootstrapServer = undefined;
+};
 const cliArchive = join(context.dataDir, 'releases', 'cli');
 archiveCliReleases(cliPack, cliArchive);
 
@@ -678,6 +700,7 @@ const sessionCommands = new SessionCommandService({
 
 const app = createApp({
   auth,
+  ...(onboarding === undefined ? {} : { onboarding, onSetupComplete: closeBootstrapServer }),
   settings,
   chats,
   files,
@@ -853,3 +876,38 @@ serve(
   }
   },
 );
+
+if (onboarding !== undefined) {
+  const bootstrapPort = boundedPort(process.env['POP_AGENT_BOOTSTRAP_PORT'] ?? '8788');
+  const bootstrapBind = privateBootstrapBind(process.env['POP_AGENT_BOOTSTRAP_BIND'] ?? '127.0.0.1');
+  const bootstrapApp = createBootstrapApp({ onboarding, webDist });
+  bootstrapServer = serve(
+    { fetch: bootstrapApp.fetch, port: bootstrapPort, hostname: bootstrapBind },
+    (info) => {
+      console.log(`Pop Agent setup available at http://${info.address}:${String(info.port)}/setup`);
+    },
+  );
+}
+
+function boundedPort(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535 || parsed === port) {
+    throw new Error('POP_AGENT_BOOTSTRAP_PORT must be a valid port different from POP_AGENT_PORT');
+  }
+  return parsed;
+}
+
+function privateBootstrapBind(value: string): string {
+  if (value === '127.0.0.1') return value;
+  const octets = value.split('.').map(Number);
+  const valid = octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
+  const privateAddress = valid && (
+    octets[0] === 10
+    || (octets[0] === 172 && octets[1]! >= 16 && octets[1]! <= 31)
+    || (octets[0] === 192 && octets[1] === 168)
+  );
+  if (!privateAddress) {
+    throw new Error('POP_AGENT_BOOTSTRAP_BIND must be loopback or an RFC1918 private IPv4 address');
+  }
+  return value;
+}

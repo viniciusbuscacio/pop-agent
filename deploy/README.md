@@ -16,15 +16,22 @@ those with `--data-dir`, `--workspace`, and `--port` when needed. A successful
 install also places the server manager at `/usr/local/bin/popman`, bound to the
 managed Node runtime and those exact data/workspace paths.
 
+On a fresh data directory it also prints `http://<private-LAN-IP>:8788/setup`
+and a 15-minute one-time code. That restricted page guides Tailscale login and
+private HTTPS, then sends the owner to the resulting `https://…ts.net` origin
+before accepting a master password. Use `popman onboarding-code` if the code
+expires. Use `--skip-network-onboarding` only when another HTTPS edge such as
+Caddy is already operator-managed.
+
 ## Fixed-ref GitHub acquisition
 
-Retrieve the planned immutable v0.2.43 installer over HTTPS into an owner-only
+Retrieve the planned immutable v0.2.44 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.43/server-install.sh && sh "$file" --ref v0.2.43)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.44/server-install.sh && sh "$file" --ref v0.2.44)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -56,8 +63,9 @@ refused because its destination now exists. Before handoff the script unsets
 common token, askpass, and SSH-agent environment variables. It neither puts
 tokens in URLs/argv/logs nor makes host credential files inaccessible; those
 files remain governed by host permissions and credential-tool configuration.
-DNS, TLS, firewall/proxy/tunnel configuration and account setup remain separate
-operator steps. The bootstrap handoff and printed retry command use the same
+The fresh guided path prepares Tailscale and private TLS but leaves tailnet
+authorization and account setup as explicit browser actions. Firewall policy
+and alternative proxies remain operator-owned. The bootstrap handoff and printed retry command use the same
 minimal explicit environment rather than inherited Git/token/agent variables.
 
 ## Local source acquisition
@@ -131,10 +139,12 @@ deploy/bootstrap-server.sh \
   --port 8787
 ```
 
-That flag permits only `sudo apt-get update` and installation of
+That flag permits only `sudo apt-get update`, the pinned official Tailscale apt
+key/repository, and installation of
 `ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`, and
-`python3` (required by native npm package builds), and `ffmpeg` for local voice
-transcription.
+`python3` (required by native npm package builds), `ffmpeg` for local voice
+transcription, and `tailscale` for guided private HTTPS. The key download is
+size/SHA-256 verified before root installation.
 Runtime downloads use `curl` as archive downloads; no remote script is piped to
 a shell.
 
@@ -149,8 +159,10 @@ the official Node, Go, and whisper.cpp release metadata, including byte sizes. T
 metadata regression test enforces the target matrix, official URL shape, exact
 hash syntax, and compatibility with the repository Node minimum.
 
-This bootstrap does **not** acquire source, provision Linux, configure DNS, TLS,
-firewalls, Tailscale, Caddy, a reverse proxy, or create a Pop account. It
+This bootstrap does **not** acquire source, provision Linux, open firewalls,
+enable Funnel, configure Caddy, or create a Pop account. The default fresh path
+does install/start Tailscale and delegate its CLI to the non-root service user;
+the paired browser owns login and Serve HTTPS activation. It
 is not a universal or public installer. Host and apt security updates remain the
 operator's responsibility.
 
@@ -168,7 +180,8 @@ npm run install:server -- \
 
 It validates Linux/systemd, Node 22.19+, npm, Git, Go 1.23+, required commands,
 checkout ownership and cleanliness. It then runs `npm ci` and the complete gate
-without root, uses narrowly scoped sudo to install the root-owned `popman`
+without root, uses narrowly scoped sudo to assign the service user as the
+Tailscale operator, install the root-owned `popman`
 launcher and activate the systemd unit, and performs bounded loopback health
 verification.
 

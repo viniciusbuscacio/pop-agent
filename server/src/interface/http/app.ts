@@ -72,9 +72,15 @@ import { createStaticSite } from './static-site.js';
 import { createMcpRoutes } from './mcp-routes.js';
 import { createA2aRoutes } from './a2a-routes.js';
 import { apiError } from './errors.js';
+import type { ServerOnboardingService } from '../../application/onboarding/server-onboarding-service.js';
+import { createOnboardingRoutes } from './onboarding-routes.js';
 
 export interface AppDeps {
   auth: AuthService;
+  /** Present only while a fresh guided server install is being completed. */
+  onboarding?: ServerOnboardingService;
+  /** Stops the temporary private-LAN listener after account setup is durable. */
+  onSetupComplete?: () => void;
   settings: SettingsService;
   chats: ChatService;
   /** The user's Files as a plain folder (docs/specs/Spec-Pop-General.md §14). */
@@ -205,6 +211,9 @@ export function createApp(deps: AppDeps): Hono {
     ],
     guarded: [
       sessionGuarded(createAuthRoutes(deps)),
+      ...(deps.onboarding === undefined
+        ? []
+        : [sessionGuarded(createOnboardingRoutes(deps.onboarding))]),
       sessionGuarded(createWebAuthnRoutes(deps)),
       sessionGuarded(createSettingsRoutes(deps)),
       sessionGuarded(createServerRoutes(deps)),

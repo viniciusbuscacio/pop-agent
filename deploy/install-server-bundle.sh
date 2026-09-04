@@ -12,6 +12,7 @@ TOOLCHAIN_DIR=
 PORT=8787
 INSTALL_APT=0
 PREPARE_ONLY=0
+SKIP_NETWORK_ONBOARDING=0
 STAGING=
 VERIFY_REPOSITORY=
 
@@ -41,6 +42,7 @@ Options:
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Install Git now and pass apt opt-in to the host bootstrap
   --prepare-only               Acquire source and prepare toolchain without systemd activation
+  --skip-network-onboarding    Keep network/TLS setup operator-managed
   -h, --help                   Show this help
 
 All source input is local. This command performs no HTTP requests.
@@ -64,6 +66,7 @@ while [ "$#" -gt 0 ]; do
     --port) require_value "$@"; PORT=$2; shift 2 ;;
     --install-apt-packages) INSTALL_APT=1; shift ;;
     --prepare-only) PREPARE_ONLY=1; shift ;;
+    --skip-network-onboarding) SKIP_NETWORK_ONBOARDING=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -155,4 +158,5 @@ set -- \
 if [ -n "$TOOLCHAIN_DIR" ]; then set -- "$@" --toolchain-dir "$TOOLCHAIN_DIR"; fi
 if [ "$INSTALL_APT" -eq 1 ]; then set -- "$@" --install-apt-packages; fi
 if [ "$PREPARE_ONLY" -eq 1 ]; then set -- "$@" --prepare-only; fi
+if [ "$SKIP_NETWORK_ONBOARDING" -eq 1 ]; then set -- "$@" --skip-network-onboarding; fi
 exec "$DESTINATION/deploy/bootstrap-server.sh" "$@"

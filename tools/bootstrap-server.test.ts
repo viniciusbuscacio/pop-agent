@@ -103,7 +103,7 @@ if [ "\${1:-}" = --version ]; then printf '10.9.0\\n'; exit 0; fi
   const sudoLog = join(root, 'sudo.log');
   const npmLog = join(root, 'npm.log');
   const osRelease = join(root, 'os-release');
-  writeFileSync(osRelease, 'ID=ubuntu\n');
+  writeFileSync(osRelease, 'ID=ubuntu\nVERSION_CODENAME=noble\n');
   executable(join(fakeBin, 'curl'), `#!/bin/sh
 output=
 url=
@@ -122,6 +122,7 @@ cp "$BOOTSTRAP_TEST_FIXTURES/\${url##*/}" "$output"
   executable(join(fakeBin, 'id'), '#!/bin/sh\n[ "$1" = -u ] || exit 2\nprintf "%s\\n" "${FAKE_UID:-1000}"\n');
   executable(join(fakeBin, 'sudo'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$BOOTSTRAP_TEST_SUDO_LOG"\nexit 0\n');
   executable(join(fakeBin, 'ffmpeg'), '#!/bin/sh\nexit 0\n');
+  executable(join(fakeBin, 'tailscale'), '#!/bin/sh\n[ "${1:-}" = version ] && printf "1.98.10\\n"\nexit 0\n');
 
   return {
     root,
@@ -210,6 +211,16 @@ describe('server toolchain bootstrap', () => {
       '-- env DEBIAN_FRONTEND=noninteractive apt-get update',
       '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg',
     ]);
+  });
+
+  it('installs Tailscale from the pinned official apt key for guided setup', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '../deploy/bootstrap-server.sh'), 'utf8');
+    expect(source).toContain('https://pkgs.tailscale.com/stable/ubuntu/$DIST_CODENAME.noarmor.gpg');
+    expect(source).toContain('3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39');
+    expect(source).toContain('/usr/share/keyrings/tailscale-archive-keyring.gpg');
+    expect(source).toContain('/etc/apt/sources.list.d/tailscale.list');
+    expect(source).toContain('apt-get install -y --no-install-recommends tailscale');
+    expect(source).toContain('systemctl enable --now tailscaled');
   });
 
   it('accepts the standard Ubuntu os-release symlink', () => {

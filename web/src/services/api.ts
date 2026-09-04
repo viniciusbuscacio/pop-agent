@@ -148,7 +148,7 @@ function retriesLocalReconnect(path: string, method: string): boolean {
 
 export async function apiRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; onboardingToken?: string } = {},
   runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
@@ -157,6 +157,9 @@ export async function apiRequest<T>(
   const method = init.method ?? 'GET';
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
+  if (init.onboardingToken !== undefined) {
+    headers['x-pop-agent-onboarding-token'] = init.onboardingToken;
+  }
   // Capture one stable selector for the whole operation. A reconnect changes
   // only the server-side transport ID; retries must neither lose local routing
   // nor jump to a different machine selected in another UI interaction.

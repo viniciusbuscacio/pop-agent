@@ -34,6 +34,16 @@ session. SSE uses a short-lived single-use session-bound ticket because native
 EventSource cannot send Authorization headers. Signed file downloads use their
 own path-and-expiry HMAC authorization.
 
+Fresh guided installation adds a separate pre-account authorization boundary:
+`GET /v1/onboarding/public` exposes only whether pairing or secure handoff is
+required; `POST /v1/onboarding/pair` consumes the terminal code; and detailed
+state, Tailscale login, and Serve HTTPS actions require
+`X-Pop-Onboarding-Token`. The temporary HTTP application mounts those routes,
+`/v1/auth/state`, `/v1/health`, `/healthz`, and the static setup shell only. It
+does not mount `/v1/setup` or any login, recovery, product, artifact or local
+access route. Ordinary deployments without pending guided state do not create
+this listener.
+
 ## Error envelope
 
 All expected API failures use:

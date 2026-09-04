@@ -43,6 +43,11 @@ export function publicSurface(reason: string, routes: Hono): PublicSurface {
 export const PUBLIC_V1_PATHS: readonly { path: string; reason: string }[] = [
   { path: '/v1/health', reason: 'sidebar health dot; leaks only ok/error flags' },
   { path: '/v1/auth/state', reason: 'the login screen needs to know setup state' },
+  { path: '/v1/onboarding/public', reason: 'the temporary installer needs only phase and expiry metadata' },
+  { path: '/v1/onboarding/pair', reason: 'the terminal-only one-time code authorizes this exchange' },
+  { path: '/v1/onboarding/state', reason: 'the route enforces its separate onboarding token' },
+  { path: '/v1/onboarding/tailscale/connect', reason: 'the route enforces its separate onboarding token' },
+  { path: '/v1/onboarding/tailscale/https', reason: 'the route enforces its separate onboarding token' },
   { path: '/v1/setup', reason: 'first-run password creation happens pre-session' },
   { path: '/v1/login', reason: 'login is how a session is born' },
   { path: '/v1/auth/recover', reason: 'recovery runs exactly when the session is lost' },

@@ -30,6 +30,7 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
     resetPassword: () => Promise.resolve({ ok: true, recoveryKey: 'KEY-1234' }),
     askPassword: () => Promise.resolve('correcthorsebattery'),
     updateSteps: () => ['git pull'],
+    onboardingCode: () => Promise.resolve({ code: 'ABCD-EFGH-JKMN', expiresAt: 1_700_000_900_000 }),
     ...overrides,
   };
 
@@ -155,6 +156,16 @@ describe('popman', () => {
     const h = harness();
     expect(await run(['access-list', 'clean'], h.deps)).toBe(1);
     expect(h.err.join('\n')).toContain('Not built yet');
+  });
+
+  it('prints a replacement onboarding code only while setup is pending', async () => {
+    const h = harness();
+    expect(await run(['onboarding-code'], h.deps)).toBe(0);
+    expect(h.out.join('\n')).toContain('ABCD-EFGH-JKMN');
+
+    const done = harness({ onboardingCode: () => Promise.resolve(undefined) });
+    expect(await run(['onboarding-code'], done.deps)).toBe(1);
+    expect(done.err.join('\n')).toContain('No pending network onboarding');
   });
 
   it('reads status without sudo, and changes the machine with it', async () => {

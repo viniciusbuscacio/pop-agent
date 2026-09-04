@@ -37,6 +37,7 @@ class FakeRunner implements CommandRunner {
     if (key === 'systemctl --version') return result('systemd 255\n');
     if (key === 'sudo --version') return result('Sudo version 1.9.15\n');
     if (key === 'install --version') return result('install (GNU coreutils) 9.4\n');
+    if (key === 'tailscale version') return result('1.98.10\n');
     if (key === 'git rev-parse --show-toplevel') return result(`${this.checkout}\n`);
     if (key === 'git status --porcelain=v1 --untracked-files=normal') return result(this.dirty ? '?? unexpected\n' : '');
     if (command === 'sudo' && args[1] === 'install') {
@@ -96,6 +97,7 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
       whisperExecutable: '/opt/pop-whisper/whisper-cli',
       systemdRuntimeDir: systemdRuntime,
       healthCheck: async () => true,
+      privateIpv4: () => '192.168.50.12',
     },
     runner,
   };
@@ -124,6 +126,8 @@ describe('systemd server installer', () => {
     expect(unit).toContain('Environment=PATH=/opt/pop-node/bin:/opt/pop-go/bin:/opt/pop-whisper:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n');
     expect(unit).toContain('Environment=PI_OFFLINE=1\n');
     expect(unit).toContain('Environment=POP_AGENT_BIND=127.0.0.1\n');
+    expect(unit).toContain('Environment=POP_AGENT_BOOTSTRAP_BIND=127.0.0.1\n');
+    expect(unit).toContain('Environment=POP_AGENT_BOOTSTRAP_PORT=8788\n');
     expect(unit).toContain('Environment=POP_AGENT_DATA_DIR=/srv/pop-agent/data\n');
     expect(unit).toContain('Environment=POP_AGENT_WORKSPACE=/srv/pop-agent/workspace\n');
     expect(unit).toContain('ExecStart=/opt/pop-node/bin/node /srv/pop-agent/source/server/dist/main.js\n');
@@ -174,12 +178,14 @@ describe('systemd server installer', () => {
     expect(commandLines).toContain('npm ci');
     expect(commandLines).toContain('npm run gate');
     expect(commandLines).toContain('sudo -- systemctl daemon-reload');
+    expect(commandLines).toContain('sudo -- tailscale set --operator=popowner');
     expect(commandLines).toContain('sudo -- systemctl enable pop-agent-service.service');
     expect(commandLines).toContain('sudo -- systemctl restart pop-agent-service.service');
     expect(commandLines.indexOf('npm ci')).toBeLessThan(commandLines.indexOf('npm run gate'));
     expect(commandLines.indexOf('npm run gate')).toBeLessThan(commandLines.indexOf('sudo -- systemctl daemon-reload'));
     expect(runner.calls.find((call) => call.command === 'npm' && call.args[0] === 'ci')?.inherit).toBe(true);
     expect(runner.installedUnit).toContain(`WorkingDirectory=${realpathSync(options.checkout)}\n`);
+    expect(runner.installedUnit).toContain('Environment=POP_AGENT_BOOTSTRAP_BIND=192.168.50.12\n');
     expect(runner.installedPopman).toContain(`export POP_AGENT_DATA_DIR=${realpathSync(options.dataDir)}\n`);
     expect(runner.installedPopman).toContain(`export POP_AGENT_WORKSPACE=${realpathSync(options.workspace)}\n`);
     expect(runner.installedPopman).toContain(`exec /usr/bin/node ${realpathSync(options.checkout)}/server/dist/manager/main.js "$@"\n`);
@@ -190,6 +196,20 @@ describe('systemd server installer', () => {
     expect(statSync(options.dataDir).mode & 0o777).toBe(0o700);
     expect(statSync(options.workspace).mode & 0o777).toBe(0o700);
     expect(statSync(join(dirname(options.dataDir), 'pop-backups')).mode & 0o777).toBe(0o700);
+  });
+
+  it('does not add guided Tailscale setup to an existing server data root', async () => {
+    const { options, dependencies, runner } = fixture();
+    mkdirSync(options.dataDir, { recursive: true });
+    writeFileSync(join(options.dataDir, 'pop-agent.db'), 'existing');
+
+    await installPreparedCheckout(options, dependencies);
+
+    const commands = runner.calls.map((call) => `${call.command} ${call.args.join(' ')}`);
+    expect(commands).not.toContain('tailscale version');
+    expect(commands).not.toContain('sudo -- tailscale set --operator=popowner');
+    expect(runner.installedUnit).not.toContain('POP_AGENT_BOOTSTRAP_BIND');
+    expect(existsSync(join(options.dataDir, 'server-onboarding.json'))).toBe(false);
   });
 
   it('resolves symlinked parents before refusing data paths inside the checkout', async () => {

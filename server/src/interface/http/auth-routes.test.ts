@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import { createTestApp, FakeClock, type TestApp } from '../../testing/app-fixture.js';
+import { ServerOnboardingService } from '../../application/onboarding/server-onboarding-service.js';
+import type { ServerOnboardingRecord, ServerOnboardingRepo } from '../../application/ports/server-onboarding.js';
 
 const PASSWORD = 'correct horse battery';
 const NEW_PASSWORD = 'another good password';
@@ -57,6 +59,52 @@ describe('POST /v1/session/refresh', () => {
 });
 
 describe('POST /v1/setup', () => {
+  it('keeps the master password behind completed, proxied HTTPS onboarding', async () => {
+    class Repo implements ServerOnboardingRepo {
+      record: ServerOnboardingRecord | undefined = {
+        version: 1,
+        phase: 'pairing',
+        codeSalt: '1'.repeat(32),
+        codeDigest: '2'.repeat(64),
+        codeExpiresAt: clock.now() + 60_000,
+        failedAttempts: 0,
+      };
+      read() { return this.record; }
+      write(record: ServerOnboardingRecord) { this.record = record; }
+      remove() { this.record = undefined; }
+    }
+    const repo = new Repo();
+    const onboarding = new ServerOnboardingService({
+      repo,
+      clock,
+      tailscale: {
+        status: () => ({ installed: true, connected: true, serve: 'none' }),
+        beginLogin: () => Promise.resolve(undefined),
+        enableHttps: () => ({ ok: false, reason: 'failed' }),
+      },
+    });
+    fixture = createTestApp(clock, { onboarding });
+    app = fixture.app;
+
+    expect(await (await app.request('/v1/auth/state')).json()).toEqual({
+      setupDone: false,
+      setupMode: 'network',
+    });
+    expect((await post('/v1/setup', { password: PASSWORD })).status).toBe(409);
+
+    repo.record = { ...repo.record!, phase: 'secure', secureUrl: 'https://pop.example.ts.net' };
+    expect((await post('/v1/setup', { password: PASSWORD })).status).toBe(403);
+    const secure = await app.request('/v1/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-proto': 'https' },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    expect(secure.status).toBe(200);
+    const { token } = (await secure.json()) as { token: string };
+    expect((await post('/v1/setup/acknowledge', undefined, token)).status).toBe(200);
+    expect(repo.record).toBeUndefined();
+  });
+
   it('creates a pending account and completes it only after authenticated acknowledgement', async () => {
     const body = await setup(false);
     expect(body.recoveryKey).toMatch(/^[A-Z2-9]{4}(-[A-Z2-9]{4}){5}$/);

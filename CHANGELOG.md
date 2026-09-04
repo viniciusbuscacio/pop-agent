@@ -4,6 +4,18 @@ All notable changes to Pop Agent. Dates are ISO. Current normative rules start
 at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 `docs/specs/History-Pop-Spec.md`.
 
+## v0.2.44 — 2026-09-04
+
+### Added
+
+- **Fresh Ubuntu installs now continue in a guided private-network setup page.**
+  The installer prints a private-LAN HTTP URL and 15-minute one-time code; that
+  restricted surface can only pair the browser, authorize Tailscale and enable
+  tailnet-only Serve HTTPS. It never mounts password, login, recovery or product
+  APIs. Master-password creation begins only at the verified `https://…ts.net`
+  origin, conflicting Serve configuration is preserved, Funnel is never used,
+  and `popman onboarding-code` recovers an expired pairing code.
+
 ## v0.2.43 — 2026-09-01
 
 ### Changed

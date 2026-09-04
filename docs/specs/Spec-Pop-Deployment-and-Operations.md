@@ -32,16 +32,19 @@ Both acquisition paths hand explicit checkout/data/workspace/port values to the
 delivered non-root Ubuntu amd64/arm64 bootstrap. The fresh-host path
 explicitly opts in to the same narrowly scoped apt build/download prerequisite
 allowlist needed for a fresh supported host. The bootstrap installs an exact
-repository-pinned Node/Go/whisper.cpp toolchain per user, installs ffmpeg, then hands the checkout to the
+repository-pinned Node/Go/whisper.cpp toolchain per user, installs ffmpeg and
+Tailscale for the default guided path, then hands the checkout to the
 prepared-checkout installer. That installer validates the host, runs locked
 dependency installation and the full gate as the non-root checkout owner,
 generates/activates the production unit through narrowly scoped sudo, and
-verifies loopback health. This server installer does not provision Linux or
-configure DNS, TLS, firewall, reverse proxy, or an account. A separate explicit
-helper may configure Tailscale Serve only after local health and an existing
-authenticated Tailscale session are verified.
-Documentation must not present those operator-owned steps or client/PLA
-installers as part of it.
+verifies loopback health. On a fresh data root it assigns the non-root service
+user as Tailscale operator, creates an owner-only pairing record and prints a
+temporary `http://<RFC1918-IP>:8788/setup` URL plus 15-minute code. The paired
+browser owns Tailscale authorization, the Certificate Transparency notice and
+private Serve HTTPS activation. This server installer does not provision Linux,
+open a firewall, enable Funnel, alter tailnet policy, or create an account.
+`--skip-network-onboarding` keeps TLS entirely operator-managed. A separate
+explicit helper remains available for manual/repair Serve configuration.
 
 A production checkout is built and gated before activation. Runtime data lives
 outside the checkout through `POP_AGENT_DATA_DIR` and workspace configuration.
@@ -51,10 +54,11 @@ archives.
 ## Network exposure and TLS
 
 The application binds loopback by default. Production HTTPS is terminated by
-an operator-managed reverse proxy/tunnel:
+a reverse proxy/tunnel:
 
 - public VPS: Caddy (recommended) or equivalent with a stable domain and ACME;
-- inbound ports unavailable/CGNAT: `tailscale serve` for tailnet-only HTTPS;
+- the default guided fresh install: `tailscale serve` for tailnet-only HTTPS;
+- inbound ports unavailable/CGNAT: the same tailnet-only Serve shape;
 - optional intentional public tunnel/funnel according to operator policy.
 
 The proxy must preserve streaming responses, disable buffering for SSE, allow
@@ -62,7 +66,10 @@ WebSocket upgrade for PLA, pass the original Host/proto correctly and use idle
 timeouts longer than event/PLA heartbeats. Compression/caching must not coalesce
 live streams.
 
-Remote plain HTTP is unsupported. Loopback HTTP remains for smoke/development.
+Remote plain HTTP is unsupported after installation. Loopback HTTP remains for
+smoke/development. The only non-loopback HTTP exception is the fresh-install
+restricted listener on one RFC1918 address and separate port. It mounts no
+credential or product route and is removed after first-owner setup.
 A stable HTTPS origin is required for installable PWA, WebAuthn RP binding,
 service worker and remote launcher profiles.
 
@@ -80,6 +87,11 @@ so pi catalog bookkeeping cannot stall service-side subscription sign-in. It
 restarts unexpected failures with bounded backoff/start limits, receives SIGTERM
 on planned stop and journals stdout/stderr. Rerunning the installer regenerates,
 reinstalls and restarts the same named unit rather than accumulating services.
+While owner-only `server-onboarding.json` exists, it also carries the validated
+private bootstrap bind/port. The runtime refuses public, wildcard or same-port
+bootstrap binds. Tailscale Serve is accepted only when port 443 HTTPS has one
+handler proxying exactly to `http://127.0.0.1:<app-port>`; any other existing
+Serve state is a conflict and remains unchanged.
 
 The process opens/migrates SQLite, reconciles recoverable publications/state,
 loads services, starts HTTP, then starts timers/background admission. Startup

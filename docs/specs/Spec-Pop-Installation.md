@@ -2,7 +2,7 @@
 
 **Status:** normative
 **Legacy coverage:** §15 updates
-**Primary implementation:** `launcher/`, `local-access/tray/`, `server/src/interface/http/*installer*`, `server/src/application/update/`, `server/src/infrastructure/update/`, `server/src/manager/`, `web/src/services/pwa-*`
+**Primary implementation:** `deploy/`, `tools/install-systemd.ts`, `launcher/`, `local-access/tray/`, `server/src/{application,infrastructure}/onboarding/`, `server/src/interface/http/{bootstrap-app,onboarding-routes}.ts`, `server/src/application/update/`, `server/src/infrastructure/update/`, `server/src/manager/`, `web/src/{routes/setup-page,services/onboarding}.ts*`, `web/src/services/pwa-*`
 **Related:** [`Spec-Pop-Frontend.md`](Spec-Pop-Frontend.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md), [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Deployment-and-Operations.md`](Spec-Pop-Deployment-and-Operations.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`../cli.md`](../cli.md)
 
 ## Purpose and scope
@@ -63,9 +63,11 @@ Every installation and update path must preserve these rules:
     operator action—not as telemetry.
 
 Remote client installation requires HTTPS. Plain HTTP is accepted only for a
-loopback development server. TLS authenticates the personal server and release
-source; checksums detect corruption and bind downloaded bytes to the manifest or
-script the client already received.
+loopback development server and the fresh-install restricted bootstrap listener
+on one RFC1918 address. That listener cannot accept credentials or product
+traffic and exists only until private HTTPS and first-owner setup complete. TLS
+authenticates the personal server and release source; checksums detect corruption
+and bind downloaded bytes to the manifest or script the client already received.
 
 ## Product installation topology
 
@@ -95,7 +97,9 @@ cd pop-agent
 ```
 
 `--data-dir`, `--workspace`, `--port` and `--prepare-only` provide explicit
-overrides. A producer-to-shell pipeline is not an installation command.
+overrides. `--skip-network-onboarding` is the deliberate escape hatch for an
+operator-managed Caddy/HTTPS deployment. A producer-to-shell pipeline is not an
+installation command.
 
 The root `server-install.sh` remains the fixed-ref GitHub acquisition path for
 operators who need branch/tag/commit resolution or authenticated private/fork
@@ -175,7 +179,10 @@ deploy/bootstrap-server.sh --install-apt-packages
 It refuses root and unsupported platforms. An explicit
 `--install-apt-packages` opt-in permits only apt update/install of
 `ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`,
-`python3`, and `ffmpeg` through sudo. Without that flag the bootstrap
+`python3`, `ffmpeg`, and `tailscale` through sudo. When Tailscale is absent, its
+official Ubuntu apt key is downloaded over HTTPS, checked against a
+repository-pinned byte size and SHA-256, and installed with a fixed codename
+repository entry before package installation. Without that flag the bootstrap
 only validates host commands. It never pipes downloaded content to a shell.
 Exact Node, Go and whisper.cpp archives, URLs,
 sizes and official SHA-256 values are repository-pinned for both architectures;
@@ -202,7 +209,8 @@ activation it validates Linux with a running systemd, Node 22.19+, npm, Git, Go
 paths outside the clean checkout and checkout ownership. It runs `npm ci` and
 `npm run gate` without root privileges, requires the built
 `server/dist/main.js`, creates owner-controlled data/workspace roots, then uses
-sudo only for an explicit root-owned `/usr/local/bin/popman` launcher and the
+sudo only for an explicit Tailscale operator assignment, root-owned
+`/usr/local/bin/popman` launcher and the
 unit-file install, daemon reload, enable and restart commands. The launcher pins
 the selected managed Node executable and canonical data/workspace paths rather
 than depending on a global Node or `$HOME` defaults. The installer installs an
@@ -212,7 +220,33 @@ Go and whisper.cpp directories on the service `PATH`, offline pi catalog
 bookkeeping and bounded restart. The owner-only backup
 sibling used by the server is prepared with the data root, then the installer
 performs a bounded `/healthz` check and confirms that systemd still reports the
-unit active.
+unit active. The assignment lets the non-root service invoke only the Tailscale
+CLI; no root-capable web helper is created.
+
+For a fresh data root (or a rerun while its onboarding record still exists),
+the installer chooses the first RFC1918 IPv4 address (or
+loopback with an SSH-forwarding notice), opens a second listener on port 8788,
+and prints its `/setup` URL plus a one-time 12-symbol code. Only a salted digest
+of that code is written to the owner-only data root. It expires after 15 minutes,
+is consumed by the first successful exchange, locks for one minute after five
+misses, and can be replaced locally with `popman onboarding-code`. The main app
+continues to bind only `127.0.0.1:8787`.
+
+The temporary application mounts static setup assets, liveness/auth-mode
+metadata and the onboarding routes only. After pairing, it drives `tailscale
+up`, returns only a strictly validated Tailscale login URL, and polls daemon
+state. Before Serve activation it explains that the device must share the
+tailnet and requires explicit acceptance that the machine/tailnet FQDN appears
+in public Certificate Transparency logs. It refuses an existing conflicting
+Serve configuration rather than replacing it, never enables Funnel, and accepts
+the master password only after verifying HTTPS on port 443 proxies exactly to
+the loopback Pop origin. The owner continues on the verified `https://…ts.net`
+origin; completing recovery-key acknowledgement deletes onboarding state and
+closes the temporary listener.
+
+An existing data root with no onboarding record is upgraded without adding a
+Tailscale dependency or temporary listener. This preserves earlier Caddy/manual
+deployments; the guided default applies only to a genuinely fresh setup.
 
 Neither layer accepts or generates a secrets environment file. Provider and
 account secrets remain in Pop-owned storage rather than argv, installer logs or
@@ -220,16 +254,16 @@ the unit. The removed ubuntu-home development unit is not a production
 template; the TypeScript generator is the unit source of truth.
 
 The operator must maintain the host, any required private or access-controlled
-source credentials, and the apt security channel; configure a supported HTTPS
-exposure shape; complete first-run account setup; and verify public health. The
-host bootstrap itself does not install or own Linux, repository/source acquisition,
-DNS, TLS, a firewall, Caddy or account setup, and it does not
-modify system-wide Node or Go.
+source credentials, the apt security channel and tailnet policy; complete the
+explicit Tailscale authorization and first-run account setup; and verify health.
+The host bootstrap itself does not install or own Linux, repository/source
+acquisition, a public DNS zone, firewall, Caddy, Funnel or account setup, and it
+does not modify system-wide Node or Go.
 
-`deploy/configure-tailscale.sh` is a separate explicit exposure helper. It may
-run only after the loopback health check passes and the operator has independently
-installed and authenticated Tailscale. It configures Tailscale Serve for the
-loopback origin, never Funnel, installation, login, or tailnet policy.
+`deploy/configure-tailscale.sh` remains a separate repair/manual exposure helper
+for skipped or existing deployments. It may run only after the loopback health
+check passes and Tailscale is authenticated. It configures Tailscale Serve for
+the loopback origin and never Funnel or tailnet policy.
 
 ## Installation guide in the PWA
 
@@ -556,8 +590,8 @@ be coupled to PWA service-worker activation.
 
 ## Security requirements
 
-- Production origins and downloads use HTTPS; only loopback development may use
-  HTTP.
+- Production origins and downloads use HTTPS; only loopback development and the
+  credential-free RFC1918 first-install listener may use HTTP.
 - Installer-generated origins are escaped for their shell language.
 - Shell scripts use strict failure behavior and temporary files with cleanup.
 - PowerShell uses strict mode and terminating errors.

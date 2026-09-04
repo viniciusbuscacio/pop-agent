@@ -11,7 +11,10 @@ WORKSPACE=$HOME/pop-agent-workspace
 PORT=8787
 INSTALL_APT=0
 PREPARE_ONLY=0
+NETWORK_ONBOARDING=1
 STAGING_DIR=
+TAILSCALE_KEY_TEMP=
+TAILSCALE_LIST_TEMP=
 
 say() {
   printf '%s\n' "$*"
@@ -26,6 +29,8 @@ cleanup() {
   if [ -n "$STAGING_DIR" ] && [ -d "$STAGING_DIR" ]; then
     rm -rf -- "$STAGING_DIR"
   fi
+  [ -z "$TAILSCALE_KEY_TEMP" ] || rm -f -- "$TAILSCALE_KEY_TEMP"
+  [ -z "$TAILSCALE_LIST_TEMP" ] || rm -f -- "$TAILSCALE_LIST_TEMP"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -44,9 +49,11 @@ Options:
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Explicitly allow the narrow apt prerequisite phase
   --prepare-only               Prepare and verify the toolchain without invoking systemd installation
+  --skip-network-onboarding    Do not prepare the temporary HTTP/Tailscale setup flow
   -h, --help                   Show this help
 
-This is not a source, DNS, TLS, proxy, Tailscale, Caddy, or account installer.
+The normal fresh-host path installs Tailscale and delegates its CLI to the service user.
+It never exposes a password on HTTP; account setup begins only after private HTTPS works.
 It never pipes a remote script to a shell and never installs Node, Go, or whisper.cpp system-wide.
 EOF
 }
@@ -91,6 +98,10 @@ while [ "$#" -gt 0 ]; do
       PREPARE_ONLY=1
       shift
       ;;
+    --skip-network-onboarding)
+      NETWORK_ONBOARDING=0
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -133,6 +144,7 @@ esac
 OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}
 [ -f "$OS_RELEASE_FILE" ] && [ -r "$OS_RELEASE_FILE" ] || die "cannot identify the Linux distribution from $OS_RELEASE_FILE"
 DIST_ID=
+DIST_CODENAME=
 # ID in os-release is specified as shell-compatible data. Read only this field and
 # remove its optional quotes instead of sourcing the whole host-owned file.
 while IFS= read -r os_line; do
@@ -143,7 +155,13 @@ while IFS= read -r os_line; do
       DIST_ID=${DIST_ID%\"}
       DIST_ID=${DIST_ID#\'}
       DIST_ID=${DIST_ID%\'}
-      break
+      ;;
+    VERSION_CODENAME=*)
+      DIST_CODENAME=${os_line#VERSION_CODENAME=}
+      DIST_CODENAME=${DIST_CODENAME#\"}
+      DIST_CODENAME=${DIST_CODENAME%\"}
+      DIST_CODENAME=${DIST_CODENAME#\'}
+      DIST_CODENAME=${DIST_CODENAME%\'}
       ;;
   esac
 done < "$OS_RELEASE_FILE"
@@ -159,6 +177,28 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   say "Installing the explicitly approved apt prerequisites..."
   sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
   sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg
+  if [ "$PREPARE_ONLY" -eq 0 ] && [ "$NETWORK_ONBOARDING" -eq 1 ] && ! command -v tailscale >/dev/null 2>&1; then
+    case $DIST_CODENAME in ''|*[!a-z0-9]*) die "unsupported Ubuntu codename for the Tailscale repository: $DIST_CODENAME" ;; esac
+    TAILSCALE_KEY_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-key.XXXXXX") \
+      || die "could not create temporary Tailscale key file"
+    TAILSCALE_LIST_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-list.XXXXXX") \
+      || die "could not create temporary Tailscale repository file"
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+      --output "$TAILSCALE_KEY_TEMP" https://pkgs.tailscale.com/stable/ubuntu/$DIST_CODENAME.noarmor.gpg \
+      || die "could not download the official Tailscale package key"
+    tailscale_key_size=$(wc -c < "$TAILSCALE_KEY_TEMP" | tr -d ' ')
+    tailscale_key_hash=$(sha256sum "$TAILSCALE_KEY_TEMP") || die "could not hash the Tailscale package key"
+    tailscale_key_hash=${tailscale_key_hash%% *}
+    [ "$tailscale_key_size" = 2288 ] \
+      && [ "$tailscale_key_hash" = 3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39 ] \
+      || die "the Tailscale package key did not match the repository-pinned size/SHA-256"
+    printf 'deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu %s main\n' \
+      "$DIST_CODENAME" > "$TAILSCALE_LIST_TEMP"
+    sudo -- install -o root -g root -m 0644 "$TAILSCALE_KEY_TEMP" /usr/share/keyrings/tailscale-archive-keyring.gpg
+    sudo -- install -o root -g root -m 0644 "$TAILSCALE_LIST_TEMP" /etc/apt/sources.list.d/tailscale.list
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tailscale
+  fi
 fi
 
 for required in curl git tar xz sha256sum find readlink mktemp mv ffmpeg; do
@@ -166,6 +206,10 @@ for required in curl git tar xz sha256sum find readlink mktemp mv ffmpeg; do
 done
 if [ "$PREPARE_ONLY" -eq 0 ]; then
   require_command sudo
+  if [ "$NETWORK_ONBOARDING" -eq 1 ]; then
+    require_command tailscale
+    sudo -- systemctl enable --now tailscaled
+  fi
 fi
 
 [ -r "$MANIFEST" ] || die "pinned toolchain manifest is missing: $MANIFEST"
@@ -420,4 +464,7 @@ fi
 
 say "Handing off to the delivered prepared-checkout installer..."
 cd -- "$CHECKOUT"
+if [ "$NETWORK_ONBOARDING" -eq 0 ]; then
+  exec npm run install:server -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT" --skip-network-onboarding
+fi
 exec npm run install:server -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT"

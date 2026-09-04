@@ -110,6 +110,15 @@ Boot asks `GET /v1/auth/state` and chooses one of four states:
 - `signed-out` — route to `/login`;
 - `signed-in` — start the one SSE connection and allow protected routes.
 
+On a fresh guided server, `setupMode: network` makes `/setup` render the
+restricted installation sequence before the account sequence. It exchanges the
+terminal code, opens the Tailscale authorization URL, polls typed onboarding
+state, explains that this browser must share the tailnet, and requires explicit
+acceptance of the Certificate Transparency hostname disclosure before enabling
+Serve HTTPS. The token stays in `sessionStorage` and never enters a URL. Once
+the backend verifies the exact loopback Serve target, the page links to the
+generated `https://…ts.net/setup` origin; password fields render only there.
+
 A session rejected with `invalid_session` is cleared once and navigates to
 login. A wrong password is an ordinary form failure and must not trigger the
 global lost-session path.

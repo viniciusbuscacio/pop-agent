@@ -10,6 +10,7 @@ WORKSPACE=$HOME/pop-agent-workspace
 PORT=8787
 INSTALL_APT=1
 PREPARE_ONLY=0
+SKIP_NETWORK_ONBOARDING=0
 STAGING=
 INVOKING_UID=
 PARENT=
@@ -42,13 +43,15 @@ Options:
   --port PORT                  Server loopback port (default: 8787)
   --prepare-only               Acquire source and prepare the toolchain without systemd activation
   --no-install-apt-packages    Do not opt in to the bootstrap's fixed apt prerequisite allowlist
+  --skip-network-onboarding    Keep network/TLS setup operator-managed (for Caddy or another proxy)
   -h, --help                   Show this help
 
 Public repositories require only Git and are acquired over non-interactive
 HTTPS. An authenticated GitHub CLI session is optional and enables private or
 access-controlled repositories and forks. Neither path accepts a token argument
 or puts credentials in source URLs. The destination must not already exist. The
-script does not configure DNS, TLS, a firewall, proxy, tunnel, or Pop account.
+By default the acquired bootstrap prepares guided private HTTPS through Tailscale.
+It never configures Funnel, a public firewall rule, or a Pop account password.
 EOF
 }
 
@@ -67,6 +70,7 @@ while [ "$#" -gt 0 ]; do
     --port) require_value "$@"; PORT=$2; shift 2 ;;
     --prepare-only) PREPARE_ONLY=1; shift ;;
     --no-install-apt-packages) INSTALL_APT=0; shift ;;
+    --skip-network-onboarding) SKIP_NETWORK_ONBOARDING=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -333,6 +337,7 @@ set -- \
   --port "$PORT"
 if [ "$INSTALL_APT" -eq 1 ]; then set -- "$@" --install-apt-packages; fi
 if [ "$PREPARE_ONLY" -eq 1 ]; then set -- "$@" --prepare-only; fi
+if [ "$SKIP_NETWORK_ONBOARDING" -eq 1 ]; then set -- "$@" --skip-network-onboarding; fi
 say "Handing off to the acquired checkout's verified host bootstrap..."
 if env -i HOME="$SAFE_HOME" USER="$SERVICE_USER" LOGNAME="$SERVICE_USER" \
   PATH="$SAFE_PATH" LANG="$SAFE_LANG" "$BOOTSTRAP" "$@"; then

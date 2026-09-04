@@ -7,22 +7,46 @@ import { SetupPage } from './setup-page';
 
 const setup = vi.fn();
 const acknowledgeSetup = vi.fn();
+const authState = vi.fn();
+const onboardingPublic = vi.fn();
+const onboardingPair = vi.fn();
+const onboardingState = vi.fn();
+const onboardingConnect = vi.fn();
+const onboardingHttps = vi.fn();
 vi.mock('../services/auth', () => ({
   authService: {
+    state: () => authState() as Promise<unknown>,
     setup: (password: string) => setup(password) as Promise<unknown>,
     acknowledgeSetup: () => acknowledgeSetup() as Promise<unknown>,
+  },
+}));
+vi.mock('../services/onboarding', () => ({
+  onboardingSession: {
+    read: () => sessionStorage.getItem('test-onboarding') ?? undefined,
+    write: (token: string) => sessionStorage.setItem('test-onboarding', token),
+    clear: () => sessionStorage.removeItem('test-onboarding'),
+  },
+  onboardingService: {
+    publicState: () => onboardingPublic() as Promise<unknown>,
+    pair: (code: string) => onboardingPair(code) as Promise<unknown>,
+    state: (token: string) => onboardingState(token) as Promise<unknown>,
+    connect: (token: string) => onboardingConnect(token) as Promise<unknown>,
+    enableHttps: (token: string, accepted: boolean, hostname?: string) =>
+      onboardingHttps(token, accepted, hostname) as Promise<unknown>,
   },
 }));
 
 const PASSWORD = 'correct horse battery';
 const RECOVERY_KEY = 'ABCD-EFGH-JKMN-PQRS-TUVW-XYZ2';
 
-function renderWizard() {
-  return render(
+async function renderWizard() {
+  const rendered = render(
     <MemoryRouter>
       <SetupPage />
     </MemoryRouter>,
   );
+  await waitFor(() => expect(screen.getByTestId('setup-password')).toBeDefined());
+  return rendered;
 }
 
 /** Plain DOM assertion: the repo does not carry jest-dom's matchers. */
@@ -35,6 +59,14 @@ afterEach(cleanup);
 beforeEach(() => {
   setup.mockReset();
   acknowledgeSetup.mockReset();
+  authState.mockReset();
+  authState.mockResolvedValue({ setupDone: false, setupMode: 'account' });
+  onboardingPublic.mockReset();
+  onboardingPair.mockReset();
+  onboardingState.mockReset();
+  onboardingConnect.mockReset();
+  onboardingHttps.mockReset();
+  onboardingPublic.mockResolvedValue({ required: true, phase: 'pairing' });
   setup.mockResolvedValue({ recoveryKey: RECOVERY_KEY, token: 'token-1' });
   acknowledgeSetup.mockResolvedValue({ setupDone: true });
   localStorage.clear();
@@ -42,9 +74,34 @@ beforeEach(() => {
 });
 
 describe('setup wizard', () => {
+  it('uses HTTP only to pair and prepare Tailscale, without rendering a password field', async () => {
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    onboardingPair.mockResolvedValue({
+      token: 'onboarding-token',
+      state: {
+        required: true,
+        phase: 'tailscale',
+        tailscaleInstalled: true,
+        tailscaleConnected: false,
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SetupPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId('onboarding-code')).toBeDefined());
+    expect(screen.queryByTestId('setup-password')).toBeNull();
+    await user.type(screen.getByTestId('onboarding-code'), 'ABCD-EFGH-JKMN');
+    await user.click(screen.getByTestId('onboarding-pair'));
+    await waitFor(() => expect(screen.getByTestId('onboarding-connect')).toBeDefined());
+    expect(onboardingPair).toHaveBeenCalledWith('ABCD-EFGH-JKMN');
+  });
+
   it('keeps Continue disabled until the passwords are long enough and match', async () => {
     const user = userEvent.setup();
-    renderWizard();
+    await renderWizard();
 
     expect(disabled('setup-submit')).toBe(true);
 
@@ -65,7 +122,7 @@ describe('setup wizard', () => {
 
   it('shows the recovery key once the account is created', async () => {
     const user = userEvent.setup();
-    renderWizard();
+    await renderWizard();
 
     await user.type(screen.getByTestId('setup-password'), PASSWORD);
     await user.type(screen.getByTestId('setup-password-confirm'), PASSWORD);
@@ -78,7 +135,7 @@ describe('setup wizard', () => {
 
   it('will not move on until the key is acknowledged', async () => {
     const user = userEvent.setup();
-    renderWizard();
+    await renderWizard();
 
     await user.type(screen.getByTestId('setup-password'), PASSWORD);
     await user.type(screen.getByTestId('setup-password-confirm'), PASSWORD);
@@ -97,7 +154,7 @@ describe('setup wizard', () => {
 
   it('reaches the provider step, which can still be skipped', async () => {
     const user = userEvent.setup();
-    renderWizard();
+    await renderWizard();
 
     await user.type(screen.getByTestId('setup-password'), PASSWORD);
     await user.type(screen.getByTestId('setup-password-confirm'), PASSWORD);
@@ -113,7 +170,7 @@ describe('setup wizard', () => {
   it('surfaces a server refusal instead of pretending it worked', async () => {
     setup.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
-    renderWizard();
+    await renderWizard();
 
     await user.type(screen.getByTestId('setup-password'), PASSWORD);
     await user.type(screen.getByTestId('setup-password-confirm'), PASSWORD);

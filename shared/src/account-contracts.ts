@@ -1,6 +1,49 @@
 /** `GET /v1/auth/state` — decides between the setup wizard and the login screen. */
 export interface AuthStateResponse {
   setupDone: boolean;
+  /** Fresh guided installs prepare the private HTTPS origin before accepting a password. */
+  setupMode?: 'network' | 'account';
+}
+
+export type OnboardingPhase =
+  | 'pairing'
+  | 'tailscale'
+  | 'https'
+  | 'secure'
+  | 'blocked';
+
+/** Public, credential-free view of the temporary first-install surface. */
+export interface OnboardingPublicStateResponse {
+  required: boolean;
+  phase: 'pairing' | 'secure';
+  codeExpiresAt?: string;
+  secureUrl?: string;
+}
+
+/** The detailed view is returned only after the terminal code has been exchanged. */
+export interface OnboardingStateResponse {
+  required: boolean;
+  phase: OnboardingPhase;
+  tailscaleInstalled: boolean;
+  tailscaleConnected: boolean;
+  loginUrl?: string;
+  approvalUrl?: string;
+  secureUrl?: string;
+  issue?: 'code_expired' | 'tailscale_missing' | 'serve_conflict' | 'tailscale_failed';
+}
+
+export interface OnboardingPairRequest {
+  code: string;
+}
+
+export interface OnboardingPairResponse {
+  token: string;
+  state: OnboardingStateResponse;
+}
+
+export interface OnboardingHttpsRequest {
+  acceptCertificateTransparency: boolean;
+  hostname?: string;
 }
 
 /** `POST /v1/setup` — first run only. */

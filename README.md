@@ -46,7 +46,7 @@ only for configured or explicitly used features.
 
 The supported server is a fresh **Ubuntu systemd** host on **amd64 or arm64**.
 Use a non-root account with `sudo`, Git, and outbound HTTPS. The bootstrap
-installs a fixed apt prerequisite set, downloads repository-pinned Node, Go,
+installs a fixed apt prerequisite set plus Tailscale, downloads repository-pinned Node, Go,
 and `whisper.cpp` archives with size/SHA-256 verification, runs the complete
 repository gate, and installs a loopback-only systemd service.
 
@@ -63,7 +63,8 @@ Defaults:
 - user workspace: `$HOME/pop-agent-workspace`;
 - service: `pop-agent-service.service`;
 - server manager: `/usr/local/bin/popman`;
-- local address: `http://127.0.0.1:8787`.
+- app origin: loopback-only `http://127.0.0.1:8787` behind Tailscale Serve;
+- temporary setup page: `http://<private-LAN-IP>:8788/setup`.
 
 Do not run the bootstrap as root. Custom paths, ports, preparation-only mode,
 verified offline bundles, exact trust boundaries, and failure recovery are in
@@ -72,29 +73,27 @@ the [deployment guide](deploy/README.md) and
 
 ### Private HTTPS with Tailscale
 
-Pop Agent deliberately remains bound to loopback. Do **not** expose port 8787
-directly. After installing Tailscale and signing this server into your own
-tailnet, the repository helper verifies both services before configuring
-tailnet-only HTTPS:
+The installer prints a temporary private-LAN URL and a one-time code. Open that
+URL, enter the code, sign the server into your tailnet, and explicitly enable
+private HTTPS. Pop Agent configures Tailscale Serve for its loopback origin and
+never enables Funnel. The browser device must be connected to the same tailnet.
+Do **not** expose port 8787 directly.
 
-```sh
-./deploy/configure-tailscale.sh
-```
-
-The helper does not install Tailscale, log in, change the account, or publish
-the service to the internet. Use `tailscale serve status` to see the resulting
-HTTPS URL. A conventional HTTPS reverse proxy such as Caddy is also supported;
-it must preserve SSE streaming and WebSocket upgrades. Remote plain HTTP is not
-supported.
+No password is accepted on the temporary HTTP surface. It exposes only this
+bounded network setup and disappears after first-owner setup completes. If its
+15-minute code expires, run `popman onboarding-code` on the server. Existing
+Caddy or manually managed installations can use `--skip-network-onboarding`;
+`deploy/configure-tailscale.sh` remains an explicit repair/manual helper.
 
 ### First run
 
-1. Open the HTTPS URL and create the one owner password.
-2. Save the one-time recovery key somewhere separate and secure.
-3. Add and test a model provider in Settings.
-4. Create a manual backup and separately protect the host's `secret.key`, which
+1. Follow the printed HTTP URL through Tailscale login and private HTTPS.
+2. Continue at the generated `https://…ts.net` URL and create the one owner password.
+3. Save the one-time recovery key somewhere separate and secure.
+4. Add and test a model provider in Settings.
+5. Create a manual backup and separately protect the host's `secret.key`, which
    is intentionally excluded from Pop Agent backup archives.
-5. Optionally install the PWA and the CLI from Settings → Installation.
+6. Optionally install the PWA and the CLI from Settings → Installation.
 
 ## Current limits
 

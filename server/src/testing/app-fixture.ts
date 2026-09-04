@@ -60,6 +60,7 @@ import { createApp } from '../interface/http/app.js';
 import type { A2aHttpService } from '../interface/http/a2a-routes.js';
 import { SseHub } from '../interface/http/sse-hub.js';
 import { mimeOf } from '../domain/files/mime.js';
+import type { ServerOnboardingService } from '../application/onboarding/server-onboarding-service.js';
 
 /**
  * Test-only wiring: the real app, assembled the way main.ts assembles it, over
@@ -233,6 +234,8 @@ export interface TestAppOptions {
   mcpClients?: McpClientFactory;
   /** Mount outbound A2A routes against a deterministic application-service fake. */
   a2a?: A2aHttpService;
+  /** Fresh-install network gate, omitted by ordinary application tests. */
+  onboarding?: ServerOnboardingService;
 }
 
 /** Complete the real first-run HTTP flow and return its now-usable session. */
@@ -437,6 +440,7 @@ export function createTestApp(
   });
   const app = createApp({
     auth,
+    ...(options.onboarding === undefined ? {} : { onboarding: options.onboarding }),
     settings,
     chats,
     files,
