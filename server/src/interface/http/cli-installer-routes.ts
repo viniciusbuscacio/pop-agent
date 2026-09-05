@@ -227,7 +227,7 @@ sh "$tmp"
 if ! command -v node >/dev/null 2>&1 && ! "$pop_bin" runtime doctor >/dev/null 2>&1; then
   "$pop_bin" runtime install --server "$origin"
 fi
-"$pop_bin" login "$origin"
+"$pop_bin" login "$origin" --no-chat
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -287,7 +287,7 @@ $pop = Join-Path $env:LOCALAPPDATA 'PopAgent\\bin\\pop.exe'
 if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
   throw 'Pop Local Access requires Node.js 22.19.0 or newer. Install it from https://nodejs.org/ and run this command again.'
 }
-& $pop login $origin
+& $pop login $origin --no-chat
 if ($LASTEXITCODE -ne 0) { throw 'Pop Agent sign-in did not complete.' }
 $configRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_CONFIG_HOME)) { Join-Path $HOME '.config\\pop-agent' } else { Join-Path $env:XDG_CONFIG_HOME 'pop-agent' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name

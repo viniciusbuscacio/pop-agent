@@ -189,8 +189,8 @@ printf '0.3.0\n' > "$prefix/node_modules/pop-agent/dist/main.js"
 	if err != nil || st.ActiveVersion != "0.3.0" {
 		t.Fatalf("state = %#v, %v", st, err)
 	}
-	// Reopening bare pop must repair even an equal-version installation and
-	// continue into chat, rather than returning like the update subcommand.
+	// Bare pop and ordinary update must keep an equal-version installation;
+	// only an explicit repair should replace its bytes.
 	writeProfile(t, l, server.URL)
 	entry := cliEntry(filepath.Join(l.home, ".pop", "cli", "0.3.0"))
 	if err := os.WriteFile(entry, []byte("broken"), 0600); err != nil {
@@ -201,8 +201,22 @@ printf '0.3.0\n' > "$prefix/node_modules/pop-agent/dist/main.js"
 		t.Fatalf("repair launch returned %d: %s", code, l.stderr.(*strings.Builder).String())
 	}
 	content, err := os.ReadFile(entry)
-	if err != nil || strings.TrimSpace(string(content)) != "0.3.0" {
-		t.Fatalf("bare launch did not repair the installed version: %s, %v", content, err)
+	if err != nil || string(content) != "broken" {
+		t.Fatalf("bare launch unexpectedly reinstalled an equal version: %s, %v", content, err)
+	}
+	if code := l.run([]string{"update"}); code != 0 {
+		t.Fatalf("update returned %d", code)
+	}
+	content, _ = os.ReadFile(entry)
+	if string(content) != "broken" {
+		t.Fatal("update unexpectedly reinstalled an equal version")
+	}
+	if code := l.run([]string{"update", "--repair"}); code != 0 {
+		t.Fatalf("repair returned %d", code)
+	}
+	content, _ = os.ReadFile(entry)
+	if strings.TrimSpace(string(content)) != "0.3.0" {
+		t.Fatal("explicit repair did not reinstall")
 	}
 	if len(launchedArgs) != 0 {
 		t.Fatalf("repair launch started with %#v", launchedArgs)

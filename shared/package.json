@@ -1,6 +1,6 @@
 {
   "name": "@pop-agent/shared",
-  "version": "0.2.45",
+  "version": "0.2.46",
   "private": true,
   "type": "module",
   "license": "MIT",

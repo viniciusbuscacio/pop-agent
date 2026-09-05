@@ -150,11 +150,14 @@ Root `VERSION` is the product/Node CLI release. Launcher release is separate and
 changes when launcher source ships. The server advertises minimum compatible
 client/local-access versions; minimums move only for real wire breaks.
 
-A bare `pop` launch forces verified installation of the advertised CLI package
-before opening chat, including repair of an equal-version installation. It fails
-with installation diagnostics if repair fails. An installed newer version is
-not downgraded. Other commands update before attach when a newer exact server
-release exists; version queries remain local and side-effect free. Attach still enforces the minimum as defense in depth.
+A bare `pop` launch and `pop update` check published versions and install only
+newer releases. Equal versions open directly without reinstalling. Explicit
+`pop update --repair` reinstalls the advertised CLI version, while preserving
+the no-downgrade rule and all artifact checks.
+Interactive `pop login` opens chat after successful authentication in the same
+process, without repeating launcher update checks. Failed login never opens
+chat. `--no-chat` and noninteractive output keep login-only behavior; PLA
+installers use `--no-chat` so installation continues after authentication. Attach still enforces the minimum as defense in depth.
 A behind-but-compatible version may warn without blocking. Version checks never
 substitute for protocol negotiation.
 

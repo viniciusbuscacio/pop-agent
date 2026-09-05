@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.1.2"
+const launcherVersion = "1.1.3"
 const requestTimeout = 3 * time.Second
 const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 
@@ -167,8 +167,8 @@ func (l *launcher) run(args []string) int {
 	}
 
 	updateCommand := len(args) > 0 && args[0] == "update"
-	// A bare chat launch repairs the exact published package before opening.
-	forceUpdate := updateCommand || len(args) == 0
+	// Reinstall an equal version only for an explicit repair request.
+	forceUpdate := updateCommand && hasArg(args, "--repair")
 	if st.ActiveVersion == "" || compareVersions(st.ActiveVersion, m.Version) < 0 || forceUpdate {
 		if err := l.installIfNeeded(serverURL, m, localTools, forceUpdate); err != nil {
 			fmt.Fprintf(l.stderr, "Pop Agent CLI %s could not be installed: %v\n", m.Version, err)

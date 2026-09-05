@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VERSION } from '../version.js';
 import { runCli } from './cli.js';
-import type { Terminal } from './commands.js';
+import { login, type Context, type Terminal } from './commands.js';
+import { chat } from './chat.js';
+vi.mock('./chat.js', () => ({ chat: vi.fn(async () => 0) }));
+vi.mock('./commands.js', async (original) => ({
+  ...await original<typeof import('./commands.js')>(), login: vi.fn(async () => 0),
+}));
 
 function recordingTerminal(lines: string[]): Terminal {
   return {
@@ -38,5 +43,32 @@ describe('local version command', () => {
     expect(code).toBe(0);
     expect(lines).toEqual([VERSION]);
     expect(contextConstructions).toBe(0);
+  });
+});
+
+const originalTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+afterEach(() => {
+  if (originalTTY) Object.defineProperty(process.stdout, 'isTTY', originalTTY);
+  else Reflect.deleteProperty(process.stdout, 'isTTY');
+  vi.clearAllMocks();
+});
+
+describe('login handoff', () => {
+  it.each([
+    { args: ['login', 'https://pop.example'], tty: true, code: 0, opens: true },
+    { args: ['login', 'https://pop.example', '--no-chat'], tty: true, code: 0, opens: false },
+    { args: ['login', 'https://pop.example'], tty: false, code: 0, opens: false },
+    { args: ['login', 'https://pop.example'], tty: true, code: 1, opens: false },
+  ])('handles login $args, tty=$tty, result=$code', async ({ args, tty, code, opens }) => {
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: tty });
+    vi.mocked(login).mockResolvedValueOnce(code);
+    const context = {} as Context;
+    expect(await runCli(args, recordingTerminal([]), () => context)).toBe(code);
+    expect(login).toHaveBeenCalledWith(context, { url: 'https://pop.example' });
+    expect(chat).toHaveBeenCalledTimes(opens ? 1 : 0);
+    if (opens) {
+      expect(chat).toHaveBeenCalledWith(context, {});
+      expect(vi.mocked(login).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(chat).mock.invocationCallOrder[0]!);
+    }
   });
 });

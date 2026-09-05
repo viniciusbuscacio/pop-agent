@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.46 — 2026-09-05
+
+- Launcher 1.1.3 checks updates without reinstalling an equal CLI version. Use `pop update --repair` for explicit repair.
+- Successful interactive login opens chat immediately; local-access installers use login-only mode to continue setup.
+
+
 ## 0.2.45 — 2026-09-05
 
 - `pop update` updates both the native launcher and CLI with verified artifacts and native rollback.

@@ -18,11 +18,11 @@ const USAGE = `pop — a terminal client for your Pop Agent
   pop                       open the interactive screen
   pop "question"            ask, print the answer, exit
   pop -p "question"         the same, spelled out for scripts
-  pop login <url>           sign in and remember the server
+  pop login <url>           sign in and open chat (--no-chat to exit)
   pop logout                forget this server's token
   pop servers               list the servers you have signed in to
   pop chats                 list conversations
-  pop update                update this CLI from the selected server
+  pop update                update launcher and CLI (--repair to reinstall)
   pop local-access          keep this computer connected in the background
   pop version               print this installed CLI version and exit
 
@@ -43,6 +43,7 @@ export async function runCli(
   const chatId = takeOption(args, '--chat');
   const thinking = takeFlag(args, '--thinking');
   const statusJson = takeFlag(args, '--status-json');
+  const noChat = takeFlag(args, '--no-chat');
   const prompt = takeOption(args, '-p');
   const command = args[0];
 
@@ -72,7 +73,9 @@ export async function runCli(
         terminal.line('Which server? Run: pop login <url>');
         return 1;
       }
-      return login(context, { url });
+      const code = await login(context, { url });
+      if (code !== 0 || noChat || !process.stdout.isTTY) return code;
+      return chat(context, chatId === undefined ? {} : { chatId });
     }
     case 'logout':
       return logout(context);
