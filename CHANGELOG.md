@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.53
+
+- Fix tray shutdown leaving the Windows Node local-access transport alive after its launcher exited. Terminate the process tree before cancelling and apply tree termination to context cancellation too.
+
+
 ## 0.2.52
 
 - Accept conversation messages and queue edits when the selected known local machine is offline. Preserve its routing binding and expose clearly unavailable local tools without executing local work on the server.

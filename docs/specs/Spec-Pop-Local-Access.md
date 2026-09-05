@@ -544,3 +544,7 @@ The CLI accepts structurally valid call envelopes and dispatches `access` and
 `mkdir` alongside `read`, `write` and `bash`. Unsupported operation names return
 an explicit correlated error result; they are never silently dropped. The same
 access-policy check applies to prerequisite operations and file operations.
+
+### Tray shutdown process tree
+
+Tray Quit terminates the launcher and its descendants before cancelling the app context. Context cancellation must also terminate the whole process tree, never only the launcher. Closing the tray must not leave a background Node transport with local file access.

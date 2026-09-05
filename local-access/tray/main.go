@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const trayVersion = "0.2.52"
+const trayVersion = "0.2.53"
 
 type childEvent struct {
 	Kind      string `json:"kind"`
@@ -103,7 +103,7 @@ func (a *app) start() {
 		a.publish()
 		return
 	}
-	cmd := exec.CommandContext(a.ctx, pop, "local-access", "--status-json")
+	cmd := childCommand(a.ctx, pop, "local-access", "--status-json")
 	home, _ := os.UserHomeDir()
 	cmd.Dir = home
 	cmd.SysProcAttr = childProcessAttributes()
@@ -247,8 +247,8 @@ func (a *app) quit() {
 	a.mu.Lock()
 	a.quitting = true
 	a.mu.Unlock()
-	a.cancel()
 	a.stop()
+	a.cancel()
 	stopTray()
 }
 
@@ -290,4 +290,11 @@ func openLog() (*os.File, error) {
 		return nil, err
 	}
 	return os.OpenFile(filepath.Join(dir, "local-access.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+// Cancellation must keep the launcher alive until tree termination has found its children.
+func childCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Cancel = func() error { terminateChild(cmd); return nil }
+	return cmd
 }
