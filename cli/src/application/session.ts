@@ -164,6 +164,7 @@ export class ChatSession {
     // A later selection superseded this request. Its snapshot owns the screen.
     if (this.loading !== loading) return;
 
+    this.openRevision += 1;
     this.chatId = chat.id;
     this.archived = chat.archived;
     this.shownMessageIds = new Set(response.messages.map((message) => message.id));
@@ -366,6 +367,9 @@ export class ChatSession {
       const alreadyShown = this.shownMessageIds.has(event.user.id);
       this.shownMessageIds.add(event.user.id);
       if (!own && !alreadyShown) this.listener.onExternalUser(event.user.content);
+      // A startup snapshot already contains this turn. Buffered pre-snapshot
+      // events must not resurrect a completed run or reset the live snapshot.
+      if (alreadyShown) return;
       if (this.transcript?.snapshot().runId !== event.runId) {
         this.transcript = new Transcript(emptyRun(event.chatId, event.runId));
         this.listener.onRun(this.transcript.snapshot());

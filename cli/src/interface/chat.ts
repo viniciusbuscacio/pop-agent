@@ -1,3 +1,4 @@
+import type { ChatDTO } from '@pop-agent/shared';
 import { hostname } from 'node:os';
 import { ChatSession } from '../application/session.js';
 import { DEFAULT_PROFILE } from '../application/profiles.js';
@@ -47,11 +48,18 @@ export async function chat(
     return saved?.url === profile.url ? saved.token : '';
   };
   const streamApi = context.api({ url: profile.url, token });
-  let stream: Response;
+  let stream: Response | undefined;
+  let resumedChat: ChatDTO | undefined;
   try {
     const { ticket } = await streamApi.eventTicket();
     stream = await streamApi.openEvents(ticket);
+    if (options.chatId !== undefined) {
+      resumedChat = (await streamApi.chats()).chats.find((entry) => entry.id === options.chatId)
+        ?? (await streamApi.chats(true)).chats.find((entry) => entry.id === options.chatId);
+      if (resumedChat === undefined) throw new Error('That conversation does not exist. Run pop chats to choose a conversation.');
+    }
   } catch (error) {
+    await stream?.body?.cancel().catch(() => undefined);
     const which = context.profile === DEFAULT_PROFILE ? '' : ` --server ${context.profile}`;
     context.terminal.line(error instanceof ApiError && error.code === 'invalid_session'
       ? `Your session expired or was revoked. Sign in again: pop login ${profile.url}${which}`
@@ -109,7 +117,7 @@ export async function chat(
         // One ticket, one stream, for as long as the screen is open. Each
         // ticket is spent on use, so a reconnect would need a fresh one --
         // which is why a dropped stream is reported and not retried here.
-        yield* readEvents(stream);
+        yield* readEvents(stream!);
       },
     },
     {
@@ -128,13 +136,23 @@ export async function chat(
   const screen = new ChatScreen({
     session,
     server: profile.url,
+    ...(resumedChat === undefined ? {} : { title: resumedChat.title || "Untitled conversation" }),
     thinkingShown: context.preferences.showThinking,
     onThinkingShownChange: (shown) => context.preferences.setShowThinking(shown),
   });
-  if (options.chatId !== undefined) session.open(options.chatId);
+  if (resumedChat !== undefined) {
+    try {
+      await session.switchTo(resumedChat);
+    } catch (error) {
+      await stream.body?.cancel().catch(() => undefined);
+      context.terminal.line(`Could not open conversation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return 1;
+    }
+  }
 
   localAccess.connect();
   screen.start();
+  if (resumedChat?.archived) screen.onArchivedChanged(true, "event");
   // Resolves only when the stream ends; the screen exits the process itself
   // on Ctrl+C or /quit.
   try {

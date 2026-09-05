@@ -38,6 +38,11 @@ export async function runCli(
   terminal: Terminal,
   createContext: ContextFactory,
 ): Promise<number> {
+  const chatFlag = argv.indexOf('--chat');
+  if (chatFlag >= 0 && (!argv[chatFlag + 1] || argv[chatFlag + 1]?.startsWith('--'))) {
+    terminal.line('Choose a conversation: pop --chat <id>');
+    return 1;
+  }
   const args = [...argv];
   const profile = takeOption(args, '--server') ?? DEFAULT_PROFILE;
   const chatId = takeOption(args, '--chat');

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.47 — 2026-09-05
+
+- Launcher 1.1.4 checks native updates for `pop --chat` as well as bare chat launches.
+- Restore titles, history and live state when resuming a chat, including archived conversations; reject missing or unknown IDs.
+- Ignore stream events already covered by the history snapshot and prevent late sends from replacing a newly selected conversation.
+
+
 ## 0.2.46 — 2026-09-05
 
 - Launcher 1.1.3 checks updates without reinstalling an equal CLI version. Use `pop update --repair` for explicit repair.

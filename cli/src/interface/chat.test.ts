@@ -6,8 +6,12 @@ import { PopAgentApi } from '../infrastructure/api.js';
 import { chat } from './chat.js';
 import type { Context } from './commands.js';
 
-const screen = vi.hoisted(() => ({ start: vi.fn(), onStreamEnd: vi.fn() }));
+const screen = vi.hoisted(() => ({ construct: vi.fn(), start: vi.fn(), onStreamEnd: vi.fn(), onChatLoaded: vi.fn(), onRun: vi.fn(), onArchivedChanged: vi.fn() }));
 vi.mock('./tui/chat-screen.js', () => ({ ChatScreen: class {
+  constructor(options: unknown) { screen.construct(options); }
+  onChatLoaded = screen.onChatLoaded;
+  onRun = screen.onRun;
+  onArchivedChanged = screen.onArchivedChanged;
   start = screen.start;
   onStreamEnd = screen.onStreamEnd;
 } }));
@@ -51,5 +55,50 @@ describe('interactive connection admission', () => {
     expect(await chat(ctx)).toBe(1);
     expect(ctx.terminal.line).toHaveBeenCalledWith('Could not connect to the server: Network unavailable');
     expect(screen.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('conversation continuation', () => {
+  const existing = {
+    id: 'existing', title: 'My saved conversation', archived: false,
+    pinned: false, model: '', provider: '', createdAt: '', updatedAt: '', preview: '',
+  };
+  it.each([false, true])('loads the title and history, archived=%s', async (archived) => {
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
+    const saved = { ...existing, archived };
+    const history = { messages: [{
+      id: 'user-1', chatId: saved.id, role: 'user', content: 'Earlier question',
+      thinking: '', tools: [], attachments: [], createdAt: '',
+    }] };
+    const http = vi.fn<typeof fetch>(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/v1/events/ticket') return Response.json({ ticket: 'ticket' });
+      if (path === '/v1/events') return new Response('', { headers: { 'content-type': 'text/event-stream' } });
+      if (path === '/v1/chats') return Response.json({ chats: archived === String(input).includes('archived=true') ? [saved] : [] });
+      if (path === '/v1/chats/existing/messages') return Response.json(history);
+      throw new Error('Unexpected request');
+    });
+    expect(await chat(context(http), { chatId: 'existing' })).toBe(0);
+    expect(screen.construct).toHaveBeenCalledWith(expect.objectContaining({ title: saved.title }));
+    expect(screen.onChatLoaded).toHaveBeenCalledWith(saved, history);
+    expect(screen.onChatLoaded.mock.invocationCallOrder[0]).toBeLessThan(screen.start.mock.invocationCallOrder[0]!);
+    expect(screen.onArchivedChanged).toHaveBeenCalledTimes(archived ? 1 : 0);
+    expect(http.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url]) => String(url))).toEqual(['https://pop.example/v1/events/ticket']);
+  });
+
+  it('rejects an unknown chat and closes the admitted stream without opening a screen', async () => {
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
+    const cancel = vi.fn();
+    const ctx = context(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/v1/events/ticket') return Response.json({ ticket: 'ticket' });
+      if (path === '/v1/events') return new Response(new ReadableStream({ cancel }), { headers: { 'content-type': 'text/event-stream' } });
+      return Response.json({ chats: [] });
+    });
+    expect(await chat(ctx, { chatId: 'missing' })).toBe(1);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(screen.start).not.toHaveBeenCalled();
+    expect(ctx.localAccess).not.toHaveBeenCalled();
+    expect(ctx.terminal.line).toHaveBeenCalledWith(expect.stringContaining('That conversation does not exist.'));
   });
 });

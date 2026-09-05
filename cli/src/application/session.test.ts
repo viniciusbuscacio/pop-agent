@@ -666,3 +666,36 @@ describe('ChatSession', () => {
     expect(ports.stop).not.toHaveBeenCalled();
   });
 });
+
+describe('resume snapshot races', () => {
+  it('does not resurrect a completed run from buffered pre-snapshot events', async () => {
+    const user = {
+      id: 'stored-user', chatId: 'chat-1', role: 'user' as const, content: 'Already answered',
+      thinking: '', tools: [], attachments: [], createdAt: '',
+    };
+    const { session, ports, seen, release } = harness([
+      { kind: 'run-started', chatId: 'chat-1', runId: 'old-run', user },
+      { kind: 'delta', chatId: 'chat-1', runId: 'old-run', seq: 1, text: 'Old answer' },
+    ]);
+    vi.mocked(ports.loadChat).mockResolvedValue({ messages: [user] });
+    await session.switchTo(chatDto('chat-1'));
+    const listening = session.listen();
+    release();
+    await listening;
+    expect(seen.externalUsers).toEqual([]);
+    expect(seen.runs).toEqual([]);
+    expect(session.busy).toBe(false);
+  });
+
+  it('keeps the selected chat when an earlier create-chat request resolves late', async () => {
+    const { session, ports } = harness();
+    let created: (chat: { id: string }) => void = () => undefined;
+    vi.mocked(ports.createChat).mockImplementation(() => new Promise((resolve) => { created = resolve; }));
+    const asking = session.ask('Sent before switching');
+    await session.switchTo(chatDto('selected'));
+    created({ id: 'late-created' });
+    await asking;
+    expect(session.currentChatId).toBe('selected');
+    expect(ports.send).not.toHaveBeenCalled();
+  });
+});

@@ -116,12 +116,14 @@ func TestFirstRunInstallsAtomicallyAndStartsLogin(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test helper scripts use POSIX shell")
 	}
+	nativeChecks := 0
 	archive := []byte("immutable cli package")
 	hash := sha256.Sum256(archive)
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/cli/launcher/manifest.json":
+			nativeChecks++
 			_ = json.NewEncoder(w).Encode(launcherManifest{Version: launcherVersion})
 		case "/cli/manifest.json":
 			_ = json.NewEncoder(w).Encode(manifest{
@@ -220,6 +222,16 @@ printf '0.3.0\n' > "$prefix/node_modules/pop-agent/dist/main.js"
 	}
 	if len(launchedArgs) != 0 {
 		t.Fatalf("repair launch started with %#v", launchedArgs)
+	}
+	checksBefore := nativeChecks
+	if code := l.run([]string{"--chat", "saved-chat"}); code != 0 {
+		t.Fatalf("continuation returned %d", code)
+	}
+	if nativeChecks != checksBefore+1 {
+		t.Fatal("continuation skipped native update discovery")
+	}
+	if strings.Join(launchedArgs, " ") != "--chat saved-chat" {
+		t.Fatalf("continuation arguments lost: %#v", launchedArgs)
 	}
 	if _, err := os.Stat(filepath.Join(l.home, ".pop", "cli", ".staging-0.3.0")); !os.IsNotExist(err) {
 		t.Fatal("staging directory remained after activation")

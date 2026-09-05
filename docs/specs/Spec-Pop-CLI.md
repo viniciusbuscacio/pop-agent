@@ -54,7 +54,7 @@ smoke-checked through `--version` and only then activated. A locally newer
 compatible CLI is not silently downgraded. Launcher-owned `pop update` first checks the same-origin native launcher release,
 verifies its size/hash and version probe, and replaces/restarts the launcher
 when newer. Windows preserves the renamed running executable for rollback.
-The same native check runs before bare chat launches. It then requests CLI
+The same native check runs before bare chat launches and `--chat` continuation. It then requests CLI
 repair/update and failed candidates preserve the prior active version. For a
 legacy npm-global CLI, `pop update` installs the same-origin non-cacheable
 `/cli-latest.tgz` alias without deriving a versioned filename from server update
@@ -198,3 +198,10 @@ fact; historical proposal text must not imply an IP allowlist exists.
 - PLA transport/policy behavior shares server contract tests;
 - `popman restore` proves stop → extract → start, including failure paths;
 - packed releases install outside the monorepo on all supported platforms.
+
+A `--chat <id>` launch loads the selected active or archived chat, title,
+stored messages and live snapshot before opening the editor. Unknown IDs and
+missing arguments fail with actionable guidance and never create a chat.
+Archived conversations remain read-only. Snapshot-covered stream events never
+resurrect a completed run; switching chats invalidates outstanding sends from
+the previous conversation.

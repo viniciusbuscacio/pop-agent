@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.1.3"
+const launcherVersion = "1.1.4"
 const requestTimeout = 3 * time.Second
 const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 
@@ -130,7 +130,7 @@ func (l *launcher) run(args []string) int {
 		return 1
 	}
 
-	if len(args) == 0 || args[0] == "update" {
+	if len(args) == 0 || args[0] == "update" || hasArg(args, "--chat") {
 		executable, updated, err := l.updateLauncher(serverURL)
 		if err != nil {
 			fmt.Fprintf(l.stderr, "Could not connect to or update the Pop launcher: %v. Run pop doctor for diagnostics.\n", err)

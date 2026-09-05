@@ -69,8 +69,8 @@ export class PopAgentApi {
     return this.request<LoginResponse>('/login', { method: 'POST', body: { password } });
   }
 
-  chats(): Promise<ChatListResponse> {
-    return this.request<ChatListResponse>('/chats');
+  chats(archived = false): Promise<ChatListResponse> {
+    return this.request<ChatListResponse>(archived ? '/chats?archived=true' : '/chats');
   }
 
   updateStatus(): Promise<UpdateStatusResponse> {

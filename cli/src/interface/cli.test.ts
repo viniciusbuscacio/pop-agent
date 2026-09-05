@@ -72,3 +72,11 @@ describe('login handoff', () => {
     }
   });
 });
+
+it.each([['--chat'], ['--chat', '--thinking']])('rejects missing continuation ID: %s', async (...args) => {
+  const lines: string[] = [];
+  const create = vi.fn();
+  expect(await runCli(args, recordingTerminal(lines), create)).toBe(1);
+  expect(create).not.toHaveBeenCalled();
+  expect(lines).toEqual(['Choose a conversation: pop --chat <id>']);
+});
