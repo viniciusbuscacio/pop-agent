@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { A2aNetworkError, createScreenedA2aFetch, isPrivateAddress } from './screened-fetch.js';
+import { A2aNetworkError, createScreenedA2aFetch, isPrivateAddress, screenedHttpResponse } from './screened-fetch.js';
 
 const publicDns = async (): Promise<string[]> => ['8.8.8.8'];
 
@@ -113,4 +113,10 @@ describe('screened A2A fetch', () => {
     });
     await expect(fetchImpl('https://agent.example')).rejects.toMatchObject({ code: 'response_too_large' });
   });
+});
+
+
+it.each([204,205,304])('preserves bodyless HTTP status %s for REST operations', async status => {
+  const response=screenedHttpResponse(new Uint8Array(),{status,headers:{'x-result':'ok'}});
+  expect(response.status).toBe(status);expect(response.headers.get('x-result')).toBe('ok');expect(await response.text()).toBe('');
 });

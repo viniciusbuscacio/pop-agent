@@ -1,3 +1,4 @@
+import { RestApiPage } from './routes/rest-api-page';
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { t } from './i18n';
@@ -138,6 +139,7 @@ function Boot() {
         <Route path="mcp" element={<McpPage />} />
         <Route path="mcp/new" element={<McpPage />} />
         <Route path="mcp/:id" element={<McpPage />} />
+        <Route path="rest-api" element={<RestApiPage />} />
         <Route path="a2a" element={<A2aPage />} />
         <Route path="a2a/new" element={<A2aPage />} />
         <Route path="a2a/:id" element={<A2aPage />} />

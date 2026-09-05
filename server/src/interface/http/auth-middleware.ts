@@ -1,3 +1,4 @@
+import type { IntegrationService } from '../../application/integrations/integration-service.js';
 import type { MiddlewareHandler } from 'hono';
 import { SESSION_TOKEN_HEADER } from '@pop-agent/shared';
 import type { AuthService } from '../../application/auth/auth-service.js';
@@ -17,7 +18,7 @@ const PUBLIC_PATHS: ReadonlySet<string> = publicV1PathSet();
  * also hands back a fresh one in `x-pop-agent-token`, which is what keeps a weekly
  * user from ever meeting the login screen.
  */
-export function authMiddleware(auth: AuthService): MiddlewareHandler {
+export function authMiddleware(auth: AuthService, integrations?: IntegrationService): MiddlewareHandler {
   return async (c, next) => {
     if (PUBLIC_PATHS.has(c.req.path)) return next();
 
@@ -25,6 +26,11 @@ export function authMiddleware(auth: AuthService): MiddlewareHandler {
     const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
     if (token.length === 0) {
       return apiError(c, 401, 'invalid_session', 'This request needs a valid session token.');
+    }
+
+    if (token.startsWith('popi_') && integrations !== undefined && c.req.path.startsWith('/v1/integration/')) {
+      try { integrations.authenticate(token); } catch { return apiError(c, 401, 'invalid_integration_token', 'Invalid integration token.'); }
+      return next();
     }
 
     const setupAcknowledgement = c.req.path === '/v1/setup/acknowledge';

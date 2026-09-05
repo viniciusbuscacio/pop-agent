@@ -173,7 +173,7 @@ async function pinnedRetrieve(
       throw new A2aNetworkError('authentication', 'The A2A endpoint rejected its credential.');
     }
     const bytes = await readCapped(response.body);
-    return new Response(new Uint8Array(bytes), {
+    return screenedHttpResponse(bytes, {
       status: response.statusCode,
       headers: Object.fromEntries(
         Object.entries(response.headers).flatMap(([name, value]) =>
@@ -229,4 +229,10 @@ for (const [network, prefix] of [
 
 async function defaultResolve(host: string): Promise<string[]> {
   return (await lookup(host, { all: true })).map((entry) => entry.address);
+}
+
+
+/** HTTP forbids a body on these statuses, even when the byte buffer is empty. */
+export function screenedHttpResponse(bytes: Uint8Array, init: ResponseInit): Response {
+  return new Response([204,205,304].includes(init.status ?? 200) ? null : new Uint8Array(bytes), init);
 }

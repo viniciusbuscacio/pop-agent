@@ -200,3 +200,7 @@ DTO changes, compatibility tests and migration guidance.
 - body/frame/file limits and malformed encodings fail before retention;
 - old supported clients are exercised whenever wire compatibility changes;
 - smoke covers setup, auth, settings, frontend, chat, SSE, tools and Stop.
+
+## REST integrations
+
+The scoped integration server and owner-managed REST clients are specified in [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md). The authenticated `/v1/rest-api/reference` exports their current inbound reference and OpenAPI.

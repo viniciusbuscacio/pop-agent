@@ -10,3 +10,5 @@ export * from './automation-provider-contracts.js';
 export * from './event-contracts.js';
 export * from './mcp.js';
 export * from './a2a.js';
+
+export * from './integrations.js';

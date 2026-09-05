@@ -1,3 +1,6 @@
+import type { RestClientService } from '../../application/integrations/rest-client-service.js';
+import type { IntegrationService } from '../../application/integrations/integration-service.js';
+import { createIntegrationRoutes } from './integration-routes.js';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type {
@@ -76,6 +79,8 @@ import type { ServerOnboardingService } from '../../application/onboarding/serve
 import { createOnboardingRoutes } from './onboarding-routes.js';
 
 export interface AppDeps {
+  integrations?: IntegrationService;
+  restClients?: RestClientService;
   auth: AuthService;
   /** Present only while a fresh guided server install is being completed. */
   onboarding?: ServerOnboardingService;
@@ -186,7 +191,7 @@ export function createApp(deps: AppDeps): Hono {
   // session-guarded or a declared public surface with a written reason --
   // an unauthenticated URL cannot be mounted by accident, and the probe in
   // route-guard.test.ts verifies the runtime half of the same invariant.
-  mountApi(app, authMiddleware(deps.auth), {
+  mountApi(app, authMiddleware(deps.auth, deps.integrations), {
     public: [
       publicSurface(
         'liveness and the health dot leak only ok/error flags, and a session check here would make "signed out" indistinguishable from "server down"',
@@ -210,6 +215,7 @@ export function createApp(deps: AppDeps): Hono {
       ),
     ],
     guarded: [
+      ...(deps.integrations === undefined ? [] : [sessionGuarded(createIntegrationRoutes(deps.integrations, deps.chats, deps.restClients))]),
       sessionGuarded(createAuthRoutes(deps)),
       ...(deps.onboarding === undefined
         ? []

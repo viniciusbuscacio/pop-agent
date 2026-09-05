@@ -1,3 +1,5 @@
+import type { IntegrationRepo } from '../application/ports/integration-repo.js';
+import { SqliteIntegrationRepo } from './db/sqlite-integration-repo.js';
 import { join } from 'node:path';
 import type { A2aRepo } from '../application/ports/a2a-repo.js';
 import type { ChatRepo } from '../application/ports/chat-repo.js';
@@ -64,6 +66,7 @@ export interface AppContext {
   queuedMessages: QueuedMessageRepo;
   /** Durable ownership and crash recovery for admitted chat runs. */
   runJournal: RunJournalRepo;
+  integrations: IntegrationRepo;
   /** Which chat wrote which Files path -- append-only history (§6, §14). */
   fileProvenance: FileProvenanceRepo;
   llmRuns: LlmRunsRepo;
@@ -115,6 +118,7 @@ export function bootstrap(): AppContext {
   return {
     dataDir,
     secretKey: key,
+    integrations: new SqliteIntegrationRepo(db),
     settings: new SqliteSettingsRepo(db),
     secrets: new SqliteSecretsRepo(db, key),
     chats: new SqliteChatRepo(db),

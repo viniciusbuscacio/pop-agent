@@ -288,3 +288,7 @@ The gate must include focused tests for:
 
 Security-sensitive changes require the complete repository gate, not only their
 focused unit test.
+
+## REST integrations
+
+Integration tokens are separate hashed, expiring, scoped credentials. They cannot use owner administration or PLA selection. Outbound REST client secrets use encrypted SecretsRepo storage and screened public HTTPS transport. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).

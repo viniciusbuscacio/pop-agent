@@ -384,3 +384,7 @@ suite must cover:
 - local-machine attach/detach/policy publication without polling;
 - cross-device chat create/delete/archive/pin/model/mode/title convergence;
 - end-to-end HTTP/SSE smoke through the fake engine.
+
+## REST integrations
+
+The integration activity stream is a separate, content-minimized projection with bounded durable replay and scope enforcement. It does not alter the owner PWA/CLI event stream. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).

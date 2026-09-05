@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.51 — 2026-09-05
+
+- Add Agent → REST API with Server tokens/reference and outbound Clients on one page.
+- Scope integration reads, sends and cancellation; persist idempotent responses and content-free activity with authenticated SSE.
+- Expose configured REST operations to the agent with encrypted credentials, public HTTPS screening and Plan Mode/taint restrictions.
+
+
 ## 0.2.50 — 2026-09-05
 
 - Exclude transport metadata from skill routing and reject procedural skill matches for social-only messages.

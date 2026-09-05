@@ -304,6 +304,7 @@ export interface SdkPiEngineOptions {
    * Outbound A2A tools, composed only when the application service and durable
    * adapter exist. They remain absent from the fixed Plan Mode allowlist.
    */
+  restTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool) => ToolDefinition[];
   a2aTools?: (defineTool: typeof import('@earendil-works/pi-coding-agent').defineTool) => ToolDefinition[];
   /** MCP tools whose server explicitly advertised annotations.readOnlyHint=true. */
   planReadOnlyMcpTools?: () => string[];
@@ -336,6 +337,7 @@ export function buildPlanToolNames(readOnlyMcpTools: readonly string[] = []): st
     'files_search',
     'list_scheduled_tasks',
     'skills_list',
+    'rest_clients_list',
     'web_fetch',
     'local_read',
     ...readOnlyMcpTools,
@@ -514,6 +516,7 @@ export class SdkPiEngine implements PiEngine {
         : buildSkillTools(sdk.defineTool, this.options.skills)),
       ...buildWebTools(sdk.defineTool),
       ...(this.options.mcpTools?.(sdk.defineTool, options.chatId) ?? []),
+      ...(this.options.restTools?.(sdk.defineTool) ?? []),
       ...(this.options.a2aTools?.(sdk.defineTool) ?? []),
       ...(this.options.localTools?.(sdk, options.localConnectionId) ?? []),
     ];

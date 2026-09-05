@@ -206,6 +206,7 @@ export class RunService {
       chatId,
       runId: run.runId,
       user: userMessage,
+      ...(options.queuedMessageId === undefined ? {} : { queuedMessageId: options.queuedMessageId }),
     });
 
     if (this.running < this.ceiling) {

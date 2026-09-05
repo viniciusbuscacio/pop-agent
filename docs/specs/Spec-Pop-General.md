@@ -32,6 +32,7 @@ to silently choose one side.
 | §11 — Notes | [Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md) |
 | §12 — web and MCP access | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
 | MCP integration ownership and pi extension boundary | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
+| REST API server and outbound clients | [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md) |
 | Outbound Agent2Agent (A2A) client | [Spec-Pop-A2A.md](Spec-Pop-A2A.md) |
 | §13 — API contract | [Spec-Pop-API.md](Spec-Pop-API.md) |
 | §14 — PWA/frontend | [Spec-Pop-Frontend.md](Spec-Pop-Frontend.md) |

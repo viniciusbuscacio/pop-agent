@@ -612,3 +612,7 @@ for relevant changes explicitly cover:
 
 Before completion run `npm run gate`: specs/self-map, lint, typecheck, UI checks,
 frontend build, complete tests and smoke.
+
+## REST integrations
+
+Agent navigation includes REST API, presenting inbound Server credentials/reference and outbound Clients configuration on the same responsive page. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).

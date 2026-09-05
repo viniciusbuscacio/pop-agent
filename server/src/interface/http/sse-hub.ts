@@ -13,9 +13,11 @@ import type { EventSink, RunEvent } from '../../application/ports/event-sink.js'
 export type Subscriber = (payload: string) => void;
 
 export class SseHub implements EventSink {
+  onIntegrationEvent?: (event: RunEvent) => void;
   private readonly subscribers = new Map<Subscriber, number>();
 
   emit(event: RunEvent): void {
+    this.onIntegrationEvent?.(event);
     const wire = toStreamEvent(event);
     const payload = JSON.stringify(wire);
     const requiredVersion = minimumEventVersion(wire);

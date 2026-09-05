@@ -1,3 +1,4 @@
+import { SidebarNav } from './sidebar-nav';
 import { useEffect } from 'react';
 import { Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
@@ -30,13 +31,14 @@ export function ChatLayout() {
   const taskDetail = useMatch('/tasks/:taskId');
   const mcpDetail = useMatch('/mcp/:id');
   const a2aDetail = useMatch('/a2a/:id');
+  const restApi = useMatch('/rest-api');
   const contentOpen =
     openChat !== null ||
     filesOpen !== null ||
     skillDetail !== null ||
     taskDetail !== null ||
     mcpDetail !== null ||
-    a2aDetail !== null;
+    a2aDetail !== null || restApi !== null;
 
   useEffect(() => {
     const chatId = openChat?.params.chatId;
@@ -66,7 +68,7 @@ export function ChatLayout() {
       <aside
         className={`${contentOpen ? 'hidden md:flex' : 'flex'} relative w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
       >
-        <ChatList />
+        {restApi !== null ? <><SidebarNav /><p className="p-4 text-sm text-[var(--muted)]">Manage inbound Server access and outbound REST Clients.</p></> : <ChatList />}
       </aside>
 
       <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col overflow-x-hidden`}>

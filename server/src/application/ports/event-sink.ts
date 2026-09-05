@@ -38,7 +38,7 @@ export type RunEvent =
   | { kind: 'system-message'; chatId: string; runId?: string; message: Message }
   | { kind: 'title'; chatId: string; title: string }
   /** A persisted user turn opened a run, whichever client sent it. */
-  | { kind: 'run-started'; chatId: string; runId: string; user: Message }
+  | { kind: 'run-started'; chatId: string; runId: string; user: Message; queuedMessageId?: string }
   /** Whether a run is waiting for a slot or actually talking to the engine. */
   | { kind: 'run-status'; chatId: string; runId: string; status: 'queued' | 'running' }
   /** A risky action is paused, waiting for the user to allow or deny it. */

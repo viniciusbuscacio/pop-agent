@@ -1,3 +1,6 @@
+import { IntegrationService } from '../application/integrations/integration-service.js';
+import { RestClientService } from '../application/integrations/rest-client-service.js';
+import { SqliteIntegrationRepo } from '../infrastructure/db/sqlite-integration-repo.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -176,6 +179,7 @@ export class FakeTranscriber {
 const inertTimer: Timer = { every: () => () => undefined };
 
 export interface TestApp {
+  integrations: IntegrationService;
   app: Hono;
   /** Danger-zone calls the test inspects (LOTE 6). */
   controlLog: string[];
@@ -438,7 +442,12 @@ export function createTestApp(
     bridge,
     busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
   });
+  const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {chats, runs, queue:queuedMessages, now:()=>clock.now()});
+  hub.onIntegrationEvent = event=>integrations.observe(event);
+  const restClients = new RestClientService({repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
   const app = createApp({
+    integrations,
+    restClients,
     auth,
     ...(options.onboarding === undefined ? {} : { onboarding: options.onboarding }),
     settings,
@@ -551,6 +560,7 @@ export function createTestApp(
 
   return {
     controlLog,
+    integrations,
     app,
     auth,
     chats,

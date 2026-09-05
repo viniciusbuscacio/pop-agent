@@ -1,3 +1,7 @@
+import { RestClientService } from './application/integrations/rest-client-service.js';
+import { ScreenedRestGateway } from './infrastructure/integrations/screened-rest-gateway.js';
+import { buildRestTools } from './infrastructure/agent/rest-tools.js';
+import { IntegrationService } from './application/integrations/integration-service.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,6 +175,7 @@ if (agent === 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const hub = new SseHub();
+const restClients = new RestClientService({repo:context.integrations,secrets:context.secrets,gateway:new ScreenedRestGateway(),now:()=>systemClock.now()});
 // Which computers are allowed and which secure transports are currently attached.
 const localAccessPolicy = new LocalAccessPolicyService(context.settings);
 const localConnections = new LocalConnectionRegistry(
@@ -353,6 +358,7 @@ function piBridge(): PiAgentBridge {
       files,
       skills: skillsVault,
       autoSkillsEnabled: () => settings.read().autoSkillsEnabled,
+      restTools: defineTool => buildRestTools(defineTool, restClients),
       a2aTools: (defineTool) => buildA2aTools(defineTool, a2a),
       mcpTools: (defineTool, _chatId) => mcp.list().filter((server) => server.enabled).flatMap((server) => server.capabilities.filter((capability) => capability.kind === 'tool').map((capability) => defineTool({
         name: mcpToolName(server.id, capability.name),
@@ -698,7 +704,12 @@ const sessionCommands = new SessionCommandService({
   busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
 });
 
+const integrations = new IntegrationService(context.integrations, {chats, runs, queue: queuedMessages, now: () => systemClock.now()});
+hub.onIntegrationEvent = event => integrations.observe(event);
+for (const entry of context.runJournal.list()) integrations.observe({kind:'run-status',chatId:entry.chatId,runId:entry.runId,status:entry.state});
 const app = createApp({
+  integrations,
+  restClients,
   auth,
   ...(onboarding === undefined ? {} : { onboarding, onSetupComplete: closeBootstrapServer }),
   settings,

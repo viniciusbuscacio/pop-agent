@@ -106,6 +106,7 @@ export function isBlockedUnderTaint(command: string, machine: GuardedMachine = '
 const REFUSED_UNDER_TAINT = new Set([
   'skill_write',
   'a2a_send_message',
+  'rest_call',
   'a2a_continue_task',
   'a2a_cancel_task',
 ]);
