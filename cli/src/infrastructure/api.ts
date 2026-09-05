@@ -12,7 +12,10 @@ import type {
   EventTicketResponse,
   LoginResponse,
   MessagesResponse,
+  ModelsResponse,
   PatchChatRequest,
+  ProvidersResponse,
+  RecentModelsResponse,
   SendMessageResponse,
   SessionCommandName,
   SessionCommandResponse,
@@ -83,6 +86,18 @@ export class PopAgentApi {
 
   patchChat(chatId: string, patch: PatchChatRequest): Promise<ChatDTO> {
     return this.request<ChatDTO>(`/chats/${chatId}`, { method: 'PATCH', body: patch });
+  }
+
+  providers(): Promise<ProvidersResponse> {
+    return this.request<ProvidersResponse>('/providers');
+  }
+
+  models(providerId: string): Promise<ModelsResponse> {
+    return this.request<ModelsResponse>(`/models?provider=${encodeURIComponent(providerId)}`);
+  }
+
+  recentModels(): Promise<RecentModelsResponse> {
+    return this.request<RecentModelsResponse>('/recent-models');
   }
 
   messages(chatId: string): Promise<MessagesResponse> {

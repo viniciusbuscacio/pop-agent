@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatDTO, StreamEvent } from '@pop-agent/shared';
-import { ChatSession, type SessionListener, type SessionPorts } from './session.js';
+import { ChatSession, type ChatModelState, type SessionListener, type SessionPorts } from './session.js';
 import type { RunState } from './transcript.js';
 
 /**
@@ -17,6 +17,7 @@ function harness(events: StreamEvent[] = []) {
     externalUsers: string[];
     titles: string[];
     archivedChanges: { archived: boolean; source: string }[];
+    models: ChatModelState[];
     loaded: string[];
     ended: number;
   } = {
@@ -27,6 +28,7 @@ function harness(events: StreamEvent[] = []) {
     externalUsers: [],
     titles: [],
     archivedChanges: [],
+    models: [],
     loaded: [],
     ended: 0,
   };
@@ -40,6 +42,7 @@ function harness(events: StreamEvent[] = []) {
     },
     onExternalUser: (text) => seen.externalUsers.push(text),
     onArchivedChanged: (archived, source) => seen.archivedChanges.push({ archived, source }),
+    onModelChanged: (state) => seen.models.push(state),
     onTitle: (title) => seen.titles.push(title),
     onStreamEnd: () => {
       seen.ended += 1;
@@ -52,11 +55,15 @@ function harness(events: StreamEvent[] = []) {
     release = resolve;
   });
   const ports: SessionPorts = {
-    createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
+    createChat: vi.fn(() => Promise.resolve(chatDto())),
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
     unarchiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: false })),
+    patchModel: vi.fn((_chatId, provider, model) => Promise.resolve({ ...chatDto(), provider, model })),
+    listProviders: vi.fn(() => Promise.resolve([])),
+    listModels: vi.fn(() => Promise.resolve([])),
+    recentModels: vi.fn(() => Promise.resolve([])),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     events: async function* () {
@@ -667,6 +674,192 @@ describe('ChatSession', () => {
   });
 });
 
+describe('per-chat model selection', () => {
+  it('orders valid recent pairs first, deduplicates, and keeps partial catalogs usable', async () => {
+    const { session, ports } = harness();
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'later', name: 'Later', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'l/1', serviceModel: '', allowCustomModel: false, order: 2, enabled: true },
+      { id: 'first', name: 'First', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'f/1', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+      { id: 'off', name: 'Off', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'off/1', serviceModel: '', allowCustomModel: false, order: 3, enabled: false },
+    ]);
+    vi.mocked(ports.listModels).mockImplementation((provider) => provider === 'later'
+      ? Promise.reject(new Error('catalog down'))
+      : Promise.resolve([{ id: 'f/1' }, { id: 'f/2' }, { id: 'f/1' }]));
+    vi.mocked(ports.recentModels).mockResolvedValue([
+      { provider: 'first', model: 'f/2', usedAt: 'later' },
+      { provider: 'later', model: 'l/1', usedAt: 'earlier' },
+    ]);
+
+    const data = await session.modelPickerData();
+
+    expect(data?.state.effectiveDefault).toEqual({ provider: 'first', model: 'f/1' });
+    expect(data?.choices.map(({ provider, model }) => ({ provider, model }))).toEqual([
+      { provider: 'first', model: 'f/2' },
+      { provider: 'first', model: 'f/1' },
+    ]);
+    expect(data?.failedProviders).toEqual(['Later']);
+    expect(ports.listModels).not.toHaveBeenCalledWith('off');
+  });
+
+  it('validates direct input without mistaking a catalog failure for a missing model', async () => {
+    const { session, ports } = harness();
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'first', name: 'First', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'f/1', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValueOnce([{ id: 'vendor/model' }]);
+
+    await expect(session.setModelFromInput('first', 'vendor/model')).resolves.toBe('applied');
+    await expect(session.setModelFromInput('missing', 'vendor/model')).rejects.toThrow(
+      'That provider is not configured and enabled.',
+    );
+    vi.mocked(ports.listModels).mockRejectedValueOnce(new Error('offline'));
+    await expect(session.setModelFromInput('first', 'vendor/model')).rejects.toThrow(
+      'The model catalog could not be loaded.',
+    );
+    vi.mocked(ports.listModels).mockResolvedValueOnce([{ id: 'other' }]);
+    await expect(session.setModelFromInput('first', 'vendor/model')).rejects.toThrow(
+      'That model is not available for the selected provider.',
+    );
+  });
+
+  it('does not let a recent-model failure block successful catalogs', async () => {
+    const { session, ports } = harness();
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'first', name: 'First', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'f/1', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValue([{ id: 'vendor/model' }]);
+    vi.mocked(ports.recentModels).mockRejectedValue(new Error('recent down'));
+
+    await expect(session.modelPickerData()).resolves.toMatchObject({
+      choices: [{ provider: 'first', model: 'vendor/model' }],
+      failedProviders: [],
+    });
+  });
+
+  it('keeps a fresh default lazy but creates and patches an explicit pair together', async () => {
+    const { session, ports } = harness();
+
+    expect(await session.setModel('', '')).toBe('applied');
+    expect(ports.createChat).not.toHaveBeenCalled();
+    expect(await session.setModel('openrouter', 'vendor/model')).toBe('applied');
+
+    expect(ports.createChat).toHaveBeenCalledOnce();
+    expect(ports.patchModel).toHaveBeenCalledWith('chat-1', 'openrouter', 'vendor/model');
+    expect(session.currentModel.selected).toEqual({ provider: 'openrouter', model: 'vendor/model' });
+  });
+
+  it('preserves the created chat and confirmed default if its first model PATCH fails', async () => {
+    const { session, ports } = harness();
+    vi.mocked(ports.patchModel).mockRejectedValueOnce(new Error('Patch failed.'));
+
+    await expect(session.setModel('openrouter', 'vendor/model')).rejects.toThrow('Patch failed.');
+
+    expect(session.currentChatId).toBe('chat-1');
+    expect(session.currentModel.selected).toEqual({ provider: '', model: '' });
+  });
+
+  it('does not let the first send outrun an in-flight model PATCH', async () => {
+    const { session, ports } = harness();
+    let finishPatch: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.patchModel).mockImplementationOnce(
+      () => new Promise((resolve) => { finishPatch = resolve; }),
+    );
+
+    const changing = session.setModel('openrouter', 'vendor/model');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledOnce());
+    const asking = session.ask('use the selected model');
+    await Promise.resolve();
+    expect(ports.send).not.toHaveBeenCalled();
+
+    finishPatch({ ...chatDto(), provider: 'openrouter', model: 'vendor/model' });
+    await changing;
+    await asking;
+
+    expect(ports.send).toHaveBeenCalledWith('chat-1', 'use the selected model');
+  });
+
+  it('shares lazy creation when a send starts just before model selection', async () => {
+    const { session, ports } = harness();
+    let finishCreate: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.createChat).mockImplementationOnce(
+      () => new Promise((resolve) => { finishCreate = resolve; }),
+    );
+
+    const asking = session.ask('first turn');
+    await vi.waitFor(() => expect(ports.createChat).toHaveBeenCalledOnce());
+    const changing = session.setModel('openrouter', 'vendor/model');
+    finishCreate(chatDto('shared-chat'));
+    await Promise.all([asking, changing]);
+
+    expect(ports.createChat).toHaveBeenCalledOnce();
+    expect(ports.send).toHaveBeenCalledWith('shared-chat', 'first turn');
+    expect(ports.patchModel).toHaveBeenCalledWith('shared-chat', 'openrouter', 'vendor/model');
+    expect(session.currentChatId).toBe('shared-chat');
+  });
+
+  it('does not let an abandoned model PATCH block the newly opened chat', async () => {
+    const { session, ports } = harness();
+    session.open('old-chat');
+    let finishPatch: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.patchModel).mockImplementationOnce(
+      () => new Promise((resolve) => { finishPatch = resolve; }),
+    );
+
+    const changing = session.setModel('openrouter', 'old/model');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledOnce());
+    session.open('new-chat');
+    await session.ask('new turn');
+
+    expect(ports.send).toHaveBeenCalledWith('new-chat', 'new turn');
+    finishPatch({ ...chatDto('old-chat'), provider: 'openrouter', model: 'old/model' });
+    await expect(changing).resolves.toBe('superseded');
+  });
+
+  it('patches an existing chat without interrupting its run and resets on new', async () => {
+    const { session, ports } = harness();
+    session.open('chat-existing');
+    await session.ask('still running');
+
+    await session.setModel('openai', 'gpt/future');
+
+    expect(ports.stop).not.toHaveBeenCalled();
+    expect(session.busy).toBe(true);
+    expect(ports.patchModel).toHaveBeenCalledWith('chat-existing', 'openai', 'gpt/future');
+    session.open(undefined);
+    expect(session.currentModel.selected).toEqual({ provider: '', model: '' });
+  });
+
+  it('consumes only current-chat model events and suppresses duplicate state notifications', async () => {
+    const { session, seen, release } = harness([
+      { kind: 'chat-model-changed', chatId: 'other', provider: 'x', model: 'x/1' },
+      { kind: 'chat-model-changed', chatId: 'chat-1', provider: 'openai', model: 'gpt/5' },
+      { kind: 'chat-model-changed', chatId: 'chat-1', provider: 'openai', model: 'gpt/5' },
+    ]);
+    session.open('chat-1');
+    const listening = session.listen();
+    release();
+    await listening;
+
+    expect(session.currentModel.selected).toEqual({ provider: 'openai', model: 'gpt/5' });
+    expect(seen.models.filter((state) => state.selected.provider.length > 0)).toHaveLength(1);
+  });
+
+  it('ignores a late model PATCH after switching chats', async () => {
+    const { session, ports } = harness();
+    session.open('old');
+    let finish: (chat: ChatDTO) => void = () => undefined;
+    vi.mocked(ports.patchModel).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const changing = session.setModel('openrouter', 'old/model');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledOnce());
+    await session.switchTo({ ...chatDto('new'), provider: 'openai', model: 'new/model' });
+    finish({ ...chatDto('old'), provider: 'openrouter', model: 'old/model' });
+
+    expect(await changing).toBe('superseded');
+    expect(session.currentChatId).toBe('new');
+    expect(session.currentModel.selected).toEqual({ provider: 'openai', model: 'new/model' });
+  });
+});
+
 describe('resume snapshot races', () => {
   it('does not resurrect a completed run from buffered pre-snapshot events', async () => {
     const user = {
@@ -689,11 +882,11 @@ describe('resume snapshot races', () => {
 
   it('keeps the selected chat when an earlier create-chat request resolves late', async () => {
     const { session, ports } = harness();
-    let created: (chat: { id: string }) => void = () => undefined;
+    let created: (chat: ChatDTO) => void = () => undefined;
     vi.mocked(ports.createChat).mockImplementation(() => new Promise((resolve) => { created = resolve; }));
     const asking = session.ask('Sent before switching');
     await session.switchTo(chatDto('selected'));
-    created({ id: 'late-created' });
+    created(chatDto('late-created'));
     await asking;
     expect(session.currentChatId).toBe('selected');
     expect(ports.send).not.toHaveBeenCalled();

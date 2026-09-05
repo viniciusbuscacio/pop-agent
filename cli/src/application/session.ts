@@ -1,6 +1,9 @@
 import type {
   ChatDTO,
   MessagesResponse,
+  ModelDTO,
+  ProviderStatusDTO,
+  RecentModelDTO,
   SendMessageResponse,
   SessionCommandName,
   SessionCommandResponse,
@@ -23,11 +26,15 @@ import { Transcript, emptyRun, type RunState } from './transcript.js';
  */
 
 export interface SessionPorts {
-  createChat(): Promise<{ id: string }>;
+  createChat(): Promise<ChatDTO>;
   listChats(): Promise<ChatDTO[]>;
   loadChat(chatId: string): Promise<MessagesResponse>;
   archiveChat(chatId: string): Promise<ChatDTO>;
   unarchiveChat(chatId: string): Promise<ChatDTO>;
+  patchModel(chatId: string, provider: string, model: string): Promise<ChatDTO>;
+  listProviders(): Promise<ProviderStatusDTO[]>;
+  listModels(providerId: string): Promise<ModelDTO[]>;
+  recentModels(): Promise<RecentModelDTO[]>;
   send(chatId: string, text: string): Promise<SendMessageResponse>;
   stop(chatId: string): Promise<void>;
   sessionCommand?(chatId: string, command: SessionCommandName, argument: string): Promise<SessionCommandResponse>;
@@ -46,12 +53,44 @@ export type UnarchiveCurrentResult =
 
 export type ArchivedChangeSource = 'event' | 'send-rejected';
 
+export interface ModelPair {
+  provider: string;
+  model: string;
+}
+
+export interface ChatModelState {
+  /** Empty strings mean this chat follows the server default. */
+  selected: ModelPair;
+  /** Best-effort projection from provider status; the server remains authoritative. */
+  effectiveDefault?: ModelPair;
+}
+
+export interface ModelChoice extends ModelPair {
+  providerName: string;
+  modelName?: string;
+}
+
+export interface ModelPickerData {
+  choices: ModelChoice[];
+  state: ChatModelState;
+  failedProviders: string[];
+}
+
 export class ChatArchivedError extends Error {
   readonly code = 'chat_archived';
 
   constructor() {
     super('This conversation is archived. Use /unarchive to restore it.');
     this.name = 'ChatArchivedError';
+  }
+}
+
+/** A prerequisite failed before the message reached the admission endpoint. */
+export class MessageNotSentError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : 'That message was not sent.');
+    this.name = 'MessageNotSentError';
+    this.cause = cause;
   }
 }
 
@@ -70,6 +109,8 @@ export interface SessionListener {
   onExternalUser(text: string): void;
   /** The chat's archive state changed while this transcript remained open. */
   onArchivedChanged(archived: boolean, source: ArchivedChangeSource): void;
+  /** The authoritative explicit pair or the current best-effort default projection changed. */
+  onModelChanged(state: ChatModelState): void;
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
@@ -90,6 +131,17 @@ export class ChatSession {
   private archived: boolean | undefined = false;
   /** Counts every authoritative archive event, including duplicate values. */
   private archiveEventRevision = 0;
+  private model: ChatModelState = { selected: { provider: '', model: '' } };
+  /** Distinguishes model PATCHes from a later navigation/reset. */
+  private modelMutationRevision = 0;
+  /** A send waits only for a model transaction belonging to its selected conversation revision. */
+  private modelMutation:
+    | { openRevision: number; promise: Promise<'applied' | 'superseded'> }
+    | undefined;
+  /** One lazy chat creation is shared by sends, model selection, and session commands. */
+  private chatCreation: { openRevision: number; promise: Promise<ChatDTO> } | undefined;
+  /** Prevents a late HTTP response from overwriting a newer SSE value. */
+  private modelEventRevision = 0;
   /** Own responses that arrived before their run-started event. */
   private readonly ownRunIds = new Set<string>();
   /** Durable turns already echoed locally but not consumed by pi yet. */
@@ -122,11 +174,17 @@ export class ChatSession {
     return this.archived === true;
   }
 
+  get currentModel(): ChatModelState {
+    return this.model;
+  }
+
   /** Opens on an existing chat, or on a clean new one at the first message. */
   open(chatId: string | undefined): void {
     this.openRevision += 1;
     this.chatId = chatId;
     this.archived = chatId === undefined ? false : undefined;
+    this.modelMutationRevision += 1;
+    this.setModelState({ provider: '', model: '' });
     this.transcript = undefined;
     this.ownRunIds.clear();
     this.ownQueuedTexts.length = 0;
@@ -167,6 +225,8 @@ export class ChatSession {
     this.openRevision += 1;
     this.chatId = chat.id;
     this.archived = chat.archived;
+    this.modelMutationRevision += 1;
+    this.setModelState({ provider: chat.provider, model: chat.model });
     this.shownMessageIds = new Set(response.messages.map((message) => message.id));
     this.transcript = response.live === undefined
       ? undefined
@@ -213,12 +273,29 @@ export class ChatSession {
     if (this.archiving?.openRevision === openRevision) {
       throw new Error('This conversation is being archived.');
     }
+    // Selecting an explicit model can materialize a lazy chat and then PATCH
+    // it. A submit made while that is in flight must not reach /messages first.
+    // Propagating a failed model change also preserves the editor draft rather
+    // than silently sending with the server default.
+    const modelMutation = this.modelMutation;
+    try {
+      if (modelMutation?.openRevision === openRevision) await modelMutation.promise;
+    } catch (error) {
+      throw new MessageNotSentError(error);
+    }
+    if (openRevision !== this.openRevision) return;
+
     const pending = { text, openRevision };
     this.pendingSends.push(pending);
     try {
-      const chatId = this.chatId ?? (await this.ports.createChat()).id;
-      if (openRevision !== this.openRevision) return;
-      this.chatId = chatId;
+      let created: { id: string } | undefined;
+      try {
+        created = await this.ensureChat(openRevision);
+      } catch (error) {
+        throw new MessageNotSentError(error);
+      }
+      if (created === undefined || openRevision !== this.openRevision) return;
+      const chatId = this.chatId ?? created.id;
       let response: SendMessageResponse;
       try {
         response = await this.ports.send(chatId, text);
@@ -254,6 +331,164 @@ export class ChatSession {
   async stop(): Promise<void> {
     if (this.chatId === undefined || !this.busy) return;
     await this.ports.stop(this.chatId);
+  }
+
+  /** Loads only enough provider state to render Default/effective in the compact header. */
+  async refreshModelDefault(): Promise<void> {
+    const openRevision = this.openRevision;
+    const providers = (await this.ports.listProviders())
+      .filter((provider) => provider.configured && provider.enabled)
+      .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
+    if (openRevision === this.openRevision) this.setEffectiveDefault(effectiveDefault(providers));
+  }
+
+  /**
+   * Builds the picker from selectable providers without making one failed
+   * catalog (or the optional recent list) hide the providers that did load.
+   */
+  async modelPickerData(): Promise<ModelPickerData | undefined> {
+    const openRevision = this.openRevision;
+    const providers = (await this.ports.listProviders())
+      .filter((provider) => provider.configured && provider.enabled)
+      .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
+    if (openRevision !== this.openRevision) return undefined;
+
+    const effective = effectiveDefault(providers);
+    this.setEffectiveDefault(effective);
+    const [recentResult, ...catalogResults] = await Promise.allSettled([
+      this.ports.recentModels(),
+      ...providers.map((provider) => this.ports.listModels(provider.id)),
+    ]);
+    if (openRevision !== this.openRevision) return undefined;
+
+    const choices: ModelChoice[] = [];
+    const byKey = new Map<string, ModelChoice>();
+    const failedProviders: string[] = [];
+    for (const [index, provider] of providers.entries()) {
+      const result = catalogResults[index];
+      if (result?.status !== 'fulfilled') {
+        failedProviders.push(provider.name);
+        continue;
+      }
+      for (const model of result.value) {
+        const choice: ModelChoice = {
+          provider: provider.id,
+          model: model.id,
+          providerName: provider.name,
+          ...(model.name === undefined ? {} : { modelName: model.name }),
+        };
+        const key = pairKey(choice);
+        if (!byKey.has(key)) byKey.set(key, choice);
+      }
+    }
+
+    if (recentResult?.status === 'fulfilled') {
+      for (const recent of recentResult.value) {
+        const choice = byKey.get(pairKey(recent));
+        if (choice !== undefined && !choices.includes(choice)) choices.push(choice);
+      }
+    }
+    for (const choice of byKey.values()) {
+      if (!choices.includes(choice)) choices.push(choice);
+    }
+    return { choices, state: this.model, failedProviders };
+  }
+
+  /** Validates a typed shortcut against the same selectable catalog used by the picker. */
+  async setModelFromInput(providerId: string, modelId: string): Promise<'applied' | 'superseded'> {
+    const provider = (await this.ports.listProviders()).find(
+      (candidate) => candidate.id === providerId && candidate.configured && candidate.enabled,
+    );
+    if (provider === undefined) {
+      throw new Error('That provider is not configured and enabled.');
+    }
+
+    let models: ModelDTO[];
+    try {
+      models = await this.ports.listModels(provider.id);
+    } catch {
+      throw new Error('The model catalog could not be loaded. Run /model to retry.');
+    }
+    if (!models.some((candidate) => candidate.id === modelId)) {
+      throw new Error('That model is not available for the selected provider.');
+    }
+    return this.setModel(provider.id, modelId);
+  }
+
+  /** Applies an authoritative pair. Selecting a model is the only picker action that may create a lazy chat. */
+  async setModel(provider: string, model: string): Promise<'applied' | 'superseded'> {
+    const openRevision = this.openRevision;
+    const previous = this.modelMutation?.openRevision === openRevision
+      ? this.modelMutation.promise
+      : undefined;
+    const operation = (async (): Promise<'applied' | 'superseded'> => {
+      // Serialize writes for this conversation so quick successive commands
+      // reach the server in input order. A failed earlier write does not poison
+      // the queue, and navigation detaches unrelated old-chat work.
+      if (previous !== undefined) await previous.catch(() => undefined);
+      if (openRevision !== this.openRevision) return 'superseded';
+      return this.applyModel(provider, model, openRevision);
+    })();
+    this.modelMutation = { openRevision, promise: operation };
+    try {
+      return await operation;
+    } finally {
+      if (this.modelMutation?.promise === operation) this.modelMutation = undefined;
+    }
+  }
+
+  private async applyModel(
+    provider: string,
+    model: string,
+    openRevision: number,
+  ): Promise<'applied' | 'superseded'> {
+    const isDefault = provider.length === 0 && model.length === 0;
+    if ((provider.length === 0) !== (model.length === 0)) {
+      throw new Error('A model selection needs both provider and model.');
+    }
+    const mutationRevision = ++this.modelMutationRevision;
+    let chatId = this.chatId;
+
+    if (chatId === undefined) {
+      if (isDefault) {
+        this.setModelState({ provider: '', model: '' });
+        return 'applied';
+      }
+      const created = await this.ensureChat(openRevision);
+      if (
+        created === undefined ||
+        openRevision !== this.openRevision ||
+        mutationRevision !== this.modelMutationRevision
+      ) {
+        return 'superseded';
+      }
+      chatId = created.id;
+      // ensureChat retained the server-confirmed state, so a failed PATCH
+      // leaves the durable chat selected without displaying the requested pair.
+    }
+
+    const eventRevision = this.modelEventRevision;
+    let patched: ChatDTO;
+    try {
+      patched = await this.ports.patchModel(chatId, provider, model);
+    } catch (error) {
+      if (
+        openRevision !== this.openRevision ||
+        mutationRevision !== this.modelMutationRevision ||
+        this.chatId !== chatId
+      ) return 'superseded';
+      throw error;
+    }
+    if (
+      openRevision !== this.openRevision ||
+      mutationRevision !== this.modelMutationRevision ||
+      this.chatId !== chatId
+    ) return 'superseded';
+    // An SSE event carrying a later authoritative value wins over this response.
+    if (this.modelEventRevision === eventRevision) {
+      this.setModelState({ provider: patched.provider, model: patched.model });
+    }
+    return 'applied';
   }
 
   /** Archives only a persisted, idle conversation and clears it after success. */
@@ -317,8 +552,10 @@ export class ChatSession {
   }
 
   async command(command: SessionCommandName, argument: string): Promise<SessionCommandResponse> {
-    const chatId = this.chatId ?? (await this.ports.createChat()).id;
-    this.chatId = chatId;
+    const openRevision = this.openRevision;
+    const created = await this.ensureChat(openRevision);
+    if (created === undefined) throw new Error('The conversation changed before the command could run.');
+    const chatId = this.chatId ?? created.id;
     if (this.ports.sessionCommand === undefined) throw new Error('Session commands are unavailable.');
     const result = await this.ports.sessionCommand(chatId, command, argument);
     if (result.kind === 'fork' && result.chat !== undefined) await this.switchTo(result.chat);
@@ -330,16 +567,59 @@ export class ChatSession {
     return this.ports.forkPoints(this.chatId);
   }
 
+  private async ensureChat(openRevision: number): Promise<{ id: string } | undefined> {
+    if (openRevision !== this.openRevision) return undefined;
+    if (this.chatId !== undefined) return { id: this.chatId };
+
+    let creation = this.chatCreation;
+    if (creation?.openRevision !== openRevision) {
+      creation = { openRevision, promise: this.ports.createChat() };
+      this.chatCreation = creation;
+    }
+    try {
+      const created = await creation.promise;
+      if (openRevision !== this.openRevision) return undefined;
+      if (this.chatId === undefined) {
+        this.chatId = created.id;
+        this.archived = created.archived;
+        this.setModelState({ provider: created.provider, model: created.model });
+      }
+      return created;
+    } finally {
+      if (this.chatCreation === creation) this.chatCreation = undefined;
+    }
+  }
+
   private setArchived(archived: boolean, source: ArchivedChangeSource): void {
     if (this.archived === archived) return;
     this.archived = archived;
     this.listener.onArchivedChanged(archived, source);
   }
 
+  private setEffectiveDefault(pair: ModelPair | undefined): void {
+    if (samePair(this.model.effectiveDefault, pair)) return;
+    this.model = { ...this.model, ...(pair === undefined ? {} : { effectiveDefault: pair }) };
+    if (pair === undefined) delete this.model.effectiveDefault;
+    this.listener.onModelChanged(this.model);
+  }
+
+  private setModelState(selected: ModelPair): void {
+    if (samePair(this.model.selected, selected)) return;
+    this.model = { ...this.model, selected };
+    this.listener.onModelChanged(this.model);
+  }
+
   private absorb(event: StreamEvent): void {
     const loading = this.loading;
     if (loading !== undefined && 'chatId' in event && event.chatId === loading.chatId) {
       loading.events.push(event);
+      return;
+    }
+
+    if (event.kind === 'chat-model-changed') {
+      if (event.chatId !== this.chatId) return;
+      this.modelEventRevision += 1;
+      this.setModelState({ provider: event.provider, model: event.model });
       return;
     }
 
@@ -395,6 +675,20 @@ export class ChatSession {
     this.listener.onRun(state);
     if (transcript.finished) this.listener.onIdle(state);
   }
+}
+
+function effectiveDefault(providers: ProviderStatusDTO[]): ModelPair | undefined {
+  const provider = providers[0];
+  if (provider === undefined || provider.defaultModel.length === 0) return undefined;
+  return { provider: provider.id, model: provider.defaultModel };
+}
+
+function pairKey(pair: ModelPair | RecentModelDTO): string {
+  return `${pair.provider}\u0000${pair.model}`;
+}
+
+function samePair(left: ModelPair | undefined, right: ModelPair | undefined): boolean {
+  return left?.provider === right?.provider && left?.model === right?.model;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {

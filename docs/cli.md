@@ -638,6 +638,37 @@ and autocomplete; it patches `{ archived: false }`, preserves the transcript
 and reenables sends after success. No current chat and a chat already known open
 are no-ops, and failure leaves the archived transcript selected.
 
+`/model` opens a searchable inline selector in the same above-editor position.
+It shows Default with the effective pair when provider status can determine it,
+marks an explicit current pair, puts valid recent pairs first, then catalog
+pairs from configured and enabled providers in stable priority order, and
+deduplicates by provider/model. A persisted pair absent from the current
+catalogs remains visible as unavailable, not as a selectable row. Typing filters
+provider and model, arrows move, Enter applies, and Escape closes only the
+selector without interrupting a run. A failed catalog is named with retry
+guidance while other catalogs remain usable; recent-history failure is ignored.
+`/model <provider-id> <model-id>` validates the pair against the configured,
+enabled provider and current catalog (including model IDs containing `/`), while
+`/model default` resets it. Other argument counts print usage. Provider and
+model always travel together in the PATCH.
+
+The fresh screen remains lazy when the picker is opened, cancelled, or reset to
+Default. An explicit choice may create its chat and then PATCH before the first
+dependent send. Lazy creation is shared across sends, model changes and session
+commands. If that PATCH fails, the created ID and server-confirmed state remain
+selected, and a dependent draft is restored rather than sent with Default. `/new` resets to Default and invalidates stale model work;
+switch/resume restores the saved pair. Current-chat `chat-model-changed` events
+update the compact width-truncated header and an open picker without disturbing
+its filter, editor draft, transcript, or active run. Other-chat events are
+ignored.
+
+Changing model does not stop work already running. Verified server semantics
+are: an admitted run snapshots its pair, including a run waiting only for a
+global execution slot; steering joins that same run and pair. A durable
+per-chat follow-up stores no model pair and snapshots the chat's then-current
+pair when it drains into `startRun`, so it uses a model selected while it was
+waiting.
+
 `/think` immediately shows or hides reasoning in live and historical assistant
 segments, persists that choice for the machine, and reasoning remains visible
 after a run settles.

@@ -9,14 +9,21 @@ import {
   ProcessTerminal,
   Text,
   TUI,
+  truncateToWidth,
   type Component,
   type SlashCommand,
   type Terminal,
 } from '@earendil-works/pi-tui';
 import type { ChatDTO, MessageDTO, MessagesResponse, SessionCommandName } from '@pop-agent/shared';
-import type { ChatSession } from '../../application/session.js';
+import {
+  MessageNotSentError,
+  type ChatModelState,
+  type ChatSession,
+  type ModelPair,
+} from '../../application/session.js';
 import type { RunState } from '../../application/transcript.js';
 import { ApiError } from '../../infrastructure/api.js';
+import { ModelSelector, safeTerminalText } from './model-selector.js';
 import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
 
 /**
@@ -50,6 +57,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'archive', description: 'Archive the current conversation' },
   { name: 'unarchive', description: 'Restore this archived conversation' },
   { name: 'chats', description: 'Switch to an open conversation' },
+  { name: 'model', description: 'Choose this conversation’s model' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
   { name: 'think', description: 'Show or hide the reasoning' },
   { name: 'compact', description: 'Compact the pi session context' },
@@ -101,6 +109,39 @@ export interface ScreenOptions {
 
 type AssistantContent = Pick<RunState, 'text' | 'thinking' | 'tools'>;
 type ShownUser = { components: Component[]; spokenBefore: boolean; spokenRevision: number };
+
+class Header implements Component {
+  constructor(
+    private title: string,
+    private readonly server: string,
+    private model: ChatModelState,
+  ) {}
+
+  setTitle(title: string): void {
+    this.title = title;
+  }
+
+  setModel(model: ChatModelState): void {
+    this.model = model;
+  }
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    const selected = this.model.selected;
+    const effective = this.model.effectiveDefault;
+    const model = selected.provider.length > 0
+      ? `${safeTerminalText(selected.provider)}/${safeTerminalText(selected.model)}`
+      : effective === undefined
+        ? 'Default'
+        : `Default ${safeTerminalText(effective.provider)}/${safeTerminalText(effective.model)}`;
+    return [truncateToWidth(
+      `${paint.bold(safeTerminalText(this.title))}  ${paint.cyan(model)}  ${paint.dim(safeTerminalText(this.server))}`,
+      Math.max(1, width),
+      '…',
+    )];
+  }
+}
 
 /** One assistant segment that can change while streaming and survive settlement. */
 class AssistantSegment extends Container {
@@ -173,11 +214,12 @@ export class ChatScreen {
   private readonly tui: TUI;
   private readonly terminal: Terminal;
   private readonly editor: Editor;
-  private readonly header: Text;
+  private readonly header: Header;
   /** Replaceable history; the header and editor survive a chat switch. */
   private readonly transcript = new Container();
   /** Inline chat picker mounted immediately above the editor. */
-  private picker: SelectList | undefined;
+  private picker: Component | undefined;
+  private modelSelector: ModelSelector | undefined;
   /** Prevents repeated /chats submissions from racing before the list arrives. */
   private pickerOpening = false;
   /** Current assistant segment; earlier steering segments remain in history. */
@@ -204,7 +246,7 @@ export class ChatScreen {
     this.tui = new TUI(this.terminal);
     this.title = options.title ?? 'New conversation';
     this.thinkingShown = options.thinkingShown ?? true;
-    this.header = new Text('', 0, 0);
+    this.header = new Header(this.title, options.server, options.session.currentModel);
     this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
     // Typing `/` now opens the menu, with Tab completing. The base path is the
     // launch directory, which is what pi-tui completes files against -- worth
@@ -322,13 +364,20 @@ export class ChatScreen {
   }
 
   private paintHeader(): void {
-    this.header.setText(`${paint.bold(this.title)}  ${paint.dim(this.options.server)}`);
+    this.header.setTitle(this.title);
+    this.header.setModel(this.options.session.currentModel);
     this.tui.requestRender();
   }
 
   setTitle(title: string): void {
     this.title = title;
     this.paintHeader();
+  }
+
+  onModelChanged(state: ChatModelState): void {
+    this.header.setModel(state);
+    this.modelSelector?.updateState(state);
+    this.tui.requestRender();
   }
 
   /** Reset every replaceable part of the screen to a clean conversation. */
@@ -487,12 +536,7 @@ export class ChatScreen {
       const current = chats.findIndex((chat) => chat.id === this.options.session.currentChatId);
       if (current >= 0) list.setSelectedIndex(current);
 
-      const close = (): void => {
-        const picker = this.picker;
-        this.picker = undefined;
-        if (picker !== undefined) this.tui.removeChild(picker);
-        this.layoutTail();
-      };
+      const close = (): void => this.closePicker();
       list.onCancel = close;
       list.onSelect = (item) => {
         const selected = byId.get(item.value);
@@ -514,6 +558,55 @@ export class ChatScreen {
       this.say(paint.red(message));
     } finally {
       this.pickerOpening = false;
+    }
+  }
+
+  private async openModelPicker(): Promise<void> {
+    if (this.picker !== undefined || this.pickerOpening) return;
+    this.pickerOpening = true;
+    try {
+      const data = await this.options.session.modelPickerData();
+      if (data === undefined || this.picker !== undefined) return;
+      const selector = new ModelSelector(data);
+      selector.onChange = () => this.tui.requestRender();
+      selector.onCancel = () => this.closePicker();
+      selector.onSelect = (pair) => {
+        this.closePicker();
+        void this.applyModel(pair);
+      };
+      this.modelSelector = selector;
+      this.picker = selector;
+      this.layoutTail();
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Models did not load. Run /model to retry.'));
+    } finally {
+      this.pickerOpening = false;
+    }
+  }
+
+  private closePicker(): void {
+    const picker = this.picker;
+    this.picker = undefined;
+    this.modelSelector = undefined;
+    if (picker !== undefined) this.tui.removeChild(picker);
+    this.layoutTail();
+  }
+
+  private async applyModel(pair: ModelPair, validateCatalog = false): Promise<void> {
+    try {
+      const result = validateCatalog
+        ? await this.options.session.setModelFromInput(pair.provider, pair.model)
+        : await this.options.session.setModel(pair.provider, pair.model);
+      if (result === 'superseded') return;
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
+      this.say(paint.dim(pair.provider.length === 0
+        ? 'Using the server default model.'
+        : `Model set to ${safeTerminalText(pair.provider)} / ${safeTerminalText(pair.model)}.`));
+    } catch (error) {
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
+      this.say(paint.red(error instanceof Error ? error.message : 'The model did not change.'));
     }
   }
 
@@ -663,6 +756,13 @@ export class ChatScreen {
       const chatId = this.options.session.currentChatId;
       if (chatId !== undefined) this.options.onChatOpened?.(chatId);
     } catch (error) {
+      if (error instanceof MessageNotSentError) {
+        this.rollbackUser(shown);
+        this.editor.setText(raw);
+        this.say(paint.red(error.message));
+        this.tui.requestRender();
+        return;
+      }
       if (this.options.session.readOnly || (error instanceof ApiError && error.code === 'chat_archived')) {
         // pi-tui clears submitted input before this callback settles. An
         // archived chat did not accept these words, so remove the optimistic
@@ -717,7 +817,14 @@ export class ChatScreen {
         this.say(HELP);
         return;
       case '/chats':
+        if (text !== '/chats') {
+          this.say(paint.yellow('Usage: /chats'));
+          return;
+        }
         void this.openChatPicker();
+        return;
+      case '/model':
+        this.modelCommand(text);
         return;
       case '/stop':
         void this.options.session.stop();
@@ -747,6 +854,23 @@ export class ChatScreen {
       default:
         this.say(paint.yellow(`No such command: ${name ?? text}`));
     }
+  }
+
+  private modelCommand(text: string): void {
+    const parts = text.split(/\s+/);
+    if (parts.length === 1) {
+      void this.openModelPicker();
+      return;
+    }
+    if (parts.length === 2 && parts[1] === 'default') {
+      void this.applyModel({ provider: '', model: '' });
+      return;
+    }
+    if (parts.length === 3 && parts[1] !== undefined && parts[2] !== undefined) {
+      void this.applyModel({ provider: parts[1], model: parts[2] }, true);
+      return;
+    }
+    this.say(paint.yellow('Usage: /model | /model default | /model <provider-id> <model-id>'));
   }
 
   private async runSessionCommand(command: SessionCommandName, argument: string): Promise<void> {

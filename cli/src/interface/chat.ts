@@ -109,6 +109,10 @@ export async function chat(
       loadChat: (chatId) => api.messages(chatId),
       archiveChat: (chatId) => api.patchChat(chatId, { archived: true }),
       unarchiveChat: (chatId) => api.patchChat(chatId, { archived: false }),
+      patchModel: (chatId, provider, model) => api.patchChat(chatId, { provider, model }),
+      listProviders: async () => (await api.providers()).providers,
+      listModels: async (providerId) => (await api.models(providerId)).models,
+      recentModels: async () => (await api.recentModels()).models,
       send: (chatId, text) => api.send(chatId, text),
       stop: (chatId) => api.stop(chatId),
       sessionCommand: (chatId, command, argument) => api.sessionCommand(chatId, command, argument),
@@ -128,6 +132,7 @@ export async function chat(
       onSteering: () => screen.onSteering(),
       onExternalUser: (text) => screen.onExternalUser(text),
       onArchivedChanged: (archived, source) => screen.onArchivedChanged(archived, source),
+      onModelChanged: (state) => screen.onModelChanged(state),
       onTitle: (title) => screen.setTitle(title),
       onStreamEnd: (error) => screen.onStreamEnd(error),
     },
@@ -149,6 +154,9 @@ export async function chat(
       return 1;
     }
   }
+  // Best effort only: a provider-status outage must not prevent an already
+  // admitted chat screen from opening. The header simply says Default.
+  await session.refreshModelDefault().catch(() => undefined);
 
   localAccess.connect();
   screen.start();

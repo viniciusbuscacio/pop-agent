@@ -14,6 +14,37 @@ const archivedChat = {
 };
 
 describe('PopAgentApi', () => {
+  it('requests a provider catalog with an encoded provider id', async () => {
+    const http = vi.fn(() => Promise.resolve(Response.json({ models: [], source: 'static' })));
+    const api = new PopAgentApi({
+      url: 'https://pop-agent.example',
+      token: 'session-token',
+      fetch: http as typeof globalThis.fetch,
+    });
+
+    await api.models('custom/provider name');
+
+    expect(http.mock.calls[0]?.[0]).toBe(
+      'https://pop-agent.example/v1/models?provider=custom%2Fprovider%20name',
+    );
+  });
+
+  it('patches a model only as an authoritative provider/model pair', async () => {
+    const selected = { ...archivedChat, provider: 'openrouter', model: 'vendor/model' };
+    const http = vi.fn(() => Promise.resolve(Response.json(selected)));
+    const api = new PopAgentApi({
+      url: 'https://pop-agent.example',
+      token: 'session-token',
+      fetch: http as typeof globalThis.fetch,
+    });
+
+    await api.patchChat('chat-archive', { provider: 'openrouter', model: 'vendor/model' });
+
+    expect((http.mock.calls[0]?.[1] as RequestInit | undefined)?.body).toBe(
+      JSON.stringify({ provider: 'openrouter', model: 'vendor/model' }),
+    );
+  });
+
   it.each([
     { archived: true, label: 'archive' },
     { archived: false, label: 'unarchive' },

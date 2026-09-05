@@ -127,6 +127,43 @@ and reenables sends only after success. With no current chat or a current chat
 known to be open it makes no request; failure preserves the archived selection,
 transcript and draft. `/archive` behavior is unchanged.
 
+`/model` is available in help and autocomplete. With no arguments it opens an
+inline searchable selector above the editor. Typing filters provider and model,
+arrows move, Enter applies, and Escape closes only the selector even while a run
+is active. The list contains Default (with its effective pair when provider
+status makes that determinable), then valid recent pairs, then configured and
+enabled providers' catalog pairs in deterministic provider order, deduplicated
+by `(provider, model)`. An explicit current pair is visibly marked; when that
+pair is absent from the current catalogs, the selector keeps it visible as
+unavailable instead of presenting it as selectable. One failed catalog does not
+hide successful providers and the selector identifies failures with `/model`
+retry guidance; failure to load recent pairs is non-blocking.
+
+`/model <provider-id> <model-id>` validates an explicit pair against the
+configured, enabled provider and its current catalog before applying it;
+`/model default` clears both fields. Catalog failure is distinct from an absent
+pair. Other argument counts are rejected with usage guidance; model IDs may
+contain `/`. Existing chats always PATCH provider
+and model together. On a fresh lazy conversation, opening, cancelling, or
+choosing Default creates nothing. Choosing an explicit pair may create the chat,
+then PATCH it before a dependent first send. Lazy creation is single-flight
+across sends, model changes and session commands, so concurrent actions cannot
+materialize different chats. If creation succeeds and PATCH fails, the new chat
+ID and its server-confirmed Default state remain selected and a dependent draft
+is restored rather than sent with the wrong model.
+`/new` clears the pair and invalidates old requests; switching or resuming loads
+the persisted pair. `chat-model-changed` updates only the currently open chat's
+header and selector without changing draft, filter, transcript, or run state.
+The compact header shows either the explicit pair or Default/effective pair and
+truncates to terminal width.
+
+A model change never stops the active run. RunService snapshots a pair when a
+run is admitted, so an already admitted active or global-capacity-queued run
+keeps that pair. A per-chat durable follow-up row does not store a model pair;
+when it later drains through `startRun`, it snapshots the chat's then-current
+pair. Steering delivered into the current run therefore uses that run's pair,
+while a future drained follow-up uses the newly selected pair.
+
 ## Local Access inside the client
 
 Interactive terminal chat and background tray supervision both reuse the PLA

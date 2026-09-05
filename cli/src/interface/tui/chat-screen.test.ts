@@ -6,6 +6,7 @@ import { ChatSession, type SessionPorts } from '../../application/session.js';
 import { emptyRun } from '../../application/transcript.js';
 import { ApiError } from '../../infrastructure/api.js';
 import { ChatScreen } from './chat-screen.js';
+import { ModelSelector, safeTerminalText } from './model-selector.js';
 
 /**
  * What ends up on screen, asserted against a terminal that only records.
@@ -94,11 +95,15 @@ function screenWith(
   options: { thinkingShown?: boolean; onThinkingShownChange?: (shown: boolean) => void } = {},
 ) {
   const ports: SessionPorts = {
-    createChat: vi.fn(() => Promise.resolve({ id: 'chat-1' })),
+    createChat: vi.fn(() => Promise.resolve(chatDto())),
     listChats: vi.fn(() => Promise.resolve([])),
     loadChat: vi.fn(() => Promise.resolve({ messages: [] })),
     archiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: true })),
     unarchiveChat: vi.fn(() => Promise.resolve({ ...chatDto(), archived: false })),
+    patchModel: vi.fn((_chatId, provider, model) => Promise.resolve({ ...chatDto(), provider, model })),
+    listProviders: vi.fn(() => Promise.resolve([])),
+    listModels: vi.fn(() => Promise.resolve([])),
+    recentModels: vi.fn(() => Promise.resolve([])),
     send: vi.fn(() => Promise.resolve({ runId: 'run-1' })),
     stop: vi.fn(() => Promise.resolve()),
     sessionCommand: vi.fn((_chatId, command) => Promise.resolve({ kind: command, message: 'Session details' })),
@@ -116,6 +121,7 @@ function screenWith(
     onSteering: () => undefined,
     onExternalUser: () => undefined,
     onArchivedChanged: (archived, source) => holder.screen?.onArchivedChanged(archived, source),
+    onModelChanged: (state) => holder.screen?.onModelChanged(state),
     onTitle: () => undefined,
     onStreamEnd: () => undefined,
   });
@@ -129,6 +135,29 @@ function screenWith(
   holder.screen = screen;
   return { screen, session, ports, onExit };
 }
+
+describe('model selector safety', () => {
+  it('strips terminal controls and identifies an unavailable current pair', () => {
+    const selector = new ModelSelector({
+      choices: [{
+        provider: 'safe',
+        providerName: 'Provider\u001b]52;c;clipboard\u0007',
+        model: 'model\u001b[2J',
+      }],
+      state: { selected: { provider: 'missing\u001b[31m', model: 'old\u0007model' } },
+      failedProviders: ['Broken\u001b[2J'],
+    });
+
+    const output = selector.render(120).join('\n');
+    expect(output).toContain('Current (unavailable): missing[31m / oldmodel');
+    expect(output).toContain('Provider]52;c;clipboard / model[2J');
+    expect(output).toContain('Catalog failed: Broken[2J');
+    expect(output).not.toContain('\u001b]52');
+    expect(output).not.toContain('\u001b[2J');
+    expect(output).not.toContain('\u0007');
+    expect(safeTerminalText('safe\u009bcontrol')).toBe('safecontrol');
+  });
+});
 
 describe('ChatScreen', () => {
   it('paints the header and the greeting when it opens', async () => {
@@ -180,6 +209,138 @@ describe('ChatScreen', () => {
 
     const editor = (screen as unknown as { editor: { getText(): string } }).editor;
     expect(editor.getText()).toBe('/unarchive ');
+  });
+
+  it('lists and autocompletes /model', async () => {
+    const { terminal, plain, send } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/help');
+    await flush();
+    expect(plain()).toContain('Choose this conversation’s model');
+
+    send('/mod');
+    await flush();
+    send('\t');
+    const editor = (screen as unknown as { editor: { getText(): string } }).editor;
+    expect(editor.getText()).toBe('/model ');
+  });
+
+  it('filters and navigates the inline model selector, then applies model ids containing slashes', async () => {
+    const { terminal, plain, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'openrouter', name: 'OpenRouter', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'base/default', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValue([{ id: 'alpha/one' }, { id: 'vendor/model-two' }]);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model');
+    await vi.waitFor(() => expect(ports.listModels).toHaveBeenCalled());
+    await flush();
+    expect(plain()).toContain('Model filter:');
+    send('model-two');
+    await flush();
+    expect(plain()).toContain('vendor/model-two');
+    send('\r');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledWith(
+      'chat-1', 'openrouter', 'vendor/model-two',
+    ));
+  });
+
+  it('lets Escape close only the model selector without stopping the current run', async () => {
+    const { terminal, send } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'openrouter', name: 'OpenRouter', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'base/default', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValue([{ id: 'vendor/model' }]);
+    await session.ask('running');
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model');
+    await vi.waitFor(() => expect(ports.listModels).toHaveBeenCalled());
+    await flush();
+
+    send('\u001b');
+    await flush();
+
+    expect(ports.stop).not.toHaveBeenCalled();
+    expect((screen as unknown as { picker?: unknown }).picker).toBeUndefined();
+  });
+
+  it('supports direct explicit/default syntax and rejects extra arguments', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'openrouter', name: 'OpenRouter', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'vendor/model/id', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValue([{ id: 'vendor/model/id' }]);
+    screen.start();
+
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model openrouter vendor/model/id');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledWith(
+      'chat-1', 'openrouter', 'vendor/model/id',
+    ));
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model default');
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledWith('chat-1', '', ''));
+    const before = vi.mocked(ports.patchModel).mock.calls.length;
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model too many arguments here');
+    await flush();
+
+    expect(ports.patchModel).toHaveBeenCalledTimes(before);
+    expect(plain()).toContain('Usage: /model');
+  });
+
+  it('restores a dependent draft when the initial model PATCH fails', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'openrouter', name: 'OpenRouter', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'vendor/model', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockResolvedValue([{ id: 'vendor/model' }]);
+    let rejectPatch: (error: Error) => void = () => undefined;
+    vi.mocked(ports.patchModel).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => { rejectPatch = reject; }),
+    );
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit(
+      '/model openrouter vendor/model',
+    );
+    await vi.waitFor(() => expect(ports.patchModel).toHaveBeenCalledOnce());
+    const editor = (screen as unknown as { editor: { getText(): string; setText(text: string): void } }).editor;
+    editor.setText('must remain a draft');
+    const asking = (screen as unknown as { submit(text: string): Promise<void> }).submit('must remain a draft');
+
+    rejectPatch(new Error('Model patch failed.'));
+    await asking;
+    await flush();
+
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(editor.getText()).toBe('must remain a draft');
+    expect(plain()).not.toContain('> must remain a draft');
+    expect(plain()).toContain('Model patch failed.');
+  });
+
+  it('keeps a fresh chat lazy when the selector is cancelled and reports partial catalog failure', async () => {
+    const { terminal, plain, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    vi.mocked(ports.listProviders).mockResolvedValue([
+      { id: 'good', name: 'Good', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'good/model', serviceModel: '', allowCustomModel: false, order: 1, enabled: true },
+      { id: 'bad', name: 'Broken', authType: 'api-key', configured: true, source: 'settings', defaultModel: 'bad/model', serviceModel: '', allowCustomModel: false, order: 2, enabled: true },
+    ]);
+    vi.mocked(ports.listModels).mockImplementation((provider) => provider === 'bad'
+      ? Promise.reject(new Error('down'))
+      : Promise.resolve([{ id: 'good/model' }]));
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/model');
+    await vi.waitFor(() => expect(ports.listModels).toHaveBeenCalledTimes(2));
+    await flush();
+
+    expect(plain()).toContain('Good / good/model');
+    expect(plain()).toContain('Catalog failed: Broken');
+    expect(plain()).toContain('run /model to retry');
+    send('\u001b');
+    expect(ports.createChat).not.toHaveBeenCalled();
   });
 
   it('runs pi session commands locally instead of sending them as prompts', async () => {

@@ -410,6 +410,24 @@ describe('the queue', () => {
     expect(third).toHaveLength(3);
   });
 
+  it('keeps the model pair snapshotted when a run waits for a global slot', async () => {
+    const release: (() => void)[] = [];
+    bridge.script = () => new Promise<void>((resolve) => release.push(resolve));
+    const ids = [newChat(), newChat(), newChat()];
+    const queuedChat = ids[2] as string;
+    chats.setModel(queuedChat, 'old/model', 'old-provider');
+    for (const chatId of ids) runs.startRun(chatId, 'question');
+
+    chats.setModel(queuedChat, 'new/model', 'new-provider');
+    release[0]?.();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(bridge.seen[2]).toMatchObject({ provider: 'old-provider', model: 'old/model' });
+    release[1]?.();
+    release[2]?.();
+    await runs.whenIdle();
+  });
+
   it('drops a queued run from the queue instead of aborting the engine', () => {
     bridge.script = () => new Promise(() => undefined);
     const ids = [newChat(), newChat(), newChat()];
