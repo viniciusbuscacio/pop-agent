@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.55
+
+- Preserve discovered MCP argument schemas in model tools and omit redundant structured result copies only when identical JSON is already present in a text block. Distinct data, annotations and errors remain intact.
+
+
 ## 0.2.54
 
 - Create or repair the Pop Local Access Start menu shortcut with the Pop icon as part of the Windows installer. Build the Windows tray as a GUI application so opening it does not leave a console window.
