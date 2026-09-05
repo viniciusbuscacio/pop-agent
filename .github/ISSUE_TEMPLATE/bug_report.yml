@@ -13,7 +13,7 @@ body:
     attributes:
       label: Pop Agent version or commit
       description: Use the tagged version or full commit hash when possible.
-      placeholder: v0.2.41 or 0123456789abcdef...
+      placeholder: vX.Y.Z or full commit hash
     validations:
       required: true
   - type: dropdown
@@ -35,7 +35,7 @@ body:
     attributes:
       label: Environment
       description: Include relevant OS, architecture, browser, Node, and deployment details.
-      placeholder: Debian 12 amd64, Node 22.19.0, Caddy, Firefox 136
+      placeholder: Ubuntu amd64, Pop version, browser version, Tailscale Serve
     validations:
       required: true
   - type: textarea

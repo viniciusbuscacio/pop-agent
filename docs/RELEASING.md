@@ -1,6 +1,6 @@
 # Releasing Pop Agent
 
-This is the maintainer runbook for preparing a future GitHub release. It does
+This is the maintainer runbook for preparing a GitHub release. It does
 not authorize changing repository visibility or publishing from an unreviewed
 checkout. The normative version and installation rules remain in
 [`specs/Spec-Pop-General.md`](specs/Spec-Pop-General.md) and
@@ -76,7 +76,7 @@ git diff -- VERSION package.json package-lock.json shared/package.json \
   server/package.json web/package.json cli/package.json tools/package.json \
   cli/src/version.ts local-access/tray/main.go CHANGELOG.md
 npm ci
-npm run gate
+env -u NODE_ENV npm run gate
 ```
 
 The gate covers version/specification/self-map checks, lint, TypeScript, Go,
@@ -160,7 +160,12 @@ find "$server_release" -maxdepth 1 -type f \
 test -n "$(find "$upload" -maxdepth 1 -name '*.bundle' -print -quit)"
 ```
 
-When client artifacts are part of the release, run `npm run pack:cli` on the
+Before activating a server that serves client installers, run the full
+`npm run pack:cli` command. Running `tools/pack-cli.ts` alone omits managed Node
+archives and their manifest. The systemd installer performs this step after the
+gate and before activation.
+
+For release asset staging, run `npm run pack:cli` on the
 supported build hosts. It creates the versioned CLI archive, launcher target
 binaries, managed Node archives, manifests, and only the Pop Local Access
 targets that the host can validly produce. A production macOS tray requires its
@@ -209,7 +214,9 @@ the installation specification. At minimum record:
 5. login, restart/login-item behavior, update/repair, and removal with data
    preservation;
 6. server `/healthz`, reported version/commit, and clean deployed checkout;
-7. the public bootstrap fetched fully to an owner-only temporary file before
+7. the documented `git clone` plus `deploy/bootstrap-server.sh` flow, including
+   GitHub CLI authentication for private repository access; and
+8. the public bootstrap fetched fully to an owner-only temporary file before
    execution—never a producer-to-shell pipeline.
 
 Test the source bundle through `deploy/install-server-bundle.sh` with its exact

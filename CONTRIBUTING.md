@@ -44,6 +44,8 @@ POP_AGENT_DATA_DIR="$dev_root/data" \
   npm run dev
 ```
 
+For a private checkout, follow the [GitHub authentication steps](deploy/README.md#private-repositories) before cloning.
+
 The root development command watches the server. To rebuild the PWA on changes,
 run this in another terminal:
 
@@ -75,8 +77,12 @@ reproductions.
 Add or update focused tests for behavior changes. Before submitting, run:
 
 ```sh
-npm run gate
+env -u NODE_ENV npm run gate
 ```
+
+Run tests without an inherited `NODE_ENV=production`. Production React builds
+do not expose the testing APIs used by the suite. This changes only the test
+subprocess environment, not the running service configuration.
 
 The gate covers version/specification checks, lint, TypeScript, Go checks,
 builds, tests, and the smoke flow. If a platform-specific check cannot be run,

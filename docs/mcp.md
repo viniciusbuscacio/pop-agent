@@ -35,8 +35,15 @@ shell parser or silently discard quoting.
 A connection is short-lived for Test and for one tool call. Closing it is mandatory in
 a `finally`; the SDK reaps stdio children and terminates a legacy HTTP session when one
 exists. Discovery includes tools, resources, resource templates and prompts. Tool
-calls use the SDK result unchanged and Pop Agent serializes it only at its existing tool
-boundary.
+calls preserve the SDK result at the transport boundary. At the model boundary,
+Pop preserves the discovered input JSON Schema, including required fields and
+nested constraints. It removes `structuredContent` only when a text block
+already contains exactly the same parsed JSON value. Distinct structured data
+and non-text blocks remain intact.
+
+An explicit MCP `isError: true` becomes a failed pi tool with the external
+content envelope preserved. Ordinary text containing the word "error" is not
+classified as a protocol failure.
 
 ## Credentials and trust
 

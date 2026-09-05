@@ -5,7 +5,7 @@ installed PWA, and terminal clients, connects to multiple LLM providers, and
 keeps your data under your control.**
 
 > [!IMPORTANT]
-> Pop Agent is a **public beta** and remains pre-1.0. It is a working personal
+> Pop Agent is a **beta** and remains pre-1.0. It is a working personal
 > system and an AI engineering portfolio project, not a hosted service. Expect
 > intentional compatibility changes, read the changelog before updating, and
 > keep current backups.
@@ -37,6 +37,7 @@ only for configured or explicitly used features.
 - Multiple providers with failover, encrypted credentials, OAuth where
   supported, and provider-specific usage views
 - Native MCP client integration and outbound A2A agents with persisted tasks
+- Scoped REST API access for external clients and configured outbound REST calls
 - Installable responsive PWA, terminal client, and optional macOS/Windows Pop
   Local Access tray
 - Manual backups, recovery keys, passkeys, session controls, update validation,
@@ -55,6 +56,8 @@ git clone https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
+
+For private repository access, complete the [GitHub authentication steps](deploy/README.md#private-repositories) before cloning.
 
 Defaults:
 
@@ -154,6 +157,7 @@ private process in [SECURITY.md](SECURITY.md) for vulnerabilities.
 - [Security model](docs/specs/Spec-Pop-Security.md)
 - [CLI and Local Access guide](docs/cli.md)
 - [MCP compatibility notes](docs/mcp.md)
+- [REST API server and outbound clients](docs/specs/Spec-Pop-REST-API.md)
 - [Changelog](CHANGELOG.md)
 - [Support policy](SUPPORT.md)
 - [Maintainer release runbook](docs/RELEASING.md)

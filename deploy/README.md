@@ -47,7 +47,7 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the planned immutable v0.2.56 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.56 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
@@ -201,7 +201,7 @@ npm run install:server -- \
 ```
 
 It validates Linux/systemd, Node 22.19+, npm, Git, Go 1.23+, required commands,
-checkout ownership and cleanliness. It then runs `npm ci` and the complete gate
+checkout ownership and cleanliness. It then runs `npm ci`, the complete gate, and `npm run pack:cli`
 without root, uses narrowly scoped sudo to assign the service user as the
 Tailscale operator, install the root-owned `popman`
 launcher and activate the systemd unit, and performs bounded loopback health
