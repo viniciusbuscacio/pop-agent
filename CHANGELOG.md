@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.56
+
+- Launcher 1.1.5 supports verified Windows ZIP runtimes; publish the Node runtime matrix for Windows, Linux and macOS on amd64/arm64.
+
+- Server installation now packages client downloads and the managed Node runtime before activation, avoiding missing installer/runtime manifests on a fresh server.
+
+- Inherit pi native compaction defaults and document authenticated HTTPS Git clone for private installations.
+
+- Windows PLA installation provisions the managed Node runtime instead of requiring Node on PATH, and terminates the existing process tree before upgrading.
+- Explicit MCP isError results now surface as failed tools while preserving their untrusted-content envelope.
+
+
 ## 0.2.55
 
 - Preserve discovered MCP argument schemas in model tools and omit redundant structured result copies only when identical JSON is already present in a text block. Distinct data, annotations and errors remain intact.

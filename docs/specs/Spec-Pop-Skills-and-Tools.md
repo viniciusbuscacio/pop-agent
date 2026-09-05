@@ -264,3 +264,5 @@ must pass before these contracts ship.
 Transport/channel metadata must not influence skill selection. Complete greetings and social acknowledgements select no procedural skills, even with high semantic similarity; greetings followed by a task still route normally. Routed bodies are optional procedural reference and never create tasks or authorize actions. The current user request defines the task.
 
 MCP model tool definitions preserve the discovered input JSON Schema, including required and nested fields. Result projection may omit structuredContent only when a text block parses to the identical JSON value; distinct data and metadata remain intact. This avoids duplicating compatibility representations in model context without changing the MCP wire response.
+
+An explicit MCP result isError=true becomes a failed agent tool with its external-data envelope preserved. Freeform result text is not heuristically interpreted as a protocol error flag.

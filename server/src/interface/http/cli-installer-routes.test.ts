@@ -102,7 +102,7 @@ describe('native Pop launcher installers', () => {
     expect(windows).toContain("Name 'Pop Local Access'");
     expect(windows).toContain('icacls.exe');
     expect(windows).toContain('$backup = "$tray.previous"');
-    expect(windows.indexOf('Stop-Process -Id')).toBeLessThan(windows.indexOf('Move-Item -Force $tmp $tray'));
+    expect(windows.indexOf('$termination = Start-Process')).toBeLessThan(windows.indexOf('Move-Item -Force $tmp $tray'));
     expect(windows).not.toContain('secret-session');
   });
 

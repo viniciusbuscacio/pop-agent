@@ -5,10 +5,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createNodeRuntimeRoutes } from './node-runtime-routes.js';
 
-describe('managed Node runtime distribution', () => {
+describe.each([
+  ['darwin-arm64', 'node-v22.23.2-darwin-arm64.tar.gz', 'application/gzip'],
+  ['windows-amd64', 'node-v22.23.2-win-x64.zip', 'application/zip'],
+])('managed Node runtime distribution (%s)', (target, file, contentType) => {
   let pack: string;
   const bytes = Buffer.from('official Node archive');
-  const file = 'node-v22.23.2-darwin-arm64.tar.gz';
 
   beforeEach(() => {
     pack = mkdtempSync(join(tmpdir(), 'pop-node-runtime-'));
@@ -19,7 +21,7 @@ describe('managed Node runtime distribution', () => {
       version: '22.23.2',
       minimumLauncherVersion: '1.1.0',
       packages: {
-        'darwin-arm64': {
+        [target]: {
           sourceUrl: `https://nodejs.org/dist/v22.23.2/${file}`,
           file,
           size: bytes.length,
@@ -39,6 +41,7 @@ describe('managed Node runtime distribution', () => {
 
     const archive = await routes.request(`/runtime/node/22.23.2/${file}`);
     expect(archive.status).toBe(200);
+    expect(archive.headers.get('content-type')).toBe(contentType);
     expect(archive.headers.get('cache-control')).toContain('immutable');
     expect(Buffer.from(await archive.arrayBuffer())).toEqual(bytes);
   });

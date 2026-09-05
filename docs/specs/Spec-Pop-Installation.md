@@ -673,3 +673,5 @@ that platform. Cross-compilation alone is not end-user acceptance.
 - allowing a pi version to bypass isolated validation;
 - claiming a one-command server installer before one exists and passes the full
   supported-platform matrix.
+
+Managed Node runtime artifacts cover macOS, Linux and Windows on amd64/arm64. Windows uses the official ZIP archive and launcher 1.1.5 or newer; extraction rejects traversal, multiple roots, symlinks, special files and expansion beyond the runtime limit before activation. The server installer packages these artifacts with the client releases.

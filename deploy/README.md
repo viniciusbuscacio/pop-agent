@@ -10,10 +10,32 @@ cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
 
+### Private repositories
+
+Authenticate Git once as the same non-root service owner, then use the same clone
+and bootstrap commands above:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y git gh
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git --hostname github.com
+git clone https://github.com/viniciusbuscacio/pop-agent.git
+cd pop-agent
+./deploy/bootstrap-server.sh --install-apt-packages
+```
+
+Complete the device code in your browser using an account with repository access.
+Do not put access tokens in clone URLs, shell arguments or installer scripts.
+Git uses the GitHub CLI credential helper. A headless host may store GitHub CLI
+credentials in its owner-protected configuration if no system credential store
+is available; this is separate from Pop's provider credentials. Public repositories do not require these GitHub authentication steps.
+
 The bootstrap defaults to `$HOME/.pop-agent` for durable data,
 `$HOME/pop-agent-workspace` for the user workspace, and port 8787. Override
 those with `--data-dir`, `--workspace`, and `--port` when needed. A successful
-install also places the server manager at `/usr/local/bin/popman`, bound to the
+install builds the CLI, launcher, PLA and managed Node download artifacts before
+activating the service. It also places the server manager at `/usr/local/bin/popman`, bound to the
 managed Node runtime and those exact data/workspace paths.
 
 On a fresh data directory it also prints `http://<private-LAN-IP>:8788/setup`
@@ -25,13 +47,13 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the planned immutable v0.2.55 installer over HTTPS into an owner-only
+Retrieve the planned immutable v0.2.56 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.55/server-install.sh && sh "$file" --ref v0.2.55)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.56/server-install.sh && sh "$file" --ref v0.2.56)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`

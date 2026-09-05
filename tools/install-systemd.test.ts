@@ -177,6 +177,9 @@ describe('systemd server installer', () => {
     const commandLines = runner.calls.map((call) => `${call.command} ${call.args.join(' ')}`);
     expect(commandLines).toContain('npm ci');
     expect(commandLines).toContain('npm run gate');
+    expect(commandLines).toContain('npm run pack:cli');
+    expect(commandLines.indexOf('npm run gate')).toBeLessThan(commandLines.indexOf('npm run pack:cli'));
+    expect(commandLines.indexOf('npm run pack:cli')).toBeLessThan(commandLines.indexOf('sudo -- systemctl daemon-reload'));
     expect(commandLines).toContain('sudo -- systemctl daemon-reload');
     expect(commandLines).toContain('sudo -- tailscale set --operator=popowner');
     expect(commandLines).toContain('sudo -- systemctl enable pop-agent-service.service');

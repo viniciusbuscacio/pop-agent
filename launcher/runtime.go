@@ -161,7 +161,11 @@ func (l *launcher) installManagedRuntime(serverURL string, release runtimeManife
 		return err
 	}
 	defer os.RemoveAll(staging)
-	if err := extractNodeTarGz(archive, staging); err != nil {
+	extract := extractNodeTarGz
+	if strings.HasSuffix(file, ".zip") {
+		extract = extractNodeZip
+	}
+	if err := extract(archive, staging); err != nil {
 		return fmt.Errorf("extract runtime: %w", err)
 	}
 	nodeVersion, _, err := l.validateManagedRuntime(staging)

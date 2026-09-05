@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.1.4"
+const launcherVersion = "1.1.5"
 const requestTimeout = 3 * time.Second
 const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 

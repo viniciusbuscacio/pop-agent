@@ -72,8 +72,9 @@ and use an isolated service completion.
 
 ## Long-chat compaction and continuity
 
-Pi's explicit native compaction policy triggers before a turn near the model
-window, reserves 16,384 tokens and keeps a 20,000-token recent tail. Pi cuts at
+Pi owns the native compaction policy, thresholds and recent tail. Pop inherits
+the active pi defaults without restating their values. A native refusal such as
+"session too small" is accepted; Pop does not force a different compaction decision. Pi cuts at
 valid turn/tool boundaries and persists compaction entries in its JSONL.
 
 On a provider context-overflow refusal, Pop rewinds the rejected branch,

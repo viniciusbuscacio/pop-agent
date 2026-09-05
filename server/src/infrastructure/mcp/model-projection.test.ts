@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mcpModelResult, mcpParameters } from './model-projection.js';
+import { mcpModelResult, mcpParameters, mcpToolText } from './model-projection.js';
 
 describe('MCP model projection', () => {
   it('exposes required arguments and nested constraints without mutating discovery', () => {
@@ -20,4 +20,12 @@ describe('MCP model projection', () => {
   it('preserves non-JSON results and structured-only results', () => {
     for (const raw of ['plain text', 'null', '[]', '{"structuredContent":{"value":1}}']) expect(mcpModelResult(raw)).toBe(raw);
   });
+});
+
+it('surfaces an explicit MCP tool failure without interpreting text as a status flag', () => {
+  const raw = JSON.stringify({ isError: true, content: [{ type: 'text', text: 'Access denied' }] });
+  expect(() => mcpToolText(raw, 'test-mcp')).toThrow('Access denied');
+  expect(() => mcpToolText(raw, 'test-mcp')).toThrow('external-content');
+  expect(mcpToolText('{"content":[{"type":"text","text":"error handling guide"}]}', 'test-mcp')).toContain('error handling guide');
+  expect(mcpToolText('null', 'test-mcp')).toContain('external-content');
 });

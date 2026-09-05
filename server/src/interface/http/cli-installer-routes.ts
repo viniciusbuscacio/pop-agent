@@ -284,9 +284,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Pop launcher installation failed with exit code $LASTEXITCODE" }
 } finally { Remove-Item -Force -ErrorAction SilentlyContinue $bootstrap }
 $pop = Join-Path $env:LOCALAPPDATA 'PopAgent\\bin\\pop.exe'
-if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
-  throw 'Pop Local Access requires Node.js 22.19.0 or newer. Install it from https://nodejs.org/ and run this command again.'
-}
+& $pop runtime install --server $origin
+if ($LASTEXITCODE -ne 0) { throw 'Pop managed Node runtime installation failed.' }
 & $pop login $origin --no-chat
 if ($LASTEXITCODE -ne 0) { throw 'Pop Agent sign-in did not complete.' }
 $configRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_CONFIG_HOME)) { Join-Path $HOME '.config\\pop-agent' } else { Join-Path $env:XDG_CONFIG_HOME 'pop-agent' }
@@ -307,7 +306,13 @@ if ($actual -ne '${artifact.sha256}') { Remove-Item -Force $tmp; throw 'Pop Loca
 $backup = "$tray.previous"
 $runningTray = @(Get-CimInstance Win32_Process -Filter "Name = 'pop-local-access.exe'" -ErrorAction SilentlyContinue |
   Where-Object { $_.ExecutablePath -eq $tray })
-$runningTray | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+# Stop the entire tree before replacing the executable; killing only the tray
+# can leave its Node transport alive with local access.
+$taskkill = Join-Path $env:SystemRoot 'System32\\taskkill.exe'
+$runningTray | ForEach-Object {
+  $termination = Start-Process -FilePath $taskkill -ArgumentList @('/PID', [string]$_.ProcessId, '/T', '/F') -WindowStyle Hidden -Wait -PassThru
+  if ($termination.ExitCode -ne 0) { throw 'Could not stop the existing Pop Local Access process tree.' }
+}
 $runningTray | ForEach-Object { Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }
 Remove-Item -Force -ErrorAction SilentlyContinue $backup
 if (Test-Path -LiteralPath $tray) { Move-Item -Force $tray $backup }

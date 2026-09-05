@@ -415,3 +415,7 @@ the full repository gate. The maintained suite must cover at least:
 
 No implementation change to Pop Agent's pi integration is complete until the
 relevant focused tests and `npm run gate` pass.
+
+## Prefer native pi behavior
+
+Use supported pi APIs and inherit native behavior wherever it satisfies the product need. Do not duplicate runtime algorithms, defaults or heuristics in Pop. Pop adapters own product-specific authentication, persistence, channels, local-machine boundaries and UI; an override of native behavior requires a concrete product requirement and documented justification. Compaction decisions and thresholds belong to pi.

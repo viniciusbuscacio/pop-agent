@@ -35,7 +35,7 @@ export function createNodeRuntimeRoutes(deps: NodeRuntimeRouteDeps): Hono {
     return c.json(release);
   });
 
-  routes.get('/runtime/node/:version/:file{node-[0-9A-Za-z.-]+\\.tar\\.gz}', (c) => {
+  routes.get('/runtime/node/:version/:file', (c) => {
     const release = readRelease(deps.cliPack);
     if (release === undefined || c.req.param('version') !== release.version) {
       return c.notFound();
@@ -49,7 +49,7 @@ export function createNodeRuntimeRoutes(deps: NodeRuntimeRouteDeps): Hono {
       const size = statSync(path).size;
       if (size !== artifact.size) return c.notFound();
       return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {
-        'content-type': 'application/gzip',
+        'content-type': artifact.file.endsWith('.zip') ? 'application/zip' : 'application/gzip',
         'content-length': String(size),
         'cache-control': 'public, max-age=31536000, immutable',
         'content-disposition': `attachment; filename="${artifact.file}"`,

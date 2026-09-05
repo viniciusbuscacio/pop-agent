@@ -243,6 +243,9 @@ export async function installPreparedCheckout(
   console.log('Running the mandatory repository gate as the checkout owner...');
   runChecked(runner, 'npm', ['run', 'gate'], options.checkout, true);
 
+  console.log('Packing CLI, launcher, local access and managed Node downloads...');
+  runChecked(runner, 'npm', ['run', 'pack:cli'], options.checkout, true);
+
   requireCleanCheckout(runner, options.checkout, 'The gate completed but the checkout is no longer clean. Commit or remove the changes and rerun the installer.');
   const builtServer = join(options.checkout, 'server/dist/main.js');
   if (!existsSync(builtServer) || !statSync(builtServer).isFile()) {

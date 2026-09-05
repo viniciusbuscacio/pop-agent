@@ -552,3 +552,5 @@ Tray Quit terminates the launcher and its descendants before cancelling the app 
 The Windows installer creates or repairs a per-user **Pop Local Access** Start menu shortcut on every installation, targeting the installed tray executable with its icon and working directory. This does not require administrator privileges.
 
 The Windows tray release uses the Windows GUI subsystem, so launching it from Start or Explorer never opens a console window. The installer also starts it hidden. The CLI launcher remains a console application.
+
+The Windows PLA installer provisions the verified managed Node runtime before login, without requiring Node on the shell PATH. Upgrading a running tray terminates its whole process tree before executable replacement.

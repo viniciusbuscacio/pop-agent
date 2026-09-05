@@ -521,12 +521,8 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.localTools?.(sdk, options.localConnectionId) ?? []),
     ];
 
-    // The compaction policy, explicit instead of inherited defaults
-    // (docs/specs/Spec-Pop-General.md §7): pi summarizes the old span when the context passes
-    // `window - reserveTokens`, keeping a 20k-token tail. inMemory also
-    // keeps a host ~/.pi settings file from leaking in.
+    // Inherit pi's compaction policy. Keep settings isolated from ambient host files.
     const settingsManager = sdk.SettingsManager.inMemory({
-      compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
       // Pop queues every live intervention durably, then pi injects the whole
       // accepted batch before the next model call.
       steeringMode: 'all',
