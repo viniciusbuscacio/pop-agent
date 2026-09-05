@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.49 — 2026-09-05
+
+- Add per-chat CLI model selection with a searchable `/model` picker, explicit provider/model arguments and `/model default`.
+- Synchronize model selection across clients, preserve drafts on failure, and serialize model changes with fresh-chat creation and message submission.
+- Show unavailable persisted selections and sanitize model labels against terminal control sequences.
+
+
 ## 0.2.48 — 2026-09-05
 
 - Fix local file reads and directory creation hanging because the CLI dropped access and mkdir prerequisite calls.
