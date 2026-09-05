@@ -313,20 +313,39 @@ Remove-Item -Force -ErrorAction SilentlyContinue $backup
 if (Test-Path -LiteralPath $tray) { Move-Item -Force $tray $backup }
 try {
   Move-Item -Force $tmp $tray
-  Start-Process -FilePath $tray
+  Start-Process -FilePath $tray -WindowStyle Hidden
   Remove-Item -Force -ErrorAction SilentlyContinue $backup
 } catch {
   Remove-Item -Force -ErrorAction SilentlyContinue $tray
   if (Test-Path -LiteralPath $backup) {
     Move-Item -Force $backup $tray
-    Start-Process -FilePath $tray
+    Start-Process -FilePath $tray -WindowStyle Hidden
   }
   throw
 }
+# Use the same Pop icon in the Start menu; the tray executable has no shell icon resource.
+$iconPath = Join-Path $installDir 'pop.ico'
+$iconTmp = Join-Path ([IO.Path]::GetTempPath()) ('pop-icon-' + [guid]::NewGuid().ToString('N') + '.ico')
+try {
+  Invoke-WebRequest -UseBasicParsing "$origin/pop-local-access.ico" -OutFile $iconTmp
+  if ((Get-FileHash -Algorithm SHA256 -LiteralPath $iconTmp).Hash.ToLowerInvariant() -ne '83eb214365a982aa6cf24875b3e65203050b103c6802f15e9687c70b9464f6b3') { throw 'Pop icon checksum mismatch.' }
+  Move-Item -LiteralPath $iconTmp -Destination $iconPath -Force
+} finally { Remove-Item -LiteralPath $iconTmp -Force -ErrorAction SilentlyContinue }
+# Install or repair the per-user Start menu shortcut on every installation.
+$programs = [Environment]::GetFolderPath('Programs')
+New-Item -ItemType Directory -Force -Path $programs | Out-Null
+$shortcutPath = Join-Path $programs 'Pop Local Access.lnk'
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $tray
+$shortcut.WorkingDirectory = $installDir
+$shortcut.IconLocation = $iconPath + ',0'
+$shortcut.Description = 'Connect this computer to Pop Agent for local file and command access.'
+$shortcut.Save()
 $run = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 New-Item -Path $run -Force | Out-Null
 Set-ItemProperty -Path $run -Name 'Pop Local Access' -Value ('"' + $tray + '"')
-Write-Host 'Pop Local Access is installed. Look for it in the Windows tray.' -ForegroundColor Green
+Write-Host 'Pop Local Access is installed. Open Pop Local Access from the Start menu or find its icon in the Windows tray.' -ForegroundColor Green
 `;
 }
 

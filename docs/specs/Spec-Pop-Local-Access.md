@@ -548,3 +548,7 @@ access-policy check applies to prerequisite operations and file operations.
 ### Tray shutdown process tree
 
 Tray Quit terminates the launcher and its descendants before cancelling the app context. Context cancellation must also terminate the whole process tree, never only the launcher. Closing the tray must not leave a background Node transport with local file access.
+
+The Windows installer creates or repairs a per-user **Pop Local Access** Start menu shortcut on every installation, targeting the installed tray executable with its icon and working directory. This does not require administrator privileges.
+
+The Windows tray release uses the Windows GUI subsystem, so launching it from Start or Explorer never opens a console window. The installer also starts it hidden. The CLI launcher remains a console application.

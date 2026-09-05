@@ -171,7 +171,7 @@ async function main(): Promise<void> {
     const suffix = os === 'windows' ? '.exe' : '';
     const file = `pop-local-access-${version}-${os}-${arch}${suffix}`;
     const path = join(localAccessOut, file);
-    execFileSync('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path, '.'], {
+    execFileSync('go', ['build', '-trimpath', os === 'windows' ? '-ldflags=-s -w -H=windowsgui' : '-ldflags=-s -w', '-o', path, '.'], {
       cwd: join(root, 'local-access', 'tray'),
       env: { ...process.env, CGO_ENABLED: os === 'windows' ? '0' : '1', GOOS: os, GOARCH: arch },
       stdio: 'inherit',

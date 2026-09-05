@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.54
+
+- Create or repair the Pop Local Access Start menu shortcut with the Pop icon as part of the Windows installer. Build the Windows tray as a GUI application so opening it does not leave a console window.
+
+
 ## 0.2.53
 
 - Fix tray shutdown leaving the Windows Node local-access transport alive after its launcher exited. Terminate the process tree before cancelling and apply tree termination to context cancellation too.
