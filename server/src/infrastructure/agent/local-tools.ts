@@ -27,12 +27,21 @@ export function buildLocalTools(
   connectionId: string | undefined,
 ): ToolDefinition[] {
   const connection = localConnections.executionConnection(connectionId);
-  // No terminal, no second pair: the tools are absent from the prompt rather
-  // than present and failing, so she can say she has no access to that
-  // machine instead of trying and apologising. Both cases land here -- a
-  // message from the PWA, which named no terminal, and a terminal that has
-  // since left.
-  if (connection === undefined) return [];
+  if (connection === undefined) {
+    if (connectionId === undefined) return [];
+    // Keep explicit local tools unavailable, never substitute server operations.
+    const definitions = [
+      sdk.createBashToolDefinition('.'), sdk.createReadToolDefinition('.'),
+      sdk.createWriteToolDefinition('.'), sdk.createEditToolDefinition('.'),
+    ];
+    return definitions.map(definition => ({
+      ...definition,
+      name: `local_${definition.name}`,
+      label: `${definition.label} (local machine offline)`,
+      description: 'The selected local machine is offline. Conversation can continue. This local tool is unavailable: ask the user to reconnect Pop Local Access if needed. Never use server tools as a substitute for operations intended for this machine.',
+      execute: async () => { throw new Error('The selected local machine is offline. Reconnect Pop Local Access before using local tools.'); },
+    })) as ToolDefinition[];
+  }
 
   const { machine } = connection;
   const where = `${machine.hostname} (${machine.platform}/${machine.arch})`;

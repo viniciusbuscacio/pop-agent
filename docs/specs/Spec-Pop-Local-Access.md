@@ -337,19 +337,12 @@ Windows, tool construction resolves the ID only to an eligible background
 transport, then binds each operation to that exact transport; a later disconnect
 removes local tools or fails an in-flight call and never falls back to an
 interactive transport. Linux retains role-independent stable-machine resolution.
-Before a run/queue mutation is accepted, an enabled known machine without an
-eligible live transport produces `local_connection_unavailable`; a selector
-absent from persistent machine policy produces `local_connection_unknown`.
-
-For installed-PWA message POSTs and queue PUTs only, the common API layer retries
-`local_connection_unavailable` over an approximately 30-second bounded grace
-window, covering the observed 28-second Windows PLA recovery after a server
-restart. Every attempt retains the same stable machine selector, allowing a tray
-to reconnect with a new transport ID without rerouting the request. It does not
-retry unknown selectors, arbitrary failures, browser-only web requests or other
-API actions. An unknown persisted selector is cleared after its rejected
-request; an offline known selector is retained. Grace expiry remains a rejected
-send/update and preserves the exact composer draft and attachments.
+Known enabled machines without a live transport do not block message sends or
+queue edits. The stable selector is retained. Offline local tool definitions
+explain the limitation and fail immediately without server execution. A new run
+after reconnect rebuilds the tools for the eligible transport. Unknown selectors
+still produce `local_connection_unknown`. The legacy client retry remains only
+for compatibility with older servers that return `local_connection_unavailable`.
 
 The selector is captured with the message/queued input, not stored on the chat.
 Two devices can use the same conversation while intentionally targeting
@@ -442,10 +435,9 @@ pretending the whole computer is under the server’s Files jail.
 - Selected unknown machine: reject message/queue update with 409
   `local_connection_unknown`; the PWA clears that stale selection and explains
   the reset.
-- Selected offline enabled machine: reject with 409
-  `local_connection_unavailable`; the installed PWA retries only message sends
-  and queue updates for a bounded reconnect grace window, then explains that PLA
-  is offline while preserving the draft and attachments.
+- Selected offline enabled machine: accept messages and queue edits while keeping
+  the machine binding. Conversation continues; local tool calls fail clearly and
+  promptly. Never substitute server operations for the selected local machine.
 - Selected known disabled machine: continue server-only.
 - Busy connection: fail the call rather than queueing unbounded work.
 - Oversized frame/body/output/file: cancel/close with bounded memory.
@@ -509,8 +501,8 @@ machine inventory.
 ### Routing and UI
 
 - absent selection remains server-only;
-- unknown and known-enabled-but-offline selectors have distinct 409 errors and
-  neither silently becomes server-only;
+- unknown selectors return 409; known enabled offline selectors accept messages
+  and queue edits without silently becoming server-only;
 - installed-PWA message/queue retries retain one stable selector across a new
   transport ID, stop at the bounded grace deadline and do not retry other
   failures/actions;

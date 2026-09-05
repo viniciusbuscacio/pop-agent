@@ -452,14 +452,11 @@ describe('sending a message', () => {
       headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId },
     });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({
-      error: { code: 'local_connection_unavailable' },
-    });
-    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
-    expect(fixture.rejectedLocalSelections).toEqual([{
-      selector: machine.machineId, reason: 'offline',
-    }]);
+    expect(response.status).toBe(202);
+    expect(fixture.rejectedLocalSelections).toEqual([]);
+    await fixture.runs.whenIdle();
+    const history = await (await api(`/v1/chats/${chat.id}/messages`)).json() as { messages: MessageDTO[] };
+    expect(history.messages.some(message => message.role === 'assistant')).toBe(true);
   });
 
   it('accepts a stable machine selection after the tray reconnects with a new connection ID', async () => {
@@ -491,7 +488,7 @@ describe('sending a message', () => {
     await fixture.runs.whenIdle();
   });
 
-  it('rejects a PWA selection when a macOS machine has only an interactive CLI', async () => {
+  it('accepts conversation without using an interactive fallback when a macOS machine has only an interactive CLI', async () => {
     const machine = {
       machineId: 'machine-interactive-only',
       hostname: 'm1', platform: 'darwin', arch: 'arm64', cwd: '/Users/vini', clientVersion: '0.2.34',
@@ -508,20 +505,9 @@ describe('sending a message', () => {
       headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({
-      error: { code: 'local_connection_unavailable' },
-    });
-    expect(fixture.runs.liveRun(chat.id)).toBeUndefined();
-
-    const queueResponse = await api(`/v1/chats/${chat.id}/queue`, {
-      method: 'PUT', body: { text: 'still do not use the terminal' },
-      headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
-    });
-    expect(queueResponse.status).toBe(409);
-    expect(await queueResponse.json()).toMatchObject({
-      error: { code: 'local_connection_unavailable' },
-    });
+    expect(response.status).toBe(202);
+    expect(fixture.localConnections.executionConnection(machine.machineId)).toBeUndefined();
+    await fixture.runs.whenIdle();
   });
 
   it('pins a PWA selection to background when interactive and tray transports coexist', async () => {
@@ -606,11 +592,9 @@ describe('sending a message', () => {
       method: 'PUT', body: { text: 'must not become server-only' },
       headers: { [LOCAL_CONNECTION_HEADER]: machine.machineId, [CLIENT_HEADER]: 'pwa' },
     });
-    expect(offline.status).toBe(409);
-    expect(await offline.json()).toMatchObject({
-      error: { code: 'local_connection_unavailable' },
-    });
-    expect(fixture.queuedMessages.list(chat.id)[0]?.text).toBe('queued before reconnect');
+    expect(offline.status).toBe(200);
+    expect(fixture.queuedMessages.list(chat.id)[0]?.text).toBe('must not become server-only');
+    expect(fixture.queuedMessages.list(chat.id)[0]?.localConnectionId).toBe(machine.machineId);
 
     fixture.localConnections.attach({
       id: 'local-queue-new', role: 'background', machine,

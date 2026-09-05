@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.52
+
+- Accept conversation messages and queue edits when the selected known local machine is offline. Preserve its routing binding and expose clearly unavailable local tools without executing local work on the server.
+
+
 ## 0.2.51 — 2026-09-05
 
 - Add Agent → REST API with Server tokens/reference and outbound Clients on one page.

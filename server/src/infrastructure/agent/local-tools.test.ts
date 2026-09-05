@@ -54,7 +54,8 @@ describe('local tools', () => {
     });
 
     expect(registry.connection('machine-m1')?.id).toBe('local-interactive');
-    expect(buildLocalTools(sdk, registry, 'machine-m1')).toEqual([]);
+    expect(buildLocalTools(sdk, registry, 'machine-m1')).toHaveLength(4);
+    expect(buildLocalTools(sdk, registry, 'machine-m1')[0]?.description).toContain('offline');
 
     registry.attach({
       id: 'local-reconnected-tray',
@@ -65,4 +66,14 @@ describe('local tools', () => {
     });
     expect(buildLocalTools(sdk, registry, 'machine-m1')).toHaveLength(4);
   });
+});
+
+it('offline tools fail promptly without issuing transport calls or server operations', async () => {
+  const registry = new LocalConnectionRegistry();
+  const tools = buildLocalTools(sdk, registry, 'offline-machine');
+  expect(buildLocalTools(sdk, registry, undefined)).toEqual([]);
+  for (const tool of tools) {
+    expect(tool.name).toMatch(/^local_/u);
+    await expect(tool.execute('test', {}, undefined, undefined, {} as never)).rejects.toThrow('offline');
+  }
 });

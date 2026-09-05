@@ -254,6 +254,8 @@ function selectLocalConnection(
     // between transports is distinct from a selector the server has never
     // known, so the PWA can retry only the transient case.
     if (registry.knownAndDisabled(explicit)) return { ok: true };
+    // Preserve the machine binding while offline; only local tools are unavailable.
+    if (registry.knownAndEnabled(explicit)) return { ok: true, connectionId: explicit };
     return {
       ok: false,
       selector: explicit,
