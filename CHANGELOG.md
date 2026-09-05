@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.48 — 2026-09-05
+
+- Fix local file reads and directory creation hanging because the CLI dropped access and mkdir prerequisite calls.
+- Return an explicit error for unsupported local operations instead of silently discarding valid call envelopes.
+
+
 ## 0.2.47 — 2026-09-05
 
 - Launcher 1.1.4 checks native updates for `pop --chat` as well as bare chat launches.

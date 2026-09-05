@@ -584,7 +584,7 @@ function parseCallFrame(frame: Record<string, unknown>): CallFrame | undefined {
   const tool = stringField(frame, 'tool');
   if (
     callId === undefined || callId.length === 0 || callId.length > 256 ||
-    tool === undefined || !['bash', 'read', 'write', 'edit'].includes(tool)
+    tool === undefined || tool.length === 0 || tool.length > 256
   ) return undefined;
   return { kind: 'call', callId, tool, input: frame['input'] };
 }

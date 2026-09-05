@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -211,5 +214,42 @@ describe('LocalAccess reconnection', () => {
     localAccess.close();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(connections).toBe(1);
+  });
+});
+
+
+describe('LocalAccess file operation dispatch', () => {
+  it('completes access, read and mkdir prerequisites and returns errors instead of hanging', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'pop-local-dispatch-'));
+    const localAccess = new LocalAccess({ url: 'https://pop.example', token: 'session', version: '1.0.0' });
+    const internal = localAccess as unknown as {
+      handleServerFrame(frame: Record<string, unknown>, send: (frame: Record<string, unknown>) => void): Promise<void>;
+    };
+    const results: Record<string, unknown>[] = [];
+    const send = (frame: Record<string, unknown>): void => { results.push(frame); };
+    try {
+      await internal.handleServerFrame({ kind: 'access_policy', enabled: true }, send);
+      const path = join(directory, 'input.txt');
+      await writeFile(path, 'local contents');
+      const invoke = async (callId: string, tool: string, input: unknown): Promise<Record<string, unknown>> => {
+        const before = results.length;
+        await internal.handleServerFrame({ kind: 'call', callId, tool, input }, send);
+        expect(results).toHaveLength(before + 1);
+        expect(results.at(-1)).toMatchObject({ kind: 'result', callId });
+        return results.at(-1)!;
+      };
+      expect(await invoke('access', 'access', { path })).toMatchObject({ ok: true });
+      expect(await invoke('read', 'read', { path })).toMatchObject({ ok: true, output: Buffer.from('local contents').toString('base64') });
+      const nested = join(directory, 'new', 'nested');
+      expect(await invoke('mkdir', 'mkdir', { path: nested })).toMatchObject({ ok: true });
+      expect((await stat(nested)).isDirectory()).toBe(true);
+      expect(await invoke('missing', 'access', { path: join(directory, 'missing') })).toMatchObject({ ok: false, error: { code: 'not_found', message: expect.any(String) } });
+      expect(await invoke('unknown', 'unsupported_operation', {})).toMatchObject({ ok: false, error: { code: 'invalid_input', message: expect.stringContaining('Unknown local tool') } });
+      await internal.handleServerFrame({ kind: 'access_policy', enabled: false }, send);
+      expect(await invoke('disabled', 'mkdir', { path: join(directory, 'denied') })).toMatchObject({ ok: false, error: expect.stringContaining('disabled') });
+    } finally {
+      localAccess.close();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

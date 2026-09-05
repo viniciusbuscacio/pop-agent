@@ -545,3 +545,10 @@ and removal behavior.
 - using PLA transport as the browser SSE or software-update channel;
 - claiming Linux tray support before a real packaged tray and desktop
   integration pass platform acceptance.
+
+### Local file prerequisite dispatch
+
+The CLI accepts structurally valid call envelopes and dispatches `access` and
+`mkdir` alongside `read`, `write` and `bash`. Unsupported operation names return
+an explicit correlated error result; they are never silently dropped. The same
+access-policy check applies to prerequisite operations and file operations.
