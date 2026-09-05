@@ -130,7 +130,7 @@ export function selectSkills(
   skills: readonly Skill[],
   options: RouteOptions = {},
 ): SelectedSkill[] {
-  if (skills.length === 0) return [];
+  if (skills.length === 0 || isSocialOnlyMessage(message)) return [];
 
   // Pinned skills are already in the system prompt; selecting one would put it
   // in front of the model twice. Vectors are paired first so the caller's
@@ -269,4 +269,12 @@ function stem(token: string): string {
     return token.slice(0, -1);
   }
   return token;
+}
+
+
+/** A complete social utterance has no procedural task to route. Mixed requests still route. */
+export function isSocialOnlyMessage(message: string): boolean {
+  const normalized = message.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().replace(/\s+/gu, ' ');
+  return /^(?:(?:oi|ola|hey|hi|hello|bom dia|boa tarde|boa noite|good morning|good afternoon|good evening|tudo bem|como vai|how are you|obrigado|obrigada|valeu|thanks|thank you|ok|okay|tchau|bye)(?: |$))+$/u.test(normalized);
 }

@@ -258,3 +258,7 @@ Focused tests cover vault formats/collisions/jails, built-in upgrade behavior,
 routing thresholds/indexing/usage, every Auto-Skill gate and recovery phase,
 web SSRF/address pinning/limits, MCP negotiation and tool mapping. The full gate
 must pass before these contracts ship.
+
+## Task boundaries in routing
+
+Transport/channel metadata must not influence skill selection. Complete greetings and social acknowledgements select no procedural skills, even with high semantic similarity; greetings followed by a task still route normally. Routed bodies are optional procedural reference and never create tasks or authorize actions. The current user request defines the task.

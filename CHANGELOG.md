@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.50 — 2026-09-05
+
+- Exclude transport metadata from skill routing and reject procedural skill matches for social-only messages.
+- Frame routed skills as task-scoped reference, never as a new request or permission to execute procedures.
+
+
 ## 0.2.49 — 2026-09-05
 
 - Add per-chat CLI model selection with a searchable `/model` picker, explicit provider/model arguments and `/model default`.

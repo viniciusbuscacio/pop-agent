@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelNote } from './channel-note.js';
+import { channelNote, withoutChannelNote } from './channel-note.js';
 
 describe('channelNote', () => {
   it('says where the first message came from, since there is nothing to compare', () => {
@@ -41,4 +41,16 @@ describe('channelNote', () => {
     // A newer client talking to an older server should read oddly, not wrongly.
     expect(channelNote({ kind: 'watch' }, undefined)).toContain('watch');
   });
+});
+
+
+it('routes the user text independently of channel and platform metadata', () => {
+  for (const kind of ['cli', 'pwa', 'web', 'api', 'task']) {
+    for (const previous of [undefined, 'web']) {
+      const note = channelNote({ kind, platform: 'win32' }, previous);
+      const prompt = note === undefined ? 'oi' : `${note}\n\noi`;
+      expect(withoutChannelNote(prompt)).toBe('oi');
+    }
+  }
+  expect(withoutChannelNote('fix the Pop Agent CLI')).toBe('fix the Pop Agent CLI');
 });

@@ -1040,3 +1040,20 @@ describe('session rewind on retry (docs/specs/Spec-Pop-General.md §15)', () => 
     expect(engine.sessions[0]?.tree.userPromptsOnMainPath()).toHaveLength(1);
   });
 });
+
+
+it('routes only user text and frames skill bodies as reference rather than tasks', async () => {
+  const routed: string[] = [];
+  const subject = new PiAgentBridge({ chats, engine, skillsFor: async (message) => {
+    routed.push(message);
+    return ['Run the full gate'];
+  } });
+  const internal = subject as unknown as { withSkills(prompt: string, message: string): Promise<string> };
+  const prompt = '[Pop Agent: this message arrived through the terminal (Pop Agent CLI) on win32.]\n\noi';
+  const result = await internal.withSkills(prompt, prompt);
+  expect(routed).toEqual(['oi']);
+  expect(result).toContain('not a user request');
+  expect(result).toContain('Ignore unrelated procedures');
+  expect(result.endsWith(prompt)).toBe(true);
+  subject.close();
+});

@@ -179,3 +179,11 @@ describe('pinnedBodies', () => {
     expect(pinnedBodies([...SKILLS, identity])).toEqual([]);
   });
 });
+
+
+it('does not turn social messages into tasks even with a perfect semantic match', () => {
+  for (const text of ['oi', 'Olá!', 'oi, tudo bem?', 'hello', 'Thanks!', 'bom dia']) {
+    expect(selectSkills(text, SKILLS, { messageVector: MESSAGE_VECTOR, skillVectors: vectorsFavouring('git') })).toEqual([]);
+  }
+  expect(selectSkills('oi, check git branches', SKILLS)[0]?.skill.slug).toBe('git');
+});

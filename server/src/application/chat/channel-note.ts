@@ -46,3 +46,8 @@ export function channelNote(
     NAMES[previousKind] ?? previousKind
   }.]`;
 }
+
+/** Exclude Pop's transport metadata from per-message skill relevance. */
+export function withoutChannelNote(prompt: string): string {
+  return prompt.replace(/^\[Pop Agent: this message arrived through [^\r\n]*\.\]\r?\n\r?\n/u, '');
+}
