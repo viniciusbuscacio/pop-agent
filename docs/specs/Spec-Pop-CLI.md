@@ -51,7 +51,10 @@ staging, rollback and release rules are normative in Installation.
 The active CLI lives in a private version directory with atomic active-version
 state. A candidate is downloaded to temporary storage, verified, installed,
 smoke-checked through `--version` and only then activated. A locally newer
-compatible CLI is not silently downgraded. Launcher-owned `pop update` requests
+compatible CLI is not silently downgraded. Launcher-owned `pop update` first checks the same-origin native launcher release,
+verifies its size/hash and version probe, and replaces/restarts the launcher
+when newer. Windows preserves the renamed running executable for rollback.
+The same native check runs before bare chat launches. It then requests CLI
 repair/update and failed candidates preserve the prior active version. For a
 legacy npm-global CLI, `pop update` installs the same-origin non-cacheable
 `/cli-latest.tgz` alias without deriving a versioned filename from server update
@@ -73,6 +76,8 @@ without secrets.
 Authentication failure stops blind reconnect and gives an actionable login
 message. Profiles never contain provider credentials. Remote plain HTTP is
 refused; `localhost`, `127.0.0.1` and `::1` remain valid development origins.
+
+Interactive chat validates the event ticket and SSE response before rendering the conversation or attaching local access. Authentication rejection gives the selected server login command and exits nonzero; it is never reported as an established connection dropping. API clients use renewed credentials for subsequent requests.
 
 ## User commands and chat behavior
 
@@ -145,8 +150,11 @@ Root `VERSION` is the product/Node CLI release. Launcher release is separate and
 changes when launcher source ships. The server advertises minimum compatible
 client/local-access versions; minimums move only for real wire breaks.
 
-Ordinary launch updates compatible client code before attach when a newer exact
-server release exists. Attach still enforces the minimum as defense in depth.
+A bare `pop` launch forces verified installation of the advertised CLI package
+before opening chat, including repair of an equal-version installation. It fails
+with installation diagnostics if repair fails. An installed newer version is
+not downgraded. Other commands update before attach when a newer exact server
+release exists; version queries remain local and side-effect free. Attach still enforces the minimum as defense in depth.
 A behind-but-compatible version may warn without blocking. Version checks never
 substitute for protocol negotiation.
 

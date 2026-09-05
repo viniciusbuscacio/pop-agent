@@ -73,7 +73,7 @@ export interface SessionListener {
   /** The chat gained a title, which the header shows. */
   onTitle(title: string): void;
   /** The stream died. The screen says so; it does not pretend to be live. */
-  onStreamEnd(): void;
+  onStreamEnd(error?: unknown): void;
 }
 
 export class ChatSession {
@@ -195,11 +195,14 @@ export class ChatSession {
   async listen(): Promise<void> {
     if (this.reading) return;
     this.reading = true;
+    let failure: unknown;
     try {
       for await (const event of this.ports.events()) this.absorb(event);
+    } catch (error) {
+      failure = error;
     } finally {
       this.reading = false;
-      this.listener.onStreamEnd();
+      this.listener.onStreamEnd(failure);
     }
   }
 

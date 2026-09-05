@@ -44,7 +44,7 @@ export class ApiError extends Error {
 
 export interface ApiOptions {
   url: string;
-  token?: string;
+  token?: string | (() => string);
   /** Told when the server issues a fresh token, so the profile can store it. */
   onToken?: (token: string) => void;
   /**
@@ -117,8 +117,13 @@ export class PopAgentApi {
   }
 
   /** The raw stream response; the caller reads and parses `text/event-stream`. */
-  openEvents(ticket: string): Promise<Response> {
-    return this.http(`${this.options.url}/v1/events?ticket=${encodeURIComponent(ticket)}`);
+  async openEvents(ticket: string): Promise<Response> {
+    const response = await this.http(`${this.options.url}/v1/events?ticket=${encodeURIComponent(ticket)}`);
+    if (!response.ok) throw await toApiError(response);
+    if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new ApiError('invalid_stream', 'The server did not return an event stream.', response.status);
+    }
+    return response;
   }
 
   async request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -132,7 +137,8 @@ export class PopAgentApi {
     const localConnectionId = this.options.localConnectionId?.();
     if (localConnectionId !== undefined) headers[LOCAL_CONNECTION_HEADER] = localConnectionId;
     if (init.body !== undefined) headers['content-type'] = 'application/json';
-    if (this.options.token !== undefined) headers['authorization'] = `Bearer ${this.options.token}`;
+    const token = typeof this.options.token === 'function' ? this.options.token() : this.options.token;
+    if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
     const response = await this.http(`${this.options.url}/v1${path}`, {
       method: init.method ?? 'GET',
@@ -141,7 +147,10 @@ export class PopAgentApi {
     });
 
     const renewed = response.headers.get(SESSION_TOKEN_HEADER);
-    if (renewed !== null && renewed.length > 0) this.options.onToken?.(renewed);
+    if (response.ok && renewed !== null && renewed.length > 0) {
+      if (typeof this.options.token !== 'function') this.options.token = renewed;
+      this.options.onToken?.(renewed);
+    }
 
     if (response.status === 204) return undefined as T;
     if (response.ok) return (await response.json()) as T;

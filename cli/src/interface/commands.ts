@@ -36,7 +36,7 @@ export interface Context {
   /** Built per command so a fresh token can be stored as soon as it arrives. */
   api: (options: {
     url: string;
-    token?: string;
+    token?: string | (() => string);
     /** This terminal's local connection, read per call (docs/cli.md, Whose local access). */
     localConnectionId?: () => string | undefined;
   }) => PopAgentApi;
@@ -81,13 +81,17 @@ export async function backgroundLocalAccess(
   const report = (event: Record<string, unknown>, text: string): void => {
     context.terminal.line(options.json === true ? JSON.stringify(event) : text);
   };
+  let rejectedToken: string | undefined;
   let fatal: () => void = () => undefined;
   const stoppedByServer = new Promise<void>((resolve) => {
     fatal = resolve;
   });
   const localAccess = context.localAccess({
     url: profile.url,
-    token: () => context.profiles.get(context.profile)?.token ?? profile.token,
+    token: () => {
+      const saved = context.profiles.get(context.profile);
+      return saved?.url === profile.url ? saved.token : '';
+    },
     version: VERSION,
     role: 'background',
     onEvent: (event) => {
@@ -98,7 +102,8 @@ export async function backgroundLocalAccess(
       } else if (event.kind === 'access-policy') {
         report(event, event.enabled ? 'Local file access enabled.' : 'Local file access disabled.');
       } else if (event.kind === 'authentication-required') {
-        report(event, 'Pop Local Access needs you to sign in again.');
+        rejectedToken = context.profiles.get(context.profile)?.token;
+        report(event, `Pop Local Access needs you to sign in again: pop login ${profile.url}`);
       } else if (event.kind === 'outdated') {
         report(event, `Pop Local Access requires Pop Agent ${event.minimum} or newer.`);
         fatal();
@@ -109,11 +114,29 @@ export async function backgroundLocalAccess(
   // A background process does not make ordinary API calls, so it must create
   // its own authenticated hop to receive sliding session renewal. The socket
   // will reconnect with the newly persisted token when its original lease ends.
-  const refresh = context.api({ url: profile.url, token: profile.token });
+  const refresh = context.api({
+    url: profile.url,
+    token: () => {
+      const saved = context.profiles.get(context.profile);
+      return saved?.url === profile.url ? saved.token : '';
+    },
+  });
   const refreshTimer = setInterval(() => {
+    if (rejectedToken !== undefined) return;
     void refresh.request<void>('/session/refresh', { method: 'POST' }).catch(() => undefined);
   }, 6 * 60 * 60 * 1_000);
   refreshTimer.unref?.();
+  // Check local credentials only while refused. Retry the network only after
+  // an explicit login has replaced the rejected credential for this origin.
+  const loginTimer = setInterval(() => {
+    if (rejectedToken === undefined) return;
+    const saved = context.profiles.get(context.profile);
+    if (saved?.url !== profile.url || !saved.token || saved.token === rejectedToken) return;
+    rejectedToken = undefined;
+    localAccess.close();
+    localAccess.connect();
+  }, 5_000);
+  loginTimer.unref?.();
 
   const stopWatching = options.json === true
     ? context.watchLocalAccessControl?.((enabled) => localAccess.setAccessEnabled?.(enabled))
@@ -125,6 +148,7 @@ export async function backgroundLocalAccess(
   } finally {
     stopWatching?.();
     clearInterval(refreshTimer);
+    clearInterval(loginTimer);
     localAccess.close();
   }
   return 0;

@@ -332,7 +332,7 @@ describe('pending message composition', () => {
     ],
     [
       'local_connection_unavailable',
-      'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
+      'The selected computer is offline. Open Pop Local Access from the system tray, or install it in Settings > Installation. To chat without computer access, select Server only there. Your draft and attachments were kept.',
     ],
     [
       'local_connection_unknown',
@@ -366,7 +366,7 @@ describe('pending message composition', () => {
     fireEvent.click(screen.getByTestId('composer-send'));
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(
-      'The selected local machine is offline.',
+      'The selected computer is offline.',
     ));
     expect(area.value).toBe('keep queued edit');
   });

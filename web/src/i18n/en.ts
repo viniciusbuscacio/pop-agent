@@ -139,7 +139,7 @@ export const en = {
   'chat.serverReconnecting':
     'Server reconnecting… Your draft and attachments were kept. Sending will unlock automatically when the server is back.',
   'chat.localMachineOffline':
-    'The selected local machine is offline. Reconnect Pop Local Access, then try again. Your draft and attachments were kept.',
+    'The selected computer is offline. Open Pop Local Access from the system tray, or install it in Settings > Installation. To chat without computer access, select Server only there. Your draft and attachments were kept.',
   'chat.localMachineReset':
     'The saved local machine selection no longer exists and was reset. Choose a computer again in Settings, then retry. Your draft and attachments were kept.',
   'chat.queue': 'Queue message',

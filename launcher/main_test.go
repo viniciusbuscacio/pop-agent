@@ -121,6 +121,8 @@ func TestFirstRunInstallsAtomicallyAndStartsLogin(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/cli/launcher/manifest.json":
+			_ = json.NewEncoder(w).Encode(launcherManifest{Version: launcherVersion})
 		case "/cli/manifest.json":
 			_ = json.NewEncoder(w).Encode(manifest{
 				Version:                "0.3.0",
@@ -186,6 +188,24 @@ printf '0.3.0\n' > "$prefix/node_modules/pop-agent/dist/main.js"
 	st, err := l.readState()
 	if err != nil || st.ActiveVersion != "0.3.0" {
 		t.Fatalf("state = %#v, %v", st, err)
+	}
+	// Reopening bare pop must repair even an equal-version installation and
+	// continue into chat, rather than returning like the update subcommand.
+	writeProfile(t, l, server.URL)
+	entry := cliEntry(filepath.Join(l.home, ".pop", "cli", "0.3.0"))
+	if err := os.WriteFile(entry, []byte("broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	launchedArgs = nil
+	if code := l.run(nil); code != 0 {
+		t.Fatalf("repair launch returned %d: %s", code, l.stderr.(*strings.Builder).String())
+	}
+	content, err := os.ReadFile(entry)
+	if err != nil || strings.TrimSpace(string(content)) != "0.3.0" {
+		t.Fatalf("bare launch did not repair the installed version: %s, %v", content, err)
+	}
+	if len(launchedArgs) != 0 {
+		t.Fatalf("repair launch started with %#v", launchedArgs)
 	}
 	if _, err := os.Stat(filepath.Join(l.home, ".pop", "cli", ".staging-0.3.0")); !os.IsNotExist(err) {
 		t.Fatal("staging directory remained after activation")
@@ -294,3 +314,13 @@ func writeExecutable(t *testing.T, path, content string) {
 }
 
 var _ io.Reader
+
+func TestForcedUpdateDoesNotDowngradeANewerClient(t *testing.T) {
+	l := testLauncher(t)
+	if err := l.writeState(state{ActiveVersion: "0.4.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.installIfNeeded("http://127.0.0.1:1", manifest{Version: "0.3.0"}, tools{}, true); err != nil {
+		t.Fatalf("newer installed client should not download an older release: %v", err)
+	}
+}

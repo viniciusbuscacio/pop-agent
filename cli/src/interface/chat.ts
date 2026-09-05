@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import { ChatSession } from '../application/session.js';
 import { DEFAULT_PROFILE } from '../application/profiles.js';
+import { ApiError } from '../infrastructure/api.js';
 import { readEvents } from '../infrastructure/events.js';
 import type { Context } from './commands.js';
 import { ChatScreen } from './tui/chat-screen.js';
@@ -41,13 +42,29 @@ export async function chat(
     return 1;
   }
 
+  const token = (): string => {
+    const saved = context.profiles.get(context.profile);
+    return saved?.url === profile.url ? saved.token : '';
+  };
+  const streamApi = context.api({ url: profile.url, token });
+  let stream: Response;
+  try {
+    const { ticket } = await streamApi.eventTicket();
+    stream = await streamApi.openEvents(ticket);
+  } catch (error) {
+    const which = context.profile === DEFAULT_PROFILE ? '' : ` --server ${context.profile}`;
+    context.terminal.line(error instanceof ApiError && error.code === 'invalid_session'
+      ? `Your session expired or was revoked. Sign in again: pop login ${profile.url}${which}`
+      : `Could not connect to the server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return 1;
+  }
 
   // The local-tools channel, alongside the chat and never in front of it: a server
   // that refuses the upgrade leaves the conversation working and the local
   // tools simply absent (docs/cli.md step 3).
   const localAccess = context.localAccess({
     url: profile.url,
-    token: profile.token,
+    token,
     version: VERSION,
     onEvent: (event) => {
       if (event.kind === 'attached') screen.say(localAccessReady());
@@ -73,7 +90,7 @@ export async function chat(
   // local connections).
   const api = context.api({
     url: profile.url,
-    token: profile.token,
+    token,
     localConnectionId: () => localAccess.connectionId,
   });
 
@@ -92,8 +109,7 @@ export async function chat(
         // One ticket, one stream, for as long as the screen is open. Each
         // ticket is spent on use, so a reconnect would need a fresh one --
         // which is why a dropped stream is reported and not retried here.
-        const { ticket } = await api.eventTicket();
-        yield* readEvents(await api.openEvents(ticket));
+        yield* readEvents(stream);
       },
     },
     {
@@ -105,7 +121,7 @@ export async function chat(
       onExternalUser: (text) => screen.onExternalUser(text),
       onArchivedChanged: (archived, source) => screen.onArchivedChanged(archived, source),
       onTitle: (title) => screen.setTitle(title),
-      onStreamEnd: () => screen.onStreamEnd(),
+      onStreamEnd: (error) => screen.onStreamEnd(error),
     },
   );
 
@@ -121,6 +137,10 @@ export async function chat(
   screen.start();
   // Resolves only when the stream ends; the screen exits the process itself
   // on Ctrl+C or /quit.
-  await session.listen();
+  try {
+    await session.listen();
+  } finally {
+    localAccess.close();
+  }
   return 0;
 }

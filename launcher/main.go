@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const launcherVersion = "1.1.1"
+const launcherVersion = "1.1.2"
 const requestTimeout = 3 * time.Second
 const npmRegistry = "https://packagefeedproxy.microsoft.io/npm/"
 
@@ -130,6 +130,30 @@ func (l *launcher) run(args []string) int {
 		return 1
 	}
 
+	if len(args) == 0 || args[0] == "update" {
+		executable, updated, err := l.updateLauncher(serverURL)
+		if err != nil {
+			fmt.Fprintf(l.stderr, "Could not connect to or update the Pop launcher: %v. Run pop doctor for diagnostics.\n", err)
+			return 1
+		}
+		if updated {
+			nextArgs := args
+			if firstLogin {
+				nextArgs = []string{"login", serverURL}
+			}
+			command := l.command(executable, nextArgs...)
+			command.Stdin, command.Stdout, command.Stderr = l.stdin, l.stdout, l.stderr
+			if err := command.Run(); err != nil {
+				if exit, ok := err.(*exec.ExitError); ok {
+					return exit.ExitCode()
+				}
+				fmt.Fprintln(l.stderr, "Could not start updated launcher:", err)
+				return 1
+			}
+			return 0
+		}
+	}
+
 	m, err := l.fetchManifest(serverURL)
 	if err != nil {
 		fmt.Fprintf(l.stderr, "Could not connect to the Pop Agent server.\n\nServer: %s\nCause: %s\n\nCheck that the server is online and reachable, then run `pop` again.\nRun `pop doctor` for detailed diagnostics.\n", serverURL, describeNetworkError(err))
@@ -142,7 +166,9 @@ func (l *launcher) run(args []string) int {
 		return 1
 	}
 
-	forceUpdate := len(args) > 0 && args[0] == "update"
+	updateCommand := len(args) > 0 && args[0] == "update"
+	// A bare chat launch repairs the exact published package before opening.
+	forceUpdate := updateCommand || len(args) == 0
 	if st.ActiveVersion == "" || compareVersions(st.ActiveVersion, m.Version) < 0 || forceUpdate {
 		if err := l.installIfNeeded(serverURL, m, localTools, forceUpdate); err != nil {
 			fmt.Fprintf(l.stderr, "Pop Agent CLI %s could not be installed: %v\n", m.Version, err)
@@ -150,7 +176,7 @@ func (l *launcher) run(args []string) int {
 		}
 		st, _ = l.readState()
 	}
-	if forceUpdate {
+	if updateCommand {
 		fmt.Fprintf(l.stdout, "Pop Agent CLI %s is ready.\n", st.ActiveVersion)
 		return 0
 	}
@@ -312,7 +338,7 @@ func (l *launcher) installIfNeeded(serverURL string, m manifest, localTools tool
 	}
 	defer release()
 	current, _ := l.readState()
-	if !force && current.ActiveVersion != "" && compareVersions(current.ActiveVersion, m.Version) >= 0 {
+	if current.ActiveVersion != "" && (compareVersions(current.ActiveVersion, m.Version) > 0 || (!force && compareVersions(current.ActiveVersion, m.Version) == 0)) {
 		return nil
 	}
 	return l.install(serverURL, m, localTools, current)

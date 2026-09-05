@@ -264,7 +264,7 @@ describe('pop "question"', () => {
     });
     return vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('/v1/events?')) return Promise.resolve(new Response(stream));
+      if (url.includes('/v1/events?')) return Promise.resolve(new Response(stream, { headers: { "content-type": "text/event-stream" } }));
       if (url.endsWith('/v1/events/ticket')) return Promise.resolve(json({ ticket: 'tk' }));
       if (url.endsWith('/v1/chats')) return Promise.resolve(json({ id: 'chat-1' }, { status: 201 }));
       if (url.includes('/messages')) return Promise.resolve(json({ runId: 'run-1', userMessageId: 'm' }));
@@ -342,6 +342,7 @@ describe('pop "question"', () => {
                 controller.close();
               },
             }),
+            { headers: { 'content-type': 'text/event-stream' } },
           ),
         );
       }
@@ -354,5 +355,53 @@ describe('pop "question"', () => {
     const profiles = new Profiles(new MemoryStore({ default: { url: 'http://a', token: 't' } }));
     expect(await ask(contextWith(failing, profiles), 'hi')).toBe(1);
     expect(said()).toContain('provider_down');
+  });
+});
+
+describe('background session recovery', () => {
+  it('renews repeatedly with the latest persisted credential', async () => {
+    vi.useFakeTimers();
+    try {
+      const profiles = new Profiles(new MemoryStore({ default: { url: 'https://pop.example', token: 'first' } }));
+      const http = vi.fn<typeof fetch>(async () => new Response(null, {
+        status: 204, headers: { 'x-pop-agent-token': 'renewed' },
+      }));
+      const ctx = contextWith(http, profiles);
+      let stop: () => void = () => undefined;
+      ctx.waitForShutdown = () => new Promise<void>((resolve) => { stop = resolve; });
+      const running = backgroundLocalAccess(ctx);
+      await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000);
+      expect(http.mock.calls[0]?.[1]?.headers).toMatchObject({ authorization: 'Bearer first' });
+      expect(http.mock.calls[1]?.[1]?.headers).toMatchObject({ authorization: 'Bearer renewed' });
+      stop();
+      await running;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('reconnects only after a login replaces a refused token for the same server', async () => {
+    vi.useFakeTimers();
+    try {
+      const profiles = new Profiles(new MemoryStore({ default: { url: 'https://pop.example', token: 'expired' } }));
+      let options: Parameters<Context['localAccess']>[0] | undefined;
+      const local = { connect: vi.fn(), close: vi.fn(), connectionId: undefined };
+      const ctx = contextWith(vi.fn() as never, profiles, (value) => { options = value; return local; });
+      let stop: () => void = () => undefined;
+      ctx.waitForShutdown = () => new Promise<void>((resolve) => { stop = resolve; });
+      const running = backgroundLocalAccess(ctx, { json: true });
+      options?.onEvent?.({ kind: 'authentication-required' });
+      await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
+      expect(local.connect).toHaveBeenCalledTimes(1);
+      profiles.save('default', { url: 'https://different.example', token: 'other-server' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(local.connect).toHaveBeenCalledTimes(1);
+      profiles.save('default', { url: 'https://pop.example', token: 'fresh-login' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(local.connect).toHaveBeenCalledTimes(2);
+      expect(local.close).toHaveBeenCalledTimes(1);
+      stop();
+      await running;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
   });
 });

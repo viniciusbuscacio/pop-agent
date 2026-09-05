@@ -584,12 +584,15 @@ export class ChatScreen {
     this.tui.requestRender();
   }
 
-  onStreamEnd(): void {
+  onStreamEnd(error?: unknown): void {
     // The screen cannot recover this one-use event stream. Leave immediately
     // through the same clean path as `/quit` instead of keeping a dead CLI in
     // the foreground or as a hidden background process. Passing the notice to
     // quit prints it after TUI shutdown, where a cancelled repaint cannot hide it.
-    this.quit(paint.red('The connection to the server dropped. Restart pop to reconnect.'));
+    const message = error instanceof ApiError && error.code === 'invalid_session'
+      ? `Your session expired or was revoked. Sign in again: pop login ${this.options.server}`
+      : 'The connection to the server dropped. Restart pop to reconnect.';
+    this.quit(paint.red(message));
   }
 
   private setRunStatus(status: RunState['status']): void {

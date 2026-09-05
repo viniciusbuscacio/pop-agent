@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.45 — 2026-09-05
+
+- `pop update` updates both the native launcher and CLI with verified artifacts and native rollback.
+- Launcher 1.1.2 forces verified CLI repair/update before bare `pop` opens chat, without downgrading a newer installed version.
+
+- Validate CLI authentication and the event stream before showing a conversation; preserve session errors with actionable sign-in guidance.
+- Use renewed credentials for subsequent API requests and background local-access renewal; resume refused local access after a new same-server login.
+- Explain how to install/open Pop Local Access or explicitly choose Server only when the selected computer is offline.
+
+
 All notable changes to Pop Agent. Dates are ISO. Current normative rules start
 at `docs/specs/Spec-Pop-General.md`; detailed migrated decision history lives in
 `docs/specs/History-Pop-Spec.md`.

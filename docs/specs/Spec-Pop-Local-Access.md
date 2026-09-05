@@ -457,6 +457,8 @@ pretending the whole computer is under the server’s Files jail.
 - Damaged stable ID: create a new disabled identity rather than borrowing old
   permission.
 
+Background renewal reads the latest profile token for the original server on every request. After authentication refusal, PLA waits for the local profile credential to change before reconnecting; unchanged credentials and profiles redirected to another origin never trigger a retry. PWA offline guidance points to tray installation/startup and the explicit Server only choice without changing the selection automatically.
+
 ## Privacy, logs and diagnostics
 
 Server journal entries include platform/architecture, role, shortened transient
