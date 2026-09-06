@@ -139,3 +139,6 @@ export type ClientKind = (typeof CLIENT_KINDS)[number];
 export function isClientKind(value: string): value is ClientKind {
   return (CLIENT_KINDS as readonly string[]).includes(value);
 }
+
+/** Header for the restricted network setup browser session. */
+export const ONBOARDING_TOKEN_HEADER = 'X-Pop-Onboarding-Token';

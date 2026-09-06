@@ -34,6 +34,17 @@ describe('clientEnvironment', () => {
 });
 
 describe('apiRequest', () => {
+  it('sends the browser pairing credential under the server onboarding header', async () => {
+    const fetch = vi.fn(() => Promise.resolve(new Response('{}', { status: 200 })));
+    vi.stubGlobal('fetch', fetch);
+    await apiRequest('/onboarding/tailscale/connect', {
+      method: 'POST', onboardingToken: 'test-pairing-credential',
+    });
+    expect(fetch).toHaveBeenCalledWith('/v1/onboarding/tailscale/connect', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Pop-Onboarding-Token': 'test-pairing-credential' }),
+    }));
+  });
+
   function useInstalledPwa(): void {
     vi.stubGlobal('navigator', { userAgent: 'Windows', standalone: true });
   }

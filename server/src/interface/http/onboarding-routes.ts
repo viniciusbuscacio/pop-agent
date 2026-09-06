@@ -1,10 +1,11 @@
 import { Hono, type Context } from 'hono';
+import { ONBOARDING_TOKEN_HEADER } from '@pop-agent/shared';
 import { z } from 'zod';
 import type { ServerOnboardingService } from '../../application/onboarding/server-onboarding-service.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
 
-export const ONBOARDING_TOKEN_HEADER = 'X-Pop-Onboarding-Token';
+export { ONBOARDING_TOKEN_HEADER } from '@pop-agent/shared';
 
 const pairSchema = z.object({ code: z.string().min(1).max(64) }).strict();
 const httpsSchema = z.object({

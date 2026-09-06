@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.57
+
+- Share the onboarding token header between browser and server so paired browsers can start Tailscale sign-in and enable HTTPS. Add coverage for the full network setup request sequence.
+
+
 ## 0.2.56
 
 - Launcher 1.1.5 supports verified Windows ZIP runtimes; publish the Node runtime matrix for Windows, Linux and macOS on amd64/arm64.

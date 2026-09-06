@@ -4,6 +4,7 @@ import {
   EVENT_STREAM_VERSION,
   EVENT_STREAM_VERSION_HEADER,
   LOCAL_CONNECTION_HEADER,
+  ONBOARDING_TOKEN_HEADER,
   SESSION_TOKEN_HEADER,
 } from '@pop-agent/shared';
 import { healthMonitor } from './health';
@@ -158,7 +159,7 @@ export async function apiRequest<T>(
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
   if (init.onboardingToken !== undefined) {
-    headers['x-pop-agent-onboarding-token'] = init.onboardingToken;
+    headers[ONBOARDING_TOKEN_HEADER] = init.onboardingToken;
   }
   // Capture one stable selector for the whole operation. A reconnect changes
   // only the server-side transport ID; retries must neither lose local routing
