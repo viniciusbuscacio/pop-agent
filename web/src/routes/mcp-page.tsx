@@ -227,7 +227,7 @@ function McpEditor({
   }
 
   return (
-    <form onSubmit={(event) => void save(event)} className="mx-auto w-full max-w-3xl p-5">
+    <form onSubmit={(event) => void save(event)} className="w-full p-6">
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-xl font-semibold">{server ? 'Edit MCP server' : 'Add MCP server'}</h1>
         <Button variant="ghost" type="button" onClick={() => void onDone()}>Back</Button>

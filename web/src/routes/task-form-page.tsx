@@ -122,7 +122,7 @@ function TaskForm({ taskId }: { taskId: string | undefined }) {
       {loading ? (
         <p className="p-6 text-sm text-[var(--muted)]">{t('app.loading')}</p>
       ) : (
-        <form onSubmit={(event) => void save(event)} className="mx-auto max-w-2xl p-4">
+        <form onSubmit={(event) => void save(event)} className="w-full p-6">
           <Card className="flex flex-col gap-5">
             <TextField
               id="task-title"

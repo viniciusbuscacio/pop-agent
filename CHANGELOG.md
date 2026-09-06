@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let Skill, Task, MCP and A2A creation/edit forms use the full pane width with the same 24px outer padding as their overviews.
+
 - Reset task and MCP editors when switching destinations so New starts blank and another MCP loads its own fields.
 
 - Prevent REST configuration actions (including Add/Remove operation and Cancel) from implicitly submitting their forms.

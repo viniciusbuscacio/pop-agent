@@ -55,7 +55,7 @@ export function SkillsPage() {
             </Card>)}</div>}
         </div>
       ) : isNew || skill !== undefined ? (
-        <div className="mx-auto w-full max-w-3xl p-4">
+        <div className="w-full p-6">
           <SkillEditor
             skill={skill}
             onDone={() => {

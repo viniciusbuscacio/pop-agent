@@ -209,7 +209,7 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
   }
 
   return (
-    <form onSubmit={(event) => void save(event)} className="mx-auto w-full max-w-3xl p-5">
+    <form onSubmit={(event) => void save(event)} className="w-full p-6">
       <div className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">
           {agent === undefined ? t('a2a.addTitle') : t('a2a.editTitle')}

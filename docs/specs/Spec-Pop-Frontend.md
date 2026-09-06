@@ -655,3 +655,5 @@ Task creation is offered in the task explorer (sidebar on desktop, list screen o
 The explicit `/skills/new` route has no `slug` parameter. Skills must identify creation from the pathname as well as the dynamic parameter, and render the blank editor on desktop and mobile.
 
 Task and MCP editor state is keyed by the selected item ID (or new), preventing unsaved values from a previous route from appearing or being saved under another item.
+
+Agent creation and editing forms for Skills, Tasks, MCP and A2A use the available pane width (`w-full p-6`), without a centered fixed maximum width. Their outer spacing matches overview pages, including on ultra-wide displays.
