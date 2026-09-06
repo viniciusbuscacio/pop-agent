@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 // @vitest-environment happy-dom
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -60,4 +61,21 @@ it('offers retry instead of editable controls when settings fail to load', async
   expect(screen.queryByRole('switch')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   await screen.findByRole('switch', { name: 'REST API Server' });
+});
+
+it('adding/removing operations and cancelling a valid client never submits the form', async () => {
+  const user = userEvent.setup();
+  render(<MemoryRouter><RestApiPage /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Edit REST API Client' }));
+  await user.click(screen.getByRole('button', { name: 'New client' }));
+  await user.type(screen.getByLabelText('Name'), 'Valid draft');
+  await user.type(screen.getByLabelText('Base URL (HTTPS)'), 'https://example.invalid');
+  await user.click(screen.getByRole('button', { name: 'Add operation' }));
+  expect(screen.getAllByLabelText('Operation ID')).toHaveLength(2);
+  expect(integrationsService.saveClient).not.toHaveBeenCalled();
+  await user.click(screen.getAllByRole('button', { name: 'Remove operation' })[1]!);
+  expect(screen.getAllByLabelText('Operation ID')).toHaveLength(1);
+  expect(integrationsService.saveClient).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(integrationsService.saveClient).not.toHaveBeenCalled();
 });

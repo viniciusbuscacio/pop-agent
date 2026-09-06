@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Reset task and MCP editors when switching destinations so New starts blank and another MCP loads its own fields.
+
+- Prevent REST configuration actions (including Add/Remove operation and Cancel) from implicitly submitting their forms.
+
+- Fix New skill opening the overview instead of the editor on the explicit creation route; include Agent screens in the isolated UI button crawl.
+
+- Keep New task in the task explorer only; remove the duplicate overview action.
+
 - Make the footer refresh fetch a fresh app document from the server, bypass the PWA navigation cache and report connection errors.
 
 - Align Agent overview typography, headings, spacing and card widths with MCP/A2A; show Tasks and Skills summaries with links to their editors.

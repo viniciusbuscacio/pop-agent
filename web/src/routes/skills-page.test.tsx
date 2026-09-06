@@ -65,6 +65,7 @@ function Harness() {
       </button>
       <Routes>
         <Route path="/skills" element={<SkillsPage />} />
+        <Route path="/skills/new" element={<SkillsPage />} />
         <Route path="/skills/:slug" element={<SkillsPage />} />
       </Routes>
     </>
@@ -227,4 +228,14 @@ describe('the skill enabled toggle', () => {
     });
     expect(screen.queryByTestId('skill-enabled-toggle')).toBeNull();
   });
+});
+
+it('opens the blank editor on the explicit new route without a slug parameter', async () => {
+  render(<MemoryRouter initialEntries={['/skills/new']}><Harness /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId('skill-name')).toBeTruthy());
+  expect(valueOf('skill-name')).toBe('');
+  expect(valueOf('skill-body')).toBe('');
+  expect(screen.queryByRole('heading', { name: 'Skills' })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await screen.findByRole('heading', { name: 'Skills' });
 });

@@ -102,6 +102,7 @@ export function McpPage() {
   else if (isNew || current !== undefined) {
     body = (
       <McpEditor
+        key={current?.id ?? 'new'}
         server={current}
         onDone={async () => {
           await reload();

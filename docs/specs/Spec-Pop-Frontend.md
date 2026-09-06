@@ -649,3 +649,9 @@ app-shell fallback, forcing a network document. The marker is removed before the
 router starts. Other query parameters, fragment, authentication, preferences and
 service-worker registration (including push subscription) are preserved. This
 refresh does not clear all browser storage or install a server release.
+
+Task creation is offered in the task explorer (sidebar on desktop, list screen on mobile); the Tasks overview does not duplicate New task.
+
+The explicit `/skills/new` route has no `slug` parameter. Skills must identify creation from the pathname as well as the dynamic parameter, and render the blank editor on desktop and mobile.
+
+Task and MCP editor state is keyed by the selected item ID (or new), preventing unsaved values from a previous route from appearing or being saved under another item.

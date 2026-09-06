@@ -55,9 +55,6 @@ export function TasksIntro() {
   useEffect(() => { void reload(); }, [reload]);
   return <div className="flex-1 overflow-y-auto p-6">
     <AgentPageHeader title={t('agent.tasksTitle')} description={t('agent.tasksDescription')} />
-    <div className="mb-3">
-      <Button type="button" data-testid="tasks-intro-new" onClick={() => void navigate('/tasks/new')}>{t('tasks.new')}</Button>
-    </div>
     {tasks === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : tasks.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('tasks.none')}</p> :
       <div className="grid gap-3">{tasks.map(task => <Card key={task.id} className="flex items-center justify-between gap-4">
         <div className="min-w-0">

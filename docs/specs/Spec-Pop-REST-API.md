@@ -85,3 +85,5 @@ Network policy reuses screened DNS and pinned public addresses: HTTPS only, no p
 ## Validation
 
 Cover token scope isolation, revocation/expiry, SSE cleanup, content minimization, idempotency conflicts/replay, exact cancellation identity, owner-only client configuration, fixed operations, credential replacement/redaction, and UI create/cancel behavior. Maintain shared DTOs, update the reference with contracts, and run the complete repository gate in a test-compatible environment.
+
+Configuration forms explicitly mark non-submit actions as `type="button"`: adding/removing operations, cancelling, testing, copying and revoking must never implicitly submit a form. Only Save/Create token/Send request submit their corresponding forms.

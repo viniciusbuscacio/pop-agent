@@ -1,7 +1,7 @@
 import { Button, Card } from '../ui/controls';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { SkillEditor } from './skill-editor';
 import { SidebarNav } from './sidebar-nav';
@@ -17,6 +17,7 @@ import { useSkillsStore } from '../store/skills';
 export function SkillsPage() {
   const navigate = useNavigate();
   const { slug } = useParams();
+  const location = useLocation();
   const skills = useSkillsStore((state) => state.skills);
   const reload = useSkillsStore((state) => state.reload);
 
@@ -24,7 +25,7 @@ export function SkillsPage() {
     void reload();
   }, [reload]);
 
-  const isNew = slug === 'new';
+  const isNew = location.pathname === '/skills/new' || slug === 'new';
   const skill = isNew ? undefined : skills?.find((entry) => entry.slug === slug);
 
   // A dead link (a deleted skill) falls back to the list once skills arrived.
@@ -41,7 +42,7 @@ export function SkillsPage() {
       <div className="md:hidden">
         <SidebarNav />
       </div>
-      {slug === undefined ? (
+      {slug === undefined && !isNew ? (
         <div className="p-6">
           <AgentPageHeader title={t('agent.skillsTitle')} description={t('agent.skillsDescription')} />
           {skills === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : skills.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('skills.empty.body')}</p> :

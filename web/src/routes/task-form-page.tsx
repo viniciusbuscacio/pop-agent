@@ -15,8 +15,12 @@ import { Button, Card, CheckField, Segmented, Select, TextArea, TextField, Press
 type Unit = 'minutes' | 'hours';
 
 export function TaskFormPage() {
-  const navigate = useNavigate();
   const { taskId } = useParams();
+  return <TaskForm key={taskId ?? 'new'} taskId={taskId} />;
+}
+
+function TaskForm({ taskId }: { taskId: string | undefined }) {
+  const navigate = useNavigate();
   const reload = useTasksStore((state) => state.reload);
 
   const [title, setTitle] = useState('');

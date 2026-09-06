@@ -34,6 +34,7 @@ interface Outcome {
   requests: number;
   domChanged: boolean;
   consoleErrors: string[];
+  blockedRequests: string[];
   verdict: 'ok' | 'NO-OP';
 }
 
@@ -98,6 +99,7 @@ async function seed(base: string): Promise<{ token: string; chatId: string; fold
     body: { password: PASSWORD },
   })) as { token: string };
   const token = created.token;
+  await api(base, '/v1/setup/acknowledge', { method: 'POST', token });
 
   const chat = (await api(base, '/v1/chats', { method: 'POST', token })) as { id: string };
   await api(base, '/v1/files/folders', { method: 'POST', token, body: { path: 'Docs' } });
@@ -133,7 +135,7 @@ async function crawlScreen(
   const shot = `${viewport}-${screen.replace(/[/?:=]+/g, '_') || 'home'}.png`;
   await page.screenshot({ path: join(OUT, shot), fullPage: false });
 
-  const selector = 'button:visible, [role="button"]:visible, [role="menuitem"]:visible';
+  const selector = 'button:visible, [role="button"]:visible, [role="menuitem"]:visible, summary:visible';
   const seen = new Set<string>();
   // Menus reveal buttons as we click; sweep until a pass finds nothing new.
   for (let pass = 0; pass < 3; pass += 1) {
@@ -149,6 +151,11 @@ async function crawlScreen(
           return `text:${text.length > 0 ? text : '<unnamed>'}`;
         }),
     );
+    const contextUrl = page.url();
+    const restoreContext = async (): Promise<void> => {
+      await page.goto(contextUrl, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(250);
+    };
     const fresh = ids.filter((id) => !seen.has(id));
     console.log(
       `  [${viewport}] ${screen} pass ${String(pass)}: ${String(ids.length)} clickable, ${String(fresh.length)} new`,
@@ -166,6 +173,7 @@ async function crawlScreen(
         requests: 0,
         domChanged: false,
         consoleErrors: [],
+        blockedRequests: [],
         verdict: 'ok',
       };
 
@@ -197,7 +205,7 @@ async function crawlScreen(
       // previous click is still up. Reload and retry only when it is not there.
       let target = await mark(id);
       if (!target) {
-        await open();
+        await restoreContext();
         target = await mark(id);
       }
       if (!target) {
@@ -215,7 +223,7 @@ async function crawlScreen(
         // A leftover overlay from the previous in-place click can cover the
         // target; a fresh page settles that before we call a button broken.
         live.outcome = undefined;
-        await open();
+        await restoreContext();
         if (!(await mark(id))) {
           unreached.push(`[${viewport}] ${screen} -> ${id}`);
           continue;
@@ -289,6 +297,7 @@ async function main(): Promise<void> {
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   const dataDir = mkdtempSync(join(tmpdir(), 'pop-agent-crawl-'));
+  mkdirSync(join(dataDir, 'workspace'));
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
 
@@ -301,6 +310,7 @@ async function main(): Promise<void> {
         POP_AGENT_PORT: String(port),
         POP_AGENT_BIND: '127.0.0.1',
         POP_AGENT_DATA_DIR: dataDir,
+        POP_AGENT_WORKSPACE: join(dataDir, 'workspace'),
         POP_AGENT_ENGINE: 'fake',
       },
       stdio: ['ignore', 'ignore', 'inherit'],
@@ -325,6 +335,19 @@ async function main(): Promise<void> {
       // per-click `once` handlers stack across iterations and double-handle
       // the first dialog that actually appears.
       const live: LiveOutcome = { outcome: undefined };
+      // The fixture owns its DB/workspace, but host administration still targets
+      // real services. Exercise the UI error path without invoking host changes.
+      await context.route('**/*', async route => {
+        const request = route.request();
+        const url = new URL(request.url());
+        const hostMutation = request.method() !== 'GET' && /^\/v1\/(?:server\/|update\/|onboarding\/|backups\/.*\/restore)/u.test(url.pathname);
+        if (url.origin !== base || hostMutation) {
+          live.outcome?.blockedRequests.push(request.method() + ' ' + url.pathname);
+          await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'crawl_isolated', message: 'Host/external action excluded from the isolated UI crawl.', status: 503 } }) });
+          return;
+        }
+        await route.continue();
+      });
       page.on('console', (message) => {
         if (message.type() === 'error') {
           live.outcome?.consoleErrors.push(message.text().slice(0, 200));
@@ -357,6 +380,11 @@ async function main(): Promise<void> {
         '/files',
         `/files/${folderPath}`,
         '/settings',
+        '/tasks', '/tasks/new',
+        '/skills', '/skills/new',
+        '/mcp', '/mcp/new',
+        '/a2a', '/a2a/new',
+        '/rest-api',
       ];
       for (const screen of screens) {
         await crawlScreen(page, base, viewport, screen, live, results, unreached);
@@ -371,6 +399,7 @@ async function main(): Promise<void> {
 
   writeFileSync(join(OUT, 'report.json'), JSON.stringify(results, null, 2));
   const noops = results.filter((entry) => entry.verdict === 'NO-OP');
+  const excluded = results.filter(entry => entry.blockedRequests.length > 0);
   const errored = results.filter((entry) => entry.consoleErrors.length > 0);
   console.log(`\nclicked ${String(results.length)} buttons across ${String(new Set(results.map((r) => `${r.viewport} ${r.screen}`)).size)} screens`);
   for (const entry of noops) {
@@ -379,7 +408,8 @@ async function main(): Promise<void> {
   for (const entry of errored) {
     console.log(`  JSERROR [${entry.viewport}] ${entry.screen} -> ${entry.button}: ${entry.consoleErrors[0] ?? ''}`);
   }
-  if (noops.length === 0 && errored.length === 0) console.log('  every clicked button did something.');
+  for (const entry of excluded) console.log(`  EXCLUDED [${entry.viewport}] ${entry.screen} -> ${entry.button}: ${entry.blockedRequests.join(', ')}`);
+  if (noops.length === 0 && errored.length === 0 && excluded.length === 0) console.log('  every clicked button did something.');
   // No silent caps: a button we enumerated but never managed to click is a
   // coverage hole, not a pass.
   for (const entry of unreached) console.log(`  UNREACHED ${entry}`);

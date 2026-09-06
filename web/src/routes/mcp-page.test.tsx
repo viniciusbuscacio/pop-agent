@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServerDTO } from '@pop-agent/shared';
 import { useMcpStore } from '../store/mcp';
@@ -113,4 +113,19 @@ describe('MCP server list', () => {
       ),
     );
   });
+});
+
+it('resets the editor when selecting another server or the explicit New MCP route', async () => {
+  list.mockResolvedValue({ servers: [server(false), { ...server(false), id: 'second', name: 'Second MCP', endpoint: 'https://second.invalid' }] });
+  render(<MemoryRouter initialEntries={['/mcp/mcp-learn']}>
+    <Link to="/mcp/second">Open second</Link><Link to="/mcp/new">New MCP</Link>
+    <Routes><Route path="/mcp/new" element={<McpPage />} /><Route path="/mcp/:id" element={<McpPage />} /></Routes>
+  </MemoryRouter>);
+  await waitFor(() => expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Microsoft Learn'));
+  await userEvent.click(screen.getByRole('link', { name: 'Open second' }));
+  await waitFor(() => expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Second MCP'));
+  expect(screen.getByLabelText('Endpoint URL')).toHaveProperty('value', 'https://second.invalid');
+  await userEvent.click(screen.getByRole('link', { name: 'New MCP' }));
+  await waitFor(() => expect(screen.getByLabelText('Name')).toHaveProperty('value', ''));
+  expect(screen.getByLabelText('Endpoint URL')).toHaveProperty('value', '');
 });
