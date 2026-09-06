@@ -4,6 +4,22 @@
  * without hunting through JSX.
  */
 export const en = {
+  'rest.activeTokensTable': 'Active integration tokens',
+  'rest.tokenName': 'Name',
+  'rest.tokenPermissions': 'Permissions',
+  'rest.tokenExpiry': 'Expires',
+  'rest.tokenUsed': 'Last used',
+  'rest.tokenActions': 'Actions',
+  'rest.neverUsed': 'Never',
+  'rest.revoke': 'Revoke',
+  'rest.confirmRevoke': 'Confirm revoke',
+  'rest.cancel': 'Cancel',
+  'rest.activeToken': '{count} active token',
+  'rest.activeTokens': '{count} active tokens',
+  'rest.tokenPages': 'Active tokens pagination',
+  'rest.previous': 'Previous',
+  'rest.next': 'Next',
+  'rest.pageCount': '{page} of {count}',
   'rest.title': 'REST API',
   'rest.server': 'REST API Server',
   'rest.client': 'REST API Client',

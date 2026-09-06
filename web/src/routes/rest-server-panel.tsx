@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { IntegrationScopeDTO, IntegrationTokenDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
 import { integrationsService } from '../services/integrations';
@@ -12,6 +13,9 @@ const scopes: {
     { value: 'runs:cancel', label: 'Cancel runs and queued messages' },
 ];
 export function RestServerPanel() {
+    const [tokensOpen, setTokensOpen] = useState(false);
+    const [page, setPage] = useState(0);
+    const [now, setNow] = useState(Date.now);
     const [tokens, setTokens] = useState<IntegrationTokenDTO[]>([]);
     const [reference, setReference] = useState<IntegrationReferenceDTO>();
     const [creating, setCreating] = useState(false);
@@ -23,10 +27,19 @@ export function RestServerPanel() {
     const [error, setError] = useState('');
     const [status, setStatus] = useState('');
     const [revoking, setRevoking] = useState<string>();
+    const activeTokens = tokens.filter(token => token.revokedAt === null && token.expiresAt > now);
+    const pageCount = Math.max(1, Math.ceil(activeTokens.length / 10));
+    const currentPage = Math.min(page, pageCount - 1);
+    useEffect(() => {
+        const nextExpiry = Math.min(...tokens.filter(token => token.revokedAt === null && token.expiresAt > Date.now()).map(token => token.expiresAt));
+        if (!Number.isFinite(nextExpiry)) return;
+        const timer = window.setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(1, nextExpiry - Date.now())));
+        return () => window.clearTimeout(timer);
+    }, [tokens, now]);
     const base = window.location.origin + '/v1';
-    const reload = async (): Promise<void> => { const result = await integrationsService.list(); setTokens(result.tokens); };
+    const reload = async (): Promise<void> => { const result = await integrationsService.list(); setTokens(result.tokens); setNow(Date.now()); };
     useEffect(() => { let active = true; void Promise.all([integrationsService.list(), integrationsService.reference()]).then(([list, docs]) => { if (active) {
-        setTokens(list.tokens);
+        setTokens(list.tokens); setNow(Date.now());
         setReference(docs);
     } }).catch(() => { if (active)
         setError('Could not load REST API settings.'); }); return () => { active = false; }; }, []);
@@ -71,7 +84,33 @@ export function RestServerPanel() {
         <p className="text-sm">Access: {selected.join(', ') || 'none'}. Expires in {days} days. No access to account administration or local machines.</p>
         <div className="flex gap-2"><Button type="submit" disabled={busy || selected.length === 0}>Create token</Button><Button variant="ghost" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button></div>
       </form></Card>}
-      {tokens.map(token => <Card key={token.id}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium">{token.name}</p><p className="text-sm">{token.scopes.join(', ')}</p><p className="text-sm text-[var(--muted)]">{token.revokedAt !== null ? 'Revoked' : token.expiresAt <= Date.now() ? 'Expired' : 'Active'} · Created {new Date(token.createdAt).toLocaleDateString()} · Expires {new Date(token.expiresAt).toLocaleDateString()} · Last used {token.lastUsedAt === null ? 'never' : new Date(token.lastUsedAt).toLocaleString()}</p></div>{token.revokedAt === null ? <Button variant="danger" size="sm" onClick={() => setRevoking(token.id)}>Revoke</Button> : null}</div>{revoking === token.id ? <div className="mt-3 flex gap-2"><Button variant="danger" disabled={busy} onClick={() => { setBusy(true); void integrationsService.revoke(token.id).then(reload).then(() => setRevoking(undefined)).catch(() => setError('Revocation failed.')).finally(() => setBusy(false)); }}>Confirm revoke</Button><Button variant="ghost" onClick={() => setRevoking(undefined)}>Cancel</Button></div> : null}</Card>)}
+      <details className="space-y-3" onToggle={event => { setTokensOpen(event.currentTarget.open); setPage(0); }}>
+        <summary className="cursor-pointer">{t(activeTokens.length === 1 ? 'rest.activeToken' : 'rest.activeTokens', { count: activeTokens.length })}</summary>
+      {tokensOpen ? <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm" aria-label={t('rest.activeTokensTable')}>
+          <thead><tr>{(['rest.tokenName', 'rest.tokenPermissions', 'rest.tokenExpiry', 'rest.tokenUsed', 'rest.tokenActions'] as const).map(key => <th key={key} scope="col" className="px-2 py-2">{t(key)}</th>)}</tr></thead>
+          <tbody>{activeTokens.slice(currentPage * 10, currentPage * 10 + 10).map(token => <tr key={token.id}>
+            <th scope="row" className="max-w-52 break-words px-2 py-3 align-top font-medium">{token.name}</th>
+            <td className="px-2 py-3 align-top">{token.scopes.map(scope => <span key={scope} className="block">{scope}</span>)}</td>
+            <td className="px-2 py-3 align-top">{new Date(token.expiresAt).toLocaleDateString()}</td>
+            <td className="px-2 py-3 align-top">{token.lastUsedAt === null ? t('rest.neverUsed') : new Date(token.lastUsedAt).toLocaleString()}</td>
+            <td className="px-2 py-3 align-top">
+              {revoking === token.id ? <div className="flex flex-col gap-2">
+                <Button variant="danger" size="sm" disabled={busy} onClick={() => { setBusy(true); void integrationsService.revoke(token.id).then(reload).then(() => setRevoking(undefined)).catch(() => setError('Revocation failed.')).finally(() => setBusy(false)); }}>{t('rest.confirmRevoke')}</Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRevoking(undefined)}>{t('rest.cancel')}</Button>
+              </div> : <Button variant="danger" size="sm" disabled={busy} onClick={() => setRevoking(token.id)}>{t('rest.revoke')}</Button>}
+            </td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {pageCount > 1 ? <nav aria-label={t('rest.tokenPages')} className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>{t('rest.previous')}</Button>
+        <span>{t('rest.pageCount', { page: currentPage + 1, count: pageCount })}</span>
+        <Button variant="ghost" size="sm" disabled={currentPage + 1 === pageCount} onClick={() => setPage(currentPage + 1)}>{t('rest.next')}</Button>
+      </nav> : null}
+      </> : null}
+      </details>
       <details className="space-y-4"><summary className="cursor-pointer">API reference and examples</summary><Button variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Method / path</th><th>Scope</th><th>Behavior</th></tr></thead><tbody>{reference?.endpoints.map(e => <tr key={e.method + e.path}><td className="py-2 font-mono">{e.method.toUpperCase()} {e.path}</td><td>{e.scope}</td><td>{e.summary}</td></tr>)}</tbody></table></div>
       <Card><h3 className="font-medium">Read activity</h3><pre className="overflow-x-auto py-3 text-sm">{`# Set POP_API_TOKEN in your external client environment.

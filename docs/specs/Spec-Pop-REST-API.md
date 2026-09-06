@@ -36,6 +36,15 @@ Client rejects new outbound calls before network access with 503
 Existing client configuration, enabled flags and encrypted credentials remain
 stored. Already dispatched requests may complete.
 
+## Token list presentation
+
+Server configuration starts with a collapsed disclosure labelled `N active tokens`
+(`1 active token` for a single token). Only unrevoked, unexpired tokens are counted
+or rendered. Expiration updates the open screen automatically. Expanding renders
+a compact table (name, permissions, expiry, last use and revocation) with Previous/Next controls and at most ten entries per page; collapsing unmounts entries. Creation and revocation
+refresh the count, and pagination clamps when entries disappear. Expired/revoked
+records are not exposed in this screen; no history or automatic deletion is added.
+
 ## Server credentials
 
 Owner sessions alone manage `/v1/rest-api/tokens`, `/clients`, `/reference`, and `/health`.

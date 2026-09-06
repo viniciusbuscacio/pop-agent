@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Collapse the REST Server token list behind its active count; show only unrevoked, unexpired tokens, at most ten per page.
+
 ## 0.2.75
 
 - Simplify Agent REST API into Server and Client cards with persisted switches and Edit, preserve Settings navigation, move configuration behind Edit and remove the client Delete action.
