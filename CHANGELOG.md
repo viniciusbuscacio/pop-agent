@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.70
+
+- Keep Copilot login on pi native OAuth without bulk model-policy activation. Preserve valid credentials when the optional catalog is rate-limited or temporarily unavailable; retain last-known model availability on refresh. Authentication errors and cancellation still fail.
+
 ## 0.2.69
 
 - Clarify HTTPS setup progress: “Preparing your secure connection. You will be redirected when it’s ready.”

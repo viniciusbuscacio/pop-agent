@@ -41,6 +41,14 @@ cancellable and bounded by timeout. Transcript events are sanitized and never
 contain access/refresh tokens. Provider 429 cooldown is persisted so restart
 does not turn repeated login into abuse.
 
+Copilot login must not enable all model policies automatically. It reads existing
+account availability; models needing policy acceptance are enabled through GitHub.
+A catalog-only 429, 5xx or timeout must not discard valid OAuth credentials.
+Refresh retains last-known availability; first login may use the ordinary offline
+catalog fallback, which is not proof of entitlement. Authentication failures,
+invalid catalog responses and cancellation remain errors. No immediate catalog
+retry is performed after a transient failure.
+
 ## Custom OpenAI-compatible providers
 
 The owner may create up to 256 custom instances. Each has random collision-safe

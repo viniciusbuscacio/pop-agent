@@ -1,17 +1,23 @@
 # Dependency patches
 
-## pi 0.84.1 — GitHub Copilot policy concurrency
+## pi 0.84.1 — GitHub Copilot login and catalog isolation
 
-`@earendil-works/pi-ai` 0.84.1 sends one policy update for every known Copilot
-model in a single `Promise.all`. With the current 30-model catalog, GitHub
-rate-limits the final `/models` request and an otherwise successful device login
-ends as HTTP 429.
+The original SDK enables every known model policy during login. The previous
+upstream concurrency patch limited simultaneous requests to four, but still
+sent the entire policy batch before requesting the catalog. A fresh login in
+our test VM still ended with HTTP 429 after the enabling-models progress event.
+The endpoint that returned that production error was not captured.
 
-This patch is the compiled form of upstream commit
-[`b3edf017021f802af9b76ab4d95cb555c5427352`](https://github.com/earendil-works/pi/commit/b3edf017021f802af9b76ab4d95cb555c5427352),
-which limits policy updates to four concurrent requests. `postinstall` reapplies
-it and `npm run pi-patch:check` prevents an unpatched dependency from passing the
-gate.
+This targeted patch keeps pi's device login and token refresh, removes automatic
+policy acceptance for all models, and reads the account's available catalog.
+Models requiring policy acceptance must be enabled through GitHub first.
+A catalog-only 429, 5xx or timeout does not discard an already valid credential.
+Refresh keeps previous model IDs; first login uses the normal offline catalog
+fallback when availability is unknown. That fallback does not prove entitlement.
+Catalog 401/403, invalid responses, cancellation and token exchange failures
+still fail. No catalog retry or rate-limit bypass is added.
 
-Remove the patch, `patch-package`, the postinstall script and the contract check
-when Pop upgrades to a published pi version containing that commit.
+postinstall reapplies the patch. pi-patch:check checks its presence and the
+Copilot OAuth regression tests exercise the installed SDK with mocked HTTP.
+Remove this patch only when an upstream release provides equivalent behavior;
+do not remove it solely because it includes the older concurrency fix.
