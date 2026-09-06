@@ -1,6 +1,6 @@
 {
   "name": "@pop-agent/cli",
-  "version": "0.2.73",
+  "version": "0.2.74",
   "private": true,
   "type": "module",
   "license": "MIT",

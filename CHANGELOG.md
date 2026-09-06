@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.74
+
+- End successful first-run bootstrap output with the command to replace an expired setup code: popman onboarding-code.
+
 ## 0.2.73
 
 - Separate the final installation-log path from setup instructions with a blank line.

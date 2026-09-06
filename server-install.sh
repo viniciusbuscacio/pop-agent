@@ -40,6 +40,9 @@ install_log_finish() {
   [ -n "$INSTALL_LOG_FILE" ] || return 0
   install_event "event=finish phase=$INSTALL_LOG_PHASE exit_code=$1 duration_seconds=$(($(date +%s) - INSTALL_LOG_STARTED))"
   printf '\nInstallation log: %s\n' "$INSTALL_LOG_FILE" >&2
+  if [ "$1" -eq 0 ] && grep -q 'event=setup-code-issued' "$INSTALL_LOG_FILE"; then
+    printf '%s\n' 'If the setup code expires, run: popman onboarding-code' >&2
+  fi
 }
 case " ${*} " in
   *" --help "*|*" -h "*) ;;
