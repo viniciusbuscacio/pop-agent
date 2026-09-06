@@ -190,3 +190,12 @@ cancellation/recovery.
 - chat failover replay classification/rewind and cooldown;
 - usage aggregation, service-purpose booking, credits/allowance failure isolation;
 - provider UI keeps saving separate from testing and pair identity intact.
+
+## First-run provider configuration
+
+After the owner acknowledges the recovery key, setup opens the same Add Provider
+picker and configuration component used in Settings. API-key, pi-native OAuth
+and custom compatible providers share their existing test, model selection and
+save behavior. A successful save finishes this setup step; cancelling a form
+returns to the picker. Skipping remains available without adding a provider.
+Setup must not maintain an OpenRouter-only credential form.

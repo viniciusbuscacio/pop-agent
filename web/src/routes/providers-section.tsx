@@ -68,9 +68,9 @@ function providerAuthErrorAt(provider: ProviderStatusDTO): string | undefined {
   return provider.authErrorAt;
 }
 
-export function ProvidersSection() {
+export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } = {}) {
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
-  const [view, setView] = useState<View>({ kind: 'list' });
+  const [view, setView] = useState<View>({ kind: onSetupDone === undefined ? 'list' : 'pick' });
   const [loaded, setLoaded] = useState(false);
   const [listVersion, setListVersion] = useState(0);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -95,11 +95,21 @@ export function ProvidersSection() {
 
   if (!loaded) return <Card>{t('app.loading')}</Card>;
 
+  if (error !== undefined && onSetupDone !== undefined) {
+    return <Card>
+      <p role="alert">{error}</p>
+      <Button type="button" variant="ghost" data-testid="setup-skip-provider" onClick={onSetupDone}>
+        {t('setup.provider.skip')}
+      </Button>
+    </Card>;
+  }
+
   if (view.kind === 'pick') {
     return (
       <PickProvider
         configured={configured}
-        onCancel={() => setView({ kind: 'list' })}
+        setup={onSetupDone !== undefined}
+        onCancel={() => onSetupDone === undefined ? setView({ kind: 'list' }) : onSetupDone()}
         onPicked={(providerId) => {
           if (providerId === 'custom') {
             const draft: ProviderStatusDTO = {
@@ -138,11 +148,12 @@ export function ProvidersSection() {
         configured={configured}
         adding={view.adding}
         onChanged={absorb}
+        {...(onSetupDone === undefined ? {} : { onSaved: onSetupDone })}
         onDone={() => {
           if (provider.id === 'custom-draft') {
             setProviders((current) => current.filter((entry) => entry.id !== provider.id));
           }
-          setView({ kind: 'list' });
+          setView({ kind: onSetupDone === undefined ? 'list' : 'pick' });
         }}
       />
     );
@@ -471,10 +482,12 @@ function StepHeader({ title, onBack }: { title: string; onBack: () => void }) {
 /** Step one: which provider. A builtin already set up is not offered twice. */
 function PickProvider({
   configured,
+  setup = false,
   onCancel,
   onPicked,
 }: {
   configured: ProviderStatusDTO[];
+  setup?: boolean;
   onCancel: () => void;
   onPicked: (providerId: string) => void;
 }) {
@@ -506,8 +519,8 @@ function PickProvider({
           ))}
         </div>
         <div>
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            {t('common.cancel')}
+          <Button type="button" variant="ghost" data-testid={setup ? 'setup-skip-provider' : undefined} onClick={onCancel}>
+            {t(setup ? 'setup.provider.skip' : 'common.cancel')}
           </Button>
         </div>
       </Card>
@@ -527,12 +540,14 @@ function ConfigureProvider({
   adding,
   onChanged,
   onDone,
+  onSaved,
 }: {
   provider: ProviderStatusDTO;
   configured: ProviderStatusDTO[];
   adding: boolean;
   onChanged: (response: ProvidersResponse) => void;
   onDone: () => void;
+  onSaved?: () => void;
 }) {
   const [apiKey, setApiKey] = useState('');
   const [name, setName] = useState(provider.name);
@@ -629,7 +644,7 @@ function ConfigureProvider({
         });
         onChanged(latest);
       }
-      onDone();
+      (onSaved ?? onDone)();
     } catch {
       setNote(t('provider.saveFailed'));
     } finally {

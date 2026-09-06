@@ -61,9 +61,6 @@ export const en = {
   'setup.recovery.confirm': 'I saved my recovery key',
   'setup.recovery.filename': 'pop-agent-recovery-key.txt',
 
-  'setup.provider.title': 'Connect a model',
-  'setup.provider.body':
-    'Pop Agent talks to a language model through OpenRouter. Paste an API key to connect — or skip and add one later in Settings.',
   'setup.provider.skip': 'Skip for now',
 
   'setup.done.title': "You're all set",

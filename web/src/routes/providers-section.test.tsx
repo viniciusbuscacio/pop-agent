@@ -90,6 +90,49 @@ describe('OpenAI subscription card', () => {
 });
 
 describe('provider configuration flow', () => {
+  it('reuses the OAuth picker during setup and returns there on cancel', async () => {
+    list.mockResolvedValue({ providers: [{ ...CODEX, configured: false }] });
+    const done = vi.fn();
+    const user = userEvent.setup();
+    render(<ProvidersSection onSetupDone={done} />);
+    expect((await screen.findAllByTestId('provider-choice')).length).toBe(6);
+    await user.click(screen.getByText('OpenAI — ChatGPT subscription'));
+    expect(screen.queryByTestId('provider-key')).toBeNull();
+    await user.click(screen.getByTestId('provider-back'));
+    expect(screen.getAllByTestId('provider-choice').length).toBe(6);
+    expect(done).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('setup-skip-provider'));
+    expect(done).toHaveBeenCalledOnce();
+  });
+
+  it('finishes setup only after the shared provider save succeeds', async () => {
+    const provider = { ...CODEX, id: 'openai', name: 'OpenAI', authType: 'api-key', configured: false };
+    list.mockResolvedValue({ providers: [provider] });
+    saveConfiguration.mockRejectedValueOnce(new Error('offline'));
+    const done = vi.fn();
+    const user = userEvent.setup();
+    render(<ProvidersSection onSetupDone={done} />);
+    await user.click(await screen.findByText('OpenAI — API key'));
+    await user.type(screen.getByTestId('provider-key'), 'synthetic-key');
+    await user.click(screen.getByTestId('provider-save'));
+    await waitFor(() => expect(saveConfiguration).toHaveBeenCalledOnce());
+    expect(done).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('provider-save'));
+    await waitFor(() => expect(done).toHaveBeenCalledOnce());
+    expect(saveConfiguration).toHaveBeenLastCalledWith('openai', expect.objectContaining({ apiKey: 'synthetic-key' }));
+  });
+
+  it('lets setup skip a failed catalogue without displaying an unusable picker', async () => {
+    list.mockRejectedValue(new Error('offline'));
+    const done = vi.fn();
+    const user = userEvent.setup();
+    render(<ProvidersSection onSetupDone={done} />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByTestId('provider-choice')).toBeNull();
+    await user.click(screen.getByTestId('setup-skip-provider'));
+    expect(done).toHaveBeenCalledOnce();
+  });
+
   it('saves one provider card through one request', async () => {
     const user = userEvent.setup();
     render(<ProvidersSection />);

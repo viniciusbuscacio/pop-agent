@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.59
+
+- Reuse the Settings Add Provider flow during first-run setup, including API keys, subscriptions and custom endpoints. Preserve cancellation and skipping, and advance only after a successful save.
+
+
 ## 0.2.58
 
 - Preserve the service owner as the explicit Tailscale operator during browser-driven login, including the restricted subprocess environment.

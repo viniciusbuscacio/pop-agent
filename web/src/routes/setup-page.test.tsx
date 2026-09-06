@@ -13,6 +13,10 @@ const onboardingPair = vi.fn();
 const onboardingState = vi.fn();
 const onboardingConnect = vi.fn();
 const onboardingHttps = vi.fn();
+vi.mock('../services/providers', () => ({
+  normalizeBaseUrl: (value: string) => value,
+  providersService: { list: () => Promise.resolve({ providers: [] }) },
+}));
 vi.mock('../services/auth', () => ({
   authService: {
     state: () => authState() as Promise<unknown>,
