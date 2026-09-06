@@ -114,7 +114,7 @@ export const chatsService = {
 
   models(providerId?: string): Promise<ModelsResponse> {
     return apiRequest<ModelsResponse>(
-      providerId === undefined ? '/models' : `/models?provider=${providerId}`,
+      providerId === undefined ? '/models' : `/models?provider=${encodeURIComponent(providerId)}`,
     );
   },
 

@@ -48,13 +48,13 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the immutable v0.2.70 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.71 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.70/server-install.sh && sh "$file" --ref v0.2.70)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.71/server-install.sh && sh "$file" --ref v0.2.71)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`

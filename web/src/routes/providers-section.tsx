@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { healthMonitor } from '../services/health';
+import { useEffect, useRef, useState } from 'react';
 import type {
   ProviderStatusDTO,
   ProviderSubscriptionUsageResponse,
@@ -558,6 +559,10 @@ function ConfigureProvider({
   // choosing the chat model again is what clears it.
   const [serviceModel, setServiceModel] = useState(provider.serviceModel);
   const [catalogue, setCatalogue] = useState<ModelPickerOption[]>([]);
+  const [refreshingModels, setRefreshingModels] = useState(false);
+  const [catalogNote, setCatalogNote] = useState<string>();
+  const catalogRevision = useRef(0);
+  const catalogRefreshPending = useRef(false);
   const [testing, setTesting] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -579,10 +584,11 @@ function ConfigureProvider({
   // providers there is no catalogue to fetch until one is stored.
   useEffect(() => {
     let live = true;
+    const revision = ++catalogRevision.current;
     void chatsService
       .models(provider.id)
       .then((response) => {
-        if (!live) return;
+        if (!live || revision !== catalogRevision.current) return;
         setCatalogue(
           response.models.map((entry) => ({ value: entry.id, label: entry.name ?? entry.id })),
         );
@@ -590,8 +596,28 @@ function ConfigureProvider({
       .catch(() => undefined);
     return () => {
       live = false;
+      catalogRevision.current += 1;
     };
   }, [provider.id, provider.configured]);
+
+  async function refreshModels(): Promise<void> {
+    if (catalogRefreshPending.current || !provider.configured) return;
+    catalogRefreshPending.current = true;
+    setRefreshingModels(true);
+    setCatalogNote(undefined);
+    const revision = ++catalogRevision.current;
+    try {
+      const response = await chatsService.models(provider.id);
+      if (revision !== catalogRevision.current) return;
+      setCatalogue(response.models.map((entry) => ({ value: entry.id, label: entry.name ?? entry.id })));
+      setCatalogNote(t('provider.models.refreshed'));
+    } catch {
+      if (revision === catalogRevision.current) setCatalogNote(t('provider.models.failed'));
+    } finally {
+      catalogRefreshPending.current = false;
+      setRefreshingModels(false);
+    }
+  }
 
   async function test(): Promise<void> {
     setTesting(true);
@@ -645,6 +671,7 @@ function ConfigureProvider({
         });
         onChanged(latest);
       }
+      healthMonitor.refreshAfterProviderChange();
       (onSaved ?? onDone)();
     } catch {
       setNote(t('provider.saveFailed'));
@@ -726,6 +753,22 @@ function ConfigureProvider({
           )}
         </div>
         <p className="-mt-1 text-xs text-[var(--muted)]">{t('provider.test.hint')}</p>
+
+        {isOAuth ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-testid="provider-refresh-models"
+              disabled={!provider.configured || refreshingModels}
+              onClick={() => void refreshModels()}
+            >
+              {refreshingModels ? t('provider.models.refreshing') : t('provider.models.refresh')}
+            </Button>
+            {catalogNote ? <span role="status" className="text-sm text-[var(--muted)]">{catalogNote}</span> : null}
+          </div>
+        ) : null}
 
         {/* A dropdown of what this provider actually offers, which is the
             only way to choose among OpenRouter's hundreds. A custom endpoint

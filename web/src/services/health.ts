@@ -33,6 +33,8 @@ export type HealthState =
 
 /** Healthy: a keepalive, not a heartbeat. */
 const KEEPALIVE_MS = 60_000;
+const PROVIDER_REFRESH_INTERVAL_MS = 10_000;
+const PROVIDER_REFRESH_COUNT = 10;
 /** Unreachable: recover quickly from a restart, then cap at one probe per 10 seconds. */
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 10_000;
@@ -57,6 +59,8 @@ class HealthMonitor {
   private listeners = new Set<Listener>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private retryMs = FIRST_RETRY_MS;
+  private probeRevision = 0;
+  private providerRefreshStartedAt: number | undefined;
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -68,6 +72,12 @@ class HealthMonitor {
   };
 
   getState = (): HealthState => this.state;
+
+  /** One immediate check, then ten checks ten seconds apart after provider changes. */
+  refreshAfterProviderChange = (): void => {
+    this.providerRefreshStartedAt = Date.now();
+    this.checkNow();
+  };
 
   /** The banner's "Try now": ask again this instant, whatever the timer says. */
   checkNow = (): void => {
@@ -130,6 +140,7 @@ class HealthMonitor {
   }
 
   private stop(): void {
+    this.probeRevision += 1;
     this.sleep();
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('pageshow', this.wake);
@@ -159,6 +170,13 @@ class HealthMonitor {
 
   /** Healthy or merely degraded, the server answered: back to keepalive pace. */
   private nextDelay(): number {
+    if (this.providerRefreshStartedAt !== undefined) {
+      const elapsed = Date.now() - this.providerRefreshStartedAt;
+      if (elapsed < PROVIDER_REFRESH_COUNT * PROVIDER_REFRESH_INTERVAL_MS) {
+        return PROVIDER_REFRESH_INTERVAL_MS - Math.max(0, elapsed) % PROVIDER_REFRESH_INTERVAL_MS;
+      }
+      this.providerRefreshStartedAt = undefined;
+    }
     if (this.state.kind === 'ok' || this.state.kind === 'degraded') {
       this.retryMs = FIRST_RETRY_MS;
       return KEEPALIVE_MS;
@@ -174,6 +192,7 @@ class HealthMonitor {
     // Whatever wakes the page calls this again.
     if (this.listeners.size === 0 || document.hidden) return;
 
+    const revision = ++this.probeRevision;
     const mock = mockParam();
     if (mock === 'mock-offline') {
       this.setState({ kind: 'offline' });
@@ -191,9 +210,11 @@ class HealthMonitor {
         const response = await fetch('/v1/health', { cache: 'no-store' });
         if (!response.ok) throw new Error(String(response.status));
         const report = (await response.json()) as HealthResponse;
+        if (revision !== this.probeRevision) return;
         const problems = (['provider', 'db'] as const).filter((key) => report[key] === 'error');
         this.setState(problems.length === 0 ? { kind: 'ok' } : { kind: 'degraded', problems });
       } catch {
+        if (revision !== this.probeRevision) return;
         this.setState(deviceIsOffline() ? { kind: 'device-offline' } : { kind: 'offline' });
       }
     }

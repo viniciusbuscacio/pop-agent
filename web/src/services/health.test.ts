@@ -157,3 +157,97 @@ describe('healthMonitor', () => {
     unsubscribe();
   });
 });
+
+
+describe('explicit health refresh after provider configuration', () => {
+  it('replaces a degraded report immediately without waiting for the keepalive', async () => {
+    const monitor = await freshMonitor();
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ server: 'ok', provider: 'error', db: 'ok' }))
+      .mockResolvedValue(Response.json({ server: 'ok', provider: 'ok', db: 'ok' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const unsubscribe = monitor.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(monitor.getState()).toEqual({ kind: 'degraded', problems: ['provider'] });
+    monitor.checkNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(monitor.getState()).toEqual({ kind: 'ok' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
+  it.each(['degraded', 'failed'])('ignores an older %s probe after the new report arrives', async older => {
+    const monitor = await freshMonitor();
+    let resolveOld!: (response: Response) => void;
+    let rejectOld!: (reason: Error) => void;
+    const pending = new Promise<Response>((resolve, reject) => { resolveOld = resolve; rejectOld = reject; });
+    vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(pending)
+      .mockResolvedValue(Response.json({ server: 'ok', provider: 'ok', db: 'ok' })));
+    const unsubscribe = monitor.subscribe(() => undefined);
+    monitor.checkNow();
+    await vi.waitFor(() => expect(monitor.getState()).toEqual({ kind: 'ok' }));
+    if (older === 'failed') rejectOld(new Error('old connection failed'));
+    else resolveOld(Response.json({ server: 'ok', provider: 'error', db: 'ok' }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(monitor.getState()).toEqual({ kind: 'ok' });
+    unsubscribe();
+  });
+});
+
+
+describe('provider health follow-up window', () => {
+  it('checks immediately, ten times at ten seconds, then returns to sixty seconds', async () => {
+    const monitor = await freshMonitor();
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(() => Promise.resolve(Response.json({ server: 'ok', provider: 'ok', db: 'ok' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const unsubscribe = monitor.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    fetchMock.mockClear();
+    monitor.refreshAfterProviderChange();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    for (let count = 1; count <= 10; count += 1) {
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(fetchMock).toHaveBeenCalledTimes(count);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchMock).toHaveBeenCalledTimes(count + 1);
+    }
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(12);
+    unsubscribe();
+  });
+
+  it('restarts one follow-up window after another save and pauses while hidden', async () => {
+    const monitor = await freshMonitor();
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(() => Promise.resolve(Response.json({ server: 'ok', provider: 'error', db: 'ok' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const unsubscribe = monitor.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    monitor.refreshAfterProviderChange();
+    await vi.advanceTimersByTimeAsync(5_000);
+    fetchMock.mockClear();
+    monitor.refreshAfterProviderChange();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    setHidden(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(110_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    setHidden(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    unsubscribe();
+  });
+});

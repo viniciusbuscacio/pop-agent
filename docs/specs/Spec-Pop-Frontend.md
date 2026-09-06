@@ -616,3 +616,16 @@ frontend build, complete tests and smoke.
 ## REST integrations
 
 Agent navigation includes REST API, presenting inbound Server credentials/reference and outbound Clients configuration on the same responsive page. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).
+
+
+### Provider health refresh
+
+After a provider configuration save succeeds or OAuth credentials are confirmed
+by provider status (including recovery from a lost flow), request fresh server
+health immediately, then ten more times at ten-second intervals before returning
+to the normal sixty-second keepalive (or outage retry policy if unreachable).
+A new provider change restarts one window; hidden pages do not poll or replay
+missed checks. Do not wait for the periodic keepalive or assume saving a
+provider proves database or provider health. A previous in-flight health probe
+must not overwrite the newer check. Failed saves and unconfirmed sign-ins must
+not announce recovery.

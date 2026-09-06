@@ -222,3 +222,14 @@ completed OAuth flow alone does not enable Save: the refreshed provider status
 must confirm configured=true. Apply the same rule in setup and Settings. The
 configuration API rejects unconfigured OAuth providers before mutating models
 or priority, including when the browser submits a stale enabled form.
+
+
+### Subscription model list refresh
+
+The OpenAI Codex and GitHub Copilot configuration forms offer Refresh models
+when connected. It reloads only that provider's current server catalog through
+GET /v1/models?provider=..., preserving unsaved fields and both model selections.
+Show loading state, prevent duplicate clicks, retain the last list on failure,
+and ignore stale initial catalog responses. This reload uses the existing pi
+catalog; it does not promise a new upstream catalog, initiate OAuth, change
+account model policies or refresh every provider.

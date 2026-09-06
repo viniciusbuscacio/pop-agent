@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.71
+
+- Add Refresh models to connected OpenAI Codex and GitHub Copilot forms, preserving unsaved selections and retaining the previous list when reload fails.
+
+- Refresh server health immediately after confirmed provider sign-in or configuration save, then ten more times at ten-second intervals before restoring normal polling. Ignore older health probes so a stale warning cannot replace the refreshed status.
+
 ## 0.2.70
 
 - Keep Copilot login on pi native OAuth without bulk model-policy activation. Preserve valid credentials when the optional catalog is rate-limited or temporarily unavailable; retain last-known model availability on refresh. Authentication errors and cancellation still fail.

@@ -1,3 +1,4 @@
+import { healthMonitor } from '../services/health';
 import { useEffect, useState } from 'react';
 import type { OAuthStateResponse, ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -64,6 +65,7 @@ export function OAuthSection({
           const connected =
             response.providers.find((entry) => entry.id === provider.id)?.configured === true;
           if (connected) {
+            healthMonitor.refreshAfterProviderChange();
             setFlow(next);
             return;
           }
@@ -129,6 +131,7 @@ export function OAuthSection({
         onChanged(response);
         const landed =
           response.providers.find((entry) => entry.id === provider.id)?.configured === true;
+        if (landed) healthMonitor.refreshAfterProviderChange();
         setFlow((current) => {
           if (current === undefined) return current;
           const settled: OAuthStateResponse = { ...current, done: true, ok: landed };

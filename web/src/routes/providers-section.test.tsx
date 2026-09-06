@@ -5,11 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { ProvidersSection } from './providers-section';
 
+const checkHealth = vi.fn();
+vi.mock('../services/health', () => ({ healthMonitor: { refreshAfterProviderChange: () => checkHealth() } }));
+
 const oauthState = vi.fn();
 const list = vi.fn();
 const subscriptionUsage = vi.fn();
 const saveConfiguration = vi.fn();
 const createConfiguredCustom = vi.fn();
+const models = vi.fn();
 
 vi.mock('../services/providers', () => ({
   normalizeBaseUrl: (value: string) => value,
@@ -40,7 +44,7 @@ vi.mock('../services/providers', () => ({
 }));
 
 vi.mock('../services/chats', () => ({
-  chatsService: { models: () => Promise.resolve({ models: [], source: 'static' }) },
+  chatsService: { models: (id: string) => models(id) as Promise<unknown> },
 }));
 
 const CODEX: ProviderStatusDTO = {
@@ -59,6 +63,8 @@ const CODEX: ProviderStatusDTO = {
 afterEach(cleanup);
 
 beforeEach(() => {
+  checkHealth.mockClear();
+  models.mockReset().mockResolvedValue({ models: [], source: 'engine' });
   oauthState.mockReset().mockRejectedValue(new Error('no active flow'));
   list.mockReset();
   list.mockResolvedValue({ providers: [CODEX] });
@@ -103,8 +109,10 @@ describe('provider configuration flow', () => {
     await user.click(screen.getByTestId('provider-oauth-signin-openai-codex'));
     expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(false), { timeout: 3500 });
+    expect(checkHealth).toHaveBeenCalledOnce();
     await user.click(screen.getByTestId('provider-save'));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
+    expect(checkHealth).toHaveBeenCalledTimes(2);
   });
 
   it.each(['openai-codex', 'github-copilot'])('keeps Save disabled for %s until a credential exists', async (id) => {
@@ -192,5 +200,40 @@ describe('provider configuration flow', () => {
 
     expect(createConfiguredCustom).not.toHaveBeenCalled();
     expect(await screen.findByText('No providers yet. Add one and Pop Agent can start answering.')).toBeTruthy();
+  });
+});
+
+
+describe('subscription model refresh', () => {
+  it.each(['openai-codex', 'github-copilot'])('reloads only %s and preserves unsaved fields', async id => {
+    list.mockResolvedValue({ providers: [{ ...CODEX, id }] });
+    const user = userEvent.setup();
+    render(<ProvidersSection />);
+    await user.click(await screen.findByTestId('provider-edit'));
+    const input = screen.getByTestId('provider-model') as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, 'my-unsaved-model');
+    models.mockClear();
+    await user.click(screen.getByTestId('provider-refresh-models'));
+    expect(await screen.findByText('Model list refreshed.')).toBeTruthy();
+    expect(models).toHaveBeenCalledExactlyOnceWith(id);
+    expect(input.value).toBe('my-unsaved-model');
+    expect(saveConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('disables repeat clicks while loading and keeps the selected model after failure', async () => {
+    const user = userEvent.setup();
+    render(<ProvidersSection />);
+    await user.click(await screen.findByTestId('provider-edit'));
+    let reject!: (error: Error) => void;
+    models.mockImplementationOnce(() => new Promise((_resolve, no) => { reject = no; }));
+    const button = screen.getByTestId('provider-refresh-models') as HTMLButtonElement;
+    await user.click(button);
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Refreshing models…');
+    reject(new Error('unreachable'));
+    await screen.findByText('Could not refresh models. Your previous list and selections were kept.');
+    expect((screen.getByTestId('provider-model') as HTMLInputElement).value).toBe(CODEX.defaultModel);
+    expect(button.disabled).toBe(false);
   });
 });
