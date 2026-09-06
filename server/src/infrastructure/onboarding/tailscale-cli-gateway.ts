@@ -1,3 +1,4 @@
+import { waitForTailnetHttps } from './https-readiness.js';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { userInfo } from 'node:os';
 import type {
@@ -16,6 +17,8 @@ export class TailscaleCliGateway implements TailscaleGateway {
   private loginUrl: string | undefined;
 
   constructor(private readonly originPort: number) {}
+
+  verifyHttps(origin: string): Promise<boolean> { return waitForTailnetHttps(origin); }
 
   status(): TailnetStatus {
     const status = runTailscale(['status', '--json']);

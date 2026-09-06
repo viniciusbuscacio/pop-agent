@@ -246,6 +246,9 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
     if (status.custom !== true && (parsed.data.name !== undefined || parsed.data.baseURL !== undefined)) {
       return apiError(c, 400, 'invalid_field', 'Built-in providers do not have custom identity fields.');
     }
+    if (status.authType === 'oauth' && deps.providers.status(id)?.configured !== true) {
+      return apiError(c, 409, 'provider_login_required', 'Sign in to this subscription provider before saving its configuration.');
+    }
     if (status.authType === 'api-key' && !status.configured && parsed.data.apiKey === undefined) {
       return apiError(c, 400, 'missing_field', 'An API key is required to add this provider.');
     }

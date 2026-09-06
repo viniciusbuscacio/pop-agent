@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setupNavigation } from '../services/setup-navigation';
 import { SetupPage } from './setup-page';
 
 const setup = vi.fn();
@@ -155,6 +156,74 @@ describe('setup wizard', () => {
     rendered.unmount(); expect(tab.close).toHaveBeenCalledOnce();
     finish({ required: true, phase: 'tailscale', loginUrl: 'https://login.tailscale.com/a/test' });
     await Promise.resolve(); expect(tab.location.replace).not.toHaveBeenCalled();
+  });
+
+  it('redirects directly after Enable HTTPS succeeds, without another click', async () => {
+    const navigate = vi.spyOn(setupNavigation, 'replace').mockImplementation(() => undefined);
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    sessionStorage.setItem('test-onboarding', 'paired');
+    onboardingState.mockResolvedValue({ required: true, phase: 'https' });
+    onboardingHttps.mockResolvedValue({ required: true, phase: 'secure', secureUrl: 'https://pop.tail123.ts.net' });
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId('onboarding-certificate-notice'));
+    expect(navigate).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('onboarding-enable-https'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith('https://pop.tail123.ts.net/setup'));
+    expect(screen.queryByTestId('setup-password')).toBeNull();
+    expect(screen.queryByText('Private HTTPS is ready')).toBeNull();
+  });
+
+  it('automatically continues an already-secure unpaired HTTP browser', async () => {
+    const navigate = vi.spyOn(setupNavigation, 'replace').mockImplementation(() => { throw new Error('blocked'); });
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    onboardingPublic.mockResolvedValue({ required: true, phase: 'secure', secureUrl: 'https://pop.tail123.ts.net' });
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith('https://pop.tail123.ts.net/setup'));
+    await waitFor(() => expect(screen.getByTestId('onboarding-secure-link').getAttribute('href')).toBe('https://pop.tail123.ts.net/setup'));
+  });
+
+  it('shows animated progress while the server verifies HTTPS', async () => {
+    const navigate = vi.spyOn(setupNavigation, 'replace').mockImplementation(() => undefined);
+    let finish!: (value: unknown) => void;
+    onboardingHttps.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    sessionStorage.setItem('test-onboarding', 'paired');
+    onboardingState.mockResolvedValue({ required: true, phase: 'https' });
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId('onboarding-certificate-notice'));
+    await user.click(screen.getByTestId('onboarding-enable-https'));
+    await screen.findByTestId('onboarding-https-loading');
+    expect(screen.getByTestId('working-indicator')).toBeDefined();
+    expect(screen.getByText('Working…')).toBeDefined();
+    expect(navigate).not.toHaveBeenCalled();
+    finish({ required: true, phase: 'secure', secureUrl: 'https://pop.tail123.ts.net' });
+    await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith('https://pop.tail123.ts.net/setup'));
+  });
+
+  it('offers retry without refresh when navigation is blocked', async () => {
+    const navigate = vi.spyOn(setupNavigation, 'replace')
+      .mockImplementationOnce(() => { throw new Error('blocked'); })
+      .mockImplementation(() => undefined);
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    onboardingPublic.mockResolvedValue({ required: true, phase: 'secure', secureUrl: 'https://pop.tail123.ts.net' });
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    await userEvent.setup().click(await screen.findByTestId('onboarding-retry-https'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(2));
+  });
+
+  it('stays on the HTTPS activation step when activation fails', async () => {
+    const navigate = vi.spyOn(setupNavigation, 'replace').mockImplementation(() => undefined);
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    sessionStorage.setItem('test-onboarding', 'paired');
+    onboardingState.mockResolvedValue({ required: true, phase: 'https' });
+    onboardingHttps.mockRejectedValue(new Error('not ready'));
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId('onboarding-certificate-notice'));
+    await user.click(screen.getByTestId('onboarding-enable-https'));
+    await screen.findByRole('alert'); expect(navigate).not.toHaveBeenCalled();
   });
 
   it('keeps Continue disabled until the passwords are long enough and match', async () => {

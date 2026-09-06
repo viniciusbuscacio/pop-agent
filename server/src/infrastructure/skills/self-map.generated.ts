@@ -10,7 +10,7 @@ export const SELF_MAP = [
   "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (91 modules)",
   "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
   "- `domain/` -- entities, value objects and pure services -- the innermost layer (17 modules)",
-  "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (91 modules)",
+  "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (92 modules)",
   "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (38 modules)",
   "- `manager/` -- see docs/specs/Spec-Pop-General.md (3 modules)",
   "- `testing/` -- shared test harness helpers (1 module)",

@@ -204,3 +204,13 @@ The built-in default model for OpenAI Codex and GitHub Copilot subscriptions is
 `gpt-5.6-sol`. An explicitly stored provider model takes precedence over this
 installation default. Model metadata continues to come from the native catalog
 when available.
+
+
+### Subscription configuration completion
+
+The provider editor disables Save while a subscription provider has no stored
+OAuth credential. Cancel and the sign-in action remain available. A started or
+completed OAuth flow alone does not enable Save: the refreshed provider status
+must confirm configured=true. Apply the same rule in setup and Settings. The
+configuration API rejects unconfigured OAuth providers before mutating models
+or priority, including when the browser submits a stale enabled form.

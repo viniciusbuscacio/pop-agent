@@ -433,6 +433,16 @@ describe('PUT /v1/providers/:id/default-model', () => {
 });
 
 describe('PUT /v1/providers/:id/configuration', () => {
+  it.each(['openai-codex', 'github-copilot'])('refuses to save %s before subscription login without changing settings', async (id) => {
+    const before = fixture.providers.status(id);
+    const res = await authed(`/v1/providers/${id}/configuration`, {
+      method: 'PUT', body: JSON.stringify({ defaultModel: 'changed', serviceModel: '', priority: 1 }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'provider_login_required' } });
+    expect(fixture.providers.status(id)).toEqual(before);
+  });
+
   it('saves credential, models, and priority in one request', async () => {
     const res = await authed('/v1/providers/anthropic/configuration', {
       method: 'PUT',

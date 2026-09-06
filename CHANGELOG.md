@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.65
+
+- Show the Pop balloon and animated Working indicator while activating and checking HTTPS. Verify actual server HTTPS readiness with bounded retries, then continue directly to secure password setup without another confirmation or refresh.
+- Keep subscription provider Save disabled until server status confirms OAuth credentials. Reject unauthenticated subscription configuration at the API before changing models or priority.
+
 ## 0.2.64
 
 - Open Tailscale sign-in automatically from the initial setup click. Reserve the tab before asynchronous preparation, show progress, fall back to the current tab when pop-ups are blocked, and close unused tabs after errors, navigation or an already-connected result.

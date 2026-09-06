@@ -26,6 +26,7 @@ export interface TailnetStatus {
 export interface TailscaleGateway {
   status(): TailnetStatus;
   beginLogin(): Promise<string | undefined>;
+  verifyHttps(origin: string): Promise<boolean>;
   enableHttps(hostname?: string):
     | { ok: true; secureUrl: string }
     | { ok: false; reason: 'not_installed' | 'not_connected' | 'conflict' | 'failed' }

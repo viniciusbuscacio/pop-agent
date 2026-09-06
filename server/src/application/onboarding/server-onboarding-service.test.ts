@@ -21,6 +21,8 @@ class MemoryRepo implements ServerOnboardingRepo {
 class FakeTailscale implements TailscaleGateway {
   current: TailnetStatus = { installed: true, connected: false, serve: 'none' };
   loginUrl = 'https://login.tailscale.com/a/abc123';
+  ready = true;
+  verifyHttps() { return Promise.resolve(this.ready); }
   status() { return this.current; }
   beginLogin() { return Promise.resolve(this.loginUrl); }
   enableHttps() {
@@ -44,6 +46,19 @@ function fixture() {
 }
 
 describe('server network onboarding', () => {
+  it('does not promote configured Serve or a failed readiness check to secure', async () => {
+    const f = fixture(); const paired = f.service.pair(f.generated.code);
+    if (!paired.ok) throw new Error('pairing failed');
+    f.tailscale.current = { installed: true, connected: true, serve: 'ours', dnsName: 'pop.example.ts.net.' };
+    expect(f.service.state(paired.token)?.phase).toBe('https');
+    f.tailscale.ready = false;
+    expect(await f.service.enableHttps(paired.token, true)).toEqual({ ok: false, reason: 'failed' });
+    expect(f.service.allowsAccountSetup()).toBe(false);
+    expect(f.repo.record?.phase).toBe('paired');
+    f.tailscale.ready = true;
+    expect(await f.service.enableHttps(paired.token, true)).toMatchObject({ ok: true, state: { phase: 'secure' } });
+  });
+
   it('exchanges the terminal code once and protects detailed state with its token', () => {
     const f = fixture();
     expect(f.service.state('not-a-token')).toBeUndefined();
@@ -70,7 +85,7 @@ describe('server network onboarding', () => {
     expect(paired.service.state(result.token)?.phase).toBe('tailscale');
   });
 
-  it('never overwrites a conflicting Serve config and persists the verified HTTPS origin', () => {
+  it('never overwrites a conflicting Serve config and persists the verified HTTPS origin', async () => {
     const f = fixture();
     const paired = f.service.pair(f.generated.code);
     if (!paired.ok) throw new Error('pairing failed');
@@ -78,7 +93,7 @@ describe('server network onboarding', () => {
     expect(f.service.state(paired.token)).toMatchObject({ phase: 'blocked', issue: 'serve_conflict' });
 
     f.tailscale.current = { installed: true, connected: true, serve: 'none' };
-    const secure = f.service.enableHttps(paired.token, true, 'pop-agent');
+    const secure = await f.service.enableHttps(paired.token, true, 'pop-agent');
     expect(secure).toMatchObject({ ok: true, state: { phase: 'secure', secureUrl: 'https://pop.example.ts.net' } });
     expect(f.repo.record?.phase).toBe('secure');
   });

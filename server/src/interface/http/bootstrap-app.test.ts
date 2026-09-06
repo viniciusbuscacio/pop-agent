@@ -31,7 +31,8 @@ describe('temporary HTTP bootstrap app', () => {
         repo, clock,
         tailscale: {
           status: () => ({ installed: true, connected: false, serve: 'none' }),
-          beginLogin: () => Promise.resolve('https://login.tailscale.com/a/test'),
+          verifyHttps: () => Promise.resolve(true),
+        beginLogin: () => Promise.resolve('https://login.tailscale.com/a/test'),
           enableHttps: () => ({ ok: true, secureUrl: 'https://test.example.ts.net' }),
         },
       }),
@@ -63,7 +64,8 @@ describe('temporary HTTP bootstrap app', () => {
         clock: new FakeClock(),
         tailscale: {
           status: () => ({ installed: true, connected: false, serve: 'none' }),
-          beginLogin: () => Promise.resolve('https://login.tailscale.com/a/abc123'),
+          verifyHttps: () => Promise.resolve(true),
+        beginLogin: () => Promise.resolve('https://login.tailscale.com/a/abc123'),
           enableHttps: () => ({ ok: false, reason: 'not_connected' }),
         },
       }),

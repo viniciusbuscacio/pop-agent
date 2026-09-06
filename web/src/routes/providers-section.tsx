@@ -620,6 +620,7 @@ function ConfigureProvider({
 
   /** One Save is one server request; a network failure cannot split the form. */
   async function save(): Promise<void> {
+    if (saving || missingRequiredConfiguration) return;
     setSaving(true);
     setNote(undefined);
     try {
@@ -653,8 +654,7 @@ function ConfigureProvider({
   }
 
   const missingRequiredConfiguration =
-    adding &&
-    !isOAuth &&
+    isOAuth ? !provider.configured : adding &&
     (apiKey.trim().length === 0 ||
       (isCustom && (name.trim().length === 0 || normalizeBaseUrl(baseURL).length === 0)));
 

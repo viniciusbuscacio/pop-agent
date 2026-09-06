@@ -7,6 +7,7 @@ import { authService } from '../services/auth';
 import { pendingRecovery } from '../services/pending-recovery';
 import { onboardingService, onboardingSession } from '../services/onboarding';
 import { prepareTailscaleSignIn, type PendingTailscaleSignIn } from '../services/tailscale-sign-in';
+import { secureSetupDestination, setupNavigation } from '../services/setup-navigation';
 import { ProvidersSection } from './providers-section';
 import { session } from '../services/session';
 import { useAuthStore } from '../store/auth';
@@ -231,6 +232,22 @@ function NetworkSetupStep() {
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const secureUrl = (state?.phase === 'secure' ? state.secureUrl : undefined) ?? publicSecureUrl;
+  const secureTarget = secureSetupDestination(secureUrl);
+  const [preparingHttps, setPreparingHttps] = useState(false);
+  const [handoffFailed, setHandoffFailed] = useState(false);
+  const [probeAttempt, setProbeAttempt] = useState(0);
+  useEffect(() => {
+    if (secureTarget === undefined || new URL(secureTarget).origin === window.location.origin) return;
+    setHandoffFailed(false);
+    const fallbackTimer = window.setTimeout(() => setHandoffFailed(true), 3_000);
+    try {
+      // The server verifies HTTPS before returning secure. Navigate at the top
+      // level: insecure pages cannot probe private HTTPS using subresources.
+      setupNavigation.replace(secureTarget);
+    } catch { setHandoffFailed(true); }
+    return () => window.clearTimeout(fallbackTimer);
+  }, [secureTarget, probeAttempt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,6 +325,7 @@ function NetworkSetupStep() {
   async function enableHttps(): Promise<void> {
     if (token === undefined || !accepted || busy) return;
     setBusy(true);
+    setPreparingHttps(true);
     setError(undefined);
     try {
       setState(await onboardingService.enableHttps(token, accepted, hostname.trim()));
@@ -315,24 +333,25 @@ function NetworkSetupStep() {
       setError(cause instanceof ApiError ? cause.message : t('error.generic'));
     } finally {
       setBusy(false);
+      setPreparingHttps(false);
     }
   }
 
-  const secureUrl = state?.secureUrl ?? publicSecureUrl;
-  if (secureUrl !== undefined) {
+  if (preparingHttps || secureUrl !== undefined) {
     return (
-      <div className="flex flex-col gap-5">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-xl font-semibold">{t('setup.network.secureTitle')}</h1>
-          <p className="text-sm text-[var(--key-fg-dim)]">{t('setup.network.secureBody')}</p>
-        </header>
-        <a
-          data-testid="onboarding-secure-link"
-          className="inline-flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-sm font-medium text-[var(--screen-fg)] hover:bg-[var(--panel-hover)]"
-          href={`${secureUrl}/setup`}
-        >
-          {t('setup.network.continueSecurely')}
-        </a>
+      <div className="flex flex-col gap-5" data-testid="onboarding-https-loading">
+        {secureUrl !== undefined && secureTarget === undefined ? <p role="alert">{t('error.generic')}</p> : <>
+          {!handoffFailed ? <LoadingState label={t('chat.working')} /> : null}
+          <p role={handoffFailed ? 'alert' : undefined} className="text-sm text-[var(--key-fg-dim)]">
+            {handoffFailed ? t('setup.network.waitFailed') : t('setup.network.preparingHttps')}
+          </p>
+          {handoffFailed && secureTarget !== undefined ? <>
+            <Button type="button" data-testid="onboarding-retry-https" onClick={() => setProbeAttempt((value) => value + 1)}>
+              {t('setup.network.retryConnection')}
+            </Button>
+            <a data-testid="onboarding-secure-link" href={secureTarget}>{t('setup.network.continueSecurely')}</a>
+          </> : null}
+        </>}
       </div>
     );
   }

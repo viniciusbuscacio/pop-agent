@@ -79,6 +79,7 @@ describe('POST /v1/setup', () => {
       clock,
       tailscale: {
         status: () => ({ installed: true, connected: true, serve: 'none' }),
+        verifyHttps: () => Promise.resolve(true),
         beginLogin: () => Promise.resolve(undefined),
         enableHttps: () => ({ ok: false, reason: 'failed' }),
       },

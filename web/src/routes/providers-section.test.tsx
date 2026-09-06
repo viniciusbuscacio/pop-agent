@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { ProvidersSection } from './providers-section';
 
+const oauthState = vi.fn();
 const list = vi.fn();
 const subscriptionUsage = vi.fn();
 const saveConfiguration = vi.fn();
@@ -31,7 +32,7 @@ vi.mock('../services/providers', () => ({
       createConfiguredCustom(configuration) as Promise<unknown>,
     deleteCustom: vi.fn(),
     oauthStart: vi.fn(),
-    oauthState: vi.fn(() => Promise.reject(new Error('no active flow'))),
+    oauthState: () => oauthState() as Promise<unknown>,
     oauthInput: vi.fn(),
     oauthCancel: vi.fn(),
     oauthLogout: vi.fn(),
@@ -58,6 +59,7 @@ const CODEX: ProviderStatusDTO = {
 afterEach(cleanup);
 
 beforeEach(() => {
+  oauthState.mockReset().mockRejectedValue(new Error('no active flow'));
   list.mockReset();
   list.mockResolvedValue({ providers: [CODEX] });
   subscriptionUsage.mockReset();
@@ -90,6 +92,33 @@ describe('OpenAI subscription card', () => {
 });
 
 describe('provider configuration flow', () => {
+  it('enables Save only after successful login is confirmed by provider status', async () => {
+    list.mockResolvedValueOnce({ providers: [{ ...CODEX, configured: false, source: null }] }).mockResolvedValue({ providers: [CODEX] });
+    oauthState.mockRejectedValueOnce(new Error('no active flow'))
+      .mockResolvedValueOnce({ flowId: 'test', events: [], done: false })
+      .mockResolvedValue({ flowId: 'test', events: [], done: true, ok: true });
+    const done = vi.fn(); const user = userEvent.setup(); render(<ProvidersSection onSetupDone={done} />);
+    await user.click((await screen.findAllByTestId('provider-choice'))[2]!);
+    expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByTestId('provider-oauth-signin-openai-codex'));
+    expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(false), { timeout: 3500 });
+    await user.click(screen.getByTestId('provider-save'));
+    await waitFor(() => expect(done).toHaveBeenCalledOnce());
+  });
+
+  it.each(['openai-codex', 'github-copilot'])('keeps Save disabled for %s until a credential exists', async (id) => {
+    list.mockResolvedValue({ providers: [{ ...CODEX, id, name: id, configured: false, source: null }] });
+    const done = vi.fn(); const user = userEvent.setup();
+    render(<ProvidersSection onSetupDone={done} />);
+    const choices = await screen.findAllByTestId('provider-choice');
+    await user.click(choices[id === 'openai-codex' ? 2 : 4]!);
+    expect((screen.getByTestId('provider-save') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(false);
+    await user.click(screen.getByTestId('provider-save'));
+    expect(saveConfiguration).not.toHaveBeenCalled(); expect(done).not.toHaveBeenCalled();
+  });
+
   it('reuses the OAuth picker during setup and returns there on cancel', async () => {
     list.mockResolvedValue({ providers: [{ ...CODEX, configured: false }] });
     const done = vi.fn();

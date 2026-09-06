@@ -255,8 +255,20 @@ tailnet and requires explicit acceptance that the machine/tailnet FQDN appears
 in public Certificate Transparency logs. It refuses an existing conflicting
 Serve configuration rather than replacing it, never enables Funnel, and accepts
 the master password only after verifying HTTPS on port 443 proxies exactly to
-the loopback Pop origin. The owner continues on the verified `https://…ts.net`
-origin; completing recovery-key acknowledgement deletes onboarding state and
+the loopback Pop origin. Once activation and verification succeed, automatically replace the temporary
+HTTP page with `/setup` on the verified `https://…ts.net` origin. Do not require
+a separate HTTPS-ready confirmation. Show the Pop SVG balloon and shared animated Working indicator from the
+activation click through handoff. Do not equate a Serve configuration with a
+ready address: use bounded asynchronous HTTPS health probes with normal TLS
+validation before persisting secure. Keep the user on the working screen while
+the server verifies readiness, then perform a top-level navigation. Do not use
+cross-origin image, fetch or iframe probes from insecure HTTP: browsers can
+block those requests to private addresses. If activation fails, allow retry
+on the activation step; if navigation is blocked, offer Try again and a direct
+link without requiring a page refresh. Clear navigation fallback timers on unmount. Apply this
+also when a refreshed/unpaired browser discovers setup is already secure. Never
+redirect to an unverified HTTP URL, forward pairing credentials in the URL or
+repeat navigation on the destination origin. The owner continues there; completing recovery-key acknowledgement deletes onboarding state and
 closes the temporary listener.
 
 An existing data root with no onboarding record is upgraded without adding a

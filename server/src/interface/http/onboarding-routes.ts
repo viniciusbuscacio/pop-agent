@@ -60,7 +60,7 @@ export function createOnboardingRoutes(service: ServerOnboardingService): Hono {
     if (body === undefined) return badBody(c);
     const parsed = httpsSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
-    const result = service.enableHttps(
+    const result = await service.enableHttps(
       onboardingToken(c),
       parsed.data.acceptCertificateTransparency,
       parsed.data.hostname,

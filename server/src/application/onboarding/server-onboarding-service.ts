@@ -3,7 +3,6 @@ import type { Clock } from '../ports/clock.js';
 import type {
   ServerOnboardingRecord,
   ServerOnboardingRepo,
-  TailnetStatus,
   TailscaleGateway,
 } from '../ports/server-onboarding.js';
 
@@ -109,14 +108,14 @@ export class ServerOnboardingService {
     return loginUrl === undefined ? state : { ...state, loginUrl };
   }
 
-  enableHttps(
+  async enableHttps(
     token: string,
     acceptedCertificateTransparency: boolean,
     hostname?: string,
-  ):
+  ): Promise<
     | { ok: true; state: ServerOnboardingView }
     | { ok: false; reason: 'approval_required'; approvalUrl: string }
-    | { ok: false; reason: 'invalid_token' | 'notice_required' | 'invalid_hostname' | 'not_ready' | 'conflict' | 'failed' } {
+    | { ok: false; reason: 'invalid_token' | 'notice_required' | 'invalid_hostname' | 'not_ready' | 'conflict' | 'failed' }> {
     const record = this.authorizedRecord(token);
     if (record === undefined) return { ok: false, reason: 'invalid_token' };
     if (!acceptedCertificateTransparency) return { ok: false, reason: 'notice_required' };
@@ -136,8 +135,11 @@ export class ServerOnboardingService {
       return { ok: false, reason: 'failed' };
     }
 
+    if (!await this.deps.tailscale.verifyHttps(result.secureUrl)) return { ok: false, reason: 'failed' };
+    const current = this.authorizedRecord(token);
+    if (current === undefined) return { ok: false, reason: 'invalid_token' };
     const secure: ServerOnboardingRecord = {
-      ...record,
+      ...current,
       phase: 'secure',
       secureUrl: result.secureUrl,
     };
@@ -194,27 +196,8 @@ export class ServerOnboardingService {
         issue: 'serve_conflict',
       };
     }
-    if (status.serve === 'ours') {
-      const secureUrl = secureUrlFor(status);
-      if (secureUrl === undefined) {
-        return {
-          required: true,
-          phase: 'blocked',
-          tailscaleInstalled: true,
-          tailscaleConnected: true,
-          issue: 'tailscale_failed',
-        };
-      }
-      const secure = { ...record, phase: 'secure' as const, secureUrl };
-      this.deps.repo.write(secure);
-      return {
-        required: true,
-        phase: 'secure',
-        tailscaleInstalled: true,
-        tailscaleConnected: true,
-        secureUrl,
-      };
-    }
+    // A configured proxy is not proof of DNS, certificate or HTTP readiness.
+    // Only the explicit activation path persists secure after the async probe.
     return {
       required: true,
       phase: 'https',
@@ -240,9 +223,4 @@ function sameDigest(left: string, right: string): boolean {
 
 function validHostname(value: string): boolean {
   return value.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(value);
-}
-
-function secureUrlFor(status: TailnetStatus): string | undefined {
-  const name = status.dnsName?.replace(/\.$/, '');
-  return name === undefined ? undefined : `https://${name}`;
 }
