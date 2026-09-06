@@ -1,3 +1,4 @@
+import { RestApiSettingsService } from './application/integrations/rest-api-settings.js';
 import { LazyClientArtifacts } from './infrastructure/update/lazy-client-artifacts.js';
 import { RestClientService } from './application/integrations/rest-client-service.js';
 import { ScreenedRestGateway } from './infrastructure/integrations/screened-rest-gateway.js';
@@ -175,7 +176,7 @@ if (agent === 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const hub = new SseHub();
-const restClients = new RestClientService({repo:context.integrations,secrets:context.secrets,gateway:new ScreenedRestGateway(),now:()=>systemClock.now()});
+const restClients = new RestClientService({config: new RestApiSettingsService(context.settings),repo:context.integrations,secrets:context.secrets,gateway:new ScreenedRestGateway(),now:()=>systemClock.now()});
 // Which computers are allowed and which secure transports are currently attached.
 const localAccessPolicy = new LocalAccessPolicyService(context.settings);
 const localConnections = new LocalConnectionRegistry(
@@ -705,7 +706,7 @@ const sessionCommands = new SessionCommandService({
   busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
 });
 
-const integrations = new IntegrationService(context.integrations, {chats, runs, queue: queuedMessages, now: () => systemClock.now()});
+const integrations = new IntegrationService(context.integrations, {config: new RestApiSettingsService(context.settings), chats, runs, queue: queuedMessages, now: () => systemClock.now()});
 hub.onIntegrationEvent = event => integrations.observe(event);
 for (const entry of context.runJournal.list()) integrations.observe({kind:'run-status',chatId:entry.chatId,runId:entry.runId,status:entry.state});
 const app = createApp({

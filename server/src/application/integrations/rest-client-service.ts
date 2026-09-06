@@ -3,13 +3,16 @@ import { IntegrationError, type RestClient } from '../../domain/integrations/int
 import type { IntegrationRepo } from '../ports/integration-repo.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { RestGateway } from '../ports/rest-gateway.js';
+import type { RestApiSettingsService } from './rest-api-settings.js';
 export class RestClientService {
     constructor(private readonly deps: {
         repo: IntegrationRepo;
         secrets: SecretsRepo;
         gateway: RestGateway;
         now: () => number;
+        config: RestApiSettingsService;
     }) { }
+    available(): RestClient[] { return this.deps.config.get().clientEnabled ? this.list().filter(c => c.enabled) : []; }
     list(): RestClient[] { return this.deps.repo.clients(); }
     save(input: Omit<RestClient, 'id' | 'hasCredential' | 'updatedAt'>, id?: string, credential?: string): RestClient {
         let url: URL;
@@ -58,6 +61,7 @@ export class RestClientService {
         status: number;
         body: string;
     }> {
+        if (!this.deps.config.get().clientEnabled) throw new IntegrationError(503, 'rest_api_client_disabled');
         const client = this.list().find(c => c.id === id);
         if (!client)
             throw new IntegrationError(404, 'client_not_found');

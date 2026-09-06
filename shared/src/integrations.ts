@@ -39,3 +39,8 @@ export interface IntegrationActivityDTO {
   phase:'unknown'|'model'|'tool'|'subagent'|'finished'; updatedAt:number; startedAt:number;
   tool:{name:string;status:string}|null; messageId:string|null; queueId:string|null;
 }
+
+export interface RestApiSettingsDTO {
+  serverEnabled: boolean;
+  clientEnabled: boolean;
+}

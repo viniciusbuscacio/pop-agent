@@ -1,3 +1,4 @@
+import { RestApiSettingsService } from '../application/integrations/rest-api-settings.js';
 import { IntegrationService } from '../application/integrations/integration-service.js';
 import { RestClientService } from '../application/integrations/rest-client-service.js';
 import { SqliteIntegrationRepo } from '../infrastructure/db/sqlite-integration-repo.js';
@@ -442,9 +443,9 @@ export function createTestApp(
     bridge,
     busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
   });
-  const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {chats, runs, queue:queuedMessages, now:()=>clock.now()});
+  const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
   hub.onIntegrationEvent = event=>integrations.observe(event);
-  const restClients = new RestClientService({repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
+  const restClients = new RestClientService({config: new RestApiSettingsService(settingsRepo),repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
   const app = createApp({
     integrations,
     restClients,

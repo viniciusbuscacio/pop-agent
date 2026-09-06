@@ -89,6 +89,14 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
         app.delete('/rest-api/clients/:id', c => { clients.delete(c.req.param('id')); return c.json({ ok: true }); });
         app.post('/rest-api/clients/:id/call', async (c) => { const input = z.object({ operationId: z.string().max(64), query: z.record(z.string(), z.string()).optional(), body: z.unknown().optional() }).strict().parse(await c.req.json()); return c.json(await clients.call(c.req.param('id'), input.operationId, input.query, input.body, c.req.raw.signal)); });
     }
+    app.get('/rest-api/settings', c => c.json(service.settings()));
+    app.patch('/rest-api/settings', async c => {
+        const patch = z.object({ serverEnabled: z.boolean().optional(), clientEnabled: z.boolean().optional() }).strict().parse(await c.req.json());
+        return c.json(service.configure({
+            ...(patch.serverEnabled === undefined ? {} : { serverEnabled: patch.serverEnabled }),
+            ...(patch.clientEnabled === undefined ? {} : { clientEnabled: patch.clientEnabled }),
+        }));
+    });
     app.get('/rest-api/tokens', c => c.json({ tokens: service.repo.tokens().map(integrationTokenDto) }));
     app.post('/rest-api/tokens', async (c) => {
         const input = z.object({ name: z.string().min(1).max(80), scopes: z.array(z.enum(INTEGRATION_SCOPES)).min(1).max(4), days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }).strict().parse(await c.req.json());

@@ -1,3 +1,4 @@
+import { ShellFooter } from './shell-header';
 import { SidebarNav } from './sidebar-nav';
 import { useEffect } from 'react';
 import { Outlet, useMatch, useNavigate } from 'react-router-dom';
@@ -68,7 +69,7 @@ export function ChatLayout() {
       <aside
         className={`${contentOpen ? 'hidden md:flex' : 'flex'} relative w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
       >
-        {restApi !== null ? <><SidebarNav /><p className="p-4 text-sm text-[var(--muted)]">Manage inbound Server access and outbound REST Clients.</p></> : <ChatList />}
+        {restApi !== null ? <><SidebarNav /><ShellFooter /></> : <ChatList />}
       </aside>
 
       <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col overflow-x-hidden`}>

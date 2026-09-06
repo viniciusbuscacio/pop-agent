@@ -1,3 +1,4 @@
+import type { RestApiSettingsService, RestApiSettings } from './rest-api-settings.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { INTEGRATION_SCOPES, IntegrationError, type IntegrationActivity, type IntegrationScope, type IntegrationToken } from '../../domain/integrations/integration.js';
 import type { IntegrationRepo } from '../ports/integration-repo.js';
@@ -17,6 +18,7 @@ export class IntegrationService {
         runs: RunService;
         queue: QueuedMessageService;
         now: () => number;
+        config: RestApiSettingsService;
     }) {
         for (const item of repo.activities(0, 10000)) {
             if ((item.state === 'running' || item.state === 'queued') && deps.runs.liveRun(item.chatId)?.runId !== item.runId) {
@@ -40,6 +42,8 @@ export class IntegrationService {
         return { token, secret };
     }
     revoke(id: string): void { this.repo.revoke(id, this.deps.now()); this.repo.audit(id, 'revoke', '', this.deps.now()); }
+    settings(): RestApiSettings { return this.deps.config.get(); }
+    configure(patch: Partial<RestApiSettings>): RestApiSettings { return this.deps.config.update(patch); }
     authenticate(secret: string): IntegrationToken {
         const token = secret.length <= 128 && secret.startsWith('popi_') ? this.repo.token(digest(secret)) : undefined;
         if (!token || token.revokedAt !== null || token.expiresAt <= this.deps.now())
@@ -47,12 +51,14 @@ export class IntegrationService {
         return token;
     }
     authorize(secret: string, scope: IntegrationScope): IntegrationToken {
+        if (!this.settings().serverEnabled) throw new IntegrationError(503, 'rest_api_server_disabled');
         const token = this.authenticate(secret);
         if (!token.scopes.includes(scope))
             throw new IntegrationError(403, 'missing_scope');
         return token;
     }
     admit(secret: string): void {
+        if (!this.settings().serverEnabled) throw new IntegrationError(503, 'rest_api_server_disabled');
         const token = this.authenticate(secret);
         const now = this.deps.now();
         for (const [id, value] of this.limits)

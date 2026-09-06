@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.75
+
+- Simplify Agent REST API into Server and Client cards with persisted switches and Edit, preserve Settings navigation, move configuration behind Edit and remove the client Delete action.
+
 ## 0.2.74
 
 - End successful first-run bootstrap output with the command to replace an expired setup code: popman onboarding-code.

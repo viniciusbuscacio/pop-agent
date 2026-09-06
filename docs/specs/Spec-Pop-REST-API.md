@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Agent → REST API presents Server and Clients on one page. Server accepts scoped external integrations; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
+Agent → REST API presents REST API Server and REST API Client as two compact cards, matching the provider settings pattern. Each card has a persisted toggle and Edit; there is no Delete action. Editing opens configuration in the same pane, with Back to the overview. Server reference and examples are collapsed by default. The shell footer, including Settings, remains available on desktop and mobile. Server accepts scoped external integrations; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
 
 ## Reuse map
 
@@ -19,6 +19,22 @@ Agent → REST API presents Server and Clients on one page. Server accepts scope
 | Provider credentials | SecretsRepo | Separate encrypted outbound client credential keys |
 | Outbound network | Screened A2A transport | DNS screening/pinning, public HTTPS, no redirects |
 | Scheduled tasks | Existing Tasks API | Not exposed as integration task creation in this version |
+
+## Module switches
+
+Owner-only GET/PATCH `/v1/rest-api/settings` reads or updates `serverEnabled` and
+`clientEnabled`. Missing settings default to true to preserve existing behavior;
+individual new clients still default to disabled. Partial updates preserve the
+other switch. Invalid keys/types are rejected. The UI shows confirmed server
+state, prevents overlapping updates and retains the previous state after errors.
+
+Disabling Server rejects integration requests with 503 `rest_api_server_disabled`
+and disconnects existing integration SSE leases within one second. Owner settings
+remain accessible; tokens remain valid and admitted work continues. Disabling
+Client rejects new outbound calls before network access with 503
+`rest_api_client_disabled`; `rest_clients_list` returns no available operations.
+Existing client configuration, enabled flags and encrypted credentials remain
+stored. Already dispatched requests may complete.
 
 ## Server credentials
 

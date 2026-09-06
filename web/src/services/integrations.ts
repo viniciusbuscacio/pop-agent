@@ -1,6 +1,8 @@
-import type { RestClientDTO, IntegrationTokenDTO, IntegrationScopeDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
+import type { RestApiSettingsDTO, RestClientDTO, IntegrationTokenDTO, IntegrationScopeDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
 import { apiRequest } from './api';
 export const integrationsService = {
+    settings: () => apiRequest<RestApiSettingsDTO>('/rest-api/settings'),
+    updateSettings: (body: Partial<RestApiSettingsDTO>) => apiRequest<RestApiSettingsDTO>('/rest-api/settings', { method: 'PATCH', body }),
     clients: () => apiRequest<{
         clients: RestClientDTO[];
     }>('/rest-api/clients'),

@@ -4,6 +4,21 @@
  * without hunting through JSX.
  */
 export const en = {
+  'rest.title': 'REST API',
+  'rest.server': 'REST API Server',
+  'rest.client': 'REST API Client',
+  'rest.description': 'Choose how Pop connects with other apps.',
+  'rest.serverDescription': 'Let other apps send messages to Pop and follow its activity.',
+  'rest.clientDescription': 'Let Pop call other services using connections you configure.',
+  'rest.edit': 'Edit',
+  'rest.editServer': 'Edit REST API Server',
+  'rest.editClient': 'Edit REST API Client',
+  'rest.enabled': 'Enabled',
+  'rest.disabled': 'Disabled',
+  'rest.back': 'Back',
+  'rest.retry': 'Try again',
+  'rest.loadError': 'Could not load REST API settings.',
+  'rest.saveError': 'Could not change this setting. Try again.',
   'app.name': 'Pop Agent',
   'app.loading': 'Loading…',
 

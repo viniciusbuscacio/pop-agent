@@ -3,15 +3,15 @@ import type { RestClientDTO, RestOperationDTO } from '@pop-agent/shared';
 import { integrationsService } from '../services/integrations';
 import { Button, Card, TextField, TextArea, SwitchField, Select } from '../ui/controls';
 const initialOperation: RestOperationDTO = { id: 'get_status', name: 'Get status', method: 'GET', path: '/status' };
-export function RestClientsPanel() {
+export function RestClientsPanel({ enabled = true }: { enabled?: boolean }) {
     const [clients, setClients] = useState<RestClientDTO[]>([]);
     const [editing, setEditing] = useState<RestClientDTO | null | undefined>();
     const [error, setError] = useState('');
     const reload = async (): Promise<void> => { setClients((await integrationsService.clients()).clients); };
     useEffect(() => { void reload().catch(() => setError('Could not load REST clients.')); }, []);
-    return <div className="space-y-4"><h2 className="text-lg font-medium">Clients</h2><p>Let Pop call other REST services through operations you configure. Credentials stay on the server. Only public HTTPS destinations are supported; private networks and redirects are blocked.</p>{error ? <p role="alert">{error}</p> : null}<Button onClick={() => setEditing(null)}>New client</Button>
-    {editing !== undefined ? <ClientEditor key={editing?.id ?? 'new'} client={editing ?? undefined} onCancel={() => setEditing(undefined)} onSaved={async () => { setEditing(undefined); await reload(); }}/> : null}
-    {clients.map(client => <Card key={client.id}><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-medium">{client.name}</h3><p className="break-all text-sm">{client.baseUrl}</p><p className="text-sm">{client.enabled ? 'Enabled' : 'Disabled'} · {client.operations.length} operations · {client.hasCredential ? 'Credential stored' : 'No credential'}</p></div><Button variant="ghost" size="sm" onClick={() => setEditing(client)}>Edit</Button></div><ClientCall client={client}/></Card>)}
+    if (editing !== undefined) return <ClientEditor key={editing?.id ?? 'new'} client={editing ?? undefined} onCancel={() => setEditing(undefined)} onSaved={async () => { setEditing(undefined); try { await reload(); } catch { setError('Client saved. Reopen this page to reload the list.'); } }} />;
+    return <div className="space-y-4"><p>Let Pop call other REST services through operations you configure. Credentials stay on the server. Only public HTTPS destinations are supported; private networks and redirects are blocked.</p>{error ? <p role="alert">{error}</p> : null}<Button onClick={() => setEditing(null)}>New client</Button>
+    {clients.map(client => <Card key={client.id}><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-medium">{client.name}</h3><p className="break-all text-sm">{client.baseUrl}</p><p className="text-sm">{client.enabled ? 'Enabled' : 'Disabled'} · {client.operations.length} operations · {client.hasCredential ? 'Credential stored' : 'No credential'}</p></div><Button variant="ghost" size="sm" onClick={() => setEditing(client)}>Edit</Button></div><ClientCall client={client} enabled={enabled}/></Card>)}
   </div>;
 }
 function ClientEditor({ client, onCancel, onSaved }: {
@@ -28,7 +28,6 @@ function ClientEditor({ client, onCancel, onSaved }: {
     const [operations, setOperations] = useState<RestOperationDTO[]>(client?.operations ?? [{ ...initialOperation }]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const [deleting, setDeleting] = useState(false);
     const save = async (e: FormEvent): Promise<void> => { e.preventDefault(); setBusy(true); setError(''); try {
         await integrationsService.saveClient({ name, baseUrl: url, enabled, authHeader: header, operations, ...(clear ? { credential: '' } : credential ? { credential } : {}) }, client?.id);
         await onSaved();
@@ -54,11 +53,11 @@ function ClientEditor({ client, onCancel, onSaved }: {
       <TextField id={`op-path-${index}`} label="Path appended to base URL" required value={op.path} onChange={e => change(index, { path: e.target.value })}/>
       <Button size="sm" variant="ghost" disabled={operations.length === 1} onClick={() => setOperations(old => old.filter((_, i) => i !== index))}>Remove operation</Button>
     </div>)}<Button variant="ghost" size="sm" disabled={operations.length >= 30} onClick={() => setOperations(old => [...old, { ...initialOperation, id: `operation_${old.length + 1}` }])}>Add operation</Button>
-    <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>Save</Button><Button variant="ghost" disabled={busy} onClick={onCancel}>Cancel</Button>{client ? <Button variant="danger" disabled={busy} onClick={() => setDeleting(true)}>Delete</Button> : null}</div>
-    {deleting && client ? <div className="flex gap-2"><Button variant="danger" disabled={busy} onClick={() => { setBusy(true); void integrationsService.deleteClient(client.id).then(onSaved).catch(() => setError('Deletion failed.')).finally(() => setBusy(false)); }}>Confirm delete</Button><Button variant="ghost" onClick={() => setDeleting(false)}>Cancel</Button></div> : null}
+    <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>Save</Button><Button variant="ghost" disabled={busy} onClick={onCancel}>Cancel</Button></div>
   </form></Card>;
 }
-function ClientCall({ client }: {
+function ClientCall({ client, enabled }: {
+    enabled: boolean;
     client: RestClientDTO;
 }) {
     const [open, setOpen] = useState(false);
@@ -80,5 +79,5 @@ function ClientCall({ client }: {
     finally {
         setBusy(false);
     } };
-    return <div className="mt-3"><Button variant="ghost" size="sm" disabled={!client.enabled} onClick={() => setOpen(v => !v)}>Try operation</Button>{open ? <form onSubmit={e => void call(e)} className="mt-3 space-y-3"><Select id={`call-${client.id}`} label="Operation" value={operation} onChange={e => setOperation(e.target.value)}>{client.operations.map(op => <option key={op.id} value={op.id}>{op.method} {op.name}</option>)}</Select><TextArea id={`query-${client.id}`} label="Query parameters (JSON string values)" value={query} onChange={e => setQuery(e.target.value)}/><TextArea id={`body-${client.id}`} label="JSON body (optional, not for GET)" value={body} onChange={e => setBody(e.target.value)}/><p className="text-sm">This sends a real request. Write operations may change remote data.</p><div className="flex gap-2"><Button type="submit" disabled={busy}>Send request</Button><Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button></div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all text-sm">{result}</pre></form> : null}</div>;
+    return <div className="mt-3"><Button variant="ghost" size="sm" disabled={!enabled || !client.enabled} onClick={() => setOpen(v => !v)}>Try operation</Button>{open ? <form onSubmit={e => void call(e)} className="mt-3 space-y-3"><Select id={`call-${client.id}`} label="Operation" value={operation} onChange={e => setOperation(e.target.value)}>{client.operations.map(op => <option key={op.id} value={op.id}>{op.method} {op.name}</option>)}</Select><TextArea id={`query-${client.id}`} label="Query parameters (JSON string values)" value={query} onChange={e => setQuery(e.target.value)}/><TextArea id={`body-${client.id}`} label="JSON body (optional, not for GET)" value={body} onChange={e => setBody(e.target.value)}/><p className="text-sm">This sends a real request. Write operations may change remote data.</p><div className="flex gap-2"><Button type="submit" disabled={busy}>Send request</Button><Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button></div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all text-sm">{result}</pre></form> : null}</div>;
 }

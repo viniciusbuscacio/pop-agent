@@ -114,3 +114,43 @@ it('does not expose internal pi session paths in conversation listings', async (
   expect(body).not.toContain('piSessionId');
   expect(body).not.toContain('autoTitle');
 });
+
+it('persists module switches, retains tokens, and keeps owner configuration accessible', async () => {
+  const f = await fixture();
+  const patch = (body: unknown) => f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(f.owner), body: JSON.stringify(body) });
+  expect((await f.app.request('/v1/rest-api/settings', { headers: auth(f.secret) })).status).toBe(401);
+  expect(await (await patch({ serverEnabled: false })).json()).toEqual({ serverEnabled: false, clientEnabled: true });
+  expect((await f.app.request('/v1/integration/activity', { headers: auth(f.secret) })).status).toBe(503);
+  expect((await f.app.request('/v1/rest-api/tokens', { headers: auth(f.owner) })).status).toBe(200);
+  expect(await (await f.app.request('/v1/rest-api/settings', { headers: auth(f.owner) })).json()).toEqual({ serverEnabled: false, clientEnabled: true });
+  expect((await patch({ serverEnabled: 'false' })).status).toBe(400);
+  expect((await patch({ unknown: true })).status).toBe(400);
+  await patch({ serverEnabled: true });
+  expect((await f.app.request('/v1/integration/activity', { headers: auth(f.secret) })).status).toBe(200);
+});
+
+it('blocks outgoing calls without deleting client configuration or credentials', async () => {
+  const f = await fixture();
+  const created = await f.app.request('/v1/rest-api/clients', { method: 'POST', headers: auth(f.owner), body: JSON.stringify({ name: 'Example', baseUrl: 'https://example.com', enabled: true, authHeader: 'Authorization', credential: 'Bearer test', operations: [{ id: 'status', name: 'Status', method: 'GET', path: '/status' }] }) });
+  const { client } = await created.json() as { client: { id: string } };
+  const call = () => f.app.request('/v1/rest-api/clients/' + client.id + '/call', { method: 'POST', headers: auth(f.owner), body: JSON.stringify({ operationId: 'status' }) });
+  await f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(f.owner), body: JSON.stringify({ clientEnabled: false }) });
+  expect((await call()).status).toBe(503);
+  expect(await (await f.app.request('/v1/rest-api/clients', { headers: auth(f.owner) })).json()).toMatchObject({ clients: [{ id: client.id, enabled: true, hasCredential: true }] });
+  await f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(f.owner), body: JSON.stringify({ clientEnabled: true }) });
+  expect((await call()).status).toBe(200);
+});
+
+it('closes an existing activity stream after the Server switch is disabled', async () => {
+  const f = await fixture();
+  const controller = new AbortController();
+  const response = await f.app.request('/v1/integration/events', { headers: auth(f.secret), signal: controller.signal });
+  const reader = response.body!.getReader();
+  try {
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('ready');
+    await f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(f.owner), body: JSON.stringify({ serverEnabled: false }) });
+    let closed = false;
+    while (!closed) { closed = (await reader.read()).done; }
+    expect(closed).toBe(true);
+  } finally { controller.abort(); reader.releaseLock(); }
+});

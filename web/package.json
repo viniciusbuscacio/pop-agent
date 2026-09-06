@@ -1,6 +1,6 @@
 {
   "name": "@pop-agent/web",
-  "version": "0.2.74",
+  "version": "0.2.75",
   "private": true,
   "type": "module",
   "license": "MIT",
