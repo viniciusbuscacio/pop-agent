@@ -11,6 +11,7 @@ import { session } from '../services/session';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, CenteredScreen, CheckField, TextField } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
+import { LoadingState } from '../ui/loading-state';
 
 /**
  * First-run wizard (docs/specs/Spec-Pop-General.md §9). Four steps in one component: refreshing
@@ -90,6 +91,8 @@ export function SetupPage() {
     }
   }
 
+  if (step === 'loading') return <CenteredScreen><LoadingState /></CenteredScreen>;
+
   if (step === 'provider') {
     return (
       <main className="flex min-h-dvh items-center justify-center p-4">
@@ -103,10 +106,6 @@ export function SetupPage() {
   return (
     <CenteredScreen>
       <Card>
-        {step === 'loading' ? (
-          <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p>
-        ) : null}
-
         {step === 'unavailable' ? (
           <p role="alert" className="text-sm text-[var(--danger)]">{t('setup.stateFailed')}</p>
         ) : null}

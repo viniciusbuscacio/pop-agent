@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.60
+
+- Show the Pop balloon above the shared Working animation during application boot and setup loading.
+
+
 ## 0.2.59
 
 - Reuse the Settings Add Provider flow during first-run setup, including API keys, subscriptions and custom endpoints. Preserve cancellation and skipping, and advance only after a successful save.

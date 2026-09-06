@@ -12,15 +12,6 @@ const WORKING_FRAME_MS = 140;
  * presentation -- the server sends run lifecycle, never spinner frames.
  */
 export function RunStatusLine({ status }: { status: 'queued' | 'running' | 'approval' }) {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    if (status !== 'running') return undefined;
-    const timer = window.setInterval(() => {
-      setFrame((current) => (current + 1) % WORKING_FRAMES.length);
-    }, WORKING_FRAME_MS);
-    return () => window.clearInterval(timer);
-  }, [status]);
 
   return (
     <div
@@ -30,9 +21,7 @@ export function RunStatusLine({ status }: { status: 'queued' | 'running' | 'appr
     >
       {status === 'running' ? (
         <>
-          <span data-testid="working-indicator" aria-hidden="true" className="font-mono">
-            {WORKING_FRAMES[frame]}
-          </span>
+          <WorkingIndicator />
           <span>{t('chat.working')}</span>
         </>
       ) : (
@@ -40,4 +29,18 @@ export function RunStatusLine({ status }: { status: 'queued' | 'running' | 'appr
       )}
     </div>
   );
+}
+
+/** The shared activity animation for runs and initial loading. */
+export function WorkingIndicator() {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setFrame((current) => (current + 1) % WORKING_FRAMES.length);
+    }, WORKING_FRAME_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <span data-testid="working-indicator" aria-hidden="true" className="font-mono">{WORKING_FRAMES[frame]}</span>;
 }

@@ -1,7 +1,7 @@
 import { RestApiPage } from './routes/rest-api-page';
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { t } from './i18n';
+import { LoadingState } from './ui/loading-state';
 import { setSessionLostHandler } from './services/api';
 import { authService } from './services/auth';
 import { eventStream } from './services/events';
@@ -86,7 +86,7 @@ function Boot() {
   if (status === 'loading') {
     return (
       <div className="flex min-h-dvh items-center justify-center text-sm text-[var(--muted)]">
-        {t('app.loading')}
+        <LoadingState />
       </div>
     );
   }
