@@ -199,3 +199,8 @@ and custom compatible providers share their existing test, model selection and
 save behavior. A successful save finishes this setup step; cancelling a form
 returns to the picker. Skipping remains available without adding a provider.
 Setup must not maintain an OpenRouter-only credential form.
+
+The built-in default model for OpenAI Codex and GitHub Copilot subscriptions is
+`gpt-5.6-sol`. An explicitly stored provider model takes precedence over this
+installation default. Model metadata continues to come from the native catalog
+when available.

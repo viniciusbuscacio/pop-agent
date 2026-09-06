@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.61
+
+- Default OpenAI Codex and GitHub Copilot subscriptions to GPT-5.6 Sol. Retain explicitly saved provider model selections.
+
+
 ## 0.2.60
 
 - Show the Pop balloon above the shared Working animation during application boot and setup loading.

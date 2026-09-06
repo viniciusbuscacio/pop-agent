@@ -432,9 +432,9 @@ describe('resolving the pair', () => {
 
     expect(service.resolve({ provider: 'openai-codex', model: '' })).toEqual({
       providerId: 'openai-codex',
-      modelId: 'gpt-5.5',
+      modelId: 'gpt-5.6-sol',
     });
-    expect(service.resolve()).toEqual({ providerId: 'openai-codex', modelId: 'gpt-5.5' });
+    expect(service.resolve()).toEqual({ providerId: 'openai-codex', modelId: 'gpt-5.6-sol' });
   });
 });
 
@@ -448,8 +448,8 @@ describe('subscription (oauth) providers', () => {
       authType: 'oauth',
       configured: false,
       source: null,
-      defaultModel: 'gpt-5.5',
-      serviceModel: 'gpt-5.5',
+      defaultModel: 'gpt-5.6-sol',
+      serviceModel: 'gpt-5.6-sol',
       allowCustomModel: false,
       order: 4,
       enabled: true,
@@ -475,7 +475,7 @@ describe('subscription (oauth) providers', () => {
 
     expect(result).toEqual({ ok: true, latencyMs: 0 });
     expect(engineCompletions).toEqual([
-      expect.objectContaining({ providerId: CODEX, modelId: 'gpt-5.5' }),
+      expect.objectContaining({ providerId: CODEX, modelId: 'gpt-5.6-sol' }),
     ]);
     // Still never an HTTP gateway: the engine owns the credential.
     expect(gateway.completions).toHaveLength(0);
@@ -681,7 +681,7 @@ describe('the failover chain (docs/specs/Spec-Pop-General.md §15, fase 2)', () 
     expect(service.resolveChain()).toEqual([
       { providerId: OPENROUTER, modelId: 'moonshotai/kimi-k3' },
       { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' },
-      { providerId: 'openai-codex', modelId: 'gpt-5.5' },
+      { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
     ]);
   });
 

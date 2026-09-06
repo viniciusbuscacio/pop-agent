@@ -167,7 +167,7 @@ describe('setup wizard', () => {
     await user.click(screen.getByTestId('setup-saved-key'));
     await user.click(screen.getByTestId('setup-recovery-continue'));
 
-    await user.click(screen.getByTestId('setup-skip-provider'));
+    await user.click(await screen.findByTestId('setup-skip-provider'));
     await waitFor(() => expect(screen.getByTestId('setup-finish')).toBeDefined());
   });
 

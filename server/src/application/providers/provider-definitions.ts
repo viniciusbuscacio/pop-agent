@@ -78,10 +78,11 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     name: 'OpenAI — ChatGPT subscription',
     baseURL: '',
     authType: 'oauth',
-    defaultModel: 'gpt-5.5',
+    defaultModel: 'gpt-5.6-sol',
     allowCustomModel: false,
     customBaseURL: false,
     staticModels: [
+      { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
       { id: 'gpt-5.4', name: 'GPT-5.4', context: 272_000, pricing: { input: 2.5, output: 15 } },
       { id: 'gpt-5.5', name: 'GPT-5.5', context: 272_000, pricing: { input: 5, output: 30 } },
       {
@@ -98,10 +99,11 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     name: 'GitHub Copilot subscription',
     baseURL: '',
     authType: 'oauth',
-    defaultModel: 'gpt-5.4',
+    defaultModel: 'gpt-5.6-sol',
     allowCustomModel: false,
     customBaseURL: false,
     staticModels: [
+      { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
       { id: 'gpt-5.4', name: 'GPT-5.4', context: 1_000_000, pricing: { input: 2.5, output: 15 } },
       {
         id: 'claude-opus-5',
