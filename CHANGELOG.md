@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.73
+
+- Separate the final installation-log path from setup instructions with a blank line.
+
 ## 0.2.72
 
 - Default OpenAI Codex and GitHub Copilot subscriptions to GPT-5.6 Sol for chat and GPT-5.6 Luna for service work, preserving explicit saved choices and the follow-chat option.

@@ -39,7 +39,7 @@ install_log_init() {
 install_log_finish() {
   [ -n "$INSTALL_LOG_FILE" ] || return 0
   install_event "event=finish phase=$INSTALL_LOG_PHASE exit_code=$1 duration_seconds=$(($(date +%s) - INSTALL_LOG_STARTED))"
-  printf 'Installation log: %s\n' "$INSTALL_LOG_FILE" >&2
+  printf '\nInstallation log: %s\n' "$INSTALL_LOG_FILE" >&2
 }
 case " ${*} " in
   *" --help "*|*" -h "*) ;;
