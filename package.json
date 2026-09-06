@@ -1,7 +1,7 @@
 {
   "name": "pop-agent",
   "private": true,
-  "version": "0.2.61",
+  "version": "0.2.62",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -46,6 +46,7 @@
     "safety:scan": "tsx tools/safety-scan.ts .",
     "smoke": "tsx tools/smoke.ts",
     "pack:cli": "npm run version:check && tsx tools/pack-cli.ts && tsx tools/pack-node-runtime.ts",
+    "pack:server-runtime": "node tools/pack-server-runtime.ts",
     "pack:server-source": "npm run version:check && tsx tools/pack-server-release.ts"
   },
   "devDependencies": {

@@ -104,6 +104,15 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
 }
 
 describe('systemd server installer', () => {
+  it('activates a prepared prebuilt runtime without npm, Go, or the repository gate', async () => {
+    const { options, dependencies, runner } = fixture();
+    dependencies.goExecutable = '';
+    await installPreparedCheckout({ ...options, prebuilt: true }, dependencies);
+    expect(runner.calls.some((call) => call.command === 'npm' || call.command === 'go')).toBe(false);
+    expect(runner.installedUnit).toContain('ExecStart=/usr/bin/node');
+    expect(runner.installedUnit).not.toContain('/go/');
+  });
+
   it('starts through the dependency-free bootstrap without touching systemd for help', () => {
     const invocation = spawnSync(process.execPath, [join(import.meta.dirname, 'install-systemd.mjs'), '--help'], {
       encoding: 'utf8',

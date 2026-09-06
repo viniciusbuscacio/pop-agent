@@ -32,10 +32,11 @@ Both acquisition paths hand explicit checkout/data/workspace/port values to the
 delivered non-root Ubuntu amd64/arm64 bootstrap. The fresh-host path
 explicitly opts in to the same narrowly scoped apt build/download prerequisite
 allowlist needed for a fresh supported host. The bootstrap installs an exact
-repository-pinned Node/Go/whisper.cpp toolchain per user, installs ffmpeg and
+repository-pinned Node/whisper.cpp runtime per user, installs ffmpeg and
 Tailscale for the default guided path, then hands the checkout to the
-prepared-checkout installer. That installer validates the host, runs locked
-dependency installation and the full gate as the non-root checkout owner,
+prebuilt installer. Native release builders run the full gate; the host verifies
+the exact architecture package, native dependencies and built application with
+disposable data, then
 generates/activates the production unit through narrowly scoped sudo, and
 verifies loopback health. On a fresh data root it assigns the non-root service
 user as Tailscale operator, creates an owner-only pairing record and prints a
@@ -81,7 +82,7 @@ password/passkey session auth plus the network boundary chosen by the operator.
 
 The generated systemd unit runs `server/dist/main.js` with the checkout owner's
 absolute Node executable under that non-root user, keeps the validated Node and
-Go directories on the service `PATH`, and uses a fixed absolute checkout working
+Whisper directories on the service `PATH`, and uses a fixed absolute checkout working
 directory, explicit data/workspace paths, loopback binding and `PI_OFFLINE=1`
 so pi catalog bookkeeping cannot stall service-side subscription sign-in. It
 restarts unexpected failures with bounded backoff/start limits, receives SIGTERM

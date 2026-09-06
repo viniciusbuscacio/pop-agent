@@ -11,10 +11,13 @@ WORKSPACE=$HOME/pop-agent-workspace
 PORT=8787
 INSTALL_APT=0
 PREPARE_ONLY=0
+BUILD_FROM_SOURCE=0
 NETWORK_ONBOARDING=1
 STAGING_DIR=
 TAILSCALE_KEY_TEMP=
 TAILSCALE_LIST_TEMP=
+node_download_pid=
+whisper_download_pid=
 
 say() {
   printf '%s\n' "$*"
@@ -26,6 +29,12 @@ die() {
 }
 
 cleanup() {
+  for download_pid in "$node_download_pid" "$whisper_download_pid"; do
+    if [ -n "$download_pid" ]; then
+      kill "$download_pid" 2>/dev/null || true
+      wait "$download_pid" 2>/dev/null || true
+    fi
+  done
   if [ -n "$STAGING_DIR" ] && [ -d "$STAGING_DIR" ]; then
     rm -rf -- "$STAGING_DIR"
   fi
@@ -48,6 +57,7 @@ Options:
   --workspace PATH             Server workspace directory (default: $HOME/pop-agent-workspace)
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Explicitly allow the narrow apt prerequisite phase
+  --build-from-source          Developer path: install compilers, build and run the full gate
   --prepare-only               Prepare and verify the toolchain without invoking systemd installation
   --skip-network-onboarding    Do not prepare the temporary HTTP/Tailscale setup flow
   -h, --help                   Show this help
@@ -92,6 +102,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --install-apt-packages)
       INSTALL_APT=1
+      shift
+      ;;
+    --build-from-source)
+      BUILD_FROM_SOURCE=1
       shift
       ;;
     --prepare-only)
@@ -176,7 +190,10 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   require_command apt-get
   say "Installing the explicitly approved apt prerequisites..."
   sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
-  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg
+  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar ffmpeg
+  if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3
+  fi
   if [ "$PREPARE_ONLY" -eq 0 ] && [ "$NETWORK_ONBOARDING" -eq 1 ] && ! command -v tailscale >/dev/null 2>&1; then
     case $DIST_CODENAME in ''|*[!a-z0-9]*) die "unsupported Ubuntu codename for the Tailscale repository: $DIST_CODENAME" ;; esac
     TAILSCALE_KEY_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-key.XXXXXX") \
@@ -441,30 +458,51 @@ EOF
   say "Activated verified $component $version in the Pop-owned toolchain."
 }
 
+# Independent downloads use separate subshell variables and temporary names.
+download_archive "$NODE_ARCHIVE" "$NODE_SIZE" "$NODE_SHA" "$NODE_URL" &
+node_download_pid=$!
+download_archive "$WHISPER_ARCHIVE" "$WHISPER_SIZE" "$WHISPER_SHA" "$WHISPER_URL" &
+whisper_download_pid=$!
+node_download_status=0
+wait "$node_download_pid" || node_download_status=$?
+whisper_download_status=0
+wait "$whisper_download_pid" || whisper_download_status=$?
+node_download_pid=
+whisper_download_pid=
+[ "$node_download_status" -eq 0 ] && [ "$whisper_download_status" -eq 0 ] || die "toolchain download failed; verified archives are retained for retry"
+
 install_runtime node "$NODE_VERSION" "$NODE_ARCHIVE" "$NODE_SIZE" "$NODE_SHA" "$NODE_URL" xz "node-v$NODE_VERSION-linux-$( [ "$ARCH" = amd64 ] && printf x64 || printf arm64 )"
 ACTIVE_NODE=$ACTIVE_RUNTIME
-install_runtime go "$GO_VERSION" "$GO_ARCHIVE" "$GO_SIZE" "$GO_SHA" "$GO_URL" gzip go
-ACTIVE_GO=$ACTIVE_RUNTIME
+ACTIVE_GO=
+if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
+  install_runtime go "$GO_VERSION" "$GO_ARCHIVE" "$GO_SIZE" "$GO_SHA" "$GO_URL" gzip go
+  ACTIVE_GO=$ACTIVE_RUNTIME
+fi
 WHISPER_PLATFORM_ARCH=$( [ "$ARCH" = amd64 ] && printf x64 || printf arm64 )
 install_runtime whisper "$WHISPER_VERSION" "$WHISPER_ARCHIVE" "$WHISPER_SIZE" "$WHISPER_SHA" "$WHISPER_URL" gzip "whisper-bin-ubuntu-$WHISPER_PLATFORM_ARCH"
 ACTIVE_WHISPER=$ACTIVE_RUNTIME
 
-PATH=$ACTIVE_NODE/bin:$ACTIVE_GO/bin:$ACTIVE_WHISPER:$PATH
+PATH=$ACTIVE_NODE/bin:${ACTIVE_GO:+$ACTIVE_GO/bin:}$ACTIVE_WHISPER:$PATH
 export PATH
 [ "$(command -v node)" = "$ACTIVE_NODE/bin/node" ] || die "managed Node is not first on PATH"
-[ "$(command -v npm)" = "$ACTIVE_NODE/bin/npm" ] || die "managed npm is not first on PATH"
-[ "$(command -v go)" = "$ACTIVE_GO/bin/go" ] || die "managed Go is not first on PATH"
 [ "$(command -v whisper-cli)" = "$ACTIVE_WHISPER/whisper-cli" ] || die "managed whisper-cli is not first on PATH"
 
-say "Managed toolchain ready: Node $NODE_VERSION, Go $GO_VERSION, and whisper.cpp $WHISPER_VERSION ($ARCH)."
+if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
+  say "Managed toolchain ready: Node $NODE_VERSION, Go $GO_VERSION, and whisper.cpp $WHISPER_VERSION ($ARCH)."
+else
+  say "Managed runtime ready: Node $NODE_VERSION and whisper.cpp $WHISPER_VERSION ($ARCH); no Go or compiler required."
+fi
 if [ "$PREPARE_ONLY" -eq 1 ]; then
   say "Preparation complete; systemd installation was not invoked (--prepare-only)."
   exit 0
 fi
 
-say "Handing off to the delivered prepared-checkout installer..."
 cd -- "$CHECKOUT"
-if [ "$NETWORK_ONBOARDING" -eq 0 ]; then
-  exec npm run install:server -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT" --skip-network-onboarding
+set -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT"
+if [ "$NETWORK_ONBOARDING" -eq 0 ]; then set -- "$@" --skip-network-onboarding; fi
+if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
+  say "Building from source with the complete development gate..."
+  exec npm run install:server -- "$@"
 fi
-exec npm run install:server -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT"
+say "Installing the prebuilt server release..."
+exec node tools/install-prebuilt.ts "$@"

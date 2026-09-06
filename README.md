@@ -47,12 +47,16 @@ only for configured or explicitly used features.
 
 The supported server is a fresh **Ubuntu systemd** host on **amd64 or arm64**.
 Use a non-root account with `sudo`, Git, and outbound HTTPS. The bootstrap
-installs a fixed apt prerequisite set plus Tailscale, downloads repository-pinned Node, Go,
-and `whisper.cpp` archives with size/SHA-256 verification, runs the complete
-repository gate, and installs a loopback-only systemd service.
+installs a fixed apt prerequisite set plus Tailscale, downloads repository-pinned Node
+and `whisper.cpp` archives with size/SHA-256 verification, installs a prebuilt
+server release, checks the production application, and activates a loopback-only
+systemd service. FFmpeg and Whisper are included. Python, C/C++ compilers, Go,
+TypeScript builds and the full test suite are only needed on release builders,
+not on the normal installation host. Prebuilt releases support Ubuntu 24.04 or
+newer on amd64/arm64; the manifest checks the actual glibc and Node versions.
 
 ```sh
-git clone https://github.com/viniciusbuscacio/pop-agent.git
+git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
@@ -62,6 +66,7 @@ For private repository access, complete the [GitHub authentication steps](deploy
 Defaults:
 
 - source: the cloned repository;
+- installed runtime: `~/.local/share/pop-agent/server-releases/` (a verified isolated generation);
 - data: `$HOME/.pop-agent`;
 - user workspace: `$HOME/pop-agent-workspace`;
 - service: `pop-agent-service.service`;
@@ -122,7 +127,7 @@ Development requires Node.js `>=22.19.0`, npm, Go `>=1.23`, Git, and the native
 build tools used by the locked dependencies.
 
 ```sh
-git clone https://github.com/viniciusbuscacio/pop-agent.git
+git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 npm ci
 npm run build

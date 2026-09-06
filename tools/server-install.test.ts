@@ -281,7 +281,7 @@ describe('GitHub fresh-server installer', () => {
     }
     for (const path of recommendedInstallDocs) {
       const documentation = readFileSync(path, 'utf8');
-      expect(documentation, path).toContain('git clone https://github.com/viniciusbuscacio/pop-agent.git');
+      expect(documentation, path).toContain('git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git');
       expect(documentation, path).toContain('deploy/bootstrap-server.sh --install-apt-packages');
     }
     for (const path of publicInstallDocs.slice(0, 1)) {

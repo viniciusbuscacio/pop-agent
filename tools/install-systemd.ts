@@ -32,6 +32,7 @@ export interface InstallOptions {
   workspace: string;
   port: number;
   networkOnboarding?: boolean;
+  prebuilt?: boolean;
   bootstrapBind?: string;
   bootstrapPort?: number;
 }
@@ -83,7 +84,7 @@ const defaultRunner: CommandRunner = {
   },
 };
 
-function defaultDependencies(): InstallerDependencies {
+function defaultDependencies(prebuilt = false): InstallerDependencies {
   return {
     runner: defaultRunner,
     platform: process.platform,
@@ -91,7 +92,7 @@ function defaultDependencies(): InstallerDependencies {
     username: userInfo().username,
     nodeVersion: process.versions.node,
     nodeExecutable: realpathSync(process.execPath),
-    goExecutable: executableOnPath('go'),
+    goExecutable: prebuilt ? '' : executableOnPath('go'),
     whisperExecutable: executableOnPath('whisper-cli'),
     systemdRuntimeDir: '/run/systemd/system',
     healthCheck: boundedHealthCheck,
@@ -110,7 +111,7 @@ export function renderSystemdUnit(
   const dataDir = safeAbsolutePath('data directory', options.dataDir);
   const workspace = safeAbsolutePath('workspace', options.workspace);
   const node = safeAbsolutePath('Node executable', nodeExecutable);
-  const go = safeAbsolutePath('Go executable', goExecutable);
+  const go = options.prebuilt === true ? '' : safeAbsolutePath('Go executable', goExecutable);
   const whisper = safeAbsolutePath('whisper.cpp executable', whisperExecutable);
   validateUsername(username);
   validatePort(options.port);
@@ -121,7 +122,7 @@ export function renderSystemdUnit(
 
   const pathDirectories = [
     dirname(node),
-    dirname(go),
+    ...(go === '' ? [] : [dirname(go)]),
     dirname(whisper),
     '/usr/local/sbin',
     '/usr/local/bin',
@@ -232,19 +233,22 @@ export function parseInstallArguments(args: readonly string[], checkout: string)
 
 export async function installPreparedCheckout(
   requested: InstallOptions,
-  dependencies: InstallerDependencies = defaultDependencies(),
+  dependencies: InstallerDependencies = defaultDependencies(requested.prebuilt),
 ): Promise<void> {
   const options = validatePreflight(requested, dependencies);
   const { runner } = dependencies;
 
-  console.log('Installing locked dependencies as the checkout owner...');
-  runChecked(runner, 'npm', ['ci'], options.checkout, true);
+  if (options.prebuilt !== true) {
+    console.log('Installing locked dependencies as the checkout owner...');
+    runChecked(runner, 'npm', ['ci'], options.checkout, true);
 
-  console.log('Running the mandatory repository gate as the checkout owner...');
-  runChecked(runner, 'npm', ['run', 'gate'], options.checkout, true);
+    console.log('Running the mandatory repository gate as the checkout owner...');
+    runChecked(runner, 'npm', ['run', 'gate'], options.checkout, true);
 
-  console.log('Packing CLI, launcher, local access and managed Node downloads...');
-  runChecked(runner, 'npm', ['run', 'pack:cli'], options.checkout, true);
+    console.log('Packing CLI, launcher, local access and managed Node downloads...');
+    runChecked(runner, 'npm', ['run', 'pack:cli'], options.checkout, true);
+
+  }
 
   requireCleanCheckout(runner, options.checkout, 'The gate completed but the checkout is no longer clean. Commit or remove the changes and rerun the installer.');
   const builtServer = join(options.checkout, 'server/dist/main.js');
@@ -353,7 +357,7 @@ function validatePreflight(requested: InstallOptions, dependencies: InstallerDep
   }
   validateUsername(dependencies.username);
   requireVersion('Node', dependencies.nodeVersion, MINIMUM_NODE);
-  safeAbsolutePath('Go executable', dependencies.goExecutable);
+  if (requested.prebuilt !== true) safeAbsolutePath('Go executable', dependencies.goExecutable);
   safeAbsolutePath('whisper.cpp executable', dependencies.whisperExecutable);
 
   const checkout = realpathSync(safeAbsolutePath('checkout', requested.checkout));
@@ -383,12 +387,14 @@ function validatePreflight(requested: InstallOptions, dependencies: InstallerDep
   const { runner } = dependencies;
   const gitVersion = runChecked(runner, 'git', ['--version'], checkout).stdout.trim();
   if (!/^git version \d+\./.test(gitVersion)) throw new Error(`could not validate Git: ${gitVersion || 'no version output'}`);
-  const npmVersion = runChecked(runner, 'npm', ['--version'], checkout).stdout.trim();
-  if (!/^\d+\.\d+\.\d+/.test(npmVersion)) throw new Error(`could not validate npm: ${npmVersion || 'no version output'}`);
-  const goVersion = runChecked(runner, 'go', ['version'], checkout).stdout;
-  const goMatch = /\bgo(\d+\.\d+(?:\.\d+)?)/.exec(goVersion);
-  if (goMatch?.[1] === undefined) throw new Error(`could not parse Go version from: ${goVersion.trim() || 'no version output'}`);
-  requireVersion('Go', goMatch[1], MINIMUM_GO);
+  if (requested.prebuilt !== true) {
+    const npmVersion = runChecked(runner, 'npm', ['--version'], checkout).stdout.trim();
+    if (!/^\d+\.\d+\.\d+/.test(npmVersion)) throw new Error(`could not validate npm: ${npmVersion || 'no version output'}`);
+    const goVersion = runChecked(runner, 'go', ['version'], checkout).stdout;
+    const goMatch = /\bgo(\d+\.\d+(?:\.\d+)?)/.exec(goVersion);
+    if (goMatch?.[1] === undefined) throw new Error(`could not parse Go version from: ${goVersion.trim() || 'no version output'}`);
+    requireVersion('Go', goMatch[1], MINIMUM_GO);
+  }
   runChecked(runner, 'systemctl', ['--version'], checkout);
   runChecked(runner, 'sudo', ['--version'], checkout);
   runChecked(runner, 'install', ['--version'], checkout);

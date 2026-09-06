@@ -310,3 +310,27 @@ availability.
 After any rollback, verify service health, running commit/version, data
 integrity, and checkout cleanliness. Record the failed version and reason so it
 cannot be accidentally promoted later.
+
+## Prebuilt server release workflow
+
+Normal Ubuntu installation consumes the architecture assets published by
+`.github/workflows/server-release.yml`. After pushing the clean, gated version
+commit, dispatch `server-release` for that exact ref. Both Ubuntu 24.04 amd64
+and arm64 jobs run the full gate, pack clients, prune production dependencies,
+probe native modules, and smoke the built app. They then exercise extraction
+and validation with npm/Go/Python/compiler commands replaced by failing stubs.
+Only the successful pair is published as `v<VERSION>`, with JSON manifests and
+immutable tarballs. This workflow creates the release/tag; do not pre-create a
+release with the same version. A failed publication leaves a draft for review,
+not a partially advertised installation. Never replace published bytes.
+
+For a local native build after a matching gate and client packaging:
+
+```sh
+npm run pack:server-runtime -- /absolute/release-output
+```
+
+The output must be outside the checkout. Copy the manifest and tarball together
+for offline validation with `POP_AGENT_SERVER_RELEASE_DIR`. The release remains
+private while its repository is private. Publishing installation assets never
+changes repository visibility.

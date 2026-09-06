@@ -21,7 +21,8 @@ import { fileURLToPath } from 'node:url';
  */
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SERVER_MAIN = join(ROOT, 'server/src/main.ts');
+const BUILT = process.argv.includes('--built');
+const SERVER_MAIN = join(ROOT, BUILT ? 'server/dist/main.js' : 'server/src/main.ts');
 const TSX_CLI = join(ROOT, 'node_modules/tsx/dist/cli.mjs');
 
 const PASSWORD = 'smoke test password';
@@ -369,7 +370,7 @@ async function main(): Promise<void> {
   const base = `http://127.0.0.1:${String(port)}`;
 
   console.log(`smoke: starting Pop Agent on ${base} with data in ${dataDir}`);
-  const child = spawn(process.execPath, [TSX_CLI, SERVER_MAIN], {
+  const child = spawn(process.execPath, BUILT ? [SERVER_MAIN] : [TSX_CLI, SERVER_MAIN], {
     env: {
       ...process.env,
       POP_AGENT_PORT: String(port),

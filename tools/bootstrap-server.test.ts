@@ -149,6 +149,7 @@ cp "$BOOTSTRAP_TEST_FIXTURES/\${url##*/}" "$output"
 
 function run(fixture: Fixture, extra: string[] = [], env: NodeJS.ProcessEnv = fixture.env) {
   return spawnSync(fixture.script, [
+    '--build-from-source',
     '--checkout', fixture.checkout,
     '--toolchain-dir', fixture.toolchain,
     '--data-dir', fixture.dataDir,
@@ -158,6 +159,17 @@ function run(fixture: Fixture, extra: string[] = [], env: NodeJS.ProcessEnv = fi
 }
 
 describe('server toolchain bootstrap', () => {
+  it('prepares only Node and Whisper and omits compiler packages on the default path', () => {
+    const fixture = createFixture();
+    const result = spawnSync(fixture.script, ['--checkout', fixture.checkout, '--toolchain-dir', fixture.toolchain, '--install-apt-packages', '--prepare-only'], { encoding: 'utf8', env: fixture.env });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('no Go or compiler required');
+    expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(2);
+    expect(readFileSync(fixture.sudoLog, 'utf8')).not.toMatch(/build-essential|python3/);
+    expect(lstatSync(join(fixture.toolchain, 'current/node')).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(fixture.toolchain, 'current/whisper')).isSymbolicLink()).toBe(true);
+  });
+
   it('installs from verified local fixtures, activates atomically, and preserves matching runtimes', () => {
     const fixture = createFixture();
     const first = run(fixture, ['--prepare-only']);
@@ -209,7 +221,8 @@ describe('server toolchain bootstrap', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(fixture.sudoLog, 'utf8').trim().split('\n')).toEqual([
       '-- env DEBIAN_FRONTEND=noninteractive apt-get update',
-      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar build-essential python3 ffmpeg',
+      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar ffmpeg',
+      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3',
     ]);
   });
 

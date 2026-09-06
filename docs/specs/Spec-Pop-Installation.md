@@ -73,7 +73,7 @@ and bind downloaded bytes to the manifest or script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64/arm64; fixed clean commit and pinned private Node/Go/whisper.cpp toolchain |
+| Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64/arm64; fixed clean commit, prebuilt production package and pinned private Node/whisper.cpp runtime |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -91,7 +91,7 @@ bootstrap. Public instructions are inspectable before execution and use safe
 per-user defaults:
 
 ```sh
-git clone https://github.com/viniciusbuscacio/pop-agent.git
+git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
@@ -177,51 +177,57 @@ deploy/bootstrap-server.sh --install-apt-packages
 ```
 
 It refuses root and unsupported platforms. An explicit
-`--install-apt-packages` opt-in permits only apt update/install of
-`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`,
-`python3`, `ffmpeg`, and `tailscale` through sudo. When Tailscale is absent, its
-official Ubuntu apt key is downloaded over HTTPS, checked against a
-repository-pinned byte size and SHA-256, and installed with a fixed codename
-repository entry before package installation. Without that flag the bootstrap
-only validates host commands. It never pipes downloaded content to a shell.
-Exact Node, Go and whisper.cpp archives, URLs,
-sizes and official SHA-256 values are repository-pinned for both architectures;
-archives are downloaded to a Pop-owned per-user toolchain, checked before
-extraction, screened for unsafe roots, paths, link targets and special entries,
-smoked, staged, then activated through an atomic per-runtime symlink. A rerun
-preserves a matching verified runtime. The bootstrap puts its managed Node/npm,
-Go and `whisper-cli` first on `PATH` for the handoff. `--prepare-only` stops
-after this host preparation without touching systemd.
+`--install-apt-packages` permits apt update/install of `ca-certificates`, `curl`,
+`git`, `xz-utils`, `tar`, `ffmpeg` and `tailscale` through sudo. FFmpeg and
+Whisper remain installed by default. The official Tailscale key is verified
+against the pinned size/SHA-256 before configuring its codename repository.
+Normal installation does not install Python, C/C++ compilers or Go.
 
-The normal handoff is the existing prepared-checkout installer, with all paths
-and the port passed explicitly:
+Pinned Node and whisper.cpp archives are downloaded concurrently, verified,
+screened for unsafe paths/links, executable-probed and atomically activated in
+the per-user toolchain. Cached bytes are reverified and reused on retries.
+`--prepare-only` stops before application/systemd installation. The explicit
+`--build-from-source` developer mode adds build-essential, Python and the pinned
+Go runtime and retains the former npm ci/full gate/client packaging path.
 
-```text
-npm run install:server -- \
-  --data-dir /absolute/data/path \
-  --workspace /absolute/workspace/path \
-  --port 8787
-```
+Normal bootstrap invokes `tools/install-prebuilt.ts` with native Node TypeScript
+support, without installing development packages. It acquires the exact
+`v<VERSION>` server release from the checkout's GitHub origin; private releases
+use the owner's existing gh login, while public downloads require no login.
+Missing artifacts fail explicitly without a compilation fallback. A trusted
+local `POP_AGENT_SERVER_RELEASE_DIR` is available for offline validation and
+installation; it is never treated as an independently authenticated source.
 
-That command runs as the intended non-root service/checkout owner. Before
-activation it validates Linux with a running systemd, Node 22.19+, npm, Git, Go
-1.23+ (required by the full gate), the required host commands, absolute separate
-paths outside the clean checkout and checkout ownership. It runs `npm ci` and
-`npm run gate` without root privileges, requires the built
-`server/dist/main.js`, creates owner-controlled data/workspace roots, then uses
-sudo only for an explicit Tailscale operator assignment, root-owned
-`/usr/local/bin/popman` launcher and the
-unit-file install, daemon reload, enable and restart commands. The launcher pins
-the selected managed Node executable and canonical data/workspace paths rather
-than depending on a global Node or `$HOME` defaults. The installer installs an
-idempotent production unit with loopback binding,
-explicit data/workspace paths, the invoking non-root user, the selected Node,
-Go and whisper.cpp directories on the service `PATH`, offline pi catalog
-bookkeeping and bounded restart. The owner-only backup
-sibling used by the server is prepared with the data root, then the installer
-performs a bounded `/healthz` check and confirms that systemd still reports the
-unit active. The assignment lets the non-root service invoke only the Tailscale
-CLI; no root-capable web helper is created.
+The architecture JSON manifest must match version, exact source commit/tree,
+Node version, Linux architecture and supported glibc, with positive bounded size,
+SHA-256 and a successful gate timestamp. Prebuilt release builders run on Ubuntu
+24.04 amd64/arm64. Archive validation rejects traversal, unexpected roots,
+duplicates, hard links, special entries, escaping links and writes through a
+symlink. Only ignored runtime paths (production node_modules, compiled outputs
+and packed clients) may be extracted into a new isolated clone of the exact
+source commit under the owner-only server-releases directory. Persistent data
+and workspace remain separate. Verified downloads survive retries.
+
+Release generation requires a clean committed tree and a fresh matching full
+gate receipt. Packaging retains applied pi patches, prunes development packages
+without install scripts, and removes ONNX native binaries for other platforms.
+It probes SQLite, Argon2, Sharp, embeddings and pi imports and runs the built
+application smoke before publication. Both architecture jobs must pass before
+publishing their immutable GitHub release assets. CI also extracts the package
+through the real installation path with build commands replaced by failing
+sentinels, without activating systemd. It must never overwrite a released asset.
+
+The host runs only native probes and the 14-step built application smoke with
+disposable data and a fake provider. Once staging succeeds, the shared systemd
+installer validates ownership, clean Git state, Linux/systemd, separate paths,
+Node and required host commands, then installs popman and the production service
+using narrow sudo commands. The service uses the verified generation and its
+managed Node and Whisper paths, offline pi bookkeeping, loopback-only binding
+and bounded restart. A final health check and systemd active check are mandatory.
+Failed replacement activation restores the previous unit/launcher and restarts
+that service. Older generations remain available; there is no automatic deletion.
+The existing explicit server/pi update validation is unchanged by this fresh
+installation path and still requires its own preparation receipt.
 
 For a fresh data root (or a rerun while its onboarding record still exists),
 the installer chooses the first RFC1918 IPv4 address (or

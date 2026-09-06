@@ -64,7 +64,7 @@ export function publicReadinessErrors(root: string): string[] {
   const installer = read('server-install.sh');
   const toolchain = read('deploy/server-toolchain-manifest.tsv');
 
-  if (!readme.includes('git clone https://github.com/viniciusbuscacio/pop-agent.git')) {
+  if (!readme.includes('git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git')) {
     errors.push('README lacks the public Git clone command');
   }
   if (!readme.includes('./deploy/bootstrap-server.sh --install-apt-packages')) {

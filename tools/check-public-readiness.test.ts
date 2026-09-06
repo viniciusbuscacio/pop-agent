@@ -56,7 +56,7 @@ describe('public repository readiness', () => {
   it('rejects missing guided clone installation and an unpinned GitHub Action', () => {
     const root = fixture();
     const readme = readFileSync(join(root, 'README.md'), 'utf8').replaceAll(
-      'git clone https://github.com/viniciusbuscacio/pop-agent.git',
+      'git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git',
       'git clone https://example.invalid/not-pop.git',
     );
     writeFileSync(

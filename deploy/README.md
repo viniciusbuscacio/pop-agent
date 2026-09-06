@@ -5,7 +5,7 @@
 On a fresh Ubuntu amd64/arm64 host, run as the non-root service owner:
 
 ```sh
-git clone https://github.com/viniciusbuscacio/pop-agent.git
+git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
@@ -20,7 +20,7 @@ sudo apt-get update
 sudo apt-get install -y git gh
 gh auth login --hostname github.com --git-protocol https --web
 gh auth setup-git --hostname github.com
-git clone https://github.com/viniciusbuscacio/pop-agent.git
+git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
 cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
@@ -34,8 +34,8 @@ is available; this is separate from Pop's provider credentials. Public repositor
 The bootstrap defaults to `$HOME/.pop-agent` for durable data,
 `$HOME/pop-agent-workspace` for the user workspace, and port 8787. Override
 those with `--data-dir`, `--workspace`, and `--port` when needed. A successful
-install builds the CLI, launcher, PLA and managed Node download artifacts before
-activating the service. It also places the server manager at `/usr/local/bin/popman`, bound to the
+install downloads the already built server, CLI, launcher, PLA and managed Node
+download artifacts before activating the service. It also places the server manager at `/usr/local/bin/popman`, bound to the
 managed Node runtime and those exact data/workspace paths.
 
 On a fresh data directory it also prints `http://<private-LAN-IP>:8788/setup`
@@ -47,13 +47,13 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the immutable v0.2.61 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.62 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.61/server-install.sh && sh "$file" --ref v0.2.61)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.62/server-install.sh && sh "$file" --ref v0.2.62)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -136,10 +136,10 @@ deploy/bootstrap-server.sh --install-apt-packages
 
 Run it as the non-root checkout owner. The bootstrap refuses root, other Linux
 distributions, other operating systems, and unsupported CPU architectures. It
-downloads exact official Node, Go, and `whisper.cpp` archives declared in
+downloads exact official Node and `whisper.cpp` archives declared in
 `server-toolchain-manifest.tsv`, verifies pinned sizes and SHA-256 values before
 extraction, screens archive roots/paths/link targets, smokes each staged runtime,
-and atomically points `current/node`, `current/go`, and `current/whisper` at the new generation. The
+and atomically points `current/node` and `current/whisper` at the new generation. The
 default Pop-owned per-user location is:
 
 ```text
@@ -147,11 +147,11 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/pop-agent/server-toolchain
 ```
 
 Matching verified runtimes and downloaded archives are reused on a rerun. Node,
-npm, Go, and `whisper-cli` are put first on `PATH` only inside the bootstrap/handoff process;
+npm and `whisper-cli` are put first on `PATH` only inside the bootstrap/handoff process;
 no system-wide runtime or shell profile is modified.
 
 The script does not silently mutate apt. If the host needs the narrow download
-and build prerequisites, opt in explicitly:
+prerequisites, opt in explicitly:
 
 ```sh
 deploy/bootstrap-server.sh \
@@ -163,8 +163,7 @@ deploy/bootstrap-server.sh \
 
 That flag permits only `sudo apt-get update`, the pinned official Tailscale apt
 key/repository, and installation of
-`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `build-essential`, and
-`python3` (required by native npm package builds), `ffmpeg` for local voice
+`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `ffmpeg` for local voice
 transcription, and `tailscale` for guided private HTTPS. The key download is
 size/SHA-256 verified before root installation.
 Runtime downloads use `curl` as archive downloads; no remote script is piped to
@@ -188,24 +187,57 @@ the paired browser owns login and Serve HTTPS activation. It
 is not a universal or public installer. Host and apt security updates remain the
 operator's responsibility.
 
-## Prepared-checkout systemd installer
+## Prebuilt server installation
 
-The bootstrap ultimately executes this existing delivered command with explicit
-arguments:
+Normal installation requires a published release for the exact source commit.
+The bootstrap downloads the architecture-specific JSON manifest and tarball
+from the origin GitHub repository's `v<VERSION>` release. Private downloads use
+the existing GitHub CLI login; public releases need no GitHub account. A missing
+or incompatible release fails with a clear message, without silently compiling.
 
-```sh
-npm run install:server -- \
-  --data-dir /absolute/owner-owned/data \
-  --workspace /absolute/owner-owned/workspace \
-  --port 8787
+The manifest binds version, commit, source tree, exact Node runtime, Linux
+architecture, minimum glibc, archive byte size/SHA-256 and the build gate date.
+Prebuilt packages target Ubuntu 24.04 or newer on amd64/arm64. The installer
+checks metadata and bytes, screens archive paths/links, and extracts into an
+isolated owner-only generation beneath:
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/pop-agent/server-releases
 ```
 
-It validates Linux/systemd, Node 22.19+, npm, Git, Go 1.23+, required commands,
-checkout ownership and cleanliness. It then runs `npm ci`, the complete gate, and `npm run pack:cli`
-without root, uses narrowly scoped sudo to assign the service user as the
-Tailscale operator, install the root-owned `popman`
-launcher and activate the systemd unit, and performs bounded loopback health
-verification.
+It loads native SQLite, Argon2, Sharp, embeddings and pi dependencies, then runs
+14 functional checks against the built application with temporary data and a
+fake provider. No model request or user database is involved. There is no npm
+install, TypeScript build, Go build or full development suite on this path.
+Verified archives survive retries. Node and Whisper downloads run in parallel.
+FFmpeg and Whisper remain part of the default installation.
+
+Only after these checks does the shared systemd installer activate the staged
+runtime, pin popman to it, and check service health. The source clone remains
+available for inspection; the running generation has the same clean Git commit.
+On a failed replacement activation, the previous unit and popman launcher are
+restored and the previous service is restarted. Historical generations are not
+removed automatically. Existing server update controls still require their
+explicit prepared-checkout gate; this does not weaken update authorization.
+
+For an offline release, set `POP_AGENT_SERVER_RELEASE_DIR` to a trusted directory
+containing the architecture manifest and archive when invoking the bootstrap.
+The directory is operator-trusted release material; all metadata and checksum
+checks still apply. Source bundles alone do not contain runtime dependencies.
+
+## Developer source-build alternative
+
+To deliberately compile on the target host (including unpublished commits):
+
+```sh
+./deploy/bootstrap-server.sh --install-apt-packages --build-from-source
+```
+
+This explicit path additionally installs `build-essential` and `python3`,
+prepares the pinned Go runtime, and invokes `npm run install:server` with the
+selected data/workspace/port arguments. It retains `npm ci`, the complete gate,
+client packaging, and the shared systemd activation and health checks.
+`--prepare-only --build-from-source` prepares that development toolchain only.
 
 The former `pop-agent-service.service` was an ubuntu-home development unit with
 machine-specific paths and a source-level `tsx` command. It was removed so it
