@@ -1,3 +1,4 @@
+import { probeAudioBinary } from './audio-runtime.ts';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -112,7 +113,8 @@ export function validateTree(path: string, root: string): void {
   } else if (!stat.isFile()) throw new Error(`Special entry in release: ${path}`);
 }
 
-export async function checkNativeRuntime(root: string): Promise<void> {
+export async function checkNativeRuntime(root: string, clientMode: 'complete' | 'lazy' = 'lazy'): Promise<void> {
+  probeAudioBinary(join(root, 'server/dist/audio/ffmpeg'));
   // Load actual native code, not just package.json metadata. No model download or provider request.
   const script = `
     import { createRequire } from 'node:module';
@@ -140,16 +142,21 @@ export async function checkNativeRuntime(root: string): Promise<void> {
   for (const file of ['server/dist/main.js', 'server/dist/manager/main.js', 'web/dist/index.html', 'cli/pack/runtime/node/manifest.json']) {
     if (!lstatSync(join(root, file)).isFile()) throw new Error(`Missing runtime file: ${file}`);
   }
+  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  if (clientMode === 'lazy') {
+    const source = JSON.parse(readFileSync(join(root, 'cli/pack/client-downloads.json'), 'utf8')) as { repository: string; version: string };
+    if (!/^[\w.-]+\/[\w.-]+$/.test(source.repository) || source.version !== version) throw new Error('Invalid deferred client release source');
+  }
   for (const directory of ['cli/pack/launcher', 'cli/pack/local-access', 'cli/pack/runtime/node']) {
     const manifest = JSON.parse(readFileSync(join(root, directory, 'manifest.json'), 'utf8')) as { artifacts?: Record<string, { file: string; size: number; sha256: string }>; packages?: Record<string, { file: string; size: number; sha256: string }> };
     const artifacts = Object.values(manifest.artifacts ?? manifest.packages ?? {});
     if (artifacts.length === 0) throw new Error(`Empty client manifest: ${directory}`);
     for (const artifact of artifacts) {
-      if (typeof artifact.file !== 'string' || artifact.file.includes('/') || artifact.file.includes('\\') || artifact.file === '..') throw new Error('Invalid client artifact filename');
+      if (typeof artifact.file !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]+$/.test(artifact.file) || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > 128 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(artifact.sha256)) throw new Error('Invalid client artifact filename');
       const path = join(root, directory, artifact.file);
+      if (clientMode === 'lazy') continue;
       if (!lstatSync(path).isFile() || lstatSync(path).size !== artifact.size || await fileHash(path) !== artifact.sha256) throw new Error(`Client artifact failed verification: ${artifact.file}`);
     }
   }
-  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
   if (!lstatSync(join(root, `cli/pack/cli-${version}.tgz`)).isFile()) throw new Error('Missing packed CLI');
 }

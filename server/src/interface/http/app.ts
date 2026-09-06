@@ -1,3 +1,4 @@
+import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
 import type { RestClientService } from '../../application/integrations/rest-client-service.js';
 import type { IntegrationService } from '../../application/integrations/integration-service.js';
 import { createIntegrationRoutes } from './integration-routes.js';
@@ -161,6 +162,7 @@ export interface AppDeps {
   webDist: string;
   /** Directory holding the current packed CLI release and public manifests. */
   cliPack: string;
+  clientArtifacts?: ClientArtifactProvider;
   /** Durable history of immutable CLI tarballs across checkout replacement. */
   cliArchive?: string;
 }

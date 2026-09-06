@@ -1,3 +1,4 @@
+import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,6 +18,7 @@ interface RuntimeRelease {
 }
 
 export interface NodeRuntimeRouteDeps {
+  clientArtifacts?: ClientArtifactProvider;
   cliPack: string;
 }
 
@@ -35,7 +37,7 @@ export function createNodeRuntimeRoutes(deps: NodeRuntimeRouteDeps): Hono {
     return c.json(release);
   });
 
-  routes.get('/runtime/node/:version/:file', (c) => {
+  routes.get('/runtime/node/:version/:file', async (c) => {
     const release = readRelease(deps.cliPack);
     if (release === undefined || c.req.param('version') !== release.version) {
       return c.notFound();
@@ -44,7 +46,9 @@ export function createNodeRuntimeRoutes(deps: NodeRuntimeRouteDeps): Hono {
     const artifact = Object.values(release.packages).find((entry) => entry.file === file);
     if (artifact === undefined) return c.notFound();
 
-    const path = join(deps.cliPack, 'runtime', 'node', artifact.file);
+    const localPath = join(deps.cliPack, 'runtime', 'node', artifact.file);
+    const path = deps.clientArtifacts === undefined ? localPath : await deps.clientArtifacts.ensure('node', c.req.param('file'));
+    if (path === undefined) return c.json({ error: 'Client download is temporarily unavailable. Retry shortly.' }, 503);
     try {
       const size = statSync(path).size;
       if (size !== artifact.size) return c.notFound();

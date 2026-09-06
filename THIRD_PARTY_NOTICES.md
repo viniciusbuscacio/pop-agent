@@ -1,5 +1,19 @@
 # Third-party notices
 
+## FFmpeg
+
+Prebuilt server releases contain an audio-only FFmpeg 9.0.1 executable under
+LGPL 2.1 or later, with no GPL or nonfree components enabled. FFmpeg copyright
+belongs to its contributors. The complete LGPL license, source checksum and
+exact configure flags accompany the executable in `server/dist/audio/`.
+The unmodified corresponding `ffmpeg-9.0.1.tar.xz` source is distributed as an
+asset in the same GitHub release and is also available from
+https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz. The delivered checkout contains
+`tools/build-audio-runtime.ts` and `tools/audio-runtime.ts` to rebuild it.
+The binary is a separate executable invoked by Pop Agent; it is not linked
+into Pop Agent. Users can replace it or select another compatible executable
+with `POP_AGENT_FFMPEG`.
+
 ## whisper.cpp
 
 The Ubuntu bootstrap downloads the pinned official `whisper.cpp` command-line

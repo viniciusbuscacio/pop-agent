@@ -148,6 +148,7 @@ export function renderSystemdUnit(
     'Environment=NODE_ENV=production',
     `Environment=PATH=${servicePath}`,
     'Environment=PI_OFFLINE=1',
+    ...(options.prebuilt === true ? [`Environment=POP_AGENT_FFMPEG=${checkout}/server/dist/audio/ffmpeg`] : []),
     'Environment=POP_AGENT_BIND=127.0.0.1',
     `Environment=POP_AGENT_PORT=${String(options.port)}`,
     ...(networkOnboarding

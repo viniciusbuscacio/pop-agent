@@ -1,3 +1,4 @@
+import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,6 +18,7 @@ interface LauncherRelease {
 type LocalAccessRelease = LauncherRelease;
 
 export interface CliInstallerDeps {
+  clientArtifacts?: ClientArtifactProvider;
   cliPack: string;
   versions: { popAgentVersion: string };
 }
@@ -75,13 +77,15 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
     });
   });
 
-  routes.get('/local-access/:file', (c) => {
+  routes.get('/local-access/:file', async (c) => {
     const release = readLocalAccessRelease(deps.cliPack);
     const artifact = release === undefined
       ? undefined
       : Object.values(release.artifacts).find((entry) => entry.file === c.req.param('file'));
     if (artifact === undefined) return c.notFound();
-    const path = join(deps.cliPack, 'local-access', artifact.file);
+    const localPath = join(deps.cliPack, 'local-access', artifact.file);
+    const path = deps.clientArtifacts === undefined ? localPath : await deps.clientArtifacts.ensure('local-access', c.req.param('file'));
+    if (path === undefined) return c.json({ error: 'Client download is temporarily unavailable. Retry shortly.' }, 503);
     try {
       if (statSync(path).size !== artifact.size) return c.notFound();
       return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {

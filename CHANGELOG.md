@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.63
+
+- Bundle a verified audio-only FFmpeg runtime instead of installing Ubuntu's multimedia package and its graphical/video dependencies. Keep Whisper and browser voice transcription available by default. Install only missing base/runtime apt prerequisites.
+- Fetch client launchers, Local Access and official Node archives on demand through the existing server URLs, with manifest size/SHA-256 checks and a durable cache. Keep private GitHub release access through the server owner's existing gh authentication.
+- Validate real speech conversion and Whisper transcription across eight formats on both native release architectures before publication. Distribute FFmpeg source and license with the release.
+
 ## 0.2.62
 
 - Install verified prebuilt Ubuntu server releases instead of compiling and running the full development gate on each host. Native amd64/arm64 release builds run the full gate and probe the production package before publication.

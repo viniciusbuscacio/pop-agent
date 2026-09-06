@@ -35,6 +35,18 @@ jobs:
         run: |
           ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
           npm run gate
+          # Full FFmpeg is a release-test encoder only, never a host prerequisite.
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          ./deploy/bootstrap-server.sh --prepare-only
+          if [ "$(uname -m)" = x86_64 ]; then
+            npm run build:audio -- "$RUNNER_TEMP/server-release"
+          else
+            npm run build:audio
+          fi
+          npm run test:audio
           npm run pack:cli
           npm run pack:server-runtime -- "$RUNNER_TEMP/server-release"
       - name: Verify the downloaded installation path without development tools
@@ -48,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: server-${{ matrix.runner }}
-          path: ${{ runner.temp }}/server-release/pop-agent-*
+          path: ${{ runner.temp }}/server-release/*
           compression-level: 0
           retention-days: 3
   publish:
@@ -71,7 +83,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(cat VERSION)
-          test "$(find release -type f | wc -l)" -eq 4
+          test -s "release/pop-agent-$version-linux-amd64.tar.gz"
+          test -s "release/pop-agent-$version-linux-amd64.json"
+          test -s "release/pop-agent-$version-linux-arm64.tar.gz"
+          test -s "release/pop-agent-$version-linux-arm64.json"
+          test -s release/ffmpeg-*.tar.xz
+          test "$(find release -name 'pop-launcher-*' -type f | wc -l)" -eq 6
+          test -s "release/pop-local-access-$version-windows-amd64.exe"
+          # Each native server manifest must match the shared client assets.
+          python3 - <<'PY'
+          import hashlib, json, pathlib, tarfile
+          directory = pathlib.Path('release')
+          for archive in directory.glob('pop-agent-*-linux-*.tar.gz'):
+              with tarfile.open(archive) as package:
+                  for category in ('launcher', 'local-access'):
+                      manifest = json.load(package.extractfile(f'cli/pack/{category}/manifest.json'))
+                      for artifact in manifest['artifacts'].values():
+                          content = (directory / artifact['file']).read_bytes()
+                          assert len(content) == artifact['size'], artifact['file']
+                          assert hashlib.sha256(content).hexdigest() == artifact['sha256'], artifact['file']
+          PY
           if gh release view "v$version" >/dev/null 2>&1; then
             echo 'This version already has a release; never replace its bytes.' >&2
             exit 1
@@ -81,6 +112,6 @@ jobs:
           git tag -a "v$version" "$GITHUB_SHA" -m "Pop Agent $version"
           gh auth setup-git
           git push origin "refs/tags/v$version"
-          gh release create "v$version" --target "$GITHUB_SHA" --draft --title "Pop Agent $version" --notes 'Prebuilt Ubuntu amd64 and arm64 server packages. Both native builds passed the full gate and production installation probes. FFmpeg and Whisper remain included in guided installation.'
+          gh release create "v$version" --target "$GITHUB_SHA" --draft --title "Pop Agent $version" --notes 'Prebuilt Ubuntu amd64 and arm64 server packages. Both native builds passed the full gate and production installation probes. Minimal audio-only FFmpeg and Whisper remain included, without Ubuntu multimedia/graphical packages. Real speech transcription passed for eight audio formats on both architectures. Client runtimes download on demand with verified persistent caching. FFmpeg corresponding source is included.'
           gh release upload "v$version" release/*
           gh release edit "v$version" --draft=false

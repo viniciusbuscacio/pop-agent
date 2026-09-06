@@ -1,3 +1,4 @@
+import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
 import { Hono } from 'hono';
 import { closeSync, constants, createReadStream, fstatSync, openSync, readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -36,6 +37,7 @@ import { Readable } from 'node:stream';
  */
 
 export interface CliDownloadDeps {
+  clientArtifacts?: ClientArtifactProvider;
   /** Directory holding the current packed tarball and release manifests. */
   cliPack: string;
   /** Durable history of immutable CLI tarballs across checkout replacement. */
@@ -74,7 +76,7 @@ export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
     }
   });
 
-  routes.get('/cli/launcher/:file{pop-launcher-[0-9A-Za-z.\\-]+}', (c) => {
+  routes.get('/cli/launcher/:file{pop-launcher-[0-9A-Za-z.\\-]+}', async (c) => {
     const manifestPath = join(deps.cliPack, 'launcher', 'manifest.json');
     try {
       const release = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
@@ -84,7 +86,9 @@ export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
         (artifact) => artifact.file === c.req.param('file'),
       );
       if (!allowed) return c.notFound();
-      const path = join(deps.cliPack, 'launcher', c.req.param('file'));
+      const localPath = join(deps.cliPack, 'launcher', c.req.param('file'));
+      const path = deps.clientArtifacts === undefined ? localPath : await deps.clientArtifacts.ensure('launcher', c.req.param('file'));
+      if (path === undefined) return c.json({ error: 'Client download is temporarily unavailable. Retry shortly.' }, 503);
       const size = statSync(path).size;
       return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {
         'content-type': 'application/octet-stream',

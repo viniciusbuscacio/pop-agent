@@ -34,8 +34,9 @@ is available; this is separate from Pop's provider credentials. Public repositor
 The bootstrap defaults to `$HOME/.pop-agent` for durable data,
 `$HOME/pop-agent-workspace` for the user workspace, and port 8787. Override
 those with `--data-dir`, `--workspace`, and `--port` when needed. A successful
-install downloads the already built server, CLI, launcher, PLA and managed Node
-download artifacts before activating the service. It also places the server manager at `/usr/local/bin/popman`, bound to the
+install downloads the prebuilt server with the current CLI tarball and platform
+manifests. Launcher, PLA and client Node binaries are fetched, verified and cached
+when a client requests its platform. It also places the server manager at `/usr/local/bin/popman`, bound to the
 managed Node runtime and those exact data/workspace paths.
 
 On a fresh data directory it also prints `http://<private-LAN-IP>:8788/setup`
@@ -47,13 +48,13 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the immutable v0.2.62 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.63 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.62/server-install.sh && sh "$file" --ref v0.2.62)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.63/server-install.sh && sh "$file" --ref v0.2.63)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -163,7 +164,8 @@ deploy/bootstrap-server.sh \
 
 That flag permits only `sudo apt-get update`, the pinned official Tailscale apt
 key/repository, and installation of
-`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `ffmpeg` for local voice
+`ca-certificates`, `curl`, `git`, `xz-utils`, `tar`, `libgomp1` and `libstdc++6`
+when missing. Local voice uses the bundled audio-only FFmpeg
 transcription, and `tailscale` for guided private HTTPS. The key download is
 size/SHA-256 verified before root installation.
 Runtime downloads use `curl` as archive downloads; no remote script is piped to
@@ -211,7 +213,10 @@ an offline ONNX CPU inference without GPU libraries, then runs
 fake provider. No model request or user database is involved. There is no npm
 install, TypeScript build, Go build or full development suite on this path.
 Verified archives survive retries. Node and Whisper downloads run in parallel.
-FFmpeg and Whisper remain part of the default installation.
+An audio-only FFmpeg binary and Whisper remain part of the default installation.
+The normal apt path excludes the distribution FFmpeg package and its graphical/video
+dependencies. Release builders run real speech conversion and Whisper tests before
+publication; those tests do not run during host installation.
 
 Only after these checks does the shared systemd installer activate the staged
 runtime, pin popman to it, and check service health. The source clone remains

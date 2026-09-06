@@ -188,11 +188,23 @@ require_command() {
 if [ "$INSTALL_APT" -eq 1 ]; then
   require_command sudo
   require_command apt-get
-  say "Installing the explicitly approved apt prerequisites..."
-  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
-  sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar ffmpeg
+  say "Checking the minimal apt prerequisites..."
+  missing_packages=
+  required_packages='ca-certificates curl git xz-utils tar libgomp1 libstdc++6'
   if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
-    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3
+    required_packages="$required_packages build-essential python3 ffmpeg"
+  fi
+  for package in $required_packages; do
+    installed_status=$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)
+    if [ "$installed_status" != 'install ok installed' ]; then missing_packages="$missing_packages $package"; fi
+  done
+  if [ -n "$missing_packages" ]; then
+    say "Installing missing prerequisites:$missing_packages"
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
+    # This list contains only the fixed package names above, never user input.
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $missing_packages
+  else
+    say "Base prerequisites are already installed."
   fi
   if [ "$PREPARE_ONLY" -eq 0 ] && [ "$NETWORK_ONBOARDING" -eq 1 ] && ! command -v tailscale >/dev/null 2>&1; then
     case $DIST_CODENAME in ''|*[!a-z0-9]*) die "unsupported Ubuntu codename for the Tailscale repository: $DIST_CODENAME" ;; esac
@@ -218,7 +230,7 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   fi
 fi
 
-for required in curl git tar xz sha256sum find readlink mktemp mv ffmpeg; do
+for required in curl git tar xz sha256sum find readlink mktemp mv; do
   require_command "$required"
 done
 if [ "$PREPARE_ONLY" -eq 0 ]; then

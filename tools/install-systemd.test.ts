@@ -111,6 +111,7 @@ describe('systemd server installer', () => {
     expect(runner.calls.some((call) => call.command === 'npm' || call.command === 'go')).toBe(false);
     expect(runner.installedUnit).toContain('ExecStart=/usr/bin/node');
     expect(runner.installedUnit).not.toContain('/go/');
+    expect(runner.installedUnit).toContain(`Environment=POP_AGENT_FFMPEG=${options.checkout}/server/dist/audio/ffmpeg`);
   });
 
   it('starts through the dependency-free bootstrap without touching systemd for help', () => {

@@ -1,3 +1,4 @@
+import { LazyClientArtifacts } from './infrastructure/update/lazy-client-artifacts.js';
 import { RestClientService } from './application/integrations/rest-client-service.js';
 import { ScreenedRestGateway } from './infrastructure/integrations/screened-rest-gateway.js';
 import { buildRestTools } from './infrastructure/agent/rest-tools.js';
@@ -680,7 +681,8 @@ const piActivation = new PiActivationService({
 const voiceModels = new WhisperModelStore(join(context.dataDir, 'voice-models'));
 const transcriber = new WhisperTranscriber({
   whisperCli: process.env['POP_AGENT_WHISPER_CLI'] ?? 'whisper-cli',
-  ffmpeg: process.env['POP_AGENT_FFMPEG'] ?? 'ffmpeg',
+  ffmpeg: process.env['POP_AGENT_FFMPEG'] ?? (existsSync(fileURLToPath(new URL('./audio/ffmpeg', import.meta.url)))
+    ? fileURLToPath(new URL('./audio/ffmpeg', import.meta.url)) : 'ffmpeg'),
   resolveModel: () => {
     const override = process.env['POP_AGENT_WHISPER_MODEL'];
     if (override !== undefined && override.length > 0) return Promise.resolve(override);
@@ -814,6 +816,7 @@ const app = createApp({
   })(),
   webDist,
   cliPack,
+  clientArtifacts: new LazyClientArtifacts(cliPack, join(context.dataDir, 'releases/client-artifacts')),
   cliArchive,
 });
 

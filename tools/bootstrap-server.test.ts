@@ -39,7 +39,7 @@ function archive(sourceParent: string, rootName: string, destination: string, co
   if (result.status !== 0) throw new Error(`fixture tar failed: ${result.stderr}`);
 }
 
-function createFixture(options: { escapingNodeSymlink?: boolean; badNodeHash?: boolean } = {}): Fixture {
+function createFixture(options: { escapingNodeSymlink?: boolean; badNodeHash?: boolean; packagesInstalled?: boolean } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'pop-bootstrap-test-'));
   roots.push(root);
   const checkout = join(root, 'checkout');
@@ -121,6 +121,7 @@ cp "$BOOTSTRAP_TEST_FIXTURES/\${url##*/}" "$output"
   executable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "${FAKE_UNAME_S:-Linux}";; -m) printf "%s\\n" "${FAKE_UNAME_M:-x86_64}";; *) exit 2;; esac\n');
   executable(join(fakeBin, 'id'), '#!/bin/sh\n[ "$1" = -u ] || exit 2\nprintf "%s\\n" "${FAKE_UID:-1000}"\n');
   executable(join(fakeBin, 'sudo'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$BOOTSTRAP_TEST_SUDO_LOG"\nexit 0\n');
+  executable(join(fakeBin, 'dpkg-query'), options.packagesInstalled === true ? '#!/bin/sh\nprintf "install ok installed"\n' : '#!/bin/sh\nexit 1\n');
   executable(join(fakeBin, 'ffmpeg'), '#!/bin/sh\nexit 0\n');
   executable(join(fakeBin, 'tailscale'), '#!/bin/sh\n[ "${1:-}" = version ] && printf "1.98.10\\n"\nexit 0\n');
 
@@ -165,9 +166,16 @@ describe('server toolchain bootstrap', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('no Go or compiler required');
     expect(readFileSync(fixture.curlLog, 'utf8').trim().split('\n')).toHaveLength(2);
-    expect(readFileSync(fixture.sudoLog, 'utf8')).not.toMatch(/build-essential|python3/);
+    expect(readFileSync(fixture.sudoLog, 'utf8')).not.toMatch(/build-essential|python3|ffmpeg|x11|wayland|sdl|fonts/i);
     expect(lstatSync(join(fixture.toolchain, 'current/node')).isSymbolicLink()).toBe(true);
     expect(lstatSync(join(fixture.toolchain, 'current/whisper')).isSymbolicLink()).toBe(true);
+  });
+
+  it('skips apt entirely when runtime prerequisites and Tailscale are already installed', () => {
+    const fixture = createFixture({ packagesInstalled: true });
+    const result = spawnSync(fixture.script, ['--checkout', fixture.checkout, '--toolchain-dir', fixture.toolchain, '--install-apt-packages', '--prepare-only'], { encoding: 'utf8', env: fixture.env });
+    expect(result.status, result.stderr).toBe(0);
+    expect(() => readFileSync(fixture.sudoLog)).toThrow();
   });
 
   it('installs from verified local fixtures, activates atomically, and preserves matching runtimes', () => {
@@ -221,8 +229,7 @@ describe('server toolchain bootstrap', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(fixture.sudoLog, 'utf8').trim().split('\n')).toEqual([
       '-- env DEBIAN_FRONTEND=noninteractive apt-get update',
-      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar ffmpeg',
-      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3',
+      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar libgomp1 libstdc++6 build-essential python3 ffmpeg',
     ]);
   });
 

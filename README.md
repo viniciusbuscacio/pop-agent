@@ -47,10 +47,12 @@ only for configured or explicitly used features.
 
 The supported server is a fresh **Ubuntu systemd** host on **amd64 or arm64**.
 Use a non-root account with `sudo`, Git, and outbound HTTPS. The bootstrap
-installs a fixed apt prerequisite set plus Tailscale, downloads repository-pinned Node
+installs only missing base/runtime apt prerequisites plus Tailscale, downloads repository-pinned Node
 and `whisper.cpp` archives with size/SHA-256 verification, installs a prebuilt
 server release, checks the production application, and activates a loopback-only
-systemd service. FFmpeg and Whisper are included. Python, C/C++ compilers, Go,
+systemd service. An audio-only FFmpeg binary and Whisper are included; the normal
+installation does not install Ubuntu's FFmpeg package or its graphical/video
+dependencies. Client runtime downloads are fetched and cached on demand. Python, C/C++ compilers, Go,
 TypeScript builds and the full test suite are only needed on release builders,
 not on the normal installation host. Prebuilt releases support Ubuntu 24.04 or
 newer on amd64/arm64; the manifest checks the actual glibc and Node versions.
@@ -113,7 +115,7 @@ Caddy or manually managed installations can use `--skip-network-onboarding`;
   correctly configured reverse proxy.
 - Model/provider accounts and their charges are external to Pop Agent.
 - Voice runs on the server and requires local disk for the selected Whisper
-  model. The installer supplies `ffmpeg` and the pinned `whisper.cpp` runtime.
+  model. The installer supplies an audio-only `ffmpeg` and the pinned `whisper.cpp` runtime.
 - Files uploads are limited to 100 MiB per file. Chat accepts up to eight
   attachments, 25 MiB each and 100 MiB combined. Audio notes remain 25 MiB.
 - PWA builds update automatically. Server and AI-runtime activation remain

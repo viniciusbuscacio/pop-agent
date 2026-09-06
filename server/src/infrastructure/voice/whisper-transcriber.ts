@@ -14,10 +14,10 @@ import { createExclusiveInternalFile } from '../process/internal-file.js';
  * recorded into 16 kHz mono WAV, whisper.cpp's whisper-cli turns the WAV into
  * words. Everything runs on the server's own CPU -- no tokens, no network.
  *
- * Both binaries and the GGML model are found by configuration, not bundled:
- * `POP_AGENT_WHISPER_CLI`, `POP_AGENT_FFMPEG` (default: the names, resolved by PATH)
- * and `POP_AGENT_WHISPER_MODEL` (path to a ggml-*.bin). A missing piece fails with
- * the words to fix it.
+ * Installation supplies managed Whisper and audio-only FFmpeg. Configuration
+ * can override them with POP_AGENT_WHISPER_CLI and POP_AGENT_FFMPEG; development
+ * source builds can resolve host binaries through PATH. The GGML model is
+ * selected separately and downloaded only when needed.
  */
 
 const TRANSCRIBE_TIMEOUT_MS = 120_000;
@@ -69,7 +69,7 @@ export class WhisperTranscriber implements Transcriber {
       await run(
         this.options.ffmpeg,
         ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav],
-        'ffmpeg is required for voice transcription: install it (apt install ffmpeg) or set POP_AGENT_FFMPEG.',
+        'ffmpeg is required for voice transcription: reinstall the Pop audio runtime or set POP_AGENT_FFMPEG.',
       );
 
       // -l auto: the language is whatever was spoken. -nt: no timestamps.

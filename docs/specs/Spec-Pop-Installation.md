@@ -178,8 +178,11 @@ deploy/bootstrap-server.sh --install-apt-packages
 
 It refuses root and unsupported platforms. An explicit
 `--install-apt-packages` permits apt update/install of `ca-certificates`, `curl`,
-`git`, `xz-utils`, `tar`, `ffmpeg` and `tailscale` through sudo. FFmpeg and
-Whisper remain installed by default. The official Tailscale key is verified
+`git`, `xz-utils`, `tar`, `libgomp1`, `libstdc++6` and `tailscale` through sudo.
+Only missing prerequisites are installed; an already prepared host skips apt.
+Whisper remains installed by default. FFmpeg is supplied as an audio-only binary
+inside the verified server release, not through Ubuntu's multimedia package.
+The normal path must not request X11, Wayland, SDL, fonts or video libraries. The official Tailscale key is verified
 against the pinned size/SHA-256 before configuring its codename repository.
 Normal installation does not install Python, C/C++ compilers or Go.
 
@@ -187,7 +190,7 @@ Pinned Node and whisper.cpp archives are downloaded concurrently, verified,
 screened for unsafe paths/links, executable-probed and atomically activated in
 the per-user toolchain. Cached bytes are reverified and reused on retries.
 `--prepare-only` stops before application/systemd installation. The explicit
-`--build-from-source` developer mode adds build-essential, Python and the pinned
+`--build-from-source` developer mode adds build-essential, Python, distribution FFmpeg and the pinned
 Go runtime and retains the former npm ci/full gate/client packaging path.
 
 Normal bootstrap invokes `tools/install-prebuilt.ts` with native Node TypeScript
@@ -204,7 +207,7 @@ SHA-256 and a successful gate timestamp. Prebuilt release builders run on Ubuntu
 24.04 amd64/arm64. Archive validation rejects traversal, unexpected roots,
 duplicates, hard links, special entries, escaping links and writes through a
 symlink. Only ignored runtime paths (production node_modules, compiled outputs
-and packed clients) may be extracted into a new isolated clone of the exact
+and client manifests/current CLI tarball) may be extracted into a new isolated clone of the exact
 source commit under the owner-only server-releases directory. Persistent data
 and workspace remain separate. Verified downloads survive retries.
 
@@ -223,7 +226,7 @@ disposable data and a fake provider. Once staging succeeds, the shared systemd
 installer validates ownership, clean Git state, Linux/systemd, separate paths,
 Node and required host commands, then installs popman and the production service
 using narrow sudo commands. The service uses the verified generation and its
-managed Node and Whisper paths, offline pi bookkeeping, loopback-only binding
+managed Node and Whisper paths plus the bundled `POP_AGENT_FFMPEG`, offline pi bookkeeping, loopback-only binding
 and bounded restart. A final health check and systemd active check are mandatory.
 Failed replacement activation restores the previous unit/launcher and restarts
 that service. Older generations remain available; there is no automatic deletion.
@@ -681,4 +684,35 @@ that platform. Cross-compilation alone is not end-user acceptance.
 - claiming a one-command server installer before one exists and passes the full
   supported-platform matrix.
 
-Managed Node runtime artifacts cover macOS, Linux and Windows on amd64/arm64. Windows uses the official ZIP archive and launcher 1.1.5 or newer; extraction rejects traversal, multiple roots, symlinks, special files and expansion beyond the runtime limit before activation. The server installer packages these artifacts with the client releases.
+Managed Node runtime artifacts cover macOS, Linux and Windows on amd64/arm64. Windows uses the official ZIP archive and launcher 1.1.5 or newer; extraction rejects traversal, multiple roots, symlinks, special files and expansion beyond the runtime limit before activation. Release builders verify these archives; the server retrieves only the requested platform archive on demand.
+
+
+### Minimal audio runtime and deferred client assets
+
+Release builders compile the pinned, checksum-verified FFmpeg source on each
+native supported Linux architecture. Disable autodetection, networking, video
+devices and unused components. Enable only local audio container decoding,
+resampling and mono PCM16 WAV output needed by Whisper. Include the LGPL license,
+exact configure flags and corresponding source archive in the release. An
+explicit POP_AGENT_FFMPEG override remains supported. Development source builds
+may use the host FFmpeg when a bundled binary is absent.
+
+Before publishing, test real speech conversion and real Whisper transcription
+for WebM/Opus, fragmented MP4/AAC, M4A, WAV, MP3, Ogg/Vorbis, FLAC and AAC on both
+amd64 and arm64. Native installation probes include conversion to 16 kHz mono
+PCM16 WAV and reject missing or graphical dependencies. Compiler tools, source
+archives, speech fixtures and test models are release-build inputs, not downloads
+required by normal installation.
+
+The server bundle retains the current CLI tarball and all platform manifests.
+Launcher and PLA binaries are separate immutable GitHub release assets; Node
+archives come from the exact official nodejs.org URL pinned by the manifest.
+Existing same-origin client download URLs and hashes remain the contract.
+A request for an allowed platform artifact triggers acquisition, exact size and
+SHA-256 validation, atomic publication and reuse from an owner-only durable cache
+under the data directory. Manifest requests do not trigger downloads. Coalesce
+concurrent requests, reverify cached bytes and never serve failed or partial
+bytes. A failed acquisition returns retryable HTTP 503. Unknown artifacts remain
+404. Private GitHub assets use the server owner's existing gh authentication;
+public releases need no authentication. No startup prefetch and no credential
+material in public manifests or responses. Retain legacy complete packs.
