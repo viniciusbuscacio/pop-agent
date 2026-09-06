@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { OnboardingStateResponse } from '@pop-agent/shared';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
@@ -6,6 +6,7 @@ import { ApiError } from '../services/api';
 import { authService } from '../services/auth';
 import { pendingRecovery } from '../services/pending-recovery';
 import { onboardingService, onboardingSession } from '../services/onboarding';
+import { prepareTailscaleSignIn, type PendingTailscaleSignIn } from '../services/tailscale-sign-in';
 import { ProvidersSection } from './providers-section';
 import { session } from '../services/session';
 import { useAuthStore } from '../store/auth';
@@ -216,6 +217,11 @@ export function SetupPage() {
 }
 
 function NetworkSetupStep() {
+  const pendingSignIn = useRef<PendingTailscaleSignIn | undefined>(undefined);
+  useEffect(() => () => {
+    pendingSignIn.current?.close();
+    pendingSignIn.current = undefined;
+  }, []);
   const [token, setToken] = useState(() => onboardingSession.read());
   const [code, setCode] = useState('');
   const [state, setState] = useState<OnboardingStateResponse | undefined>();
@@ -273,17 +279,29 @@ function NetworkSetupStep() {
   }
 
   async function connect(): Promise<void> {
-    if (token === undefined || busy) return;
+    if (token === undefined || busy || pendingSignIn.current !== undefined) return;
+    const pending = prepareTailscaleSignIn(t('setup.network.preparing'));
+    pendingSignIn.current = pending;
     setBusy(true);
     setError(undefined);
     try {
       const result = await onboardingService.connect(token);
+      if (pendingSignIn.current !== pending) return;
+      if (result.loginUrl !== undefined) {
+        pending.navigate(result.loginUrl);
+        setLoginUrl(result.loginUrl);
+      } else pending.close();
       setState(result);
-      setLoginUrl(result.loginUrl);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : t('error.generic'));
+      pending.close();
+      if (pendingSignIn.current === pending) {
+        setError(cause instanceof ApiError ? cause.message : t('error.generic'));
+      }
     } finally {
-      setBusy(false);
+      if (pendingSignIn.current === pending) {
+        pendingSignIn.current = undefined;
+        setBusy(false);
+      }
     }
   }
 
@@ -410,7 +428,7 @@ function NetworkSetupStep() {
       </header>
       {loginUrl === undefined ? (
         <Button type="button" data-testid="onboarding-connect" disabled={busy} onClick={() => void connect()}>
-          {t('setup.network.connect')}
+          {busy ? t('setup.network.preparing') : t('setup.network.connect')}
         </Button>
       ) : (
         <a

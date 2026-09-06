@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.64
+
+- Open Tailscale sign-in automatically from the initial setup click. Reserve the tab before asynchronous preparation, show progress, fall back to the current tab when pop-ups are blocked, and close unused tabs after errors, navigation or an already-connected result.
+
 ## 0.2.63
 
 - Bundle a verified audio-only FFmpeg runtime instead of installing Ubuntu's multimedia package and its graphical/video dependencies. Keep Whisper and browser voice transcription available by default. Install only missing base/runtime apt prerequisites.

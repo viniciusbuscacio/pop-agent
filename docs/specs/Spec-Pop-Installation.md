@@ -245,7 +245,12 @@ continues to bind only `127.0.0.1:8787`.
 The temporary application mounts static setup assets, liveness/auth-mode
 metadata and the onboarding routes only. After pairing, it drives `tailscale
 up`, returns only a strictly validated Tailscale login URL, and polls daemon
-state. Before Serve activation it explains that the device must share the
+state. One click must prepare and open sign-in: reserve a tab synchronously
+during the click, clear its opener and navigate it once the validated login URL
+arrives. Show preparation progress. If pop-ups are blocked, continue in the
+current tab without requiring a second click. Close unused waiting tabs on
+failure, unmount or an already-connected result. Retain a manual link for reopening
+sign-in, while the original setup page polls connection state. Before Serve activation it explains that the device must share the
 tailnet and requires explicit acceptance that the machine/tailnet FQDN appears
 in public Certificate Transparency logs. It refuses an existing conflicting
 Serve configuration rather than replacing it, never enables Funnel, and accepts

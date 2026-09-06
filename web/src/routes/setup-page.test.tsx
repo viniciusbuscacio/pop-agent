@@ -58,7 +58,7 @@ function disabled(testId: string): boolean {
   return (screen.getByTestId(testId) as HTMLButtonElement).disabled;
 }
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 beforeEach(() => {
   setup.mockReset();
@@ -101,6 +101,60 @@ describe('setup wizard', () => {
     await user.click(screen.getByTestId('onboarding-pair'));
     await waitFor(() => expect(screen.getByTestId('onboarding-connect')).toBeDefined());
     expect(onboardingPair).toHaveBeenCalledWith('ABCD-EFGH-JKMN');
+  });
+
+  async function renderNetwork() {
+    authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
+    sessionStorage.setItem('test-onboarding', 'paired');
+    onboardingState.mockResolvedValue({ required: true, phase: 'tailscale' });
+    const rendered = render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByTestId('onboarding-connect')).toBeDefined());
+    return rendered;
+  }
+
+  function signInTab() {
+    const tab = { opener: {}, closed: false, document: { title: '', body: { textContent: '' } }, location: { replace: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    return tab;
+  }
+
+  it('opens sign-in automatically from one click after asynchronous server preparation', async () => {
+    const tab = signInTab();
+    let finish!: (value: unknown) => void;
+    onboardingConnect.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    await renderNetwork();
+    await userEvent.setup().click(screen.getByTestId('onboarding-connect'));
+    expect(window.open).toHaveBeenCalledOnce();
+    expect(onboardingConnect).toHaveBeenCalledWith('paired');
+    expect(disabled('onboarding-connect')).toBe(true);
+    expect(tab.location.replace).not.toHaveBeenCalled();
+    finish({ required: true, phase: 'tailscale', loginUrl: 'https://login.tailscale.com/a/test' });
+    await waitFor(() => expect(tab.location.replace).toHaveBeenCalledWith('https://login.tailscale.com/a/test'));
+    expect(tab.close).not.toHaveBeenCalled();
+  });
+
+  it('closes the reserved tab on failure and allows a retry', async () => {
+    const tab = signInTab(); onboardingConnect.mockRejectedValue(new Error('offline'));
+    await renderNetwork(); await userEvent.setup().click(screen.getByTestId('onboarding-connect'));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+    expect(tab.close).toHaveBeenCalledOnce(); expect(disabled('onboarding-connect')).toBe(false);
+    expect(tab.location.replace).not.toHaveBeenCalled();
+  });
+
+  it('closes the waiting tab if Tailscale is already connected', async () => {
+    const tab = signInTab(); onboardingConnect.mockResolvedValue({ required: true, phase: 'https' });
+    await renderNetwork(); await userEvent.setup().click(screen.getByTestId('onboarding-connect'));
+    await waitFor(() => expect(screen.getByTestId('onboarding-enable-https')).toBeDefined());
+    expect(tab.close).toHaveBeenCalledOnce(); expect(tab.location.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate after leaving setup while preparation is pending', async () => {
+    const tab = signInTab(); let finish!: (value: unknown) => void;
+    onboardingConnect.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const rendered = await renderNetwork(); await userEvent.setup().click(screen.getByTestId('onboarding-connect'));
+    rendered.unmount(); expect(tab.close).toHaveBeenCalledOnce();
+    finish({ required: true, phase: 'tailscale', loginUrl: 'https://login.tailscale.com/a/test' });
+    await Promise.resolve(); expect(tab.location.replace).not.toHaveBeenCalled();
   });
 
   it('keeps Continue disabled until the passwords are long enough and match', async () => {

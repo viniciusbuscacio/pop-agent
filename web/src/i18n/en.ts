@@ -28,6 +28,7 @@ export const en = {
   'setup.network.codeLabel': 'One-time setup code',
   'setup.network.tailscaleTitle': 'Connect the server to Tailscale',
   'setup.network.tailscaleBody': 'Pop Agent will open Tailscale sign-in. This keeps the app private to your tailnet.',
+  'setup.network.preparing': 'Preparing Tailscale sign-in…',
   'setup.network.connect': 'Start Tailscale sign-in',
   'setup.network.openTailscale': 'Open Tailscale sign-in',
   'setup.network.tailnetDevice': 'The device running this browser must also be connected to the same tailnet.',
