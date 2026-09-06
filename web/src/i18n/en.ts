@@ -4,6 +4,10 @@
  * without hunting through JSX.
  */
 export const en = {
+  'agent.tasksTitle': 'Tasks',
+  'agent.tasksDescription': 'Create and manage scheduled tasks.',
+  'agent.skillsTitle': 'Skills',
+  'agent.skillsDescription': 'Browse and manage the skills Pop uses.',
   'rest.activeTokensTable': 'Active integration tokens',
   'rest.tokenName': 'Name',
   'rest.tokenPermissions': 'Permissions',
@@ -139,7 +143,8 @@ export const en = {
     'Delete "{title}"? This is irreversible — the conversation history is gone forever.',
   'shell.empty.title': 'Pick up where you left off',
   'shell.empty.body': 'Choose a conversation on the left, or start a new one.',
-  'shell.refresh': 'Refresh the lists',
+  'shell.refresh': 'Reload app from server',
+  'shell.refreshFailed': 'Could not reload the app. Check the connection and try again.',
   'shell.settings': 'Settings',
   'shell.health.provider': 'LLM provider disconnected',
   'shell.health.db': 'Database disconnected',

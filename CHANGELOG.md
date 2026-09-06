@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make the footer refresh fetch a fresh app document from the server, bypass the PWA navigation cache and report connection errors.
+
+- Align Agent overview typography, headings, spacing and card widths with MCP/A2A; show Tasks and Skills summaries with links to their editors.
+
 - Collapse the REST Server token list behind its active count; show only unrevoked, unexpired tokens, at most ten per page.
 
 ## 0.2.75

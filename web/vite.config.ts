@@ -61,7 +61,8 @@ export default defineConfig({
         // APIs, health checks and signed file views are never the app shell.
         // In particular, intercepting /files/download replaced a Markdown
         // preview with a second copy of the PWA inside its own viewer on iOS.
-        navigateFallbackDenylist: [/^\/v1\//, /^\/healthz$/, /^\/files\/download(?:\?|$)/],
+        // A manual refresh must fetch the HTML from the server, not precache.
+        navigateFallbackDenylist: [/[?&]_pop_refresh=/,/^\/v1\//, /^\/healthz$/, /^\/files\/download(?:\?|$)/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/v1/'),

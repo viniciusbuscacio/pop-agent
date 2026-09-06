@@ -629,3 +629,23 @@ missed checks. Do not wait for the periodic keepalive or assume saving a
 provider proves database or provider health. A previous in-flight health probe
 must not overwrite the newer check. Failed saves and unconfirmed sign-ins must
 not announce recovery.
+
+## Agent overview layout
+
+Tasks, Skills, MCP, A2A and REST API share `AgentPageHeader`: left-aligned
+`text-xl font-semibold` title, a short muted `text-sm` description separated by
+`mt-1`, and `mb-5` before content. Overview panes use `p-6` and the available pane
+width, following MCP/A2A. Overview lists use `grid gap-3`; cards place identifying
+information on the left and actions on the right, wrapping on narrow screens.
+REST API presents Server and Client as full-width rows with toggles and Edit.
+Tasks and Skills show existing entries with Edit links to their existing editors.
+Sidebar navigation and editor workflows remain canonical.
+
+The shell refresh button performs a full document navigation, not a list refresh.
+It first checks server reachability with a no-store request. Failure retains the
+current page and shows a retryable error. Success navigates the current route with
+a unique `_pop_refresh` query parameter; Workbox excludes that navigation from its
+app-shell fallback, forcing a network document. The marker is removed before the
+router starts. Other query parameters, fragment, authentication, preferences and
+service-worker registration (including push subscription) are preserved. This
+refresh does not clear all browser storage or install a server release.

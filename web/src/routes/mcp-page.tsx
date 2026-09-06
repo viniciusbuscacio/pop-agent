@@ -1,3 +1,4 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { McpAuthKind, McpServerDTO, McpTransport } from '@pop-agent/shared';
@@ -50,12 +51,7 @@ export function McpPage() {
   function listView() {
     return (
       <div className="p-6">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">MCP</h1>
-            <p className="mt-1 text-sm text-[var(--muted)]">Connect and manage MCP servers.</p>
-          </div>
-        </div>
+        <AgentPageHeader title="MCP" description="Connect and manage MCP servers." />
 
         {loadError !== undefined || actionError !== undefined ? (
           <p role="alert" className="mb-3 text-sm text-[var(--danger)]">

@@ -1,3 +1,4 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { TaskDTO } from '@pop-agent/shared';
@@ -5,7 +6,7 @@ import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { shortDateTime } from '../lib/time';
 import { useTasksStore } from '../store/tasks';
-import { Button, Pressable, Menu } from '../ui/controls';
+import { Button, Card, Pressable, Menu } from '../ui/controls';
 
 /**
  * The background-task list (docs/specs/Spec-Pop-General.md §21). It lives in the sidebar for the
@@ -49,20 +50,23 @@ export function TasksList({ filter = '' }: { filter?: string }) {
  */
 export function TasksIntro() {
   const navigate = useNavigate();
-
-  return (
-    <div className="flex flex-1 items-center justify-center p-8">
-      <div className="max-w-sm text-center">
-        <h1 className="text-lg font-semibold">{t('tasks.empty.title')}</h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">{t('tasks.empty.body')}</p>
-        <div className="mt-4 flex justify-center">
-          <Button type="button" data-testid="tasks-intro-new" onClick={() => void navigate('/tasks/new')}>
-            {t('tasks.new')}
-          </Button>
-        </div>
-      </div>
+  const tasks = useTasksStore(state => state.tasks);
+  const reload = useTasksStore(state => state.reload);
+  useEffect(() => { void reload(); }, [reload]);
+  return <div className="flex-1 overflow-y-auto p-6">
+    <AgentPageHeader title={t('agent.tasksTitle')} description={t('agent.tasksDescription')} />
+    <div className="mb-3">
+      <Button type="button" data-testid="tasks-intro-new" onClick={() => void navigate('/tasks/new')}>{t('tasks.new')}</Button>
     </div>
-  );
+    {tasks === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : tasks.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('tasks.none')}</p> :
+      <div className="grid gap-3">{tasks.map(task => <Card key={task.id} className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="break-words font-medium">{task.title}</div>
+          <p className="text-sm text-[var(--muted)]">{describeSchedule(task)} · {describeNextRun(task)}</p>
+        </div>
+        <Button variant="ghost" onClick={() => void navigate('/tasks/' + task.id)}>{t('tasks.edit')}</Button>
+      </Card>)}</div>}
+  </div>;
 }
 
 function TaskRow({ task }: { task: TaskDTO }) {

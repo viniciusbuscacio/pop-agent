@@ -3,9 +3,8 @@ import { Pressable } from '../ui/controls';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
-import { useChatStore } from '../store/chat';
 import { useDismiss } from '../lib/dismiss';
-import { checkForAndApplyUpdate } from '../services/update-signal';
+import { hardRefreshPage } from '../services/hard-refresh';
 
 /**
  * The app header: the wordmark and the Settings gear. The sidebar always
@@ -94,45 +93,30 @@ function useOpenSettings(): () => void {
  * button remains the manual handle for cross-device list changes. It spins
  * while it works, so a fast network does not read as a dead button.
  */
-const REFRESH_SPIN_SLOT_MS = 1_000;
-
 function RefreshButton() {
-  const loadChats = useChatStore((state) => state.loadChats);
-  const loadArchived = useChatStore((state) => state.loadArchived);
   const [busy, setBusy] = useState(false);
-
+  const [error, setError] = useState(false);
   async function refresh(): Promise<void> {
-    const startedAt = performance.now();
+    if (busy) return;
     setBusy(true);
-    try {
-      await Promise.all([loadChats(), loadArchived(), checkForAndApplyUpdate()]);
-    } finally {
-      // Finish on a one-second boundary instead of snapping the icon back in
-      // the middle of a turn: 0.2 s => 1 turn, 1.5 s => 2, 2.1 s => 3.
-      const elapsed = Math.max(0, performance.now() - startedAt);
-      const slots = Math.max(1, Math.ceil(elapsed / REFRESH_SPIN_SLOT_MS));
-      const remaining = slots * REFRESH_SPIN_SLOT_MS - elapsed;
-      if (remaining > 0) {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
-      }
-      setBusy(false);
-    }
+    setError(false);
+    try { await hardRefreshPage(); }
+    catch { setError(true); setBusy(false); }
   }
-
-  return (
+  return <>
     <Pressable
       type="button"
       data-testid="shell-refresh"
       aria-label={t('shell.refresh')}
+      title={t('shell.refresh')}
       disabled={busy}
       onClick={() => void refresh()}
       className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
     >
-      <span className={busy ? 'block motion-safe:animate-spin' : 'block'}>
-        <RefreshIcon />
-      </span>
+      <span className={busy ? 'block motion-safe:animate-spin' : 'block'}><RefreshIcon /></span>
     </Pressable>
-  );
+    {error ? <span role="alert" className="absolute bottom-full left-3 right-3 mb-2 text-sm text-[var(--danger)]">{t('shell.refreshFailed')}</span> : null}
+  </>;
 }
 
 function RefreshIcon() {

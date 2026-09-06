@@ -84,14 +84,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the skills pane', () => {
-  it('shows the empty pane until a skill is selected', () => {
+  it('shows the overview and opens a skill through Edit', async () => {
     render(
       <MemoryRouter initialEntries={['/skills']}>
         <Harness />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Select a skill')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Skills' })).toBeDefined();
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await waitFor(() => expect(valueOf('skill-name')).toBe('Alpha'));
   });
 
   it('shows the skill in the route', async () => {

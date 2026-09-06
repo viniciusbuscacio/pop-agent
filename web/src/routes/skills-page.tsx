@@ -1,3 +1,5 @@
+import { Button, Card } from '../ui/controls';
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
@@ -8,7 +10,7 @@ import { useSkillsStore } from '../store/skills';
 /**
  * Skills as the right-hand pane of the shell (docs/specs/Spec-Pop-General.md §8, §14), the explorer
  * layout Chat and Files use: the sidebar carries the list, and this pane shows
- * the skill you picked. No `:slug` is the empty pane on a wide screen; `new`
+ * the skill you picked. No `:slug` shows the overview on a wide screen; `new`
  * starts a blank editor; any other slug edits that skill. On a phone the list
  * is the screen, so this pane only mounts once a skill is open.
  */
@@ -40,11 +42,16 @@ export function SkillsPage() {
         <SidebarNav />
       </div>
       {slug === undefined ? (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <div className="max-w-sm text-center">
-            <h1 className="text-lg font-semibold">{t('skills.empty.title')}</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">{t('skills.empty.body')}</p>
-          </div>
+        <div className="p-6">
+          <AgentPageHeader title={t('agent.skillsTitle')} description={t('agent.skillsDescription')} />
+          {skills === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : skills.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('skills.empty.body')}</p> :
+            <div className="grid gap-3">{skills.map(entry => <Card key={entry.slug} className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="break-words font-medium">{entry.name}</div>
+                <p className="text-sm text-[var(--muted)]">{entry.description}</p>
+              </div>
+              <Button variant="ghost" onClick={() => void navigate('/skills/' + encodeURIComponent(entry.slug))}>{t('common.edit')}</Button>
+            </Card>)}</div>}
         </div>
       ) : isNew || skill !== undefined ? (
         <div className="mx-auto w-full max-w-3xl p-4">

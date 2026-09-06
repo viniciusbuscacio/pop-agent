@@ -1,3 +1,4 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState } from 'react';
 import type { RestApiSettingsDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -32,23 +33,27 @@ export function RestApiPage() {
   return <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
     <div className="md:hidden"><SidebarNav /></div>
     <div className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">
-      <div className="mx-auto max-w-2xl space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">{editing ? t(editing === 'server' ? 'rest.server' : 'rest.client') : t('rest.title')}</h1>
-          {editing ? <Button variant="ghost" size="sm" onClick={() => setEditing(undefined)}>{t('rest.back')}</Button> : null}
-        </div>
+      <div className="w-full">
+        <AgentPageHeader
+          title={editing ? t(editing === 'server' ? 'rest.server' : 'rest.client') : t('rest.title')}
+          description={editing ? undefined : t('rest.description')}
+          action={editing ? <Button variant="ghost" size="sm" onClick={() => setEditing(undefined)}>{t('rest.back')}</Button> : null}
+        />
         {error ? <p role="alert">{error} {!settings ? <Button variant="ghost" size="sm" onClick={() => setRetry(v => v + 1)}>{t('rest.retry')}</Button> : null}</p> : null}
         {!settings && !error ? <p role="status">{t('app.loading')}</p> : null}
         {editing === undefined && settings ? <>
-          <p className="text-sm text-[var(--muted)]">{t('rest.description')}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3">
             {(['server', 'client'] as const).map(kind => {
               const key = kind === 'server' ? 'serverEnabled' : 'clientEnabled';
-              return <Card key={kind} padding="compact" className="flex flex-col gap-3">
-                <SwitchField id={'rest-' + kind} label={t(kind === 'server' ? 'rest.server' : 'rest.client')} checked={settings[key]} disabled={busy} onChange={value => void toggle(key, value)} />
-                <p className="flex-1 text-sm text-[var(--muted)]">{t(kind === 'server' ? 'rest.serverDescription' : 'rest.clientDescription')}</p>
-                <p className="text-xs text-[var(--muted)]">{t(settings[key] ? 'rest.enabled' : 'rest.disabled')}</p>
-                <Button variant="ghost" size="sm" aria-label={t(kind === 'server' ? 'rest.editServer' : 'rest.editClient')} onClick={() => setEditing(kind)}>{t('rest.edit')}</Button>
+              return <Card key={kind} className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{t(kind === 'server' ? 'rest.server' : 'rest.client')}</div>
+                  <p className="text-sm text-[var(--muted)]">{t(kind === 'server' ? 'rest.serverDescription' : 'rest.clientDescription')}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <SwitchField id={'rest-' + kind} label={t(kind === 'server' ? 'rest.server' : 'rest.client')} checked={settings[key]} disabled={busy} onChange={value => void toggle(key, value)} />
+                  <Button variant="ghost" aria-label={t(kind === 'server' ? 'rest.editServer' : 'rest.editClient')} onClick={() => setEditing(kind)}>{t('rest.edit')}</Button>
+                </div>
               </Card>;
             })}
           </div>

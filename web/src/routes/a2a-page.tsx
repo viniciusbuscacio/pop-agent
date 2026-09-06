@@ -1,3 +1,4 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { A2aAgentDTO, A2aTaskDTO } from '@pop-agent/shared';
@@ -53,10 +54,7 @@ function A2aOverview() {
 
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold">{t('a2a.title')}</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">{t('a2a.intro')}</p>
-      </div>
+      <AgentPageHeader title={t('a2a.title')} description={t('a2a.intro')} />
       {agents === undefined ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">{t('a2a.loading')}</p>
       ) : agents.length === 0 ? (
