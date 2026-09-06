@@ -449,7 +449,7 @@ describe('subscription (oauth) providers', () => {
       configured: false,
       source: null,
       defaultModel: 'gpt-5.6-sol',
-      serviceModel: 'gpt-5.6-sol',
+      serviceModel: 'gpt-5.6-luna',
       allowCustomModel: false,
       order: 4,
       enabled: true,
@@ -1165,5 +1165,19 @@ describe('the legacy custom alias (docs/specs/Spec-Pop-General.md §15)', () => 
     service.setEnabled(instance.id, false);
 
     expect(defaults.provider).toBe('anthropic');
+  });
+});
+
+
+describe('subscription installation defaults', () => {
+  it.each(['openai-codex', 'github-copilot'])('uses Sol for chat and Luna for service work on %s', id => {
+    expect(service.status(id)?.defaultModel).toBe('gpt-5.6-sol');
+    expect(service.status(id)?.serviceModel).toBe('gpt-5.6-luna');
+    service.setDefaultModel(id, 'another-chat-model');
+    expect(service.serviceModel(id)).toBe('gpt-5.6-luna');
+    service.setServiceModel(id, 'owner-service-choice');
+    expect(service.serviceModel(id)).toBe('owner-service-choice');
+    service.setServiceModel(id, '');
+    expect(service.serviceModel(id)).toBe('another-chat-model');
   });
 });

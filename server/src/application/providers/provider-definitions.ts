@@ -20,6 +20,8 @@ export interface ProviderDefinition {
   baseURL: string;
   authType: 'api-key' | 'oauth';
   defaultModel: string;
+  /** Used only before an explicit service-model choice is stored. */
+  defaultServiceModel?: string;
   allowCustomModel: boolean;
   /** True when pi needs `registerProvider` instead of a builtin. */
   customBaseURL: boolean;
@@ -79,6 +81,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     baseURL: '',
     authType: 'oauth',
     defaultModel: 'gpt-5.6-sol',
+    defaultServiceModel: 'gpt-5.6-luna',
     allowCustomModel: false,
     customBaseURL: false,
     staticModels: [
@@ -100,10 +103,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     baseURL: '',
     authType: 'oauth',
     defaultModel: 'gpt-5.6-sol',
+    defaultServiceModel: 'gpt-5.6-luna',
     allowCustomModel: false,
     customBaseURL: false,
     staticModels: [
       { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
+      { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna' },
       { id: 'gpt-5.4', name: 'GPT-5.4', context: 1_000_000, pricing: { input: 2.5, output: 15 } },
       {
         id: 'claude-opus-5',

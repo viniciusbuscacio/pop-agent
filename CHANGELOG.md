@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.72
+
+- Default OpenAI Codex and GitHub Copilot subscriptions to GPT-5.6 Sol for chat and GPT-5.6 Luna for service work, preserving explicit saved choices and the follow-chat option.
+
 ## 0.2.71
 
 - Add Refresh models to connected OpenAI Codex and GitHub Copilot forms, preserving unsaved selections and retaining the previous list when reload fails.

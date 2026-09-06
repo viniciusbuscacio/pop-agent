@@ -511,8 +511,8 @@ export class ProviderService {
   serviceModel(providerId: string): string {
     const id = this.canonicalId(providerId);
     const stored = this.deps.settings.get<string>(`provider.${id}.serviceModel`);
-    if (stored !== undefined && stored.length > 0) return stored;
-    return this.chatModelOf(id);
+    if (stored !== undefined) return stored.length > 0 ? stored : this.chatModelOf(id);
+    return this.definition(id)?.defaultServiceModel ?? this.chatModelOf(id);
   }
 
   /**

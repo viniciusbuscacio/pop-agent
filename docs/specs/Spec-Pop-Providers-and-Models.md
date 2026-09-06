@@ -96,7 +96,9 @@ Each provider has:
 - service-model override: isolated titles, Auto-Skill creator/reviewer, voice
   cleanup and other internal completions.
 
-An empty service override means “follow this provider's chat model” dynamically,
+When no service-model setting exists, a provider-specific installation default
+applies if defined; otherwise service work follows its chat model.
+An explicitly empty service override means “follow this provider's chat model” dynamically,
 not a copied model ID. Service work with a parent chat starts from that chat's
 provider; independent work starts from the provider chain head. Each failover
 entry resolves its own service model.
@@ -209,8 +211,8 @@ returns to the picker. Skipping remains available without adding a provider.
 Setup must not maintain an OpenRouter-only credential form.
 
 The built-in default model for OpenAI Codex and GitHub Copilot subscriptions is
-`gpt-5.6-sol`. An explicitly stored provider model takes precedence over this
-installation default. Model metadata continues to come from the native catalog
+`gpt-5.6-sol`, with `gpt-5.6-luna` as the initial service model. Explicitly
+stored model choices take precedence over these installation defaults. Model metadata continues to come from the native catalog
 when available.
 
 
