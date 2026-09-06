@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { userInfo } from 'node:os';
 import type {
   TailnetStatus,
   TailscaleGateway,
@@ -54,7 +55,7 @@ export class TailscaleCliGateway implements TailscaleGateway {
         return;
       }
 
-      const child = spawn('tailscale', ['up', '--timeout=10m'], {
+      const child = spawn('tailscale', ['up', '--timeout=10m', `--operator=${userInfo().username}`], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: commandEnvironment(),
       });

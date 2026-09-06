@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.58
+
+- Preserve the service owner as the explicit Tailscale operator during browser-driven login, including the restricted subprocess environment.
+
+
 ## 0.2.57
 
 - Share the onboarding token header between browser and server so paired browsers can start Tailscale sign-in and enable HTTPS. Add coverage for the full network setup request sequence.
