@@ -752,3 +752,33 @@ automatically replay password creation or provider saves.
 
 The setup/loading balloon reuses the chat PopBubbleMark SVG, with a transparent
 background, muted theme color and 25% opacity. Do not use the solid app icon.
+
+
+### Installation diagnostics
+
+Both acquisition (server-install.sh) and checkout bootstrap
+(deploy/bootstrap-server.sh) automatically create a unique log under
+$XDG_STATE_HOME/pop-agent/install-logs, defaulting to
+~/.local/state/pop-agent/install-logs. Each entry point creates its own file;
+the bootstrap file also receives the managed Node installer's structured events.
+The acquisition path therefore produces an acquisition log and a bootstrap log.
+The installer prints each path when logging starts and again at completion or
+failure. Re-running creates a new file and preserves earlier logs. Logs remain
+outside the checkout, runtime staging and rollback directories.
+
+Record UTC timestamps, stages, architecture, available release version/commit,
+managed Node and Tailscale versions, command names and exit codes, and total
+duration. Missing a final event indicates an interrupted execution; no logger
+can guarantee a final write after SIGKILL, power loss or snapshot restoration.
+Do not record command arguments, environment dumps, raw stdout/stderr, remote
+URLs, passwords, tokens, keys or the one-time pairing code. These are structured
+diagnostics rather than terminal transcripts. Keep files owner-only (0600) in
+an owner-only directory (0700); refuse a symlink journal directory. If logging
+cannot initialize, warn without replacing the original installation error.
+
+For installation bug reports, attach the relevant acquisition and bootstrap
+.log files and describe the last visible step and error. No upload is automatic.
+The journal ends when preparation/service activation finishes; account setup and
+HTTPS interaction in the browser happen afterwards. Runtime/Tailscale failures
+also require bounded service journals and live client-to-server probes. Restore
+a VM snapshot only after collecting the failed attempt's diagnostics.

@@ -48,13 +48,13 @@ Caddy is already operator-managed.
 
 ## Fixed-ref GitHub acquisition
 
-Retrieve the immutable v0.2.67 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.68 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.67/server-install.sh && sh "$file" --ref v0.2.67)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.68/server-install.sh && sh "$file" --ref v0.2.68)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -267,3 +267,24 @@ The helper first checks `http://127.0.0.1:8787/healthz` and the current
 http://127.0.0.1:8787`. It never installs Tailscale, starts an account login,
 changes tailnet policy, or uses Funnel. Pop Agent remains loopback-only while
 Tailscale owns the authenticated HTTPS edge.
+
+## Installation logs
+
+The installer prints its log path at the start and on completion/failure.
+Logs are stored in ~/.local/state/pop-agent/install-logs/ (or under
+$XDG_STATE_HOME). Source acquisition and host bootstrap produce separate files;
+the bootstrap log includes runtime verification and service activation.
+Re-running preserves earlier logs.
+
+For a bug report, attach the files from the failed attempt and describe the last
+visible error. The logs contain structured phases, versions, status codes and
+timings; they do not capture terminal output or pairing/authentication secrets.
+They are local files and are never uploaded automatically.
+
+For a failure after the browser opens, preserve the VM and collect the recent
+service journals as well:
+
+    sudo journalctl -u pop-agent-service.service -u tailscaled --since "30 minutes ago" --no-pager
+
+Review service journal contents before sharing them. A restored snapshot removes
+the failed attempt's later state and diagnostics.

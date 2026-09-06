@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.68
+
+- Persist private installation journals from source acquisition and host bootstrap through prebuilt runtime verification and systemd activation. Print the log path on start and completion/failure; record UTC stages, release identity, command exit codes and duration without capturing terminal output, credentials or setup pairing codes.
+
 ## 0.2.67
 
 - Use the same transparent, muted Pop balloon as the chat empty state during setup and application loading, instead of the app icon with a solid background.

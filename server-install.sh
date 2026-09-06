@@ -1,6 +1,52 @@
 #!/bin/sh
 set -eu
 
+# BEGIN INSTALL JOURNAL (kept identical in both standalone entry points)
+INSTALL_LOG_FILE=
+INSTALL_LOG_PHASE=preflight
+INSTALL_LOG_STARTED=0
+POP_AGENT_INSTALL_LOG_ACTIVE=0
+export POP_AGENT_INSTALL_LOG_ACTIVE
+install_event() {
+  [ -n "$INSTALL_LOG_FILE" ] || return 0
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >&3 || :
+}
+install_phase() {
+  INSTALL_LOG_PHASE=$1
+  install_event "event=phase phase=$1"
+}
+install_log_init() {
+  # Never capture stdout/stderr, arguments, environment or authentication output.
+  for log_command in date mkdir stat id mktemp; do
+    command -v "$log_command" >/dev/null 2>&1 || return 1
+  done
+  INSTALL_LOG_STARTED=$(date +%s)
+  log_root=${XDG_STATE_HOME:-"$HOME/.local/state"}
+  case $log_root in /*) ;; *) return 1 ;; esac
+  log_dir=$log_root/pop-agent/install-logs
+  (umask 077; mkdir -p -- "$log_dir") || return 1
+  [ ! -L "$log_dir" ] && [ -d "$log_dir" ] || return 1
+  [ "$(stat -c %u -- "$log_dir")" = "$(id -u)" ] || return 1
+  [ "$(stat -c %a -- "$log_dir")" = 700 ] || return 1
+  INSTALL_LOG_FILE=$(umask 077; mktemp "$log_dir/install-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX.log") || return 1
+  exec 3>>"$INSTALL_LOG_FILE"
+  POP_AGENT_INSTALL_LOG_ACTIVE=1
+  export POP_AGENT_INSTALL_LOG_ACTIVE
+  printf 'Installation log: %s\n' "$INSTALL_LOG_FILE"
+  install_event "event=start schema=1"
+  install_phase preflight
+}
+install_log_finish() {
+  [ -n "$INSTALL_LOG_FILE" ] || return 0
+  install_event "event=finish phase=$INSTALL_LOG_PHASE exit_code=$1 duration_seconds=$(($(date +%s) - INSTALL_LOG_STARTED))"
+  printf 'Installation log: %s\n' "$INSTALL_LOG_FILE" >&2
+}
+case " ${*} " in
+  *" --help "*|*" -h "*) ;;
+  *) install_log_init || printf '%s\n' 'Warning: installation logging could not be initialized.' >&2 ;;
+esac
+# END INSTALL JOURNAL
+
 PROGRAM=server-install.sh
 REPOSITORY=viniciusbuscacio/pop-agent
 REF=main
@@ -22,9 +68,10 @@ cleanup() { [ -z "$STAGING" ] || rm -rf -- "$STAGING"; }
 on_signal() {
   trap - EXIT HUP INT TERM
   cleanup
+  install_log_finish 1
   exit 1
 }
-trap cleanup EXIT
+trap 'install_status=$?; cleanup; install_log_finish "$install_status"' EXIT
 trap on_signal HUP INT TERM
 
 usage() {
@@ -106,6 +153,7 @@ validate_paths() {
   fi
 }
 
+install_phase arguments
 validate_paths
 safe_absolute_path "home directory" "$HOME"
 case $PORT in ''|*[!0-9]*) die "port must be an integer from 1 to 65535: $PORT" ;; esac
@@ -147,6 +195,7 @@ done < "$OS_RELEASE_FILE"
 
 require_command() { command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"; }
 for required in git mktemp mkdir mv realpath rm stat chmod env; do require_command "$required"; done
+install_phase source-acquisition
 GIT_EXECUTABLE=$(realpath -- "$(command -v git)") || die "could not resolve Git executable"
 [ -f "$GIT_EXECUTABLE" ] && [ -x "$GIT_EXECUTABLE" ] || die "Git executable is not a regular executable file"
 
@@ -321,6 +370,7 @@ BOOTSTRAP=$(realpath -- "$ACTIVATED_CHECKOUT/deploy/bootstrap-server.sh") \
 [ "$BOOTSTRAP" = "$ACTIVATED_CHECKOUT/deploy/bootstrap-server.sh" ] \
   || die "activated bootstrap path escapes the checkout"
 say "Acquired clean Pop Agent checkout at exact commit $RESOLVED_COMMIT."
+install_event "event=source commit=$RESOLVED_COMMIT"
 
 # Build/service setup receives a small deliberate environment rather than
 # inherited token, askpass, SSH-agent, or environment-injected Git config.
@@ -338,6 +388,7 @@ set -- \
 if [ "$INSTALL_APT" -eq 1 ]; then set -- "$@" --install-apt-packages; fi
 if [ "$PREPARE_ONLY" -eq 1 ]; then set -- "$@" --prepare-only; fi
 if [ "$SKIP_NETWORK_ONBOARDING" -eq 1 ]; then set -- "$@" --skip-network-onboarding; fi
+install_phase bootstrap-handoff
 say "Handing off to the acquired checkout's verified host bootstrap..."
 if env -i HOME="$SAFE_HOME" USER="$SERVICE_USER" LOGNAME="$SERVICE_USER" \
   PATH="$SAFE_PATH" LANG="$SAFE_LANG" "$BOOTSTRAP" "$@"; then

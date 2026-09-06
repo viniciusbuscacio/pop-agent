@@ -1,6 +1,52 @@
 #!/bin/sh
 set -eu
 
+# BEGIN INSTALL JOURNAL (kept identical in both standalone entry points)
+INSTALL_LOG_FILE=
+INSTALL_LOG_PHASE=preflight
+INSTALL_LOG_STARTED=0
+POP_AGENT_INSTALL_LOG_ACTIVE=0
+export POP_AGENT_INSTALL_LOG_ACTIVE
+install_event() {
+  [ -n "$INSTALL_LOG_FILE" ] || return 0
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >&3 || :
+}
+install_phase() {
+  INSTALL_LOG_PHASE=$1
+  install_event "event=phase phase=$1"
+}
+install_log_init() {
+  # Never capture stdout/stderr, arguments, environment or authentication output.
+  for log_command in date mkdir stat id mktemp; do
+    command -v "$log_command" >/dev/null 2>&1 || return 1
+  done
+  INSTALL_LOG_STARTED=$(date +%s)
+  log_root=${XDG_STATE_HOME:-"$HOME/.local/state"}
+  case $log_root in /*) ;; *) return 1 ;; esac
+  log_dir=$log_root/pop-agent/install-logs
+  (umask 077; mkdir -p -- "$log_dir") || return 1
+  [ ! -L "$log_dir" ] && [ -d "$log_dir" ] || return 1
+  [ "$(stat -c %u -- "$log_dir")" = "$(id -u)" ] || return 1
+  [ "$(stat -c %a -- "$log_dir")" = 700 ] || return 1
+  INSTALL_LOG_FILE=$(umask 077; mktemp "$log_dir/install-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX.log") || return 1
+  exec 3>>"$INSTALL_LOG_FILE"
+  POP_AGENT_INSTALL_LOG_ACTIVE=1
+  export POP_AGENT_INSTALL_LOG_ACTIVE
+  printf 'Installation log: %s\n' "$INSTALL_LOG_FILE"
+  install_event "event=start schema=1"
+  install_phase preflight
+}
+install_log_finish() {
+  [ -n "$INSTALL_LOG_FILE" ] || return 0
+  install_event "event=finish phase=$INSTALL_LOG_PHASE exit_code=$1 duration_seconds=$(($(date +%s) - INSTALL_LOG_STARTED))"
+  printf 'Installation log: %s\n' "$INSTALL_LOG_FILE" >&2
+}
+case " ${*} " in
+  *" --help "*|*" -h "*) ;;
+  *) install_log_init || printf '%s\n' 'Warning: installation logging could not be initialized.' >&2 ;;
+esac
+# END INSTALL JOURNAL
+
 PROGRAM=${0##*/}
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 MANIFEST=$SCRIPT_DIR/server-toolchain-manifest.tsv
@@ -41,7 +87,10 @@ cleanup() {
   [ -z "$TAILSCALE_KEY_TEMP" ] || rm -f -- "$TAILSCALE_KEY_TEMP"
   [ -z "$TAILSCALE_LIST_TEMP" ] || rm -f -- "$TAILSCALE_LIST_TEMP"
 }
-trap cleanup EXIT HUP INT TERM
+trap 'install_status=$?; cleanup; install_log_finish "$install_status"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 usage() {
   cat <<'EOF'
@@ -137,6 +186,7 @@ safe_absolute_path() {
   [ "$value" != / ] || die "$label must not be the filesystem root"
 }
 
+install_phase arguments
 safe_absolute_path "checkout" "$CHECKOUT"
 safe_absolute_path "toolchain directory" "$TOOLCHAIN_DIR"
 safe_absolute_path "data directory" "$DATA_DIR"
@@ -155,6 +205,8 @@ case $(uname -m) in
   *) die "unsupported architecture: $(uname -m); supported architectures are amd64 and arm64" ;;
 esac
 
+install_phase platform
+install_event "event=platform os=linux architecture=$ARCH"
 OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}
 [ -f "$OS_RELEASE_FILE" ] && [ -r "$OS_RELEASE_FILE" ] || die "cannot identify the Linux distribution from $OS_RELEASE_FILE"
 DIST_ID=
@@ -185,6 +237,7 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1 (rerun with --install-apt-packages where applicable)"
 }
 
+install_phase prerequisites
 if [ "$INSTALL_APT" -eq 1 ]; then
   require_command sudo
   require_command apt-get
@@ -208,6 +261,7 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   fi
   if [ "$PREPARE_ONLY" -eq 0 ] && [ "$NETWORK_ONBOARDING" -eq 1 ] && ! command -v tailscale >/dev/null 2>&1; then
     case $DIST_CODENAME in ''|*[!a-z0-9]*) die "unsupported Ubuntu codename for the Tailscale repository: $DIST_CODENAME" ;; esac
+    install_phase tailscale-install
     TAILSCALE_KEY_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-key.XXXXXX") \
       || die "could not create temporary Tailscale key file"
     TAILSCALE_LIST_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-list.XXXXXX") \
@@ -470,6 +524,7 @@ EOF
   say "Activated verified $component $version in the Pop-owned toolchain."
 }
 
+install_phase toolchain-download
 # Independent downloads use separate subshell variables and temporary names.
 download_archive "$NODE_ARCHIVE" "$NODE_SIZE" "$NODE_SHA" "$NODE_URL" &
 node_download_pid=$!
@@ -483,6 +538,7 @@ node_download_pid=
 whisper_download_pid=
 [ "$node_download_status" -eq 0 ] && [ "$whisper_download_status" -eq 0 ] || die "toolchain download failed; verified archives are retained for retry"
 
+install_phase toolchain-verification
 install_runtime node "$NODE_VERSION" "$NODE_ARCHIVE" "$NODE_SIZE" "$NODE_SHA" "$NODE_URL" xz "node-v$NODE_VERSION-linux-$( [ "$ARCH" = amd64 ] && printf x64 || printf arm64 )"
 ACTIVE_NODE=$ACTIVE_RUNTIME
 ACTIVE_GO=
@@ -514,7 +570,10 @@ set -- --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT"
 if [ "$NETWORK_ONBOARDING" -eq 0 ]; then set -- "$@" --skip-network-onboarding; fi
 if [ "$BUILD_FROM_SOURCE" -eq 1 ]; then
   say "Building from source with the complete development gate..."
-  exec npm run install:server -- "$@"
+  install_phase source-build
+  npm run install:server -- "$@"
+  exit $?
 fi
 say "Installing the prebuilt server release..."
-exec node tools/install-prebuilt.ts "$@"
+install_phase prebuilt-runtime
+node tools/install-prebuilt.ts "$@"

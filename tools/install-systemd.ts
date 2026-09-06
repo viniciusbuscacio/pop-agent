@@ -18,6 +18,8 @@ import { networkInterfaces, tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { installEvent } from './install-journal.ts';
+
 const MINIMUM_NODE = [22, 19, 0] as const;
 const MINIMUM_GO = [1, 23, 0] as const;
 const UNIT_NAME = 'pop-agent-service.service';
@@ -236,6 +238,7 @@ export async function installPreparedCheckout(
   requested: InstallOptions,
   dependencies: InstallerDependencies = defaultDependencies(requested.prebuilt),
 ): Promise<void> {
+  installEvent('service-preflight');
   const options = validatePreflight(requested, dependencies);
   const { runner } = dependencies;
 
@@ -261,6 +264,7 @@ export async function installPreparedCheckout(
     throw new Error(`the gate did not produce ${builtManager}; inspect the gate output and rerun`);
   }
 
+  installEvent('service-directories');
   const dataDir = prepareOwnedDirectory(options.dataDir, dependencies.uid, 'data directory');
   const workspace = prepareOwnedDirectory(options.workspace, dependencies.uid, 'workspace');
   const backupsDir = prepareOwnedDirectory(join(dirname(dataDir), 'pop-backups'), dependencies.uid, 'backup directory');
@@ -303,15 +307,21 @@ export async function installPreparedCheckout(
     if (networkOnboarding) {
       runChecked(runner, 'sudo', ['--', 'tailscale', 'set', `--operator=${dependencies.username}`], options.checkout, true);
     }
+    installEvent('service-launcher');
     runChecked(runner, 'sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0755', stagedPopman, POPMAN_DESTINATION], options.checkout, true);
+    installEvent('service-unit');
     runChecked(runner, 'sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0644', stagedUnit, UNIT_DESTINATION], options.checkout, true);
+    installEvent('service-reload');
     runChecked(runner, 'sudo', ['--', 'systemctl', 'daemon-reload'], options.checkout, true);
+    installEvent('service-enable');
     runChecked(runner, 'sudo', ['--', 'systemctl', 'enable', UNIT_NAME], options.checkout, true);
+    installEvent('service-start');
     runChecked(runner, 'sudo', ['--', 'systemctl', 'restart', UNIT_NAME], options.checkout, true);
   } finally {
     rmSync(stagingDirectory, { recursive: true, force: true });
   }
 
+  installEvent('service-health');
   const healthUrl = `http://127.0.0.1:${String(options.port)}/healthz`;
   console.log(`Waiting up to 30 seconds for ${healthUrl}...`);
   if (!(await dependencies.healthCheck(healthUrl, 30_000))) {
@@ -321,6 +331,7 @@ export async function installPreparedCheckout(
     );
   }
   runChecked(runner, 'systemctl', ['is-active', '--quiet', UNIT_NAME], options.checkout);
+  installEvent('service-ready');
   console.log(`Pop Agent is healthy. The service remains loopback-only at http://127.0.0.1:${String(options.port)}.`);
   if (setupCode !== undefined) {
     const setupOrigin = `http://${finalOptions.bootstrapBind}:${String(finalOptions.bootstrapPort ?? 8788)}/setup`;
@@ -328,6 +339,7 @@ export async function installPreparedCheckout(
     console.log('Continue the private-network setup in a browser:');
     console.log(`  ${setupOrigin}`);
     console.log('');
+    installEvent('setup-code-issued');
     console.log(`One-time setup code (valid for 15 minutes): ${setupCode.code}`);
     if (finalOptions.bootstrapBind === '127.0.0.1') {
       console.log('No private LAN address was found. Forward the setup port over SSH before opening the URL.');
@@ -401,6 +413,8 @@ function validatePreflight(requested: InstallOptions, dependencies: InstallerDep
   runChecked(runner, 'install', ['--version'], checkout);
   if (networkOnboarding) {
     const tailscaleVersion = runChecked(runner, 'tailscale', ['version'], checkout).stdout.trim();
+    const version = /^\d+\.\d+\.\d+/.exec(tailscaleVersion)?.[0];
+    if (version !== undefined) installEvent('tailscale-version', { version });
     if (!/^\d+\.\d+/.test(tailscaleVersion)) {
       throw new Error(`could not validate Tailscale: ${tailscaleVersion || 'no version output'}`);
     }
@@ -554,7 +568,10 @@ function runChecked(
   cwd: string,
   inherit = false,
 ): RunResult {
+  const started = Date.now();
+  installEvent('command-start', { command });
   const result = runner.run(command, args, { cwd, inherit });
+  installEvent('command-finish', { command, exit_code: result.status, duration_ms: Date.now() - started });
   if (result.status !== 0) {
     const detail = result.stderr.trim() || result.stdout.trim();
     throw new Error(
