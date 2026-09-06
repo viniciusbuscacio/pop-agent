@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.66
+
+- Let setup own connection recovery: hide the global reconnect banner and keep setup controls interactive. Retry state reads with per-request timeouts, show branded Working progress, and offer Try again after bounded failures instead of requiring reload. Avoid duplicate boot/setup state requests.
+
 ## 0.2.65
 
 - Show the Pop balloon and animated Working indicator while activating and checking HTTPS. Verify actual server HTTPS readiness with bounded retries, then continue directly to secure password setup without another confirmation or refresh.

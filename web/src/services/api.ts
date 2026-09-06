@@ -149,7 +149,7 @@ function retriesLocalReconnect(path: string, method: string): boolean {
 
 export async function apiRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown; onboardingToken?: string } = {},
+  init: { method?: string; body?: unknown; onboardingToken?: string; signal?: AbortSignal } = {},
   runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
@@ -178,6 +178,7 @@ export async function apiRequest<T>(
       fetch(`${BASE}${path}`, {
         method,
         headers,
+        ...(init.signal === undefined ? {} : { signal: init.signal }),
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
       }),
     );

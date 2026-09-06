@@ -6,9 +6,9 @@ import { healthMonitor } from '../services/health';
  * visible, but make the route tree inert until the health probe reconnects;
  * the connection banner stays outside this gate so Try now remains available.
  */
-export function ServerAvailabilityGate({ children }: { children: ReactNode }) {
+export function ServerAvailabilityGate({ children, bypass = false }: { children: ReactNode; bypass?: boolean }) {
   const state = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getState);
-  const unavailable = state.kind === 'offline' || state.kind === 'device-offline';
+  const unavailable = !bypass && (state.kind === 'offline' || state.kind === 'device-offline');
   return (
     <div
       className="contents"

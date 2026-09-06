@@ -1,6 +1,6 @@
 import { RestApiPage } from './routes/rest-api-page';
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { LoadingState } from './ui/loading-state';
 import { setSessionLostHandler } from './services/api';
 import { authService } from './services/auth';
@@ -32,22 +32,28 @@ import { ServerAvailabilityGate } from './ui/server-availability-gate';
 export function App() {
   return (
     <BrowserRouter>
-      {/*
-        Above the router, so an unreachable server is announced on every screen
-        -- including the login the failed boot falls back to, which otherwise
-        just looks like the app forgot who you are.
-      */}
-      <ConnectionBanner />
+      <ConnectionChrome />
       <UpdatePrompt />
       <Toasts />
-      <ServerAvailabilityGate>
-        <Boot />
-      </ServerAvailabilityGate>
+      <ConnectionBoundary><Boot /></ConnectionBoundary>
     </BrowserRouter>
   );
 }
 
+/** Setup owns loading/retry and must remain interactive during network preparation. */
+function ConnectionChrome() {
+  const location = useLocation();
+  const status = useAuthStore((state) => state.status);
+  return location.pathname === '/setup' || status === 'needs-setup' ? null : <ConnectionBanner />;
+}
+function ConnectionBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const status = useAuthStore((state) => state.status);
+  return <ServerAvailabilityGate bypass={location.pathname === '/setup' || status === 'needs-setup'}>{children}</ServerAvailabilityGate>;
+}
+
 function Boot() {
+  const isSetup = useLocation().pathname === '/setup';
   const status = useAuthStore((state) => state.status);
   const setStatus = useAuthStore((state) => state.setStatus);
   const navigate = useNavigate();
@@ -67,6 +73,10 @@ function Boot() {
   }, [status]);
 
   useEffect(() => {
+    if (isSetup) {
+      setStatus('needs-setup');
+      return;
+    }
     let cancelled = false;
     authService
       .state()
@@ -81,7 +91,7 @@ function Boot() {
     return () => {
       cancelled = true;
     };
-  }, [setStatus]);
+  }, [setStatus, isSetup]);
 
   if (status === 'loading') {
     return (

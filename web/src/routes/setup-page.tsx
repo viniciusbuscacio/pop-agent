@@ -3,6 +3,7 @@ import type { OnboardingStateResponse } from '@pop-agent/shared';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
+import { readSetupState } from '../services/setup-state';
 import { authService } from '../services/auth';
 import { pendingRecovery } from '../services/pending-recovery';
 import { onboardingService, onboardingSession } from '../services/onboarding';
@@ -37,6 +38,7 @@ export function SetupPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [stateAttempt, setStateAttempt] = useState(0);
 
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
   const mismatch = confirmation.length > 0 && confirmation !== password;
@@ -44,18 +46,23 @@ export function SetupPage() {
 
   useEffect(() => {
     if (pendingKey !== undefined) return;
-    let cancelled = false;
-    void authService.state()
+    const controller = new AbortController();
+    setStep('loading');
+    void readSetupState(controller.signal)
       .then((state) => {
-        if (!cancelled) setStep(state.setupMode === 'network' ? 'network' : 'password');
+        if (controller.signal.aborted) return;
+        if (state.setupDone) {
+          setStatus(session.token() === undefined ? 'signed-out' : 'signed-in');
+          void navigate(session.token() === undefined ? '/login' : '/', { replace: true });
+          return;
+        }
+        setStep(state.setupMode === 'network' ? 'network' : 'password');
       })
       .catch(() => {
-        if (!cancelled) setStep('unavailable');
+        if (!controller.signal.aborted) setStep('unavailable');
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingKey]);
+    return () => controller.abort();
+  }, [pendingKey, stateAttempt, setStatus, navigate]);
 
   async function submitPassword(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -93,7 +100,7 @@ export function SetupPage() {
     }
   }
 
-  if (step === 'loading') return <CenteredScreen><LoadingState /></CenteredScreen>;
+  if (step === 'loading') return <CenteredScreen><LoadingState label={t('chat.working')} /></CenteredScreen>;
 
   if (step === 'provider') {
     return (
@@ -109,7 +116,10 @@ export function SetupPage() {
     <CenteredScreen>
       <Card>
         {step === 'unavailable' ? (
-          <p role="alert" className="text-sm text-[var(--danger)]">{t('setup.stateFailed')}</p>
+          <div className="flex flex-col gap-5">
+            <p role="alert" className="text-sm text-[var(--danger)]">{t('setup.stateFailed')}</p>
+            <Button type="button" data-testid="setup-state-retry" onClick={() => setStateAttempt((value) => value + 1)}>{t('setup.network.retryConnection')}</Button>
+          </div>
         ) : null}
 
         {step === 'network' ? <NetworkSetupStep /> : null}

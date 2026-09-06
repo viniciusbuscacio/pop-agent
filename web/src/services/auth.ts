@@ -12,8 +12,8 @@ import { session } from './session';
 
 /** Auth calls. Types come from `shared/` -- the frontend never restates them. */
 export const authService = {
-  state(): Promise<AuthStateResponse> {
-    return apiRequest<AuthStateResponse>('/auth/state');
+  state(signal?: AbortSignal): Promise<AuthStateResponse> {
+    return apiRequest<AuthStateResponse>('/auth/state', signal === undefined ? {} : { signal });
   },
 
   setup(password: string): Promise<SetupResponse> {

@@ -33,6 +33,12 @@ afterEach(() => {
 });
 
 describe('ServerAvailabilityGate', () => {
+  it('keeps setup retry controls usable during an outage', () => {
+    health.set('offline');
+    render(<ServerAvailabilityGate bypass><button type="button">Try again</button></ServerAvailabilityGate>);
+    expect(screen.getByTestId('server-availability-gate').hasAttribute('inert')).toBe(false);
+  });
+
   it('keeps loaded content visible but inert until the server reconnects', () => {
     render(
       <ServerAvailabilityGate>

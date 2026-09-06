@@ -733,3 +733,19 @@ bytes. A failed acquisition returns retryable HTTP 503. Unknown artifacts remain
 404. Private GitHub assets use the server owner's existing gh authentication;
 public releases need no authentication. No startup prefetch and no credential
 material in public manifests or responses. Retain legacy complete packs.
+
+
+### Setup connection recovery
+
+Setup owns connection feedback. Hide the global connection banner on /setup
+and while onboarding is required, and do not make setup controls inert through
+the application-wide availability gate. Keep the Pop balloon and Working
+indicator visible while reading initial state. The setup route owns this lookup;
+application boot must not race it with a second lookup.
+
+Retry failed, stalled or malformed setup-state GET responses with six attempts,
+an eight-second deadline per request and two seconds between attempts. Cancel
+requests and delays on unmount. After exhaustion, offer an enabled Try again
+button in the page; do not demand browser reload and never infer that it is safe
+to display password setup from a failed response. Only retry reads, never
+automatically replay password creation or provider saves.

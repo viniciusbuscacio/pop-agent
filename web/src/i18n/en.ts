@@ -22,7 +22,7 @@ export const en = {
   'setup.welcome.title': 'Welcome to Pop Agent',
   'setup.welcome.body':
     'This is your own Pop Agent, running on your own server. Start by choosing a password — it is the only way in.',
-  'setup.stateFailed': 'Setup state could not be verified. Check the server connection and reload this page.',
+  'setup.stateFailed': 'Setup is taking longer than expected. Check your connection and try again.',
   'setup.network.pairTitle': 'Finish setting up this server',
   'setup.network.pairBody': 'Enter the one-time code printed by the installer. No password is accepted on this temporary HTTP page.',
   'setup.network.codeLabel': 'One-time setup code',

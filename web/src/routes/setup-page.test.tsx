@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -79,6 +79,25 @@ beforeEach(() => {
 });
 
 describe('setup wizard', () => {
+  it('retries a failed state lookup while showing Working', async () => {
+    authState.mockRejectedValueOnce(new Error('temporary')).mockResolvedValue({ setupDone: false, setupMode: 'account' });
+    render(<MemoryRouter><SetupPage /></MemoryRouter>);
+    expect(await screen.findByText('Working…')).toBeDefined();
+    await waitFor(() => expect(screen.getByTestId('setup-password')).toBeDefined(), { timeout: 3000 });
+  });
+  it('offers a working retry after exhausting automatic attempts', async () => {
+    vi.useFakeTimers();
+    try {
+      authState.mockRejectedValue(new Error('temporary'));
+      render(<MemoryRouter><SetupPage /></MemoryRouter>);
+      await act(async () => { await vi.advanceTimersByTimeAsync(11000); });
+      expect(screen.getByTestId('setup-state-retry')).toBeDefined();
+      authState.mockResolvedValue({ setupDone: false, setupMode: 'account' });
+      await act(async () => { screen.getByTestId('setup-state-retry').click(); });
+      expect(screen.getByTestId('setup-password')).toBeDefined();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('uses HTTP only to pair and prepare Tailscale, without rendering a password field', async () => {
     authState.mockResolvedValue({ setupDone: false, setupMode: 'network' });
     onboardingPair.mockResolvedValue({
