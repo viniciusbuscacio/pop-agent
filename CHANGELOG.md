@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.69
+
+- Clarify HTTPS setup progress: “Preparing your secure connection. You will be redirected when it’s ready.”
+
 ## 0.2.68
 
 - Persist private installation journals from source acquisition and host bootstrap through prebuilt runtime verification and systemd activation. Print the log path on start and completion/failure; record UTC stages, release identity, command exit codes and duration without capturing terminal output, credentials or setup pairing codes.

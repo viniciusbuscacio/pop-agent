@@ -32,7 +32,7 @@ export const en = {
   'setup.network.connect': 'Start Tailscale sign-in',
   'setup.network.openTailscale': 'Open Tailscale sign-in',
   'setup.network.tailnetDevice': 'The device running this browser must also be connected to the same tailnet.',
-  'setup.network.preparingHttps': 'Preparing your secure connection. This can take a moment. You will continue automatically.',
+  'setup.network.preparingHttps': 'Preparing your secure connection. You will be redirected when it’s ready.',
   'setup.network.waitFailed': 'The secure page did not open. Check that this device is connected to Tailscale, then try again.',
   'setup.network.retryConnection': 'Try again',
   'setup.network.httpsTitle': 'Enable private HTTPS',
