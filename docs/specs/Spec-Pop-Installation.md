@@ -749,3 +749,6 @@ requests and delays on unmount. After exhaustion, offer an enabled Try again
 button in the page; do not demand browser reload and never infer that it is safe
 to display password setup from a failed response. Only retry reads, never
 automatically replay password creation or provider saves.
+
+The setup/loading balloon reuses the chat PopBubbleMark SVG, with a transparent
+background, muted theme color and 25% opacity. Do not use the solid app icon.

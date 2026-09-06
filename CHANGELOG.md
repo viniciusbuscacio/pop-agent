@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.67
+
+- Use the same transparent, muted Pop balloon as the chat empty state during setup and application loading, instead of the app icon with a solid background.
+
 ## 0.2.66
 
 - Let setup own connection recovery: hide the global reconnect banner and keep setup controls interactive. Retry state reads with per-request timeouts, show branded Working progress, and offer Try again after bounded failures instead of requiring reload. Avoid duplicate boot/setup state requests.
