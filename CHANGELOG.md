@@ -4,7 +4,7 @@
 
 - Install verified prebuilt Ubuntu server releases instead of compiling and running the full development gate on each host. Native amd64/arm64 release builds run the full gate and probe the production package before publication.
 - Keep FFmpeg and Whisper installed by default; omit Python, compilers and Go from normal installation. Download Node and Whisper in parallel and retain verified downloads for retries.
-- Ship prepacked CLI/PLA downloads and only the target architecture's ONNX native binaries. Preserve an explicit developer source-build path.
+- Ship prepacked CLI/PLA downloads and only the target architecture's ONNX CPU binaries, without unused CUDA/TensorRT libraries. Preserve an explicit developer source-build path.
 
 ## 0.2.61
 

@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: local-access/tray/go.sum
       - name: Build and validate on the native architecture
         run: |
-          npm ci
+          ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
           npm run gate
           npm run pack:cli
           npm run pack:server-runtime -- "$RUNNER_TEMP/server-release"

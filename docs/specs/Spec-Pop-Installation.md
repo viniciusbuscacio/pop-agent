@@ -210,7 +210,8 @@ and workspace remain separate. Verified downloads survive retries.
 
 Release generation requires a clean committed tree and a fresh matching full
 gate receipt. Packaging retains applied pi patches, prunes development packages
-without install scripts, and removes ONNX native binaries for other platforms.
+without install scripts, and removes ONNX native binaries for other platforms and unused CUDA/TensorRT
+providers. It runs an offline Identity graph through the CPU execution provider.
 It probes SQLite, Argon2, Sharp, embeddings and pi imports and runs the built
 application smoke before publication. Both architecture jobs must pass before
 publishing their immutable GitHub release assets. CI also extracts the package

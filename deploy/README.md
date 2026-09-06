@@ -205,7 +205,8 @@ isolated owner-only generation beneath:
 ${XDG_DATA_HOME:-$HOME/.local/share}/pop-agent/server-releases
 ```
 
-It loads native SQLite, Argon2, Sharp, embeddings and pi dependencies, then runs
+It loads native SQLite, Argon2, Sharp, embeddings and pi dependencies, performs
+an offline ONNX CPU inference without GPU libraries, then runs
 14 functional checks against the built application with temporary data and a
 fake provider. No model request or user database is involved. There is no npm
 install, TypeScript build, Go build or full development suite on this path.

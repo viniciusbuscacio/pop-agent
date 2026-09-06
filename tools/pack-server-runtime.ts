@@ -34,6 +34,10 @@ try {
     const binaries = join(runtime, workspace, 'node_modules/onnxruntime-node/bin');
     if (!existsSync(binaries)) continue;
     for (const api of readdirSync(binaries)) {
+      // Pop embeddings use CPU. These optional GPU providers are not runtime requirements.
+      for (const provider of ['libonnxruntime_providers_cuda.so', 'libonnxruntime_providers_tensorrt.so']) {
+        rmSync(join(binaries, api, process.platform, process.arch, provider), { force: true });
+      }
       for (const platform of readdirSync(join(binaries, api))) {
         const directory = join(binaries, api, platform);
         if (platform !== process.platform) rmSync(directory, { recursive: true, force: true });

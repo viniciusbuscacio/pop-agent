@@ -125,6 +125,12 @@ export async function checkNativeRuntime(root: string): Promise<void> {
     const hash = await argon2.hash('local-install-probe');
     if (!await argon2.verify(hash, 'local-install-probe')) throw Error('Argon2 probe failed');
     await require('sharp')({create:{width:1,height:1,channels:3,background:'white'}}).png().toBuffer();
+    const ort = await import('onnxruntime-node');
+    // ONNX Identity graph, float32[1], opset 13: an actual offline CPU inference.
+    const session = await ort.InferenceSession.create(Buffer.from('08083a410a100a017812017922084964656e74697479120b706f702d696e7374616c6c5a0f0a0178120a0a08080112040a020801620f0a0179120a0a08080112040a0208014202100d', 'hex'), { executionProviders: ['cpu'] });
+    const output = await session.run({ x: new ort.Tensor('float32', Float32Array.of(42), [1]) });
+    if (output.y.data[0] !== 42) throw Error('ONNX CPU probe failed');
+    await session.release();
     await import('@huggingface/transformers');
     await import('@earendil-works/pi-coding-agent');
   `;
