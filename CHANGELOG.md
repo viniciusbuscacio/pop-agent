@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.77 — 2026-09-07
+
+- Remove Chat message and conversation-header overflow buttons, their click triggers and reserved spacing on every viewport and display mode, including installed PWAs.
+
 - Wait up to five minutes for the Ubuntu package manager lock when installing prerequisites or Tailscale, instead of failing immediately during automatic upgrades.
 
 ## 0.2.76 — 2026-09-07

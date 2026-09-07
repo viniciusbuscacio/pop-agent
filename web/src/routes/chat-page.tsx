@@ -152,8 +152,7 @@ export function ChatPage() {
         const source = resendSource(history, index);
         const canResend = source !== undefined && idle && pending.length === 0;
         return (
-          <div key={message.id} data-context-message={message.id} className="relative min-w-0 md:pr-8">
-          <Pressable type="button" data-testid="message-context-trigger" onPointerDown={event=>event.preventDefault()} aria-label={t('context.actions')} className="absolute right-0 top-0 hidden rounded px-2 text-[var(--muted)] md:block">⋯</Pressable>
+          <div key={message.id} data-context-message={message.id} className="min-w-0">
           <ChatMessage
             message={message}
             resending={resendingId === message.id}
@@ -281,11 +280,11 @@ export function ChatPage() {
     setShowJump(false);
   }
 
-  function openContext(event: React.MouseEvent<HTMLElement>, background = false): void {
-    if (!background && nativeContext(event.target)) return;
-    if (!background && (event.target as Element).closest('[data-testid="message-assistant"], [data-testid="message-user"], [data-testid="message-system"]') && !(event.target as Element).closest('[data-context-message]')) return;
+  function openContext(event: React.MouseEvent<HTMLElement>): void {
+    if (nativeContext(event.target)) return;
+    if ((event.target as Element).closest('[data-testid="message-assistant"], [data-testid="message-user"], [data-testid="message-system"]') && !(event.target as Element).closest('[data-context-message]')) return;
     event.preventDefault();event.stopPropagation();
-    const root = background ? null : (event.target as Element).closest<HTMLElement>('[data-context-message]');
+    const root = (event.target as Element).closest<HTMLElement>('[data-context-message]');
     const index = (messages ?? []).findIndex(message=>message.id === root?.dataset.contextMessage);
     const message = messages?.[index];
     const actions: ContextAction[] = [];
@@ -309,7 +308,6 @@ export function ChatPage() {
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
         <BackButton data-testid="chat-back" aria-label={t('common.back')} onClick={() => void navigate('/')} className="md:hidden" />
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
-        <Pressable type="button" aria-label={t('context.actions')} data-testid="chat-context-trigger" className="rounded px-2 py-1 text-[var(--muted)]" onClick={event=>openContext(event,true)}>⋯</Pressable>
 
       </header>
 
@@ -321,7 +319,6 @@ export function ChatPage() {
           data-testid="chat-scroller"
           onKeyDown={menuKeyboard}
           onContextMenu={event=>openContext(event)}
-          onClick={event=>{if((event.target as Element).closest('[data-testid="message-context-trigger"]'))openContext(event);}}
           className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         >
