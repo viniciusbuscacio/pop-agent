@@ -172,8 +172,9 @@ between the server and an optional local runtime.
   optional local-access tray; they do not contain the agent or web UI.
 - **Tests:** Vitest, Testing Library/happy-dom, Go tests, contract probes and an
   end-to-end smoke server with a fake provider.
-- **CI:** GitHub Actions runs `npm ci` and the full gate on pushes to `main` and
-  pull requests.
+- **Validation/publication:** owner-managed Ubuntu 24.04 AMD64 Docker builder on
+  ubuntu-home, with persistent caches. Hosted GitHub Actions CI/release workflows
+  are disabled; GitHub stores the source and explicitly published batch releases.
 
 ## 3. Repository layout and architecture
 
@@ -288,10 +289,18 @@ archives cannot forge or decrypt credentials by themselves.
 - Read the General index and relevant focused specs before architectural work;
   inspect current code and tests before asserting implementation details.
 - Repository changes are English and limited to the requested concern.
+- Batch GitHub pushes and prebuilt releases at owner-agreed publication points,
+  rather than after each small change. A daily batch is an option, not an
+  automatic schedule. Continue local implementation, validation and authorized
+  principal-server updates between batches; do not bump the product version or
+  dispatch a release for every individual adjustment.
 - Parallel or isolated work uses Git worktrees. Never overwrite unrelated work
   found in `main`.
-- Before declaring code work complete: review the full related diff, run
-  `npm run gate`, commit only related files and verify final Git status.
+- During development: review the related diff, run checks appropriate to the
+  change, commit only related files locally and verify final Git status. Before
+  publishing a batch, the local release builder must pass the full exact-tree
+  `npm run gate` once (or reuse its successful receipt for at most 24 hours).
+  Do not repeat the full gate for each small adjustment or on hosted Actions.
 - The gate runs version consistency, pi patch validation, specification and
   generated self-map checks, lint, typecheck, Go launcher/tray checks, build,
   the complete test suite and smoke.

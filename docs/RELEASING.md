@@ -313,16 +313,21 @@ cannot be accidentally promoted later.
 
 ## Prebuilt server release workflow
 
-Normal Ubuntu installation consumes the architecture assets published by
-`.github/workflows/server-release.yml`. After pushing the clean, gated version
-commit, dispatch `server-release` for that exact ref. Both Ubuntu 24.04 amd64
-and arm64 jobs run the full gate, pack clients, prune production dependencies,
-probe native modules, and smoke the built app. They then exercise extraction
-and validation with npm/Go/Python/compiler commands replaced by failing stubs.
-Only the successful pair is published as `v<VERSION>`, with JSON manifests and
-immutable tarballs. This workflow creates the release/tag; do not pre-create a
-release with the same version. A failed publication leaves a draft for review,
-not a partially advertised installation. Never replace published bytes.
+Batch publication is performed on ubuntu-home, not GitHub Actions. Commit the
+agreed batch, then run `./deploy/local-release.sh build`. The first run prepares
+a pinned Ubuntu 24.04 AMD64 Docker image; later runs reuse the image, installed
+dependencies, verified audio and an exact-tree gate receipt for up to 24 hours.
+The builder validates production installation with development tools blocked.
+It never mounts the principal data directory or publication credentials.
+
+Authenticate once using `./deploy/local-release.sh auth` with the owner's GitHub
+token on stdin. Run `./deploy/local-release.sh publish` only at the agreed batch
+publication point. This verifies bundle/client hashes and source identity,
+pushes the committed batch, uploads a draft and publishes only after successful
+uploads. Existing releases are refused and published bytes are never replaced.
+A failed publication leaves a draft for inspection. New versions must be chosen
+at publication time, not for every UI adjustment. Routine development uses
+focused checks and local commits, without hosted CI or automatic releases.
 
 For a local native build after a matching gate and client packaging:
 

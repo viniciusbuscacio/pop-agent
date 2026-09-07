@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move batch release builds to the owner-managed Ubuntu 24.04 AMD64 Docker builder on ubuntu-home; reuse verified dependency/audio/gate caches, isolate build credentials and test temporary files, and publish verified bundles explicitly without hosted GitHub Actions.
+
 ## 0.2.77 — 2026-09-07
 
 - Remove Chat message and conversation-header overflow buttons, their click triggers and reserved spacing on every viewport and display mode, including installed PWAs.

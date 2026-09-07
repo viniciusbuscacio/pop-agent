@@ -288,3 +288,13 @@ service journals as well:
 
 Review service journal contents before sharing them. A restored snapshot removes
 the failed attempt's later state and diagnostics.
+
+## Maintainer builds on ubuntu-home
+
+Run `./deploy/local-release.sh build` for a committed publication batch, then
+`./deploy/local-release.sh publish` when that batch should be sent to GitHub.
+The first build prepares an Ubuntu 24.04 Docker image; later builds reuse it,
+locked dependencies and verified audio artifacts. Authentication is configured
+once with `./deploy/local-release.sh auth` (GitHub token on stdin). Credentials
+are isolated from builds. State and bundles live under
+`~/.local/share/pop-agent/release-builder`. No GitHub Actions runner is required.

@@ -14,9 +14,10 @@ Quick facts for agents working in this repo:
   rule and inner-layer purity are enforced by
   `server/src/architecture/boundary.test.ts` in the gate. The React app
   only paints; components never call `fetch` — only `web/src/services/*`.
-- Gate before every commit: `npm run gate` (lint + typecheck + tests +
-  build). Green gate → conventional commit straight to main. English
-  everywhere in the repo.
+- During development, run checks appropriate to the change and commit locally.
+  Batch GitHub pushes and releases only at owner-agreed publication points.
+  The local Ubuntu 24.04 release builder runs/reuses the full exact-tree gate
+  once per batch; do not repeat it on GitHub Actions. English everywhere.
 - Test end-to-end without clicking: `tools/smoke.ts` (temp DB + fake
   provider) and the `GET /v1/ax` control plane.
 - UI vetoes (permanent): no side drawer for forms; no emoji as icons;

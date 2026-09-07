@@ -778,3 +778,33 @@ The journal ends when preparation/service activation finishes; account setup and
 HTTPS interaction in the browser happen afterwards. Runtime/Tailscale failures
 also require bounded service journals and live client-to-server probes. Restore
 a VM snapshot only after collecting the failed attempt's diagnostics.
+
+## Owner-managed local release builder
+
+Run `./deploy/local-release.sh build` on ubuntu-home. A pinned Ubuntu 24.04 Docker
+image builds native AMD64 artifacts independently of the Ubuntu 26.04 host and
+principal service. Docker may use existing passwordless sudo. The owner-only
+state directory defaults to `~/.local/share/pop-agent/release-builder`; an
+exclusive lock prevents overlapping build/publication. No production data or
+Docker socket is mounted into the builder. CPU and memory are bounded.
+
+The persistent disposable checkout reuses npm dependencies only for identical
+lockfile/patch inputs, Node version and builder image. Node/Go/Whisper downloads
+remain pinned and verified. The full gate runs once per source tree; a successful
+exact-tree/Node receipt is reusable for 24 hours. Each container run owns and
+cleans its temporary test files. Native audio build and real-transcription proof
+are cached by build/test inputs, transcription implementation, toolchain pins
+and base image; cached files are hash-verified before reuse. Every new server
+bundle still passes native checks and a production installation probe with
+development tools blocked. Repeating the same verified build only verifies and
+reuses its immutable assets.
+
+`./deploy/local-release.sh auth` accepts the owner's GitHub token through stdin.
+Credentials are kept in the separate owner-only `auth` directory, mounted only
+for authentication/publication, never for builds or dependency install scripts.
+`./deploy/local-release.sh publish` is the explicit publication boundary: it
+requires the latest verified build to match the committed source batch, checks
+server/client/source hashes and source identity, refuses an existing release,
+pushes the batch without force, uploads a draft and publishes only after all
+uploads succeed. A failed upload leaves an unpublished draft for inspection.
+Hosted CI and release workflows are disabled; no release runs on each UI edit.

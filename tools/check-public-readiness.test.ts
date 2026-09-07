@@ -17,7 +17,7 @@ function fixture(): string {
     'docs/specs/Spec-Pop-Installation.md',
     '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/ISSUE_TEMPLATE/config.yml',
-    '.github/dependabot.yml', '.github/workflows/ci.yml', 'package.json',
+    '.github/dependabot.yml', 'deploy/local-release.Dockerfile', 'deploy/local-release.sh', 'deploy/local-release-container.sh', 'package.json',
     'shared/package.json', 'server/package.json', 'web/package.json', 'cli/package.json',
     'tools/package.json',
   ]) {
@@ -53,7 +53,7 @@ describe('public repository readiness', () => {
     ]));
   });
 
-  it('rejects missing guided clone installation and an unpinned GitHub Action', () => {
+  it('rejects missing guided clone installation and an unpinned local builder image', () => {
     const root = fixture();
     const readme = readFileSync(join(root, 'README.md'), 'utf8').replaceAll(
       'git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git',
@@ -64,16 +64,16 @@ describe('public repository readiness', () => {
       `${readme}\n\`\`\`sh\ncurl \\\n  https://example.invalid/install |\n  sh\n\`\`\`\n`,
     );
     writeFileSync(
-      join(root, '.github/workflows/ci.yml'),
-      readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8').replace(
-        /actions\/checkout@[0-9a-f]{40}/,
-        'actions/checkout@v4',
+      join(root, 'deploy/local-release.Dockerfile'),
+      readFileSync(join(root, 'deploy/local-release.Dockerfile'), 'utf8').replace(
+        /ubuntu:24\.04@sha256:[a-f0-9]{64}/,
+        'ubuntu:latest',
       ),
     );
     expect(publicReadinessErrors(root)).toEqual(expect.arrayContaining([
       'README lacks the public Git clone command',
       'README.md contains a producer-to-shell installer',
-      expect.stringContaining('CI action is not pinned to a full commit'),
+      'Local builder image is not pinned to Ubuntu 24.04 by digest',
     ]));
   });
 });

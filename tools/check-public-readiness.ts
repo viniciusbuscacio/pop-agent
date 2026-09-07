@@ -28,7 +28,9 @@ const REQUIRED_FILES = [
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/ISSUE_TEMPLATE/config.yml',
   '.github/dependabot.yml',
-  '.github/workflows/ci.yml',
+  'deploy/local-release.Dockerfile',
+  'deploy/local-release.sh',
+  'deploy/local-release-container.sh',
 ] as const;
 
 const PACKAGE_FILES = [
@@ -59,10 +61,11 @@ export function publicReadinessErrors(root: string): string[] {
 
   const readme = read('README.md');
   const security = read('SECURITY.md');
-  const workflow = read('.github/workflows/ci.yml');
+  const builder = read('deploy/local-release.Dockerfile');
+  const localRelease = read('deploy/local-release.sh');
+  const containerBuild = read('deploy/local-release-container.sh');
   const releasing = read('docs/RELEASING.md');
   const installer = read('server-install.sh');
-  const toolchain = read('deploy/server-toolchain-manifest.tsv');
 
   if (!readme.includes('git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git')) {
     errors.push('README lacks the public Git clone command');
@@ -92,27 +95,10 @@ export function publicReadinessErrors(root: string): string[] {
     errors.push('installer does not reject branch/tag ambiguity');
   }
 
-  if (!/^permissions:\n {2}contents: read$/m.test(workflow)) errors.push('CI does not default to read-only contents permission');
-  if (!workflow.includes('persist-credentials: false')) errors.push('CI checkout retains credentials');
-  if (!workflow.includes('timeout-minutes:')) errors.push('CI job has no timeout');
-  const toolVersions = new Map(
-    toolchain.split('\n')
-      .filter((line) => line.length > 0 && !line.startsWith('#'))
-      .map((line) => line.split('|'))
-      .filter((fields): fields is [string, string, ...string[]] => fields.length >= 2)
-      .map((fields) => [fields[0], fields[1]]),
-  );
-  for (const tool of ['node', 'go']) {
-    const version = toolVersions.get(tool);
-    if (version === undefined || !workflow.includes(`${tool}-version: ${version}`)) {
-      errors.push(`CI ${tool} version does not match the pinned server toolchain`);
-    }
-  }
-  for (const line of workflow.split('\n').filter((entry) => entry.trim().startsWith('uses:'))) {
-    if (!/uses:\s+[\w.-]+\/[\w.-]+@[0-9a-f]{40}(?:\s+#\s+v?\S+)?$/.test(line.trim())) {
-      errors.push(`CI action is not pinned to a full commit: ${line.trim()}`);
-    }
-  }
+  if (!/^FROM ubuntu:24\.04@sha256:[a-f0-9]{64}$/m.test(builder)) errors.push('Local builder image is not pinned to Ubuntu 24.04 by digest');
+  if (!localRelease.includes('--cpus=2 --memory=4g')) errors.push('Local builder lacks resource limits');
+  if (!containerBuild.includes('--prepare-only --build-from-source')) errors.push('Local builder does not use pinned toolchain preparation');
+  if (!containerBuild.includes('npm run gate')) errors.push('Local builder does not enforce the full publication gate');
 
   const repositoryUrl = 'git+https://github.com/viniciusbuscacio/pop-agent.git';
   const homepageUrl = 'https://github.com/viniciusbuscacio/pop-agent#readme';
