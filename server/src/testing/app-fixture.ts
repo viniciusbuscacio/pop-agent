@@ -444,7 +444,7 @@ export function createTestApp(
     bridge,
     busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
   });
-  const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
+  const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {secrets, config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
   hub.onIntegrationEvent = event=>integrations.observe(event);
   const restClients = new RestClientService({config: new RestApiSettingsService(settingsRepo),repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
   const uiBridge = new UiBridgeService();

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createTestApp, setupTestSession } from '../../testing/app-fixture.js';
 import type { IntegrationScope } from '../../domain/integrations/integration.js';
 import { integrationOpenApi, INTEGRATION_ENDPOINTS } from './integration-routes.js';
@@ -6,14 +6,7 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}`, 'content-ty
 async function fixture(scopes: IntegrationScope[] = ['activity:read']) {
     const f = createTestApp();
     const owner = await setupTestSession(f.app);
-    const response = await f.app.request('/v1/rest-api/tokens', { method: 'POST', headers: auth(owner), body: JSON.stringify({ name: 'test integration', scopes, days: 7 }) });
-    expect(response.status).toBe(201);
-    const token = await response.json() as {
-        secret: string;
-        token: {
-            id: string;
-        };
-    };
+    const token = f.integrations.create('legacy scoped fixture', scopes, 7);
     return { ...f, owner, ...token };
 }
 describe('REST integration authorization and commands', () => {
@@ -153,4 +146,40 @@ it('closes an existing activity stream after the Server switch is disabled', asy
     while (!closed) { closed = (await reader.read()).done; }
     expect(closed).toBe(true);
   } finally { controller.abort(); reader.releaseLock(); }
+});
+
+
+describe('single REST access key', () => {
+  it('persists one owner-readable key, replaces legacy keys and grants all REST operations', async () => {
+    const f = await fixture();
+    const read = () => f.app.request('/v1/rest-api/key', { headers: auth(f.owner) });
+    expect(await (await read()).json()).toEqual({ secret: null });
+    expect((await f.app.request('/v1/rest-api/key')).status).toBe(401);
+    const response = await f.app.request('/v1/rest-api/key', { method: 'POST', headers: auth(f.owner) });
+    expect(response.status).toBe(201); expect(response.headers.get('cache-control')).toBe('no-store');
+    const first = await response.json() as { secret: string };
+    expect(await (await read()).json()).toEqual(first);
+    expect((await f.app.request('/v1/integration/activity', { headers: auth(f.secret) })).status).toBe(401);
+    for (const path of ['/v1/integration/activity', '/v1/integration/conversations', '/v1/integration/ax'])
+      expect((await f.app.request(path, { headers: auth(first.secret) })).status).toBe(200);
+    expect((await f.app.request('/v1/rest-api/key', { headers: auth(first.secret) })).status).toBe(401);
+    const second = await (await f.app.request('/v1/rest-api/key', { method: 'POST', headers: auth(f.owner) })).json() as { secret: string };
+    expect(second.secret).not.toBe(first.secret);
+    expect((await f.app.request('/v1/integration/activity', { headers: auth(first.secret) })).status).toBe(401);
+    expect(f.integrations.repo.tokens().filter(t => t.revokedAt === null)).toHaveLength(1);
+    f.integrations.configure({ serverEnabled: false });
+    expect(await (await read()).json()).toEqual(second);
+    expect((await f.app.request('/v1/integration/activity', { headers: auth(second.secret) })).status).toBe(503);
+    expect((await f.app.request('/v1/rest-api/tokens', { method: 'POST', headers: auth(f.owner), body: '{}' })).status).toBe(410);
+  });
+  it('keeps the previous key usable when encrypted persistence fails', async () => {
+    const f = await fixture();
+    const original = f.integrations.rotateAccessKey();
+    const failure = vi.spyOn(f.secrets, 'set').mockImplementationOnce(() => { throw new Error('disk failure'); });
+    expect(() => f.integrations.rotateAccessKey()).toThrow('disk failure');
+    failure.mockRestore();
+    expect(f.integrations.accessKey()).toBe(original);
+    expect(f.integrations.authenticate(original).revokedAt).toBeNull();
+    expect(f.integrations.repo.tokens().filter(t => t.revokedAt === null)).toHaveLength(1);
+  });
 });

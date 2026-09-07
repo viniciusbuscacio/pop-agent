@@ -6,6 +6,7 @@ export interface IntegrationRepo {
     tokens(): IntegrationToken[];
     token(hash: string): IntegrationToken | undefined;
     saveToken(token: IntegrationToken, hash: string): void;
+    replaceToken(token: IntegrationToken, hash: string, persistSecret: () => void): void;
     revoke(id: string, now: number): void;
     used(id: string, now: number): void;
     once(tokenId: string, key: string, hash: string, now: number, action: () => Record<string, unknown>): Record<string, unknown>;

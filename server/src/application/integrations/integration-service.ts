@@ -1,3 +1,4 @@
+import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { RestApiSettingsService, RestApiSettings } from './rest-api-settings.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { INTEGRATION_SCOPES, IntegrationError, type IntegrationActivity, type IntegrationScope, type IntegrationToken } from '../../domain/integrations/integration.js';
@@ -14,6 +15,7 @@ export class IntegrationService {
     }>();
     private readonly streams = new Map<string, number>();
     constructor(readonly repo: IntegrationRepo, private readonly deps: {
+        secrets: SecretsRepo;
         chats: ChatService;
         runs: RunService;
         queue: QueuedMessageService;
@@ -30,6 +32,7 @@ export class IntegrationService {
         token: IntegrationToken;
         secret: string;
     } {
+        if (this.accessKey()) throw new IntegrationError(409, 'single_api_key');
         if (!name.trim() || name.length > 80 || ![7, 30, 90].includes(days) || scopes.length === 0 || scopes.some(s => !INTEGRATION_SCOPES.includes(s)))
             throw new IntegrationError(400, 'invalid_token_options');
         if (this.repo.tokens().filter(token => token.revokedAt === null && token.expiresAt > this.deps.now()).length >= 100)
@@ -40,6 +43,22 @@ export class IntegrationService {
         this.repo.saveToken(token, digest(secret));
         this.repo.audit(token.id, 'create', '', now);
         return { token, secret };
+    }
+    accessKey(): string | null {
+        const secret = this.deps.secrets.get('rest-api.access-key');
+        if (!secret) return null;
+        try { this.authenticate(secret); return secret; }
+        catch (error) { if (error instanceof IntegrationError && error.status === 401) return null; throw error; }
+    }
+    rotateAccessKey(): string {
+        const now = this.deps.now();
+        const token: IntegrationToken = {
+            id: randomUUID(), name: 'REST API Server', scopes: [...INTEGRATION_SCOPES],
+            createdAt: now, expiresAt: 8640000000000000, lastUsedAt: null, revokedAt: null,
+        };
+        const secret = `popi_${randomBytes(32).toString('base64url')}`;
+        this.repo.replaceToken(token, digest(secret), () => this.deps.secrets.set('rest-api.access-key', secret));
+        return secret;
     }
     recordUiAccess(secret: string, operation: string, sessionId: string): void {
         const token = this.authorize(secret, 'ui:control');

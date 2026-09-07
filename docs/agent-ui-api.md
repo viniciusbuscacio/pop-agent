@@ -1,6 +1,6 @@
 # Pop Agent live UI API
 
-Turn on REST API Server. Signed-in tabs become available automatically; there is no separate tab connection or name form. Create a dedicated integration token with **ui:control** to perform owner actions in those tabs. Turning off REST API Server or signing out ends UI access.
+Turn on REST API Server. Signed-in tabs become available automatically; there is no separate tab connection or name form. Generate the single Access key in Server settings and copy Agent instructions to perform owner actions in those tabs. The key includes UI control and remains valid until replaced. Turning off REST API Server or signing out ends UI access.
 
 Use the server HTTPS origin as Base URL, with `Authorization: Bearer <token>` on every request. Never put tokens in URLs.
 
@@ -23,4 +23,4 @@ Use the testid and, for repeated controls, index from the latest state. POST dbl
 
 The settings screen has no separate screenshot or sharing controls. The existing screenshot transport returns `screen_not_shared` without an active capture source. Enabling REST API Server cannot bypass browser display-capture restrictions; automatic screenshot capture requires a separate browser integration. Do not assume a screenshot is available from UI connectivity alone.
 
-A timeout disconnects the bridge and returns `ui_timeout`; an action might already have run. The app reconnects automatically while the API is enabled, but commands are never replayed. Inspect the resulting state before repeating a mutation. Unknown, disabled or ambiguous targets return structured errors. Revoking the token or disabling REST Server prevents further commands. Owner-session automation can use `/v1/ax` and `/v1/ui/*` instead, using its owner bearer.
+A timeout disconnects the bridge and returns `ui_timeout`; an action might already have run. The app reconnects automatically while the API is enabled, but commands are never replayed. Inspect the resulting state before repeating a mutation. Unknown, disabled or ambiguous targets return structured errors. Replacing the key or disabling REST Server prevents further commands. Owner-session automation can use `/v1/ax` and `/v1/ui/*` instead, using its owner bearer.

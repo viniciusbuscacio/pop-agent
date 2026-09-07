@@ -15,6 +15,16 @@ export class SqliteIntegrationRepo implements IntegrationRepo {
         metadata: string;
     } | undefined; return row === undefined ? undefined : JSON.parse(row.metadata) as IntegrationToken; }
     saveToken(token: IntegrationToken, hash: string): void { this.db.prepare('INSERT INTO integration_tokens VALUES (?, ?, ?)').run(token.id, hash, JSON.stringify(token)); }
+    replaceToken(token: IntegrationToken, hash: string, persistSecret: () => void): void {
+        this.db.transaction(() => {
+            for (const previous of this.tokens()) {
+                if (previous.revokedAt === null) this.revoke(previous.id, token.createdAt);
+            }
+            this.saveToken(token, hash);
+            persistSecret();
+            this.audit(token.id, 'rotate-key', '', token.createdAt);
+        })();
+    }
     private update(id: string, change: Partial<IntegrationToken>): void {
         const row = this.db.prepare('SELECT metadata FROM integration_tokens WHERE id = ?').get(id) as {
             metadata: string;

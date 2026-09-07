@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace REST Server token management with one persistent encrypted access key and ready-to-copy agent instructions; generating a key invalidates all previous tokens.
+
 - Hide per-message overflow buttons and their reserved gutter in mobile Chat.
 
 - Use the go-notepad Settings SVG arrow for the shared Back button across Pop Agent.

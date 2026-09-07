@@ -6,7 +6,7 @@ import type { RestClientService } from '../../application/integrations/rest-clie
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { IntegrationError, INTEGRATION_SCOPES, type IntegrationScope } from '../../domain/integrations/integration.js';
+import { IntegrationError, type IntegrationScope } from '../../domain/integrations/integration.js';
 import type { IntegrationService } from '../../application/integrations/integration-service.js';
 import type { ChatService } from '../../application/chat/chat-service.js';
 import { apiError } from './errors.js';
@@ -107,12 +107,9 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
         }));
     });
     app.get('/rest-api/tokens', c => c.json({ tokens: service.repo.tokens().map(integrationTokenDto) }));
-    app.post('/rest-api/tokens', async (c) => {
-        const input = z.object({ name: z.string().min(1).max(80), scopes: z.array(z.enum(INTEGRATION_SCOPES)).min(1).max(4), days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }).strict().parse(await c.req.json());
-        c.header('Cache-Control', 'no-store');
-        const created = service.create(input.name, input.scopes, input.days);
-        return c.json({token:integrationTokenDto(created.token),secret:created.secret},201);
-    });
+    app.post('/rest-api/tokens', c => apiError(c, 410, 'single_api_key', 'Use the single REST API Server access key.'));
+    app.get('/rest-api/key', c => { c.header('Cache-Control', 'no-store'); return c.json({ secret: service.accessKey() }); });
+    app.post('/rest-api/key', c => { c.header('Cache-Control', 'no-store'); return c.json({ secret: service.rotateAccessKey() }, 201); });
     app.delete('/rest-api/tokens/:id', c => { service.revoke(c.req.param('id')); return c.json({ ok: true }); });
     app.get('/rest-api/reference', c => c.json({ endpoints: INTEGRATION_ENDPOINTS, openapi: integrationOpenApi() }));
     app.get('/rest-api/health', c => c.json({ ok: true }));

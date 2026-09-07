@@ -1,6 +1,8 @@
-import type { RestApiSettingsDTO, RestClientDTO, IntegrationTokenDTO, IntegrationScopeDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
+import type { RestApiSettingsDTO, RestApiKeyDTO, RestClientDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
 import { apiRequest } from './api';
 export const integrationsService = {
+    accessKey: () => apiRequest<RestApiKeyDTO>('/rest-api/key'),
+    rotateAccessKey: () => apiRequest<RestApiKeyDTO>('/rest-api/key', { method: 'POST' }),
     settings: readSettings,
     updateSettings: async (body: Partial<RestApiSettingsDTO>) => {
         ++settingsRevision;
@@ -24,16 +26,6 @@ export const integrationsService = {
         status: number;
         body: string;
     }>(`/rest-api/clients/${encodeURIComponent(id)}/call`, { method: 'POST', body: { operationId, query, ...(body === undefined ? {} : { body }) } }),
-    list: () => apiRequest<{
-        tokens: IntegrationTokenDTO[];
-    }>('/rest-api/tokens'),
-    create: (name: string, scopes: IntegrationScopeDTO[], days: number) => apiRequest<{
-        token: IntegrationTokenDTO;
-        secret: string;
-    }>('/rest-api/tokens', { method: 'POST', body: { name, scopes, days } }),
-    revoke: (id: string) => apiRequest<{
-        ok: boolean;
-    }>(`/rest-api/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     reference: () => apiRequest<IntegrationReferenceDTO>('/rest-api/reference'),
     test: () => apiRequest<{
         ok: boolean;

@@ -291,4 +291,4 @@ focused unit test.
 
 ## REST integrations
 
-Integration tokens are separate hashed, expiring, scoped credentials. They cannot use owner administration or PLA selection. Outbound REST client secrets use encrypted SecretsRepo storage and screened public HTTPS transport. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).
+REST API Server uses one separate, non-expiring access key, authenticated by its hash and stored recoverably through encrypted SecretsRepo. Owner-only endpoints return it with no-store for copying instructions. Rotation atomically invalidates all previous tokens. The key grants all REST operations, including owner actions through authenticated UI tabs, while direct owner administration endpoints remain blocked. Legacy scoped credentials retain their restrictions until replaced. Outbound REST client secrets use encrypted SecretsRepo storage and screened public HTTPS transport. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).
