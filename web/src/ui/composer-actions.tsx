@@ -72,8 +72,8 @@ export function ComposerActions({
     <Pressable ref={trigger} type="button" data-testid="composer-actions" aria-label={t('chat.actions')}
       aria-haspopup="dialog" aria-expanded={page !== undefined} aria-controls={page ? 'composer-actions-panel' : undefined}
       disabled={locked} onClick={() => { if (page) close(); else { onOpen(); setPage('actions'); } }}
-      className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--muted)] hover:bg-[var(--hover-overlay)]">
-      <Plus size={20} aria-hidden="true" />
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--muted)] hover:bg-[var(--hover-overlay)]">
+      <Plus size={16} aria-hidden="true" />
     </Pressable>
     {page && !locked ? createPortal(
       <Menu ref={panel} id="composer-actions-panel" role="dialog" aria-label={t('chat.actions')}

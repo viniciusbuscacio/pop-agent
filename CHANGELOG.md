@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep the composer compact on one initial line, use smaller 32px actions and remove persistent mode labels from the message box.
+
 - Consolidate chat controls into Send and Add inside the message box, with mode switches, an in-place model page, attachments and voice actions.
 
 - Move batch release builds to the owner-managed Ubuntu 24.04 AMD64 Docker builder on ubuntu-home; reuse verified dependency/audio/gate caches, isolate build credentials and test temporary files, and publish verified bundles explicitly without hosted GitHub Actions.

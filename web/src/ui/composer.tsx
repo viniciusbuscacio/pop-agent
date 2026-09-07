@@ -739,7 +739,7 @@ export function Composer({
         </div>
       ) : null}
 
-      <div data-testid="composer-box" className="min-w-0 rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
+      <div data-testid="composer-box" className="flex min-w-0 items-end rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
         <FileInput
           inputRef={picker}
           multiple
@@ -751,7 +751,7 @@ export function Composer({
           }}
         />
         {voice === 'idle' ? (
-          <div className="relative w-full min-w-0 sm:flex-1">
+          <div className="relative min-w-0 flex-1">
           {slashMode === 'models' ? (
             <ModelMenu
               models={models}
@@ -823,10 +823,7 @@ export function Composer({
           </div>
         )}
 
-        <div data-testid="composer-toolbar" className="flex min-w-0 items-center justify-end gap-2 px-2 pb-2">
-          <span className="mr-auto min-w-0 truncate pl-2 text-xs text-[var(--muted)]" aria-live="polite">
-            {[showThinking ? t('chat.thinkingLabel') : '', executionMode === 'plan' ? t('chat.planLabel') : ''].filter(Boolean).join(' · ')}
-          </span>
+        <div data-testid="composer-toolbar" className="flex shrink-0 items-center justify-end gap-1 pr-1 pb-1.5">
           {voice === 'recording' ? (
             <IconButton testId="composer-recording-stop" label={t('chat.micStop')} stop onClick={() => void toggleRecording()}>
               <StopIcon />
@@ -954,7 +951,7 @@ function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-10 w-10 flex-none place-items-center rounded-full border ${skin}`}
+      className={`grid h-8 w-8 flex-none place-items-center rounded-full border ${skin}`}
     >
       {children}
     </Pressable>
@@ -963,7 +960,7 @@ function IconButton({
 
 function SendIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m9 5 7 7-7 7" />
     </svg>
   );
@@ -971,7 +968,7 @@ function SendIcon() {
 
 function StopIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <rect x="4" y="4" width="16" height="16" rx="2" />
     </svg>
   );

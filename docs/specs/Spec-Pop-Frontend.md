@@ -699,10 +699,11 @@ The shell shows an 8px green REST API Server dot beside Settings when enabled an
 ## Composer action surface
 
 The message box contains exactly two persistent action buttons in a reserved
-bottom row: Send (right-pointing chevron), then Add (+). The row follows the
-growing textarea and remains visible when text reaches its height cap and scrolls.
-Thinking and Plan mode are switches inside Add; active modes have quiet text
-indicators. Model opens an in-place page with Back, reusing the shared grouped
+bottom-right area: Send (right-pointing chevron), then Add (+). The box starts
+with one text line; 32px buttons sit beside the textarea, aligned to its bottom,
+and remain visible when text reaches its height cap and scrolls.
+Thinking and Plan mode are switches inside Add; no persistent mode labels
+occupy the message box. Plan mode retains its distinct input placeholder. Model opens an in-place page with Back, reusing the shared grouped
 model picker. Attach files and voice recording are direct actions. Controls
 remain English and share behavior across desktop, phone and installed PWA.
 The popup fits the viewport above the trigger, scrolls when necessary, closes
