@@ -1,6 +1,17 @@
 #!/bin/sh
 set -eu
 
+# A single interactive presenter owns the terminal across nested installers.
+case " ${*} " in
+  *" --help "*|*" -h "*) ;;
+  *)
+    console_helper=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/install-console.sh
+    if [ "${POP_AGENT_INSTALL_UI_ACTIVE:-0}" != 1 ] && [ -t 0 ] && [ -t 1 ] && [ -f "$console_helper" ] && command -v bash >/dev/null 2>&1; then
+      exec bash "$console_helper" "$0" "$@"
+    fi
+    ;;
+esac
+
 # BEGIN INSTALL JOURNAL (kept identical in both standalone entry points)
 INSTALL_LOG_FILE=
 INSTALL_LOG_PHASE=preflight
@@ -14,6 +25,7 @@ install_event() {
 install_phase() {
   INSTALL_LOG_PHASE=$1
   install_event "event=phase phase=$1"
+  if [ "${POP_AGENT_INSTALL_UI_ACTIVE:-0}" = 1 ]; then printf '[pop-step] %s\n' "$1"; fi
 }
 install_log_init() {
   # Never capture stdout/stderr, arguments, environment or authentication output.
@@ -112,6 +124,7 @@ Options:
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Explicitly allow the narrow apt prerequisite phase
   --build-from-source          Developer path: install compilers, build and run the full gate
+  --verbose                    Show detailed installation output immediately
   --prepare-only               Prepare and verify the toolchain without invoking systemd installation
   --skip-network-onboarding    Do not prepare the temporary HTTP/Tailscale setup flow
   -h, --help                   Show this help
@@ -170,6 +183,7 @@ while [ "$#" -gt 0 ]; do
       NETWORK_ONBOARDING=0
       shift
       ;;
+    --verbose) shift ;;
     -h|--help)
       usage
       exit 0

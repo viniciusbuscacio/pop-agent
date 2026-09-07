@@ -14,6 +14,7 @@ install_event() {
 install_phase() {
   INSTALL_LOG_PHASE=$1
   install_event "event=phase phase=$1"
+  if [ "${POP_AGENT_INSTALL_UI_ACTIVE:-0}" = 1 ]; then printf '[pop-step] %s\n' "$1"; fi
 }
 install_log_init() {
   # Never capture stdout/stderr, arguments, environment or authentication output.

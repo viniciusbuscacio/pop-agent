@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Present interactive installation as concise stages, with D/--verbose for detailed output, private redacted transcripts and safe terminal/password handling.
+
 - Remove the accent focus halo and native touch highlight from the composer Add button.
 
 - Remove the inner accent focus rectangle from the chat message input and label the visibility switch Show Thinking.

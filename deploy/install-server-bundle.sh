@@ -1,6 +1,17 @@
 #!/bin/sh
 set -eu
 
+# A single interactive presenter owns the terminal across nested installers.
+case " ${*} " in
+  *" --help "*|*" -h "*) ;;
+  *)
+    console_helper=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/install-console.sh
+    if [ "${POP_AGENT_INSTALL_UI_ACTIVE:-0}" != 1 ] && [ -t 0 ] && [ -t 1 ] && [ -f "$console_helper" ] && command -v bash >/dev/null 2>&1; then
+      exec bash "$console_helper" "$0" "$@"
+    fi
+    ;;
+esac
+
 PROGRAM=${0##*/}
 BUNDLE=
 EXPECTED_SHA=
@@ -41,6 +52,7 @@ Options:
   --toolchain-dir PATH         Override the private Node/Go/whisper.cpp toolchain directory
   --port PORT                  Server loopback port (default: 8787)
   --install-apt-packages       Install Git now and pass apt opt-in to the host bootstrap
+  --verbose                    Show detailed installation output immediately
   --prepare-only               Acquire source and prepare toolchain without systemd activation
   --skip-network-onboarding    Keep network/TLS setup operator-managed
   -h, --help                   Show this help
@@ -67,6 +79,7 @@ while [ "$#" -gt 0 ]; do
     --install-apt-packages) INSTALL_APT=1; shift ;;
     --prepare-only) PREPARE_ONLY=1; shift ;;
     --skip-network-onboarding) SKIP_NETWORK_ONBOARDING=1; shift ;;
+    --verbose) shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac

@@ -298,3 +298,19 @@ locked dependencies and verified audio artifacts. Authentication is configured
 once with `./deploy/local-release.sh auth` (GitHub token on stdin). Credentials
 are isolated from builds. State and bundles live under
 `~/.local/share/pop-agent/release-builder`. No GitHub Actions runner is required.
+
+### Installation output
+
+The interactive checkout installer shows concise progress. Press **D** at any time
+while it runs to reveal technical output, including earlier redacted details.
+To start with details:
+
+```sh
+./deploy/bootstrap-server.sh --install-apt-packages --verbose
+```
+
+The terminal prints the private `details-*.log` path at completion or failure.
+Package-manager output is retained there; passwords, authentication and the
+one-time setup code are excluded. Existing structured installation logs remain
+available. Piped/noninteractive installation retains plain output without a key
+listener. No new system package is needed for this presentation.

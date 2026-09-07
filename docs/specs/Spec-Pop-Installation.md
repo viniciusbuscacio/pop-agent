@@ -808,3 +808,34 @@ server/client/source hashes and source identity, refuses an existing release,
 pushes the batch without force, uploads a draft and publishes only after all
 uploads succeed. A failed upload leaves an unpublished draft for inspection.
 Hosted CI and release workflows are disabled; no release runs on each UI edit.
+
+### Interactive installation presentation
+
+Checkout installations use deploy/install-console.sh, a Bash presenter with no
+Node, Python, compiler or additional apt dependency. Interactive terminals show
+short English stages and a live activity indicator instead of Git/apt/npm output.
+Press D (no Enter required) to replay earlier redacted details and stream subsequent
+technical output. --verbose selects detailed output immediately. Noninteractive
+entry points preserve their existing plain streaming behavior and structured logs;
+they do not listen for keys or change terminal settings. Help never starts a UI.
+The local bundle entry point uses the same presenter when its checked-out helper
+exists. The standalone acquisition script retains plain acquisition output until
+it delegates to checkout bootstrap; its scrubbed handoff environment is unchanged.
+
+The presenter additionally creates an owner-only details-*.log in the same private
+install-logs directory. This is a redacted technical transcript, separate from the
+existing structured journals: package progress and errors are retained, while
+authentication is outside capture and secret-bearing lines, setup codes and URL
+credentials/query values are omitted or redacted. Nested installers share the
+outer presentation and transcript; their structured journal paths remain recorded.
+No log upload occurs automatically.
+
+Authenticate sudo before enabling the D listener, then run sudo noninteractively
+and refresh its existing timestamp during the install. Never let a background key
+reader consume a password or record keyboard input. Restore terminal echo/canonical
+mode on completion, failure and interruption; Ctrl+C terminates the installer process
+group and preserves exit 130. Preserve ordinary failure codes and the final error
+even without a trailing newline. Failure names the stage and detail log. Setup URL,
+one-time code and popman onboarding-code remain visible in summary mode, but the
+code is never stored in the detailed transcript. Preparation-only reports preparation,
+not successful service installation.
