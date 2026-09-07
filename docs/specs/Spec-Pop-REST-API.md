@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Agent → REST API presents REST API Server and REST API Client as two compact cards, matching the provider settings pattern. Each card has a persisted toggle and Edit; there is no Delete action. Editing opens configuration in the same pane, with Back to the overview. Server reference and examples are collapsed by default. The shell footer, including Settings, remains available on desktop and mobile. Server accepts scoped external integrations; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
+Agent → REST API presents REST API Server and REST API Client as two compact cards, matching the provider settings pattern. Each card has a persisted toggle and Edit; there is no Delete action. Editing opens configuration in the same pane, with Back to the overview. Detailed server reference and extended examples are collapsed by default; a concise Agent instructions block remains visible and copyable. The shell footer, including Settings, remains available on desktop and mobile. Server accepts scoped external integrations; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
 
 ## Reuse map
 
@@ -99,3 +99,5 @@ The owner explicitly connects a named tab from Server > UI access. A persistent 
 State lists visible controls with testid, index, role, name and disabled state. Repeated IDs require an explicit index. Empty input clears a supported text/select field. Missing, ambiguous and disabled targets fail explicitly. Keyboard events invoke application handlers, not trusted browser/OS shortcuts. Native dialogs/file pickers require the user. The bridge does not execute arbitrary JavaScript.
 
 Screenshots require an independent user gesture and browser `getDisplayMedia` consent. The captured surface is exactly the tab/window/screen selected by the user; it is not a synthetic DOM reconstruction. PNGs scale to at most 1920 pixels wide and 3.5 MB base64. The transport caps replies at 4 MiB. No captures or screen contents are persisted or logged. Sharing ends with track stop, disconnect or page close; unsupported browsers return a clear message. JSON discovery remains available without screen sharing.
+
+The Server editor follows the go-notepad layout with Start/Stop, persisted enabled-state status, address, connection port, HTTPS and access-control cards, Agent instructions, API tokens and UI access. Port/HTTPS describe the current app origin; this screen does not change the shared listener, TLS or tailnet policy. No independent API autostart switch is shown: the existing enabled state persists across restarts. Copy instructions uses a placeholder until a token is created; while its one-time secret is visible, it includes that token and only its granted operations. Detailed reference and token pagination remain intact.

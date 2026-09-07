@@ -16,7 +16,7 @@ function expand(summary: HTMLElement, open = true) {
 }
 it('starts collapsed, excludes inactive tokens, and renders only ten rows at a time', async () => {
   vi.mocked(integrationsService.list).mockResolvedValue({ tokens: [...Array.from({ length: 11 }, (_, i) => token(i)), { ...token(20), revokedAt: Date.now() }, { ...token(21), expiresAt: Date.now() }] });
-  render(<RestServerPanel />);
+  render(<RestServerPanel enabled onToggle={() => undefined} />);
   const summary = await screen.findByText('11 active tokens');
   expect(screen.queryByText('Token 0')).toBeNull();
   expand(summary);
@@ -37,7 +37,7 @@ it('starts collapsed, excludes inactive tokens, and renders only ten rows at a t
 it('clamps the last page after revocation and refreshes the active count', async () => {
   const tokens = Array.from({ length: 11 }, (_, i) => token(i));
   vi.mocked(integrationsService.list).mockResolvedValueOnce({ tokens }).mockResolvedValue({ tokens: tokens.slice(0, 10) });
-  render(<RestServerPanel />);
+  render(<RestServerPanel enabled onToggle={() => undefined} />);
   expand(await screen.findByText('11 active tokens'));
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
@@ -51,7 +51,7 @@ it('clamps the last page after revocation and refreshes the active count', async
 it('removes a token that expires while the section is open', async () => {
   vi.useFakeTimers();
   vi.mocked(integrationsService.list).mockResolvedValue({ tokens: [{ ...token(1), expiresAt: Date.now() + 2000 }] });
-  await act(async () => { render(<RestServerPanel />); });
+  await act(async () => { render(<RestServerPanel enabled onToggle={() => undefined} />); });
   expand(screen.getByText('1 active token'));
   expect(screen.getByText('Token 1')).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(2001); });

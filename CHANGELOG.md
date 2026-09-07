@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align REST API Server configuration with go-notepad: Start/Stop, connection cards, copyable agent instructions and scoped API tokens, keeping shared port/HTTPS settings informational.
+
 - Add opt-in live PWA UI control through REST: discover connected tabs, inspect visible controls, click, double-click, type and send application keys; capture real PNG screenshots after browser screen-sharing consent.
 
 - Show the go-apps green pulsing REST API Server indicator beside Settings while enabled and reachable; click opens server configuration.

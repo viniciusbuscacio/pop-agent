@@ -69,7 +69,7 @@ export function RestApiPage() {
             })}
           </div>
         </> : null}
-        {editing === 'server' ? <RestServerPanel /> : null}
+        {editing === 'server' && settings ? <RestServerPanel enabled={settings.serverEnabled} changing={busy} onToggle={() => void toggle('serverEnabled', !settings.serverEnabled)} /> : null}
         {editing === 'client' ? <RestClientsPanel enabled={settings?.clientEnabled ?? false} /> : null}
       </div>
     </div>

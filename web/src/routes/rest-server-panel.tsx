@@ -14,7 +14,7 @@ const scopes: {
     { value: 'runs:cancel', label: 'Cancel runs and queued messages' },
     { value: 'ui:control', label: 'Control connected UI tabs (owner actions, personal content and screenshots)' },
 ];
-export function RestServerPanel() {
+export function RestServerPanel({ enabled, changing = false, onToggle }: { enabled: boolean; changing?: boolean; onToggle: () => void }) {
     const [tokensOpen, setTokensOpen] = useState(false);
     const [page, setPage] = useState(0);
     const [now, setNow] = useState(Date.now);
@@ -25,6 +25,7 @@ export function RestServerPanel() {
     const [days, setDays] = useState(30);
     const [selected, setSelected] = useState<IntegrationScopeDTO[]>(['activity:read']);
     const [secret, setSecret] = useState('');
+    const [secretScopes, setSecretScopes] = useState<IntegrationScopeDTO[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [status, setStatus] = useState('');
@@ -38,7 +39,26 @@ export function RestServerPanel() {
         const timer = window.setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(1, nextExpiry - Date.now())));
         return () => window.clearTimeout(timer);
     }, [tokens, now]);
-    const base = window.location.origin + '/v1';
+    const origin = window.location.origin;
+    const base = origin + '/v1';
+    const secure = window.location.protocol === 'https:';
+    const port = window.location.port || (secure ? '443' : '80');
+    const instructions = [
+      `Base URL: ${origin}`,
+      `Header:   Authorization: Bearer ${secret || '<TOKEN>'}`,
+      ...(secret ? secretScopes.includes('activity:read') ? ['GET  /v1/integration/activity -> run activity'] : [] : ['GET  /v1/integration/activity -> run activity (activity:read)']),
+      ...(!secret || secretScopes.includes('ui:control') ? [
+        'GET  /v1/integration/ax -> how it works + where to click (ui:control)',
+        'GET  /v1/integration/ui/sessions -> connected tabs',
+        'GET  /v1/integration/ui/state?sessionId=ID -> visible controls',
+        'POST /v1/integration/ui/input -> {"sessionId":"ID","testid":"composer-input","value":"Draft"}',
+        'POST /v1/integration/ui/press -> {"sessionId":"ID","testid":"shell-new-chat"}',
+        'GET  /v1/integration/ui/screenshot?sessionId=ID -> PNG (screen sharing required)',
+      ] : []),
+      ...(secret && secretScopes.includes('conversations:read') ? ['GET  /v1/integration/conversations -> conversations'] : []),
+      ...(secret && secretScopes.includes('conversations:write') ? ['POST /v1/integration/conversations -> create a conversation (Idempotency-Key required)'] : []),
+      ...(secret && secretScopes.includes('runs:cancel') ? ['POST /v1/integration/runs/ID/cancel -> cancel a run (Idempotency-Key required)'] : []),
+    ].join('\n');
     const reload = async (): Promise<void> => { const result = await integrationsService.list(); setTokens(result.tokens); setNow(Date.now()); };
     useEffect(() => { let active = true; void Promise.all([integrationsService.list(), integrationsService.reference()]).then(([list, docs]) => { if (active) {
         setTokens(list.tokens); setNow(Date.now());
@@ -52,6 +72,7 @@ export function RestServerPanel() {
         try {
             const result = await integrationsService.create(name, selected, days);
             setSecret(result.secret);
+            setSecretScopes([...selected]);
             setCreating(false);
             setName('');
             await reload();
@@ -73,12 +94,32 @@ export function RestServerPanel() {
     const download = (): void => { if (!reference)
         return; const url = URL.createObjectURL(new Blob([JSON.stringify(reference.openapi, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'pop-agent-openapi.json'; a.click(); URL.revokeObjectURL(url); };
     return <div className="space-y-5">
-      <p className="text-sm text-[var(--muted)]">Connect external integrations to this Pop Agent. Tokens apply to this entire single-user installation.</p>
-      <Card><p className="break-all font-mono text-sm">{base}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(base)}>Copy URL</Button><Button type="button" size="sm" variant="ghost" onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div></Card>
-      <p className="text-sm text-[var(--muted)]">Your external client must be able to reach this address. Remote connections require HTTPS. No network ports or Tailscale settings are changed here.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" data-testid="rest-server-power" variant={enabled ? 'danger' : 'primary'} disabled={changing} onClick={onToggle}>{enabled ? 'Stop' : 'Start'}</Button>
+        <span data-testid="rest-server-status" className={`rounded-md border px-4 py-2 text-sm font-medium ${enabled ? 'border-[var(--success)] text-[var(--success)]' : 'border-[var(--border)] text-[var(--muted)]'}`}>{enabled ? 'Enabled' : 'Stopped'}</span>
+      </div>
+      <p className="text-sm text-[var(--muted)]">This state is saved and restored when Pop Agent starts. Stopping the API keeps the app available.</p>
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}
-      <UiAccessPanel />
-      <h2 className="text-base font-medium">Integration tokens</h2>
+      <div className="grid gap-3">
+        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0"><h2 className="font-medium">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
+          <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button><Button type="button" size="sm" variant="ghost" disabled={!enabled} onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div>
+        </Card>
+        <Card className="flex items-center justify-between gap-4">
+          <div><h2 className="font-medium">Connection port</h2><p className="text-sm text-[var(--muted)]">Shared with the Pop app at this address.</p></div><span className="font-mono">{port}</span>
+        </Card>
+        <Card className="flex items-center justify-between gap-4">
+          <div><h2 className="font-medium">HTTPS</h2><p className="text-sm text-[var(--muted)]">Managed by your server connection. Remote access requires HTTPS.</p></div><span className={`shrink-0 text-sm ${secure ? 'text-[var(--success)]' : 'text-[var(--muted)]'}`}>{secure ? 'Enabled' : 'Not in use'}</span>
+        </Card>
+        <Card><h2 className="font-medium">Access control</h2><p className="text-sm text-[var(--muted)]">A valid token is required for every request. Each token has its own permissions and expiry. Network access follows your Tailscale and server configuration.</p></Card>
+      </div>
+      <section className="space-y-3" aria-labelledby="rest-agent-instructions">
+        <div className="flex items-center justify-between gap-3"><h2 id="rest-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="sm" data-testid="rest-copy-instructions" onClick={() => void copy(instructions)}>Copy instructions</Button></div>
+        <Card><pre data-ui-private={secret ? true : undefined} data-testid="rest-agent-instructions" className="overflow-x-auto text-xs leading-relaxed">{instructions}</pre></Card>
+        <p className="text-sm text-[var(--muted)]">{secret ? 'These instructions include your new token and its available operations. Save them before closing this screen.' : 'Replace <TOKEN> with a token below. UI operations require ui:control and a connected tab.'}</p>
+      </section>
+      <section className="space-y-3" aria-labelledby="rest-api-tokens">
+      <h2 id="rest-api-tokens" className="font-medium">API tokens</h2>
       {secret ? <Card><p>Save this token now. It will not be shown again.</p><code data-ui-private className="block break-all py-3">{secret}</code><div className="flex gap-2"><Button type="button" onClick={() => void copy(secret)}>Copy token</Button><Button type="button" variant="ghost" onClick={() => setSecret('')}>Done</Button></div></Card> : null}
       {!creating ? <Button type="button" onClick={() => { setSelected(['activity:read']); setDays(30); setCreating(true); }}>New token</Button> : <Card><form className="space-y-4" onSubmit={event => void create(event)}>
         <TextField id="integration-name" label="Name" value={name} maxLength={80} required onChange={e => setName(e.target.value)}/>
@@ -114,6 +155,8 @@ export function RestServerPanel() {
       </nav> : null}
       </> : null}
       </details>
+      </section>
+      <UiAccessPanel enabled={enabled} showExamples={false} />
       <details className="space-y-4"><summary className="cursor-pointer">API reference and examples</summary><Button type="button" variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Method / path</th><th>Scope</th><th>Behavior</th></tr></thead><tbody>{reference?.endpoints.map(e => <tr key={e.method + e.path}><td className="py-2 font-mono">{e.method.toUpperCase()} {e.path}</td><td>{e.scope}</td><td>{e.summary}</td></tr>)}</tbody></table></div>
       <Card><h3 className="font-medium">Read activity</h3><pre className="overflow-x-auto py-3 text-sm">{`# Set POP_API_TOKEN in your external client environment.
@@ -124,7 +167,7 @@ Invoke-RestMethod '${base}/integration/activity' -Headers @{ Authorization = "Be
       <Card><h3 className="font-medium">Create a conversation and send a message</h3><pre className="overflow-x-auto py-3 text-sm">{`# Use a token with conversations:write. Replace CHAT_ID with the returned chatId.
 curl -X POST -H "Authorization: Bearer $POP_API_TOKEN" -H "Idempotency-Key: create-001" "${base}/integration/conversations"
 curl -X POST -H "Authorization: Bearer $POP_API_TOKEN" -H "Idempotency-Key: send-001" -H "Content-Type: application/json" -d '{"text":"Hello"}' "${base}/integration/conversations/CHAT_ID/messages"`}</pre></Card>
-      <p className="text-sm">Commands require Idempotency-Key (1–128 letters, digits, dots, underscores, colons or hyphens). Retries with the same token, key and payload return the original result for 24 hours. Use a new key for each new operation. Messages sent during a run become follow-ups, not steering; their queueId appears on the eventual run snapshot. Local access is not inherited.</p>
+      <p className="text-sm">Conversation and cancellation commands require Idempotency-Key (1–128 letters, digits, dots, underscores, colons or hyphens). Retries with the same token, key and payload return the original result for 24 hours. Use a new key for each new operation. Messages sent during a run become follow-ups, not steering; their queueId appears on the eventual run snapshot. Local access is not inherited.</p>
       <p className="text-sm">SSE: GET /integration/events with the bearer header. Resume with Last-Event-ID; ready/resync means refresh the REST snapshot. Replay retains up to 1,000 events for one hour. Heartbeats show connectivity, not work progress. Revoked or expired tokens disconnect within one second. Limit: 120 requests/minute and three streams per token; retry after 60 seconds.</p>
       <p className="text-sm">Activity history is retained for 30 days. A quiet run is not necessarily stuck. Subagent activity currently identifies the delegated tool; detailed output remains in the authorized conversation. Configure outbound operations in REST API Client.</p>
       </details>

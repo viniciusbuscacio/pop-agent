@@ -79,3 +79,16 @@ it('adding/removing operations and cancelling a valid client never submits the f
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(integrationsService.saveClient).not.toHaveBeenCalled();
 });
+
+it('starts and stops the server from its editor without changing the client switch', async () => {
+  render(<MemoryRouter initialEntries={['/rest-api?edit=server']}><RestApiPage /></MemoryRouter>);
+  const stop = await screen.findByTestId('rest-server-power');
+  expect(stop.textContent).toBe('Stop');
+  fireEvent.click(stop);
+  await waitFor(() => expect(stop.textContent).toBe('Start'));
+  expect(integrationsService.updateSettings).toHaveBeenLastCalledWith({ serverEnabled: false });
+  expect((screen.getByTestId('ui-connect') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(stop);
+  await waitFor(() => expect(stop.textContent).toBe('Stop'));
+  expect(integrationsService.updateSettings).toHaveBeenLastCalledWith({ serverEnabled: true });
+});
