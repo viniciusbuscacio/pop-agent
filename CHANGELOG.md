@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add isolated HTML previews with Source mode, fitted image previews including SVG, and PDF browser/download actions.
+
 - Make the Files top bin delete selected items with confirmation instead of navigating to Trash; label both modes explicitly.
 
 - Show Select all items in the Files top toolbar during selection, keeping its width stable for double-click navigation.

@@ -9,6 +9,7 @@
 
 :root,
 :root[data-theme='dark'] {
+  --document-bg: #ffffff;
   --bg: #202020;
   --screen-fg: #ffffff;
   --titlebar-fg: #d6d6d6;
@@ -40,6 +41,7 @@
 :root[data-theme='light'] {
   /* A warm canvas keeps the light theme from reading as a blank white page;
      controls stay white so the hierarchy remains visible without heavy lines. */
+  --document-bg: #ffffff;
   --bg: #f7f5f2;
   --screen-fg: #201f1e;
   --titlebar-fg: #201f1e;

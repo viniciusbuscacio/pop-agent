@@ -742,6 +742,9 @@ export const en = {
   'files.selectFile': 'Select file',
   'files.selectFolder': 'Select folder',
   'files.openFile': 'Open file',
+  'files.preview': 'Preview',
+  'files.source': 'Source',
+  'files.openInBrowser': 'Open in browser',
   'files.openFailed': 'This file could not be opened.',
   // The trash. Every row says how many days it has left: a bin that only says
   // "deleted" makes you guess whether it is safe to leave something in it.

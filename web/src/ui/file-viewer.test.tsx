@@ -3,18 +3,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { readText, saveText, viewUrl } = vi.hoisted(() => ({
+const { readText, saveText, viewUrl, link, blob } = vi.hoisted(() => ({
   readText: vi.fn<(path: string) => Promise<{ content: string; revision: string }>>(),
-  saveText: vi.fn(),
+  saveText: vi.fn(), link: vi.fn(), blob: vi.fn(),
   viewUrl: vi.fn<(path: string) => Promise<string>>(),
 }));
-vi.mock('../services/artifacts', () => ({ filesService: { readText, saveText, viewUrl } }));
+vi.mock('../services/artifacts', () => ({ filesService: { readText, saveText, viewUrl, link, blob } }));
 
 import { FileViewer } from './file-viewer';
 
 afterEach(() => {
   cleanup();
-  readText.mockReset();
+  readText.mockReset(); link.mockReset(); blob.mockReset();
   saveText.mockReset();
   vi.restoreAllMocks();
   viewUrl.mockReset();
@@ -90,4 +90,39 @@ it('keeps failed edits and allows canceling without saving', async () => {
   await userEvent.click(screen.getByRole('button',{name:'Cancel'}));
   expect(screen.getByTestId('file-text-preview').textContent).toBe('original');
   expect(saveText).toHaveBeenCalledOnce();
+});
+
+it('renders HTML only in an opaque sandbox and offers its escaped source', async () => {
+  const html='<h1>Report</h1><script>parent.stolen=true</script>';
+  link.mockResolvedValue('/signed');blob.mockResolvedValue({blob:new Blob([html])});
+  render(<FileViewer path="report.HTML" name="report.HTML" onClose={vi.fn()} />);
+  const frame=await screen.findByTestId('file-html-preview');
+  expect(frame.getAttribute('sandbox')).toBe('');
+  expect(frame.getAttribute('srcdoc')).toContain("default-src 'none'");
+  expect(frame.getAttribute('srcdoc')).toContain(html);
+  await userEvent.click(screen.getByRole('button',{name:'Source'}));
+  expect(screen.getByTestId('file-text-preview').textContent).toBe(html);
+  expect(screen.queryByTestId('file-html-preview')).toBeNull();
+  await userEvent.click(screen.getByRole('button',{name:'Preview'}));
+  expect(screen.getByTestId('file-html-preview')).toBeTruthy();
+});
+it.each(['photo.PNG','photo.jpg','photo.webp'])('renders %s as a fitted image and reports load failure', async name => {
+  viewUrl.mockResolvedValue('/signed-image');render(<FileViewer path={name} name={name} onClose={vi.fn()} />);
+  const img=await screen.findByRole('img',{name});expect(img.getAttribute('src')).toBe('/signed-image');
+  fireEvent.error(img);expect(screen.getByRole('alert')).toBeTruthy();
+});
+it('renders SVG in image context and releases its object URL on close', async () => {
+  const create=vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:svg');const revoke=vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
+  link.mockResolvedValue('/signed');blob.mockResolvedValue({blob:new Blob(['<svg/>'])});
+  const view=render(<FileViewer path="diagram.svg" name="diagram.svg" onClose={vi.fn()} />);
+  expect((await screen.findByRole('img')).getAttribute('src')).toBe('blob:svg');
+  expect(create.mock.calls[0]?.[0]).toHaveProperty('type','image/svg+xml');
+  view.unmount();expect(revoke).toHaveBeenCalledWith('blob:svg');
+});
+it('revokes SVG URLs even when loading finishes after close', async () => {
+  vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:late');const revoke=vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
+  let finish!: (value: {blob:Blob})=>void;link.mockResolvedValue('/signed');blob.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const view=render(<FileViewer path="diagram.svg" name="diagram.svg" onClose={vi.fn()} />);
+  await waitFor(()=>expect(blob).toHaveBeenCalled());view.unmount();finish({blob:new Blob(['<svg/>'])});
+  await waitFor(()=>expect(revoke).toHaveBeenCalledWith('blob:late'));
 });
