@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import type { FilesService } from '../../application/files/files-service.js';
 import { verifyFileDownload } from '../../application/files/files-download.js';
@@ -62,11 +63,14 @@ export function createFilesDownloadRoutes(deps: FilesDownloadRoutesDeps): Hono {
 
     const mime = mimeOf(path);
     const view = c.req.query('inline') === '1' ? inlineView(mime) : undefined;
-    const filename = sanitizeFilename(path.split('/').at(-1) ?? 'download');
+    const filename = path.split('/').at(-1) ?? 'download';
+    const encodedFilename = encodeURIComponent(filename).replace(
+      /['()*]/g, (character) => '%' + character.charCodeAt(0).toString(16).toUpperCase(),
+    );
     return new Response(nodeStreamToWeb(createReadStream(absolute)), {
       headers: {
         'content-type': view?.contentType ?? mime,
-        'content-disposition': `${view === undefined ? 'attachment' : 'inline'}; filename="${filename}"`,
+        'content-disposition': `${view === undefined ? 'attachment' : 'inline'}; filename="${sanitizeFilename(filename)}"; filename*=UTF-8''${encodedFilename}`,
         'cache-control': 'private, no-store',
         // Belt and braces for the inline case: nosniff stops the browser
         // from deciding these bytes are really HTML, and the sandbox denies
@@ -80,21 +84,16 @@ export function createFilesDownloadRoutes(deps: FilesDownloadRoutesDeps): Hono {
   return routes;
 }
 
-/** Keeps the header well-formed: no quotes or control characters. */
+/** ASCII fallback plus filename* above preserves Unicode without invalid headers. */
 function sanitizeFilename(name: string): string {
-  // eslint-disable-next-line no-control-regex
-  return name.replace(/["\r\n\u0000-\u001f]/g, '_') || 'download';
+  return Array.from(name, (character) => {
+    const code = character.codePointAt(0)!;
+    return code < 32 || code > 126 || character === '"' || character === '\\' ? '_' : character;
+  }).join('') || 'download';
 }
 
 function nodeStreamToWeb(stream: ReturnType<typeof createReadStream>): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      stream.on('data', (chunk) => controller.enqueue(new Uint8Array(chunk as Buffer)));
-      stream.on('end', () => controller.close());
-      stream.on('error', (error) => controller.error(error));
-    },
-    cancel() {
-      stream.destroy();
-    },
-  });
+  return Readable.toWeb(stream, {
+    strategy: { highWaterMark: stream.readableHighWaterMark, size: (chunk: Uint8Array) => chunk.byteLength },
+  }) as ReadableStream<Uint8Array>;
 }

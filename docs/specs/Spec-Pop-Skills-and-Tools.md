@@ -225,6 +225,10 @@ adapter. Adopting a third-party MCP extension requires a new normative decision
 and proof that all Pop security, Plan Mode, cancellation, isolation,
 observability and session-freshness contracts remain enforced.
 
+Stateful HTTP session cleanup is best-effort and bounded by the configured
+request timeout, capped at five seconds. Pop aborts an unresponsive session
+DELETE and still closes the SDK client before returning.
+
 The SDK owns pagination, sessions, required headers, request SSE, cancellation,
 metadata and stdio cleanup. A stdio child receives only the SDK safe environment
 plus that server's encrypted variables, never Pop Agent's full environment.

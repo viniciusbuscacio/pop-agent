@@ -94,9 +94,9 @@ export function createEventStream(environment: EventStreamEnvironment): EventStr
       if (source !== connection || stopped) return;
       retryMs = FIRST_RETRY_MS;
       // A retry may cover an arbitrarily long gap. Consumers need a canonical
-      // snapshot after the replacement is actually open. Foreground recovery
-      // already notified them immediately and must not duplicate that fetch.
-      if (reason === 'retry') notifyResume();
+      // snapshot after the replacement is actually open, including foreground
+      // recovery: a snapshot before opening would leave an unobserved gap.
+      if (reason !== 'initial') notifyResume();
     });
 
     connection.addEventListener('message', (message: MessageEvent<string>) => {
@@ -138,7 +138,6 @@ export function createEventStream(environment: EventStreamEnvironment): EventStr
     source?.close();
     source = undefined;
     beginConnect('resume');
-    notifyResume();
   };
 
   const onVisibilityChange = (): void => {

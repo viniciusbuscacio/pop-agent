@@ -265,7 +265,8 @@ same path. Foreground recovery:
 2. invalidates a pending ticket attempt;
 3. closes the prior EventSource;
 4. starts a fresh-ticket connection immediately;
-5. notifies snapshot consumers once without waiting for SSE data.
+5. notifies snapshot consumers once the replacement connection opens, without
+   waiting for SSE data. A pre-open snapshot alone leaves a gap with no replay.
 
 Initial `pageshow` is not a resume and must not create a second connection.
 

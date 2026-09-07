@@ -162,6 +162,8 @@ async function performApiRequest<T>(
   runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
+  const generation = session.generation();
+  const isCurrentSession = (): boolean => session.generation() === generation && session.token() === token;
   const client = clientEnvironment();
   const headers: Record<string, string> = clientHeaders(client);
   if (init.uiKey !== undefined) headers['X-Pop-UI-Key'] = init.uiKey;
@@ -195,7 +197,7 @@ async function performApiRequest<T>(
 
     // The server hands back a fresh token once the current one is a day old.
     const renewed = response.headers.get(SESSION_TOKEN_HEADER);
-    if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+    if (isCurrentSession() && renewed !== null && renewed.length > 0) session.refresh(renewed);
 
     // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
     // (POST /files/folders answers created with nothing to add).
@@ -218,7 +220,7 @@ async function performApiRequest<T>(
     }
     // Only an expired or forged session sends the user back to the login
     // screen; a wrong password on the login form is not that.
-    if (error.code === 'invalid_session') {
+    if (isCurrentSession() && error.code === 'invalid_session') {
       session.clear();
       onSessionLost();
     }
@@ -229,18 +231,22 @@ async function performApiRequest<T>(
 /** A binary GET (e.g. a backup archive), returned as a Blob with the bearer token. */
 export async function apiDownload(path: string): Promise<Blob> {
   const token = session.token();
+  const generation = session.generation();
+  const isCurrentSession = (): boolean => session.generation() === generation && session.token() === token;
   const headers: Record<string, string> = clientHeaders();
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
   const response = await probed(() => fetch(`${BASE}${path}`, { headers }));
-  refreshSessionFrom(response);
-  if (!response.ok) throw handleSessionError(classifyServerReachability(await toApiError(response)));
+  refreshSessionFrom(response, isCurrentSession);
+  if (!response.ok) throw handleSessionError(classifyServerReachability(await toApiError(response)), isCurrentSession);
   return response.blob();
 }
 
 /** A multipart upload (e.g. an artifact), returning the parsed JSON reply. */
 export async function apiUpload<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
   const token = session.token();
+  const generation = session.generation();
+  const isCurrentSession = (): boolean => session.generation() === generation && session.token() === token;
   const headers: Record<string, string> = clientHeaders();
   // No content-type header: the browser sets the multipart boundary itself.
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
@@ -253,20 +259,20 @@ export async function apiUpload<T>(path: string, form: FormData, signal?: AbortS
       ...(signal === undefined ? {} : { signal }),
     }),
   );
-  refreshSessionFrom(response);
+  refreshSessionFrom(response, isCurrentSession);
 
   if (response.ok) return (await response.json()) as T;
-  throw handleSessionError(classifyServerReachability(await toApiError(response)));
+  throw handleSessionError(classifyServerReachability(await toApiError(response)), isCurrentSession);
 }
 
-function refreshSessionFrom(response: Response): void {
+function refreshSessionFrom(response: Response, isCurrentSession: () => boolean): void {
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
-  if (renewed !== null && renewed.length > 0) session.refresh(renewed);
+  if (isCurrentSession() && renewed !== null && renewed.length > 0) session.refresh(renewed);
 }
 
 /** Apply the same invalid-session semantics to non-JSON request helpers. */
-function handleSessionError(error: ApiError): ApiError {
-  if (error.code === 'invalid_session') {
+function handleSessionError(error: ApiError, isCurrentSession: () => boolean): ApiError {
+  if (isCurrentSession() && error.code === 'invalid_session') {
     session.clear();
     onSessionLost();
   }

@@ -205,7 +205,7 @@ function transportFor(server: McpServer, secretJson: string | undefined): Transp
   }
 
   const url = new URL(server.endpoint);
-  const authenticatedFetch = fetchWithHeaders(authHeaders(server, secretJson));
+  const authenticatedFetch = fetchWithHeaders(authHeaders(server, secretJson), server.timeoutMs);
   if (server.transport === 'sse') {
     return new SSEClientTransport(url, { fetch: authenticatedFetch });
   }
@@ -225,11 +225,20 @@ function authHeaders(server: McpServer, secretJson: string | undefined): Headers
   return headers;
 }
 
-function fetchWithHeaders(base: Headers): FetchLike {
+function fetchWithHeaders(base: Headers, timeoutMs: number): FetchLike {
   return (input, init = {}) => {
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     new Headers(init.headers).forEach((value, name) => headers.set(name, value));
     base.forEach((value, name) => headers.set(name, value));
+    // Session DELETE has no SDK request timer. Bound it at the fetch boundary
+    // so cleanup cannot hold a successful tool result indefinitely.
+    const method = init.method ?? (input instanceof Request ? input.method : 'GET');
+    if (method.toUpperCase() === 'DELETE') {
+      const timeout = AbortSignal.timeout(Math.min(timeoutMs, 5_000));
+      const inherited = init.signal ?? (input instanceof Request ? input.signal : undefined);
+      const signal = inherited == null ? timeout : AbortSignal.any([inherited, timeout]);
+      return fetch(input, { ...init, headers, signal });
+    }
     return fetch(input, { ...init, headers });
   };
 }

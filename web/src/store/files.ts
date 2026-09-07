@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { FileNodeDTO } from '@pop-agent/shared';
+import { session } from '../services/session';
 import { filesService } from '../services/artifacts';
 
 /**
@@ -12,15 +13,20 @@ interface FilesState {
   reload: () => Promise<void>;
 }
 
+let reloadGeneration = 0;
+
 export const useFilesStore = create<FilesState>((set) => ({
   tree: undefined,
   reload: async () => {
+    const request = ++reloadGeneration;
+    const authGeneration = session.generation();
+    const isCurrent = (): boolean => request === reloadGeneration && authGeneration === session.generation();
     try {
       const { tree } = await filesService.tree();
-      set({ tree });
+      if (isCurrent()) set({ tree });
     } catch {
       // A failed refresh is not an empty folder; retain the last known list.
-      set((state) => ({ tree: state.tree ?? [] }));
+      if (isCurrent()) set((state) => ({ tree: state.tree ?? [] }));
     }
   },
 }));

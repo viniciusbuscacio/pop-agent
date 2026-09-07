@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Ignore stale session renewal/rejection responses across login changes, sign-out and token replacement, including uploads and downloads.
+- Refresh canonical chat state after foreground SSE reconnection opens; prevent older Files listings from overwriting newer refreshes.
+- Preserve Unicode download filenames and stream file responses with bounded buffering and cancellation.
+- Bound stateful HTTP MCP session cleanup so an unresponsive DELETE cannot indefinitely delay tool results.
+
 ## 0.2.78 — 2026-09-07
 
 - Present interactive installation as concise English stages; press D or use --verbose for technical output. Retain private redacted transcripts, keep sudo password input separate, and restore the terminal on interruption.

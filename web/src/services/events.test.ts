@@ -158,7 +158,7 @@ describe('event stream lifecycle', () => {
 
     expect(sources[0]!.closed).toBe(true);
     expect(ticketRequests).toHaveLength(2);
-    expect(resume).toHaveBeenCalledOnce();
+    expect(resume).not.toHaveBeenCalled();
     ticketRequests[1]!.resolve('after-resume');
     await settle();
     sources[1]!.open();
@@ -180,7 +180,7 @@ describe('event stream lifecycle', () => {
 
     expect(sources[0]!.closed).toBe(true);
     expect(ticketRequests).toHaveLength(2);
-    expect(resume).toHaveBeenCalledOnce();
+    expect(resume).not.toHaveBeenCalled();
     stream.stop();
   });
 

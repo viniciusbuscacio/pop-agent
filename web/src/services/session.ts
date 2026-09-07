@@ -11,6 +11,7 @@ import { chatCache } from './chat-cache';
 
 const TOKEN_KEY = 'pop-agent.token';
 const PERSIST_KEY = 'pop-agent.persist';
+let generation = 0;
 let volatileToken: string | undefined;
 let volatileStore: 'local' | 'page' | undefined;
 
@@ -69,6 +70,10 @@ function otherStore(): Storage | undefined {
 }
 
 export const session = {
+  /** Changes on explicit login/logout, even if a server reissues the same token. */
+  generation(): number {
+    return generation;
+  },
   token(): string | undefined {
     // The alternate read recovers from a preference write that failed after a
     // previous session left the opposite value behind.
@@ -77,6 +82,7 @@ export const session = {
 
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
+    generation += 1;
     volatileToken = token;
     volatileStore = keepSignedIn ? 'local' : 'page';
     remove(localStore(), TOKEN_KEY);
@@ -99,6 +105,7 @@ export const session = {
   },
 
   clear(): void {
+    generation += 1;
     volatileToken = undefined;
     volatileStore = undefined;
     remove(localStore(), TOKEN_KEY);

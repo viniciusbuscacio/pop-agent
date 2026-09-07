@@ -67,6 +67,11 @@ same. Recovery material is never retrievable later.
 
 ## Sessions
 
+Browser response side effects are scoped to the session generation and token
+that issued the request. A late renewal or rejection cannot overwrite a newer
+login, restore credentials after sign-out, or invalidate a replacement token.
+This applies equally to JSON requests, uploads and downloads.
+
 A session token is a compact HMAC-SHA256 signed payload containing epoch,
 issued-at and expiry. Signature comparison is constant-time. Lifetime is seven
 days. An authenticated request using a token older than 24 hours may receive a
