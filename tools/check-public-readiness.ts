@@ -88,8 +88,8 @@ export function publicReadinessErrors(root: string): string[] {
   if (!releasing.includes('account without repository access')) {
     errors.push('release runbook does not verify private vulnerability reporting');
   }
-  if (!releasing.includes('server_release="$release_root/server/pop-agent-$version-$commit"')) {
-    errors.push('release runbook does not stage the nested server release output');
+  if (!releasing.includes('./deploy/local-release.sh build') || !releasing.includes('./deploy/local-release.sh publish')) {
+    errors.push('release runbook does not document verified local batch build/publication');
   }
   if (!installer.includes("both a branch and tag exist")) {
     errors.push('installer does not reject branch/tag ambiguity');

@@ -77,11 +77,15 @@ probe before publication; the owner then repeats git clone plus bootstrap on the
 snapshot-based test VM. Do not advertise a new architecture solely because it
 cross-compiles. Server releases currently advertise AMD64 only.
 
+## Public visibility cutover (separate owner action)
+
 Public visibility and LinkedIn announcement require separate owner authorization
 and a broader audit: source/history/log secret review, license and support/security
 documentation, account/provider/backup/recovery flows, anonymous clone/install,
 platform acceptance, and appropriate GitHub protection/security settings. Do not
 reinstate hosted Actions or paid security tools implicitly during a release.
+Enable private vulnerability reporting and verify its advisory form from an
+account without repository access before public launch.
 
 ## Correction
 
