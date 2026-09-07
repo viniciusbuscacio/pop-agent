@@ -456,6 +456,14 @@ export class SdkPiEngine implements PiEngine {
       // recent conversations (docs/specs/Spec-Pop-General.md §7.1) -- names only, as untrusted
       // data, so the agent knows what memory it can open without being told.
       appendSystemPrompt: [
+        // Product identity belongs to this session, not the recent-chat catalog
+        // or compactable transcript. Reopening/forking supplies the current ID.
+        [
+          '## Current conversation (server-provided metadata)',
+          `Current Pop chat ID: ${JSON.stringify(options.chatId)}`,
+          'This is the ID of the conversation you are answering now. Answer questions about its ID directly from this metadata; no memory search or other tool is needed.',
+          'IDs in older messages, summaries, or the recent-conversation catalog may refer to other chats and do not replace this current ID.',
+        ].join('\n'),
         ...(options.instructions.length === 0 ? [] : [options.instructions]),
         ...this.userMemoryBlock(),
         ...(this.recentChatsCatalog() ?? []),

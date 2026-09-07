@@ -419,3 +419,7 @@ relevant focused tests and `npm run gate` pass.
 ## Prefer native pi behavior
 
 Use supported pi APIs and inherit native behavior wherever it satisfies the product need. Do not duplicate runtime algorithms, defaults or heuristics in Pop. Pop adapters own product-specific authentication, persistence, channels, local-machine boundaries and UI; an override of native behavior requires a concrete product requirement and documented justification. Compaction decisions and thresholds belong to pi.
+
+## Current conversation identity
+
+Every chat session receives its server-owned Pop chat ID in the appended system prompt, independently of memory availability and transcript compaction. Resuming a session preserves the current chat ID; opening a fork uses the fork ID rather than an ID copied in its history. The agent answers requests for its current conversation ID directly from this metadata without calling memory tools.

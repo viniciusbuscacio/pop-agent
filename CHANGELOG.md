@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Supply the current chat ID directly in each pi session system prompt, so answering its identity does not require a memory lookup.
+
 - Give incoming A2A message bubbles a distinct theme-aware background while preserving their authorship labels.
 
 - Distinguish direct owner A2A messages from Pop-authored requests and peer responses, retain authorship across continuations/restarts, and label incoming A2A chats.
