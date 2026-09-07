@@ -33,13 +33,14 @@ export function ChatLayout() {
   const mcpDetail = useMatch('/mcp/:id');
   const a2aDetail = useMatch('/a2a/:id');
   const restApi = useMatch('/rest-api');
+  const a2aModule = useMatch('/a2a');
   const contentOpen =
     openChat !== null ||
     filesOpen !== null ||
     skillDetail !== null ||
     taskDetail !== null ||
     mcpDetail !== null ||
-    a2aDetail !== null || restApi !== null;
+    a2aDetail !== null || a2aModule !== null || restApi !== null;
 
   useEffect(() => {
     const chatId = openChat?.params.chatId;
@@ -69,7 +70,7 @@ export function ChatLayout() {
       <aside
         className={`${contentOpen ? 'hidden md:flex' : 'flex'} relative w-full flex-col border-[var(--border)] md:w-80 md:border-r`}
       >
-        {restApi !== null ? <><SidebarNav /><ShellFooter /></> : <ChatList />}
+        {restApi !== null || a2aModule !== null ? <><SidebarNav /><ShellFooter /></> : <ChatList />}
       </aside>
 
       <main className={`${contentOpen ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col overflow-x-hidden`}>

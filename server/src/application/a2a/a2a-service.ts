@@ -80,6 +80,7 @@ export class A2aService {
       repo: A2aRepo;
       secrets: SecretsRepo;
       clients: A2aClientFactory;
+      clientEnabled?: () => boolean;
     },
   ) {}
 
@@ -170,6 +171,7 @@ export class A2aService {
 
   /** Tests the configured endpoint and atomically replaces its discovered card data. */
   async discover(id: string, signal?: AbortSignal): Promise<A2aAgentWithDiscovery> {
+    if (this.deps.clientEnabled?.() === false) throw new Error('A2A Client is disabled.');
     const agent = this.requireAgent(id);
     const credential = this.deps.secrets.get(secretKey(id));
     try {
@@ -229,7 +231,8 @@ export class A2aService {
     return this.deps.repo.getTask(id);
   }
 
-  async sendText(agentId: string, text: string, signal?: AbortSignal): Promise<A2aTask> {
+  async sendText(agentId: string, text: string, signal?: AbortSignal, author: 'owner' | 'agent' | 'unknown' = 'unknown'): Promise<A2aTask> {
+    if (this.deps.clientEnabled?.() === false) throw new Error('A2A Client is disabled.');
     const requestText = requiredText('requestText', text, A2A_LIMITS.text);
     const { agent, client, credential } = this.clientFor(agentId);
     const now = new Date().toISOString();
@@ -242,12 +245,13 @@ export class A2aService {
       contextId: '',
       state: 'submitted',
       requestText,
+      requestMessages: [{ author, text: requestText }],
       responseText: '',
       createdAt: now,
       updatedAt: now,
     });
     try {
-      const result = normalizeTaskResult(await client.sendText(requestText, signal));
+      const result = normalizeTaskResult(await client.sendText(requestText, signal, author));
       return this.deps.repo.updateTask(localId, {
         remoteTaskId: result.remoteTaskId,
         contextId: result.contextId,
@@ -262,25 +266,31 @@ export class A2aService {
   }
 
   async getTask(id: string, signal?: AbortSignal): Promise<A2aTask> {
+    if (this.deps.clientEnabled?.() === false) throw new Error('A2A Client is disabled.');
     const task = this.requireTask(id);
     if (isTerminal(task.state)) return task;
     return this.refreshTask(id, (client, current) => client.getTask(current.remoteTaskId, signal));
   }
 
   async cancelTask(id: string, signal?: AbortSignal): Promise<A2aTask> {
+    if (this.deps.clientEnabled?.() === false) throw new Error('A2A Client is disabled.');
     const task = this.requireTask(id);
     if (isTerminal(task.state)) throw Object.assign(new Error('The A2A task is already terminal.'), { code: 'invalid_state' });
     return this.refreshTask(id, (client, current) => client.cancelTask(current.remoteTaskId, signal));
   }
 
-  async continueTask(id: string, text: string, signal?: AbortSignal): Promise<A2aTask> {
+  async continueTask(id: string, text: string, signal?: AbortSignal, author: 'owner' | 'agent' | 'unknown' = 'unknown'): Promise<A2aTask> {
+    if (this.deps.clientEnabled?.() === false) throw new Error('A2A Client is disabled.');
     const task = this.requireTask(id);
     if (task.state !== 'input-required') {
       throw Object.assign(new Error('The A2A task is not waiting for input.'), { code: 'invalid_state' });
     }
     const continuation = requiredText('requestText', text, A2A_LIMITS.text);
+    const history = task.requestMessages?.length ? task.requestMessages : [{ author: 'unknown' as const, text: task.requestText }];
+    if (history.length >= 100) throw new Error('A2A continuation history limit reached.');
+    this.deps.repo.updateTask(id, { requestMessages: [...history, { author, text: continuation }] });
     return this.refreshTask(id, (client, current) =>
-      client.continueTask(current.remoteTaskId, current.contextId, continuation, signal),
+      client.continueTask(current.remoteTaskId, current.contextId, continuation, signal, author),
     );
   }
 

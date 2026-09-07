@@ -1,3 +1,6 @@
+import type { A2aSettingsService } from '../../application/a2a/a2a-settings.js';
+import type { A2aServerProtocol } from '../../application/ports/a2a-server.js';
+import { createA2aServerRoutes, createA2aSettingsRoutes } from './a2a-server-routes.js';
 import type { UiBridgeService } from '../../application/integrations/ui-bridge-service.js';
 import { createUiControlRoutes } from './ui-control-routes.js';
 import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
@@ -84,6 +87,8 @@ import { createOnboardingRoutes } from './onboarding-routes.js';
 export interface AppDeps {
   uiBridge?: UiBridgeService;
   integrations?: IntegrationService;
+  a2aSettings?: A2aSettingsService;
+  a2aProtocol?: A2aServerProtocol;
   restClients?: RestClientService;
   auth: AuthService;
   /** Present only while a fresh guided server install is being completed. */
@@ -198,6 +203,7 @@ export function createApp(deps: AppDeps): Hono {
   // route-guard.test.ts verifies the runtime half of the same invariant.
   mountApi(app, authMiddleware(deps.auth, deps.integrations), {
     public: [
+      ...(deps.a2aSettings && deps.a2aProtocol ? [publicSurface('A2A card and protocol enforce their own independent enabled switch, IP allowlist and bearer key.', createA2aServerRoutes(deps.a2aSettings, deps.a2aProtocol))] : []),
       publicSurface(
         'liveness and the health dot leak only ok/error flags, and a session check here would make "signed out" indistinguishable from "server down"',
         health,
@@ -220,6 +226,7 @@ export function createApp(deps: AppDeps): Hono {
       ),
     ],
     guarded: [
+      ...(deps.a2aSettings && deps.a2aProtocol ? [sessionGuarded(createA2aSettingsRoutes(deps.a2aSettings, deps.a2aProtocol))] : []),
       ...(deps.uiBridge && deps.integrations ? [sessionGuarded(createUiControlRoutes(deps.uiBridge, deps.integrations))] : []),
       ...(deps.integrations === undefined ? [] : [sessionGuarded(createIntegrationRoutes(deps.integrations, deps.chats, deps.restClients))]),
       sessionGuarded(createAuthRoutes(deps)),

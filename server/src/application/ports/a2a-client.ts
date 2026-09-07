@@ -33,7 +33,7 @@ export interface A2aTaskResult {
 
 export interface A2aClient {
   discover(signal?: AbortSignal): Promise<DiscoveredA2aAgent>;
-  sendText(text: string, signal?: AbortSignal): Promise<A2aTaskResult>;
+  sendText(text: string, signal?: AbortSignal, author?: 'owner' | 'agent' | 'unknown'): Promise<A2aTaskResult>;
   getTask(remoteTaskId: string, signal?: AbortSignal): Promise<A2aTaskResult>;
   cancelTask(remoteTaskId: string, signal?: AbortSignal): Promise<A2aTaskResult>;
   continueTask(
@@ -41,6 +41,7 @@ export interface A2aClient {
     contextId: string,
     text: string,
     signal?: AbortSignal,
+    author?: 'owner' | 'agent' | 'unknown',
   ): Promise<A2aTaskResult>;
 }
 

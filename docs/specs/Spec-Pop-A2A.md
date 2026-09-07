@@ -1,34 +1,48 @@
 # Pop Agent — outbound A2A client
 
 **Status:** normative
-**Scope:** client-only MVP for owner-configured Agent2Agent (A2A) peers
+**Scope:** independent authenticated A2A server and owner-configured outbound client
 **Primary implementation:** `server/src/application/a2a/`, `server/src/infrastructure/a2a/`, `server/src/infrastructure/agent/a2a-tools.ts`
 **Related:** [`Spec-Pop-Skills-and-Tools.md`](Spec-Pop-Skills-and-Tools.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-API.md`](Spec-Pop-API.md), [`Spec-Pop-Backend.md`](Spec-Pop-Backend.md), [`Spec-Pop-Frontend.md`](Spec-Pop-Frontend.md)
 
 ## Product boundary
 
-The A2A MVP lets the owner configure a small set of trusted remote agents and
-lets Pop Agent send them foreground text tasks. Pop is an A2A **client only**.
-It does not publish an Agent Card, accept A2A requests, expose an A2A server or
-make the owner's agent reachable by other agents.
+Agent → A2A has independent Server and Client modules, using the REST API screen
+layout: switches, Edit (no module Delete), full-pane configuration and shared
+controls. Fresh modules default OFF; an existing configured outbound client is
+preserved. Turning either module off preserves its configuration.
 
-Configuration is manual and authenticated. Discovery from a public directory,
-automatic trust, peer-to-peer enrollment and importing configuration from the
-host are out of scope. Calling an enabled configured agent is a user-requested
-integration, not telemetry or ambient network activity.
+The server publishes an authenticated A2A 1.0 Agent Card at
+`/.well-known/agent-card.json` and JSON-RPC at `/a2a/rpc`, sharing the
+application HTTPS listener. It uses the pinned official SDK for wire mechanics.
+One independent encrypted A2A bearer key is created when enabled or configured;
+rotation invalidates the old key immediately. REST keys and owner session tokens
+do not authorize the A2A protocol. Server access additionally requires an allowed
+source IP, defaulting to `127.0.0.1/32`, using the same trusted-proxy rules as REST.
+Responses and owner key endpoints use no-store.
 
-The following are also out of scope for the MVP:
+Incoming text tasks use the existing Pop chat/run engine. Their task and context
+mapping is durable and isolated from ordinary chats: a caller cannot supply an
+owner chat/run id to read or cancel unrelated work. Unique message IDs deduplicate
+retries; reusing an ID with changed content is rejected. Admission is persisted
+before execution. Missing admission/completion after a crash is reported honestly
+as failed, never replayed automatically. Task storage is bounded at 1,000 records; terminal records older than 30 days
+are pruned on admission. Deduplication and context continuation are guaranteed
+while the record is retained. Stored answers do not depend on REST activity retention.
+Owner-supplied context IDs must refer to a previously issued A2A context.
 
-- file or binary parts, URLs treated as attachments, and artifact transfer;
-- structured/data parts beyond protocol identifiers and status metadata;
-- streaming responses, push notifications, webhooks and push-notification
-  configuration;
-- schedules, autonomous polling, background continuation or unsolicited work;
-- multi-agent routing, delegation graphs and public agent discovery.
+Server operations are SendMessage, GetTask and CancelTask. Blocking sends wait up
+to 60 seconds; returnImmediately sends return the accepted task. A lost connection
+or wait timeout does not claim the remote task was canceled: retry the same message
+ID or inspect its task. Stop/key rotation/IP revocation prevents further access,
+including an outstanding blocking wait. Existing runs remain visible to the owner.
+Only text is accepted; files, artifacts, streaming, push and task lists are not
+advertised. Protocol requests are bounded to 128 KiB, messages to 32,000 Unicode
+characters and results to 64,000 characters. A key admits at most 120 requests/minute.
 
-A remote response containing an artifact or unsupported part is not downloaded,
-opened, written to Files or silently flattened into model context. Pop records a
-bounded unsupported-content result and keeps the task inspectable.
+The server editor provides address, Start/Stop, key rotation/copy, Allowed IP
+addresses and copyable agent instructions containing the actual card/protocol URL
+and key. It does not copy REST UI-control or screenshot operations into A2A.
 
 ## Configured agents and trust
 
@@ -62,9 +76,11 @@ Every Agent Card and protocol request uses HTTPS and a credential-free URL.
 Plain HTTP, URL user-info and non-HTTPS redirects are rejected. Manual trust is
 not an SSRF bypass.
 
-Before every connection, Pop resolves the destination and rejects loopback,
-private, link-local, carrier-grade NAT, multicast, reserved, unspecified and
-cloud-metadata addresses for both IPv4 and IPv6. The connection is pinned to
+Before every connection, Pop resolves and screens the destination. Public HTTPS
+is allowed. Private RFC1918, Tailscale CGNAT and IPv6 ULA addresses require an
+explicit Client allowed-private-destinations entry and the exact configured origin.
+Loopback, link-local/cloud metadata, multicast, reserved and unspecified addresses
+remain rejected even with a broad allowlist. The connection is pinned to
 the screened address set so DNS rebinding cannot change the destination after
 validation. Redirects are refused in the MVP; a different origin requires a
 new owner configuration and policy decision. The same checks apply to the
@@ -211,3 +227,18 @@ Focused tests must cover:
   those slices land.
 
 The complete gate is required before the composed feature ships.
+
+## Message authorship
+
+Outbound task requests persist an author per message: owner (direct UI send),
+agent (Pop tool invocation), or unknown (legacy/unattributed). Continuations
+preserve previous authors rather than overwriting history. The UI labels these
+You → remote agent and Pop → remote agent; remote responses are identified
+separately. Tool schemas do not let the model impersonate the owner.
+
+Pop sends this informational origin in message metadata. Receiving peers may
+report owner/agent origin, but it is not an authenticated human identity and
+never grants extra authority. Incoming chats are titled A2A and their messages
+display Remote user → Pop, Remote agent → Pop or A2A peer → Pop; metadata is
+marked as reported by the authenticated peer. Unknown history stays unknown.
+The message DTO carries only this finite label, never bearer keys or source IPs.

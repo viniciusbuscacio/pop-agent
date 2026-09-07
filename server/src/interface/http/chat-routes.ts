@@ -813,6 +813,7 @@ function toMessageDto(message: Message): MessageDTO {
     id: message.id,
     chatId: message.chatId,
     role: message.role,
+    ...(message.client?.kind.startsWith('a2a-') ? { a2aAuthor: message.client.kind === 'a2a-owner' ? 'owner' as const : message.client.kind === 'a2a-agent' ? 'agent' as const : 'unknown' as const } : {}),
     content: message.content,
     thinking: message.thinking,
     tools: message.tools.map((tool) => ({

@@ -231,3 +231,7 @@ describe('A2A detail presentation', () => {
     expect((await screen.findByRole('status')).textContent).toContain('The tenant ID is not valid.');
   });
 });
+
+vi.mock('../services/a2a-module', () => ({ a2aStatus: { subscribe: () => () => undefined, getState: () => false }, a2aModuleService: { settings: vi.fn(async () => ({ serverEnabled: false, clientEnabled: true })), outboundIps: vi.fn(async () => ({ entries: [] })) } }));
+
+vi.mock('./shell-header', () => ({ ShellFooter: () => <div>Settings navigation</div> }));

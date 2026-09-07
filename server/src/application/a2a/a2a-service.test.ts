@@ -221,7 +221,7 @@ describe('A2aService', () => {
       state: 'working', responseText: 'Continuing', requestText: 'Forecast Rio',
     });
     expect(client.continueTask).toHaveBeenCalledWith(
-      'remote-1', 'context-1', 'Add tomorrow', undefined,
+      'remote-1', 'context-1', 'Add tomorrow', undefined, 'unknown',
     );
     expect(service.listTasks(agent.id)).toHaveLength(1);
   });

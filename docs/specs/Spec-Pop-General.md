@@ -33,7 +33,7 @@ to silently choose one side.
 | §12 — web and MCP access | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
 | MCP integration ownership and pi extension boundary | [Spec-Pop-Skills-and-Tools.md](Spec-Pop-Skills-and-Tools.md) |
 | REST API server and outbound clients | [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md) |
-| Outbound Agent2Agent (A2A) client | [Spec-Pop-A2A.md](Spec-Pop-A2A.md) |
+| Agent2Agent (A2A) server and client | [Spec-Pop-A2A.md](Spec-Pop-A2A.md) |
 | §13 — API contract | [Spec-Pop-API.md](Spec-Pop-API.md) |
 | §14 — PWA/frontend | [Spec-Pop-Frontend.md](Spec-Pop-Frontend.md) |
 | §15 — providers and models | [Spec-Pop-Providers-and-Models.md](Spec-Pop-Providers-and-Models.md) |
@@ -92,9 +92,9 @@ Permanent product rules:
   official TypeScript MCP SDK owns protocol mechanics, and pi receives the
   resulting tools through its supported SDK APIs. Host-installed or third-party
   pi extensions are not the MCP product boundary.
-- **A2A is outbound and owner-configured.** The MVP calls manually configured
-  trusted remote agents as a client; Pop exposes no public A2A server and treats
-  every remote result as untrusted external content.
+- **A2A is owner-configured in both directions.** Independent Server and Client
+  modules default off; inbound calls require a dedicated key and IP allowlist,
+  and outbound results remain untrusted external content.
 - **Clients are views and optional hands.** The PWA and CLI present the product;
   optional Pop Local Access lends explicitly selected local tools without
   creating another agent.

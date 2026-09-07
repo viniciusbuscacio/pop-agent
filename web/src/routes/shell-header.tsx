@@ -1,3 +1,4 @@
+import { a2aStatus } from '../services/a2a-module';
 import { restApiStatus } from '../services/integrations';
 import { useState, useSyncExternalStore } from 'react';
 import { Pressable } from '../ui/controls';
@@ -63,6 +64,7 @@ export function ShellFooter() {
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">
         <RestApiIndicator />
+        <A2aIndicator />
         <HealthDot />
         <RefreshButton />
         <Pressable
@@ -201,6 +203,19 @@ function RestApiIndicator() {
   return <Pressable type="button" data-testid="api-indicator"
     aria-label={t('rest.runningIndicator')} title={t('rest.runningIndicator')}
     onClick={() => void navigate('/rest-api?edit=server')}
+    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--hover-overlay)]">
+    <span className="rest-api-dot" aria-hidden="true" />
+  </Pressable>;
+}
+
+function A2aIndicator() {
+  const enabled = useSyncExternalStore(a2aStatus.subscribe, a2aStatus.getState);
+  const health = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getState);
+  const navigate = useNavigate();
+  if (!enabled || health.kind === 'offline' || health.kind === 'device-offline') return null;
+  return <Pressable type="button" data-testid="a2a-indicator"
+    aria-label="A2A Server is running" title="A2A Server is running"
+    onClick={() => void navigate('/a2a?edit=server')}
     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--hover-overlay)]">
     <span className="rest-api-dot" aria-hidden="true" />
   </Pressable>;

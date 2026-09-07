@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Distinguish direct owner A2A messages from Pop-authored requests and peer responses, retain authorship across continuations/restarts, and label incoming A2A chats.
+- Add independent A2A Server and Client controls, an authenticated A2A 1.0 text-task server, dedicated access key/IP policy, copyable agent instructions and explicit private-destination permissions for configured peers.
+
 - Ignore stale session renewal/rejection responses across login changes, sign-out and token replacement, including uploads and downloads.
 - Refresh canonical chat state after foreground SSE reconnection opens; prevent older Files listings from overwriting newer refreshes.
 - Preserve Unicode download filenames and stream file responses with bounded buffering and cancellation.

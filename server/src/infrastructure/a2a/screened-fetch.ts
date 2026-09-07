@@ -1,4 +1,5 @@
-import { lookup } from 'node:dns/promises';
+import { allowsIp } from '../../domain/integrations/ip-allowlist.js';
+import { lookup, Resolver } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 import { Agent, request } from 'undici';
 
@@ -23,6 +24,7 @@ export class A2aNetworkError extends Error {
 }
 
 export interface ScreenedFetchOptions {
+  allowedPrivateIps?: readonly string[];
   timeoutMs: number;
   allowedCredentialOrigin: string;
   credentialHeader?: { name: string; value: string };
@@ -47,7 +49,7 @@ export function createScreenedA2aFetch(options: ScreenedFetchOptions): typeof fe
     const rawUrl = input instanceof Request ? input.url : input.toString();
     const url = parseA2aUrl(rawUrl);
     const outgoing = new Request(input, init);
-    const addresses = await publicAddresses(url.hostname, options.resolve ?? defaultResolve);
+    const addresses = await publicAddresses(url.hostname, options.resolve ?? defaultResolve, url.origin === options.allowedCredentialOrigin ? options.allowedPrivateIps ?? [] : []);
     const timeout = AbortSignal.timeout(options.timeoutMs);
     const operationSignal = options.operationSignal?.();
     const signal = AbortSignal.any([
@@ -102,9 +104,10 @@ export function createScreenedA2aFetch(options: ScreenedFetchOptions): typeof fe
 export async function screenA2aUrl(
   raw: string,
   resolve: (host: string) => Promise<string[]> = defaultResolve,
+  allowedPrivateIps: readonly string[] = [],
 ): Promise<URL> {
   const url = parseA2aUrl(raw);
-  await publicAddresses(url.hostname, resolve);
+  await publicAddresses(url.hostname, resolve, allowedPrivateIps);
   return url;
 }
 
@@ -127,13 +130,16 @@ export function parseA2aUrl(raw: string): URL {
 async function publicAddresses(
   host: string,
   resolve: (host: string) => Promise<string[]>,
+  allowedPrivateIps: readonly string[] = [],
 ): Promise<string[]> {
   const addresses = isIP(host) !== 0 ? [host] : await resolve(host).catch(() => []);
   if (addresses.length === 0) {
     throw new A2aNetworkError('transport_error', 'The A2A host could not be resolved.');
   }
   for (const address of addresses) {
-    if (isPrivateAddress(address)) {
+    const ownerAllowedPrivate = allowsIp(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '100.64.0.0/10', 'fc00::/7'], address)
+      && allowsIp([...allowedPrivateIps], address);
+    if (isPrivateAddress(address) && !ownerAllowedPrivate) {
       throw new A2aNetworkError('private_address', 'The A2A host resolves to a private address.');
     }
   }
@@ -228,7 +234,13 @@ for (const [network, prefix] of [
 ] as const) BLOCKED_V6.addSubnet(network, prefix, 'ipv6');
 
 async function defaultResolve(host: string): Promise<string[]> {
-  return (await lookup(host, { all: true })).map((entry) => entry.address);
+  try { return (await lookup(host, { all: true })).map((entry) => entry.address); }
+  catch (error) {
+    if (!host.endsWith('.ts.net')) throw error;
+    const resolver = new Resolver({ timeout: 2000, tries: 1 });
+    resolver.setServers(['100.100.100.100']);
+    return resolver.resolve4(host);
+  }
 }
 
 

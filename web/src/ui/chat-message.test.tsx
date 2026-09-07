@@ -427,3 +427,13 @@ describe('provider fallback notices', () => {
     expect(changeModel).toHaveBeenCalledOnce();
   });
 });
+
+it.each([
+  ['owner', 'Remote user → Pop'],
+  ['agent', 'Remote agent → Pop'],
+  ['unknown', 'A2A peer → Pop'],
+] as const)('labels incoming A2A %s messages without presenting them as local owner input', (author, label) => {
+  render(<ChatMessage message={{ ...base, role: 'user', content: 'hello', a2aAuthor: author }} />);
+  expect(screen.getByText(label)).toBeTruthy();
+  expect(screen.getByTitle('Origin reported by the authenticated A2A peer')).toBeTruthy();
+});

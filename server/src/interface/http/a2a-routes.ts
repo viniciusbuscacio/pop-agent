@@ -216,7 +216,7 @@ export function createA2aRoutes(service: A2aHttpService): Hono {
     if (parsed instanceof Response) return parsed;
     try {
       const body: A2aTaskResponse = {
-        task: taskDto(await service.sendText(id, parsed.text, c.req.raw.signal)),
+        task: taskDto(await service.sendText(id, parsed.text, c.req.raw.signal, 'owner')),
       };
       return c.json(body, 201);
     } catch {
@@ -258,7 +258,7 @@ export function createA2aRoutes(service: A2aHttpService): Hono {
     if (parsed instanceof Response) return parsed;
     try {
       const body: A2aTaskResponse = {
-        task: taskDto(await service.continueTask(id, parsed.text, c.req.raw.signal)),
+        task: taskDto(await service.continueTask(id, parsed.text, c.req.raw.signal, 'owner')),
       };
       return c.json(body);
     } catch {
@@ -362,6 +362,7 @@ function taskDto(value: A2aTask): A2aTaskDTO {
     contextId: value.contextId,
     state: value.state,
     requestText: value.requestText,
+    requestMessages: value.requestMessages ?? [{ author: 'unknown', text: value.requestText }],
     responseText: value.responseText,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,

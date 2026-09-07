@@ -11,10 +11,10 @@ import { envelope, sanitize } from '../../domain/safety/sanitize.js';
  */
 export interface A2aService {
   list(): readonly A2aAgentToolView[];
-  sendText(agentId: string, message: string, signal?: AbortSignal): Promise<A2aTaskToolView>;
+  sendText(agentId: string, message: string, signal?: AbortSignal, author?: 'owner' | 'agent' | 'unknown'): Promise<A2aTaskToolView>;
   getTask(taskId: string, signal?: AbortSignal): Promise<A2aTaskToolView>;
   cancelTask(taskId: string, signal?: AbortSignal): Promise<A2aTaskToolView>;
-  continueTask(taskId: string, message: string, signal?: AbortSignal): Promise<A2aTaskToolView>;
+  continueTask(taskId: string, message: string, signal?: AbortSignal, author?: 'owner' | 'agent' | 'unknown'): Promise<A2aTaskToolView>;
 }
 
 export interface A2aAgentToolView {
@@ -193,7 +193,7 @@ export function buildA2aTools(
       const { agentId, message } = params as { agentId: string; message: string };
       const runSignal = activeSignal(signal);
       return executeRemote('a2a:send-message', runSignal, () =>
-        service.sendText(agentId, message, runSignal));
+        service.sendText(agentId, message, runSignal, 'agent'));
     },
   });
 
@@ -251,7 +251,7 @@ export function buildA2aTools(
       const { taskId, message } = params as { taskId: string; message: string };
       const runSignal = activeSignal(signal);
       return executeRemote('a2a:continue-task', runSignal, () =>
-        service.continueTask(taskId, message, runSignal));
+        service.continueTask(taskId, message, runSignal, 'agent'));
     },
   });
 

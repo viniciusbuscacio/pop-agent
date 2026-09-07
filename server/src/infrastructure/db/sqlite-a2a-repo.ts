@@ -159,8 +159,8 @@ export class SqliteA2aRepo implements A2aRepo {
 
   createTask(task: A2aTask): A2aTask {
     this.db.prepare(`INSERT INTO a2a_tasks
-      (id,agent_id,remote_task_id,context_id,state,request_text,response_text,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?)`).run(
+      (id,agent_id,remote_task_id,context_id,state,request_text,response_text,created_at,updated_at,request_messages_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
       task.id,
       task.agentId,
       task.remoteTaskId,
@@ -170,6 +170,7 @@ export class SqliteA2aRepo implements A2aRepo {
       task.responseText,
       task.createdAt,
       task.updatedAt,
+      JSON.stringify(task.requestMessages ?? []),
     );
     return task;
   }
@@ -189,13 +190,14 @@ export class SqliteA2aRepo implements A2aRepo {
       updatedAt: new Date().toISOString(),
     } as A2aTask;
     this.db.prepare(`UPDATE a2a_tasks SET
-      remote_task_id=?,context_id=?,state=?,request_text=?,response_text=?,updated_at=? WHERE id=?`).run(
+      remote_task_id=?,context_id=?,state=?,request_text=?,response_text=?,updated_at=?,request_messages_json=? WHERE id=?`).run(
       next.remoteTaskId,
       next.contextId,
       next.state,
       next.requestText,
       next.responseText,
       next.updatedAt,
+      JSON.stringify(next.requestMessages ?? []),
       id,
     );
     return next;
@@ -248,6 +250,7 @@ interface A2aSkillRow {
 }
 
 interface A2aTaskRow {
+  request_messages_json: string;
   id: string;
   agent_id: string;
   remote_task_id: string;
@@ -313,6 +316,7 @@ function toSkill(row: A2aSkillRow): A2aSkill {
 
 function toTask(row: A2aTaskRow): A2aTask {
   return {
+    requestMessages: JSON.parse(row.request_messages_json) as NonNullable<A2aTask['requestMessages']>,
     id: row.id,
     agentId: row.agent_id,
     remoteTaskId: row.remote_task_id,

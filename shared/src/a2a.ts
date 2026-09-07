@@ -60,6 +60,7 @@ export interface A2aAgentDTO {
 }
 
 export interface A2aTaskDTO {
+  requestMessages?: { author: 'owner' | 'agent' | 'unknown'; text: string }[];
   id: string;
   agentId: string;
   remoteTaskId: string;

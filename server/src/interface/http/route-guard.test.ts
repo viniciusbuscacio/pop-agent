@@ -55,7 +55,7 @@ describe('route guard', () => {
     }
 
     expect(seen.size).toBeGreaterThan(20); // the walk found the real API, not an empty app
-    expect([...seen].filter((route) => route.includes(' /v1/a2a/'))).toHaveLength(11);
+    expect([...seen].filter((route) => route.includes(' /v1/a2a/'))).toHaveLength(21);
     expect(unguarded).toEqual([]);
   });
 

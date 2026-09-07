@@ -60,6 +60,7 @@ export interface A2aSkill {
 }
 
 export interface A2aTask {
+  requestMessages?: { author: 'owner' | 'agent' | 'unknown'; text: string }[];
   id: string;
   agentId: string;
   remoteTaskId: string;

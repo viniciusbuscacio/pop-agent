@@ -1,3 +1,7 @@
+import { SqliteA2aInboundRepo } from '../infrastructure/db/sqlite-a2a-inbound-repo.js';
+import { A2aSettingsService } from '../application/a2a/a2a-settings.js';
+import { A2aInboundService } from '../application/a2a/a2a-inbound-service.js';
+import { SdkA2aServer } from '../infrastructure/a2a/sdk-a2a-server.js';
 import { UiBridgeService } from '../application/integrations/ui-bridge-service.js';
 import { RestApiSettingsService } from '../application/integrations/rest-api-settings.js';
 import { IntegrationService } from '../application/integrations/integration-service.js';
@@ -181,6 +185,11 @@ export class FakeTranscriber {
 const inertTimer: Timer = { every: () => () => undefined };
 
 export interface TestApp {
+  a2aSettings: A2aSettingsService;
+  a2aInbound: A2aInboundService;
+  a2aInboundRepo: SqliteA2aInboundRepo;
+  a2aProtocol: SdkA2aServer;
+  settingsRepo: SettingsRepo;
   integrations: IntegrationService;
   app: Hono;
   /** Danger-zone calls the test inspects (LOTE 6). */
@@ -449,11 +458,18 @@ export function createTestApp(
   if (options.restApiEnabled !== false) settingsRepo.set('rest-api', { serverEnabled: true, clientEnabled: true });
   const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {secrets, config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
   hub.onIntegrationEvent = event=>integrations.observe(event);
+  const a2aSettings = new A2aSettingsService(settingsRepo, secrets);
+  const a2aInboundRepo = new SqliteA2aInboundRepo(db);
+  const a2aInbound = new A2aInboundService({ repo: a2aInboundRepo, clock, chats, runs, integrations });
+  hub.onIntegrationEvent = event => { integrations.observe(event); a2aInbound.observe(event); };
+  const a2aProtocol = new SdkA2aServer(a2aInbound);
   const restClients = new RestClientService({config: new RestApiSettingsService(settingsRepo),repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
   const uiBridge = new UiBridgeService();
   const app = createApp({
     uiBridge,
     integrations,
+    a2aSettings,
+    a2aProtocol,
     restClients,
     auth,
     ...(options.onboarding === undefined ? {} : { onboarding: options.onboarding }),
@@ -576,6 +592,11 @@ export function createTestApp(
 
   return {
     controlLog,
+    a2aSettings,
+    a2aProtocol,
+    a2aInbound,
+    a2aInboundRepo,
+    settingsRepo,
     integrations,
     app,
     auth,

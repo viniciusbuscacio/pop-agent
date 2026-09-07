@@ -74,3 +74,12 @@ describe('deleted open conversations', () => {
     expect(sessionStorage.getItem('pop-agent.lastActiveChat')).toBeNull();
   });
 });
+
+vi.mock('./shell-header', () => ({ ShellFooter: () => <div>Settings footer</div> }));
+it('opens the A2A module pane on mobile while retaining Settings navigation', () => {
+  render(<MemoryRouter initialEntries={['/a2a']}><Routes><Route element={<ChatLayout />}><Route path="a2a" element={<div>A2A module</div>} /></Route></Routes></MemoryRouter>);
+  const main = screen.getByRole('main');
+  expect(main.classList.contains('hidden')).toBe(false);
+  expect(main.classList.contains('flex')).toBe(true);
+  expect(screen.getByText('Settings footer')).toBeTruthy();
+});

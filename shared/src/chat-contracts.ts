@@ -64,6 +64,7 @@ export type SystemNoticeDTO =
   | { kind: 'run-failure'; failed: ModelAttemptDTO };
 
 export interface MessageDTO {
+  a2aAuthor?: 'owner' | 'agent' | 'unknown';
   id: string;
   chatId: string;
   role: 'user' | 'assistant' | 'system';

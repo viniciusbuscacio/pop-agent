@@ -33,6 +33,7 @@ import {
 const MAX_REMOTE_TEXT = 64_000;
 
 export interface SdkA2aClientFactoryOptions {
+  allowedPrivateIps?: () => string[];
   fetchDeps?: Pick<ScreenedFetchOptions, 'resolve' | 'retrieve'>;
   entraCredential?: (
     tenantId: string,
@@ -56,6 +57,7 @@ export class SdkA2aClientFactory implements A2aClientFactory {
     const authentication = authOptions(agent, credential, this.options.entraCredential);
     const fetchImpl = createScreenedA2aFetch({
       timeoutMs: agent.timeoutMs,
+      allowedPrivateIps: this.options.allowedPrivateIps?.() ?? [],
       allowedCredentialOrigin: base.origin,
       ...authentication,
       operationSignal: () => operation.signal,
@@ -76,8 +78,8 @@ export class SdkA2aClientFactory implements A2aClientFactory {
       cardResolver: resolver,
     });
     const validateInterface = (url: string) => this.options.fetchDeps?.resolve === undefined
-      ? screenA2aUrl(url)
-      : screenA2aUrl(url, this.options.fetchDeps.resolve);
+      ? screenA2aUrl(url, undefined, new URL(url).origin === base.origin ? this.options.allowedPrivateIps?.() ?? [] : [])
+      : screenA2aUrl(url, this.options.fetchDeps.resolve, new URL(url).origin === base.origin ? this.options.allowedPrivateIps?.() ?? [] : []);
     return new SdkA2aClient(cardBaseUrl, resolver, factory, operation, validateInterface);
   }
 }
@@ -121,9 +123,9 @@ class SdkA2aClient implements A2aClient {
     };
   }
 
-  async sendText(text: string, signal?: AbortSignal): Promise<A2aTaskResult> {
+  async sendText(text: string, signal?: AbortSignal, author: 'owner' | 'agent' | 'unknown' = 'unknown'): Promise<A2aTaskResult> {
     return this.withSignal(signal, async () => mapSdkA2aResult(await (await this.client()).sendMessage(
-      sendRequest(text),
+      sendRequest(text, '', '', author),
       signal === undefined ? undefined : { signal },
     )));
   }
@@ -147,9 +149,10 @@ class SdkA2aClient implements A2aClient {
     contextId: string,
     text: string,
     signal?: AbortSignal,
+    author: 'owner' | 'agent' | 'unknown' = 'unknown',
   ): Promise<A2aTaskResult> {
     return this.withSignal(signal, async () => mapSdkA2aResult(await (await this.client()).sendMessage(
-      sendRequest(text, contextId, remoteTaskId),
+      sendRequest(text, contextId, remoteTaskId, author),
       signal === undefined ? undefined : { signal },
     )));
   }
@@ -215,7 +218,7 @@ function authOptions(
   return { credentialHeader: { name: agent.authHeader, value: credential } };
 }
 
-function sendRequest(text: string, contextId = '', taskId = '') {
+function sendRequest(text: string, contextId = '', taskId = '', author: 'owner' | 'agent' | 'unknown' = 'unknown') {
   return {
     tenant: '',
     message: {
@@ -224,7 +227,7 @@ function sendRequest(text: string, contextId = '', taskId = '') {
       taskId,
       role: Role.ROLE_USER,
       parts: [textPart(text)],
-      metadata: undefined,
+      metadata: { popAgent: { author } },
       extensions: [],
       referenceTaskIds: [],
     },

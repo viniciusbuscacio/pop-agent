@@ -1,3 +1,6 @@
+import { A2aSettingsService } from './application/a2a/a2a-settings.js';
+import { A2aInboundService } from './application/a2a/a2a-inbound-service.js';
+import { SdkA2aServer } from './infrastructure/a2a/sdk-a2a-server.js';
 import { UiBridgeService } from './application/integrations/ui-bridge-service.js';
 import { RestApiSettingsService } from './application/integrations/rest-api-settings.js';
 import { LazyClientArtifacts } from './infrastructure/update/lazy-client-artifacts.js';
@@ -211,10 +214,12 @@ const mcp = new McpService({
   clients: new OfficialMcpClientFactory(),
   dataDir: context.dataDir,
 });
+const a2aSettings = new A2aSettingsService(context.settings, context.secrets, () => context.a2a.list().some(agent => agent.enabled));
 const a2a = new A2aService({
+  clientEnabled: () => a2aSettings.get().clientEnabled,
   repo: context.a2a,
   secrets: context.secrets,
-  clients: new SdkA2aClientFactory(),
+  clients: new SdkA2aClientFactory({ allowedPrivateIps: () => a2aSettings.outboundIps() }),
 });
 // The agent's own notes vault (docs/specs/Spec-Pop-General.md §11), inside the data directory.
 const notesVault = new NotesVault(join(context.dataDir, 'notes'));
@@ -710,11 +715,15 @@ const sessionCommands = new SessionCommandService({
 const integrations = new IntegrationService(context.integrations, {secrets: context.secrets, config: new RestApiSettingsService(context.settings), chats, runs, queue: queuedMessages, now: () => systemClock.now()});
 // Match go-notepad: a persisted access key exists before the server is exposed.
 integrations.ensureAccessKey();
-hub.onIntegrationEvent = event => integrations.observe(event);
+const a2aInbound = new A2aInboundService({ repo: context.a2aInbound, clock: systemClock, chats, runs, integrations });
+const a2aProtocol = new SdkA2aServer(a2aInbound);
+hub.onIntegrationEvent = event => { integrations.observe(event); a2aInbound.observe(event); };
 for (const entry of context.runJournal.list()) integrations.observe({kind:'run-status',chatId:entry.chatId,runId:entry.runId,status:entry.state});
 const app = createApp({
   uiBridge: new UiBridgeService(),
   integrations,
+  a2aSettings,
+  a2aProtocol,
   restClients,
   auth,
   ...(onboarding === undefined ? {} : { onboarding, onSetupComplete: closeBootstrapServer }),

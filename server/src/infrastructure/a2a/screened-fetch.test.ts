@@ -120,3 +120,23 @@ it.each([204,205,304])('preserves bodyless HTTP status %s for REST operations', 
   const response=screenedHttpResponse(new Uint8Array(),{status,headers:{'x-result':'ok'}});
   expect(response.status).toBe(status);expect(response.headers.get('x-result')).toBe('ok');expect(await response.text()).toBe('');
 });
+
+it('allows only explicitly approved private destinations on the configured origin', async () => {
+  const retrieve = vi.fn(async () => new Response('{}'));
+  const call = createScreenedA2aFetch({
+    timeoutMs: 1000, allowedCredentialOrigin: 'https://peer.example',
+    allowedPrivateIps: ['100.70.1.2/32'], resolve: async () => ['100.70.1.2'], retrieve,
+  });
+  await call('https://peer.example/a2a/rpc');
+  expect(retrieve).toHaveBeenCalledOnce();
+  await expect(call('https://other.example/a2a/rpc')).rejects.toMatchObject({ code: 'private_address' });
+});
+it.each(['127.0.0.1', '169.254.169.254', '0.0.0.0', '224.0.0.1'])('never allows reserved destination %s through a broad CIDR', async address => {
+  const retrieve = vi.fn();
+  const call = createScreenedA2aFetch({
+    timeoutMs: 1000, allowedCredentialOrigin: 'https://peer.example',
+    allowedPrivateIps: ['0.0.0.0/0'], resolve: async () => [address], retrieve,
+  });
+  await expect(call('https://peer.example')).rejects.toMatchObject({ code: 'private_address' });
+  expect(retrieve).not.toHaveBeenCalled();
+});

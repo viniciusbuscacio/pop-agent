@@ -17,7 +17,7 @@ function ChatMessageView({
   onChangeModel,
   systemTone = 'default',
 }: {
-  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice'>;
+  message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice' | 'a2aAuthor'>;
   onResend?: () => void;
   resending?: boolean;
   onChangeModel?: () => void;
@@ -79,6 +79,7 @@ function ChatMessageView({
   if (message.role === 'user') {
     return (
       <div className="flex min-w-0 flex-col items-end gap-2" data-testid="message-user">
+        {message.a2aAuthor ? <span className="text-xs text-[var(--muted)]" title="Origin reported by the authenticated A2A peer">{message.a2aAuthor === 'owner' ? 'Remote user → Pop' : message.a2aAuthor === 'agent' ? 'Remote agent → Pop' : 'A2A peer → Pop'}</span> : null}
         {message.content.length > 0 ? (
           <div className="user-bubble max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--accent)] px-4 py-2 text-[var(--accent-fg)] whitespace-pre-wrap [overflow-wrap:anywhere]">
             {message.content}

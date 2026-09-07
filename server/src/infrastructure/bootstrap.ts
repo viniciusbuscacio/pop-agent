@@ -1,3 +1,4 @@
+import { SqliteA2aInboundRepo } from './db/sqlite-a2a-inbound-repo.js';
 import type { IntegrationRepo } from '../application/ports/integration-repo.js';
 import { SqliteIntegrationRepo } from './db/sqlite-integration-repo.js';
 import { join } from 'node:path';
@@ -56,6 +57,7 @@ import { readLegacyCatalog, writeLegacyFiles } from './db/legacy-files-export.js
 
 /** Everything the boot sequence produces for the composition root to wire. */
 export interface AppContext {
+  a2aInbound: SqliteA2aInboundRepo;
   dataDir: string;
   /** The raw key that unlocks secrets and signs Files download links (§9, §14). */
   secretKey: Buffer;
@@ -138,6 +140,7 @@ export function bootstrap(): AppContext {
     storage: new SqliteStorageRepo(db),
     tasks: new SqliteTaskRepo(db),
     a2a: new SqliteA2aRepo(db),
+    a2aInbound: new SqliteA2aInboundRepo(db),
     mcp: new SqliteMcpRepo(db),
     push: new SqlitePushRepo(db),
     webauthn: new SqliteWebAuthnRepo(db),

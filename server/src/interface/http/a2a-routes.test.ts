@@ -227,7 +227,7 @@ describe('outbound A2A routes', () => {
       body: { text: 'Weather in Rio' },
     });
     expect(sent.status).toBe(201);
-    expect(service.sendText).toHaveBeenCalledWith('agent-1', 'Weather in Rio', expect.any(AbortSignal));
+    expect(service.sendText).toHaveBeenCalledWith('agent-1', 'Weather in Rio', expect.any(AbortSignal), 'owner');
 
     const refreshed = await api('/v1/a2a/tasks/task-1');
     expect(refreshed.status).toBe(200);
@@ -242,6 +242,7 @@ describe('outbound A2A routes', () => {
       'task-1',
       'Add tomorrow',
       expect.any(AbortSignal),
+      'owner',
     );
   });
 

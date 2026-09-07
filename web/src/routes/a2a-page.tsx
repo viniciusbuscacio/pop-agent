@@ -1,3 +1,5 @@
+import { ShellFooter } from './shell-header';
+import { A2aModulePage } from './a2a-module-page';
 import { ActionSurface } from '../ui/action-surface';
 import { useAgentContextActions } from '../lib/agent-context-actions';
 import { AgentPageHeader } from '../ui/agent-page-header';
@@ -30,14 +32,14 @@ export function A2aPage() {
   const current = isNew || id === 'new' ? undefined : agents?.find((agent) => agent.id === id);
   const done = async (): Promise<void> => {
     await reload();
-    void navigate('/a2a');
+    void navigate('/a2a?edit=client');
   };
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto pb-24 md:pb-0">
       <div className="md:hidden"><SidebarNav /></div>
       {id === undefined && !isNew ? (
-        <A2aOverview />
+        <A2aModulePage />
       ) : current !== undefined || isNew || id === 'new' ? (
         <A2aEditor key={current?.id ?? 'new'} agent={current} onDone={done} />
       ) : agents === undefined ? (
@@ -45,11 +47,12 @@ export function A2aPage() {
       ) : (
         <p className="p-6 text-sm text-[var(--muted)]">{t('a2a.notFound')}</p>
       )}
+      <div className="md:hidden"><ShellFooter /></div>
     </div>
   );
 }
 
-function A2aOverview() {
+export function A2aOverview({ embedded = false }: { embedded?: boolean }) {
   const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const agents = useA2aStore((state) => state.agents);
@@ -57,7 +60,7 @@ function A2aOverview() {
 
   return (
     <ActionSurface actions={[{id:'new',label:t('context.new'),run:()=>{void navigate('/a2a/new');}},{id:'refresh',label:t('context.refresh'),run:()=>useA2aStore.getState().reload()}]} ><div className="p-6">
-      <AgentPageHeader title={t('a2a.title')} description={t('a2a.intro')} />
+      {!embedded ? <AgentPageHeader title={t('a2a.title')} description={t('a2a.intro')} /> : <div className="mb-4 flex justify-between"><h2 className="font-medium">Remote agents</h2><Button onClick={() => void navigate('/a2a/new')}>New agent</Button></div>}
       {agents === undefined ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">{t('a2a.loading')}</p>
       ) : agents.length === 0 ? (
@@ -345,7 +348,8 @@ function RecentTask({ task }: { task: A2aTaskDTO }) {
         <span className="truncate font-medium">{task.requestText}</span>
         <span className="shrink-0 text-xs text-[var(--muted)]">{task.state} · {shortDateTime(task.updatedAt)}</span>
       </div>
-      {task.responseText ? <p className="mt-1 line-clamp-2 text-[var(--muted)]">{task.responseText}</p> : null}
+      {(task.requestMessages?.length ? task.requestMessages : [{ author: 'unknown' as const, text: task.requestText }]).map((message, index) => <p key={index} className="mt-1 text-sm"><span className="font-medium">{message.author === 'owner' ? 'You → remote agent' : message.author === 'agent' ? 'Pop → remote agent' : 'Unknown sender → remote agent'}: </span>{index > 0 ? message.text : null}</p>)}
+      {task.responseText ? <p className="mt-1 line-clamp-2 text-[var(--muted)]"><span className="font-medium">Remote agent → Pop: </span>{task.responseText}</p> : null}
     </li>
   );
 }

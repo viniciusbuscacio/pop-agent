@@ -104,11 +104,13 @@ describe('A2A pi tool execution', () => {
       'agent-research',
       'Compare the sources',
       signal,
+      'agent',
     );
     expect(a2a.continueTask).toHaveBeenCalledWith(
       'a2atask-1',
       'Use the newer source',
       signal,
+      'agent',
     );
   });
 
