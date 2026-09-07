@@ -15,11 +15,11 @@ import {
   type ModelChoice,
   type SlashCommand,
 } from './slash-menu';
+import { ComposerActions } from './composer-actions';
 import { FileInput, ModelPicker, TextArea, Pressable } from './controls';
 
 /**
- * The composer, in aw's shape: the textarea on the left, then attach, mic
- * and an icon-only send/stop on the right. Enter sends,
+ * The composer keeps send/stop and an action menu in its bottom row. Enter sends,
  * Shift+Enter breaks a line, Escape stops a run. Files arrive through the
  * picker or by dropping them anywhere on the composer; images show a
  * thumbnail chip, everything else a file chip. The per-file cap applies here
@@ -93,6 +93,7 @@ export function Composer({
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [voice, setVoice] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [sending, setSending] = useState(false);
+  const [planPending, setPlanPending] = useState(false);
   const [editingQueuedId, setEditingQueuedId] = useState<string | undefined>(undefined);
   const showThinking = useThinkingStore((state) => state.show);
   const toggleThinking = useThinkingStore((state) => state.toggle);
@@ -738,7 +739,7 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end">
+      <div data-testid="composer-box" className="min-w-0 rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
         <FileInput
           inputRef={picker}
           multiple
@@ -799,7 +800,7 @@ export function Composer({
             // descender space in the wrapper, and with the row's items-end the
             // buttons aligned to that phantom bottom, sitting ~7px too low.
             size="composer"
-            shape="composer"
+            shape="composer-inline"
             className="block max-h-[33dvh] w-full resize-none overflow-x-hidden"
           />
           </div>
@@ -822,104 +823,90 @@ export function Composer({
           </div>
         )}
 
-        <div className="relative flex max-w-full shrink-0 items-center justify-end gap-2">
-        <ModelPicker
-          id="composer-model"
-          label={t('chat.model')}
-          placeholder={t('chat.searchModels')}
-          noResults={t('chat.noModelsFound')}
-          groupsLabel={t('chat.providers')}
-          backToGroupsLabel={t('chat.backToProviders')}
-          compactLabel="M"
-          openRequest={modelPickerRequest}
-          value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
-          options={[
-            {
-              value: '',
-              label:
-                currentProviderLabel.length > 0 && currentModel.length > 0
-                  ? `${currentProviderLabel} / ${currentModel}`
-                  : t('chat.defaultModel'),
-            },
-            ...models.map((choice) => ({
-              value: `${choice.provider}||${choice.model}`,
-              label: choice.model,
-              group: choice.provider,
-              groupLabel: choice.providerLabel ?? choice.provider,
-              ...(choice.providerOrder === undefined ? {} : { groupOrder: choice.providerOrder }),
-            })),
-          ]}
-          onChange={(value) => {
-            const [provider = '', model = ''] = value.split('||');
-            const choice = models.find(
-              (candidate) => candidate.provider === provider && candidate.model === model,
-            ) ?? {
-              provider,
-              model,
-              label: model,
-            };
-            void selectModel(choice);
-          }}
-        />
-
-        <PlanButton
-          enabled={executionMode === 'plan'}
-          onToggle={() => {
-            const next = executionMode === 'plan' ? 'normal' : 'plan';
-            void onSetExecutionMode(next)
-              .then(() => notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden')))
-              .catch(() => notify(t('chat.planChangeFailed')));
-          }}
-        />
-
-        <ThinkingButton
-          show={showThinking}
-          onToggle={() => {
-            // Announce the new state through the in-app notification channel;
-            // `showThinking` is still the pre-toggle value here.
-            toggleThinking();
-            notify(showThinking ? t('chat.thinkingHidden') : t('chat.thinkingShown'));
-          }}
-        />
-
-        <IconButton
-          testId="composer-attach"
-          label={t('chat.attach')}
-          onClick={() => picker.current?.click()}
-        >
-          <AttachIcon />
-        </IconButton>
-
-        {voice === 'recording' ? (
-          <IconButton testId="composer-mic-stop" label={t('chat.micStop')} stop onClick={() => void toggleRecording()}>
-            <StopIcon />
-          </IconButton>
-        ) : (
-          <IconButton
-            testId="composer-mic"
-            label={t('chat.mic')}
-            disabled={voice === 'transcribing'}
-            onClick={() => void toggleRecording()}
-          >
-            <MicIcon />
-          </IconButton>
-        )}
-
-        {busy && !canSend ? (
-          <IconButton testId="composer-stop" label={t('chat.stop')} stop onClick={onStop}>
-            <StopIcon />
-          </IconButton>
-        ) : (
-          <IconButton
-            testId="composer-send"
-            label={editingQueuedId !== undefined ? t('chat.queueSave') : busy ? t('chat.queue') : t('chat.send')}
-            primary
-            disabled={!canSend || sending}
-            onClick={() => void submit()}
-          >
-            <SendIcon />
-          </IconButton>
-        )}
+        <div data-testid="composer-toolbar" className="flex min-w-0 items-center justify-end gap-2 px-2 pb-2">
+          <span className="mr-auto min-w-0 truncate pl-2 text-xs text-[var(--muted)]" aria-live="polite">
+            {[showThinking ? t('chat.thinkingLabel') : '', executionMode === 'plan' ? t('chat.planLabel') : ''].filter(Boolean).join(' · ')}
+          </span>
+          {voice === 'recording' ? (
+            <IconButton testId="composer-recording-stop" label={t('chat.micStop')} stop onClick={() => void toggleRecording()}>
+              <StopIcon />
+            </IconButton>
+          ) : busy && !canSend ? (
+            <IconButton testId="composer-stop" label={t('chat.stop')} stop onClick={onStop}>
+              <StopIcon />
+            </IconButton>
+          ) : (
+            <IconButton
+              testId="composer-send"
+              label={editingQueuedId !== undefined ? t('chat.queueSave') : busy ? t('chat.queue') : t('chat.send')}
+              primary
+              disabled={!canSend || sending}
+              onClick={() => void submit()}
+            >
+              <SendIcon />
+            </IconButton>
+          )}
+          <ComposerActions chatId={chatId} modelRequest={modelPickerRequest} locked={locked}
+            onOpen={() => { setSlashMode('commands'); setSlashQuery(undefined); setMentionQuery(undefined); }}
+            modelLabel={currentProviderLabel && currentModel ? `${currentProviderLabel} / ${currentModel}` : t('chat.defaultModel')}
+            thinking={showThinking}
+            onThinking={() => {
+              toggleThinking();
+              notify(showThinking ? t('chat.thinkingHidden') : t('chat.thinkingShown'));
+            }}
+            plan={executionMode === 'plan'} planPending={planPending}
+            onPlan={() => {
+              if (planPending) return;
+              setPlanPending(true);
+              const next = executionMode === 'plan' ? 'normal' : 'plan';
+              void onSetExecutionMode(next)
+                .then(() => notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden')))
+                .catch(() => notify(t('chat.planChangeFailed')))
+                .finally(() => setPlanPending(false));
+            }}
+            onAttach={() => picker.current?.click()} voice={voice} onVoice={() => void toggleRecording()}
+            busy={busy} onStop={onStop}
+            modelPicker={close => (
+              <ModelPicker
+                id="composer-model"
+                label={t('chat.model')}
+                placeholder={t('chat.searchModels')}
+                noResults={t('chat.noModelsFound')}
+                groupsLabel={t('chat.providers')}
+                backToGroupsLabel={t('chat.backToProviders')}
+                layout="embedded"
+                value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
+                options={[
+                  {
+                    value: '',
+                    label:
+                      currentProviderLabel.length > 0 && currentModel.length > 0
+                        ? `${currentProviderLabel} / ${currentModel}`
+                        : t('chat.defaultModel'),
+                  },
+                  ...models.map((choice) => ({
+                    value: `${choice.provider}||${choice.model}`,
+                    label: choice.model,
+                    group: choice.provider,
+                    groupLabel: choice.providerLabel ?? choice.provider,
+                    ...(choice.providerOrder === undefined ? {} : { groupOrder: choice.providerOrder }),
+                  })),
+                ]}
+                onChange={(value) => {
+                  const [provider = '', model = ''] = value.split('||');
+                  const choice = models.find(
+                    (candidate) => candidate.provider === provider && candidate.model === model,
+                  ) ?? {
+                    provider,
+                    model,
+                    label: model,
+                  };
+                  void selectModel(choice);
+                  close();
+                }}
+              />
+            )}
+          />
         </div>
       </div>
     </div>
@@ -933,48 +920,6 @@ function sendFailureNotice(error: unknown): string {
     if (error.code === 'local_connection_unknown') return t('chat.localMachineReset');
   }
   return t('chat.sendFailed');
-}
-
-/** Per-chat execution policy; the server still enforces the selected mode. */
-function PlanButton({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
-  return (
-    <Pressable
-      type="button"
-      data-testid="plan-mode"
-      aria-pressed={enabled}
-      aria-label={enabled ? t('chat.planOn') : t('chat.planOff')}
-      title={enabled ? t('chat.planOn') : t('chat.planOff')}
-      onClick={onToggle}
-      className={`grid h-10 w-10 place-items-center rounded-full border text-sm font-semibold transition-colors ${
-        enabled
-          ? 'border-[var(--accent)] bg-[var(--hover-overlay)] text-[var(--accent)]'
-          : 'border-[var(--border)] text-[var(--muted)]'
-      }`}
-    >
-      <span aria-hidden="true">P</span>
-    </Pressable>
-  );
-}
-
-/** The thinking visibility control sits beside the attachment action. */
-function ThinkingButton({ show, onToggle }: { show: boolean; onToggle: () => void }) {
-  return (
-    <Pressable
-      type="button"
-      data-testid="thinking-visibility"
-      aria-pressed={show}
-      aria-label={show ? t('chat.thinkingOn') : t('chat.thinkingOff')}
-      title={show ? t('chat.thinkingShowing') : t('chat.thinkingHiding')}
-      onClick={onToggle}
-      className={`grid h-10 w-10 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold transition-colors ${
-        show
-          ? 'bg-[var(--hover-overlay)] text-[var(--screen-fg)]'
-          : 'text-[var(--muted)]'
-      }`}
-    >
-      <span aria-hidden="true">T</span>
-    </Pressable>
-  );
 }
 
 /** aw's 34px icon button, in Pop Agent's rounder skin. */
@@ -1019,8 +964,7 @@ function IconButton({
 function SendIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 19V5" />
-      <path d="m5 12 7-7 7 7" />
+      <path d="m9 5 7 7-7 7" />
     </svg>
   );
 }
@@ -1029,14 +973,6 @@ function StopIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <rect x="4" y="4" width="16" height="16" rx="2" />
-    </svg>
-  );
-}
-
-function AttachIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
     </svg>
   );
 }
@@ -1086,15 +1022,7 @@ function dataUriPayloadBytes(dataUri: string): number {
   return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
 }
 
-function MicIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="9" y="2" width="6" height="12" rx="3" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <path d="M12 17v5" />
-    </svg>
-  );
-}
+
 
 function CloseIcon() {
   return (

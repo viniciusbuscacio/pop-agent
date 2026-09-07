@@ -73,7 +73,7 @@ export function BackButton({ className = '', ...props }: Omit<ButtonHTMLAttribut
   </Pressable>;
 }
 
-export function Pressable({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function Pressable({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
       type="button"
@@ -125,7 +125,8 @@ const FIELD_SIZES = {
 
 export type FieldSize = keyof typeof FIELD_SIZES;
 
-function fieldClass(size: FieldSize, extra: string, shape: 'control' | 'composer' = 'control'): string {
+function fieldClass(size: FieldSize, extra: string, shape: 'control' | 'composer' | 'composer-inline' = 'control'): string {
+  if (shape === 'composer-inline') return `${FIELD_SIZES[size]} border-0 bg-transparent outline-none ${extra}`.trim();
   const radius = shape === 'composer'
     ? 'rounded-[var(--radius-composer)]'
     : 'rounded-[var(--radius-control)]';
@@ -321,9 +322,9 @@ export function ModelPicker({
   /** Increment to open the picker from an action elsewhere on the page. */
   openRequest?: number;
   /** Toolbar menus escape the composer through a portal; form fields open in place. */
-  layout?: 'toolbar' | 'field';
+  layout?: 'toolbar' | 'field' | 'embedded';
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(layout === 'embedded');
   const [query, setQuery] = useState('');
   const [activeGroup, setActiveGroup] = useState<string | undefined>(undefined);
   const [toolbarStyle, setToolbarStyle] = useState<CSSProperties>({});
@@ -332,7 +333,7 @@ export function ModelPicker({
   const popup = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const current = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '';
-  const grouped = layout === 'toolbar' && options.some((option) => option.group !== undefined);
+  const grouped = layout !== 'field' && options.some((option) => option.group !== undefined);
   const groups = Array.from(
     options.reduce((found, option) => {
       if (option.group !== undefined && !found.has(option.group)) {
@@ -366,7 +367,7 @@ export function ModelPicker({
   }, [openRequest]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || layout === 'embedded') return;
     function close(event: PointerEvent): void {
       const target = event.target as Node;
       if (
@@ -379,7 +380,7 @@ export function ModelPicker({
     }
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
-  }, [open]);
+  }, [layout, open]);
 
   useEffect(() => {
     if (open && (!grouped || activeGroup !== undefined)) search.current?.focus();
@@ -408,7 +409,7 @@ export function ModelPicker({
 
   function choose(next: string): void {
     onChange(next);
-    setOpen(false);
+    if (layout !== 'embedded') setOpen(false);
     setActiveGroup(undefined);
     setQuery('');
   }
@@ -428,8 +429,8 @@ export function ModelPicker({
       className={`${
         layout === 'toolbar'
           ? 'fixed z-50'
-          : 'absolute top-full right-0 left-0 z-20 mt-1 w-full'
-      } rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)]`}
+          : layout === 'embedded' ? 'relative w-full' : 'absolute top-full right-0 left-0 z-20 mt-1 w-full'
+      } ${layout === 'embedded' ? 'p-1' : 'rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--input-bg)] p-1 shadow-[var(--shadow-menu)]'}`}
     >
       {grouped ? activeGroup === undefined ? (
         <p className="px-2 py-1.5 text-xs font-semibold text-[var(--screen-fg)]">{groupsLabel}</p>
@@ -515,6 +516,8 @@ export function ModelPicker({
     </div>
   ) : null;
 
+  if (layout === 'embedded') return menu;
+
   return (
     <div ref={root} className={`min-w-0 ${className}`}>
       <span id={`${id}-label`} className="sr-only">{label}</span>
@@ -559,7 +562,7 @@ export function TextArea({
   hint?: string | undefined;
   error?: string | undefined;
   size?: FieldSize;
-  shape?: 'control' | 'composer';
+  shape?: 'control' | 'composer' | 'composer-inline';
   inputRef?: Ref<HTMLTextAreaElement> | undefined;
 }) {
   return wrap(
@@ -882,6 +885,7 @@ export function MenuItem({
   danger = false,
   disabled = false,
   shortcut,
+  role = 'menuitem',
 }: {
   label: string;
   onClick: () => void;
@@ -889,11 +893,12 @@ export function MenuItem({
   danger?: boolean;
   disabled?: boolean;
   shortcut?: string;
+  role?: 'menuitem' | 'button';
 }) {
   return (
     <button
       type="button"
-      role="menuitem"
+      role={role}
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}

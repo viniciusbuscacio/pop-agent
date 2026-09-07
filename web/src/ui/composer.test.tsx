@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { ApiError } from '../services/api';
@@ -73,6 +73,38 @@ afterEach(() => {
 });
 
 describe('pending message composition', () => {
+  it('keeps exactly two persistent actions and navigates models without sending the draft', () => {
+    const { onSend } = renderComposer();
+    const toolbar = screen.getByTestId('composer-toolbar');
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(2);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'preserve this draft' } });
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    expect(screen.getByRole('switch', { name: 'Thinking' })).toBeTruthy();
+    fireEvent.click(screen.getByTestId('composer-model'));
+    expect(screen.getByRole('listbox', { name: 'Model' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('switch', { name: 'Thinking' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId('composer-actions'));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserve this draft');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps switches open and closes direct attachment actions without losing the draft', () => {
+    renderComposer();
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    const thinking = screen.getByRole('switch', { name: 'Thinking' });
+    const previous = (thinking as HTMLInputElement).checked;
+    fireEvent.click(thinking);
+    expect(thinking).toHaveProperty('checked', !previous);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    const pick = vi.spyOn(screen.getByTestId('composer-file-input'), 'click');
+    fireEvent.click(screen.getByTestId('composer-attach'));
+    expect(pick).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('locks the whole composer while a session operation is running', () => {
     renderComposer({ locked: true });
 
@@ -97,10 +129,10 @@ describe('pending message composition', () => {
     expect(area.className).toContain('overflow-x-hidden');
     expect(area.className).not.toContain('focus:border-[var(--accent)]');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    fireEvent.click(screen.getByTestId('composer-model'));
     const listbox = screen.getByRole('listbox', { name: 'Model' });
-    expect(listbox.parentElement?.className).toContain('fixed');
-    expect(listbox.parentElement?.parentElement).toBe(document.body);
+    expect(listbox.closest('[role=dialog]')?.parentElement).toBe(document.body);
 
     fireEvent.focus(area);
     expect(composer.className).toContain('overflow-x-clip');
@@ -114,7 +146,7 @@ describe('pending message composition', () => {
       currentModel: 'gpt-5.6-sol',
     });
 
-    const picker = screen.getByRole('combobox', { name: 'Model' });
+    const picker = screen.getByTestId('composer-actions');
     expect(picker.className).toContain('text-[var(--muted)]');
     expect(picker.className).not.toContain('bg-[var(--input-bg)]');
   });
@@ -126,7 +158,8 @@ describe('pending message composition', () => {
       currentModel: 'gpt-5.6-sol',
     });
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    fireEvent.click(screen.getByTestId('composer-model'));
 
     const effectiveDefault = screen.getByRole('option', {
       name: /^OpenAI Codex \/ gpt-5\.6-sol/,
@@ -147,7 +180,8 @@ describe('pending message composition', () => {
       ],
     });
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    fireEvent.click(screen.getByTestId('composer-model'));
     fireEvent.click(screen.getByRole('option', { name: /^OpenAI Codex/ }));
     fireEvent.click(screen.getByRole('option', { name: 'gpt-5.6-sol' }));
 
@@ -209,7 +243,8 @@ describe('pending message composition', () => {
       ],
     });
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    fireEvent.click(screen.getByTestId('composer-model'));
     expect(screen.getByText('Providers')).toBeTruthy();
     expect(screen.getByRole('option', { name: /OpenRouter/ })).toBeTruthy();
     expect(screen.getByRole('option', { name: /OpenAI Codex/ })).toBeTruthy();
@@ -300,7 +335,8 @@ describe('pending message composition', () => {
 
   it('requests a synchronized mode change and sends the controlled Plan value', async () => {
     const { onSend, onSetExecutionMode } = renderComposer({ executionMode: 'plan' });
-    expect(screen.getByTestId('plan-mode').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('composer-actions'));
+    expect(screen.getByTestId('plan-mode')).toHaveProperty('checked', true);
     fireEvent.click(screen.getByTestId('plan-mode'));
     expect(onSetExecutionMode).toHaveBeenCalledWith('normal');
     expect(localStorage.getItem('pop-agent.plan.chat-1')).toBeNull();

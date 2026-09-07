@@ -695,3 +695,18 @@ Enabled A2A agents expose Start conversation through the existing send endpoint 
 Blank space below the conversation list offers New chat and Refresh. Blank space in the folder tree offers Files, New folder (inside the current directory), and Refresh. These surfaces fill the remaining sidebar height even when empty; row menus and native text-field menus retain precedence.
 
 The shell shows an 8px green REST API Server dot beside Settings when enabled and the server is reachable. It follows go-calc/go-apps: a 2.4-second glow pulse, static under reduced motion, with an accessible tooltip and click through to server configuration. Successful settings writes update it immediately; shared reads reconcile every 60 seconds while visible and on returning to the page. Unknown or disconnected state hides it.
+
+## Composer action surface
+
+The message box contains exactly two persistent action buttons in a reserved
+bottom row: Send (right-pointing chevron), then Add (+). The row follows the
+growing textarea and remains visible when text reaches its height cap and scrolls.
+Thinking and Plan mode are switches inside Add; active modes have quiet text
+indicators. Model opens an in-place page with Back, reusing the shared grouped
+model picker. Attach files and voice recording are direct actions. Controls
+remain English and share behavior across desktop, phone and installed PWA.
+The popup fits the viewport above the trigger, scrolls when necessary, closes
+on outside press/Escape/navigation, and returns focus on explicit close.
+Stop replaces Send while recording or during a run without a sendable draft.
+During a run with a draft, Send retains queue/steering behavior and Stop remains
+available inside Add. Opening or navigating actions never sends a draft.

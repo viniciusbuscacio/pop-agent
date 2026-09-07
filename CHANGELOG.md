@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Consolidate chat controls into Send and Add inside the message box, with mode switches, an in-place model page, attachments and voice actions.
+
 - Move batch release builds to the owner-managed Ubuntu 24.04 AMD64 Docker builder on ubuntu-home; reuse verified dependency/audio/gate caches, isolate build credentials and test temporary files, and publish verified bundles explicitly without hosted GitHub Actions.
 
 ## 0.2.77 — 2026-09-07
