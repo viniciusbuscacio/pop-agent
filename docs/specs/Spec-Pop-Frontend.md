@@ -691,3 +691,5 @@ Messages capture selected text before moving menu focus and offer Copy/Quote. Qu
 Menus render in a portal at viewport coordinates, fit within its edges, scroll when needed and allow only one open surface. Shift+F10/Context Menu key, Up/Down, Home/End, Enter, Escape and Tab are supported. Escape restores trigger focus without bubbling into composer stop handling. Outside pointer, scrolling the surrounding view, resize, blur and navigation close the menu. Menu actions reuse resource services/stores and existing confirmation/permission rules.
 
 Enabled A2A agents expose Start conversation through the existing send endpoint only after a nonempty user-entered message; cancellation sends nothing. Successful sends open the agent details and refresh its task history. Enabled REST API Server cards expose the existing health test and show its result as a notification.
+
+Blank space below the conversation list offers New chat and Refresh. Blank space in the folder tree offers Files, New folder (inside the current directory), and Refresh. These surfaces fill the remaining sidebar height even when empty; row menus and native text-field menus retain precedence.

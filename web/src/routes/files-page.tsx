@@ -1,3 +1,4 @@
+import { promptNewFolder } from '../lib/new-folder';
 import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { useEffect, useRef, useState, type PointerEvent, type MouseEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -376,11 +377,7 @@ export function FilesPage() {
   // A folder created here lands under the folder you are in (a subfolder), or at
   // the root when you are at the root.
   async function newFolder(): Promise<void> {
-    const inside = openFolder !== undefined;
-    const name = window.prompt(inside ? t('files.newSubfolderPrompt') : t('files.newFolderPrompt'));
-    if (name === null || name.trim().length === 0) return;
-    await filesService.mkdir(joinPath(currentPath, name.trim()));
-    await reload();
+    await promptNewFolder(currentPath);
   }
 
   async function renameFolder(folder: FileNodeDTO): Promise<void> {

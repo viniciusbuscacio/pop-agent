@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -358,4 +358,16 @@ describe('pinned chats', () => {
     expect(pinButton.className).toContain('text-[var(--muted)]');
     expect(pinButton.querySelector('svg')?.getAttribute('fill')).toBe('none');
   });
+});
+
+it.each([true, false])('offers background actions below chats, populated=%s', async populated => {
+  if (!populated) activeList = [];
+  renderList();
+  await waitFor(() => expect(useChatStore.getState().chats).toHaveLength(populated ? 2 : 0));
+  const background = screen.getByTestId('chat-list-background');
+  expect(fireEvent.contextMenu(background, { clientX: 140, clientY: 600 })).toBe(false);
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['New chat', 'Refresh']);
+  fireEvent.click(screen.getByTestId('context-refresh'));
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  expect(screen.getByTestId('location').textContent).toBe('/');
 });

@@ -1,3 +1,4 @@
+import { ActionSurface } from '../ui/action-surface';
 import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
@@ -414,7 +415,11 @@ export function ChatList() {
       ) : segment === 'a2a' ? (
         <A2aSidebar filter={filter} />
       ) : (
-        <PullToRefresh onRefresh={refreshChats} className="pb-20">
+        <ActionSurface showTrigger={false} className="flex min-h-0 flex-1 flex-col" actions={[
+          ...(creating ? [] : [{ id: 'new-chat', label: t('shell.newChat'), run: startChat }]),
+          { id: 'refresh', label: t('context.refresh'), run: refreshChats },
+        ]}>
+        <PullToRefresh onRefresh={refreshChats} className="pb-20" testId="chat-list-background">
           {viewArchived && !searching ? (
             <p
               data-testid="archived-heading"
@@ -438,6 +443,7 @@ export function ChatList() {
             </ul>
           )}
         </PullToRefresh>
+        </ActionSurface>
       )}
 
       {deleteDialog && keepChat !== undefined ? (

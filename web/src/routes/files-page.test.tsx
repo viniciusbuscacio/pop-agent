@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { FolderTree } from './chat-list-explorers';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -174,4 +175,15 @@ it('blank-space menu preserves the search field native menu',()=>{
 it('does not select the whole folder through the background menu while searching',()=>{
  mount();fireEvent.change(screen.getByTestId('files-filter'),{target:{value:'one result'}});
  fireEvent.contextMenu(screen.getByTestId('files-view'));expect(screen.queryByTestId('context-select-all')).toBeNull();expect(screen.getByTestId('context-upload')).toBeTruthy();
+});
+
+it('folder-tree blank space creates inside the current directory without navigating', async () => {
+  vi.spyOn(window, 'prompt').mockReturnValue('Child');
+  render(<MemoryRouter initialEntries={['/files/Docs']}><FolderTree /></MemoryRouter>);
+  const background = screen.getByTestId('folder-tree');
+  expect(fireEvent.contextMenu(background, { clientX: 100, clientY: 600 })).toBe(false);
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Files', 'New folder', 'Refresh']);
+  fireEvent.click(screen.getByTestId('context-new-folder'));
+  await waitFor(() => expect(filesService.mkdir).toHaveBeenCalledWith('Docs/Child'));
+  expect(screen.queryByRole('menu')).toBeNull();
 });

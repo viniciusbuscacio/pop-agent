@@ -1,3 +1,4 @@
+import { promptNewFolder } from '../lib/new-folder';
 import { MenuItem } from '../ui/controls';
 import { ActionSurface } from '../ui/action-surface';
 import { useAgentContextActions } from '../lib/agent-context-actions';
@@ -170,6 +171,11 @@ export function FolderTree() {
   }
 
   return (
+    <ActionSurface showTrigger={false} className="flex min-h-0 flex-1 flex-col" actions={[
+      { id: 'open', label: t('files.rootCrumb'), run: () => navigate('/files') },
+      { id: 'new-folder', label: t('files.newFolder'), run: () => promptNewFolder(currentPath) },
+      { id: 'refresh', label: t('context.refresh'), run: reload },
+    ]}>
     <div className="flex-1 overflow-y-auto pb-20" data-testid="folder-tree">
       {/* The filesystem root is a place in its own right, even when it has no
           folders. Keeping it visible prevents an empty sidebar from looking
@@ -199,6 +205,7 @@ export function FolderTree() {
         .filter((node) => node.kind === 'dir')
         .map((folder) => renderRow(folder, 1))}
     </div>
+    </ActionSurface>
   );
 }
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cover blank space below conversations and the Files folder tree with contextual actions, sharing folder creation with the main Files pane.
+
 - Add shared keyboard-accessible contextual menus to Files, Chat, explorer sidebars, Agent resource lists and Trash, with visible overflow controls, selection-aware actions and draft-preserving quotes.
 
 - Support dropping entire folders into Files, preserving nested and empty folders with cancellable discovery and the existing upload pipeline.
