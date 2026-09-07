@@ -1,4 +1,4 @@
-import { UiAccessIndicator } from './ui/ui-access-panel';
+import { startAutomaticUiControl } from './services/automatic-ui-control';
 import { uiControl } from './services/ui-control';
 import { RestApiPage } from './routes/rest-api-page';
 import { useEffect } from 'react';
@@ -37,7 +37,6 @@ export function App() {
       <ConnectionChrome />
       <UpdatePrompt />
       <Toasts />
-      <UiAccessIndicator />
       <ConnectionBoundary><Boot /></ConnectionBoundary>
     </BrowserRouter>
   );
@@ -72,7 +71,8 @@ function Boot() {
   useEffect(() => {
     if (status !== 'signed-in') { uiControl.stop(); return; }
     eventStream.start();
-    return () => eventStream.stop();
+    const stopUiControl = startAutomaticUiControl();
+    return () => { eventStream.stop(); stopUiControl(); };
   }, [status]);
 
   useEffect(() => {

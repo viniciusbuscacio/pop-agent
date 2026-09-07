@@ -16,4 +16,7 @@ it('requires owner authentication for registration and explicit UI scope for rem
   f.integrations.configure({ serverEnabled: false });
   expect((await f.app.request('/v1/integration/ui/sessions', { headers: headers(operator.secret) })).status).toBe(503);
   expect((await f.app.request('/v1/ui/sessions/' + tab.id + '/poll', { headers: { ...headers(owner), 'X-Pop-UI-Key': tab.key } })).status).toBe(503);
+  expect((await f.app.request('/v1/ui/sessions/' + tab.id, { method: 'DELETE', headers: { ...headers(owner), 'X-Pop-UI-Key': tab.key } })).status).toBe(200);
+  f.integrations.configure({ serverEnabled: true });
+  expect(await (await f.app.request('/v1/ui/sessions', { headers: headers(owner) })).json()).toEqual({ sessions: [] });
 });

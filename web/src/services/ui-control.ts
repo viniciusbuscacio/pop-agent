@@ -88,7 +88,7 @@ async function poll(c: Connection): Promise<void> {
       await apiRequest('/ui/sessions/' + c.id + '/ack', { method: 'POST', uiKey: c.key, body: { commandId: command.id, reply }, signal: AbortSignal.timeout(5000) });
     }
     if (connection === c) timer = setTimeout(() => void poll(c), 750);
-  } catch { if (connection === c) { uiControl.stop(); emit('UI access disconnected. Connect this tab again to resume.'); } }
+  } catch { if (connection === c) { uiControl.stop(); emit('UI access disconnected. Reconnecting automatically while REST API Server is enabled.'); } }
 }
 export const uiControl = {
   getState: () => snapshot,
@@ -108,7 +108,7 @@ export const uiControl = {
     if (old) void apiRequest('/ui/sessions/' + old.id, { method: 'DELETE', uiKey: old.key, signal: AbortSignal.timeout(3000) }).catch(() => undefined);
   },
   async share(): Promise<void> {
-    if (!connection) throw new Error('Connect this tab first.');
+    if (!connection) throw new Error('Waiting for REST API Server to connect.');
     if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Screen sharing is unavailable in this browser.');
     const c = connection;
     const capture = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });

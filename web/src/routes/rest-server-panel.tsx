@@ -1,4 +1,3 @@
-import { UiAccessPanel } from '../ui/ui-access-panel';
 import { t } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { IntegrationScopeDTO, IntegrationTokenDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
@@ -116,7 +115,7 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
       <section className="space-y-3" aria-labelledby="rest-agent-instructions">
         <div className="flex items-center justify-between gap-3"><h2 id="rest-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="sm" data-testid="rest-copy-instructions" onClick={() => void copy(instructions)}>Copy instructions</Button></div>
         <Card><pre data-ui-private={secret ? true : undefined} data-testid="rest-agent-instructions" className="overflow-x-auto text-xs leading-relaxed">{instructions}</pre></Card>
-        <p className="text-sm text-[var(--muted)]">{secret ? 'These instructions include your new token and its available operations. Save them before closing this screen.' : 'Replace <TOKEN> with a token below. UI operations require ui:control and a connected tab.'}</p>
+        <p className="text-sm text-[var(--muted)]">{secret ? 'These instructions include your new token and its available operations. Save them before closing this screen.' : 'Replace <TOKEN> with a token below. UI operations require ui:control. Open tabs are available automatically while the server is enabled.'}</p>
       </section>
       <section className="space-y-3" aria-labelledby="rest-api-tokens">
       <h2 id="rest-api-tokens" className="font-medium">API tokens</h2>
@@ -156,7 +155,6 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
       </> : null}
       </details>
       </section>
-      <UiAccessPanel enabled={enabled} showExamples={false} />
       <details className="space-y-4"><summary className="cursor-pointer">API reference and examples</summary><Button type="button" variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Method / path</th><th>Scope</th><th>Behavior</th></tr></thead><tbody>{reference?.endpoints.map(e => <tr key={e.method + e.path}><td className="py-2 font-mono">{e.method.toUpperCase()} {e.path}</td><td>{e.scope}</td><td>{e.summary}</td></tr>)}</tbody></table></div>
       <Card><h3 className="font-medium">Read activity</h3><pre className="overflow-x-auto py-3 text-sm">{`# Set POP_API_TOKEN in your external client environment.

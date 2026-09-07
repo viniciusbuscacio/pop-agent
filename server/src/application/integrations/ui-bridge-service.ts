@@ -3,7 +3,7 @@ import { IntegrationError } from '../../domain/integrations/integration.js';
 export interface UiCommand { id: string; kind: 'state' | 'press' | 'dblclick' | 'key' | 'input' | 'screenshot'; expiresAt: number; testid?: string | undefined; index?: number | undefined; value?: string | undefined; key?: string | undefined }
 interface Pending { guard: () => void; command: UiCommand; delivered: boolean; finish: (value: unknown) => void; timer: ReturnType<typeof setTimeout> }
 interface UiSession { id: string; key: string; name: string; lastSeen: number; pending?: Pending }
-/** Ephemeral, explicitly connected browser tabs; never persists screen contents. */
+/** Ephemeral authenticated browser tabs; never persists screen contents. */
 export class UiBridgeService {
   private sessions = new Map<string, UiSession>();
   private sweep(): void {

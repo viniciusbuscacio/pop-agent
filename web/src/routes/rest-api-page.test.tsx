@@ -87,7 +87,8 @@ it('starts and stops the server from its editor without changing the client swit
   fireEvent.click(stop);
   await waitFor(() => expect(stop.textContent).toBe('Start'));
   expect(integrationsService.updateSettings).toHaveBeenLastCalledWith({ serverEnabled: false });
-  expect((screen.getByTestId('ui-connect') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByTestId('ui-share-screen')).toBeNull();
+  expect(screen.queryByTestId('ui-connect')).toBeNull();
   fireEvent.click(stop);
   await waitFor(() => expect(stop.textContent).toBe('Stop'));
   expect(integrationsService.updateSettings).toHaveBeenLastCalledWith({ serverEnabled: true });
