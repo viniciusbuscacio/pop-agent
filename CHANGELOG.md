@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show Select all items in the Files top toolbar during selection, keeping its width stable for double-click navigation.
+
 - Use mouse single-click selection and double-click opening in Files, while retaining touch tap-to-open/hold-to-select and keyboard Space/Enter actions.
 
 - Add a minimal UTF-8 text editor to Files with Save/Cancel, retained drafts on failure and revision checks that reject stale saves.

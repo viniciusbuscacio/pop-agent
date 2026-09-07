@@ -704,7 +704,15 @@ export function FilesPage() {
           >
             <TrashIcon />
           </Button>
-          {!searching ? <Button type="button" variant="ghost" size="sm" data-testid="files-select" disabled={selecting || listing.length === 0} onClick={() => startSelection()}>{t('files.select')}</Button> : null}
+          {!searching ? <div className="w-40 shrink-0">
+            <Button type="button" variant="ghost" size="sm" className="w-full" data-testid="files-select" disabled={deleting || listing.length === 0 || (selecting && allSelected)} onClick={() => {
+              if (!selecting) startSelection();
+              else {
+                setSelected(new Set(visibleFiles.map(file => file.path)));
+                setSelectedFolders(new Set(rootFolders.map(folder => folder.path)));
+              }
+            }}>{t(selecting ? 'files.selectAll' : 'files.select')}</Button>
+          </div> : null}
           <SearchField
             disabled={deleting}
             id="files-filter"

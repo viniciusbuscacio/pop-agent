@@ -669,3 +669,5 @@ The Files viewer offers Edit for supported UTF-8 text (including TXT, MD, JSON a
 Files folder listings distinguish the actual pointer type rather than viewport width. Mouse: one click starts/toggles selection, double click opens files/folders without the second click toggling again. Touch/pen: tap opens outside selection, hold starts selection, taps toggle while selecting. Enter opens and Space toggles selection. Checkboxes and row menus keep their own actions.
 
 Selection must not move rows between the first and second mouse clicks: reserve checkbox space, retain toolbar geometry, and place batch actions at the bottom without inserting them above the list. The list reserves bottom scroll space for those actions.
+
+The Files top toolbar changes Select to Select all items while selection mode is active, in addition to the bottom batch actions. Its reserved width stays fixed so selecting a checkbox does not shift rows. Select all includes files and folders in the current folder and is disabled when they are all selected.

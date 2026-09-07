@@ -115,3 +115,15 @@ it('folder double click navigates after a single click selects', () => {
   fireEvent.doubleClick(row);
   expect(screen.queryByTestId('file-row')).toBeNull();
 });
+
+it('shows Select all beside the toolbar after checking one file and selects the entire folder', () => {
+  mount();fireEvent.click(screen.getByTestId('files-select'));
+  fireEvent.click(screen.getByRole('checkbox',{name:'a.md'}));
+  const top=screen.getByTestId('files-select');
+  expect(top.textContent).toBe('Select all items');expect(top).toHaveProperty('disabled',false);
+  fireEvent.click(top);
+  expect(screen.getByText('3 selected')).toBeTruthy();
+  expect(screen.getByRole('checkbox',{name:'b.md'})).toHaveProperty('checked',true);
+  expect(screen.getByRole('checkbox',{name:'Docs'})).toHaveProperty('checked',true);
+  expect(top).toHaveProperty('disabled',true);
+});
