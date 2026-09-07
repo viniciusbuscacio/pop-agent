@@ -4,7 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
 import { useDismiss } from '../lib/dismiss';
-import { hardRefreshPage } from '../services/hard-refresh';
+import { retryHardRefresh } from '../services/hard-refresh';
+import { useNotificationsStore } from '../store/notifications';
 
 /**
  * The app header: the wordmark and the Settings gear. The sidebar always
@@ -86,22 +87,16 @@ function useOpenSettings(): () => void {
     });
 }
 
-/**
- * Refreshes the device on demand (Vinicius, 05/08, 15/08): chat lists are
- * reloaded and the service worker is checked in parallel. If a newer PWA is
- * available, the same press activates it and reloads the page; otherwise the
- * button remains the manual handle for cross-device list changes. It spins
- * while it works, so a fast network does not read as a dead button.
- */
+/** Retry a manual refresh quietly; only exhaustion posts a normal top toast. */
 function RefreshButton() {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const notify = useNotificationsStore(state => state.notify);
   async function refresh(): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setError(false);
-    try { await hardRefreshPage(); }
-    catch { setError(true); setBusy(false); }
+    try { await retryHardRefresh(); }
+    catch { notify(t('shell.refreshFailed')); }
+    finally { setBusy(false); }
   }
   return <>
     <Pressable
@@ -115,7 +110,6 @@ function RefreshButton() {
     >
       <span className={busy ? 'block motion-safe:animate-spin' : 'block'}><RefreshIcon /></span>
     </Pressable>
-    {error ? <span role="alert" className="absolute bottom-full left-3 right-3 mb-2 text-sm text-[var(--danger)]">{t('shell.refreshFailed')}</span> : null}
   </>;
 }
 

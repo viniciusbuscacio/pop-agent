@@ -144,7 +144,7 @@ export const en = {
   'shell.empty.title': 'Pick up where you left off',
   'shell.empty.body': 'Choose a conversation on the left, or start a new one.',
   'shell.refresh': 'Reload app from server',
-  'shell.refreshFailed': 'Could not reload the app. Check the connection and try again.',
+  'shell.refreshFailed': 'Could not reload after 10 attempts. Automatic retries have stopped.',
   'shell.settings': 'Settings',
   'shell.health.provider': 'LLM provider disconnected',
   'shell.health.db': 'Database disconnected',

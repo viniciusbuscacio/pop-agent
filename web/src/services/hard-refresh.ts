@@ -17,3 +17,22 @@ export function clearHardRefreshMarker(): void {
   url.searchParams.delete(HARD_REFRESH_PARAM);
   window.history.replaceState(window.history.state, '', url.href);
 }
+
+let pendingRefresh: Promise<void> | undefined;
+
+/** One manual refresh cycle per page, shared by desktop/mobile controls. */
+export function retryHardRefresh(): Promise<void> {
+  if (pendingRefresh) return pendingRefresh;
+  pendingRefresh = (async () => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const started = Date.now();
+      try { await hardRefreshPage(); return; }
+      catch (error) {
+        if (attempt === 9) throw error;
+        // Start attempts ten seconds apart, including time spent probing.
+        await new Promise<void>(resolve => setTimeout(resolve, Math.max(0, 10_000 - (Date.now() - started))));
+      }
+    }
+  })().finally(() => { pendingRefresh = undefined; });
+  return pendingRefresh;
+}
