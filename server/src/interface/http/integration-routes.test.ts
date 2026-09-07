@@ -207,3 +207,15 @@ it('ensures a key before enabling, keeps it through stop/start, and rejects dele
   expect((await f.app.request('/v1/rest-api/tokens/'+id, {method:'DELETE',headers:auth(owner)})).status).toBe(409);
   expect(f.integrations.accessKey()).toBe(key);
 });
+
+it('keeps a fresh installation disabled even when its access key is initialized', async () => {
+    const f = createTestApp(undefined, { restApiEnabled: false });
+    const owner = await setupTestSession(f.app);
+    const key = f.integrations.ensureAccessKey();
+    const settings = await f.app.request('/v1/rest-api/settings', { headers: auth(owner) });
+    expect(await settings.json()).toEqual({ serverEnabled: false, clientEnabled: false });
+    expect((await f.app.request('/v1/integration/activity', { headers: auth(key) })).status).toBe(503);
+    const enabled = await f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(owner), body: JSON.stringify({ serverEnabled: true }) });
+    expect(await enabled.json()).toEqual({ serverEnabled: true, clientEnabled: false });
+    expect((await f.app.request('/v1/integration/activity', { headers: auth(key) })).status).toBe(200);
+});

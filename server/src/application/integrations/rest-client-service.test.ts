@@ -9,6 +9,7 @@ function fixture() {
     const secrets = new Map<string, string>();
     const calls: unknown[] = [];
     const config = new RestApiSettingsService(new MemorySettings());
+    config.update({ clientEnabled: true });
     const service = new RestClientService({ config, repo: { clients: () => clients, saveClient: (c: RestClient) => { clients = [...clients.filter(x => x.id !== c.id), c]; }, deleteClient: (id: string) => { clients = clients.filter(c => c.id !== id); } } as IntegrationRepo, secrets: { get: k => secrets.get(k), set: (k, v) => { secrets.set(k, v); }, delete: k => { secrets.delete(k); } }, gateway: { call: async (input) => { calls.push(input); return { status: 200, body: 'Bearer secret and secret' }; } }, now: () => 1 });
     const input = { name: 'External', baseUrl: 'https://api.example.com/v1', enabled: true, authHeader: 'Authorization', operations: [{ id: 'status', name: 'Status', method: 'GET' as const, path: '/status' }] };
     return { service, input, calls, secrets, config };

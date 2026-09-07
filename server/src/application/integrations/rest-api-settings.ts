@@ -9,8 +9,8 @@ export class RestApiSettingsService {
   constructor(private readonly repo: SettingsRepo) {}
   get(): RestApiSettings {
     const saved = this.repo.get<Partial<RestApiSettings>>('rest-api');
-    // Preserve existing installations' behavior when no switch has been saved.
-    return { serverEnabled: saved?.serverEnabled ?? true, clientEnabled: saved?.clientEnabled ?? true };
+    // Fresh installations require an explicit owner opt-in; saved switches are preserved.
+    return { serverEnabled: saved?.serverEnabled ?? false, clientEnabled: saved?.clientEnabled ?? false };
   }
   allowedIps(): string[] { return this.repo.get<string[]>('rest-api.allowed-ips') ?? [...DEFAULT_ALLOWED_IPS]; }
   setAllowedIps(entries: string[]): string[] { const value = validateAllowedIps(entries); this.repo.set('rest-api.allowed-ips', value); return value; }

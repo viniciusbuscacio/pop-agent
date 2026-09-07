@@ -23,7 +23,7 @@ Agent → REST API presents REST API Server and REST API Client as two compact c
 ## Module switches
 
 Owner-only GET/PATCH `/v1/rest-api/settings` reads or updates `serverEnabled` and
-`clientEnabled`. Missing settings default to true to preserve existing behavior;
+`clientEnabled`. Missing settings default to false: fresh installations start with both modules disabled. Explicitly saved switch values are preserved on upgrade;
 individual new clients still default to disabled. Partial updates preserve the
 other switch. Invalid keys/types are rejected. The UI shows confirmed server
 state, prevents overlapping updates and retains the previous state after errors.

@@ -221,6 +221,8 @@ export interface TestApp {
 }
 
 export interface TestAppOptions {
+  /** Existing integration scenarios opt in; false exercises fresh-install defaults. */
+  restApiEnabled?: boolean;
   /** Scripted provider balance for the credits route (LOTE 6). */
   credits?: { remaining: number; used: number };
   /** Scripted subscription allowance for the provider card. */
@@ -444,6 +446,7 @@ export function createTestApp(
     bridge,
     busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
   });
+  if (options.restApiEnabled !== false) settingsRepo.set('rest-api', { serverEnabled: true, clientEnabled: true });
   const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {secrets, config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
   hub.onIntegrationEvent = event=>integrations.observe(event);
   const restClients = new RestClientService({config: new RestApiSettingsService(settingsRepo),repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
