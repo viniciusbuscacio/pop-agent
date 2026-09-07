@@ -75,7 +75,7 @@ afterEach(() => {
 describe('pending message composition', () => {
   it('keeps exactly two persistent actions and navigates models without sending the draft', () => {
     const { onSend } = renderComposer();
-    const toolbar = screen.getByTestId('composer-toolbar');
+    const toolbar = screen.getByTestId('composer-row');
     expect(within(toolbar).getAllByRole('button')).toHaveLength(2);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'preserve this draft' } });
     fireEvent.click(screen.getByTestId('composer-actions'));

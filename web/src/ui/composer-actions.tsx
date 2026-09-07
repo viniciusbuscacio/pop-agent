@@ -40,7 +40,7 @@ export function ComposerActions({
       const top = viewport?.offsetTop ?? 0;
       const height = viewport?.height ?? window.innerHeight;
       const width = Math.min(352, window.innerWidth - 16);
-      const boxTop = trigger.current?.closest('[data-testid="composer-box"]')?.getBoundingClientRect().top ?? rect.top;
+      const boxTop = trigger.current?.closest('[data-testid="composer-row"]')?.querySelector('[data-testid="composer-box"]')?.getBoundingClientRect().top ?? rect.top;
       const bottom = Math.max(top + 88, Math.min(boxTop - 8, top + height - 8));
       setPosition({
         width, left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),

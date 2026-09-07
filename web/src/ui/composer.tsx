@@ -739,7 +739,8 @@ export function Composer({
         </div>
       ) : null}
 
-      <div data-testid="composer-box" className="flex min-w-0 items-end rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
+      <div data-testid="composer-row" className="flex min-w-0 items-end gap-1">
+      <div data-testid="composer-box" className="flex min-w-0 flex-1 items-end rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
         <FileInput
           inputRef={picker}
           multiple
@@ -843,6 +844,9 @@ export function Composer({
               <SendIcon />
             </IconButton>
           )}
+        </div>
+      </div>
+        <div className="shrink-0 pb-1.5">
           <ComposerActions chatId={chatId} modelRequest={modelPickerRequest} locked={locked}
             onOpen={() => { setSlashMode('commands'); setSlashQuery(undefined); setMentionQuery(undefined); }}
             modelLabel={currentProviderLabel && currentModel ? `${currentProviderLabel} / ${currentModel}` : t('chat.defaultModel')}

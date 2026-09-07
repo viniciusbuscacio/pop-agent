@@ -698,8 +698,9 @@ The shell shows an 8px green REST API Server dot beside Settings when enabled an
 
 ## Composer action surface
 
-The message box contains exactly two persistent action buttons in a reserved
-bottom-right area: Send (right-pointing chevron), then Add (+). The box starts
+The composer has exactly two persistent action buttons: Send (right-pointing
+chevron) inside the message box at the bottom right, then Add (+) outside the
+box on its right, aligned with Send. The box starts
 with one text line; 32px buttons sit beside the textarea, aligned to its bottom,
 and remain visible when text reaches its height cap and scrolls.
 Thinking and Plan mode are switches inside Add; no persistent mode labels
