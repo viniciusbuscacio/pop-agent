@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { checkNativeRuntime, extractRuntime, fileHash, git, glibcVersion, validateManifest } from './server-runtime.ts';
+import { checkNativeRuntime, extractRuntime, fileHash, git, glibcVersion, prepareRuntimeSource, validateManifest } from './server-runtime.ts';
 import { installPreparedCheckout, parseInstallArguments } from './install-systemd.ts';
 
 import { installEvent } from './install-journal.ts';
@@ -17,9 +17,8 @@ if (statSync(source).uid !== process.getuid?.() || git(source, ['status', '--por
 const version = readFileSync(join(source, 'VERSION'), 'utf8').trim();
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid product version');
 const architecture = process.arch === 'x64' ? 'amd64' : 'arm64';
-const commit = git(source, ['rev-parse', 'HEAD']);
-const tree = git(source, ['rev-parse', 'HEAD^{tree}']);
-installEvent('release-identity', { version, commit, tree });
+const checkoutCommit = git(source, ['rev-parse', 'HEAD']);
+installEvent('checkout-identity', { version, commit: checkoutCommit });
 const base = join(process.env['XDG_DATA_HOME'] ?? join(homedir(), '.local/share'), 'pop-agent/server-releases');
 mkdirSync(base, { recursive: true, mode: 0o700 });
 if (!lstatSync(base).isDirectory() || statSync(base).uid !== process.getuid?.() || (statSync(base).mode & 0o077) !== 0) throw new Error('Server release directory must be owner-only and not a symlink');
@@ -33,6 +32,13 @@ if (repo === undefined && localRelease === undefined) throw new Error('A GitHub 
 const staging = mkdtempSync(join(base, '.install-'));
 let completed = false;
 try {
+  const runtime = join(staging, 'runtime');
+  console.log(`Selecting source for published release v${version}...`);
+  installEvent('release-source');
+  const { commit, tree } = prepareRuntimeSource(source, runtime, version, localRelease === undefined ? `https://github.com/${repo!}.git` : undefined);
+  if (localRelease !== undefined && repo !== undefined) git(runtime, ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`]);
+  installEvent('release-identity', { version, commit, tree });
+  if (commit !== checkoutCommit) console.log(`Installing published v${version} (${commit.slice(0, 12)}); checkout ${checkoutCommit.slice(0, 12)} is unchanged.`);
   async function acquire(name: string, destination: string, maximumSize: number): Promise<void> {
     if (localRelease !== undefined) {
       const path = join(resolve(localRelease), name);
@@ -64,10 +70,6 @@ try {
     if (statSync(downloaded).size !== manifest.size || await fileHash(downloaded) !== manifest.sha256) throw new Error('Server archive failed size/SHA-256 verification');
     renameSync(downloaded, archive);
   } else console.log('Reusing the verified cached server archive.');
-  const runtime = join(staging, 'runtime');
-  execFileSync('git', ['clone', '--quiet', '--no-hardlinks', '--no-checkout', '--', source, runtime], { stdio: 'pipe' });
-  execFileSync('git', ['-C', runtime, 'checkout', '--quiet', '--detach', commit], { stdio: 'pipe' });
-  if (repo !== undefined) execFileSync('git', ['-C', runtime, 'remote', 'set-url', 'origin', `https://github.com/${repo}.git`]);
   console.log('Extracting production dependencies and prebuilt clients...');
   installEvent('runtime-extract');
   extractRuntime(archive, runtime);

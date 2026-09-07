@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix prebuilt installation from a shallow main clone by selecting the latest published stable release and its runtime pins in an isolated source checkout, then verifying matching source and prebuilt manifests; preserve the caller checkout and exact source/binary integrity checks.
+
 - Simplify REST Server settings by removing port/HTTPS and extended examples, keeping Download OpenAPI visible, and adding an enforced IP/CIDR allowlist defaulting to 127.0.0.1/32.
 
 - Initialize the REST access key automatically before serving or enabling the API, reuse it across restarts, and prevent deleting the current key without replacement.

@@ -63,6 +63,7 @@ PREPARE_ONLY=0
 BUILD_FROM_SOURCE=0
 NETWORK_ONBOARDING=1
 STAGING_DIR=
+RELEASE_SOURCE_DIR=
 TAILSCALE_KEY_TEMP=
 TAILSCALE_LIST_TEMP=
 node_download_pid=
@@ -78,6 +79,7 @@ die() {
 }
 
 cleanup() {
+  if [ -n "$RELEASE_SOURCE_DIR" ] && [ -d "$RELEASE_SOURCE_DIR" ]; then rm -rf -- "$RELEASE_SOURCE_DIR"; fi
   for download_pid in "$node_download_pid" "$whisper_download_pid"; do
     if [ -n "$download_pid" ]; then
       kill "$download_pid" 2>/dev/null || true
@@ -303,6 +305,44 @@ fi
 CHECKOUT=$(CDPATH= cd -- "$CHECKOUT" && pwd -P)
 [ -f "$CHECKOUT/package.json" ] && [ -f "$CHECKOUT/package-lock.json" ] \
   || die "checkout is not an existing Pop Agent checkout: $CHECKOUT"
+
+# A normal clone follows development main. Install a published source snapshot
+# before reading runtime pins, so source, binaries and toolchain remain one release.
+if [ "$PREPARE_ONLY" -eq 0 ] && [ "$BUILD_FROM_SOURCE" -eq 0 ] && [ -z "${POP_AGENT_SERVER_RELEASE_DIR:-}" ]; then
+  [ -z "$(git -C "$CHECKOUT" status --porcelain)" ] || die "installation requires a clean checkout"
+  current_tag=$(git -C "$CHECKOUT" describe --tags --exact-match HEAD 2>/dev/null || :)
+  checkout_version=$(cat "$CHECKOUT/VERSION")
+  if [ "$current_tag" != "v$checkout_version" ]; then
+    install_phase release-selection
+    origin=$(git -C "$CHECKOUT" config --get remote.origin.url)
+    case $origin in
+      https://github.com/*) repository=${origin#https://github.com/} ;;
+      git@github.com:*) repository=${origin#git@github.com:} ;;
+      *) die "published installation requires a GitHub origin" ;;
+    esac
+    repository=${repository%.git}
+    printf '%s\n' "$repository" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || die "invalid GitHub repository"
+    if command -v gh >/dev/null 2>&1 && gh auth status --hostname github.com >/dev/null 2>&1; then
+      release_tag=$(gh api "repos/$repository/releases/latest" --jq .tag_name) || die "could not resolve the latest published release"
+    else
+      release_url=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 60 --output /dev/null --write-out '%{url_effective}' "https://github.com/$repository/releases/latest") || die "could not resolve the latest release; private repositories require gh auth login"
+      release_tag=${release_url##*/}
+    fi
+    printf '%s\n' "$release_tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || die "latest release has an unsupported tag"
+    say "Selecting published release $release_tag; the cloned checkout will remain unchanged."
+    install_event "event=selected-release tag=$release_tag"
+    RELEASE_SOURCE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/pop-published-source.XXXXXX")
+    GIT_TERMINAL_PROMPT=0 git clone --quiet --depth 1 --branch "$release_tag" -- "$origin" "$RELEASE_SOURCE_DIR/source" || die "could not fetch published release source"
+    selected_commit=$(git -C "$RELEASE_SOURCE_DIR/source" rev-parse HEAD)
+    tagged_commit=$(git -C "$RELEASE_SOURCE_DIR/source" rev-parse "refs/tags/$release_tag^{commit}") || die "published source tag is missing"
+    [ "$selected_commit" = "$tagged_commit" ] || die "published source does not match the release tag"
+    set -- --checkout "$RELEASE_SOURCE_DIR/source" --toolchain-dir "$TOOLCHAIN_DIR" --data-dir "$DATA_DIR" --workspace "$WORKSPACE" --port "$PORT"
+    if [ "$INSTALL_APT" -eq 1 ]; then set -- "$@" --install-apt-packages; fi
+    if [ "$NETWORK_ONBOARDING" -eq 0 ]; then set -- "$@" --skip-network-onboarding; fi
+    sh "$RELEASE_SOURCE_DIR/source/deploy/bootstrap-server.sh" "$@"
+    exit $?
+  fi
+fi
 
 NODE_VERSION=
 NODE_ARCHIVE=

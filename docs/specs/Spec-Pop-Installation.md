@@ -193,13 +193,9 @@ the per-user toolchain. Cached bytes are reverified and reused on retries.
 `--build-from-source` developer mode adds build-essential, Python, distribution FFmpeg and the pinned
 Go runtime and retains the former npm ci/full gate/client packaging path.
 
-Normal bootstrap invokes `tools/install-prebuilt.ts` with native Node TypeScript
-support, without installing development packages. It acquires the exact
-`v<VERSION>` server release from the checkout's GitHub origin; private releases
-use the owner's existing gh login, while public downloads require no login.
-Missing artifacts fail explicitly without a compilation fallback. A trusted
-local `POP_AGENT_SERVER_RELEASE_DIR` is available for offline validation and
-installation; it is never treated as an independently authenticated source.
+Normal bootstrap from an untagged development checkout resolves the latest published stable GitHub release and runs its bootstrap from an isolated shallow source clone before selecting runtime pins. The caller checkout is never switched or edited. This works when main contains newer commits with the same VERSION or an unreleased VERSION bump. A checkout already at its matching version tag remains explicitly pinned. Authenticated private repositories use gh; public repositories need only curl and git. No build fallback is introduced.
+
+The selected bootstrap invokes `tools/install-prebuilt.ts` with native Node TypeScript support, without installing development packages. The installer pairs prebuilt bytes with the corresponding published source tag in its isolated runtime checkout; manifest commit/tree verification is never weakened. Missing or malformed releases fail explicitly. Trusted local `POP_AGENT_SERVER_RELEASE_DIR` builds and explicit developer/source preparation skip published-release selection and retain exact caller-checkout verification. Local assets are never treated as independently authenticated sources.
 
 The architecture JSON manifest must match version, exact source commit/tree,
 Node version, Linux architecture and supported glibc, with positive bounded size,

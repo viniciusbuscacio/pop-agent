@@ -25,6 +25,28 @@ export function git(root: string, args: string[]): string {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 
+/** Keep the user's checkout intact; release bytes must run with their tagged source. */
+export function prepareRuntimeSource(source: string, destination: string, version: string, releaseOrigin?: string): { commit: string; tree: string } {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
+  execFileSync('git', ['clone', '--quiet', '--no-hardlinks', '--no-checkout', '--', source, destination], { stdio: 'pipe' });
+  let target = git(source, ['rev-parse', 'HEAD']);
+  if (releaseOrigin !== undefined) {
+    git(destination, ['remote', 'set-url', 'origin', releaseOrigin]);
+    try {
+      // Fetch the exact tag, including when the initial clone used --depth 1.
+      execFileSync('git', ['-C', destination, 'fetch', '--quiet', '--depth=1', 'origin', `refs/tags/v${version}`], {
+        stdio: 'pipe', timeout: 120_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+      target = git(destination, ['rev-parse', 'FETCH_HEAD^{commit}']);
+    } catch {
+      throw new Error(`Could not fetch published source tag v${version}. Verify that this release exists and GitHub authentication is configured. No compilation fallback was started.`);
+    }
+  }
+  git(destination, ['checkout', '--quiet', '--detach', target]);
+  if (readFileSync(join(destination, 'VERSION'), 'utf8').trim() !== version) throw new Error('Release source tag has a different product version');
+  return { commit: git(destination, ['rev-parse', 'HEAD']), tree: git(destination, ['rev-parse', 'HEAD^{tree}']) };
+}
+
 export async function fileHash(path: string): Promise<string> {
   const hash = createHash('sha256');
   for await (const bytes of createReadStream(path)) hash.update(bytes as Buffer);

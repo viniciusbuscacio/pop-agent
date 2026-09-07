@@ -160,6 +160,49 @@ function run(fixture: Fixture, extra: string[] = [], env: NodeJS.ProcessEnv = fi
 }
 
 describe('server toolchain bootstrap', () => {
+  it.each(['1.2.3', '1.2.4'])('delegates development %s to the stable tagged bootstrap before reading runtime pins', (developmentVersion) => {
+    const fixture = createFixture({ packagesInstalled: true });
+    const release = join(fixture.root, 'release-origin');
+    mkdirSync(join(release, 'deploy'), { recursive: true });
+    const receipt = join(fixture.root, 'selected-arguments');
+    const git = (cwd: string, ...args: string[]) => {
+      const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+      if (result.status !== 0) throw new Error(result.stderr);
+      return result.stdout.trim();
+    };
+    git(release, 'init', '--quiet');
+    git(release, 'config', 'user.name', 'Fixture');
+    git(release, 'config', 'user.email', 'fixture@example.invalid');
+    writeFileSync(join(release, 'VERSION'), '1.2.3\n');
+    executable(join(release, 'deploy/bootstrap-server.sh'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$SELECTED_ARGUMENTS"\nprintf "published bootstrap ran\\n"\n');
+    git(release, 'add', '.');
+    git(release, 'commit', '--quiet', '-m', 'published');
+    git(release, 'tag', '-a', 'v1.2.3', '-m', 'stable');
+    git(fixture.checkout, 'init', '--quiet');
+    git(fixture.checkout, 'config', 'user.name', 'Fixture');
+    git(fixture.checkout, 'config', 'user.email', 'fixture@example.invalid');
+    writeFileSync(join(fixture.checkout, 'VERSION'), `${developmentVersion}\n`);
+    writeFileSync(join(fixture.checkout, 'deploy/server-toolchain-manifest.tsv'), 'unpublished runtime pins must not be read\n');
+    git(fixture.checkout, 'add', '.');
+    git(fixture.checkout, 'commit', '--quiet', '-m', 'development');
+    git(fixture.checkout, 'remote', 'add', 'origin', 'https://github.com/fixture/pop-agent.git');
+    const before = git(fixture.checkout, 'rev-parse', 'HEAD');
+    const config = join(fixture.root, 'gitconfig');
+    writeFileSync(config, `[url "file://${release}"]\n  insteadOf = https://github.com/fixture/pop-agent.git\n[protocol "file"]\n  allow = always\n`);
+    executable(join(fixture.root, 'fake-bin/gh'), '#!/bin/sh\ncase "$1" in auth) exit 0;; api) [ "$2" = repos/fixture/pop-agent/releases/latest ] || exit 2; printf "v1.2.3\\n";; *) exit 2;; esac\n');
+    const result = spawnSync(fixture.script, ['--checkout', fixture.checkout, '--toolchain-dir', fixture.toolchain,
+      '--data-dir', fixture.dataDir, '--workspace', fixture.workspace, '--port', '9898', '--skip-network-onboarding'], {
+      encoding: 'utf8', env: { ...fixture.env, GIT_CONFIG_GLOBAL: config, SELECTED_ARGUMENTS: receipt },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Selecting published release v1.2.3');
+    expect(result.stdout).toContain('published bootstrap ran');
+    expect(readFileSync(receipt, 'utf8')).toContain(`--toolchain-dir\n${fixture.toolchain}\n--data-dir\n${fixture.dataDir}\n--workspace\n${fixture.workspace}\n--port\n9898\n--skip-network-onboarding\n`);
+    expect(() => readFileSync(fixture.curlLog)).toThrow();
+    expect(git(fixture.checkout, 'rev-parse', 'HEAD')).toBe(before);
+    expect(git(fixture.checkout, 'status', '--porcelain')).toBe('');
+  });
+
   it('prepares only Node and Whisper and omits compiler packages on the default path', () => {
     const fixture = createFixture();
     const result = spawnSync(fixture.script, ['--checkout', fixture.checkout, '--toolchain-dir', fixture.toolchain, '--install-apt-packages', '--prepare-only'], { encoding: 'utf8', env: fixture.env });
