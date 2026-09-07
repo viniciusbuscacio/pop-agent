@@ -71,11 +71,11 @@ export function RestServerPanel() {
     const download = (): void => { if (!reference)
         return; const url = URL.createObjectURL(new Blob([JSON.stringify(reference.openapi, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'pop-agent-openapi.json'; a.click(); URL.revokeObjectURL(url); };
     return <div className="space-y-5">
-      <p>Connect external integrations to this Pop Agent. Tokens apply to this entire single-user installation.</p>
+      <p className="text-sm text-[var(--muted)]">Connect external integrations to this Pop Agent. Tokens apply to this entire single-user installation.</p>
       <Card><p className="break-all font-mono text-sm">{base}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(base)}>Copy URL</Button><Button type="button" size="sm" variant="ghost" onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div></Card>
       <p className="text-sm text-[var(--muted)]">Your external client must be able to reach this address. Remote connections require HTTPS. No network ports or Tailscale settings are changed here.</p>
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}
-      <h2 className="text-lg font-medium">Integration tokens</h2>
+      <h2 className="text-base font-medium">Integration tokens</h2>
       {secret ? <Card><p>Save this token now. It will not be shown again.</p><code className="block break-all py-3">{secret}</code><div className="flex gap-2"><Button type="button" onClick={() => void copy(secret)}>Copy token</Button><Button type="button" variant="ghost" onClick={() => setSecret('')}>Done</Button></div></Card> : null}
       {!creating ? <Button type="button" onClick={() => { setSelected(['activity:read']); setDays(30); setCreating(true); }}>New token</Button> : <Card><form className="space-y-4" onSubmit={event => void create(event)}>
         <TextField id="integration-name" label="Name" value={name} maxLength={80} required onChange={e => setName(e.target.value)}/>

@@ -48,7 +48,7 @@ import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
-import { Button, Card, CheckField, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
+import { BackButton, Button, Card, CheckField, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
@@ -169,24 +169,8 @@ export function SettingsPage() {
         data-testid="settings-header"
         className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] p-3"
       >
-        <Pressable
-          type="button"
-          data-testid="settings-back-phone"
-          aria-label={t('common.back')}
-          onClick={goBackOnPhone}
-          className="grid min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
-        >
-          ←
-        </Pressable>
-        <Pressable
-          type="button"
-          data-testid="settings-back-desktop"
-          aria-label={t('common.back')}
-          onClick={goBackOnDesktop}
-          className="hidden min-h-10 min-w-10 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:grid"
-        >
-          ←
-        </Pressable>
+        <BackButton data-testid="settings-back-phone" aria-label={t('common.back')} onClick={goBackOnPhone} className="md:hidden" />
+        <BackButton data-testid="settings-back-desktop" aria-label={t('common.back')} onClick={goBackOnDesktop} className="hidden md:grid" />
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold md:hidden">{activeEntry?.label ?? 'Settings'}</h1>
           <h1 className="hidden text-lg font-semibold md:block">Settings</h1>

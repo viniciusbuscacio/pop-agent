@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { shortDateTime } from '../lib/time';
 import { a2aService } from '../services/a2a';
 import { useA2aStore } from '../store/a2a';
-import { Button, Card, Select, SwitchField, TextArea, TextField } from '../ui/controls';
+import { BackButton, Button, Card, Select, SwitchField, TextArea, TextField } from '../ui/controls';
 import { SidebarNav } from './sidebar-nav';
 
 const DEFAULT_AGENT_CARD_PATH = '.well-known/agent-card.json';
@@ -210,14 +210,10 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
 
   return (
     <form onSubmit={(event) => void save(event)} className="w-full p-6">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">
-          {agent === undefined ? t('a2a.addTitle') : t('a2a.editTitle')}
-        </h1>
-        <Button variant="ghost" type="button" disabled={busy} onClick={() => void onDone()}>
-          {t('common.cancel')}
-        </Button>
-      </div>
+      <AgentPageHeader
+        title={agent === undefined ? t('a2a.addTitle') : t('a2a.editTitle')}
+        back={<BackButton aria-label={t('common.back')} disabled={busy} onClick={() => void onDone()} />}
+      />
       <Card className="grid gap-4">
         <div>
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={applyMicrosoftFoundryPreset}>
@@ -264,6 +260,7 @@ function A2aEditor({ agent, onDone }: { agent?: A2aAgentDTO | undefined; onDone:
           <Button type="submit" disabled={saveDisabled}>
             {busy ? t('a2a.saving') : t('common.save')}
           </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void onDone()}>{t('common.cancel')}</Button>
           {agent === undefined ? null : (
             <>
               <Button type="button" variant="ghost" disabled={busy} onClick={() => void testConnection()}>{t('a2a.test')}</Button>

@@ -12,6 +12,7 @@ import { loadProviderCredits } from '../lib/provider-credits-cache';
 import { normalizeBaseUrl, providersService } from '../services/providers';
 import { chatsService } from '../services/chats';
 import {
+  BackButton,
   Button,
   Card,
   ModelPicker,
@@ -466,15 +467,7 @@ async function remove(
 function StepHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <div className="flex items-center gap-1">
-      <Pressable
-        type="button"
-        data-testid="provider-back"
-        aria-label={t('common.back')}
-        onClick={onBack}
-        className="-ml-2 rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
-      >
-        ←
-      </Pressable>
+      <BackButton data-testid="provider-back" aria-label={t('common.back')} onClick={onBack} />
       <h2 className="min-w-0 truncate text-base font-semibold">{title}</h2>
     </div>
   );

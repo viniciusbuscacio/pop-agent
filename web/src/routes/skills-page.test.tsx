@@ -195,7 +195,7 @@ describe('the skill enabled toggle', () => {
     await waitFor(() => {
       expect(setEnabled).toHaveBeenCalledWith('alpha', false);
     });
-    expect(screen.getByTestId('skill-enabled-toggle').getAttribute('aria-pressed')).toBe('false');
+    expect((screen.getByTestId('skill-enabled-toggle') as HTMLInputElement).checked).toBe(false);
   });
 
   it('rolls back and notifies when the switch fails', async () => {
@@ -214,7 +214,7 @@ describe('the skill enabled toggle', () => {
     await waitFor(() => {
       expect(useNotificationsStore.getState().toast?.message).toBeDefined();
     });
-    expect(screen.getByTestId('skill-enabled-toggle').getAttribute('aria-pressed')).toBe('true');
+    expect((screen.getByTestId('skill-enabled-toggle') as HTMLInputElement).checked).toBe(true);
   });
 
   it('does not show the toggle on a new skill', async () => {

@@ -1,9 +1,11 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
+import { SidebarNav } from './sidebar-nav';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { t } from '../i18n';
 import { tasksService } from '../services/tasks';
 import { useTasksStore } from '../store/tasks';
-import { Button, Card, CheckField, Segmented, Select, TextArea, TextField, Pressable } from '../ui/controls';
+import { BackButton, Button, Card, CheckField, Segmented, Select, TextArea, TextField } from '../ui/controls';
 
 /**
  * Creating and editing a background task (docs/specs/Spec-Pop-General.md §21) as a **full screen**
@@ -104,26 +106,19 @@ function TaskForm({ taskId }: { taskId: string | undefined }) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-      <header className="flex items-center gap-3 border-b border-[var(--border)] p-3">
-        <Pressable
-          type="button"
-          data-testid="task-form-back"
-          aria-label={t('common.back')}
-          onClick={() => void navigate('/tasks')}
-          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
-        >
-          ←
-        </Pressable>
-        <h1 className="text-lg font-semibold">
-          {taskId === undefined ? t('tasks.form.newTitle') : t('tasks.form.editTitle')}
-        </h1>
-      </header>
+      <div className="md:hidden"><SidebarNav /></div>
+      <div className="px-6 pt-6">
+        <AgentPageHeader
+          title={taskId === undefined ? t('tasks.form.newTitle') : t('tasks.form.editTitle')}
+          back={<BackButton data-testid="task-form-back" aria-label={t('common.back')} onClick={() => void navigate('/tasks')} />}
+        />
+      </div>
 
       {loading ? (
         <p className="p-6 text-sm text-[var(--muted)]">{t('app.loading')}</p>
       ) : (
-        <form onSubmit={(event) => void save(event)} className="w-full p-6">
-          <Card className="flex flex-col gap-5">
+        <form onSubmit={(event) => void save(event)} className="w-full px-6 pb-6">
+          <Card className="flex flex-col gap-4">
             <TextField
               id="task-title"
               data-testid="task-title"

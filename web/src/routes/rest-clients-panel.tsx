@@ -10,7 +10,7 @@ export function RestClientsPanel({ enabled = true }: { enabled?: boolean }) {
     const reload = async (): Promise<void> => { setClients((await integrationsService.clients()).clients); };
     useEffect(() => { void reload().catch(() => setError('Could not load REST clients.')); }, []);
     if (editing !== undefined) return <ClientEditor key={editing?.id ?? 'new'} client={editing ?? undefined} onCancel={() => setEditing(undefined)} onSaved={async () => { setEditing(undefined); try { await reload(); } catch { setError('Client saved. Reopen this page to reload the list.'); } }} />;
-    return <div className="space-y-4"><p>Let Pop call other REST services through operations you configure. Credentials stay on the server. Only public HTTPS destinations are supported; private networks and redirects are blocked.</p>{error ? <p role="alert">{error}</p> : null}<Button type="button" onClick={() => setEditing(null)}>New client</Button>
+    return <div className="space-y-4"><p className="text-sm text-[var(--muted)]">Let Pop call other REST services through operations you configure. Credentials stay on the server. Only public HTTPS destinations are supported; private networks and redirects are blocked.</p>{error ? <p role="alert">{error}</p> : null}<Button type="button" onClick={() => setEditing(null)}>New client</Button>
     {clients.map(client => <Card key={client.id}><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-medium">{client.name}</h3><p className="break-all text-sm">{client.baseUrl}</p><p className="text-sm">{client.enabled ? 'Enabled' : 'Disabled'} · {client.operations.length} operations · {client.hasCredential ? 'Credential stored' : 'No credential'}</p></div><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(client)}>Edit</Button></div><ClientCall client={client} enabled={enabled}/></Card>)}
   </div>;
 }
@@ -39,7 +39,7 @@ function ClientEditor({ client, onCancel, onSaved }: {
         setBusy(false);
     } };
     const change = (index: number, patch: Partial<RestOperationDTO>): void => setOperations(old => old.map((operation, i) => i === index ? { ...operation, ...patch } : operation));
-    return <Card><form className="space-y-4" onSubmit={e => void save(e)}><h3>{client ? 'Edit client' : 'New client'}</h3>{error ? <p role="alert">{error}</p> : null}
+    return <Card><form className="space-y-4" onSubmit={e => void save(e)}><h3 className="text-base font-medium">{client ? 'Edit client' : 'New client'}</h3>{error ? <p role="alert">{error}</p> : null}
     <TextField id="rest-client-name" label="Name" required maxLength={80} value={name} onChange={e => setName(e.target.value)}/>
     <TextField id="rest-client-url" label="Base URL (HTTPS)" required type="url" value={url} onChange={e => setUrl(e.target.value)}/>
     <SwitchField id="rest-client-enabled" label="Allow Pop to use this client" checked={enabled} onChange={setEnabled}/>

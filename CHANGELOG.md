@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Prevent REST API overview controls from squeezing descriptions into narrow columns on phones; hide repeated switch labels visually while retaining accessible names and align REST section typography.
+
+- Use the shared Enabled switch in Skill and MCP editors, matching A2A and REST API.
+
+- Align Agent editor headings and mobile navigation, keep Cancel beside Save, and use compact secondary navigation so Agent sections fit the sidebar.
+
+- Unify Agent and provider back controls with the Settings arrow button, including a consistent 40px touch target and accessible Back label.
+
 - Let Skill, Task, MCP and A2A creation/edit forms use the full pane width with the same 24px outer padding as their overviews.
 
 - Reset task and MCP editors when switching destinations so New starts blank and another MCP loads its own fields.

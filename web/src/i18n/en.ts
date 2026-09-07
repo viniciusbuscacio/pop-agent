@@ -470,6 +470,7 @@ export const en = {
   'skills.distiller.lastRun': 'Last looked {when}',
   'skills.distiller.waiting': '{count} waiting for you',
   'skills.new': 'New skill',
+  'skills.editTitle': 'Edit skill',
   'skills.filter.label': 'Filter skills by source',
   'skills.filter.all': 'All Skills',
   'skills.filter.personal': 'Personal',

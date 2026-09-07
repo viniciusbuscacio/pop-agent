@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { RestApiSettingsDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { integrationsService } from '../services/integrations';
-import { Button, Card, SwitchField } from '../ui/controls';
+import { BackButton, Button, Card, SwitchField } from '../ui/controls';
 import { SidebarNav } from './sidebar-nav';
 import { ShellFooter } from './shell-header';
 import { RestClientsPanel } from './rest-clients-panel';
@@ -37,7 +37,7 @@ export function RestApiPage() {
         <AgentPageHeader
           title={editing ? t(editing === 'server' ? 'rest.server' : 'rest.client') : t('rest.title')}
           description={editing ? undefined : t('rest.description')}
-          action={editing ? <Button variant="ghost" size="sm" onClick={() => setEditing(undefined)}>{t('rest.back')}</Button> : null}
+          back={editing ? <BackButton aria-label={t('common.back')} onClick={() => setEditing(undefined)} /> : null}
         />
         {error ? <p role="alert">{error} {!settings ? <Button variant="ghost" size="sm" onClick={() => setRetry(v => v + 1)}>{t('rest.retry')}</Button> : null}</p> : null}
         {!settings && !error ? <p role="status">{t('app.loading')}</p> : null}
@@ -45,13 +45,13 @@ export function RestApiPage() {
           <div className="grid gap-3">
             {(['server', 'client'] as const).map(kind => {
               const key = kind === 'server' ? 'serverEnabled' : 'clientEnabled';
-              return <Card key={kind} className="flex flex-wrap items-center justify-between gap-4">
+              return <Card key={kind} className="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{t(kind === 'server' ? 'rest.server' : 'rest.client')}</div>
                   <p className="text-sm text-[var(--muted)]">{t(kind === 'server' ? 'rest.serverDescription' : 'rest.clientDescription')}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <SwitchField id={'rest-' + kind} label={t(kind === 'server' ? 'rest.server' : 'rest.client')} checked={settings[key]} disabled={busy} onChange={value => void toggle(key, value)} />
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <SwitchField hideLabel id={'rest-' + kind} label={t(kind === 'server' ? 'rest.server' : 'rest.client')} checked={settings[key]} disabled={busy} onChange={value => void toggle(key, value)} />
                   <Button variant="ghost" aria-label={t(kind === 'server' ? 'rest.editServer' : 'rest.editClient')} onClick={() => setEditing(kind)}>{t('rest.edit')}</Button>
                 </div>
               </Card>;

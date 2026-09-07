@@ -13,9 +13,10 @@ The single focus treatment is the global `:focus-visible` ring in `styles/index.
 ### Actions
 
 - `Button`: normal primary, ghost and danger actions; `size="md" | "sm"`.
+- `BackButton`: Settings-style arrow-only return action with an accessible name and minimum 40px touch target.
 - `IconButton`: square icon-only toolbar action. It must have an accessible name.
 - `Pressable`: foundation for bespoke interactive rows, disclosures and options when Button/IconButton do not fit. It centralizes button semantics and disabled behavior.
-- `Segmented`: mutually exclusive navigation or view choices.
+- `Segmented`: mutually exclusive navigation or view choices. Compact spacing is used for secondary Agent navigation on every device.
 
 ### Fields
 
@@ -25,7 +26,7 @@ The single focus treatment is the global `:focus-visible` ring in `styles/index.
 - `Select`: native select box.
 - `Checkbox`: standalone row-selection checkbox.
 - `CheckField`: labelled checkbox with optional hint.
-- `SwitchField`: labelled on/off switch.
+- `SwitchField`: labelled on/off switch. Use `hideLabel` only when adjacent content already names it; the label remains available to assistive technology.
 - `RadioGroup`: exclusive radio choices.
 - `RangeField`: range input with its current value.
 - `FileInput`: native file/folder picker, normally hidden and activated by a Button.

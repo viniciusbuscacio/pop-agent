@@ -57,6 +57,7 @@ export function SidebarNav() {
       />
       {mainSection === 'agent' && agentSection !== undefined ? (
         <Segmented<AgentSection>
+          compact
           ariaLabel={t('shell.agentNavigation')}
           value={agentSection}
           onChange={selectAgent}

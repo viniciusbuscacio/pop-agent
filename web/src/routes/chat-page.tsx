@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Pressable } from '../ui/controls';
+import { BackButton, Pressable } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -274,15 +274,7 @@ export function ChatPage() {
   return (
     <>
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
-        <Pressable
-          type="button"
-          data-testid="chat-back"
-          aria-label={t('common.back')}
-          onClick={() => void navigate('/')}
-          className="rounded-md px-2 py-1 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] md:hidden"
-        >
-          ←
-        </Pressable>
+        <BackButton data-testid="chat-back" aria-label={t('common.back')} onClick={() => void navigate('/')} className="md:hidden" />
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
 
       </header>

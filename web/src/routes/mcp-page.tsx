@@ -7,9 +7,9 @@ import { mcpService } from '../services/mcp';
 import { useMcpStore } from '../store/mcp';
 import { SidebarNav } from './sidebar-nav';
 import {
+  BackButton,
   Button,
   Card,
-  CheckField,
   Select,
   SwitchField,
   TextArea,
@@ -228,10 +228,10 @@ function McpEditor({
 
   return (
     <form onSubmit={(event) => void save(event)} className="w-full p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{server ? 'Edit MCP server' : 'Add MCP server'}</h1>
-        <Button variant="ghost" type="button" onClick={() => void onDone()}>Back</Button>
-      </div>
+      <AgentPageHeader
+        title={server ? 'Edit MCP server' : 'Add MCP server'}
+        back={<BackButton aria-label={t('common.back')} disabled={busy} onClick={() => void onDone()} />}
+      />
       <Card className="grid gap-4">
         <TextField id="mcp-name" label="Name" value={name} onChange={(event) => setName(event.target.value)} required />
         <TextArea id="mcp-description" label="Description" value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -279,9 +279,10 @@ function McpEditor({
           </>
         ) : null}
         <TextField id="mcp-timeout" label="Timeout (ms)" type="number" value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} />
-        <CheckField id="mcp-enabled" label="Enabled" checked={enabled} onChange={setEnabled} />
+        <SwitchField id="mcp-enabled" label="Enabled" checked={enabled} onChange={setEnabled} />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy || !name}>{busy ? 'Saving…' : 'Save'}</Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void onDone()}>{t('common.cancel')}</Button>
           {server === undefined ? null : (
             <>
               <Button type="button" variant="ghost" onClick={() => void test()} disabled={busy}>Test connection</Button>

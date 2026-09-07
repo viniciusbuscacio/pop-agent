@@ -1,3 +1,4 @@
+import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState } from 'react';
 import type { SkillDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -5,7 +6,7 @@ import { ApiError } from '../services/api';
 import { skillsService } from '../services/skills';
 import { skillEnabled, useSkillsStore } from '../store/skills';
 import { useNotificationsStore } from '../store/notifications';
-import { Button, Card, TextArea, TextField, Pressable } from '../ui/controls';
+import { BackButton, Button, Card, TextArea, TextField, SwitchField } from '../ui/controls';
 
 /**
  * The skill form, in its own module rather than inside the settings page.
@@ -95,43 +96,22 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
   }
 
   return (
+    <>
+      <AgentPageHeader
+        title={isNew ? t('skills.new') : t('skills.editTitle')}
+        back={<BackButton data-testid="skill-back" aria-label={t('common.back')} onClick={onDone} />}
+      />
     <Card className="flex flex-col gap-4">
-      <Pressable
-        type="button"
-        data-testid="skill-back"
-        onClick={onDone}
-        className="self-start text-sm text-[var(--accent)]"
-      >
-        ← {t('skills.back')}
-      </Pressable>
 
       {isNew ? null : (
-        <div className="flex items-center gap-2.5">
-          <Pressable
-            type="button"
-            data-testid="skill-enabled-toggle"
-            aria-pressed={enabled}
-            aria-label={enabled ? t('skills.enabled') : t('skills.disabled')}
-            title={enabled ? t('skills.enabled') : t('skills.disabled')}
-            disabled={toggling}
-            onClick={() => void toggleEnabled()}
-            className={`flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
-              enabled
-                ? 'border-transparent bg-[var(--accent)]'
-                : 'border-[var(--border)] bg-transparent'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={
-                enabled
-                  ? 'block h-3.5 w-3.5 translate-x-4 rounded-full bg-[var(--accent-fg)] transition-transform'
-                  : 'block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-[var(--muted)] transition-transform'
-              }
-            />
-          </Pressable>
-          <span className="text-sm">{t('skills.enabled')}</span>
-        </div>
+        <SwitchField
+          id="skill-enabled"
+          testId="skill-enabled-toggle"
+          label={t('skills.enabled')}
+          checked={enabled}
+          disabled={toggling}
+          onChange={() => void toggleEnabled()}
+        />
       )}
 
       <TextField
@@ -187,5 +167,6 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
         </Button>
       </div>
     </Card>
+    </>
   );
 }

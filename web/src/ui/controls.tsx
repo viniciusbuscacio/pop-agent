@@ -59,6 +59,17 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
  * list options). It deliberately owns only interaction states; use Button or
  * IconButton whenever their visual shape fits.
  */
+/** Shared Settings-style navigation back control. */
+export function BackButton({ className = '', ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'type'>) {
+  return <Pressable
+    {...props}
+    type="button"
+    className={`grid min-h-10 min-w-10 shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)] ${className}`}
+  >
+    <span aria-hidden="true">←</span>
+  </Pressable>;
+}
+
 export function Pressable({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -658,6 +669,7 @@ export function SwitchField({
   onChange,
   testId,
   disabled = false,
+  hideLabel = false,
 }: {
   id: string;
   label: string;
@@ -666,10 +678,12 @@ export function SwitchField({
   onChange: (checked: boolean) => void;
   testId?: string;
   disabled?: boolean;
+  /** Keep the accessible name when adjacent content already names the control. */
+  hideLabel?: boolean;
 }) {
   return (
     <label htmlFor={id} className={`flex items-center justify-between gap-4 text-sm ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'}`}>
-      <span>
+      <span className={hideLabel ? 'sr-only' : undefined}>
         <span className="block text-[var(--screen-fg)]">{label}</span>
         {hint === undefined ? null : <span id={`${id}-hint`} className="block text-xs text-[var(--muted)]">{hint}</span>}
       </span>
@@ -814,6 +828,7 @@ export function Segmented<T extends string>({
   onChange,
   ariaLabel,
   bold = false,
+  compact = false,
 }: {
   options: SegmentedOption<T>[];
   value: T;
@@ -821,7 +836,9 @@ export function Segmented<T extends string>({
   ariaLabel: string;
   /** Heavier labels, for the one control that names the whole app's screens. */
   bold?: boolean;
+  compact?: boolean;
 }) {
+  const spacing = compact ? 'px-2' : 'px-4';
   const weight = bold ? ' font-semibold' : '';
   return (
     <div
@@ -838,8 +855,8 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           className={
             option.value === value
-              ? `shrink-0 bg-[var(--accent)] px-4 py-1.5 text-sm text-[var(--accent-fg)]${weight}`
-              : `shrink-0 px-4 py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]${weight}`
+              ? `shrink-0 bg-[var(--accent)] ${spacing} py-1.5 text-sm text-[var(--accent-fg)]${weight}`
+              : `shrink-0 ${spacing} py-1.5 text-sm text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]${weight}`
           }
         >
           {option.label}
