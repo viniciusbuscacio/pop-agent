@@ -1,3 +1,4 @@
+import { UiBridgeService } from '../application/integrations/ui-bridge-service.js';
 import { RestApiSettingsService } from '../application/integrations/rest-api-settings.js';
 import { IntegrationService } from '../application/integrations/integration-service.js';
 import { RestClientService } from '../application/integrations/rest-client-service.js';
@@ -446,7 +447,9 @@ export function createTestApp(
   const integrations = new IntegrationService(new SqliteIntegrationRepo(db), {config: new RestApiSettingsService(settingsRepo), chats, runs, queue:queuedMessages, now:()=>clock.now()});
   hub.onIntegrationEvent = event=>integrations.observe(event);
   const restClients = new RestClientService({config: new RestApiSettingsService(settingsRepo),repo:integrations.repo,secrets,gateway:{call:async()=>({status:200,body:'test response'})},now:()=>clock.now()});
+  const uiBridge = new UiBridgeService();
   const app = createApp({
+    uiBridge,
     integrations,
     restClients,
     auth,

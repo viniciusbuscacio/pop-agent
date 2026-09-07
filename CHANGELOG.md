@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in live PWA UI control through REST: discover connected tabs, inspect visible controls, click, double-click, type and send application keys; capture real PNG screenshots after browser screen-sharing consent.
+
 - Show the go-apps green pulsing REST API Server indicator beside Settings while enabled and reachable; click opens server configuration.
 
 - Cover blank space below conversations and the Files folder tree with contextual actions, sharing folder creation with the main Files pane.

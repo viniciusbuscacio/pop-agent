@@ -1,4 +1,4 @@
-export const INTEGRATION_SCOPES = ['activity:read', 'conversations:read', 'conversations:write', 'runs:cancel'] as const;
+export const INTEGRATION_SCOPES = ['activity:read', 'conversations:read', 'conversations:write', 'runs:cancel', 'ui:control'] as const;
 export type IntegrationScope = typeof INTEGRATION_SCOPES[number];
 export interface IntegrationToken {
     id: string;

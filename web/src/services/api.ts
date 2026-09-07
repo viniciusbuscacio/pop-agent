@@ -147,14 +147,24 @@ function retriesLocalReconnect(path: string, method: string): boolean {
   );
 }
 
-export async function apiRequest<T>(
+let activeUiRequests = 0;
+export const pendingUiRequests = (): number => activeUiRequests;
+export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal } = {}, runtime: ApiRequestRuntime = {}): Promise<T> {
+  const counted = !path.startsWith('/ui/');
+  if (counted) activeUiRequests++;
+  try { return await performApiRequest<T>(path, init, runtime); }
+  finally { if (counted) activeUiRequests--; }
+}
+
+async function performApiRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown; onboardingToken?: string; signal?: AbortSignal } = {},
+  init: { method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal } = {},
   runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
   const client = clientEnvironment();
   const headers: Record<string, string> = clientHeaders(client);
+  if (init.uiKey !== undefined) headers['X-Pop-UI-Key'] = init.uiKey;
   const method = init.method ?? 'GET';
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;

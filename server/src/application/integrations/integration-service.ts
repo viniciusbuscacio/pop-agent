@@ -41,6 +41,10 @@ export class IntegrationService {
         this.repo.audit(token.id, 'create', '', now);
         return { token, secret };
     }
+    recordUiAccess(secret: string, operation: string, sessionId: string): void {
+        const token = this.authorize(secret, 'ui:control');
+        this.repo.audit(token.id, 'ui:' + operation, sessionId, this.deps.now());
+    }
     revoke(id: string): void { this.repo.revoke(id, this.deps.now()); this.repo.audit(id, 'revoke', '', this.deps.now()); }
     settings(): RestApiSettings { return this.deps.config.get(); }
     configure(patch: Partial<RestApiSettings>): RestApiSettings { return this.deps.config.update(patch); }

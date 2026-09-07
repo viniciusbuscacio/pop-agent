@@ -12,3 +12,5 @@ export * from './mcp.js';
 export * from './a2a.js';
 
 export * from './integrations.js';
+
+export * from './ui-control.js';

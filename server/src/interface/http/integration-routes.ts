@@ -1,3 +1,4 @@
+import { UI_ENDPOINTS } from './ui-control-routes.js';
 import { integrationTokenDto, restClientDto, integrationActivityDto, integrationChatDto } from './integration-dto.js';
 import { bodyLimit } from 'hono/body-limit';
 import type { MessageDTO } from '@pop-agent/shared';
@@ -13,6 +14,7 @@ const bearer = (c: Context): string => (c.req.header('Authorization') ?? '').rep
 const page = z.coerce.number().int().min(0).max(100000).default(0);
 const limit = z.coerce.number().int().min(1).max(100).default(50);
 export const INTEGRATION_ENDPOINTS = [
+    ...UI_ENDPOINTS,
     { method: 'get', path: '/integration/activity', scope: 'activity:read', summary: 'Page through run activity without conversation content' },
     { method: 'get', path: '/integration/runs/{id}', scope: 'activity:read', summary: 'Read one durable run snapshot' },
     { method: 'get', path: '/integration/events', scope: 'activity:read', summary: 'Stream activity snapshots; Last-Event-ID resumes bounded replay' },
@@ -44,6 +46,13 @@ export function integrationOpenApi(): Record<string, unknown> {
       'post /integration/conversations/{id}/queue/{queueId}/cancel':object({chatId:string,queueId:string,removed:{type:'boolean'}}),
     };
     for (const e of INTEGRATION_ENDPOINTS) {
+        if (e.scope === 'ui:control') {
+            const commandSchema = { type: 'object', required: ['sessionId'], additionalProperties: false, properties: { sessionId: string, testid: string, index: { type: 'integer', minimum: 0 }, value: { type: 'string', maxLength: 32000 }, key: string } };
+            paths[e.path] = { [e.method]: { summary: e.summary, security: [{ integrationBearer: [] }], 'x-required-scope': e.scope,
+              ...(e.method === 'post' ? { requestBody: { required: true, content: { 'application/json': { schema: commandSchema } } } } : { parameters: e.path.endsWith('/state') || e.path.endsWith('/screenshot') ? [{ name: 'sessionId', in: 'query', required: true, schema: string }] : [] }),
+              responses: { '200': { description: e.summary, content: { [e.path.endsWith('/screenshot') ? 'image/png' : 'application/json']: { schema: e.path.endsWith('/screenshot') ? { type: 'string', format: 'binary' } : { type: 'object' } } } }, ...Object.fromEntries(['400', '401', '403', '404', '409', '429', '503'].map(code => [code, { description: 'UI request rejected; inspect state before retrying a mutation.' }])) } } };
+            continue;
+        }
         const parameters: Record<string, unknown>[] = [...e.path.matchAll(/\{(\w+)\}/gu)].map(m => ({ name: m[1], in: 'path', required: true, schema: { type: 'string' } }));
         if (e.method === 'post')
             parameters.push({ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', maxLength: 128 } });

@@ -1,3 +1,4 @@
+import { UiAccessPanel } from '../ui/ui-access-panel';
 import { t } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { IntegrationScopeDTO, IntegrationTokenDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
@@ -11,6 +12,7 @@ const scopes: {
     { value: 'conversations:read', label: 'Read all conversations and personal content' },
     { value: 'conversations:write', label: 'Send messages (may incur provider costs)' },
     { value: 'runs:cancel', label: 'Cancel runs and queued messages' },
+    { value: 'ui:control', label: 'Control connected UI tabs (owner actions, personal content and screenshots)' },
 ];
 export function RestServerPanel() {
     const [tokensOpen, setTokensOpen] = useState(false);
@@ -75,13 +77,14 @@ export function RestServerPanel() {
       <Card><p className="break-all font-mono text-sm">{base}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(base)}>Copy URL</Button><Button type="button" size="sm" variant="ghost" onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div></Card>
       <p className="text-sm text-[var(--muted)]">Your external client must be able to reach this address. Remote connections require HTTPS. No network ports or Tailscale settings are changed here.</p>
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}
+      <UiAccessPanel />
       <h2 className="text-base font-medium">Integration tokens</h2>
-      {secret ? <Card><p>Save this token now. It will not be shown again.</p><code className="block break-all py-3">{secret}</code><div className="flex gap-2"><Button type="button" onClick={() => void copy(secret)}>Copy token</Button><Button type="button" variant="ghost" onClick={() => setSecret('')}>Done</Button></div></Card> : null}
+      {secret ? <Card><p>Save this token now. It will not be shown again.</p><code data-ui-private className="block break-all py-3">{secret}</code><div className="flex gap-2"><Button type="button" onClick={() => void copy(secret)}>Copy token</Button><Button type="button" variant="ghost" onClick={() => setSecret('')}>Done</Button></div></Card> : null}
       {!creating ? <Button type="button" onClick={() => { setSelected(['activity:read']); setDays(30); setCreating(true); }}>New token</Button> : <Card><form className="space-y-4" onSubmit={event => void create(event)}>
         <TextField id="integration-name" label="Name" value={name} maxLength={80} required onChange={e => setName(e.target.value)}/>
         <Select id="integration-expiry" label="Expires in" value={days} onChange={e => setDays(Number(e.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></Select>
         {scopes.map(scope => <SwitchField id={scope.value} key={scope.value} label={scope.label} checked={selected.includes(scope.value)} onChange={enabled => setSelected(previous => enabled ? [...previous, scope.value] : previous.filter(s => s !== scope.value))}/>)}
-        <p className="text-sm">Access: {selected.join(', ') || 'none'}. Expires in {days} days. No access to account administration or local machines.</p>
+        <p className="text-sm">Access: {selected.join(', ') || 'none'}. Expires in {days} days. {selected.includes('ui:control') ? 'UI control can perform owner actions, including settings and local-machine selection through the connected tab.' : 'No access to account administration or local machines.'}</p>
         <div className="flex gap-2"><Button type="submit" disabled={busy || selected.length === 0}>Create token</Button><Button type="button" variant="ghost" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button></div>
       </form></Card>}
       <details className="space-y-3" onToggle={event => { setTokensOpen(event.currentTarget.open); setPage(0); }}>

@@ -1,4 +1,4 @@
-export type IntegrationScopeDTO = 'activity:read' | 'conversations:read' | 'conversations:write' | 'runs:cancel';
+export type IntegrationScopeDTO = 'activity:read' | 'conversations:read' | 'conversations:write' | 'runs:cancel' | 'ui:control';
 export interface IntegrationTokenDTO {
     id: string;
     name: string;

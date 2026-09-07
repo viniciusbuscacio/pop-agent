@@ -1,3 +1,4 @@
+import { UiBridgeService } from './application/integrations/ui-bridge-service.js';
 import { RestApiSettingsService } from './application/integrations/rest-api-settings.js';
 import { LazyClientArtifacts } from './infrastructure/update/lazy-client-artifacts.js';
 import { RestClientService } from './application/integrations/rest-client-service.js';
@@ -710,6 +711,7 @@ const integrations = new IntegrationService(context.integrations, {config: new R
 hub.onIntegrationEvent = event => integrations.observe(event);
 for (const entry of context.runJournal.list()) integrations.observe({kind:'run-status',chatId:entry.chatId,runId:entry.runId,status:entry.state});
 const app = createApp({
+  uiBridge: new UiBridgeService(),
   integrations,
   restClients,
   auth,

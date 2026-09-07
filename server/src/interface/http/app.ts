@@ -1,3 +1,5 @@
+import type { UiBridgeService } from '../../application/integrations/ui-bridge-service.js';
+import { createUiControlRoutes } from './ui-control-routes.js';
 import type { ClientArtifactProvider } from '../../application/ports/client-artifacts.js';
 import type { RestClientService } from '../../application/integrations/rest-client-service.js';
 import type { IntegrationService } from '../../application/integrations/integration-service.js';
@@ -80,6 +82,7 @@ import type { ServerOnboardingService } from '../../application/onboarding/serve
 import { createOnboardingRoutes } from './onboarding-routes.js';
 
 export interface AppDeps {
+  uiBridge?: UiBridgeService;
   integrations?: IntegrationService;
   restClients?: RestClientService;
   auth: AuthService;
@@ -217,6 +220,7 @@ export function createApp(deps: AppDeps): Hono {
       ),
     ],
     guarded: [
+      ...(deps.uiBridge && deps.integrations ? [sessionGuarded(createUiControlRoutes(deps.uiBridge, deps.integrations))] : []),
       ...(deps.integrations === undefined ? [] : [sessionGuarded(createIntegrationRoutes(deps.integrations, deps.chats, deps.restClients))]),
       sessionGuarded(createAuthRoutes(deps)),
       ...(deps.onboarding === undefined
