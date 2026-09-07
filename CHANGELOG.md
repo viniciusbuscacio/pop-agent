@@ -2,19 +2,11 @@
 
 ## Unreleased
 
-- Present interactive installation as concise stages, with D/--verbose for detailed output, private redacted transcripts and safe terminal/password handling.
+## 0.2.78 — 2026-09-07
 
-- Remove the accent focus halo and native touch highlight from the composer Add button.
-
-- Remove the inner accent focus rectangle from the chat message input and label the visibility switch Show Thinking.
-
-- Position Add outside the message box on its right while keeping Send inside.
-
-- Keep the composer compact on one initial line, use smaller 32px actions and remove persistent mode labels from the message box.
-
-- Consolidate chat controls into Send and Add inside the message box, with mode switches, an in-place model page, attachments and voice actions.
-
-- Move batch release builds to the owner-managed Ubuntu 24.04 AMD64 Docker builder on ubuntu-home; reuse verified dependency/audio/gate caches, isolate build credentials and test temporary files, and publish verified bundles explicitly without hosted GitHub Actions.
+- Present interactive installation as concise English stages; press D or use --verbose for technical output. Retain private redacted transcripts, keep sudo password input separate, and restore the terminal on interruption.
+- Simplify the chat composer: compact Send inside the message box, Add outside on the right, Show Thinking and Plan mode switches, and an in-place model selection page. Remove input/Add accent focus halos.
+- Move batch release builds to the owner-managed Ubuntu 24.04 AMD64 Docker builder; reuse verified dependency/audio/gate caches and explicitly publish verified bundles without hosted GitHub Actions.
 
 ## 0.2.77 — 2026-09-07
 

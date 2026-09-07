@@ -41,13 +41,20 @@ if (mode === '--publish') {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
   const release = await fetch(`https://api.github.com/repos/${repository}/releases/tags/${tag}`, { headers });
   if (release.status !== 404) throw new Error(release.ok ? 'This version already has a release; never replace its bytes.' : `GitHub preflight failed: HTTP ${release.status}`);
+  const tagRef = await fetch(`https://api.github.com/repos/${repository}/git/ref/tags/${tag}`, { headers });
+  if (tagRef.status !== 404) throw new Error(tagRef.ok ? 'This tag already exists; never replace it.' : `GitHub tag preflight failed: HTTP ${tagRef.status}`);
   const repo = await fetch(`https://api.github.com/repos/${repository}`, { headers });
   if (!repo.ok) throw new Error(`GitHub repository access failed: HTTP ${repo.status}`);
   // Publication is an explicit batch operation. Never force-push or replace a tag.
   execFileSync('gh', ['auth', 'setup-git', '--hostname', 'github.com'], { stdio: 'inherit' });
-  execFileSync('git', ['push', `https://github.com/${repository}.git`, `${commit}:refs/heads/main`], { cwd: root, stdio: 'inherit' });
-  const notes = 'Built and validated on the owner-managed Ubuntu 24.04 AMD64 builder. The exact committed tree passed the full gate and the production installation probe. Minimal audio-only FFmpeg and Whisper are included; corresponding FFmpeg source is attached.';
-  execFileSync('gh', ['release', 'create', tag, '--repo', repository, '--target', commit, '--draft', '--title', `Pop Agent ${version}`, '--notes', notes], { stdio: 'inherit' });
+  const authorName = git(root, ['show', '-s', '--format=%cn', commit]);
+  const authorEmail = git(root, ['show', '-s', '--format=%ce', commit]);
+  execFileSync('git', ['-c', `user.name=${authorName}`, '-c', `user.email=${authorEmail}`, 'tag', '-a', tag, commit, '-m', `Pop Agent ${version}`], { cwd: root, stdio: 'inherit' });
+  execFileSync('git', ['push', '--atomic', `https://github.com/${repository}.git`, `${commit}:refs/heads/main`, `refs/tags/${tag}`], { cwd: root, stdio: 'inherit' });
+  const changes = readFileSync(join(root, 'CHANGELOG.md'), 'utf8').split(`## ${version} —`)[1]?.split('\n').slice(1).join('\n').split('\n## ')[0]?.trim();
+  if (!changes) throw new Error('Missing release changelog');
+  const notes = changes + '\n\n' + 'Built and validated on the owner-managed Ubuntu 24.04 AMD64 builder. The exact committed tree passed the full gate and the production installation probe. Minimal audio-only FFmpeg and Whisper are included; corresponding FFmpeg source is attached.';
+  execFileSync('gh', ['release', 'create', tag, '--repo', repository, '--verify-tag', '--draft', '--title', `Pop Agent ${version}`, '--notes', notes], { stdio: 'inherit' });
   execFileSync('gh', ['release', 'upload', tag, '--repo', repository, ...[...files].map(name => join(output, name))], { stdio: 'inherit' });
   execFileSync('gh', ['release', 'edit', tag, '--repo', repository, '--draft=false', '--latest'], { stdio: 'inherit' });
   console.log(`Published ${tag}. If upload fails, the draft remains unpublished for inspection; do not overwrite an existing published release.`);
