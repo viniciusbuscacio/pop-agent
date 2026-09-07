@@ -1,6 +1,8 @@
-import type { RestApiSettingsDTO, RestApiKeyDTO, RestClientDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
+import type { RestApiSettingsDTO, RestApiKeyDTO, RestApiAllowedIpsDTO, RestClientDTO, IntegrationReferenceDTO } from '@pop-agent/shared';
 import { apiRequest } from './api';
 export const integrationsService = {
+    allowedIps: () => apiRequest<RestApiAllowedIpsDTO>('/rest-api/allowed-ips'),
+    setAllowedIps: (entries: string[]) => apiRequest<RestApiAllowedIpsDTO>('/rest-api/allowed-ips', { method: 'PUT', body: { entries } }),
     accessKey: () => apiRequest<RestApiKeyDTO>('/rest-api/key'),
     rotateAccessKey: () => apiRequest<RestApiKeyDTO>('/rest-api/key', { method: 'POST' }),
     settings: readSettings,

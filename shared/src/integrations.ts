@@ -47,3 +47,5 @@ export interface RestApiSettingsDTO {
 
 /** Owner-only, never cached. The single server key remains valid until replaced. */
 export interface RestApiKeyDTO { secret: string }
+
+export interface RestApiAllowedIpsDTO { entries: string[] }

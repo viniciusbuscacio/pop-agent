@@ -1,3 +1,4 @@
+import { restClientIp } from './rest-client-ip.js';
 import { UI_ENDPOINTS } from './ui-control-routes.js';
 import { integrationTokenDto, restClientDto, integrationActivityDto, integrationChatDto } from './integration-dto.js';
 import { bodyLimit } from 'hono/body-limit';
@@ -98,6 +99,11 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
         app.delete('/rest-api/clients/:id', c => { clients.delete(c.req.param('id')); return c.json({ ok: true }); });
         app.post('/rest-api/clients/:id/call', async (c) => { const input = z.object({ operationId: z.string().max(64), query: z.record(z.string(), z.string()).optional(), body: z.unknown().optional() }).strict().parse(await c.req.json()); return c.json(await clients.call(c.req.param('id'), input.operationId, input.query, input.body, c.req.raw.signal)); });
     }
+    app.get('/rest-api/allowed-ips', c => c.json({ entries: service.allowedIps() }));
+    app.put('/rest-api/allowed-ips', async c => {
+        const { entries } = z.object({ entries: z.array(z.string().max(100)).min(1).max(100) }).strict().parse(await c.req.json());
+        return c.json({ entries: service.setAllowedIps(entries) });
+    });
     app.get('/rest-api/settings', c => c.json(service.settings()));
     app.patch('/rest-api/settings', async c => {
         const patch = z.object({ serverEnabled: z.boolean().optional(), clientEnabled: z.boolean().optional() }).strict().parse(await c.req.json());
@@ -125,7 +131,7 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
         const messages = chats.getMessages(id, { limit: limit.parse(c.req.query('limit')), ...(c.req.query('before') ? { before: c.req.query('before')! } : {}) }) ?? [];
         return c.json({ messages: messages.map((message): MessageDTO => ({ id: message.id, chatId: message.chatId, role: message.role, content: message.content, thinking: message.thinking, tools: message.tools.map(tool => ({ name: tool.name, status: tool.status, detail: tool.detail })), attachments: message.attachments.map(file => ({ name: file.name, type: file.type, dataUri: file.dataUri })), createdAt: message.createdAt })) });
     });
-    const mutate = (c: Context, scope: IntegrationScope, operation: string, payload: Record<string, unknown>, action: () => Record<string, unknown>) => service.mutate(bearer(c), scope, c.req.header('Idempotency-Key') ?? '', operation, payload, action);
+    const mutate = (c: Context, scope: IntegrationScope, operation: string, payload: Record<string, unknown>, action: () => Record<string, unknown>) => { service.assertAllowedIp(restClientIp(c)); return service.mutate(bearer(c), scope, c.req.header('Idempotency-Key') ?? '', operation, payload, action); };
     app.post('/integration/conversations', c => c.json(mutate(c, 'conversations:write', 'create', {}, () => service.createChat()), 202));
     app.post('/integration/conversations/:id/messages', async (c) => {
         requireScope(c, 'conversations:write');
@@ -147,6 +153,7 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
             stream.onAbort(() => { ended = true; release(); });
             // Independently revoke even if a slow consumer has blocked a write.
             const lease = setInterval(() => { try {
+                service.assertAllowedIp(restClientIp(c));
                 service.authorize(secret, 'activity:read');
             }
             catch {
@@ -157,6 +164,7 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
                 await stream.writeSSE({ event: 'ready', data: JSON.stringify({ cursor, resync: supplied === undefined }) });
                 while (!ended) {
                     try {
+                        service.assertAllowedIp(restClientIp(c));
                         service.authorize(secret, 'activity:read');
                     }
                     catch {

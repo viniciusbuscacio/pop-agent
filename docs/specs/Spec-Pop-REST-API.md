@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Agent → REST API presents REST API Server and REST API Client as two compact cards, matching the provider settings pattern. Each card has a persisted toggle and Edit; there is no Delete action. Editing opens configuration in the same pane, with Back to the overview. Detailed server reference and extended examples are collapsed by default; a concise Agent instructions block remains visible and copyable. The shell footer, including Settings, remains available on desktop and mobile. Server accepts external integrations through one owner-managed access key; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
+Agent → REST API presents REST API Server and REST API Client as two compact cards, matching the provider settings pattern. Each card has a persisted toggle and Edit; there is no Delete action. Editing opens configuration in the same pane, with Back to the overview. A concise Agent instructions block remains visible and copyable. Download OpenAPI is a standalone button; the extended reference/examples section and port/HTTPS cards are not shown. The shell footer, including Settings, remains available on desktop and mobile. Server accepts external integrations through one owner-managed access key; Clients lets Pop invoke explicitly configured public HTTPS REST operations. Neither role replaces MCP or A2A. This remains a single-owner installation.
 
 ## Reuse map
 
@@ -35,6 +35,14 @@ Client rejects new outbound calls before network access with 503
 `rest_api_client_disabled`; `rest_clients_list` returns no available operations.
 Existing client configuration, enabled flags and encrypted credentials remain
 stored. Already dispatched requests may complete.
+
+## Allowed IP addresses
+
+The Server editor has an Allowed IP addresses table with Add and Remove, accepting IPv4, IPv6 and CIDR ranges. The default is exactly `127.0.0.1/32`. Owner-only GET/PUT `/v1/rest-api/allowed-ips` reads/replaces `{entries: string[]}` independently of module switches. Values are trimmed, validated and deduplicated; one to 100 entries are required, and the last row cannot be removed. Failed saves retain the displayed list and input. Adding/removing takes effect immediately, with no server restart.
+
+The policy applies to `/v1/integration/*` and owner-equivalent UI automation (`/v1/ax`, session discovery, state, screenshots and UI commands). Denied sources receive 403 `ip_not_allowed`; unknown source addresses fail closed under a restricted policy. The normal web app, owner configuration and owner-only tab registration/poll/ack/disconnect transport remain accessible for recovery. Existing SSE streams recheck once per second. Queued UI commands recheck before delivery and before returning data; conversation mutations recheck after parsing their input.
+
+Client IP comes from the Node socket. Forwarding headers are ignored for remote socket peers. Only loopback peers are trusted as local reverse proxies (including the supported Tailscale Serve deployment); the last `X-Forwarded-For` value is used, while malformed forwarded addresses fail closed. Proxies on other machines are not implicitly trusted. A Tailscale caller is therefore checked using its real source address, not the loopback proxy address. The access key remains mandatory for every integration call. The policy does not change PWA, A2A, TLS, ports or Tailscale ACLs.
 
 ## Single access key
 
@@ -94,4 +102,4 @@ State lists visible controls with testid, index, role, name and disabled state. 
 
 Screenshots require an independent user gesture and browser `getDisplayMedia` consent. The captured surface is exactly the tab/window/screen selected by the user; it is not a synthetic DOM reconstruction. PNGs scale to at most 1920 pixels wide and 3.5 MB base64. The transport caps replies at 4 MiB. No captures or screen contents are persisted or logged. Sharing ends with track stop, disconnect or page close; unsupported browsers return a clear message. JSON discovery remains available without screen sharing. The settings UI no longer exposes a sharing action; automatic capture requires a separate browser integration and is not implied by enabling the REST server.
 
-The Server editor follows the go-notepad layout with Start/Stop, persisted enabled-state status, address, connection port, HTTPS and access-control cards, Agent instructions and a single Access key. No separate UI-access or screenshot-sharing panel is shown. Port/HTTPS describe the current app origin; this screen does not change the shared listener, TLS or tailnet policy. No independent API autostart switch is shown: the existing enabled state persists across restarts. Copy instructions is disabled until a key is available, then includes the current persistent key and supported operations. Detailed reference remains collapsed.
+The Server editor follows the go-notepad layout with Start/Stop, persisted enabled-state status, address and access-control cards, Allowed IP addresses, Agent instructions, a single Access key and a standalone Download OpenAPI button. No separate UI-access or screenshot-sharing panel is shown. This screen does not change the shared listener, TLS or tailnet policy. No independent API autostart switch is shown: the existing enabled state persists across restarts. Copy instructions is disabled until a key is available, then includes the current persistent key and supported operations. The extended reference/examples section is not rendered; the download retains the full OpenAPI contract.

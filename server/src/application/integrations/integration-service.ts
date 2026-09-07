@@ -1,3 +1,4 @@
+import { allowsIp } from '../../domain/integrations/ip-allowlist.js';
 import type { SecretsRepo } from '../ports/secrets-repo.js';
 import type { RestApiSettingsService, RestApiSettings } from './rest-api-settings.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -69,6 +70,11 @@ export class IntegrationService {
         const key = this.accessKey();
         if (key && this.authenticate(key).id === id) throw new IntegrationError(409, 'replace_api_key');
         this.repo.revoke(id, this.deps.now()); this.repo.audit(id, 'revoke', '', this.deps.now());
+    }
+    allowedIps(): string[] { return this.deps.config.allowedIps(); }
+    setAllowedIps(entries: string[]): string[] { return this.deps.config.setAllowedIps(entries); }
+    assertAllowedIp(address: string | undefined): void {
+        if (!allowsIp(this.allowedIps(), address)) throw new IntegrationError(403, 'ip_not_allowed');
     }
     settings(): RestApiSettings { return this.deps.config.get(); }
     configure(patch: Partial<RestApiSettings>): RestApiSettings {

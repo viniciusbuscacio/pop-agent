@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplify REST Server settings by removing port/HTTPS and extended examples, keeping Download OpenAPI visible, and adding an enforced IP/CIDR allowlist defaulting to 127.0.0.1/32.
+
 - Initialize the REST access key automatically before serving or enabling the API, reuse it across restarts, and prevent deleting the current key without replacement.
 
 - Replace REST Server token management with one persistent encrypted access key and ready-to-copy agent instructions; generating a key invalidates all previous tokens.

@@ -1,3 +1,4 @@
+import { RestAllowedIps } from './rest-allowed-ips';
 import { useEffect, useState } from 'react';
 import type { IntegrationReferenceDTO } from '@pop-agent/shared';
 import { integrationsService } from '../services/integrations';
@@ -10,9 +11,6 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
     const [error, setError] = useState('');
     const [status, setStatus] = useState('');
     const origin = window.location.origin;
-    const base = origin + '/v1';
-    const secure = window.location.protocol === 'https:';
-    const port = window.location.port || (secure ? '443' : '80');
     const instructions = [
       `Base URL: ${origin}`,
       `Header:   Authorization: Bearer ${secret || '<GENERATE_ACCESS_KEY>'}`,
@@ -67,14 +65,9 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
           <div className="min-w-0"><h2 className="font-medium">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
           <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button><Button type="button" size="sm" variant="ghost" disabled={!enabled} onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div>
         </Card>
-        <Card className="flex items-center justify-between gap-4">
-          <div><h2 className="font-medium">Connection port</h2><p className="text-sm text-[var(--muted)]">Shared with the Pop app at this address.</p></div><span className="font-mono">{port}</span>
-        </Card>
-        <Card className="flex items-center justify-between gap-4">
-          <div><h2 className="font-medium">HTTPS</h2><p className="text-sm text-[var(--muted)]">Managed by your server connection. Remote access requires HTTPS.</p></div><span className={`shrink-0 text-sm ${secure ? 'text-[var(--success)]' : 'text-[var(--muted)]'}`}>{secure ? 'Enabled' : 'Not in use'}</span>
-        </Card>
         <Card><h2 className="font-medium">Access control</h2><p className="text-sm text-[var(--muted)]">One access key authorizes all REST API operations, including conversations and UI control. It stays valid until you generate a new key. Network access follows your Tailscale and server configuration.</p></Card>
       </div>
+      <RestAllowedIps />
       <section className="space-y-3" aria-labelledby="rest-agent-instructions">
         <div className="flex items-center justify-between gap-3"><h2 id="rest-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="sm" data-testid="rest-copy-instructions" disabled={!secret || busy} onClick={() => void copy(instructions)}>Copy instructions</Button></div>
         <Card><pre data-ui-private={secret ? true : undefined} data-testid="rest-agent-instructions" className="overflow-x-auto text-xs leading-relaxed">{instructions}</pre></Card>
@@ -89,19 +82,6 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
         </div>
         <p className="text-sm text-[var(--muted)]">A key is created automatically. Generating a new key replaces all previous keys and tokens immediately. Update the instructions in every connected integration.</p>
       </Card>
-      <details className="space-y-4"><summary className="cursor-pointer">API reference and examples</summary><Button type="button" variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Method / path</th><th>Scope</th><th>Behavior</th></tr></thead><tbody>{reference?.endpoints.map(e => <tr key={e.method + e.path}><td className="py-2 font-mono">{e.method.toUpperCase()} {e.path}</td><td>{e.scope}</td><td>{e.summary}</td></tr>)}</tbody></table></div>
-      <Card><h3 className="font-medium">Read activity</h3><pre className="overflow-x-auto py-3 text-sm">{`# Set POP_API_TOKEN in your external client environment.
-curl -H "Authorization: Bearer $POP_API_TOKEN" "${base}/integration/activity"
-
-# PowerShell
-Invoke-RestMethod '${base}/integration/activity' -Headers @{ Authorization = "Bearer $env:POP_API_TOKEN" }`}</pre></Card>
-      <Card><h3 className="font-medium">Create a conversation and send a message</h3><pre className="overflow-x-auto py-3 text-sm">{`# Use the access key. Replace CHAT_ID with the returned chatId.
-curl -X POST -H "Authorization: Bearer $POP_API_TOKEN" -H "Idempotency-Key: create-001" "${base}/integration/conversations"
-curl -X POST -H "Authorization: Bearer $POP_API_TOKEN" -H "Idempotency-Key: send-001" -H "Content-Type: application/json" -d '{"text":"Hello"}' "${base}/integration/conversations/CHAT_ID/messages"`}</pre></Card>
-      <p className="text-sm">Conversation and cancellation commands require Idempotency-Key (1–128 letters, digits, dots, underscores, colons or hyphens). Retries with the same token, key and payload return the original result for 24 hours. Use a new key for each new operation. Messages sent during a run become follow-ups, not steering; their queueId appears on the eventual run snapshot. Local access is not inherited.</p>
-      <p className="text-sm">SSE: GET /integration/events with the bearer header. Resume with Last-Event-ID; ready/resync means refresh the REST snapshot. Replay retains up to 1,000 events for one hour. Heartbeats show connectivity, not work progress. Replaced keys disconnect within one second. Limit: 120 requests/minute and three streams per token; retry after 60 seconds.</p>
-      <p className="text-sm">Activity history is retained for 30 days. A quiet run is not necessarily stuck. Subagent activity currently identifies the delegated tool; detailed output remains in the authorized conversation. Configure outbound operations in REST API Client.</p>
-      </details>
+      <Button type="button" variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
   </div>;
 }

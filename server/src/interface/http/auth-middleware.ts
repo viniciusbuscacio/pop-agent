@@ -1,3 +1,4 @@
+import { isRestApiOperation, restClientIp } from './rest-client-ip.js';
 import type { IntegrationService } from '../../application/integrations/integration-service.js';
 import type { MiddlewareHandler } from 'hono';
 import { SESSION_TOKEN_HEADER } from '@pop-agent/shared';
@@ -26,6 +27,11 @@ export function authMiddleware(auth: AuthService, integrations?: IntegrationServ
     const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
     if (token.length === 0) {
       return apiError(c, 401, 'invalid_session', 'This request needs a valid session token.');
+    }
+
+    if (integrations && isRestApiOperation(c.req.path, c.req.method)) {
+      try { integrations.assertAllowedIp(restClientIp(c)); }
+      catch { return apiError(c, 403, 'ip_not_allowed', 'This IP address is not allowed to use REST API Server.'); }
     }
 
     if (token.startsWith('popi_') && integrations !== undefined && c.req.path.startsWith('/v1/integration/')) {

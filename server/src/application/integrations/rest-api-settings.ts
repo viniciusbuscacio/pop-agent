@@ -1,3 +1,4 @@
+import { DEFAULT_ALLOWED_IPS, validateAllowedIps } from '../../domain/integrations/ip-allowlist.js';
 import type { SettingsRepo } from '../ports/settings-repo.js';
 export interface RestApiSettings {
   serverEnabled: boolean;
@@ -11,6 +12,8 @@ export class RestApiSettingsService {
     // Preserve existing installations' behavior when no switch has been saved.
     return { serverEnabled: saved?.serverEnabled ?? true, clientEnabled: saved?.clientEnabled ?? true };
   }
+  allowedIps(): string[] { return this.repo.get<string[]>('rest-api.allowed-ips') ?? [...DEFAULT_ALLOWED_IPS]; }
+  setAllowedIps(entries: string[]): string[] { const value = validateAllowedIps(entries); this.repo.set('rest-api.allowed-ips', value); return value; }
   update(patch: Partial<RestApiSettings>): RestApiSettings {
     const value = { ...this.get(), ...patch };
     this.repo.set('rest-api', value);

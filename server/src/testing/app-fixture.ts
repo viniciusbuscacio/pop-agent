@@ -562,6 +562,15 @@ export function createTestApp(
     cliPack: CLI_PACK,
   });
 
+  // In-process REST tests have no Node socket; model a direct local caller by default.
+  // An explicit environment overrides this for proxy/remote-address acceptance tests.
+  const request = app.request.bind(app);
+  app.request = (input, init, env, execution) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const rest = /\/v1\/(integration\/|ui\/|ax(?:$|\?))/u.test(url);
+    return request(input, init, env ?? (rest ? { incoming: { socket: { remoteAddress: '127.0.0.1' } } } : undefined), execution);
+  };
+
   return {
     controlLog,
     integrations,

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RestServerPanel } from './rest-server-panel';
 import { integrationsService } from '../services/integrations';
-vi.mock('../services/integrations', () => ({ integrationsService: {
+vi.mock('../services/integrations', () => ({ integrationsService: { allowedIps: vi.fn(async () => ({ entries: ['127.0.0.1/32'] })), setAllowedIps: vi.fn(async entries => ({ entries })),
   accessKey: vi.fn(), rotateAccessKey: vi.fn(), reference: vi.fn(async () => ({ endpoints: [], openapi: {} })),
 } }));
 const copy = vi.fn(async () => undefined);
@@ -19,6 +19,10 @@ it('loads the saved key after reopening and copies complete instructions with no
   fireEvent.click(screen.getByTestId('rest-copy-instructions'));
   expect(copy).toHaveBeenCalledWith(expect.stringContaining('Bearer popi_saved_key'));
   expect(screen.queryByText('API tokens')).toBeNull();
+  expect(screen.queryByText('API reference and examples')).toBeNull();
+  expect(screen.queryByText('Connection port')).toBeNull();
+  expect(screen.queryByText('HTTPS', {exact:true})).toBeNull();
+  expect(screen.getByRole('button', {name:'Download OpenAPI'})).toBeTruthy();
   expect(screen.getByTestId('rest-agent-instructions').hasAttribute('data-ui-private')).toBe(true);
   page.unmount(); render(<RestServerPanel enabled onToggle={() => undefined} />);
   await waitFor(() => expect(screen.getByTestId('rest-agent-instructions').textContent).toContain('Bearer popi_saved_key'));

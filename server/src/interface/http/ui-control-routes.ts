@@ -1,3 +1,4 @@
+import { restClientIp } from './rest-client-ip.js';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
@@ -38,10 +39,13 @@ export function createUiControlRoutes(bridge: UiBridgeService, integrations: Int
         if (kind === 'input' && body.value === undefined || kind === 'key' && body.key === undefined) return apiError(c, 400, 'missing_field', 'Command value is required.');
         const { sessionId, ...command } = body;
         if (prefix.startsWith('/integration')) integrations.recordUiAccess((c.req.header('Authorization') ?? '').replace(/^Bearer /u, ''), kind, sessionId);
+        const callerIp = restClientIp(c);
         const result = await bridge.dispatch(sessionId, { ...command, kind }, () => {
+          integrations.assertAllowedIp(callerIp);
           if (!integrations.settings().serverEnabled) throw new IntegrationError(503, 'rest_api_server_disabled');
           if (prefix.startsWith('/integration')) integrations.authorize((c.req.header('Authorization') ?? '').replace(/^Bearer /u, ''), 'ui:control');
         });
+        integrations.assertAllowedIp(callerIp);
         if (prefix.startsWith('/integration')) integrations.authorize((c.req.header('Authorization') ?? '').replace(/^Bearer /u, ''), 'ui:control');
         if (!integrations.settings().serverEnabled) return apiError(c, 503, 'rest_api_server_disabled', 'REST API Server is disabled.');
         const reply = result as { error?: { code: string; message: string }; png?: string };
