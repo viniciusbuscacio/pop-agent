@@ -242,3 +242,5 @@ never grants extra authority. Incoming chats are titled A2A and their messages
 display Remote user → Pop, Remote agent → Pop or A2A peer → Pop; metadata is
 marked as reported by the authenticated peer. Unknown history stays unknown.
 The message DTO carries only this finite label, never bearer keys or source IPs.
+
+Incoming A2A message bubbles use the theme notice surface, border and screen text colors, distinct from local-owner accent bubbles. Authorship labels remain visible so color is not the only indication of origin.
