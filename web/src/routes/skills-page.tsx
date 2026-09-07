@@ -1,3 +1,5 @@
+import { ActionSurface } from '../ui/action-surface';
+import { useAgentContextActions } from '../lib/agent-context-actions';
 import { Button, Card } from '../ui/controls';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect } from 'react';
@@ -15,6 +17,7 @@ import { useSkillsStore } from '../store/skills';
  * is the screen, so this pane only mounts once a skill is open.
  */
 export function SkillsPage() {
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const { slug } = useParams();
   const location = useLocation();
@@ -43,17 +46,17 @@ export function SkillsPage() {
         <SidebarNav />
       </div>
       {slug === undefined && !isNew ? (
-        <div className="p-6">
+        <ActionSurface actions={[{id:'new',label:t('context.new'),run:()=>{void navigate('/skills/new');}},{id:'refresh',label:t('context.refresh'),run:()=>reload()}]} ><div className="p-6">
           <AgentPageHeader title={t('agent.skillsTitle')} description={t('agent.skillsDescription')} />
           {skills === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : skills.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('skills.empty.body')}</p> :
-            <div className="grid gap-3">{skills.map(entry => <Card key={entry.slug} className="flex items-center justify-between gap-4">
+            <div className="grid gap-3">{skills.map(entry => <ActionSurface key={entry.slug} actions={contextActions.skill(entry)}><Card className="flex items-center justify-between gap-4 pr-10">
               <div className="min-w-0">
                 <div className="break-words font-medium">{entry.name}</div>
                 <p className="text-sm text-[var(--muted)]">{entry.description}</p>
               </div>
               <Button variant="ghost" onClick={() => void navigate('/skills/' + encodeURIComponent(entry.slug))}>{t('common.edit')}</Button>
-            </Card>)}</div>}
-        </div>
+            </Card></ActionSurface>)}</div>}
+        </div></ActionSurface>
       ) : isNew || skill !== undefined ? (
         <div className="w-full p-6">
           <SkillEditor

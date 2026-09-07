@@ -1,3 +1,5 @@
+import { ActionSurface } from '../ui/action-surface';
+import { useAgentContextActions } from '../lib/agent-context-actions';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -20,6 +22,7 @@ export function McpPage() {
   const { id } = useParams();
   const location = useLocation();
   const isNew = location.pathname === '/mcp/new' || id === 'new';
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const servers = useMcpStore((state) => state.servers);
   const loadError = useMcpStore((state) => state.error);
@@ -50,7 +53,7 @@ export function McpPage() {
 
   function listView() {
     return (
-      <div className="p-6">
+      <ActionSurface actions={[{id:'new',label:t('context.new'),run:()=>{void navigate('/mcp/new');}},{id:'refresh',label:t('context.refresh'),run:()=>reload()}]} ><div className="p-6">
         <AgentPageHeader title="MCP" description="Connect and manage MCP servers." />
 
         {loadError !== undefined || actionError !== undefined ? (
@@ -64,7 +67,7 @@ export function McpPage() {
         ) : (
           <div className="grid gap-3">
             {servers.map((server) => (
-              <Card key={server.id} className="flex items-center justify-between gap-4">
+              <ActionSurface key={server.id} actions={contextActions.mcp(server)}><Card className="flex items-center justify-between gap-4 pr-10">
                 <div>
                   <div className="font-medium">{server.name}</div>
                   <div className="text-sm text-[var(--muted)]">
@@ -86,14 +89,14 @@ export function McpPage() {
                     Edit
                   </Button>
                 </div>
-              </Card>
+              </Card></ActionSurface>
             ))}
             {servers.length === 0 ? (
               <p className="py-8 text-center text-sm text-[var(--muted)]">No MCP servers yet.</p>
             ) : null}
           </div>
         )}
-      </div>
+      </div></ActionSurface>
     );
   }
 

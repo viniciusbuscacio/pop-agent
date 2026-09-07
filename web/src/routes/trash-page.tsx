@@ -1,3 +1,4 @@
+import { ActionSurface } from '../ui/action-surface';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GarbageEntryDTO } from '@pop-agent/shared';
@@ -126,6 +127,10 @@ export function TrashPage() {
                 data-testid="trash-row"
                 className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
               >
+                <ActionSurface className="min-w-0 flex-1 pr-8" actions={busy === entry.name ? [] : [
+                  {id:'restore',label:t('trash.restore'),run:()=>restore(entry)},
+                  {id:'purge',label:t('trash.purge'),danger:true,run:()=>purge(entry)},
+                ]}>
                 <div className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                     {/* The drawn icon, never an emoji (permanent house veto). */}
@@ -136,6 +141,7 @@ export function TrashPage() {
                     {entry.originalPath} · {t('trash.daysLeft', { days: daysLeft(entry.purgeAt) })}
                   </span>
                 </div>
+                </ActionSurface>
                 <Button
                   type="button"
                   variant="ghost"

@@ -1,3 +1,4 @@
+import { ActionSurface } from '../ui/action-surface';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { RestClientDTO, RestOperationDTO } from '@pop-agent/shared';
 import { integrationsService } from '../services/integrations';
@@ -11,7 +12,7 @@ export function RestClientsPanel({ enabled = true }: { enabled?: boolean }) {
     useEffect(() => { void reload().catch(() => setError('Could not load REST clients.')); }, []);
     if (editing !== undefined) return <ClientEditor key={editing?.id ?? 'new'} client={editing ?? undefined} onCancel={() => setEditing(undefined)} onSaved={async () => { setEditing(undefined); try { await reload(); } catch { setError('Client saved. Reopen this page to reload the list.'); } }} />;
     return <div className="space-y-4"><p className="text-sm text-[var(--muted)]">Let Pop call other REST services through operations you configure. Credentials stay on the server. Only public HTTPS destinations are supported; private networks and redirects are blocked.</p>{error ? <p role="alert">{error}</p> : null}<Button type="button" onClick={() => setEditing(null)}>New client</Button>
-    {clients.map(client => <Card key={client.id}><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-medium">{client.name}</h3><p className="break-all text-sm">{client.baseUrl}</p><p className="text-sm">{client.enabled ? 'Enabled' : 'Disabled'} · {client.operations.length} operations · {client.hasCredential ? 'Credential stored' : 'No credential'}</p></div><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(client)}>Edit</Button></div><ClientCall client={client} enabled={enabled}/></Card>)}
+    {clients.map(client => <ActionSurface key={client.id} actions={[{id:"edit",label:"Edit",run:()=>setEditing(client)}]}><Card className="pr-10"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-medium">{client.name}</h3><p className="break-all text-sm">{client.baseUrl}</p><p className="text-sm">{client.enabled ? 'Enabled' : 'Disabled'} · {client.operations.length} operations · {client.hasCredential ? 'Credential stored' : 'No credential'}</p></div><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(client)}>Edit</Button></div><ClientCall client={client} enabled={enabled}/></Card></ActionSurface>)}
   </div>;
 }
 function ClientEditor({ client, onCancel, onSaved }: {

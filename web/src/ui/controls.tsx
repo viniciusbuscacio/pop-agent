@@ -1,3 +1,4 @@
+import { fitMenu, type MenuAnchor } from '../lib/context-menu';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   ButtonHTMLAttributes,
@@ -768,7 +769,7 @@ export function IconButton({
 }
 
 /** The shared visual shell for action menus; positioning remains the caller's layout concern. */
-export function Menu({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+export function Menu({ className = '', ...props }: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       role="menu"
@@ -877,11 +878,15 @@ export function MenuItem({
   onClick,
   testId,
   danger = false,
+  disabled = false,
+  shortcut,
 }: {
   label: string;
   onClick: () => void;
   testId: string;
   danger?: boolean;
+  disabled?: boolean;
+  shortcut?: string;
 }) {
   return (
     <button
@@ -889,11 +894,52 @@ export function MenuItem({
       role="menuitem"
       data-testid={testId}
       onClick={onClick}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${
-        danger ? 'text-[var(--danger)]' : ''
+      disabled={disabled}
+      className={`flex items-center justify-between gap-6 px-4 py-1.5 text-left whitespace-normal break-words disabled:opacity-50 hover:bg-[var(--hover-overlay)] ${
+        danger ? 'mt-1 border-t border-[var(--border)] text-[var(--danger)]' : ''
       }`}
     >
-      {label}
+      <span>{label}</span>{shortcut ? <span className="shrink-0 text-xs text-[var(--muted)]">{shortcut}</span> : null}
     </button>
   );
+}
+
+/** A single shared surface for cursor menus and their visible button equivalent. */
+export function ContextMenu({ anchor, onClose, children, ...props }: HTMLAttributes<HTMLDivElement> & { anchor?: MenuAnchor | undefined; onClose: () => void }) {
+  const element = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({left: 8, top: 8});
+  const closeRef = useRef(onClose); closeRef.current = onClose;
+  useLayoutEffect(() => {
+    const menu = element.current;
+    if (!menu) return;
+    document.dispatchEvent(new Event('pop-context-open'));
+    const otherMenu = () => closeRef.current();
+    document.addEventListener('pop-context-open', otherMenu);
+    const trigger = anchor?.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : undefined);
+    const box = trigger?.getBoundingClientRect();
+    const size = menu.getBoundingClientRect();
+    setPosition(fitMenu(anchor?.x ?? box?.left ?? 8, anchor?.y ?? box?.bottom ?? 8, size.width, size.height, window.innerWidth, window.innerHeight));
+    menu.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    function close(restore = false) { closeRef.current(); if (restore && trigger?.isConnected) trigger.focus({preventScroll:true}); }
+    function outside(event: PointerEvent) { if (!menu?.contains(event.target as Node)) close(); }
+    function key(event: globalThis.KeyboardEvent) {
+      const items = Array.from(menu!.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)'));
+      const index = items.indexOf(document.activeElement as HTMLElement);
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); close(true); }
+      else if (event.key === 'Tab') { close(); }
+      else if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length-1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      }
+    }
+    function moved(event: Event) { if (!(event.target instanceof Node) || !menu?.contains(event.target)) close(); }
+    const blurred = () => close();
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', key, true);
+    document.addEventListener('scroll', moved, true);
+    window.addEventListener('resize', blurred); window.addEventListener('blur', blurred);
+    return () => { document.removeEventListener('pop-context-open', otherMenu); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', key, true); document.removeEventListener('scroll', moved, true); window.removeEventListener('resize', blurred); window.removeEventListener('blur', blurred); };
+  }, [anchor]);
+  return createPortal(<Menu {...props} ref={element} data-context-menu="true" style={{...position, position:'fixed', zIndex:100, right:'auto', bottom:'auto', width:'max-content', maxWidth:'calc(100vw - 16px)', maxHeight:'calc(100dvh - 16px)', overflowY:'auto'}} onPointerDown={event=>event.stopPropagation()} onContextMenu={event=>{event.preventDefault();event.stopPropagation();}}>{children}</Menu>, document.body);
 }

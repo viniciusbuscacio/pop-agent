@@ -56,6 +56,7 @@ export function Composer({
   onSetExecutionMode,
   onSetModel,
   modelPickerRequest = 0,
+  quoteRequest,
 }: {
   chatId: string;
   busy: boolean;
@@ -85,6 +86,7 @@ export function Composer({
   onSetExecutionMode: (executionMode: ExecutionMode) => Promise<void>;
   onSetModel: (model: string, provider: string) => Promise<void>;
   modelPickerRequest?: number;
+  quoteRequest?: {chatId:string; text:string; id:string};
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
@@ -131,9 +133,10 @@ export function Composer({
 
   useEffect(() => {
     try {
-      setText(localStorage.getItem(storageKey) ?? '');
+      const saved=localStorage.getItem(storageKey) ?? '';
+      setText(saved);textRef.current=saved;
     } catch {
-      setText('');
+      setText('');textRef.current='';
     }
     historyRef.current = readComposerHistory(chatId);
     historyIndexRef.current = undefined;
@@ -161,6 +164,17 @@ export function Composer({
     queueMicrotask(() => area.current?.focus());
   }, [editRequest]);
 
+  const quotedRequest = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!quoteRequest || quoteRequest.chatId !== chatId || quotedRequest.current === quoteRequest.id) return;
+    quotedRequest.current = quoteRequest.id;
+    const quote = quoteRequest.text.split('\n').map(line=>`> ${line}`).join('\n');
+    const next = `${textRef.current}${textRef.current ? '\n\n' : ''}${quote}\n\n`;
+    persist(next);textRef.current=next;
+    setMentionQuery(undefined);setSlashQuery(undefined);setSlashMode('commands');
+    queueMicrotask(()=>{const field=area.current;if(field){field.focus();field.setSelectionRange(next.length,next.length);}});
+  }, [chatId, quoteRequest]);
+
   useEffect(() => {
     const element = area.current;
     if (element === null) return;
@@ -177,7 +191,7 @@ export function Composer({
   }, [text]);
 
   function persist(value: string): void {
-    setText(value);
+    setText(value);textRef.current=value;
     try {
       if (value.length > 0) localStorage.setItem(storageKey, value);
       else localStorage.removeItem(storageKey);

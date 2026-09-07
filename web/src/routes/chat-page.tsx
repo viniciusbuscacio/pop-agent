@@ -1,5 +1,8 @@
+import { menuAnchor, menuKeyboard, nativeContext, selectionIn, type MenuAnchor } from '../lib/context-menu';
+import { useNotificationsStore } from '../store/notifications';
+import type { ContextAction } from '../ui/action-surface';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BackButton, Pressable } from '../ui/controls';
+import { BackButton, Pressable, ContextMenu, MenuItem } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -38,6 +41,9 @@ export function ChatPage() {
   const setModel = useChatStore((state) => state.setModel);
   const setExecutionMode = useChatStore((state) => state.setExecutionMode);
   const createChat = useChatStore((state) => state.createChat);
+  const [context, setContext] = useState<{ anchor: MenuAnchor; actions: ContextAction[] }>();
+  const [quoteRequest, setQuoteRequest] = useState<{chatId:string; text:string; id:string}>();
+  const notify = useNotificationsStore(state=>state.notify);
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
@@ -67,6 +73,7 @@ export function ChatPage() {
     // On mount and on every chat change, the stored history replaces whatever
     // was on screen: a reload mid-run must not show the answer twice.
     void openChat(chatId);
+    setContext(undefined);setQuoteRequest(undefined);
     setShowJump(false);
     setEditingPendingId(undefined);
     setQueueActionError(false);
@@ -138,14 +145,16 @@ export function ChatPage() {
   // byte-for-byte stable until history or resend availability actually changes,
   // so React never even revisits old Markdown while the answer grows.
   const idle = live === undefined;
+  useEffect(()=>setContext(undefined),[chatId,idle,pending.length,compacting]);
   const settledTranscript = useMemo(
     () =>
       (messages ?? []).map((message, index, history) => {
         const source = resendSource(history, index);
         const canResend = source !== undefined && idle && pending.length === 0;
         return (
+          <div key={message.id} data-context-message={message.id} className="relative min-w-0 pr-8">
+          <Pressable type="button" data-testid="message-context-trigger" onPointerDown={event=>event.preventDefault()} aria-label={t('context.actions')} className="absolute right-0 top-0 rounded px-2 text-[var(--muted)]">⋯</Pressable>
           <ChatMessage
-            key={message.id}
             message={message}
             resending={resendingId === message.id}
             {...(!canResend
@@ -162,6 +171,7 @@ export function ChatPage() {
               ? {}
               : { onChangeModel: () => setModelPickerRequest((request) => request + 1) })}
           />
+          </div>
         );
       }),
     [chatId, idle, messages, pending.length, resendingId, send],
@@ -271,11 +281,35 @@ export function ChatPage() {
     setShowJump(false);
   }
 
+  function openContext(event: React.MouseEvent<HTMLElement>, background = false): void {
+    if (!background && nativeContext(event.target)) return;
+    if (!background && (event.target as Element).closest('[data-testid="message-assistant"], [data-testid="message-user"], [data-testid="message-system"]') && !(event.target as Element).closest('[data-context-message]')) return;
+    event.preventDefault();event.stopPropagation();
+    const root = background ? null : (event.target as Element).closest<HTMLElement>('[data-context-message]');
+    const index = (messages ?? []).findIndex(message=>message.id === root?.dataset.contextMessage);
+    const message = messages?.[index];
+    const actions: ContextAction[] = [];
+    if (message && root) {
+      const selection = selectionIn(root);
+      const text = selection || message.content;
+      if (text) {
+        actions.push({id:'copy',label:t(selection ? 'context.copySelection':'context.copyMessage'),run:()=>navigator.clipboard.writeText(text)});
+        if (!compacting && !editingPendingId) actions.push({id:'quote',label:t('context.quote'),run:()=>setQuoteRequest({chatId,text,id:crypto.randomUUID()})});
+      }
+      const source = resendSource(messages ?? [], index);
+      if (!selection && source && idle && pending.length===0 && !compacting && !resendingId) actions.push({id:'resend',label:t('chat.resend'),run:async()=>{setResendingId(message.id);try{await send(chatId,source.content,source.attachments);}finally{setResendingId(undefined);}}});
+    } else {
+      actions.push({id:'new-chat',label:t('shell.newChat'),run:async()=>{const created=await createChat();void navigate(`/chat/${created.id}`);}});
+    }
+    if (actions.length) setContext({anchor:menuAnchor(event),actions});
+  }
+
   return (
     <>
       <header className="flex items-center gap-2 border-b border-[var(--border)] p-3">
         <BackButton data-testid="chat-back" aria-label={t('common.back')} onClick={() => void navigate('/')} className="md:hidden" />
         <h1 className="min-w-0 flex-1 truncate font-medium">{chat?.title ?? t('app.loading')}</h1>
+        <Pressable type="button" aria-label={t('context.actions')} data-testid="chat-context-trigger" className="rounded px-2 py-1 text-[var(--muted)]" onClick={event=>openContext(event,true)}>⋯</Pressable>
 
       </header>
 
@@ -285,6 +319,9 @@ export function ChatPage() {
           onScroll={onScroll}
           onWheel={onWheel}
           data-testid="chat-scroller"
+          onKeyDown={menuKeyboard}
+          onContextMenu={event=>openContext(event)}
+          onClick={event=>{if((event.target as Element).closest('[data-testid="message-context-trigger"]'))openContext(event);}}
           className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         >
@@ -463,7 +500,9 @@ export function ChatPage() {
         ) : null}
       </div>
 
+      {context ? <ContextMenu anchor={context.anchor} onClose={()=>setContext(undefined)}>{context.actions.map(action=><MenuItem key={action.id} testId={`context-${action.id}`} label={action.label} onClick={()=>{setContext(undefined);void Promise.resolve().then(action.run).catch(()=>notify(t('context.failed')));}} />)}</ContextMenu> : null}
       <Composer
+        {...(quoteRequest ? {quoteRequest} : {})}
         chatId={chatId}
         busy={live !== undefined}
         locked={compacting}

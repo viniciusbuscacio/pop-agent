@@ -1,3 +1,7 @@
+import { MenuItem } from '../ui/controls';
+import { ActionSurface } from '../ui/action-surface';
+import { useAgentContextActions } from '../lib/agent-context-actions';
+import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { A2aAgentDTO, FileNodeDTO, McpServerDTO, SkillDTO } from '@pop-agent/shared';
@@ -12,7 +16,7 @@ import { useA2aStore } from '../store/a2a';
 import { useMcpStore } from '../store/mcp';
 import { useNotificationsStore } from '../store/notifications';
 import { matchesSourceFilter, skillEnabled, type SkillSourceFilter, useSkillsStore } from '../store/skills';
-import { Menu, Pressable } from '../ui/controls';
+import { ContextMenu, Pressable } from '../ui/controls';
 import { FolderIcon } from './files-page';
 
 /**
@@ -29,6 +33,7 @@ export function FolderTree() {
   const announceTrash = useTrashUndo();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   // The open folder's path, straight off the URL: the sidebar sits outside the
@@ -87,7 +92,10 @@ export function FolderTree() {
             currentPath === folder.path ? 'bg-[var(--hover-overlay)] font-medium' : 'hover:bg-[var(--hover-overlay)]'
           }`}
           style={{ paddingLeft: `${String(depth * 0.75)}rem` }}
-          onContextMenu={(event) => {
+          onKeyDown={menuKeyboard}
+      onContextMenu={(event) => {
+        if (nativeContext(event.target, false)) return;
+        event.stopPropagation(); setAnchor(menuAnchor(event));
             event.preventDefault();
             setMenuFor(folder.path);
           }}
@@ -124,18 +132,19 @@ export function FolderTree() {
             type="button"
             data-testid="tree-folder-menu"
             aria-label={t('shell.chatMenu')}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => setMenuFor((v) => (v === folder.path ? undefined : folder.path))}
+            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
             className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
           >
             ⋯
           </Pressable>
         </div>
         {menuFor === folder.path ? (
-          <Menu
-            onPointerDown={(event) => event.stopPropagation()}
+          <ContextMenu anchor={anchor} onClose={() => setMenuFor(undefined)}
+            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
             className="absolute top-9 right-2 z-10"
           >
+            <MenuItem testId="tree-folder-open" label={t('files.openFile')} onClick={()=>{setMenuFor(undefined);void navigate(`/files/${folder.path}`);}} />
             <MenuItem
               testId="tree-folder-rename"
               label={t('shell.rename')}
@@ -153,7 +162,7 @@ export function FolderTree() {
                 void deleteFolder(folder);
               }}
             />
-          </Menu>
+          </ContextMenu>
         ) : null}
         {kids.length > 0 && isOpen ? kids.map((child) => renderRow(child, depth + 1)) : null}
       </div>
@@ -289,6 +298,7 @@ export function SkillsList({ filter }: { filter: string }) {
   const sourceFilter = useSkillsStore((state) => state.sourceFilter);
   const reload = useSkillsStore((state) => state.reload);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   useDismiss(menuFor !== undefined, () => setMenuFor(undefined));
 
   useEffect(() => {
@@ -313,7 +323,7 @@ export function SkillsList({ filter }: { filter: string }) {
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <ActionSurface showTrigger={false} className="min-h-0 flex-1 overflow-y-auto" actions={[{id:"new",label:t("context.new"),run:()=>{void navigate("/skills/new");}},{id:"refresh",label:t("context.refresh"),run:reload}]}><div className="flex min-h-0 flex-1 flex-col">
       <SkillsSourceFilter />
       <div className="flex-1 overflow-y-auto pb-20" data-testid="skills-list">
       {shown.length === 0 ? (
@@ -326,7 +336,10 @@ export function SkillsList({ filter }: { filter: string }) {
                 className={`flex items-center gap-1 pr-1 ${
                   slug === skill.slug ? 'bg-[var(--hover-overlay)]' : 'hover:bg-[var(--hover-overlay)]'
                 } ${skillEnabled(skill) ? '' : 'opacity-70'}`}
-                onContextMenu={(event) => {
+                onKeyDown={menuKeyboard}
+      onContextMenu={(event) => {
+        if (nativeContext(event.target, false)) return;
+        event.stopPropagation(); setAnchor(menuAnchor(event));
                   event.preventDefault();
                   setMenuFor(skill.slug);
                 }}
@@ -356,16 +369,16 @@ export function SkillsList({ filter }: { filter: string }) {
                   type="button"
                   data-testid="skill-row-menu"
                   aria-label={t('shell.chatMenu')}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => setMenuFor((v) => (v === skill.slug ? undefined : skill.slug))}
+                  onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+                  onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === skill.slug ? undefined : skill.slug));}}
                   className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
                 >
                   ⋯
                 </Pressable>
               </div>
               {menuFor === skill.slug ? (
-                <Menu
-                  onPointerDown={(event) => event.stopPropagation()}
+                <ContextMenu anchor={anchor} onClose={() => setMenuFor(undefined)}
+                  onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
                   className="absolute top-9 right-2 z-10"
                 >
                   <MenuItem
@@ -376,6 +389,7 @@ export function SkillsList({ filter }: { filter: string }) {
                       void navigate(`/skills/${skill.slug}`);
                     }}
                   />
+                  <MenuItem testId="skill-row-toggle" label={t(skill.enabled !== false ? 'context.disable' : 'context.enable')} onClick={()=>{setMenuFor(undefined);void skillsService.setEnabled(skill.slug,skill.enabled===false).then(()=>reload());}} />
                   {skill.source === 'builtin' ? null : (
                     <MenuItem
                       testId="skill-row-delete"
@@ -387,18 +401,19 @@ export function SkillsList({ filter }: { filter: string }) {
                       }}
                     />
                   )}
-                </Menu>
+                </ContextMenu>
               ) : null}
             </li>
           ))}
         </ul>
       )}
       </div>
-    </div>
+    </div></ActionSurface>
   );
 }
 
 export function A2aSidebar({ filter }: { filter: string }) {
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const agents = useA2aStore((state) => state.agents);
   const query = filter.trim().toLowerCase();
@@ -407,17 +422,17 @@ export function A2aSidebar({ filter }: { filter: string }) {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20" data-testid="a2a-list">
+    <ActionSurface showTrigger={false} className="min-h-0 flex-1 overflow-y-auto" actions={[{id:"new",label:t("context.new"),run:()=>{void navigate("/a2a/new");}},{id:"refresh",label:t("context.refresh"),run:useA2aStore.getState().reload}]}><div className="flex-1 overflow-y-auto pb-20" data-testid="a2a-list">
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('a2a.none')}</p>
       ) : (
         <ul>
           {rows.map((agent: A2aAgentDTO) => (
-            <li key={agent.id}>
+            <li key={agent.id}><ActionSurface actions={contextActions.a2a(agent)}>
               <Pressable
                 type="button"
                 data-testid="a2a-row"
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 pr-10 text-left hover:bg-[var(--hover-overlay)]"
                 onClick={() => void navigate(`/a2a/${agent.id}`)}
               >
                 <span className="min-w-0">
@@ -431,15 +446,16 @@ export function A2aSidebar({ filter }: { filter: string }) {
                   <span>{agent.enabled ? t('a2a.enabled') : t('a2a.disabled')}</span>
                 </span>
               </Pressable>
-            </li>
+            </ActionSurface></li>
           ))}
         </ul>
       )}
-    </div>
+    </div></ActionSurface>
   );
 }
 
 export function McpSidebar({ filter }: { filter: string }) {
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const servers = useMcpStore((state) => state.servers);
   const query = filter.trim().toLowerCase();
@@ -448,16 +464,16 @@ export function McpSidebar({ filter }: { filter: string }) {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20">
+    <ActionSurface showTrigger={false} className="min-h-0 flex-1 overflow-y-auto" actions={[{id:"new",label:t("context.new"),run:()=>{void navigate("/mcp/new");}},{id:"refresh",label:t("context.refresh"),run:useMcpStore.getState().reload}]}><div className="flex-1 overflow-y-auto pb-20">
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('mcp.none')}</p>
       ) : (
         <ul>
           {rows.map((server: McpServerDTO) => (
-            <li key={server.id}>
+            <li key={server.id}><ActionSurface actions={contextActions.mcp(server)}>
               <Pressable
                 type="button"
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--hover-overlay)]"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 pr-10 text-left hover:bg-[var(--hover-overlay)]"
                 onClick={() => void navigate(`/mcp/${server.id}`)}
               >
                 <span className="min-w-0 truncate text-sm">{server.name}</span>
@@ -471,31 +487,12 @@ export function McpSidebar({ filter }: { filter: string }) {
                   )}
                 </span>
               </Pressable>
-            </li>
+            </ActionSurface></li>
           ))}
         </ul>
       )}
-    </div>
+    </div></ActionSurface>
   );
 }
 
 /** How far a finger must travel before the swipe action fires. */
-
-function MenuItem({ label, onClick, testId, danger = false }: {
-  label: string;
-  onClick: () => void;
-  testId: string;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      type="button"
-      role="menuitem"
-      data-testid={testId}
-      onClick={onClick}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${danger ? 'text-[var(--danger)]' : ''}`}
-    >
-      {label}
-    </Pressable>
-  );
-}

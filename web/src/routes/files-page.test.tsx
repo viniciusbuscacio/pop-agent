@@ -159,3 +159,19 @@ it('uploads a dropped folder under the current folder and preserves empty childr
   await waitFor(()=>expect(filesService.upload).toHaveBeenCalledWith(f,'Docs/Reports',expect.any(AbortSignal)));
   expect(filesService.mkdir).toHaveBeenCalledWith('Docs/Reports/empty');
 });
+
+it('right click preserves a selected group and targets only an unselected item',()=>{
+ mount();fireEvent.click(screen.getByTestId('files-select'));for(const check of screen.getAllByTestId('file-check'))fireEvent.click(check);
+ fireEvent.contextMenu(screen.getAllByTestId('file-row')[0]!,{clientX:900,clientY:500});expect(screen.getByTestId('context-delete-selected')).toBeTruthy();expect(screen.getByText('2 selected',{selector:'span.px-4'})).toBeTruthy();
+ fireEvent.keyDown(document.activeElement!,{key:'Escape'});
+ fireEvent.contextMenu(screen.getByTestId('folder-row'),{clientX:900,clientY:500});expect(screen.getByRole('checkbox',{name:'Docs'})).toHaveProperty('checked',true);expect(screen.getByRole('checkbox',{name:'a.md'})).toHaveProperty('checked',false);expect(screen.getByTestId('folder-open')).toBeTruthy();expect(filesService.remove).not.toHaveBeenCalled();
+});
+it('blank-space menu preserves the search field native menu',()=>{
+ mount();const e=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});screen.getByTestId('files-filter').dispatchEvent(e);expect(e.defaultPrevented).toBe(false);
+ fireEvent.contextMenu(screen.getByTestId('files-view'),{clientX:800,clientY:500});expect(screen.getByTestId('context-new-folder')).toBeTruthy();expect(screen.getByTestId('context-upload-folder')).toBeTruthy();
+});
+
+it('does not select the whole folder through the background menu while searching',()=>{
+ mount();fireEvent.change(screen.getByTestId('files-filter'),{target:{value:'one result'}});
+ fireEvent.contextMenu(screen.getByTestId('files-view'));expect(screen.queryByTestId('context-select-all')).toBeNull();expect(screen.getByTestId('context-upload')).toBeTruthy();
+});

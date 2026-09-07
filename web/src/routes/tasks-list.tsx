@@ -1,3 +1,6 @@
+import { ActionSurface } from '../ui/action-surface';
+import { useAgentContextActions } from '../lib/agent-context-actions';
+import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -6,7 +9,7 @@ import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
 import { shortDateTime } from '../lib/time';
 import { useTasksStore } from '../store/tasks';
-import { Button, Card, Pressable, Menu } from '../ui/controls';
+import { Button, Card, Pressable, ContextMenu, MenuItem } from '../ui/controls';
 
 /**
  * The background-task list (docs/specs/Spec-Pop-General.md §21). It lives in the sidebar for the
@@ -15,6 +18,7 @@ import { Button, Card, Pressable, Menu } from '../ui/controls';
  * a drawer (§14).
  */
 export function TasksList({ filter = '' }: { filter?: string }) {
+  const navigate=useNavigate();
   const tasks = useTasksStore((state) => state.tasks);
   const reload = useTasksStore((state) => state.reload);
 
@@ -29,7 +33,7 @@ export function TasksList({ filter = '' }: { filter?: string }) {
     query.length === 0 ? tasks : tasks.filter((task) => task.title.toLowerCase().includes(query));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20">
+    <ActionSurface showTrigger={false} className="min-h-0 flex-1 overflow-y-auto" actions={[{id:"new",label:t("context.new"),run:()=>{void navigate("/tasks/new");}},{id:"refresh",label:t("context.refresh"),run:reload}]}><div className="flex-1 overflow-y-auto pb-20">
       {shown.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t('tasks.none')}</p>
       ) : (
@@ -39,7 +43,7 @@ export function TasksList({ filter = '' }: { filter?: string }) {
           ))}
         </ul>
       )}
-    </div>
+    </div></ActionSurface>
   );
 }
 
@@ -49,21 +53,22 @@ export function TasksList({ filter = '' }: { filter?: string }) {
  * because the list is the whole screen.
  */
 export function TasksIntro() {
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const tasks = useTasksStore(state => state.tasks);
   const reload = useTasksStore(state => state.reload);
   useEffect(() => { void reload(); }, [reload]);
-  return <div className="flex-1 overflow-y-auto p-6">
+  return <ActionSurface actions={[{id:'new',label:t('context.new'),run:()=>{void navigate('/tasks/new');}},{id:'refresh',label:t('context.refresh'),run:()=>reload()}]} ><div className="flex-1 overflow-y-auto p-6">
     <AgentPageHeader title={t('agent.tasksTitle')} description={t('agent.tasksDescription')} />
     {tasks === undefined ? <p className="text-sm text-[var(--muted)]">{t('app.loading')}</p> : tasks.length === 0 ? <p className="text-sm text-[var(--muted)]">{t('tasks.none')}</p> :
-      <div className="grid gap-3">{tasks.map(task => <Card key={task.id} className="flex items-center justify-between gap-4">
+      <div className="grid gap-3">{tasks.map(task => <ActionSurface key={task.id} actions={contextActions.task(task)}><Card className="flex items-center justify-between gap-4 pr-10">
         <div className="min-w-0">
           <div className="break-words font-medium">{task.title}</div>
           <p className="text-sm text-[var(--muted)]">{describeSchedule(task)} · {describeNextRun(task)}</p>
         </div>
         <Button variant="ghost" onClick={() => void navigate('/tasks/' + task.id)}>{t('tasks.edit')}</Button>
-      </Card>)}</div>}
-  </div>;
+      </Card></ActionSurface>)}</div>}
+  </div></ActionSurface>;
 }
 
 function TaskRow({ task }: { task: TaskDTO }) {
@@ -74,6 +79,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
   const reload = useTasksStore((state) => state.reload);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   useDismiss(menuOpen, () => setMenuOpen(false));
 
   function confirmDelete(): void {
@@ -84,7 +90,10 @@ function TaskRow({ task }: { task: TaskDTO }) {
   return (
     <li
       className="group relative border-b border-[var(--border)] px-4 py-3 last:border-b-0"
+      onKeyDown={menuKeyboard}
       onContextMenu={(event) => {
+        if (nativeContext(event.target, false)) return;
+        event.stopPropagation(); setAnchor(menuAnchor(event));
         event.preventDefault();
         setMenuOpen(true);
       }}
@@ -137,16 +146,16 @@ function TaskRow({ task }: { task: TaskDTO }) {
         type="button"
         data-testid="task-menu"
         aria-label={t('tasks.menu')}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => setMenuOpen((value) => !value)}
+        onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+        onClick={() => {setAnchor(undefined);setMenuOpen((value) => !value);}}
         className="absolute top-2 right-1 rounded px-2 py-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯
       </Pressable>
 
       {menuOpen ? (
-        <Menu
-          onPointerDown={(event) => event.stopPropagation()}
+        <ContextMenu anchor={anchor} onClose={() => setMenuOpen(false)}
+          onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
           className="absolute top-8 right-2 z-10"
         >
           <MenuItem
@@ -166,6 +175,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
               void navigate(`/tasks/${task.id}`);
             }}
           />
+          <MenuItem testId="task-context-toggle" label={t(task.enabled ? 'tasks.disable' : 'tasks.enable')} onClick={()=>{setMenuOpen(false);void toggle(task.id,!task.enabled);}} />
           <MenuItem
             testId="task-delete"
             label={t('tasks.delete')}
@@ -175,7 +185,7 @@ function TaskRow({ task }: { task: TaskDTO }) {
               confirmDelete();
             }}
           />
-        </Menu>
+        </ContextMenu>
       ) : null}
     </li>
   );
@@ -208,31 +218,6 @@ function LastRun({ task }: { task: TaskDTO }) {
   );
 }
 
-function MenuItem({
-  label,
-  onClick,
-  testId,
-  danger = false,
-}: {
-  label: string;
-  onClick: () => void;
-  testId: string;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      type="button"
-      role="menuitem"
-      data-testid={testId}
-      onClick={onClick}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] ${
-        danger ? 'text-[var(--danger)]' : ''
-      }`}
-    >
-      {label}
-    </Pressable>
-  );
-}
 
 /** "Once", "Every 30 minutes", "Every 6 hours", "Every day". */
 export function describeSchedule(task: {

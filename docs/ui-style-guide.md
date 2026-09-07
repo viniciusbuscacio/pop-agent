@@ -118,3 +118,7 @@ pattern, check keyboard and accessible naming, dark and light themes, narrow and
 wide layouts, long real content, larger font preference and the complete set of
 interaction states. Use component tests for behavior and a real browser/device
 for overflow, safe areas and touch reachability.
+
+### Contextual actions
+
+Use `ActionSurface` around resource cards or list backgrounds with `{id, label, run, danger?}` actions. It provides both right-click and a visible overflow button, respects native text/media contexts and reports failed actions through the shared notification channel. Use `ContextMenu` with `anchor`, `onClose` and shared `MenuItem` children when the screen already owns menu state (Files, Chat and legacy explorer menus). `menuAnchor`, `menuKeyboard`, `nativeContext` and `selectionIn` centralize event policy; menus must never implement independent network calls or invent unsupported resource actions.

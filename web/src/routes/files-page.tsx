@@ -1,3 +1,4 @@
+import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { useEffect, useRef, useState, type PointerEvent, type MouseEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { FileNodeDTO, GarbageEntryDTO } from '@pop-agent/shared';
@@ -21,7 +22,7 @@ import {
   useFilesStore,
 } from '../store/files';
 import { useNotificationsStore } from '../store/notifications';
-import { Button, Checkbox, FileInput, MenuItem, SearchField, Select, Pressable, Menu } from '../ui/controls';
+import { Button, Checkbox, FileInput, MenuItem, SearchField, Select, Pressable, ContextMenu } from '../ui/controls';
 import { Breadcrumb } from '../ui/breadcrumb';
 import { PullToRefresh } from '../ui/pull-to-refresh';
 import { FileViewer } from '../ui/file-viewer';
@@ -54,6 +55,8 @@ export function FilesPage() {
     { path: string; kind: 'file' | 'dir' }[] | undefined
   >(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [backgroundMenu, setBackgroundMenu] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
   const hold = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined>(undefined);
@@ -87,7 +90,7 @@ export function FilesPage() {
     setSelectedFolders(new Set());
     setSelecting(false);
     setFilter('');
-    setMenuFor(undefined);
+    setMenuFor(undefined);setBackgroundMenu(false);
   }, [currentPath]);
 
   function cancelHold(): void {
@@ -121,8 +124,18 @@ export function FilesPage() {
       onPointerUp: cancelHold,
       onPointerCancel: cancelHold,
       onPointerLeave: cancelHold,
+      onKeyDown: menuKeyboard,
       onContextMenu: (event: MouseEvent<HTMLLIElement>) => {
-        if (hold.current || (heldClick.current?.path === path && heldClick.current.until > Date.now())) event.preventDefault();
+        if (nativeContext(event.target, false)) return;
+        if (hold.current || (heldClick.current?.path === path && heldClick.current.until > Date.now())) { event.preventDefault(); return; }
+        if (pointerKind.current !== 'mouse' && (event.clientX !== 0 || event.clientY !== 0)) return;
+        event.preventDefault(); event.stopPropagation();
+        if (deletingRef.current) return;
+        const alreadySelected = folder ? selectedFolders.has(path) : selected.has(path);
+        if (selecting && !alreadySelected) {
+          setSelected(new Set(folder ? [] : [path])); setSelectedFolders(new Set(folder ? [path] : []));
+        }
+        setBackgroundMenu(false); setAnchor(menuAnchor(event)); setMenuFor(path);
       },
       onClickCapture: (event: MouseEvent<HTMLLIElement>) => {
         if (deletingRef.current || (heldClick.current?.path === path && heldClick.current.until > Date.now())) {
@@ -520,18 +533,20 @@ export function FilesPage() {
             type="button"
             data-testid="folder-row-menu"
             aria-label={t('shell.chatMenu')}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => setMenuFor((v) => (v === folder.path ? undefined : folder.path))}
+            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
           >
             ⋯
           </Pressable>
         </div>
         {menuFor === folder.path ? (
-          <Menu
-            onPointerDown={(event) => event.stopPropagation()}
+          <ContextMenu anchor={anchor} onClose={() => setMenuFor(undefined)}
+            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
             className="absolute top-9 right-2 z-10"
           >
+            {selecting && selectedFolders.has(folder.path) && selectedCount > 1 ? batchMenu() : <>
+            <MenuItem testId="folder-open" label={t('files.openFile')} onClick={()=>{setMenuFor(undefined);openItem(folder.path,true);}} />
             <MenuItem
               testId="folder-select"
               label={t('files.selectFolder')}
@@ -557,7 +572,8 @@ export function FilesPage() {
                 void deleteFolder(folder);
               }}
             />
-          </Menu>
+            </>}
+          </ContextMenu>
         ) : null}
       </li>
     );
@@ -565,12 +581,23 @@ export function FilesPage() {
 
   // A file row's menu, shared between the folder listing and the search
   // results: the actions are the same wherever the file was found.
+  function batchMenu() {
+    return <>
+      <span className="px-4 py-1 text-xs text-[var(--muted)]">{t('files.selected', {count:selectedCount})}</span>
+      {selectedFolders.size === 0 ? flattenDirs(tree ?? []).filter(folder => folder.path !== currentPath).map(folder => <MenuItem key={folder.path} testId="context-move" label={`${t('files.moveTo')} ${folder.path}`} onClick={()=>{setMenuFor(undefined);void moveSelected(folder.path);}} />) : null}
+      {selectedFolders.size === 0 && currentPath !== '' ? <MenuItem testId="context-move-root" label={`${t('files.moveTo')} ${t('files.rootCrumb')}`} onClick={()=>{setMenuFor(undefined);void moveSelected('');}} /> : null}
+      <MenuItem testId="context-clear" label={t('files.clearSelection')} onClick={()=>{setMenuFor(undefined);clearSelection();}} />
+      <MenuItem testId="context-delete-selected" danger label={t('shell.delete')} onClick={()=>{setMenuFor(undefined);void deleteSelected();}} />
+    </>;
+  }
+
   function renderFileMenu(file: FileNodeDTO, inSearch: boolean) {
     return (
-      <Menu
+      <ContextMenu anchor={anchor} onClose={() => setMenuFor(undefined)}
         onPointerDown={(event) => event.stopPropagation()}
         className="absolute top-9 right-2 z-10"
       >
+        {selecting && selected.has(file.path) && selectedCount > 1 ? batchMenu() : <>
         <MenuItem
           testId="file-open"
           label={t('files.openFile')}
@@ -617,7 +644,8 @@ export function FilesPage() {
             void deleteFile(file);
           }}
         />
-      </Menu>
+      </>}
+      </ContextMenu>
     );
   }
 
@@ -625,6 +653,13 @@ export function FilesPage() {
     <div
       className={`relative flex h-full min-h-0 flex-1 flex-col ${dragging ? 'outline-2 outline-dashed outline-[var(--accent)] -outline-offset-2' : ''}`}
       data-testid="files-view"
+      onKeyDown={menuKeyboard}
+      onContextMenu={event=>{
+        if (nativeContext(event.target) || (event.target as Element).closest('[data-testid="artifact-row"], [data-testid="folder-row"], button')) return;
+        event.preventDefault(); event.stopPropagation();
+        if(deletingRef.current) return;
+        setMenuFor(undefined);setAnchor(menuAnchor(event));setBackgroundMenu(true);
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         setDragging(true);
@@ -730,6 +765,7 @@ export function FilesPage() {
               }
             }}>{t(selecting ? 'files.selectAll' : 'files.select')}</Button>
           </div> : null}
+          <Pressable type="button" aria-label={t('context.actions')} data-testid="files-background-menu" className="rounded px-2 py-1 text-[var(--muted)]" onClick={event=>{setMenuFor(undefined);setAnchor(menuAnchor(event));setBackgroundMenu(true);}}>⋯</Pressable>
           <SearchField
             disabled={deleting}
             id="files-filter"
@@ -895,8 +931,8 @@ export function FilesPage() {
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => setMenuFor((v) => (v === hit.path ? undefined : hit.path))}
+                            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+                            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === hit.path ? undefined : hit.path));}}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
@@ -963,8 +999,8 @@ export function FilesPage() {
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => setMenuFor((v) => (v === file.path ? undefined : file.path))}
+                            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+                            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === file.path ? undefined : file.path));}}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
@@ -991,6 +1027,13 @@ export function FilesPage() {
         <ShellFooter />
       </div>
 
+      {backgroundMenu ? <ContextMenu anchor={anchor} onClose={()=>setBackgroundMenu(false)}>
+        <MenuItem testId="context-new-folder" label={t('files.newFolder')} onClick={()=>{setBackgroundMenu(false);void newFolder();}} />
+        <MenuItem testId="context-upload" label={t('files.uploadFile')} onClick={()=>{setBackgroundMenu(false);picker.current?.click();}} />
+        <MenuItem testId="context-upload-folder" label={t('files.uploadFolder')} onClick={()=>{setBackgroundMenu(false);folderPicker.current?.click();}} />
+        {!searching ? <MenuItem testId="context-select-all" label={t('files.selectAll')} onClick={()=>{setBackgroundMenu(false);setSelecting(true);setSelected(new Set(visibleFiles.map(file=>file.path)));setSelectedFolders(new Set(rootFolders.map(folder=>folder.path)));}} /> : null}
+        <MenuItem testId="context-refresh" label={t('context.refresh')} onClick={()=>{setBackgroundMenu(false);void reload();}} />
+      </ContextMenu> : null}
       {viewing === undefined ? null : (
         <FileViewer
           key={viewing.path}

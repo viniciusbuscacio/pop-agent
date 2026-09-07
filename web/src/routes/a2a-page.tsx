@@ -1,3 +1,5 @@
+import { ActionSurface } from '../ui/action-surface';
+import { useAgentContextActions } from '../lib/agent-context-actions';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -48,12 +50,13 @@ export function A2aPage() {
 }
 
 function A2aOverview() {
+  const contextActions=useAgentContextActions();
   const navigate = useNavigate();
   const agents = useA2aStore((state) => state.agents);
   const toggle = useA2aStore((state) => state.toggle);
 
   return (
-    <div className="p-6">
+    <ActionSurface actions={[{id:'new',label:t('context.new'),run:()=>{void navigate('/a2a/new');}},{id:'refresh',label:t('context.refresh'),run:()=>useA2aStore.getState().reload()}]} ><div className="p-6">
       <AgentPageHeader title={t('a2a.title')} description={t('a2a.intro')} />
       {agents === undefined ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">{t('a2a.loading')}</p>
@@ -62,7 +65,7 @@ function A2aOverview() {
       ) : (
         <div className="grid gap-3" data-testid="a2a-overview-list">
           {agents.map((agent) => (
-            <Card key={agent.id} className="flex items-center justify-between gap-4">
+            <ActionSurface key={agent.id} actions={contextActions.a2a(agent)}><Card className="flex items-center justify-between gap-4 pr-10">
               <div className="min-w-0">
                 <div className="truncate font-medium">{agent.name}</div>
                 <div className="text-sm text-[var(--muted)]">{agentSummary(agent)}</div>
@@ -78,11 +81,11 @@ function A2aOverview() {
                   {t('common.edit')}
                 </Button>
               </div>
-            </Card>
+            </Card></ActionSurface>
           ))}
         </div>
       )}
-    </div>
+    </div></ActionSurface>
   );
 }
 

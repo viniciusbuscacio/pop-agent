@@ -140,3 +140,5 @@ Before shipping a visual change:
 7. check long real content and larger font preference;
 8. update `docs/ui-style-guide.md` when the system changes;
 9. run UI checks, focused tests and the full gate.
+
+Contextual actions use `ContextMenu` and the shared `MenuItem` primitive. Cursor menus use fixed viewport positioning through a body portal with an 8px edge inset, bounded height/width and scrolling; they retain the existing menu typography, panel tokens and focus treatment. Destructive actions appear last, separated by a rule. Overview cards reserve space for a visible overflow control rather than hiding all actions behind right-click.

@@ -1,3 +1,4 @@
+import { menuAnchor, menuKeyboard, nativeContext, type MenuAnchor } from '../lib/context-menu';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import type { ChatDTO } from '@pop-agent/shared';
@@ -11,7 +12,7 @@ import { useA2aStore } from '../store/a2a';
 import { useMcpStore } from '../store/mcp';
 import { TasksList } from './tasks-list';
 import { SidebarNav } from './sidebar-nav';
-import { Button, SearchField, TextField, Pressable, Menu } from '../ui/controls';
+import { Button, SearchField, TextField, Pressable, ContextMenu, MenuItem } from '../ui/controls';
 import { PullToRefresh } from '../ui/pull-to-refresh';
 import { A2aSidebar, FolderTree, McpSidebar, SkillsList } from './chat-list-explorers';
 
@@ -65,6 +66,7 @@ export function ChatList() {
   const searchInput = useRef<HTMLInputElement>(null);
   const [viewArchived, setViewArchived] = useState(false);
   const [listMenu, setListMenu] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   useDismiss(listMenu, () => setListMenu(false));
   const [creating, setCreating] = useState(false);
 
@@ -290,16 +292,16 @@ export function ChatList() {
               type="button"
               data-testid="list-menu"
               aria-label={t('shell.listMenu')}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setListMenu((value) => !value)}
+              onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+              onClick={() => {setAnchor(undefined);setListMenu((value) => !value);}}
               className={chatHeaderIconButton}
             >
               ⋯
             </Pressable>
           ) : null}
           {listMenu ? (
-            <Menu
-              onPointerDown={(event) => event.stopPropagation()}
+            <ContextMenu anchor={anchor} onClose={() => setListMenu(false)}
+              onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
               className="absolute top-10 right-0 z-10"
             >
               <MenuItem
@@ -332,7 +334,7 @@ export function ChatList() {
                   setDeleteDialog(true);
                 }}
               />
-            </Menu>
+            </ContextMenu>
           ) : null}
         </div>
 
@@ -514,6 +516,7 @@ function ChatRow({
   const live = useChatStore((state) => state.live[chat.id]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   useDismiss(menuOpen, () => setMenuOpen(false));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(chat.title);
@@ -665,7 +668,10 @@ function ChatRow({
       <NavLink
         to={`/chat/${chat.id}`}
         data-testid="chat-row"
-        onContextMenu={(event) => {
+        onKeyDown={menuKeyboard}
+      onContextMenu={(event) => {
+        if (nativeContext(event.target, false)) return;
+        event.stopPropagation(); setAnchor(menuAnchor(event));
           event.preventDefault();
           setMenuOpen(true);
         }}
@@ -721,7 +727,7 @@ function ChatRow({
           aria-label={t('shell.unpin')}
           aria-pressed="true"
           title={t('shell.unpin')}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
           onClick={() => void setPinned(chat.id, false)}
           className="absolute top-1 right-9 rounded p-1.5 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
         >
@@ -732,8 +738,8 @@ function ChatRow({
         type="button"
         data-testid="chat-menu"
         aria-label={t('shell.chatMenu')}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => setMenuOpen((value) => !value)}
+        onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
+        onClick={() => {setAnchor(undefined);setMenuOpen((value) => !value);}}
         className="absolute top-1 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯
@@ -743,8 +749,8 @@ function ChatRow({
       </div>
 
       {menuOpen ? (
-        <Menu
-          onPointerDown={(event) => event.stopPropagation()}
+        <ContextMenu anchor={anchor} onClose={() => setMenuOpen(false)}
+          onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
           className="absolute top-8 right-2 z-10"
         >
           <MenuItem
@@ -781,7 +787,7 @@ function ChatRow({
               confirmDelete();
             }}
           />
-        </Menu>
+        </ContextMenu>
       ) : null}
     </li>
   );
@@ -825,33 +831,3 @@ function PinIcon() {
     </svg>
   );
 }
-
-function MenuItem({
-  label,
-  onClick,
-  testId,
-  danger = false,
-  disabled = false,
-}: {
-  label: string;
-  onClick: () => void;
-  testId: string;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      type="button"
-      role="menuitem"
-      data-testid={testId}
-      onClick={onClick}
-      disabled={disabled}
-      className={`px-4 py-1.5 text-left whitespace-nowrap hover:bg-[var(--hover-overlay)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${
-        danger ? 'text-[var(--danger)]' : ''
-      }`}
-    >
-      {label}
-    </Pressable>
-  );
-}
-

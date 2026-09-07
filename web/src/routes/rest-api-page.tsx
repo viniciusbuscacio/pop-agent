@@ -1,3 +1,5 @@
+import { useNotificationsStore } from '../store/notifications';
+import { ActionSurface } from '../ui/action-surface';
 import { AgentPageHeader } from '../ui/agent-page-header';
 import { useEffect, useState } from 'react';
 import type { RestApiSettingsDTO } from '@pop-agent/shared';
@@ -45,7 +47,11 @@ export function RestApiPage() {
           <div className="grid gap-3">
             {(['server', 'client'] as const).map(kind => {
               const key = kind === 'server' ? 'serverEnabled' : 'clientEnabled';
-              return <Card key={kind} className="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
+              return <ActionSurface key={kind} actions={[
+                {id:'edit',label:t('rest.edit'),run:()=>setEditing(kind)},
+                ...(kind === 'server' && settings.serverEnabled ? [{id:'test',label:t('context.test'),run:async()=>{const result=await integrationsService.test();if(!result.ok)throw new Error('Connection test failed');useNotificationsStore.getState().notify(t('context.testPassed'));}}] : []),
+                ...(!busy ? [{id:'toggle',label:t(settings[key]?'context.disable':'context.enable'),run:()=>toggle(key,!settings[key])}] : []),
+              ]}><Card className="flex flex-col items-stretch justify-between gap-4 pr-10 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{t(kind === 'server' ? 'rest.server' : 'rest.client')}</div>
                   <p className="text-sm text-[var(--muted)]">{t(kind === 'server' ? 'rest.serverDescription' : 'rest.clientDescription')}</p>
@@ -54,7 +60,7 @@ export function RestApiPage() {
                   <SwitchField hideLabel id={'rest-' + kind} label={t(kind === 'server' ? 'rest.server' : 'rest.client')} checked={settings[key]} disabled={busy} onChange={value => void toggle(key, value)} />
                   <Button variant="ghost" aria-label={t(kind === 'server' ? 'rest.editServer' : 'rest.editClient')} onClick={() => setEditing(kind)}>{t('rest.edit')}</Button>
                 </div>
-              </Card>;
+              </Card></ActionSurface>;
             })}
           </div>
         </> : null}

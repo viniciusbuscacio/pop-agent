@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add shared keyboard-accessible contextual menus to Files, Chat, explorer sidebars, Agent resource lists and Trash, with visible overflow controls, selection-aware actions and draft-preserving quotes.
+
 - Support dropping entire folders into Files, preserving nested and empty folders with cancellable discovery and the existing upload pipeline.
 
 - Retry manual app refresh up to ten times at ten-second intervals, replacing the fixed error with a top notification only after retries stop.

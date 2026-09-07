@@ -21,6 +21,7 @@ const pending: QueuedMessageDTO = {
 function renderComposer(
   props: {
     editRequest?: QueuedMessageDTO;
+    quoteRequest?: {chatId:string;text:string;id:string};
     executionMode?: 'normal' | 'plan';
     currentProvider?: string;
     currentProviderLabel?: string;
@@ -419,4 +420,14 @@ describe('pending message composition', () => {
     expect(event.defaultPrevented).toBe(false);
     expect(area.value).toBe('first line\nsecond line');
   });
+});
+
+it('quotes into the existing draft without sending and ignores requests for another chat', async()=>{
+ localStorage.setItem('pop-agent.draft.chat-1','My draft');
+ const {onSend}=renderComposer({quoteRequest:{chatId:'chat-1',text:'First line\nSecond line',id:'quote-1'}});
+ await waitFor(()=>expect(localStorage.getItem('pop-agent.draft.chat-1')).toBe('My draft\n\n> First line\n> Second line\n\n'));
+ expect(onSend).not.toHaveBeenCalled();
+ const textarea=document.querySelector('textarea')!;expect(document.activeElement).toBe(textarea);expect(textarea.selectionStart).toBe(textarea.value.length);
+ cleanup();renderComposer({chatId:'chat-2',quoteRequest:{chatId:'chat-1',text:'stale',id:'quote-2'}});
+ expect(localStorage.getItem('pop-agent.draft.chat-2')).toBeNull();
 });
