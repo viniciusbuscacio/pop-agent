@@ -127,3 +127,22 @@ it('shows Select all beside the toolbar after checking one file and selects the 
   expect(screen.getByRole('checkbox',{name:'Docs'})).toHaveProperty('checked',true);
   expect(top).toHaveProperty('disabled',true);
 });
+
+ it('top bin deletes selected items instead of navigating to Trash, and respects cancellation', async () => {
+  mount();
+  expect(screen.getByTestId('files-trash').textContent).toContain('Trash');
+  fireEvent.click(screen.getByTestId('files-select'));
+  expect(screen.getByTestId('files-trash')).toHaveProperty('disabled', false);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'a.md' }));
+  fireEvent.click(screen.getByTestId('files-select'));
+  expect(screen.queryByTestId('files-trash')).toBeNull();
+  vi.mocked(window.confirm).mockReturnValueOnce(false);
+  fireEvent.click(screen.getByTestId('files-delete-toolbar'));
+  expect(filesService.remove).not.toHaveBeenCalled();
+  expect(screen.getByText('3 selected')).toBeTruthy();
+  fireEvent.click(screen.getByTestId('files-delete-toolbar'));
+  await waitFor(() => expect(filesService.remove).toHaveBeenCalledTimes(3));
+  expect(vi.mocked(filesService.remove).mock.calls.map(([path]) => path)).toEqual(['a.md', 'b.md', 'Docs']);
+  await waitFor(() => expect(screen.getByTestId('files-trash')).toBeTruthy());
+  expect(screen.queryByTestId('files-batch-bar')).toBeNull();
+ });

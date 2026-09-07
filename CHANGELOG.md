@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make the Files top bin delete selected items with confirmation instead of navigating to Trash; label both modes explicitly.
+
 - Show Select all items in the Files top toolbar during selection, keeping its width stable for double-click navigation.
 
 - Use mouse single-click selection and double-click opening in Files, while retaining touch tap-to-open/hold-to-select and keyboard Space/Enter actions.

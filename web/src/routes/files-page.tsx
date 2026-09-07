@@ -689,20 +689,22 @@ export function FilesPage() {
           <Button type="button" variant="ghost" size="sm" data-testid="files-new-folder" onClick={() => void newFolder()}>
             {t('files.newFolder')}
           </Button>
-          {/* Icon-only: the bin is the one control here everybody already
-              recognises without reading, and among four worded buttons the
-              word "Trash" read like a fifth action rather than a place to go.
-              The label stays for a screen reader and for the hover tooltip. */}
+          {/* Keep this slot stable, but make selection an action on the
+              selected items rather than navigation away from them. */}
           <Button
             type="button"
-            variant="ghost"
+            variant={selectedCount > 0 ? 'danger' : 'ghost'}
             size="sm"
-            data-testid="files-trash"
-            aria-label={t('trash.title')}
-            title={t('trash.title')}
-            onClick={() => void navigate('/files/trash')}
+            className="w-28 shrink-0"
+            data-testid={selectedCount > 0 ? 'files-delete-toolbar' : 'files-trash'}
+            disabled={deleting}
+            onClick={() => {
+              if (selectedCount > 0) void deleteSelected();
+              else void navigate('/files/trash');
+            }}
           >
             <TrashIcon />
+            {t(selectedCount > 0 ? 'shell.delete' : 'trash.title')}
           </Button>
           {!searching ? <div className="w-40 shrink-0">
             <Button type="button" variant="ghost" size="sm" className="w-full" data-testid="files-select" disabled={deleting || listing.length === 0 || (selecting && allSelected)} onClick={() => {

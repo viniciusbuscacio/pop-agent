@@ -671,3 +671,5 @@ Files folder listings distinguish the actual pointer type rather than viewport w
 Selection must not move rows between the first and second mouse clicks: reserve checkbox space, retain toolbar geometry, and place batch actions at the bottom without inserting them above the list. The list reserves bottom scroll space for those actions.
 
 The Files top toolbar changes Select to Select all items while selection mode is active, in addition to the bottom batch actions. Its reserved width stays fixed so selecting a checkbox does not shift rows. Select all includes files and folders in the current folder and is disabled when they are all selected.
+
+The Files top bin is explicitly labelled Trash and opens the trash when no items are checked, including in selection mode. With one or more items checked, the same fixed-width slot becomes Delete and runs confirmed batch deletion without navigation; it is disabled while deletion is running. Cancelling confirmation retains the selection.
