@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the accent focus halo and native touch highlight from the composer Add button.
+
 - Remove the inner accent focus rectangle from the chat message input and label the visibility switch Show Thinking.
 
 - Position Add outside the message box on its right while keeping Send inside.

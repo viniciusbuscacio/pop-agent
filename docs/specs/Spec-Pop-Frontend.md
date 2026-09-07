@@ -715,3 +715,5 @@ available inside Add. Opening or navigating actions never sends a draft.
 
 The composer textarea keeps its neutral enclosing border when focused, without
 an inner accent outline. Other controls retain the shared focus treatment.
+
+The composer Add button has no accent focus ring or native touch tap highlight.

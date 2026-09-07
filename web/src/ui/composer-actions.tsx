@@ -69,7 +69,7 @@ export function ComposerActions({
   }, [page]);
 
   return <>
-    <Pressable ref={trigger} type="button" data-testid="composer-actions" aria-label={t('chat.actions')}
+    <Pressable ref={trigger} id="composer-add" type="button" data-testid="composer-actions" aria-label={t('chat.actions')}
       aria-haspopup="dialog" aria-expanded={page !== undefined} aria-controls={page ? 'composer-actions-panel' : undefined}
       disabled={locked} onClick={() => { if (page) close(); else { onOpen(); setPage('actions'); } }}
       className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--muted)] hover:bg-[var(--hover-overlay)]">

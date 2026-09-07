@@ -34,6 +34,14 @@ body {
   outline: none;
 }
 
+/* Touching Add must not leave a browser accent halo around the icon. */
+#composer-add {
+  -webkit-tap-highlight-color: transparent;
+}
+#composer-add:focus {
+  outline: none;
+}
+
 /* Selection inside the user's accent bubble inverts the pair, so the
    highlight stays visible on the coloured background in both themes. */
 .user-bubble::selection {
