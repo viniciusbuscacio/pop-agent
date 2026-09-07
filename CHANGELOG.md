@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use the go-notepad Settings SVG arrow for the shared Back button across Pop Agent.
+
 - Make signed-in UI tabs follow the REST API Server switch automatically; remove manual tab naming, connection, Stop UI and screenshot-sharing controls.
 
 - Align REST API Server configuration with go-notepad: Start/Stop, connection cards, copyable agent instructions and scoped API tokens, keeping shared port/HTTPS settings informational.

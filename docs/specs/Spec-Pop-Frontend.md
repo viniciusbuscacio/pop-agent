@@ -658,7 +658,7 @@ Task and MCP editor state is keyed by the selected item ID (or new), preventing 
 
 Agent creation and editing forms for Skills, Tasks, MCP and A2A use the available pane width (`w-full p-6`), without a centered fixed maximum width. Their outer spacing matches overview pages, including on ultra-wide displays.
 
-Agent and provider editor back controls share the Settings `BackButton` primitive: arrow-only presentation, accessible Back label, minimum 40px touch target, semantic neutral colors, and button type that never submits a form. Navigation destinations and Cancel actions remain explicit.
+Agent and provider editor back controls share the Settings `BackButton` primitive: the same filled 20px SVG arrow as go-notepad Settings, accessible Back label, minimum 40px touch target, semantic neutral colors, and button type that never submits a form. Navigation destinations and Cancel actions remain explicit.
 
 Agent New/Edit pages share `AgentPageHeader`, with the Back action before the heading, 24px outer spacing and consistent card field gaps. Skills and MCP use `SwitchField` for Enabled, matching A2A and REST API. All Agent editors expose the same secondary navigation on mobile; compact spacing keeps the five destinations together at the standard sidebar width.
 
