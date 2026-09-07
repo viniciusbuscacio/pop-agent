@@ -785,6 +785,9 @@ export const en = {
   'files.crumbsAbove': 'Folders above this one',
 
   'files.uploadFile': 'Upload file',
+  'files.preparingUpload': 'Reading folder contents…',
+  'files.dropReadFailed': 'Could not read the dropped folder. Try again or use Upload folder.',
+  'files.folderUploadFailed': 'Could not create folder: {name}',
   'files.uploadFolder': 'Upload folder',
   'files.download': 'Download',
   'files.newFolder': 'New folder',

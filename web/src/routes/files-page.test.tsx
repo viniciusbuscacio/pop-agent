@@ -8,7 +8,7 @@ import { useFilesStore } from '../store/files';
 import { filesService } from '../services/artifacts';
 const reloadFiles = useFilesStore.getState().reload;
 const mocks = vi.hoisted(() => ({ undo: vi.fn(), notify: vi.fn() }));
-vi.mock('../services/artifacts', () => ({ filesService: { remove: vi.fn(), tree: vi.fn(), search: vi.fn() } }));
+vi.mock('../services/artifacts', () => ({ filesService: { upload: vi.fn(async()=>{}), mkdir: vi.fn(async()=>{}), remove: vi.fn(), tree: vi.fn(), search: vi.fn() } }));
 vi.mock('../lib/trash-undo', () => ({ useTrashUndo: () => mocks.undo }));
 vi.mock('./shell-header', () => ({ ShellFooter: () => null }));
 vi.mock('../ui/pull-to-refresh', () => ({ PullToRefresh: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
@@ -146,3 +146,16 @@ it('shows Select all beside the toolbar after checking one file and selects the 
   await waitFor(() => expect(screen.getByTestId('files-trash')).toBeTruthy());
   expect(screen.queryByTestId('files-batch-bar')).toBeNull();
  });
+
+it('uploads a dropped folder under the current folder and preserves empty children', async () => {
+  render(<MemoryRouter initialEntries={['/files/Docs']}><Routes><Route path="/files/*" element={<FilesPage />} /></Routes></MemoryRouter>);
+  const f=new File(['report'],'report.txt');
+  let batch=0;
+  const root={name:'Reports',isDirectory:true,createReader:()=>({readEntries:(done:(entries:unknown[])=>void)=>done(batch++===0?[
+    {name:'report.txt',isFile:true,file:(done:(file:File)=>void)=>done(f)},
+    {name:'empty',isDirectory:true,createReader:()=>({readEntries:(done:(entries:unknown[])=>void)=>done([])})},
+  ]:[])})};
+  fireEvent.drop(screen.getByTestId('files-view'),{dataTransfer:{files:[],items:[{kind:'file',webkitGetAsEntry:()=>root,getAsFile:()=>null}]}});
+  await waitFor(()=>expect(filesService.upload).toHaveBeenCalledWith(f,'Docs/Reports',expect.any(AbortSignal)));
+  expect(filesService.mkdir).toHaveBeenCalledWith('Docs/Reports/empty');
+});

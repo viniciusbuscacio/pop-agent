@@ -6,6 +6,7 @@ import { saveFromLink } from '../lib/download';
 import { useDismiss } from '../lib/dismiss';
 import { MD_BREAKPOINT, useMediaQuery } from '../lib/media';
 import { relativeTime } from '../lib/time';
+import { collectDroppedFiles, type DroppedFiles } from '../lib/file-drop';
 import { uploadFileBatch, type UploadFailure } from '../lib/file-upload';
 import { useTrashUndo } from '../lib/trash-undo';
 import { ApiError } from '../services/api';
@@ -260,16 +261,27 @@ export function FilesPage() {
   async function runUpload(
     entries: Array<{ file: File; destination: string }>,
     preservedFailures: UploadFailure[] = [],
+    dropped?: DataTransfer,
   ): Promise<void> {
-    if (entries.length === 0 || uploadController.current !== undefined) return;
+    if ((entries.length === 0 && !dropped) || uploadController.current !== undefined) return;
     const controller = new AbortController();
-    const destinations = new Map(entries.map((entry) => [entry.file, entry.destination]));
     uploadController.current = controller;
     setUploadFailures(preservedFailures);
     setUploading({ done: 0, total: entries.length });
+    const destinationRoot = currentPath;
     let failed: UploadFailure[] = [];
     let cancelled = false;
     try {
+      if (dropped) {
+        const plan: DroppedFiles = await collectDroppedFiles(dropped, controller.signal);
+        entries = plan.files.map(({ file, directory }) => ({ file, destination: joinPath(destinationRoot, directory) }));
+        for (const directory of plan.emptyDirectories) {
+          controller.signal.throwIfAborted();
+          try { await filesService.mkdir(joinPath(destinationRoot, directory)); }
+          catch { notify(t('files.folderUploadFailed', { name: directory })); }
+        }
+      }
+      const destinations = new Map(entries.map((entry) => [entry.file, entry.destination]));
       const result = await uploadFileBatch(
         entries.map((entry) => entry.file),
         (file) => destinations.get(file) ?? '',
@@ -279,6 +291,9 @@ export function FilesPage() {
       );
       failed = result.failures;
       cancelled = result.cancelled;
+    } catch {
+      cancelled = controller.signal.aborted;
+      if (!cancelled) notify(t('files.dropReadFailed'));
     } finally {
       if (uploadController.current === controller) uploadController.current = undefined;
       setUploading(undefined);
@@ -618,7 +633,7 @@ export function FilesPage() {
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        void upload(Array.from(event.dataTransfer.files));
+        void runUpload([], [], event.dataTransfer);
       }}
     >
       {/* The phone's copy of the nav. No rule under it: the sidebar's copy has
@@ -731,7 +746,7 @@ export function FilesPage() {
       {uploading !== undefined ? (
         <div className="flex items-center gap-2 px-4 pb-2">
           <p className="text-xs text-[var(--accent)]" data-testid="files-uploading" role="status">
-            {t('files.uploading', {
+            {uploading.total === 0 ? t('files.preparingUpload') : t('files.uploading', {
               done: Math.min(uploading.done + 1, uploading.total),
               total: uploading.total,
             })}

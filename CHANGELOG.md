@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Support dropping entire folders into Files, preserving nested and empty folders with cancellable discovery and the existing upload pipeline.
+
 - Retry manual app refresh up to ten times at ten-second intervals, replacing the fixed error with a top notification only after retries stop.
 
 - Add isolated HTML previews with Source mode, fitted image previews including SVG, and PDF browser/download actions.
