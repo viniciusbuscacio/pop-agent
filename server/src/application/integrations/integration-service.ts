@@ -50,6 +50,7 @@ export class IntegrationService {
         try { this.authenticate(secret); return secret; }
         catch (error) { if (error instanceof IntegrationError && error.status === 401) return null; throw error; }
     }
+    ensureAccessKey(): string { return this.accessKey() ?? this.rotateAccessKey(); }
     rotateAccessKey(): string {
         const now = this.deps.now();
         const token: IntegrationToken = {
@@ -64,9 +65,16 @@ export class IntegrationService {
         const token = this.authorize(secret, 'ui:control');
         this.repo.audit(token.id, 'ui:' + operation, sessionId, this.deps.now());
     }
-    revoke(id: string): void { this.repo.revoke(id, this.deps.now()); this.repo.audit(id, 'revoke', '', this.deps.now()); }
+    revoke(id: string): void {
+        const key = this.accessKey();
+        if (key && this.authenticate(key).id === id) throw new IntegrationError(409, 'replace_api_key');
+        this.repo.revoke(id, this.deps.now()); this.repo.audit(id, 'revoke', '', this.deps.now());
+    }
     settings(): RestApiSettings { return this.deps.config.get(); }
-    configure(patch: Partial<RestApiSettings>): RestApiSettings { return this.deps.config.update(patch); }
+    configure(patch: Partial<RestApiSettings>): RestApiSettings {
+        if (patch.serverEnabled ?? this.settings().serverEnabled) this.ensureAccessKey();
+        return this.deps.config.update(patch);
+    }
     authenticate(secret: string): IntegrationToken {
         const token = secret.length <= 128 && secret.startsWith('popi_') ? this.repo.token(digest(secret)) : undefined;
         if (!token || token.revokedAt !== null || token.expiresAt <= this.deps.now())

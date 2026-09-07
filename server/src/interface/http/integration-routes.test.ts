@@ -108,8 +108,9 @@ it('does not expose internal pi session paths in conversation listings', async (
   expect(body).not.toContain('autoTitle');
 });
 
-it('persists module switches, retains tokens, and keeps owner configuration accessible', async () => {
+it('persists module switches, retains the single key, and keeps owner configuration accessible', async () => {
   const f = await fixture();
+  f.secret = f.integrations.ensureAccessKey();
   const patch = (body: unknown) => f.app.request('/v1/rest-api/settings', { method: 'PATCH', headers: auth(f.owner), body: JSON.stringify(body) });
   expect((await f.app.request('/v1/rest-api/settings', { headers: auth(f.secret) })).status).toBe(401);
   expect(await (await patch({ serverEnabled: false })).json()).toEqual({ serverEnabled: false, clientEnabled: true });
@@ -153,7 +154,9 @@ describe('single REST access key', () => {
   it('persists one owner-readable key, replaces legacy keys and grants all REST operations', async () => {
     const f = await fixture();
     const read = () => f.app.request('/v1/rest-api/key', { headers: auth(f.owner) });
-    expect(await (await read()).json()).toEqual({ secret: null });
+    const initial = await (await read()).json() as { secret: string };
+    expect(initial.secret).toMatch(/^popi_/u);
+    expect(await (await read()).json()).toEqual(initial);
     expect((await f.app.request('/v1/rest-api/key')).status).toBe(401);
     const response = await f.app.request('/v1/rest-api/key', { method: 'POST', headers: auth(f.owner) });
     expect(response.status).toBe(201); expect(response.headers.get('cache-control')).toBe('no-store');
@@ -182,4 +185,25 @@ describe('single REST access key', () => {
     expect(f.integrations.authenticate(original).revokedAt).toBeNull();
     expect(f.integrations.repo.tokens().filter(t => t.revokedAt === null)).toHaveLength(1);
   });
+});
+
+it('ensures a key before enabling, keeps it through stop/start, and rejects deletion of the current key', async () => {
+  const f = createTestApp();
+  const owner = await setupTestSession(f.app);
+  f.integrations.configure({serverEnabled:false});
+  expect(f.integrations.accessKey()).toBeNull();
+  const fail = vi.spyOn(f.secrets, 'set').mockImplementationOnce(() => { throw new Error('disk failure'); });
+  expect(() => f.integrations.configure({serverEnabled:true})).toThrow('disk failure');
+  fail.mockRestore();
+  expect(f.integrations.settings().serverEnabled).toBe(false);
+  expect(f.integrations.accessKey()).toBeNull();
+  f.integrations.configure({serverEnabled:true});
+  const key = f.integrations.accessKey()!;
+  expect(key).toMatch(/^popi_/u);
+  f.integrations.configure({serverEnabled:false});
+  f.integrations.configure({serverEnabled:true});
+  expect(f.integrations.accessKey()).toBe(key);
+  const id = f.integrations.authenticate(key).id;
+  expect((await f.app.request('/v1/rest-api/tokens/'+id, {method:'DELETE',headers:auth(owner)})).status).toBe(409);
+  expect(f.integrations.accessKey()).toBe(key);
 });

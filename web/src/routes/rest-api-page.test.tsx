@@ -7,7 +7,7 @@ import { cleanup } from '@testing-library/react';
 import { RestApiPage } from './rest-api-page';
 import { integrationsService } from '../services/integrations';
 vi.mock('./shell-header', () => ({ ShellFooter: () => <div>Settings navigation</div> }));
-vi.mock('../services/integrations', () => ({ integrationsService: { settings: vi.fn(async () => ({ serverEnabled: true, clientEnabled: true })), updateSettings: vi.fn(async (patch) => ({ serverEnabled: true, clientEnabled: true, ...patch })), accessKey: vi.fn(async () => ({ secret: null })), rotateAccessKey: vi.fn(async () => ({ secret: 'popi_test_single' })), list: vi.fn(async () => ({ tokens: [] })), clients: vi.fn(async () => ({ clients: [] })), reference: vi.fn(async () => ({ endpoints: [], openapi: {} })), create: vi.fn(async () => ({ secret: 'popi_test_once', token: {} })), saveClient: vi.fn(async () => ({ client: {} })), test: vi.fn(async () => ({ ok: true })) } }));
+vi.mock('../services/integrations', () => ({ integrationsService: { settings: vi.fn(async () => ({ serverEnabled: true, clientEnabled: true })), updateSettings: vi.fn(async (patch) => ({ serverEnabled: true, clientEnabled: true, ...patch })), accessKey: vi.fn(async () => ({ secret: 'popi_existing_key' })), rotateAccessKey: vi.fn(async () => ({ secret: 'popi_test_single' })), list: vi.fn(async () => ({ tokens: [] })), clients: vi.fn(async () => ({ clients: [] })), reference: vi.fn(async () => ({ endpoints: [], openapi: {} })), create: vi.fn(async () => ({ secret: 'popi_test_once', token: {} })), saveClient: vi.fn(async () => ({ client: {} })), test: vi.fn(async () => ({ ok: true })) } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe('REST API page', () => {
     it('keeps the overview simple and puts the single key directly into agent instructions', async () => {
@@ -17,8 +17,9 @@ describe('REST API page', () => {
         expect(screen.queryByRole('button', { name: 'New token' })).toBeNull();
         expect(integrationsService.accessKey).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Edit REST API Server' }));
-        await screen.findByText('No key generated');
-        fireEvent.click(screen.getByRole('button', { name: 'Generate key' }));
+        await waitFor(() => expect(screen.getByTestId('rest-agent-instructions').textContent).toContain('Bearer popi_existing_key'));
+        expect(integrationsService.rotateAccessKey).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Generate new key' }));
         await waitFor(() => expect(screen.getByTestId('rest-agent-instructions').textContent).toContain('Bearer popi_test_single'));
         expect(integrationsService.rotateAccessKey).toHaveBeenCalledOnce();
         expect(screen.queryByLabelText('Name')).toBeNull();

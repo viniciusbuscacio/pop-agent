@@ -83,11 +83,11 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
       <Card className="space-y-3">
         <h2 className="font-medium">Access key</h2>
         <div className="flex flex-wrap items-center gap-3">
-          <code data-ui-private data-testid="rest-access-key" className="min-w-0 break-all text-sm">{secret ? `${secret.slice(0, 9)}••••••••${secret.slice(-4)}` : loaded ? 'No key generated' : 'Loading…'}</code>
+          <code data-ui-private data-testid="rest-access-key" className="min-w-0 break-all text-sm">{secret ? `${secret.slice(0, 9)}••••••••${secret.slice(-4)}` : loaded ? 'Key unavailable' : 'Loading…'}</code>
           <Button type="button" size="sm" variant="ghost" disabled={!secret || busy} onClick={() => secret && void copy(secret)}>Copy key</Button>
-          <Button type="button" size="sm" variant="ghost" data-testid="rest-rotate-key" disabled={!loaded || busy} onClick={() => void rotate()}>{secret ? 'Generate new key' : 'Generate key'}</Button>
+          <Button type="button" size="sm" variant="ghost" data-testid="rest-rotate-key" disabled={!loaded || !secret || busy} onClick={() => void rotate()}>Generate new key</Button>
         </div>
-        <p className="text-sm text-[var(--muted)]">Generating a key replaces all previous keys and tokens immediately. Update the instructions in every connected integration.</p>
+        <p className="text-sm text-[var(--muted)]">A key is created automatically. Generating a new key replaces all previous keys and tokens immediately. Update the instructions in every connected integration.</p>
       </Card>
       <details className="space-y-4"><summary className="cursor-pointer">API reference and examples</summary><Button type="button" variant="ghost" disabled={!reference} onClick={download}>Download OpenAPI</Button>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Method / path</th><th>Scope</th><th>Behavior</th></tr></thead><tbody>{reference?.endpoints.map(e => <tr key={e.method + e.path}><td className="py-2 font-mono">{e.method.toUpperCase()} {e.path}</td><td>{e.scope}</td><td>{e.summary}</td></tr>)}</tbody></table></div>

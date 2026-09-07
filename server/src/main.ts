@@ -708,6 +708,8 @@ const sessionCommands = new SessionCommandService({
 });
 
 const integrations = new IntegrationService(context.integrations, {secrets: context.secrets, config: new RestApiSettingsService(context.settings), chats, runs, queue: queuedMessages, now: () => systemClock.now()});
+// Match go-notepad: a persisted access key exists before the server is exposed.
+integrations.ensureAccessKey();
 hub.onIntegrationEvent = event => integrations.observe(event);
 for (const entry of context.runJournal.list()) integrations.observe({kind:'run-status',chatId:entry.chatId,runId:entry.runId,status:entry.state});
 const app = createApp({

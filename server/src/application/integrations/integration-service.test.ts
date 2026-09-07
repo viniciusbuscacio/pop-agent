@@ -28,9 +28,10 @@ it('recovers the encrypted single key after rebuilding services and never stores
         secrets: new SqliteSecretsRepo(db, encryptionKey), config: new RestApiSettingsService(new MemorySettings()),
         runs: {} as RunService, chats: {} as ChatService, queue: {} as QueuedMessageService, now: () => 100,
     });
-    const first = make().rotateAccessKey();
+    const first = make().ensureAccessKey();
     const reconstructed = make();
-    expect(reconstructed.accessKey()).toBe(first);
+    expect(reconstructed.ensureAccessKey()).toBe(first);
+    expect(reconstructed.repo.tokens().filter(t => t.revokedAt === null)).toHaveLength(1);
     expect(reconstructed.authenticate(first).expiresAt).toBe(8640000000000000);
     const row = db.prepare('SELECT value_encrypted FROM secrets WHERE key = ?').get('rest-api.access-key') as {value_encrypted: Buffer};
     expect(row.value_encrypted.includes(Buffer.from(first))).toBe(false);

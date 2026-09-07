@@ -1,6 +1,6 @@
 # Pop Agent live UI API
 
-Turn on REST API Server. Signed-in tabs become available automatically; there is no separate tab connection or name form. Generate the single Access key in Server settings and copy Agent instructions to perform owner actions in those tabs. The key includes UI control and remains valid until replaced. Turning off REST API Server or signing out ends UI access.
+Turn on REST API Server. Signed-in tabs become available automatically; there is no separate tab connection or name form. The single Access key is created automatically. In Server settings, copy Agent instructions to perform owner actions in those tabs. The key includes UI control and remains valid until replaced. Turning off REST API Server or signing out ends UI access.
 
 Use the server HTTPS origin as Base URL, with `Authorization: Bearer <token>` on every request. Never put tokens in URLs.
 

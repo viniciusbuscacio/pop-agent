@@ -108,7 +108,7 @@ export function createIntegrationRoutes(service: IntegrationService, chats: Chat
     });
     app.get('/rest-api/tokens', c => c.json({ tokens: service.repo.tokens().map(integrationTokenDto) }));
     app.post('/rest-api/tokens', c => apiError(c, 410, 'single_api_key', 'Use the single REST API Server access key.'));
-    app.get('/rest-api/key', c => { c.header('Cache-Control', 'no-store'); return c.json({ secret: service.accessKey() }); });
+    app.get('/rest-api/key', c => { c.header('Cache-Control', 'no-store'); return c.json({ secret: service.ensureAccessKey() }); });
     app.post('/rest-api/key', c => { c.header('Cache-Control', 'no-store'); return c.json({ secret: service.rotateAccessKey() }, 201); });
     app.delete('/rest-api/tokens/:id', c => { service.revoke(c.req.param('id')); return c.json({ ok: true }); });
     app.get('/rest-api/reference', c => c.json({ endpoints: INTEGRATION_ENDPOINTS, openapi: integrationOpenApi() }));
