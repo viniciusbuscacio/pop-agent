@@ -465,3 +465,12 @@ export interface HealthResponse {
   provider: 'ok' | 'error';
   db: 'ok' | 'error';
 }
+
+/** Small UTF-8 text document with an opaque revision for conditional editing. */
+export interface FileTextDTO {
+  content: string;
+  revision: string;
+}
+export interface SaveFileTextRequest extends FileTextDTO {
+  path: string;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type MouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { FileNodeDTO, GarbageEntryDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -41,6 +41,8 @@ import { ShellFooter } from './shell-header';
 export function FilesPage() {
   const currentPath = (useParams()['*'] ?? '').replace(/\/+$/, '');
   const navigate = useNavigate();
+  const pathRef = useRef(currentPath);
+  pathRef.current = currentPath;
   const tree = useFilesStore((state) => state.tree);
   const reload = useFilesStore((state) => state.reload);
   const notify = useNotificationsStore((state) => state.notify);
@@ -51,6 +53,10 @@ export function FilesPage() {
     { path: string; kind: 'file' | 'dir' }[] | undefined
   >(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
+  const hold = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined>(undefined);
+  const heldClick = useRef<{ path: string; until: number } | undefined>(undefined);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Folders are ticked in their own set rather than sharing the file one: the
@@ -81,6 +87,52 @@ export function FilesPage() {
     setFilter('');
     setMenuFor(undefined);
   }, [currentPath]);
+
+  function cancelHold(): void {
+    if (hold.current) clearTimeout(hold.current.timer);
+    hold.current = undefined;
+  }
+  useEffect(() => {
+    cancelHold();
+    heldClick.current = undefined;
+    return cancelHold;
+  }, [currentPath, filter]);
+
+  function selectionGesture(path: string, folder = false) {
+    return {
+      onPointerDown: (event: PointerEvent<HTMLLIElement>) => {
+        cancelHold();
+        if (deletingRef.current || selecting || !['touch', 'pen'].includes(event.pointerType)
+          || (event.target as HTMLElement).closest('input, [data-testid="file-menu"], [data-testid="folder-row-menu"]')) return;
+        const { clientX: x, clientY: y } = event;
+        hold.current = { x, y, timer: setTimeout(() => {
+          hold.current = undefined;
+          heldClick.current = { path, until: Date.now() + 1500 };
+          setMenuFor(undefined);
+          startSelection(folder ? undefined : path, folder ? path : undefined);
+        }, 500) };
+      },
+      onPointerMove: (event: PointerEvent<HTMLLIElement>) => {
+        if (hold.current && Math.hypot(event.clientX - hold.current.x, event.clientY - hold.current.y) > 10) cancelHold();
+      },
+      onPointerUp: cancelHold,
+      onPointerCancel: cancelHold,
+      onPointerLeave: cancelHold,
+      onContextMenu: (event: MouseEvent<HTMLLIElement>) => {
+        if (hold.current || (heldClick.current?.path === path && heldClick.current.until > Date.now())) event.preventDefault();
+      },
+      onClickCapture: (event: MouseEvent<HTMLLIElement>) => {
+        if (deletingRef.current || (heldClick.current?.path === path && heldClick.current.until > Date.now())) {
+          event.preventDefault(); event.stopPropagation(); heldClick.current = undefined;
+        }
+      },
+      onClick: (event: MouseEvent<HTMLLIElement>) => {
+        if (selecting && !(event.target as HTMLElement).closest('button,input')) {
+          if (folder) toggleFolderSelected(path); else toggleSelected(path);
+        }
+      },
+    };
+  }
 
   const searching = filter.trim().length > 0;
 
@@ -299,21 +351,21 @@ export function FilesPage() {
   }
 
   function toggleSelected(path: string): void {
-    setSelected((current) => toggled(current, path));
+    if (!deletingRef.current) setSelected((current) => toggled(current, path));
   }
 
   function toggleFolderSelected(path: string): void {
-    setSelectedFolders((current) => toggled(current, path));
+    if (!deletingRef.current) setSelectedFolders((current) => toggled(current, path));
   }
 
   /**
-   * Selection now starts from the item you are pointing at, not from a mode
-   * switch above the list: ticking this one and turning the mode on are the
-   * same gesture. Already selecting, it adds to what is there rather than
+   * Toolbar selection starts empty; a row menu or touch hold also ticks the
+   * item that started it. Already selecting, it adds to what is there rather than
    * throwing it away -- the menu is still reachable mid-selection, and losing
    * the previous ticks would be the surprise.
    */
   function startSelection(filePath?: string, folderPath?: string): void {
+    if (deletingRef.current) return;
     setSelecting(true);
     if (filePath !== undefined) setSelected((current) => toggled(current, filePath, true));
     if (folderPath !== undefined) {
@@ -322,6 +374,7 @@ export function FilesPage() {
   }
 
   function clearSelection(): void {
+    if (deletingRef.current) return;
     setSelecting(false);
     setSelected(new Set());
     setSelectedFolders(new Set());
@@ -330,25 +383,36 @@ export function FilesPage() {
   // Files first, then folders: a folder takes its whole subtree with it, and
   // deleting a file whose folder is already gone would be a 404 either way.
   async function deleteSelected(): Promise<void> {
-    // Batch delete is the easiest one to fire by accident -- the button sits
-    // where Move to… was a moment ago -- and with a folder ticked it reaches
-    // far past the rows on screen.
-    const message =
-      selectedFolders.size === 0
-        ? t('files.deleteSelectedConfirm', { count: selected.size })
-        : t('files.deleteSelectedMixedConfirm', {
-            files: selected.size,
-            folders: selectedFolders.size,
-          });
+    if (deletingRef.current || selected.size + selectedFolders.size === 0) return;
+    const message = selectedFolders.size === 0
+      ? t('files.deleteSelectedConfirm', { count: selected.size })
+      : t('files.deleteSelectedMixedConfirm', { files: selected.size, folders: selectedFolders.size });
     if (!window.confirm(message)) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    const originPath = currentPath;
     const removed: GarbageEntryDTO[] = [];
-    for (const path of selected) removed.push(await filesService.remove(path));
-    for (const path of selectedFolders) removed.push(await filesService.remove(path));
-    const closedTheOpenOne = currentPath !== '' && selectedFolders.has(currentPath);
-    clearSelection();
-    await reload();
-    announceTrash(removed);
-    if (closedTheOpenOne) void navigate('/files');
+    const failedFiles = new Set<string>();
+    const failedFolders = new Set<string>();
+    try {
+      for (const [paths, failures] of [[selected, failedFiles], [selectedFolders, failedFolders]] as const) {
+        for (const path of paths) {
+          try { removed.push(await filesService.remove(path)); }
+          catch { failures.add(path); }
+        }
+      }
+      if (pathRef.current === originPath) {
+        setSelected(failedFiles);
+        setSelectedFolders(failedFolders);
+        setSelecting(failedFiles.size + failedFolders.size > 0);
+      }
+      if (removed.length > 0) announceTrash(removed);
+      if (failedFiles.size + failedFolders.size > 0) notify(t('files.deleteFailed', { count: failedFiles.size + failedFolders.size }));
+      try { await reload(); } catch { notify(t('files.refreshFailed')); }
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
+    }
   }
 
   // Files only: Move to… is hidden while a folder is ticked, so the batch bar
@@ -380,7 +444,7 @@ export function FilesPage() {
   // where a folder opens in place (Vinicius, 03/08).
   function renderFolder(folder: FileNodeDTO) {
     return (
-      <li key={folder.path} className="relative">
+      <li key={folder.path} className="relative select-none" {...selectionGesture(folder.path, true)}>
         <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]">
           {selecting ? (
             // Same as a file row: the folder's name is the only label the
@@ -388,6 +452,7 @@ export function FilesPage() {
             <Checkbox
               data-testid="folder-check"
               aria-label={folder.name}
+              disabled={deleting}
               checked={selectedFolders.has(folder.path)}
               onChange={() => toggleFolderSelected(folder.path)}
             />
@@ -395,7 +460,7 @@ export function FilesPage() {
           <Pressable
             type="button"
             data-testid="folder-row"
-            onClick={() => void navigate(`/files/${folder.path}`)}
+            onClick={() => selecting ? toggleFolderSelected(folder.path) : void navigate(`/files/${folder.path}`)}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <FolderIcon />
@@ -607,7 +672,9 @@ export function FilesPage() {
           >
             <TrashIcon />
           </Button>
+          {!searching && !selecting ? <Button type="button" variant="ghost" size="sm" data-testid="files-select" disabled={listing.length === 0} onClick={() => startSelection()}>{t('files.select')}</Button> : null}
           <SearchField
+            disabled={deleting}
             id="files-filter"
             data-testid="files-filter"
             value={filter}
@@ -653,7 +720,7 @@ export function FilesPage() {
 
       {/* While selecting, the bar is always there: Select all is the point of
           turning selection on for a whole folder, and Cancel is the way out
-          now that the toolbar button is gone (Vinicius, 03/08). Move and
+          without changing folders. Move and
           Delete only join once something is actually ticked. */}
       {!searching && selecting ? (
         <div className="flex flex-wrap items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
@@ -662,6 +729,7 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-select-all"
+            disabled={deleting}
             onClick={() => {
               setSelected(allSelected ? new Set() : new Set(visibleFiles.map((file) => file.path)));
               setSelectedFolders(
@@ -676,6 +744,7 @@ export function FilesPage() {
             variant="ghost"
             size="sm"
             data-testid="files-select-cancel"
+            disabled={deleting}
             onClick={clearSelection}
           >
             {t('common.cancel')}
@@ -692,6 +761,7 @@ export function FilesPage() {
             id="files-move-to"
             size="sm"
             data-testid="files-move-to"
+            disabled={deleting}
             aria-label={t('files.moveTo')}
             defaultValue=""
             onChange={(event) => {
@@ -712,7 +782,7 @@ export function FilesPage() {
               ))}
           </Select>
           )}
-          <Button type="button" variant="danger" size="sm" data-testid="files-delete-selected" onClick={() => void deleteSelected()}>
+          <Button type="button" variant="danger" size="sm" data-testid="files-delete-selected" disabled={deleting} onClick={() => void deleteSelected()}>
             {t('shell.delete')}
           </Button>
           </>
@@ -813,7 +883,7 @@ export function FilesPage() {
             ) : (
               <ul data-testid="all-artifacts">
                 {visibleFiles.map((file) => (
-                  <li key={file.path} className="relative">
+                  <li key={file.path} className="relative select-none" {...selectionGesture(file.path)}>
                     <div
                       data-testid="artifact-row"
                       className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-[var(--hover-overlay)]"
@@ -824,13 +894,14 @@ export function FilesPage() {
                         <Checkbox
                           data-testid="file-check"
                           aria-label={file.name}
+                          disabled={deleting}
                           checked={selected.has(file.path)}
                           onChange={() => toggleSelected(file.path)}
                         />
                       ) : null}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{file.name}</span>
+                          <Pressable type="button" data-testid="file-row" className="min-w-0 flex-1 truncate text-left text-sm font-medium" onClick={() => selecting ? toggleSelected(file.path) : openFile(file)}>{file.name}</Pressable>
                           <Pressable
                             type="button"
                             data-testid="file-menu"
@@ -865,6 +936,8 @@ export function FilesPage() {
 
       {viewing === undefined ? null : (
         <FileViewer
+          key={viewing.path}
+          onSaved={() => void reload()}
           path={viewing.path}
           name={viewing.name}
           onClose={() => setViewing(undefined)}

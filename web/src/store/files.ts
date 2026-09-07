@@ -19,7 +19,8 @@ export const useFilesStore = create<FilesState>((set) => ({
       const { tree } = await filesService.tree();
       set({ tree });
     } catch {
-      set({ tree: [] });
+      // A failed refresh is not an empty folder; retain the last known list.
+      set((state) => ({ tree: state.tree ?? [] }));
     }
   },
 }));

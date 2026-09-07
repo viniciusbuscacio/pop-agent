@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -8,7 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, extname } from 'node:path';
 import { cleanRelative, isHiddenPath, resolveInFiles } from '../../domain/files/safe-path.js';
 import type { Clock } from '../ports/clock.js';
 
@@ -66,6 +67,10 @@ export type MoveResult = 'ok' | 'not-found' | 'target-exists';
 export type RemoveResult = GarbageEntry | 'not-found';
 export type RestoreResult = 'ok' | 'not-found' | 'name-taken';
 
+export const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
+const EDITABLE_TEXT_EXTENSIONS = new Set(['.css', '.csv', '.js', '.json', '.log', '.md', '.mjs', '.ts', '.txt', '.xml', '.yaml', '.yml', '.spec', '.ini', '.conf', '.toml']);
+export type TextFileResult = { content: string; revision: string } | 'not-found' | 'unsupported' | 'too-large' | 'conflict';
+
 export class FilesService {
   constructor(
     private readonly deps: {
@@ -77,6 +82,33 @@ export class FilesService {
     },
   ) {
     mkdirSync(join(deps.root, GARBAGE_DIR), { recursive: true, mode: 0o700 });
+  }
+
+  readText(path: string): TextFileResult {
+    const stat = this.stat(path);
+    if (!stat || stat.kind !== 'file') return 'not-found';
+    if (!EDITABLE_TEXT_EXTENSIONS.has(extname(path).toLowerCase())) return 'unsupported';
+    if (stat.size > MAX_EDITABLE_TEXT_BYTES) return 'too-large';
+    const bytes = this.read(path);
+    if (!bytes) return 'not-found';
+    if (bytes.length > MAX_EDITABLE_TEXT_BYTES) return 'too-large';
+    try {
+      const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+      if (content.includes('\0')) return 'unsupported';
+      return { content, revision: createHash('sha256').update(bytes).digest('hex') };
+    } catch { return 'unsupported'; }
+  }
+
+  /** Read/check/write stays synchronous so concurrent HTTP editors cannot interleave. */
+  saveText(path: string, content: string, revision: string): TextFileResult {
+    const current = this.readText(path);
+    if (typeof current === 'string') return current;
+    if (current.revision !== revision) return 'conflict';
+    const bytes = Buffer.from(content, 'utf8');
+    if (bytes.length > MAX_EDITABLE_TEXT_BYTES) return 'too-large';
+    if (content.includes('\0') || bytes.toString('utf8') !== content) return 'unsupported';
+    this.write(path, bytes);
+    return { content, revision: createHash('sha256').update(bytes).digest('hex') };
   }
 
   /** The live tree: folders first, then files, both by name; Garbage and dotfiles unlisted. */

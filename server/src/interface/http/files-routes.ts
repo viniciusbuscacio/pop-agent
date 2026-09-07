@@ -2,13 +2,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type {
   FileLinkResponse,
+  FileTextDTO,
   FileNodeDTO,
   FilesTreeResponse,
   FilesNameSearchResponse,
   GarbageEntryDTO,
   GarbageResponse,
 } from '@pop-agent/shared';
-import type { FileNode, FilesService } from '../../application/files/files-service.js';
+import type { TextFileResult, FileNode, FilesService } from '../../application/files/files-service.js';
 import { buildFileLink } from '../../application/files/files-download.js';
 import type { Clock } from '../../application/ports/clock.js';
 import { apiError } from './errors.js';
@@ -39,6 +40,15 @@ export function createFilesRoutes(deps: FilesRoutesDeps): Hono {
   routes.get('/files', (c) =>
     c.json({ tree: deps.files.tree().map(toDto) } satisfies FilesTreeResponse),
   );
+
+  routes.get('/files/text', (c) => refusing(c, () => textResponse(c, deps.files.readText(c.req.query('path') ?? ''))));
+  routes.put('/files/text', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = z.object({ path: z.string().min(1), content: z.string().max(1024 * 1024), revision: z.string().regex(/^[a-f0-9]{64}$/) }).strict().safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+    return refusing(c, () => textResponse(c, deps.files.saveText(parsed.data.path, parsed.data.content, parsed.data.revision)));
+  });
 
   // Name search stays server-side so the phone does not need the whole tree.
   routes.get('/files/search', (c) => {
@@ -197,4 +207,12 @@ function toDto(node: FileNode): FileNodeDTO {
     mtime: new Date(node.mtimeMs).toISOString(),
     ...(node.children === undefined ? {} : { children: node.children.map(toDto) }),
   };
+}
+
+function textResponse(c: Parameters<typeof apiError>[0], result: TextFileResult): Response {
+  if (typeof result !== 'string') return c.json(result satisfies FileTextDTO);
+  if (result === 'not-found') return apiError(c, 404, 'not_found', 'No such file.');
+  if (result === 'conflict') return apiError(c, 409, 'file_changed', 'The file changed after it was opened.');
+  if (result === 'too-large') return apiError(c, 413, 'too_large', 'The text editor supports files up to 1 MB.');
+  return apiError(c, 415, 'unsupported_text', 'This file is not supported UTF-8 text.');
 }

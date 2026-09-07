@@ -1,5 +1,7 @@
 import type {
   FileLinkResponse,
+  FileTextDTO,
+  SaveFileTextRequest,
   FileNodeDTO,
   FilesNameSearchResponse,
   FilesTreeResponse,
@@ -14,6 +16,12 @@ import { apiRequest, apiUpload } from './api';
  * move are the same operation, a path edit.
  */
 export const filesService = {
+  readText(path: string): Promise<FileTextDTO> {
+    return apiRequest<FileTextDTO>(`/files/text?path=${encodeURIComponent(path)}`);
+  },
+  saveText(value: SaveFileTextRequest): Promise<FileTextDTO> {
+    return apiRequest<FileTextDTO>('/files/text', { method: 'PUT', body: value });
+  },
   tree(): Promise<FilesTreeResponse> {
     return apiRequest<FilesTreeResponse>('/files');
   },

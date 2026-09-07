@@ -204,3 +204,7 @@ DTO changes, compatibility tests and migration guidance.
 ## REST integrations
 
 The scoped integration server and owner-managed REST clients are specified in [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md). The authenticated `/v1/rest-api/reference` exports their current inbound reference and OpenAPI.
+
+### Small text-file editing
+
+Owner-authenticated `GET /v1/files/text?path=<relative-path>` returns `FileTextDTO` (UTF-8 `content` and opaque `revision`). `PUT /v1/files/text` accepts `SaveFileTextRequest` (`path`, `content`, `revision`) and returns the new `FileTextDTO`. The same Files path jail applies. Supported text extensions and a 1 MiB UTF-8 byte limit are enforced server-side; empty text is allowed. A stale revision returns 409 `file_changed`, a deleted file returns 404, oversized content returns 413 and unsupported/binary text returns 415. Saves do not recreate deleted files. The revision check and write execute synchronously within the server process.

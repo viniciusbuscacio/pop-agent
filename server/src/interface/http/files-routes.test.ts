@@ -139,3 +139,24 @@ describe('files routes', () => {
     expect(body.hits.map((hit) => hit.path)).toEqual(['reports/Pesca.pdf']);
   });
 });
+
+  it('edits UTF-8 text conditionally, including empty content, and refuses stale editors', async () => {
+    const fixture=await signedIn();fixture.files.write('note.spec',Buffer.from('Olá'));
+    const read=await fixture.app.request('/v1/files/text?path=note.spec',{headers:auth(fixture.token)});
+    expect(read.status).toBe(200);const original=await read.json() as {content:string;revision:string};
+    expect(original.content).toBe('Olá');
+    const save=(content:string)=>fixture.app.request('/v1/files/text',{method:'PUT',headers:json(fixture.token),body:JSON.stringify({path:'note.spec',content,revision:original.revision})});
+    expect((await save('')).status).toBe(200);expect(fixture.files.read('note.spec')?.length).toBe(0);
+    expect((await save('stale')).status).toBe(409);expect(fixture.files.read('note.spec')?.length).toBe(0);
+    fixture.files.remove('note.spec');expect((await save('recreate')).status).toBe(404);
+  });
+  it('restricts text editing to authenticated, supported, bounded UTF-8 files inside Files', async () => {
+    const fixture=await signedIn();
+    fixture.files.write('binary.txt',Buffer.from([0xff,0xfe]));
+    fixture.files.write('large.txt',Buffer.alloc(1024*1024+1,65));
+    fixture.files.write('archive.zip',Buffer.from('text pretending to be an archive'));
+    for(const [path,status] of [['binary.txt',415],['large.txt',413],['archive.zip',415],['../secret.key',400]] as const){
+      expect((await fixture.app.request('/v1/files/text?path='+encodeURIComponent(path),{headers:auth(fixture.token)})).status).toBe(status);
+    }
+    expect((await fixture.app.request('/v1/files/text?path=binary.txt')).status).toBe(401);
+  });

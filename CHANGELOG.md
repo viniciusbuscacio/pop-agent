@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a minimal UTF-8 text editor to Files with Save/Cancel, retained drafts on failure and revision checks that reject stale saves.
+
+- Make Files multi-selection discoverable with Select and touch-and-hold, tap rows to select, and preserve failed items when batch trashing only partly succeeds.
+
 - Prevent REST API overview controls from squeezing descriptions into narrow columns on phones; hide repeated switch labels visually while retaining accessible names and align REST section typography.
 
 - Use the shared Enabled switch in Skill and MCP editors, matching A2A and REST API.
