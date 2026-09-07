@@ -86,3 +86,32 @@ it('keeps the last known file list when refresh fails', async () => {
   await reloadFiles();
   expect(useFilesStore.getState().tree).toBe(previous);
 });
+
+it('mouse click selects, the second click does not undo selection, and double click opens', () => {
+  mount();const row=screen.getAllByTestId('file-row')[0]!;
+  fireEvent.pointerDown(row,{pointerType:'mouse'});fireEvent.click(row,{detail:1});
+  expect(screen.getByRole('checkbox',{name:'a.md'})).toHaveProperty('checked',true);
+  expect(screen.queryByTestId('viewer')).toBeNull();
+  fireEvent.click(row,{detail:2});fireEvent.doubleClick(row);
+  expect(screen.getByRole('checkbox',{name:'a.md'})).toHaveProperty('checked',true);
+  expect(screen.getByTestId('viewer')).toBeTruthy();
+});
+it('touch taps open and touch double taps do not invoke desktop double-click behavior', () => {
+  mount();const row=screen.getAllByTestId('file-row')[0]!;
+  fireEvent.pointerDown(row,{pointerType:'touch'});fireEvent.pointerUp(row);fireEvent.click(row,{detail:1});
+  expect(screen.getByTestId('viewer')).toBeTruthy();
+  expect(screen.queryByTestId('file-check')).toBeNull();
+});
+it('Space selects and Enter opens even while selecting', () => {
+  mount();const row=screen.getAllByTestId('file-row')[0]!;
+  fireEvent.keyDown(row,{key:' '});
+  expect(screen.getByRole('checkbox',{name:'a.md'})).toHaveProperty('checked',true);
+  fireEvent.keyDown(row,{key:'Enter'});expect(screen.getByTestId('viewer')).toBeTruthy();
+});
+it('folder double click navigates after a single click selects', () => {
+  mount();const row=screen.getByTestId('folder-row');
+  fireEvent.pointerDown(row,{pointerType:'mouse'});fireEvent.click(row,{detail:1});
+  expect(screen.getByRole('checkbox',{name:'Docs'})).toHaveProperty('checked',true);
+  fireEvent.doubleClick(row);
+  expect(screen.queryByTestId('file-row')).toBeNull();
+});

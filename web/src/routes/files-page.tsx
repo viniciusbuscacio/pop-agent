@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type MouseEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { FileNodeDTO, GarbageEntryDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -56,6 +56,7 @@ export function FilesPage() {
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
   const hold = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined>(undefined);
+  const pointerKind = useRef('mouse');
   const heldClick = useRef<{ path: string; until: number } | undefined>(undefined);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -102,6 +103,7 @@ export function FilesPage() {
     return {
       onPointerDown: (event: PointerEvent<HTMLLIElement>) => {
         cancelHold();
+        pointerKind.current = event.pointerType || 'mouse';
         if (deletingRef.current || selecting || !['touch', 'pen'].includes(event.pointerType)
           || (event.target as HTMLElement).closest('input, [data-testid="file-menu"], [data-testid="folder-row-menu"]')) return;
         const { clientX: x, clientY: y } = event;
@@ -127,11 +129,40 @@ export function FilesPage() {
         }
       },
       onClick: (event: MouseEvent<HTMLLIElement>) => {
-        if (selecting && !(event.target as HTMLElement).closest('button,input')) {
-          if (folder) toggleFolderSelected(path); else toggleSelected(path);
-        }
+        if (!(event.target as HTMLElement).closest('button,input')) activateRow(event, path, folder);
+      },
+      onDoubleClick: (event: MouseEvent<HTMLLIElement>) => {
+        if (pointerKind.current !== 'mouse' || deletingRef.current
+          || (event.target as HTMLElement).closest('input, [data-testid="file-menu"], [data-testid="folder-row-menu"], [role="menu"]')) return;
+        event.preventDefault(); openItem(path, folder);
       },
     };
+  }
+
+  function openItem(path: string, folder: boolean): void {
+    if (deletingRef.current) return;
+    if (folder) void navigate(`/files/${path}`);
+    else setViewing({ path, name: baseName(path) });
+  }
+
+  function activateRow(event: MouseEvent<HTMLElement>, path: string, folder: boolean): void {
+    if (deletingRef.current) return;
+    const mouse = event.detail > 0 && pointerKind.current === 'mouse';
+    // The second click belongs to dblclick; it must not undo the first selection.
+    if (mouse && event.detail > 1) return;
+    if (selecting) {
+      if (folder) toggleFolderSelected(path); else toggleSelected(path);
+    } else if (mouse) startSelection(folder ? undefined : path, folder ? path : undefined);
+    else openItem(path, folder);
+  }
+
+  function rowKey(event: ReactKeyboardEvent<HTMLElement>, path: string, folder: boolean): void {
+    if (event.key === 'Enter') { event.preventDefault(); openItem(path, folder); }
+    else if (event.key === ' ') {
+      event.preventDefault();
+      if (selecting) { if (folder) toggleFolderSelected(path); else toggleSelected(path); }
+      else startSelection(folder ? undefined : path, folder ? path : undefined);
+    }
   }
 
   const searching = filter.trim().length > 0;
@@ -456,11 +487,12 @@ export function FilesPage() {
               checked={selectedFolders.has(folder.path)}
               onChange={() => toggleFolderSelected(folder.path)}
             />
-          ) : null}
+          ) : <span aria-hidden="true" className="h-4 w-4 shrink-0" />}
           <Pressable
             type="button"
             data-testid="folder-row"
-            onClick={() => selecting ? toggleFolderSelected(folder.path) : void navigate(`/files/${folder.path}`)}
+            onClick={(event) => activateRow(event, folder.path, true)}
+            onKeyDown={(event) => rowKey(event, folder.path, true)}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <FolderIcon />
@@ -672,7 +704,7 @@ export function FilesPage() {
           >
             <TrashIcon />
           </Button>
-          {!searching && !selecting ? <Button type="button" variant="ghost" size="sm" data-testid="files-select" disabled={listing.length === 0} onClick={() => startSelection()}>{t('files.select')}</Button> : null}
+          {!searching ? <Button type="button" variant="ghost" size="sm" data-testid="files-select" disabled={selecting || listing.length === 0} onClick={() => startSelection()}>{t('files.select')}</Button> : null}
           <SearchField
             disabled={deleting}
             id="files-filter"
@@ -723,7 +755,7 @@ export function FilesPage() {
           without changing folders. Move and
           Delete only join once something is actually ticked. */}
       {!searching && selecting ? (
-        <div className="flex flex-wrap items-center gap-2 px-3 pb-2" data-testid="files-batch-bar">
+        <div className="absolute inset-x-0 bottom-16 z-20 flex flex-wrap items-center gap-2 border-y border-[var(--border)] bg-[var(--panel-bg)] p-3 md:bottom-0" data-testid="files-batch-bar">
           <Button
             type="button"
             variant="ghost"
@@ -791,7 +823,7 @@ export function FilesPage() {
       ) : null}
 
       {/* pb-20 on a phone keeps the last row clear of the bottom bar below. */}
-      <PullToRefresh onRefresh={reload} className="pb-20 md:pb-0">
+      <PullToRefresh onRefresh={reload} className={selecting ? 'pb-40 md:pb-24' : 'pb-20 md:pb-0'}>
         {searching ? (
           searchHits === undefined ? null : folderHits.length === 0 && fileHits.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
@@ -898,10 +930,10 @@ export function FilesPage() {
                           checked={selected.has(file.path)}
                           onChange={() => toggleSelected(file.path)}
                         />
-                      ) : null}
+                      ) : <span aria-hidden="true" className="h-4 w-4 shrink-0" />}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <Pressable type="button" data-testid="file-row" className="min-w-0 flex-1 truncate text-left text-sm font-medium" onClick={() => selecting ? toggleSelected(file.path) : openFile(file)}>{file.name}</Pressable>
+                          <Pressable type="button" data-testid="file-row" className="min-w-0 flex-1 truncate text-left text-sm font-medium" onClick={(event) => activateRow(event, file.path, false)} onKeyDown={(event) => rowKey(event, file.path, false)}>{file.name}</Pressable>
                           <Pressable
                             type="button"
                             data-testid="file-menu"

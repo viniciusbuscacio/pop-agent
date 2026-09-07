@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use mouse single-click selection and double-click opening in Files, while retaining touch tap-to-open/hold-to-select and keyboard Space/Enter actions.
+
 - Add a minimal UTF-8 text editor to Files with Save/Cancel, retained drafts on failure and revision checks that reject stale saves.
 
 - Make Files multi-selection discoverable with Select and touch-and-hold, tap rows to select, and preserve failed items when batch trashing only partly succeeds.
