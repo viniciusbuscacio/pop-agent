@@ -703,7 +703,7 @@ chevron) inside the message box at the bottom right, then Add (+) outside the
 box on its right, aligned with Send. The box starts
 with one text line; 32px buttons sit beside the textarea, aligned to its bottom,
 and remain visible when text reaches its height cap and scrolls.
-Thinking and Plan mode are switches inside Add; no persistent mode labels
+Show Thinking and Plan mode are switches inside Add; no persistent mode labels
 occupy the message box. Plan mode retains its distinct input placeholder. Model opens an in-place page with Back, reusing the shared grouped
 model picker. Attach files and voice recording are direct actions. Controls
 remain English and share behavior across desktop, phone and installed PWA.
@@ -712,3 +712,6 @@ on outside press/Escape/navigation, and returns focus on explicit close.
 Stop replaces Send while recording or during a run without a sendable draft.
 During a run with a draft, Send retains queue/steering behavior and Stop remains
 available inside Add. Opening or navigating actions never sends a draft.
+
+The composer textarea keeps its neutral enclosing border when focused, without
+an inner accent outline. Other controls retain the shared focus treatment.

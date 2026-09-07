@@ -29,6 +29,11 @@ body {
   outline-offset: 2px;
 }
 
+/* The chat input uses its own enclosing box and caret, without an inner focus rectangle. */
+#composer-input:focus {
+  outline: none;
+}
+
 /* Selection inside the user's accent bubble inverts the pair, so the
    highlight stays visible on the coloured background in both themes. */
 .user-bubble::selection {

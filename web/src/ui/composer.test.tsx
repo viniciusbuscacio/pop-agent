@@ -79,11 +79,11 @@ describe('pending message composition', () => {
     expect(within(toolbar).getAllByRole('button')).toHaveLength(2);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'preserve this draft' } });
     fireEvent.click(screen.getByTestId('composer-actions'));
-    expect(screen.getByRole('switch', { name: 'Thinking' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Show Thinking' })).toBeTruthy();
     fireEvent.click(screen.getByTestId('composer-model'));
     expect(screen.getByRole('listbox', { name: 'Model' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByRole('switch', { name: 'Thinking' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Show Thinking' })).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(screen.getByTestId('composer-actions'));
@@ -94,7 +94,7 @@ describe('pending message composition', () => {
   it('keeps switches open and closes direct attachment actions without losing the draft', () => {
     renderComposer();
     fireEvent.click(screen.getByTestId('composer-actions'));
-    const thinking = screen.getByRole('switch', { name: 'Thinking' });
+    const thinking = screen.getByRole('switch', { name: 'Show Thinking' });
     const previous = (thinking as HTMLInputElement).checked;
     fireEvent.click(thinking);
     expect(thinking).toHaveProperty('checked', !previous);

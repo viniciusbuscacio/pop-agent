@@ -179,7 +179,7 @@ export const en = {
   'chat.placeholder': 'Message Pop Agent…',
   'chat.planPlaceholder': 'Plan without making changes…',
   'chat.actions': 'Chat actions',
-  'chat.thinkingLabel': 'Thinking',
+  'chat.thinkingLabel': 'Show Thinking',
   'chat.planLabel': 'Plan mode',
   'chat.planOn': 'Plan mode: on',
   'chat.planOff': 'Plan mode: off',
