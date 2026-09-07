@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hide per-message overflow buttons and their reserved gutter in mobile Chat.
+
 - Use the go-notepad Settings SVG arrow for the shared Back button across Pop Agent.
 
 - Make signed-in UI tabs follow the REST API Server switch automatically; remove manual tab naming, connection, Stop UI and screenshot-sharing controls.

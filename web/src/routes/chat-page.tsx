@@ -152,8 +152,8 @@ export function ChatPage() {
         const source = resendSource(history, index);
         const canResend = source !== undefined && idle && pending.length === 0;
         return (
-          <div key={message.id} data-context-message={message.id} className="relative min-w-0 pr-8">
-          <Pressable type="button" data-testid="message-context-trigger" onPointerDown={event=>event.preventDefault()} aria-label={t('context.actions')} className="absolute right-0 top-0 rounded px-2 text-[var(--muted)]">⋯</Pressable>
+          <div key={message.id} data-context-message={message.id} className="relative min-w-0 md:pr-8">
+          <Pressable type="button" data-testid="message-context-trigger" onPointerDown={event=>event.preventDefault()} aria-label={t('context.actions')} className="absolute right-0 top-0 hidden rounded px-2 text-[var(--muted)] md:block">⋯</Pressable>
           <ChatMessage
             message={message}
             resending={resendingId === message.id}
