@@ -210,6 +210,10 @@ case $(uname -m) in
   *) die "unsupported architecture: $(uname -m); supported architectures are amd64 and arm64" ;;
 esac
 
+if [ "$ARCH" != amd64 ] && [ "$PREPARE_ONLY" -eq 0 ] && [ "$BUILD_FROM_SOURCE" -eq 0 ] && [ -z "${POP_AGENT_SERVER_RELEASE_DIR:-}" ]; then
+  die "prebuilt server releases currently support amd64 only; ARM64 publication is paused"
+fi
+
 install_phase platform
 install_event "event=platform os=linux architecture=$ARCH"
 OS_RELEASE_FILE=${POP_AGENT_OS_RELEASE_FILE:-/etc/os-release}

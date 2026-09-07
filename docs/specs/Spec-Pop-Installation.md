@@ -73,7 +73,7 @@ and bind downloaded bytes to the manifest or script the client already received.
 
 | Component | Owner / install mechanism | Current supported shape |
 |---|---|---|
-| Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64/arm64; fixed clean commit, prebuilt production package and pinned private Node/whisper.cpp runtime |
+| Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64; fixed clean commit, prebuilt production package and pinned private Node/whisper.cpp runtime |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
@@ -170,7 +170,7 @@ operator-owned.
 All acquisition paths hand checkout/data/workspace/port values and
 the selected apt/prepare options to the acquired checkout's delivered host
 bootstrap. That bootstrap starts from an **existing Pop Agent checkout** on
-Ubuntu Linux amd64/arm64:
+Ubuntu Linux amd64 (ARM64 server publication is paused):
 
 ```text
 deploy/bootstrap-server.sh --install-apt-packages
@@ -200,7 +200,7 @@ The selected bootstrap invokes `tools/install-prebuilt.ts` with native Node Type
 The architecture JSON manifest must match version, exact source commit/tree,
 Node version, Linux architecture and supported glibc, with positive bounded size,
 SHA-256 and a successful gate timestamp. Prebuilt release builders run on Ubuntu
-24.04 amd64/arm64. Archive validation rejects traversal, unexpected roots,
+24.04 amd64. Archive validation rejects traversal, unexpected roots,
 duplicates, hard links, special entries, escaping links and writes through a
 symlink. Only ignored runtime paths (production node_modules, compiled outputs
 and client manifests/current CLI tarball) may be extracted into a new isolated clone of the exact
@@ -711,8 +711,8 @@ explicit POP_AGENT_FFMPEG override remains supported. Development source builds
 may use the host FFmpeg when a bundled binary is absent.
 
 Before publishing, test real speech conversion and real Whisper transcription
-for WebM/Opus, fragmented MP4/AAC, M4A, WAV, MP3, Ogg/Vorbis, FLAC and AAC on both
-amd64 and arm64. Native installation probes include conversion to 16 kHz mono
+for WebM/Opus, fragmented MP4/AAC, M4A, WAV, MP3, Ogg/Vorbis, FLAC and AAC on
+amd64. ARM64 server build/publication is paused; release completion requires only the native amd64 package. Normal bootstrap rejects ARM64 before apt or artifact downloads, while explicit developer preparation/source builds retain their runtime metadata. Native installation probes include conversion to 16 kHz mono
 PCM16 WAV and reject missing or graphical dependencies. Compiler tools, source
 archives, speech fixtures and test models are release-build inputs, not downloads
 required by normal installation.

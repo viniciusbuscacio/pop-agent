@@ -4,6 +4,8 @@
 
 ## 0.2.76 — 2026-09-07
 
+- Pause ARM64 server builds/publication and ship only the native AMD64 server package; reject unsupported prebuilt installation before host changes.
+
 - Start REST API Server and Client disabled on fresh installations; preserve explicit existing settings. Publish the accumulated interface and installer updates as matching prebuilt packages.
 
 - Fix prebuilt installation from a shallow main clone by selecting the latest published stable release and its runtime pins in an isolated source checkout, then verifying matching source and prebuilt manifests; preserve the caller checkout and exact source/binary integrity checks.

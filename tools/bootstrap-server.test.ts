@@ -160,6 +160,15 @@ function run(fixture: Fixture, extra: string[] = [], env: NodeJS.ProcessEnv = fi
 }
 
 describe('server toolchain bootstrap', () => {
+  it('rejects normal ARM64 installation before installing packages or downloading artifacts', () => {
+    const fixture = createFixture();
+    const result = spawnSync(fixture.script, ['--install-apt-packages'], { encoding: 'utf8', env: { ...fixture.env, FAKE_UNAME_M: 'aarch64' } });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('ARM64 publication is paused');
+    expect(() => readFileSync(fixture.sudoLog)).toThrow();
+    expect(() => readFileSync(fixture.curlLog)).toThrow();
+  });
+
   it.each(['1.2.3', '1.2.4'])('delegates development %s to the stable tagged bootstrap before reading runtime pins', (developmentVersion) => {
     const fixture = createFixture({ packagesInstalled: true });
     const release = join(fixture.root, 'release-origin');

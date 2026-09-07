@@ -2,7 +2,7 @@
 
 ## Recommended Git clone install
 
-On a fresh Ubuntu amd64/arm64 host, run as the non-root service owner:
+On a fresh Ubuntu amd64 host, run as the non-root service owner:
 
 ```sh
 git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
@@ -128,7 +128,7 @@ HTTP client, remote manifest or source download behavior.
 ## Existing-checkout host bootstrap
 
 For an **existing Pop Agent checkout**, Ubuntu operators on amd64
-or arm64 can prepare the narrowly supported host/toolchain layer and hand off to
+can prepare the narrowly supported host/toolchain layer and hand off to
 the production systemd installer:
 
 ```sh
@@ -199,7 +199,7 @@ or incompatible release fails with a clear message, without silently compiling.
 
 The manifest binds version, commit, source tree, exact Node runtime, Linux
 architecture, minimum glibc, archive byte size/SHA-256 and the build gate date.
-Prebuilt packages target Ubuntu 24.04 or newer on amd64/arm64. The installer
+Prebuilt packages target Ubuntu 24.04 or newer on amd64. ARM64 server publication is paused. The installer
 checks metadata and bytes, screens archive paths/links, and extracts into an
 isolated owner-only generation beneath:
 

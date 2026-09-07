@@ -45,7 +45,7 @@ only for configured or explicitly used features.
 
 ## Install on Ubuntu
 
-The supported server is a fresh **Ubuntu systemd** host on **amd64 or arm64**.
+The supported server is a fresh **Ubuntu systemd** host on **amd64 (Intel/AMD x86-64)**.
 Use a non-root account with `sudo`, Git, and outbound HTTPS. The bootstrap
 installs only missing base/runtime apt prerequisites plus Tailscale, downloads repository-pinned Node
 and `whisper.cpp` archives with size/SHA-256 verification, installs a prebuilt
@@ -55,7 +55,7 @@ installation does not install Ubuntu's FFmpeg package or its graphical/video
 dependencies. Client runtime downloads are fetched and cached on demand. Python, C/C++ compilers, Go,
 TypeScript builds and the full test suite are only needed on release builders,
 not on the normal installation host. Prebuilt releases support Ubuntu 24.04 or
-newer on amd64/arm64; the manifest checks the actual glibc and Node versions.
+newer on amd64; the manifest checks the actual glibc and Node versions.
 
 ```sh
 git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
