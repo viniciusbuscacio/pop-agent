@@ -279,9 +279,10 @@ describe('server toolchain bootstrap', () => {
     const fixture = createFixture();
     const result = run(fixture, ['--install-apt-packages', '--prepare-only']);
     expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('wait up to 5 minutes for its package lock');
     expect(readFileSync(fixture.sudoLog, 'utf8').trim().split('\n')).toEqual([
       '-- env DEBIAN_FRONTEND=noninteractive apt-get update',
-      '-- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git xz-utils tar libgomp1 libstdc++6 build-essential python3 ffmpeg',
+      '-- env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends ca-certificates curl git xz-utils tar libgomp1 libstdc++6 build-essential python3 ffmpeg',
     ]);
   });
 
@@ -291,7 +292,7 @@ describe('server toolchain bootstrap', () => {
     expect(source).toContain('3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39');
     expect(source).toContain('/usr/share/keyrings/tailscale-archive-keyring.gpg');
     expect(source).toContain('/etc/apt/sources.list.d/tailscale.list');
-    expect(source).toContain('apt-get install -y --no-install-recommends tailscale');
+    expect(source).toContain('apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends tailscale');
     expect(source).toContain('systemctl enable --now tailscaled');
   });
 

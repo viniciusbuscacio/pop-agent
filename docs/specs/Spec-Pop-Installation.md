@@ -179,7 +179,7 @@ deploy/bootstrap-server.sh --install-apt-packages
 It refuses root and unsupported platforms. An explicit
 `--install-apt-packages` permits apt update/install of `ca-certificates`, `curl`,
 `git`, `xz-utils`, `tar`, `libgomp1`, `libstdc++6` and `tailscale` through sudo.
-Only missing prerequisites are installed; an already prepared host skips apt.
+Only missing prerequisites are installed; an already prepared host skips apt. Both prerequisite and Tailscale apt installs use `DPkg::Lock::Timeout=300`, waiting up to five minutes for Ubuntu automatic upgrades to release the package lock. The installer announces this wait. It never deletes lock files or stops the updater; a timeout remains a retryable failure.
 Whisper remains installed by default. FFmpeg is supplied as an audio-only binary
 inside the verified server release, not through Ubuntu's multimedia package.
 The normal path must not request X11, Wayland, SDL, fonts or video libraries. The official Tailscale key is verified

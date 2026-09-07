@@ -262,15 +262,17 @@ if [ "$INSTALL_APT" -eq 1 ]; then
   done
   if [ -n "$missing_packages" ]; then
     say "Installing missing prerequisites:$missing_packages"
+    say "If Ubuntu is updating packages, installation will wait up to 5 minutes for its package lock."
     sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
     # This list contains only the fixed package names above, never user input.
-    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $missing_packages
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends $missing_packages
   else
     say "Base prerequisites are already installed."
   fi
   if [ "$PREPARE_ONLY" -eq 0 ] && [ "$NETWORK_ONBOARDING" -eq 1 ] && ! command -v tailscale >/dev/null 2>&1; then
     case $DIST_CODENAME in ''|*[!a-z0-9]*) die "unsupported Ubuntu codename for the Tailscale repository: $DIST_CODENAME" ;; esac
     install_phase tailscale-install
+    say "Installing Tailscale; waiting up to 5 minutes if Ubuntu is updating packages."
     TAILSCALE_KEY_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-key.XXXXXX") \
       || die "could not create temporary Tailscale key file"
     TAILSCALE_LIST_TEMP=$(mktemp "${TMPDIR:-/tmp}/pop-tailscale-list.XXXXXX") \
@@ -289,7 +291,7 @@ if [ "$INSTALL_APT" -eq 1 ]; then
     sudo -- install -o root -g root -m 0644 "$TAILSCALE_KEY_TEMP" /usr/share/keyrings/tailscale-archive-keyring.gpg
     sudo -- install -o root -g root -m 0644 "$TAILSCALE_LIST_TEMP" /etc/apt/sources.list.d/tailscale.list
     sudo -- env DEBIAN_FRONTEND=noninteractive apt-get update
-    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tailscale
+    sudo -- env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends tailscale
   fi
 fi
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Wait up to five minutes for the Ubuntu package manager lock when installing prerequisites or Tailscale, instead of failing immediately during automatic upgrades.
+
 ## 0.2.76 — 2026-09-07
 
 - Pause ARM64 server builds/publication and ship only the native AMD64 server package; reject unsupported prebuilt installation before host changes.
