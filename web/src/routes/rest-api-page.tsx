@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { useNotificationsStore } from '../store/notifications';
 import { ActionSurface } from '../ui/action-surface';
 import { AgentPageHeader } from '../ui/agent-page-header';
@@ -13,7 +14,11 @@ import { RestServerPanel } from './rest-server-panel';
 
 export function RestApiPage() {
   const [settings, setSettings] = useState<RestApiSettingsDTO>();
-  const [editing, setEditing] = useState<'server' | 'client'>();
+  const [params, setParams] = useSearchParams();
+  const editing = params.get('edit') === 'server' ? 'server' : params.get('edit') === 'client' ? 'client' : undefined;
+  const setEditing = (kind: 'server' | 'client' | undefined): void => {
+    setParams(current => { const next = new URLSearchParams(current); if (kind) next.set('edit', kind); else next.delete('edit'); return next; });
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);

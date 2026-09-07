@@ -1,3 +1,4 @@
+import { restApiStatus } from '../services/integrations';
 import { useState, useSyncExternalStore } from 'react';
 import { Pressable } from '../ui/controls';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -61,6 +62,7 @@ export function ShellFooter() {
     >
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">
+        <RestApiIndicator />
         <HealthDot />
         <RefreshButton />
         <Pressable
@@ -188,4 +190,18 @@ function GearIcon() {
       />
     </svg>
   );
+}
+
+/** Mirrors go-calc's small, clickable running-server indicator. */
+function RestApiIndicator() {
+  const enabled = useSyncExternalStore(restApiStatus.subscribe, restApiStatus.getState);
+  const health = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getState);
+  const navigate = useNavigate();
+  if (!enabled || health.kind === 'offline' || health.kind === 'device-offline') return null;
+  return <Pressable type="button" data-testid="api-indicator"
+    aria-label={t('rest.runningIndicator')} title={t('rest.runningIndicator')}
+    onClick={() => void navigate('/rest-api?edit=server')}
+    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--hover-overlay)]">
+    <span className="rest-api-dot" aria-hidden="true" />
+  </Pressable>;
 }

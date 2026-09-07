@@ -24,6 +24,7 @@ export const en = {
   'rest.previous': 'Previous',
   'rest.next': 'Next',
   'rest.pageCount': '{page} of {count}',
+  'rest.runningIndicator': 'REST API Server is enabled — click to configure',
   'rest.title': 'REST API',
   'rest.server': 'REST API Server',
   'rest.client': 'REST API Client',

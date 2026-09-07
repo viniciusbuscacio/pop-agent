@@ -88,3 +88,20 @@ body {
     transform: translateX(400%);
   }
 }
+
+/* Shared go-apps indicator: 8px dot with a 2.4-second glow, never a strobe. */
+.rest-api-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: rest-api-dot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes rest-api-dot-pulse {
+  0%, 100% { box-shadow: 0 0 3px var(--success); }
+  50% { box-shadow: 0 0 8px var(--success); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rest-api-dot { animation: none; }
+}

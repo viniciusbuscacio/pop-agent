@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show the go-apps green pulsing REST API Server indicator beside Settings while enabled and reachable; click opens server configuration.
+
 - Cover blank space below conversations and the Files folder tree with contextual actions, sharing folder creation with the main Files pane.
 
 - Add shared keyboard-accessible contextual menus to Files, Chat, explorer sidebars, Agent resource lists and Trash, with visible overflow controls, selection-aware actions and draft-preserving quotes.
