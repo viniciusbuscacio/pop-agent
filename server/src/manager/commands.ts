@@ -15,8 +15,6 @@
  * behaviour can be tested without a systemd or a database.
  */
 
-import { BackupError } from '../application/backup/backup-password.js';
-
 export interface ManagerIo {
   out(line: string): void;
   err(line: string): void;
@@ -25,6 +23,8 @@ export interface ManagerIo {
 export type ServiceVerb = 'start' | 'stop' | 'restart' | 'status';
 
 export interface ManagerDeps extends ManagerIo {
+  /** The composition root maps known backup failures to safe operator messages. */
+  backupError?: (error: unknown) => string;
   /** Runs a systemctl verb; returns its exit code. */
   service(verb: ServiceVerb): number;
   /** The unit being acted on, so the output says which one. */
@@ -87,7 +87,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
         deps.out(`${made.name}  ${megabytes(made.size)}`);
         return 0;
       } catch (error) {
-        deps.err(error instanceof BackupError ? error.message : 'Could not create backup.');
+        deps.err(deps.backupError?.(error) ?? 'Could not create backup. Configure a password in Settings → Backup first.');
         return 1;
       }
     }
@@ -130,7 +130,7 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
       try {
         restored = await deps.backups.restore(name, password);
       } catch (error) {
-        deps.err(error instanceof BackupError ? error.message : 'Could not restore backup. Check the archive and available disk space.');
+        deps.err(deps.backupError?.(error) ?? 'Could not restore backup. Check the archive and available disk space.');
         return 1;
       } finally {
         restarted = deps.service('start') === 0;

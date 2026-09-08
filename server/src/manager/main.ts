@@ -91,6 +91,9 @@ async function askPassword(prompt: string): Promise<string | undefined> {
 }
 
 async function deps(): Promise<ManagerDeps> {
+  const { BackupError } = await import('../application/backup/backup-password.js');
+  const backupError = (error: unknown): string => error instanceof BackupError
+    ? error.message : 'Backup operation failed. Check the archive and available disk space.';
   // Restore must not open SQLite or create a key before replacing offline data.
   if (process.argv[2] === 'restore' || process.argv[2] === 'backups') {
     const { TarBackupService } = await import('../infrastructure/backup/tar-backup-service.js');
@@ -99,7 +102,7 @@ async function deps(): Promise<ManagerDeps> {
     const backups = new TarBackupService({ dataDir, backupsDir: join(dataDir, '..', 'pop-backups'), now: () => new Date().toISOString() });
     return {
       out: (line) => process.stdout.write(`${line}\n`), err: (line) => process.stderr.write(`${line}\n`),
-      service, unit: UNIT, backups, askPassword, onboardingCode,
+      service, unit: UNIT, backups, askPassword, onboardingCode, backupError,
       resetPassword: () => Promise.resolve({ ok: false as const }), updateSteps: () => [],
     };
   }
@@ -125,6 +128,7 @@ async function deps(): Promise<ManagerDeps> {
   });
 
   return {
+    backupError,
     out: (line) => process.stdout.write(`${line}\n`),
     err: (line) => process.stderr.write(`${line}\n`),
     service,
