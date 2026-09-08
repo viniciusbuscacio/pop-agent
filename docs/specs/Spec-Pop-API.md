@@ -168,12 +168,16 @@ Signed public download URLs bind canonical path and expiry and remain subject to
 the final filesystem jail. Backup downloads are guarded and streamed with
 no-store: encrypted `.popbackup` files use application/octet-stream; legacy
 `.tar.gz` files use application/gzip. GET /backups reports encrypted status and
-passwordConfigured only. PUT /backups/password accepts a matching password and
+passwordConfigured, restoreAvailable and the current operation state (without passwords). PUT /backups/password accepts a matching password and
 confirmation (10–128 characters), saves through SecretsRepo and returns no
 secret. POST /backups requires a configured password and never falls back to
 plaintext creation.
-Live backup restore always conflicts; offline `popman restore` is the only
-restore path.
+POST /backups/:name/restore accepts `{ confirm: true, password?: string }` and
+returns 202 after queuing background validation on the installed systemd service.
+Encrypted archives require their own password. Replacement occurs only at cold
+boot, before repositories open. Unsupported hosts and concurrent operations
+return 409. GET /backups lets clients recover operation state after navigation.
+The offline `popman restore` command remains available.
 
 ## Local Access transport
 

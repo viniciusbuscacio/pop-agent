@@ -180,9 +180,38 @@ snapshot only as SecretsRepo ciphertext; `secret.key` remains excluded.
 Legacy `.tar.gz` archives remain unencrypted, downloadable and restorable, with
 an explicit label in the UI. New encryption does not rewrite old archives.
 
-## Offline restore
+Downloadable `models/` (embedding weights) and `voice-models/` (Whisper weights)
+are excluded from new backups. They are not owner content. Browser restoration
+reuses existing host caches; a new host downloads them on demand. User files,
+conversation sessions, skills, settings, credentials and required pi runtime
+state remain included. Older archives containing model caches remain readable.
 
-Live HTTP restore remains forbidden. `popman restore <exact-backup-name>` asks
+## Browser and offline restore
+
+Settings → Backup offers Restore for each saved archive on the installed systemd
+service. The owner confirms replacement and supplies that archive's password.
+HTTP accepts the operation (202) and prepares a validated snapshot in a private
+sibling directory. It never replaces data beneath live repositories. On success,
+the process exits for systemd restart; cold boot installs the prepared directory
+**before** bootstrap opens SQLite or starts any jobs. The previous directory is
+retained beside the data root as `.before-restore-<id>` for operator recovery;
+these recovery directories require manual cleanup and are not part of the ten
+archive retention limit. The UI warns about data replacement, interrupted runs
+and signing in again with the credentials from the snapshot.
+
+The rename journal resumes interruption between moving the old directory and
+installing the staged directory. An incomplete preparation is discarded. Failed
+installation restores the old directory before bootstrap; failure to roll back
+must fail startup closed. Browser restore replaces the complete snapshot rather
+than retaining newer files through an overlay. The same authenticated archive
+validation and host-key handling are shared with operator restore.
+
+GET `/v1/backups` exposes operation state without secrets. The screen polls every
+ten seconds, so leaving and returning does not lose the state of backup creation
+or restore preparation. Both run server-side; creation and preparation require
+the server to remain running. Conflicting backup mutations are rejected.
+
+`popman restore <exact-backup-name>` asks
 for the archive password with terminal echo disabled for `.popbackup` files.
 It does not retrieve a saved password as a shortcut: older archives may need an
 older password. No password is passed via argv or environment. Missing input
@@ -212,7 +241,8 @@ password is re-saved under the destination key for future backups.
 - malformed/escaped note and Files paths fail closed;
 - secret-shaped memory content is scrubbed through every write surface;
 - backup tests prove committed WAL rows are present without WAL/SHM sidecars;
-- live HTTP restore returns a conflict and performs no extraction;
+- browser restore validates confirmation, stages without live replacement, and installs only at cold boot;
+- invalid passwords, interrupted preparation and interrupted directory swaps preserve recoverable data;
 - operator restore proves stop → extract → start ordering;
 - backup archives exclude the encryption key and their own staging/backups;
 - storage totals avoid double counting and include external backup bytes.

@@ -8,12 +8,13 @@ import { c, t, x } from 'tar';
 import { BACKUP_PASSWORD_KEY, BackupError, BackupPassword } from '../../application/backup/backup-password.js';
 import { SqliteSecretsRepo } from '../db/sqlite-secrets-repo.js';
 import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
-import type { BackupInfo, BackupService } from '../../application/ports/backup-service.js';
+import type { BackupInfo, BackupOperation, BackupService } from '../../application/ports/backup-service.js';
+import { prepareBrowserRestore, readRestoreStatus } from './browser-restore.js';
 import { decryptArchive, encryptArchive } from './archive-crypto.js';
 
 const KEEP = 10;
 const DATABASE_FILE = 'pop-agent.db';
-const EXCLUDED = new Set(['secret.key', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
+const EXCLUDED = new Set(['secret.key', 'models', 'voice-models', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
 
 export interface TarBackupDeps {
   dataDir: string;
@@ -21,11 +22,36 @@ export interface TarBackupDeps {
   now: () => string;
   /** Offline restore always takes the archive password; it needs no SecretsRepo. */
   secrets?: SecretsRepo;
+  restartForRestore?: () => void;
 }
 
 export class TarBackupService implements BackupService {
   private busy = false;
+  private operation: BackupOperation;
+
+  status(): BackupOperation { return { ...this.operation }; }
+  canRestore(): boolean { return this.deps.restartForRestore !== undefined; }
+
+  requestRestore(name: string, password?: string): void {
+    if (this.busy) throw new BackupError('A backup operation is already running.');
+    if (!this.canRestore()) throw new BackupError('Browser restore requires the installed systemd service.');
+    if (this.pathOf(name) === undefined) throw new BackupError('No such backup.');
+    if (name.endsWith('.popbackup') && !password) throw new BackupError('Enter the password used to create this backup.');
+    this.busy = true;
+    this.operation = { state: 'preparing' };
+    void prepareBrowserRestore(this.deps.dataDir, async (destination) => {
+      const offline = new TarBackupService({ ...this.deps, dataDir: destination });
+      if (!await offline.restore(name, password)) throw new BackupError('No such backup.');
+    }).then(() => {
+      this.operation = { state: 'restarting' };
+      this.deps.restartForRestore?.();
+    }).catch((error: unknown) => {
+      this.busy = false;
+      this.operation = { state: 'failed', message: error instanceof BackupError ? error.message : 'Could not prepare restore. Check available disk space and try again.' };
+    });
+  }
   constructor(private readonly deps: TarBackupDeps) {
+    this.operation = readRestoreStatus(deps.dataDir);
     const rel = relative(resolve(deps.dataDir), resolve(deps.backupsDir));
     if (rel === '' || (rel !== '..' && !rel.startsWith('../'))) {
       throw new BackupError('Backups must be outside the data directory.');
@@ -57,6 +83,7 @@ export class TarBackupService implements BackupService {
     if (this.deps.secrets === undefined) throw new BackupError('Set a backup password in Settings → Backup first.');
     const password = new BackupPassword(this.deps.secrets).read();
     this.busy = true;
+    this.operation = { state: 'creating' };
     let stagingRoot: string | undefined;
     try {
       const stamp = this.deps.now().replace(/[:.]/g, '-');
@@ -81,8 +108,8 @@ export class TarBackupService implements BackupService {
       this.prune();
       return { name, size: (await stat(target)).size, createdAt: this.deps.now(), encrypted: true };
     } finally {
-      this.busy = false;
-      if (stagingRoot !== undefined) await rm(stagingRoot, { recursive: true, force: true });
+      try { if (stagingRoot !== undefined) await rm(stagingRoot, { recursive: true, force: true }); }
+      finally { this.busy = false; this.operation = { state: 'idle' }; }
     }
   }
 
@@ -124,6 +151,7 @@ export class TarBackupService implements BackupService {
   }
 
   delete(name: string): boolean {
+    if (this.busy) throw new BackupError('A backup operation is already running.');
     const path = this.pathOf(name);
     if (path === undefined) return false;
     rmSync(path);
@@ -131,7 +159,10 @@ export class TarBackupService implements BackupService {
   }
 
   private prune(): void {
-    for (const backup of this.list().slice(KEEP)) this.delete(backup.name);
+    for (const backup of this.list().slice(KEEP)) {
+      const path = this.pathOf(backup.name);
+      if (path !== undefined) rmSync(path);
+    }
   }
 }
 

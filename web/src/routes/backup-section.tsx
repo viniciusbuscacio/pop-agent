@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
-import type { BackupDTO } from '@pop-agent/shared';
+import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { backupsService } from '../services/backups';
 import { Button, Card, TextField } from '../ui/controls';
 
-/** Live backup management; restore is an offline operator action. */
+/** Server-owned operations remain visible after navigating away and back. */
 export function BackupSection() {
   const [backups, setBackups] = useState<BackupDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [pending, setBusy] = useState(false);
+  const [operation, setOperation] = useState<BackupsResponse['operation']>();
+  const [restoreAvailable, setRestoreAvailable] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<BackupDTO>();
+  const [restorePassword, setRestorePassword] = useState('');
+  const running = operation !== undefined && ['creating', 'preparing', 'restarting'].includes(operation.state);
+  const busy = pending || running;
   const [error, setError] = useState<string | undefined>(undefined);
   const [configured, setConfigured] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -17,6 +23,8 @@ export function BackupSection() {
 
   useEffect(() => {
     void reload();
+    const timer = window.setInterval(() => { void reload(); }, 10_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   async function reload(): Promise<void> {
@@ -24,6 +32,8 @@ export function BackupSection() {
       const result = await backupsService.list();
       setBackups(result.backups);
       setConfigured(result.passwordConfigured === true);
+      setOperation(result.operation);
+      setRestoreAvailable(result.restoreAvailable === true);
       setError(undefined);
     } catch {
       setError(t('backup.loadFailed'));
@@ -36,13 +46,27 @@ export function BackupSection() {
     setBusy(true);
     setError(undefined);
     try {
+      setOperation({ state: 'creating' });
       await backupsService.create();
       await reload();
     } catch {
+      setOperation({ state: 'idle' });
       setError(t('backup.createFailed'));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function restore(): Promise<void> {
+    if (restoreTarget === undefined || !window.confirm(t('backup.restoreConfirm', { name: restoreTarget.name }))) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await backupsService.restore(restoreTarget.name, restoreTarget.encrypted === true ? restorePassword : undefined);
+      setRestoreTarget(undefined);
+      setOperation({ state: 'preparing' });
+    } catch { setError(t('backup.restoreFailed')); }
+    finally { setRestorePassword(''); setBusy(false); }
   }
 
   function cancelPassword(): void {
@@ -125,10 +149,34 @@ export function BackupSection() {
         )}
         <div>
           <Button type="button" data-testid="backup-create" disabled={busy || loading || !configured || editing} onClick={() => void create()}>
-            {busy ? t('backup.creating') : t('backup.create')}
+            {operation?.state === 'creating' ? t('backup.creating') : t('backup.create')}
           </Button>
         </div>
       </Card>
+
+      {operation !== undefined && operation.state !== 'idle' ? (
+        <Card><p role={operation.state === 'failed' ? 'alert' : 'status'} className="text-sm text-[var(--muted)]">
+          {operation.state === 'creating' ? t('backup.background') :
+            operation.state === 'preparing' ? t('backup.preparing') :
+              operation.state === 'restarting' ? t('backup.restarting') : operation.message ?? t('backup.restored')}
+        </p></Card>
+      ) : null}
+
+      {restoreTarget === undefined ? null : (
+        <Card>
+          <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void restore(); }}>
+            <p className="text-sm font-medium">{t('backup.restoreTitle', { name: restoreTarget.name })}</p>
+            <p className="text-sm text-[var(--muted)]">{t('backup.restoreNotice')}</p>
+            {restoreTarget.encrypted === true ? <TextField id="restore-password" type="password" autoComplete="off"
+              label={t('backup.archivePassword')} value={restorePassword} required maxLength={128} disabled={busy}
+              onChange={(event) => setRestorePassword(event.target.value)} /> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="danger" disabled={busy || (restoreTarget.encrypted === true && !restorePassword)}>{t('backup.restoreNow')}</Button>
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => { setRestoreTarget(undefined); setRestorePassword(''); }}>{t('backup.cancel')}</Button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       {error === undefined ? null : (
         <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>
@@ -155,6 +203,9 @@ export function BackupSection() {
                 <Button type="button" variant="ghost" disabled={busy} onClick={() => void download(backup.name)}>
                   {t('backup.download')}
                 </Button>
+                <Button type="button" variant="ghost" disabled={busy || !restoreAvailable} onClick={() => {
+                  setRestoreTarget(backup); setRestorePassword(''); setEditing(false); setError(undefined);
+                }}>{t('backup.restore')}</Button>
                 <Button type="button" variant="danger" disabled={busy} onClick={() => void remove(backup.name)}>
                   {t('backup.delete')}
                 </Button>

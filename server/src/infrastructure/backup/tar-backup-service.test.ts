@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decryptArchive } from './archive-crypto.js';
 import { TarBackupService } from './tar-backup-service.js';
 
@@ -196,4 +196,49 @@ describe('TarBackupService', () => {
     expect(service.delete(info.name)).toBe(true);
     expect(service.list()).toHaveLength(0);
   });
+});
+
+it('queues encrypted browser restore, exposes progress, rejects overlap and applies only at cold boot', async () => {
+  const restart = vi.fn();
+  const browser = new TarBackupService({ dataDir, backupsDir, now: () => new Date().toISOString(),
+    secrets: { get: () => password, set: () => {}, delete: () => {} }, restartForRestore: restart });
+  const creating = browser.create();
+  expect(browser.status().state).toBe('creating');
+  expect(() => browser.requestRestore('anything')).toThrow('already running');
+  const backup = await creating;
+  expect(browser.status().state).toBe('idle');
+  const original = readFileSync(join(dataDir, 'pop-agent.db'));
+  browser.requestRestore(backup.name, 'incorrect-password');
+  await vi.waitFor(() => expect(browser.status().state).toBe('failed'));
+  expect(restart).not.toHaveBeenCalled();
+  expect(readFileSync(join(dataDir, 'pop-agent.db'))).toEqual(original);
+  writeFileSync(join(dataDir, 'newer-file'), 'after backup');
+  browser.requestRestore(backup.name, password);
+  expect(browser.status().state).toBe('preparing');
+  expect(() => browser.delete(backup.name)).toThrow('already running');
+  expect(() => browser.setPassword('other-password')).toThrow('already running');
+  await vi.waitFor(() => expect(restart).toHaveBeenCalledOnce());
+  expect(browser.status().state).toBe('restarting');
+  expect(existsSync(join(dataDir, 'newer-file'))).toBe(true);
+  const { applyPendingRestore } = await import('./browser-restore.js');
+  await applyPendingRestore(dataDir);
+  expect(existsSync(join(dataDir, 'newer-file'))).toBe(false);
+  const restored = new Database(join(dataDir, 'pop-agent.db'), { readonly: true });
+  expect(restored.prepare('SELECT value FROM facts').pluck().get()).toBe('the database');
+  restored.close();
+});
+
+it('excludes downloadable model caches while retaining user files and conversation sessions', async () => {
+  for (const name of ['models', 'voice-models', 'files', 'sessions']) {
+    mkdirSync(join(dataDir, name));
+    writeFileSync(join(dataDir, name, 'example'), name);
+  }
+  const backup = await service.create();
+  const archive = join(root, 'verified.tar.gz');
+  await decryptArchive(service.pathOf(backup.name) as string, archive, password);
+  const names = execFileSync('tar', ['tzf', archive], { encoding: 'utf8' });
+  expect(names).not.toContain('./models/');
+  expect(names).not.toContain('./voice-models/');
+  expect(names).toContain('./files/example');
+  expect(names).toContain('./sessions/example');
 });

@@ -13,8 +13,10 @@ export const backupsService = {
     return apiRequest<BackupDTO>('/backups', { method: 'POST' });
   },
 
-  restore(name: string): Promise<{ restartRequired: boolean }> {
-    return apiRequest<{ restartRequired: boolean }>(`/backups/${name}/restore`, { method: 'POST' });
+  restore(name: string, password?: string): Promise<{ accepted: boolean }> {
+    return apiRequest<{ accepted: boolean }>(`/backups/${encodeURIComponent(name)}/restore`, {
+      method: 'POST', body: { confirm: true, ...(password === undefined ? {} : { password }) },
+    });
   },
 
   remove(name: string): Promise<void> {

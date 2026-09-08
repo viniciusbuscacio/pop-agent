@@ -148,6 +148,8 @@ export interface BackupDTO {
 }
 
 export interface BackupsResponse {
+  restoreAvailable?: boolean;
+  operation?: { state: 'idle' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed'; message?: string };
   backups: BackupDTO[];
   passwordConfigured?: boolean;
 }

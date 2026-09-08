@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings → Backup can restore a saved archive after password confirmation, with background validation, automatic restart and recovery of the previous data directory. Backup operation status survives page navigation. Exclude downloadable voice/search model caches from new archives and reuse local caches during browser restore.
+
 - Encrypt new backup archives with an independent, confirmed password saved in encrypted secret storage for reuse; authenticate archives before offline restore, support legacy backups, and label their encryption status in Settings.
 
 - Document the distinction between encrypted new backup archives and unencrypted live server data: SQLite, user files and pi-managed sign-in tokens are not encrypted at rest by Pop. Legacy `.tar.gz` backups remain unencrypted and are labeled in Settings; creating encrypted backups does not retroactively encrypt them.

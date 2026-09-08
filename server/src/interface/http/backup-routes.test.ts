@@ -29,7 +29,7 @@ describe('backup restore boundary', () => {
     expect(await response.text()).toBe('');
     expect(backups.setPassword).toHaveBeenCalledWith('separate-password');
     const list = await app.request('/backups');
-    expect(await list.json()).toEqual({ backups: [], passwordConfigured: false });
+    expect(await list.json()).toEqual({ backups: [], passwordConfigured: false, restoreAvailable: false });
   });
   it('refuses to replace data through the live HTTP process', async () => {
     const backups = service('/backups/pop-backup-now.tar.gz');
@@ -46,4 +46,21 @@ describe('backup restore boundary', () => {
     });
     expect(response.status).toBe(404);
   });
+});
+
+it('requires explicit confirmation and queues restore without touching the live database', async () => {
+  const backups = service('/backups/pop-backup-now.popbackup');
+  backups.canRestore = () => true;
+  backups.requestRestore = vi.fn();
+  const app = createBackupRoutes({ backups });
+  const send = (body: unknown) => app.request('/backups/pop-backup-now.popbackup/restore', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  expect((await send({ password: 'archive-password' })).status).toBe(400);
+  expect(backups.requestRestore).not.toHaveBeenCalled();
+  const response = await send({ confirm: true, password: 'archive-password' });
+  expect(response.status).toBe(202);
+  expect(backups.requestRestore).toHaveBeenCalledWith('pop-backup-now.popbackup', 'archive-password');
+  expect(backups.restore).not.toHaveBeenCalled();
+  expect(await response.text()).not.toContain('archive-password');
 });

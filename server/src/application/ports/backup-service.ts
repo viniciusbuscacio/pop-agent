@@ -13,7 +13,15 @@ export interface BackupInfo {
   encrypted?: boolean;
 }
 
+export interface BackupOperation {
+  state: 'idle' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed';
+  message?: string;
+}
+
 export interface BackupService {
+  status?(): BackupOperation;
+  canRestore?(): boolean;
+  requestRestore?(name: string, password?: string): void;
   passwordConfigured(): boolean;
   setPassword(password: string): void;
   list(): BackupInfo[];

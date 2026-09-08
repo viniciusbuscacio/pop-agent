@@ -7,13 +7,7 @@ import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import type { BackupService } from '../../application/ports/backup-service.js';
 import { apiError } from './errors.js';
 
-/**
- * Backup and restore over HTTP (docs/specs/Spec-Pop-General.md §16). Settings → Backup lists the
- * snapshots, makes one, downloads one and deletes one. Restore is deliberately
- * unavailable in the live process: replacing SQLite beneath open repositories
- * can combine old in-memory state with restored files. `popman restore` stops
- * the service around extraction instead.
- */
+/** Browser restore only stages data; the next cold boot installs it offline. */
 export interface BackupRoutesDeps {
   backups: BackupService;
 }
@@ -21,9 +15,12 @@ export interface BackupRoutesDeps {
 export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
   const routes = new Hono();
 
-  routes.get('/backups', (c) =>
-    c.json({ backups: deps.backups.list().map(toDto), passwordConfigured: deps.backups.passwordConfigured() } satisfies BackupsResponse),
-  );
+  routes.get('/backups', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ backups: deps.backups.list().map(toDto), passwordConfigured: deps.backups.passwordConfigured(),
+      ...(deps.backups.status === undefined ? {} : { operation: deps.backups.status() }),
+      restoreAvailable: deps.backups.canRestore?.() === true } satisfies BackupsResponse);
+  });
 
   routes.put('/backups/password', async (c) => {
     const parsed = z.object({ password: z.string().min(10).max(128), confirmation: z.string().max(128) }).strict()
@@ -63,23 +60,31 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
     });
   });
 
-  routes.post('/backups/:name/restore', (c) => {
-    if (deps.backups.pathOf(c.req.param('name')) === undefined) {
-      return apiError(c, 404, 'not_found', 'No such backup.');
+  routes.post('/backups/:name/restore', async (c) => {
+    const name = c.req.param('name');
+    if (deps.backups.pathOf(name) === undefined) return apiError(c, 404, 'not_found', 'No such backup.');
+    if (deps.backups.requestRestore === undefined || !deps.backups.canRestore?.()) {
+      return apiError(c, 409, 'operation_error', 'Browser restore requires the installed systemd service. Use popman restore instead.');
     }
-    return apiError(
-      c,
-      409,
-      'operation_error',
-      'Restore requires the offline operator command: popman restore <backup>.',
-    );
+    const parsed = z.object({ confirm: z.literal(true), password: z.string().min(1).max(128).optional() }).strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, 'validation_error', 'Confirm the restore and provide the archive password.');
+    try {
+      deps.backups.requestRestore(name, parsed.data.password);
+      c.header('Cache-Control', 'no-store');
+      return c.json({ accepted: true }, 202);
+    } catch (error) {
+      return apiError(c, 409, 'operation_error', error instanceof BackupError ? error.message : 'Could not prepare restore.');
+    }
   });
 
-  routes.delete('/backups/:name', (c) =>
-    deps.backups.delete(c.req.param('name'))
-      ? c.body(null, 204)
-      : apiError(c, 404, 'not_found', 'No such backup.'),
-  );
+  routes.delete('/backups/:name', (c) => {
+    try {
+      return deps.backups.delete(c.req.param('name')) ? c.body(null, 204) : apiError(c, 404, 'not_found', 'No such backup.');
+    } catch (error) {
+      return apiError(c, 409, 'operation_error', error instanceof BackupError ? error.message : 'Could not delete backup.');
+    }
+  });
 
   return routes;
 }

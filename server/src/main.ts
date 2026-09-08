@@ -71,6 +71,8 @@ import { compiledServerArtifact } from './infrastructure/config/compiled-artifac
 import { readServerInfo } from './infrastructure/config/server-info.js';
 import { createFakeServiceControl, createSystemdControl } from './infrastructure/process/service-control.js';
 import { fetchOpenRouterCredits } from './infrastructure/providers/openrouter-credits.js';
+import { resolveDataDir } from './infrastructure/config/data-dir.js';
+import { applyPendingRestore } from './infrastructure/backup/browser-restore.js';
 import { TarBackupService } from './infrastructure/backup/tar-backup-service.js';
 import { StorageService } from './application/storage/storage-service.js';
 import { NodeDiskUsage } from './infrastructure/storage/node-disk-usage.js';
@@ -136,6 +138,7 @@ const piActivationSupervisorScript = compiledServerArtifact(
 );
 
 // Composition root: the one place that knows every layer (docs/specs/Spec-Pop-General.md §3).
+await applyPendingRestore(resolveDataDir());
 const context = bootstrap();
 const onboardingPath = join(context.dataDir, 'server-onboarding.json');
 const onboardingRepo = new JsonServerOnboardingRepo(onboardingPath);
@@ -777,6 +780,14 @@ const app = createApp({
   piActivation,
   deployment,
   backups: new TarBackupService({
+    ...(process.env['INVOCATION_ID'] !== undefined && process.env['POP_AGENT_SERVICE_CONTROL'] !== 'fake' ? {
+      restartForRestore: () => {
+        runs.flushInterrupted();
+        // The installed unit uses Restart=on-failure. All repositories close with
+        // this process; the next boot applies the staged snapshot before bootstrap.
+        process.exit(75);
+      },
+    } : {}),
     secrets: context.secrets,
     dataDir: context.dataDir,
     backupsDir,
