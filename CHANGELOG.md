@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Present provider model, priority and access as readable labelled rows with catalog model names.
+
 - Match provider Edit and Delete typography and padding to Add provider.
 
 - Keep local chat command output (including `/model list`) anchored in the timeline as new messages arrive.

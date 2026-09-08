@@ -223,6 +223,17 @@ function ProviderCard({
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState<string | undefined>(undefined);
   const authErrorAt = providerAuthErrorAt(provider);
+  const [modelName, setModelName] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    setModelName(undefined);
+    if (provider.defaultModel) {
+      void chatsService.models(provider.id).then(({ models }) => {
+        if (active) setModelName(models.find((model) => model.id === provider.defaultModel)?.name);
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [provider.id, provider.defaultModel, listVersion]);
 
   async function toggleEnabled(): Promise<void> {
     setToggling(true);
@@ -274,12 +285,14 @@ function ProviderCard({
 
       <div className="min-w-0">
         <Balance providerId={provider.id} listVersion={listVersion} />
-        <p className="break-words text-xs text-[var(--muted)]">
-          {t('provider.priorityBadge', { n: index + 1 })}
-          {provider.defaultModel === '' ? '' : ` · ${provider.defaultModel}`}
-          {provider.authType === 'oauth' ? ` · ${t('provider.bySubscription')}` : ''}
-          {!provider.enabled ? ` · ${t('provider.priority.off')}` : ''}
-        </p>
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm text-[var(--screen-fg)]" data-testid="provider-card-details">
+          <dt className="text-[var(--muted)]">{t('provider.model')}:</dt>
+          <dd className="min-w-0 break-words">{modelName ?? (provider.defaultModel || t('provider.card.defaultModel'))}</dd>
+          <dt className="text-[var(--muted)]">{t('provider.priority')}:</dt>
+          <dd>{index + 1} · {t(!provider.enabled ? 'provider.priority.off' : index === 0 ? 'provider.card.firstChoice' : 'provider.card.fallback')}</dd>
+          <dt className="text-[var(--muted)]">{t('provider.card.access')}:</dt>
+          <dd>{t(provider.authType === 'oauth' ? 'provider.card.subscription' : 'provider.card.apiKey')}</dd>
+        </dl>
       </div>
 
       {provider.id === 'openai-codex' ? (

@@ -398,6 +398,12 @@ export const en = {
   'provider.alreadyAdded': 'already added',
   'provider.none': 'No providers yet. Add one and Pop Agent can start answering.',
   'provider.priorityBadge': 'Priority {n}',
+  'provider.card.defaultModel': 'Provider default',
+  'provider.card.firstChoice': 'First choice',
+  'provider.card.fallback': 'Fallback',
+  'provider.card.access': 'Access',
+  'provider.card.subscription': 'Subscription',
+  'provider.card.apiKey': 'API key',
   'provider.bySubscription': 'subscription',
   'provider.deleteConfirm':
     'Remove "{name}"? A key has to be pasted again, and a subscription signed into again.',
