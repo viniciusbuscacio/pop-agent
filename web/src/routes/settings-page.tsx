@@ -400,6 +400,7 @@ function InstructionsSection() {
         label={t('settings.general.instructions')}
         hint={t('settings.general.instructionsHint')}
         rows={15}
+        className="min-h-[calc(15lh+1rem+2px)] shrink-0"
         maxLength={4000}
         value={instructions}
         onChange={(event) => {
@@ -509,7 +510,7 @@ function MemorySection() {
           setDoc(event.target.value);
           setSaved(false);
         }}
-        className="font-mono text-sm"
+        className="min-h-[calc(15lh+1rem+2px)] shrink-0 font-mono"
       />
 
       <div className="flex flex-wrap items-center gap-2">

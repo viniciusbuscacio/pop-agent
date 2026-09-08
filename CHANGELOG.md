@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Guarantee fifteen visible text lines in Instructions and Memory with a line-height-based minimum, and match their font sizes.
+
 - Match the Memory editor to the fifteen-row Instructions editor.
 
 - Increase the Instructions editor from five to fifteen visible text rows.
