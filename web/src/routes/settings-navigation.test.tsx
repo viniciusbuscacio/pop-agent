@@ -76,7 +76,7 @@ describe('Settings navigation', () => {
     await user.selectOptions(screen.getByTestId('settings-font-size'), 'huge');
 
     expect(document.documentElement.style.fontSize).toBe('140%');
-    expect(screen.getByTestId('settings-layout').className).toContain('md:w-[95%]');
+    expect(screen.getByTestId('settings-layout').className).toContain('md:w-[98%]');
     expect(screen.getByTestId('settings-layout').className).not.toContain('max-w-6xl');
     expect(screen.getByTestId('settings-content').className).toContain('max-w-full');
     expect(screen.getByTestId('settings-section-content').className).toContain('w-full');

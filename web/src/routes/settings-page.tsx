@@ -179,7 +179,7 @@ export function SettingsPage() {
 
       <div
         data-testid="settings-layout"
-        className="mx-auto grid w-full md:w-[95%] md:grid-cols-[21rem_minmax(0,1fr)]"
+        className="mx-auto grid w-full md:w-[98%] md:grid-cols-[21rem_minmax(0,1fr)]"
       >
         <SettingsIndex
           query={query}

@@ -198,7 +198,7 @@ Settings destinations.
 
 A destination deep-links as `/settings?section=<id>`. On a phone, Back returns
 from destination to Settings index and then to the unselected app list. On a
-wide screen, index and destination share a 95%-viewport split view and Back
+wide screen, index and destination share a 98%-viewport split view and Back
 returns to the chat/explorer that opened Settings. Route state is preferred;
 the session's last active chat is the fallback after reload/direct entry.
 

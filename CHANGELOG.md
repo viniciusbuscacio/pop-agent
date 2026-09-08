@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Widen the desktop Settings layout to 98% of the viewport.
+
 - Add an enabled-by-default Include files switch for backups. Archives without Files keep conversations and settings; restoring them preserves existing Files on the destination server.
 
 - Settings → Backup can restore a saved archive after password confirmation, with background validation, automatic restart and recovery of the previous data directory. Backup operation status survives page navigation. Exclude downloadable voice/search model caches from new archives and reuse local caches during browser restore.
