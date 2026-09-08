@@ -1,6 +1,7 @@
 import type {
   CreateCustomProviderResponse,
   CreateConfiguredCustomProviderRequest,
+  ModelsResponse,
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
@@ -89,6 +90,13 @@ export const providersService = {
     return apiRequest<ProviderSubscriptionUsageResponse>(
       `/providers/${providerId}/subscription-usage`,
     );
+  },
+
+  /** Owner-invoked upstream refresh for one connected subscription provider. */
+  refreshModels(providerId: string): Promise<ModelsResponse> {
+    return apiRequest<ModelsResponse>(`/providers/${providerId}/models/refresh`, {
+      method: 'POST',
+    });
   },
 
   /** The provider's default model; '' resets to the built-in one. */

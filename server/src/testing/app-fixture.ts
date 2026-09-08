@@ -319,6 +319,7 @@ export function createTestApp(
     clock,
     envKey: () => options.envKey,
     engineModels: () => bridge.listModels(),
+    engineRefreshModels: (providerId) => bridge.refreshProviderModels(providerId),
     engineHasAuth: (providerId) => providerAuth.authed.has(providerId),
     // The engine path answers through the same scripted gateway, so a test
     // reads the same script whichever door the completion came through.

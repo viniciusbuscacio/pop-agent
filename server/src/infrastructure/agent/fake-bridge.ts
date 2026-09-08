@@ -56,6 +56,10 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge, Session
     return Promise.resolve();
   }
 
+  refreshProviderModels(_providerId: string): Promise<ModelInfo[]> {
+    return this.listModels();
+  }
+
   providerSubscriptionUsage(): Promise<undefined> {
     return Promise.resolve(undefined);
   }

@@ -335,6 +335,25 @@ describe('GET /v1/models with a configured key', () => {
   });
 });
 
+describe('POST /v1/providers/:id/models/refresh', () => {
+  it('refreshes only a connected subscription provider', async () => {
+    fixture.providerAuth.authed.add('github-copilot');
+
+    const res = await authed('/v1/providers/github-copilot/models/refresh', { method: 'POST' });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      models: [{ id: 'fake/model-1' }, { id: 'fake/model-2' }],
+      source: 'engine',
+    });
+  });
+
+  it('rejects API-key and disconnected subscription providers', async () => {
+    expect((await authed('/v1/providers/openrouter/models/refresh', { method: 'POST' })).status).toBe(400);
+    expect((await authed('/v1/providers/github-copilot/models/refresh', { method: 'POST' })).status).toBe(409);
+  });
+});
+
 describe('POST /v1/transcribe', () => {
   const AUDIO = `data:audio/webm;codecs=opus;base64,${Buffer.from('fake audio').toString('base64')}`;
 

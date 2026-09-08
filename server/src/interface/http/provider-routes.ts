@@ -2,6 +2,8 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type {
   CreateCustomProviderResponse,
+  ModelDTO,
+  ModelsResponse,
   OAuthStartResponse,
   OAuthStateResponse,
   ProviderCreditsResponse,
@@ -21,6 +23,7 @@ import {
 } from '../../application/providers/provider-service.js';
 import { PROVIDER_DEFINITIONS } from '../../application/providers/provider-definitions.js';
 import { TranscriberError, type Transcriber } from '../../application/ports/transcriber.js';
+import type { ModelInfo } from '../../application/ports/agent-bridge.js';
 import type { VoiceCleanup } from '../../application/voice/voice-cleanup.js';
 import { badBody, readJson, schemaError } from './body.js';
 import { apiError } from './errors.js';
@@ -136,6 +139,24 @@ export function createProviderRoutes(deps: ProviderRoutesDeps): Hono {
       return c.json(usage satisfies ProviderSubscriptionUsageResponse);
     } catch {
       return apiError(c, 502, 'provider_unavailable', 'The subscription usage could not be read.');
+    }
+  });
+
+  routes.post('/providers/:id/models/refresh', async (c) => {
+    const id = c.req.param('id');
+    const status = deps.providers.status(id);
+    if (status === undefined) return providerNotFound(c, id);
+    if (status.authType !== 'oauth') {
+      return apiError(c, 400, 'invalid_provider', 'Only subscription providers refresh models here.');
+    }
+    if (!status.configured) {
+      return apiError(c, 409, 'provider_not_configured', 'Connect this subscription before refreshing its models.');
+    }
+    try {
+      const catalog = await deps.providers.refreshSubscriptionModels(id);
+      return c.json({ models: catalog.models.map(toModelDto), source: catalog.source } satisfies ModelsResponse);
+    } catch {
+      return apiError(c, 502, 'provider_catalog_refresh_failed', 'The provider model list could not be refreshed.');
     }
   });
 
@@ -467,6 +488,15 @@ function moveProviderToPriority(providers: ProviderService, providerId: string, 
 
 function providerNotFound(c: Context, id: string): Response {
   return apiError(c, 404, 'not_found', `Unknown provider "${id}".`);
+}
+
+function toModelDto(model: ModelInfo): ModelDTO {
+  return {
+    id: model.id,
+    ...(model.name === undefined ? {} : { name: model.name }),
+    ...(model.context === undefined ? {} : { context: model.context }),
+    ...(model.pricing === undefined ? {} : { pricing: model.pricing }),
+  };
 }
 
 function toStatusDto(status: import('../../application/providers/provider-service.js').ProviderStatus): ProviderStatusDTO {

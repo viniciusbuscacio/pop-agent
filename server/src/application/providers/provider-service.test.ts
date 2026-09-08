@@ -108,6 +108,8 @@ let gateway: ScriptedGateway;
 let clock: TickingClock;
 let envKey: string | undefined;
 let engineCatalog: ModelInfo[];
+let refreshedEngineCatalog: ModelInfo[];
+let engineRefreshes: string[];
 let oauthAuthed: Set<string>;
 let engineCompletions: { providerId: string; modelId: string; prompt: string }[];
 let engineUsage: RunUsage | undefined;
@@ -126,6 +128,8 @@ beforeEach(() => {
   clock = new TickingClock();
   envKey = undefined;
   engineCatalog = [{ id: 'engine/model' }];
+  refreshedEngineCatalog = [{ id: 'engine/refreshed-model' }];
+  engineRefreshes = [];
   oauthAuthed = new Set();
   engineCompletions = [];
   engineUsage = undefined;
@@ -144,6 +148,10 @@ beforeEach(() => {
     clock,
     envKey: () => envKey,
     engineModels: () => Promise.resolve(engineCatalog),
+    engineRefreshModels: (providerId) => {
+      engineRefreshes.push(providerId);
+      return Promise.resolve(refreshedEngineCatalog);
+    },
     engineHasAuth: (providerId) => oauthAuthed.has(providerId),
     engineComplete: (request) => {
       engineCompletions.push(request);
@@ -440,6 +448,16 @@ describe('resolving the pair', () => {
 
 describe('subscription (oauth) providers', () => {
   const CODEX = 'openai-codex';
+
+  it('requests a fresh provider-scoped engine catalog', async () => {
+    oauthAuthed.add(CODEX);
+
+    expect(await service.refreshSubscriptionModels(CODEX)).toEqual({
+      models: [{ id: 'engine/refreshed-model' }],
+      source: 'engine',
+    });
+    expect(engineRefreshes).toEqual([CODEX]);
+  });
 
   it('reports the engine credential as the whole configuration', () => {
     expect(service.status(CODEX)).toEqual({
@@ -1011,6 +1029,7 @@ describe('the Service Model, per provider (docs/specs/Spec-Pop-General.md §15, 
       clock,
       envKey: () => envKey,
       engineModels: () => Promise.resolve(engineCatalog),
+      engineRefreshModels: () => Promise.resolve(engineCatalog),
       engineHasAuth: (providerId) => oauthAuthed.has(providerId),
       engineComplete: (request) => {
         engineCompletions.push(request);
@@ -1057,6 +1076,7 @@ describe('the Service Model, per provider (docs/specs/Spec-Pop-General.md §15, 
       clock,
       envKey: () => envKey,
       engineModels: () => Promise.resolve(engineCatalog),
+      engineRefreshModels: () => Promise.resolve(engineCatalog),
       engineHasAuth: (providerId) => oauthAuthed.has(providerId),
       engineComplete: (request) => {
         engineCompletions.push(request);

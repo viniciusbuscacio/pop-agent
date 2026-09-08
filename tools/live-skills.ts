@@ -124,6 +124,7 @@ async function main(): Promise<void> {
     // The key-based providers -- which is what this instance uses -- are
     // unaffected.
     engineModels: () => Promise.resolve([]),
+    engineRefreshModels: () => Promise.reject(new Error('no engine in this harness')),
     engineHasAuth: () => false,
     engineComplete: () => Promise.reject(new Error('no engine in this harness')),
     engineLogout: () => Promise.resolve(),

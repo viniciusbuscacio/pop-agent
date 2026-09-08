@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make Refresh models fetch the selected subscription provider's current upstream pi catalog with a bounded forced refresh.
+
 - Keep provider Edit and Delete actions touch-friendly on phones while capping and right-aligning them on wider screens.
 
 - Remove the accent focus outline from every text-entry field, retaining the neutral box and caret.

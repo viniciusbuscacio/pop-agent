@@ -84,6 +84,7 @@ describe('pi sdk contract', () => {
         'getModel',
         'getModels',
         'getAuth',
+        'refresh',
         'setRuntimeApiKey',
         'registerProvider',
         'completeSimple',

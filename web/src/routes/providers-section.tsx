@@ -612,7 +612,7 @@ function ConfigureProvider({
     setCatalogNote(undefined);
     const revision = ++catalogRevision.current;
     try {
-      const response = await chatsService.models(provider.id);
+      const response = await providersService.refreshModels(provider.id);
       if (revision !== catalogRevision.current) return;
       setCatalogue(response.models.map((entry) => ({ value: entry.id, label: entry.name ?? entry.id })));
       setCatalogNote(t('provider.models.refreshed'));

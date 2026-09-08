@@ -14,6 +14,7 @@ const subscriptionUsage = vi.fn();
 const saveConfiguration = vi.fn();
 const createConfiguredCustom = vi.fn();
 const models = vi.fn();
+const refreshModels = vi.fn();
 
 vi.mock('../services/providers', () => ({
   normalizeBaseUrl: (value: string) => value,
@@ -21,6 +22,7 @@ vi.mock('../services/providers', () => ({
     list: () => list() as Promise<unknown>,
     credits: () => Promise.reject(new Error('no balance')),
     subscriptionUsage: (providerId: string) => subscriptionUsage(providerId) as Promise<unknown>,
+    refreshModels: (providerId: string) => refreshModels(providerId) as Promise<unknown>,
     setEnabled: vi.fn(),
     setOrder: vi.fn(),
     setKey: vi.fn(),
@@ -65,6 +67,7 @@ afterEach(cleanup);
 beforeEach(() => {
   checkHealth.mockClear();
   models.mockReset().mockResolvedValue({ models: [], source: 'engine' });
+  refreshModels.mockReset().mockResolvedValue({ models: [], source: 'engine' });
   oauthState.mockReset().mockRejectedValue(new Error('no active flow'));
   list.mockReset();
   list.mockResolvedValue({ providers: [CODEX] });
@@ -217,10 +220,10 @@ describe('subscription model refresh', () => {
     const input = screen.getByTestId('provider-model') as HTMLInputElement;
     await user.clear(input);
     await user.type(input, 'my-unsaved-model');
-    models.mockClear();
+    refreshModels.mockClear();
     await user.click(screen.getByTestId('provider-refresh-models'));
     expect(await screen.findByText('Model list refreshed.')).toBeTruthy();
-    expect(models).toHaveBeenCalledExactlyOnceWith(id);
+    expect(refreshModels).toHaveBeenCalledExactlyOnceWith(id);
     expect(input.value).toBe('my-unsaved-model');
     expect(saveConfiguration).not.toHaveBeenCalled();
   });
@@ -230,7 +233,7 @@ describe('subscription model refresh', () => {
     render(<ProvidersSection />);
     await user.click(await screen.findByTestId('provider-edit'));
     let reject!: (error: Error) => void;
-    models.mockImplementationOnce(() => new Promise((_resolve, no) => { reject = no; }));
+    refreshModels.mockImplementationOnce(() => new Promise((_resolve, no) => { reject = no; }));
     const button = screen.getByTestId('provider-refresh-models') as HTMLButtonElement;
     await user.click(button);
     expect(button.disabled).toBe(true);

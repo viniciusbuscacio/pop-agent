@@ -79,7 +79,9 @@ Host `~/.pi` settings, credentials, extensions, skills, prompts, themes and
 context files must not affect Pop Agent. The engine supplies its own
 `DefaultResourceLoader`, uses in-memory pi settings and disables host resource
 discovery. `allowModelNetwork` remains false during ordinary runtime creation;
-boot must not depend on a live model-catalog service.
+boot must not depend on a live model-catalog service. An explicit owner click
+on Refresh models may perform one provider-scoped, forced network refresh with
+a bounded timeout; it does not make boot or ordinary catalog reads online.
 
 Provider/model behavior and pi runtime update policy are additionally governed
 by `Spec-Pop-Providers-and-Models.md` and `Spec-Pop-Installation.md`.

@@ -254,6 +254,10 @@ class ScriptedEngine implements PiEngine {
     return Promise.resolve([{ id: 'moonshotai/kimi-k3' }]);
   }
 
+  refreshModels(): Promise<{ id: string }[]> {
+    return this.models();
+  }
+
   hasProviderAuth(): boolean {
     return false;
   }

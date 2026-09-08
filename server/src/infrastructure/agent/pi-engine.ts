@@ -209,6 +209,7 @@ export interface PiOpenOptions {
 export interface PiEngine {
   open(options: PiOpenOptions): Promise<PiSession>;
   models(providerId: string): Promise<ModelInfo[]>;
+  refreshModels(providerId: string): Promise<ModelInfo[]>;
   /** One completion outside a chat, for every kind of provider alike. */
   complete(request: {
     providerId: string;
@@ -646,6 +647,29 @@ export class SdkPiEngine implements PiEngine {
         pricing: { input: model.cost.input, output: model.cost.output },
       }))
       .sort((left, right) => left.id.localeCompare(right.id));
+  }
+
+  /** A bounded, owner-invoked exception to the offline-at-boot catalog policy. */
+  async refreshModels(providerId: string): Promise<ModelInfo[]> {
+    const runtime = await this.modelRuntime();
+    const deadline = new AbortController();
+    const timeout = setTimeout(() => deadline.abort(), 15_000);
+    try {
+      const result = await runtime.refresh({
+        allowNetwork: true,
+        force: true,
+        providers: [providerId],
+        signal: deadline.signal,
+      });
+      if (result.aborted || deadline.signal.aborted) {
+        throw new Error(`Model catalog refresh timed out for ${providerId}.`);
+      }
+      const failure = result.errors.get(providerId);
+      if (failure !== undefined) throw failure;
+      return await this.models(providerId);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**

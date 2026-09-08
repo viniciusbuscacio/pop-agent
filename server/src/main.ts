@@ -298,6 +298,7 @@ const providers: ProviderService = new ProviderService({
   clock: systemClock,
   envKey: () => process.env['OPENROUTER_API_KEY'],
   engineModels: (providerId) => bridge.listModels(providerId),
+  engineRefreshModels: (providerId) => bridge.refreshProviderModels(providerId),
   // Subscription providers (docs/specs/Spec-Pop-General.md §15, fase 1.5): the engine owns the
   // credential; the service only ever asks yes/no questions about it.
   engineHasAuth: (providerId) => bridge.hasProviderAuth(providerId),

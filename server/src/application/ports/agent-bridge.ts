@@ -181,6 +181,8 @@ export interface ProviderSubscriptionUsage {
 export interface ProviderAuthBridge {
   /** Whether the engine holds working auth for the provider (sync snapshot). */
   hasProviderAuth(providerId: string): boolean;
+  /** Explicitly refreshes one subscription provider's upstream model catalog. */
+  refreshProviderModels(providerId: string): Promise<ModelInfo[]>;
   /**
    * Runs the provider's OAuth flow; the credential is persisted by the
    * engine's own store and never crosses this boundary.

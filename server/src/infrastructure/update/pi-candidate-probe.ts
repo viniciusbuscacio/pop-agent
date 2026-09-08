@@ -87,6 +87,7 @@ const modelRuntimeMethods = [
   'getModel',
   'getModels',
   'getAuth',
+  'refresh',
   'setRuntimeApiKey',
   'registerProvider',
   'completeSimple',

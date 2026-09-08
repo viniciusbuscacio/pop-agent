@@ -117,6 +117,8 @@ export interface ProviderServiceDeps {
    * when there is no key to fetch a live catalog with. Never the network.
    */
   engineModels: (providerId: string) => Promise<ModelInfo[]>;
+  /** Owner-invoked upstream refresh for a subscription provider's pi catalog. */
+  engineRefreshModels: (providerId: string) => Promise<ModelInfo[]>;
   /**
    * Whether the engine holds an OAuth credential for a provider (docs/specs/Spec-Pop-General.md
    * §15, fase 1.5). The credential lives in pi's own store; this is the only
@@ -932,6 +934,16 @@ export class ProviderService {
       writeCache: (cache) => this.deps.settings.set<CatalogCache>(cacheKey, cache),
       engineModels: (id) => this.deps.engineModels(id),
     });
+  }
+
+  /** Refreshes one connected subscription catalog instead of rereading its current snapshot. */
+  async refreshSubscriptionModels(
+    providerId: string,
+  ): Promise<{ models: ModelInfo[]; source: ModelCatalogSource }> {
+    const definition = this.definition(providerId);
+    if (definition === undefined) throw new Error(`Unknown provider "${providerId}".`);
+    if (definition.authType !== 'oauth') throw new Error(`Provider "${providerId}" is not a subscription.`);
+    return { models: await this.deps.engineRefreshModels(definition.id), source: 'engine' };
   }
 }
 

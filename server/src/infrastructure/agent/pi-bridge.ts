@@ -444,6 +444,10 @@ export class PiAgentBridge implements AgentBridge, ProviderAuthBridge, SessionCo
     return this.deps.engine.models(providerId ?? '');
   }
 
+  refreshProviderModels(providerId: string): Promise<ModelInfo[]> {
+    return this.deps.engine.refreshModels(providerId);
+  }
+
   complete(request: EngineCompletionRequest): Promise<{ text: string; usage?: RunUsage }> {
     return this.deps.engine.complete(request);
   }
