@@ -399,7 +399,7 @@ function InstructionsSection() {
         data-testid="settings-instructions"
         label={t('settings.general.instructions')}
         hint={t('settings.general.instructionsHint')}
-        rows={5}
+        rows={15}
         maxLength={4000}
         value={instructions}
         onChange={(event) => {
