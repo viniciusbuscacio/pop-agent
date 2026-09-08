@@ -46,6 +46,24 @@ export function collectUiState(): UiStateDTO {
   return { url: location.pathname + location.search, title: document.title, width: innerWidth, height: innerHeight, controls: entries, text: Array.from(document.querySelectorAll<HTMLElement>('h1,h2,[role="alert"]')).filter(e => visible(e) && !e.closest('[data-ui-private]')).map(e => e.innerText).join('\n').slice(0, 16000), screenshotAvailable: !!stream, pendingRequests: pendingUiRequests() };
 }
 const fail = (code: string, message: string): UiReplyDTO => ({ error: { code, message } });
+function scrollable(element: HTMLElement, deltaX: number, deltaY: number): boolean {
+  const style = getComputedStyle(element);
+  const scrollsX = deltaX !== 0 && element.scrollWidth > element.clientWidth && !['visible', 'clip'].includes(style.overflowX);
+  const scrollsY = deltaY !== 0 && element.scrollHeight > element.clientHeight && !['visible', 'clip'].includes(style.overflowY);
+  return scrollsX || scrollsY;
+}
+function scrollTarget(from: HTMLElement | undefined, deltaX: number, deltaY: number): HTMLElement | undefined {
+  for (let element = from; element !== null && element !== undefined; element = element.parentElement ?? undefined) {
+    if (scrollable(element, deltaX, deltaY)) return element;
+  }
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('*'))
+    .filter(element => visible(element) && scrollable(element, deltaX, deltaY));
+  return candidates.sort((left, right) => {
+    const a = left.getBoundingClientRect();
+    const b = right.getBoundingClientRect();
+    return b.width * b.height - a.width * a.height;
+  })[0];
+}
 function target(cmd: UiCommandDTO): HTMLElement | UiReplyDTO {
   const nodes = cmd.controlId === undefined
     ? controls().filter(e => e.dataset.testid === cmd.testid)
@@ -83,17 +101,21 @@ export async function performUiCommand(cmd: UiCommandDTO): Promise<UiReplyDTO> {
     if (accepted && (key === 'Enter' || key === ' ') && e instanceof HTMLButtonElement && !disabled(e)) e.click();
     e.dispatchEvent(new KeyboardEvent('keyup', init));
   } else if (cmd.kind === 'scroll') {
+    const deltaX = cmd.deltaX ?? 0;
+    const deltaY = cmd.deltaY ?? 0;
     const move = (element: HTMLElement): void => {
-      element.scrollLeft += cmd.deltaX ?? 0;
-      element.scrollTop += cmd.deltaY ?? 0;
+      element.scrollLeft += deltaX;
+      element.scrollTop += deltaY;
     };
     if (cmd.controlId !== undefined || cmd.testid !== undefined) {
       const found = target(cmd); if (!(found instanceof HTMLElement)) return found;
-      move(found);
+      const destination = scrollTarget(found, deltaX, deltaY);
+      if (destination !== undefined) move(destination);
     } else {
-      const scrollingElement = document.scrollingElement;
-      if (scrollingElement instanceof HTMLElement) move(scrollingElement);
-      else window.scrollBy({ left: cmd.deltaX ?? 0, top: cmd.deltaY ?? 0, behavior: 'auto' });
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+      const destination = scrollTarget(focused, deltaX, deltaY);
+      if (destination !== undefined) move(destination);
+      else window.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' });
     }
   } else if (cmd.kind !== 'state') {
     const found = target(cmd); if (!(found instanceof HTMLElement)) return found; const e = found;

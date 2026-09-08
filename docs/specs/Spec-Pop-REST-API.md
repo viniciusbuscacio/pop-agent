@@ -105,9 +105,10 @@ defined, along with role, name and disabled state. Commands accept one locator:
 the `controlId` from the latest state or a stable `testid` plus index. A stale
 control ID fails explicitly instead of acting on a replacement element.
 
-Scroll moves the viewport by bounded pixel deltas or, when addressed, a visible
-scroll container. Its result is a fresh state so an integration can discover
-controls that entered the viewport. Empty input clears a supported text/select
+Scroll moves the effective app viewport by bounded pixel deltas or, when
+addressed, the nearest scrollable ancestor of a visible control. Its result is
+a fresh state so an integration can discover controls that entered the
+viewport. Empty input clears a supported text/select
 field. Missing, ambiguous and disabled targets fail explicitly. Keyboard events
 invoke application handlers, not trusted browser/OS shortcuts. Native
 dialogs/file pickers require the user. The bridge does not execute arbitrary

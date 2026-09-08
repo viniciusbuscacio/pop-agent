@@ -19,7 +19,7 @@ POST /v1/integration/ui/input
 POST /v1/integration/ui/scroll
      {"sessionId":"<chosen-id>","deltaY":600}
 POST /v1/integration/ui/scroll
-     {"sessionId":"<chosen-id>","controlId":"<visible-scroll-container>","deltaY":600}
+     {"sessionId":"<chosen-id>","controlId":"<control-inside-scroll-region>","deltaY":600}
 POST /v1/integration/ui/key
      {"sessionId":"<chosen-id>","key":"Escape"}
 GET  /v1/integration/ui/screenshot?sessionId=<chosen-id>
@@ -30,12 +30,13 @@ Stable `testid` and repeated-control `index` are also returned when the element
 defines one. Read the latest state and use either `controlId`, or `testid` plus
 `index`; never combine the two addressing forms. A `controlId` may change after
 rendering or navigation. POST dblclick takes the same target as press. Empty
-input clears a text field. Scroll without a target moves the viewport; address
-a visible scroll container to move that container instead, then read state
-again to discover newly visible controls. These operations run in the selected
-real UI, including its current chat, model, permissions and local-machine
-selection. Application keyboard handlers work; native browser shortcuts, file
-pickers and system dialogs require human interaction. Read pendingRequests
+input clears a text field. Scroll without a target moves the active app
+viewport. Address a visible control to move its nearest scrollable ancestor
+instead, then read state again to discover newly visible controls. These
+operations run in the selected real UI, including its current chat, model,
+permissions and local-machine selection. Application keyboard handlers work;
+native browser shortcuts, file pickers and system dialogs require human
+interaction. Read pendingRequests
 before assuming an asynchronous action completed. No automatic mutation
 retries or idempotent replay are provided.
 

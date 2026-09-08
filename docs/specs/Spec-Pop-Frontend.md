@@ -636,8 +636,9 @@ The live UI bridge enumerates every visible application-owned interactive
 element and assigns an ephemeral `controlId`, so complete UI access does not
 depend on manually adding test IDs to every future button. Stable test IDs
 remain preferred for durable automation targets. The bridge can scroll the
-viewport or an addressed visible container and returns a fresh state after the
-movement; controls below the fold must not require a human-only scroll gesture.
+effective app viewport or the nearest scrollable ancestor of an addressed
+visible control and returns a fresh state after the movement; controls below
+the fold must not require a human-only scroll gesture.
 
 
 ### Provider health refresh

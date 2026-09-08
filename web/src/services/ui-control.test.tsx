@@ -30,19 +30,24 @@ it('discovers and operates every visible interactive control without requiring a
   await performUiCommand({ ...command, kind: 'press', controlId: control!.controlId });
   expect(click).toHaveBeenCalledOnce();
 });
-it('scrolls the viewport or an addressed visible container', async () => {
-  visible(); render(<div data-testid="scroll-region" />);
-  const viewport = document.scrollingElement as HTMLElement;
-  viewport.scrollTop = 20;
-  const region = screen.getByTestId('scroll-region');
-  region.scrollLeft = 5;
+it('scrolls the real app root and the scrollable ancestor of an addressed control', async () => {
+  visible();
+  const appRoot = document.createElement('div');
+  appRoot.style.overflowY = 'auto';
+  Object.defineProperties(appRoot, {
+    clientHeight: { value: 700, configurable: true },
+    scrollHeight: { value: 1_800, configurable: true },
+    scrollTop: { value: 20, writable: true, configurable: true },
+  });
+  document.body.append(appRoot);
+  render(<div data-testid="settings-layout" />, { container: appRoot });
 
   await performUiCommand({ ...command, kind: 'scroll', deltaY: 600 });
-  expect(viewport.scrollTop).toBe(620);
+  expect(appRoot.scrollTop).toBe(620);
 
-  const control = collectUiState().controls.find(item => item.testid === 'scroll-region');
-  await performUiCommand({ ...command, kind: 'scroll', controlId: control!.controlId, deltaX: 120 });
-  expect(region.scrollLeft).toBe(125);
+  const control = collectUiState().controls.find(item => item.testid === 'settings-layout');
+  await performUiCommand({ ...command, kind: 'scroll', controlId: control!.controlId, deltaY: 120 });
+  expect(appRoot.scrollTop).toBe(740);
 });
 it('omits password values and private descendants from state', () => {
   visible(); render(<><input data-testid="password" type="password" defaultValue="never-export" /><div data-testid="wrapper"><code data-ui-private>private-token</code></div></>);
