@@ -103,6 +103,10 @@ silently stranded by downgrade checks. Do not relabel an older bundle.
 
 - [x] Explain the in-process pi TypeScript SDK boundary in the README.
 - [x] Preserve the private Git history before any proposed history reset.
+- [x] Validate and activate the encrypted-backup runtime on the principal
+  (2026-09-08): focused backup tests, typecheck and build passed; live API
+  reports password status and legacy archive labels and refuses creation
+  without a password.
 - [ ] Review encrypted backup setup in Settings with an owner-chosen password,
   create an encrypted archive, and verify restoration in an isolated directory.
 - [ ] Prepare the agreed new Git history and synchronized `0.1.0` version,
