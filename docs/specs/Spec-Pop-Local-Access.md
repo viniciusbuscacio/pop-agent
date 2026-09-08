@@ -135,6 +135,19 @@ the authoritative `access_policy` frame before presenting permission state.
 
 ## Authentication and session lifecycle
 
+On macOS, the tray offers **Sign in…** and makes **Sign-in required** actionable.
+Sign-in uses a native secure password dialog naming the configured server,
+without Terminal, shell commands or a local listener. It calls the existing
+password-login endpoint over HTTPS (HTTP only for explicit loopback development),
+refuses redirects and shows sanitized authentication/network errors. Cancel
+leaves the saved login untouched. Successful login atomically replaces the
+owner-only default CLI profile and reconnects the supervised runtime, preserving
+the machine identity and server-authoritative file-access permission. A changed
+profile is not knowingly overwritten. Passwords never enter argv, logs or disk.
+Disconnected/authentication-required states clear the tray's live permission
+indicator. This native sign-in implementation is macOS-only; Windows parity is
+not implied.
+
 WebSocket upgrade and every HTTPS fallback request use the ordinary Pop Agent
 bearer session. There is no second unauthenticated local-control secret and no
 machine credential in a URL.

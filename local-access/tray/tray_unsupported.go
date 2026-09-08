@@ -10,6 +10,7 @@ type viewState struct {
 	AccessEnabled bool
 	AccessKnown   bool
 	StartAtLogin  bool
+	SigningIn     bool
 }
 
 type trayView struct{}

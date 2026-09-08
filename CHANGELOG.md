@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add native macOS PLA sign-in with a secure password dialog and automatic reconnect, and clear stale live-access indicators after disconnection or session rejection.
+
 - Standardize Settings typography by role across prose editors, model labels, cards, status messages and integration forms; enforce shared field/button typography against regressions.
 
 - Guarantee fifteen visible text lines in Instructions and Memory with a line-height-based minimum, and match their font sizes.

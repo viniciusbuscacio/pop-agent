@@ -39,6 +39,7 @@ type app struct {
 	accessEnabled bool
 	accessKnown   bool
 	quitting      bool
+	signingIn     bool
 	log           *os.File
 	view          trayView
 }
@@ -85,6 +86,7 @@ func (a *app) snapshot() viewState {
 	return viewState{
 		Server: a.server, Status: a.status, AccessEnabled: a.accessEnabled,
 		AccessKnown: a.accessKnown, StartAtLogin: autostart,
+		SigningIn: a.signingIn,
 	}
 }
 
@@ -129,15 +131,16 @@ func (a *app) start() {
 	a.status = "Connecting"
 	a.mu.Unlock()
 	a.publish()
-	go a.scan(stdout)
+	go a.scan(stdout, cmd)
 	go func() {
 		err := cmd.Wait()
 		a.mu.Lock()
-		if a.command == cmd {
+		owned := a.command == cmd
+		if owned {
 			a.command = nil
 			a.commandInput = nil
 		}
-		shouldRestart := !a.quitting
+		shouldRestart := !a.quitting && owned
 		if shouldRestart {
 			a.status = "Disconnected — reconnecting"
 		}
@@ -153,7 +156,7 @@ func (a *app) start() {
 	}()
 }
 
-func (a *app) scan(reader io.Reader) {
+func (a *app) scan(reader io.Reader, cmd *exec.Cmd) {
 	scanner := bufio.NewScanner(io.LimitReader(reader, 1<<20))
 	for scanner.Scan() {
 		var event childEvent
@@ -161,6 +164,10 @@ func (a *app) scan(reader io.Reader) {
 			continue
 		}
 		a.mu.Lock()
+		if a.command != cmd {
+			a.mu.Unlock()
+			continue
+		}
 		switch event.Kind {
 		case "starting":
 			a.server = safeOrigin(event.Server)
@@ -178,9 +185,11 @@ func (a *app) scan(reader io.Reader) {
 				}
 			}
 		case "closed":
+			a.accessKnown = false
 			a.status = "Disconnected — reconnecting"
 		case "authentication-required":
-			a.status = "Authentication required"
+			a.accessKnown = false
+			a.status = "Sign-in required"
 		case "outdated":
 			a.status = "Update required"
 		}
