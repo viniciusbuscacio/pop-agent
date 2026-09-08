@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add navigable Settings breadcrumbs, including nested forms, and separate AI response controls from server restart/shutdown with clearer consequences and action failures.
+
 - Add Remove computer in Devices, revoking active local access and blocking automatic re-registration until a fresh sign-in.
 
 - Split Devices from Install Pop in Settings, show local-access setup only under Connect a computer, and filter app installation instructions by target device.

@@ -1,3 +1,4 @@
+import { useSettingsDetail } from './settings-breadcrumbs';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { LocalMachineAccessDTO } from '@pop-agent/shared';
 import { clientEnvironment } from '../services/api';
@@ -99,6 +100,7 @@ export function DevicesSection() {
   const [removing, setRemoving] = useState<string>();
   const [removeError, setRemoveError] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  useSettingsDetail(connecting ? t('settings.devices.connect') : undefined, () => setConnecting(false));
   const [platform, setPlatform] = useState<InstallPlatform>(() => {
     const current = currentPlatform();
     return current === 'ios' || current === 'android' ? 'windows' : current;

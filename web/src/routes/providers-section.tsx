@@ -1,3 +1,4 @@
+import { useSettingsDetail } from './settings-breadcrumbs';
 import { healthMonitor } from '../services/health';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -78,6 +79,12 @@ export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } =
   const [loaded, setLoaded] = useState(false);
   const [listVersion, setListVersion] = useState(0);
   const [error, setError] = useState<string | undefined>(undefined);
+  useSettingsDetail(
+    onSetupDone !== undefined || view.kind === 'list' ? undefined
+      : view.kind === 'pick' ? t('provider.add')
+      : providers.find((provider) => provider.id === view.providerId)?.name,
+    () => setView({ kind: 'list' }),
+  );
 
   useEffect(() => {
     void providersService

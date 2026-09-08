@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -151,6 +151,16 @@ describe('Settings navigation', () => {
 
     await user.click(screen.getByTestId('settings-back-phone'));
     expect(screen.getByTestId('current-location').textContent).toBe('/');
+  });
+
+  it('navigates the breadcrumb from a section back to the Settings index', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/settings?section=appearance']}><SettingsPage /></MemoryRouter>);
+    const trail = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(trail).getByText('Appearance').getAttribute('aria-current')).toBe('page');
+    await user.click(within(trail).getByRole('button', { name: 'Settings' }));
+    expect(screen.queryByTestId('settings-theme')).toBeNull();
+    expect(within(trail).queryByText('Appearance')).toBeNull();
   });
 
   it('uses a switch for an on/off setting', async () => {

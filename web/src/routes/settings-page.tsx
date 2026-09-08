@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArchiveRestore,
+  ChevronRight,
   Bell,
   BookOpen,
   Database,
@@ -28,6 +29,7 @@ import {
   type StorageResponse,
 } from '@pop-agent/shared';
 import { t } from '../i18n';
+import { SettingsDetailContext, useSettingsDetail, type SettingsDetail } from './settings-breadcrumbs';
 import { DevicesSection, InstallationSection } from './installation-section';
 import { ProvidersSection } from './providers-section';
 import { BackupSection } from './backup-section';
@@ -146,6 +148,7 @@ export function SettingsPage() {
     ? (requested as Section)
     : undefined;
   const [query, setQuery] = useState('');
+  const [detail, setDetail] = useState<SettingsDetail>();
   const activeEntry = SETTINGS_ENTRIES.find((entry) => entry.id === section);
 
   function openSection(next: Section): void {
@@ -156,6 +159,7 @@ export function SettingsPage() {
   // the visible split view always gets desktop navigation, without asking a
   // native host's JavaScript matchMedia implementation to classify the window.
   function goBackOnPhone(): void {
+    if (detail !== undefined) { detail.back(); return; }
     if (section !== undefined) void navigate('/settings', { state: location.state });
     else void navigate('/');
   }
@@ -172,10 +176,23 @@ export function SettingsPage() {
       >
         <BackButton data-testid="settings-back-phone" aria-label={t('common.back')} onClick={goBackOnPhone} className="md:hidden" />
         <BackButton data-testid="settings-back-desktop" aria-label={t('common.back')} onClick={goBackOnDesktop} className="hidden md:grid" />
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold md:hidden">{activeEntry?.label ?? 'Settings'}</h1>
-          <h1 className="hidden text-lg font-semibold md:block">Settings</h1>
-        </div>
+        <nav aria-label={t('settings.breadcrumbs')} className="min-w-0">
+          <ol className="flex flex-wrap items-center gap-1 text-sm">
+            <li>{activeEntry === undefined ? <span aria-current="page">Settings</span> : (
+              <Button variant="ghost" size="sm" onClick={() => void navigate('/settings', { state: location.state })}>Settings</Button>
+            )}</li>
+            {activeEntry !== undefined ? <>
+              <li aria-hidden="true"><ChevronRight size={14} /></li>
+              <li>{detail === undefined ? <span aria-current="page">{activeEntry.label}</span> : (
+                <Button variant="ghost" size="sm" onClick={detail.back}>{activeEntry.label}</Button>
+              )}</li>
+            </> : null}
+            {activeEntry !== undefined && detail !== undefined ? <>
+              <li aria-hidden="true"><ChevronRight size={14} /></li>
+              <li className="min-w-0 break-words" aria-current="page">{detail.label}</li>
+            </> : null}
+          </ol>
+        </nav>
       </header>
 
       <div
@@ -204,7 +221,9 @@ export function SettingsPage() {
                 <h2 className="text-xl font-semibold">{activeEntry?.label}</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
               </div>
-              <SettingsSection section={section} />
+              <SettingsDetailContext.Provider value={setDetail}>
+                <SettingsSection key={section} section={section} />
+              </SettingsDetailContext.Provider>
             </div>
           )}
         </main>
@@ -708,6 +727,7 @@ export function SkillsSection() {
   const [archived, setArchived] = useState<SkillDTO[]>([]);
   const [distiller, setDistiller] = useState<DistillerStatusDTO | undefined>(undefined);
   const [editing, setEditing] = useState<SkillDTO | 'new' | undefined>(undefined);
+  useSettingsDetail(editing === undefined ? undefined : editing === 'new' ? t('skills.new') : editing.name, () => setEditing(undefined));
 
   useEffect(() => {
     void reload();
@@ -1826,7 +1846,7 @@ function ServerSection() {
       </Card>
 
       <ServerSoftwareCard />
-      <DangerZoneSection llmStopped={info?.llmStopped === true} />
+      <ServerControls llmStopped={info?.llmStopped} />
     </div>
   );
 }
@@ -1852,16 +1872,10 @@ function ServerSoftwareCard() {
   );
 }
 
-/**
- * Four switches on two different machines, which is exactly why each one
- * carries its own consequence line: "Restart Pop Agent" and "Restart LLM" share a
- * verb and share nothing else. The LLM button is also labelled by the actual
- * state -- Start when it is off, Restart when it is on -- because a switch
- * that reads "Restart" while the model is stopped is the confusion this card
- * kept causing (Vinicius, 05/08).
- */
-function DangerZoneSection({ llmStopped: reported }: { llmStopped: boolean }) {
+export function ServerControls({ llmStopped: reported }: { llmStopped: boolean | undefined }) {
   const [busy, setBusy] = useState<string | undefined>(undefined);
+  const [actionError, setActionError] = useState(false);
+  const [actionDone, setActionDone] = useState(false);
   // The reported state arrives with the info fetch; a click updates it
   // locally so the label follows the action without another round trip.
   const [llmStopped, setLlmStopped] = useState(reported);
@@ -1869,10 +1883,13 @@ function DangerZoneSection({ llmStopped: reported }: { llmStopped: boolean }) {
 
   async function act(action: string, fn: () => Promise<unknown>): Promise<void> {
     setBusy(action);
+    setActionError(false);
+    setActionDone(false);
     try {
       await fn();
+      setActionDone(true);
     } catch {
-      // The service dying mid-answer is the expected path for restart/stop.
+      setActionError(true);
     } finally {
       setBusy(undefined);
     }
@@ -1881,85 +1898,93 @@ function DangerZoneSection({ llmStopped: reported }: { llmStopped: boolean }) {
   const hint = (text: string) => <p className="text-xs text-[var(--muted)]">{text}</p>;
 
   return (
-    <Card variant="danger" className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-[var(--danger)]">{t('settings.server.dangerZone')}</h3>
-
-      <div className="flex flex-col gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-          {t('settings.server.dangerService')}
-        </h4>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="danger"
-            disabled={busy !== undefined}
-            data-testid="server-restart"
-            onClick={() => {
-              if (!window.confirm(t('settings.server.restartConfirm'))) return;
-              void act('restart', () => serverService.restart());
-            }}
-          >
-            {t('settings.server.restart')}
-          </Button>
-          {hint(t('settings.server.restartHint'))}
+    <div className="flex flex-col gap-4">
+      {actionError ? <p role="alert" className="text-sm text-[var(--danger)]">{t('settings.server.actionFailed')}</p> : null}
+      {actionDone ? <p role="status" className="text-sm text-[var(--muted)]">{t('settings.server.actionDone')}</p> : null}
+      <Card className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold">
+            {t('settings.server.dangerLlm')}
+          </h2>
+          <p className="text-sm text-[var(--muted)]" role="status">{llmStopped === undefined ? t('settings.server.unknown') : llmStopped ? t('settings.server.paused') : t('settings.server.running')}</p>
+          <div className="flex flex-col items-start gap-2 py-2">
+            <Button
+              variant="ghost"
+              disabled={busy !== undefined || llmStopped !== false}
+              data-testid="server-llm-stop"
+              onClick={() => {
+                if (!window.confirm(t('settings.server.llmStopConfirm'))) return;
+                void act('llm-stop', async () => {
+                  await serverService.llmStop();
+                  setLlmStopped(true);
+                });
+              }}
+            >
+              {t('settings.server.llmStop')}
+            </Button>
+            {hint(t('settings.server.llmStopHint'))}
+          </div>
+          <div className="flex flex-col items-start gap-2 py-2">
+            <Button
+              variant="ghost"
+              disabled={busy !== undefined || llmStopped === undefined}
+              data-testid="server-llm-start"
+              onClick={() => {
+                if (!llmStopped && !window.confirm(t('settings.server.llmRestartConfirm'))) return;
+                void act('llm-start', async () => {
+                  await serverService.llmStart();
+                  setLlmStopped(false);
+                });
+              }}
+            >
+              {llmStopped ? t('settings.server.llmStart') : t('settings.server.llmRestart')}
+            </Button>
+            {hint(
+              llmStopped ? t('settings.server.llmStartHint') : t('settings.server.llmRestartHint'),
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="danger"
-            disabled={busy !== undefined}
-            data-testid="server-stop"
-            onClick={() => {
-              if (!window.confirm(t('settings.server.stopConfirm1'))) return;
-              if (!window.confirm(t('settings.server.stopConfirm2'))) return;
-              void act('stop', () => serverService.stop());
-            }}
-          >
-            {t('settings.server.stop')}
-          </Button>
-          {hint(t('settings.server.stopHint'))}
+      </Card>
+      <Card className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold">
+            {t('settings.server.dangerService')}
+          </h2>
+          <div className="flex flex-col items-start gap-2 py-2">
+            <Button
+              variant="ghost"
+              disabled={busy !== undefined}
+              data-testid="server-restart"
+              onClick={() => {
+                if (!window.confirm(t('settings.server.restartConfirm'))) return;
+                void act('restart', () => serverService.restart());
+              }}
+            >
+              {t('settings.server.restart')}
+            </Button>
+            {hint(t('settings.server.restartHint'))}
+          </div>
+          <details className="border-t border-[var(--border)] pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-[var(--danger)]">{t('settings.server.shutdown')}</summary>
+          <div className="flex flex-col items-start gap-2 py-2">
+            <Button
+              variant="danger"
+              disabled={busy !== undefined}
+              data-testid="server-stop"
+              onClick={() => {
+                if (!window.confirm(t('settings.server.stopConfirm1'))) return;
+                if (!window.confirm(t('settings.server.stopConfirm2'))) return;
+                void act('stop', () => serverService.stop());
+              }}
+            >
+              {t('settings.server.stop')}
+            </Button>
+            {hint(t('settings.server.stopHint'))}
+          </div>
+          </details>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-          {t('settings.server.dangerLlm')}
-        </h4>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            disabled={busy !== undefined || llmStopped}
-            data-testid="server-llm-stop"
-            onClick={() => {
-              if (!window.confirm(t('settings.server.llmStopConfirm'))) return;
-              void act('llm-stop', async () => {
-                await serverService.llmStop();
-                setLlmStopped(true);
-              });
-            }}
-          >
-            {t('settings.server.llmStop')}
-          </Button>
-          {hint(t('settings.server.llmStopHint'))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            disabled={busy !== undefined}
-            data-testid="server-llm-start"
-            onClick={() =>
-              void act('llm-start', async () => {
-                await serverService.llmStart();
-                setLlmStopped(false);
-              })
-            }
-          >
-            {llmStopped ? t('settings.server.llmStart') : t('settings.server.llmRestart')}
-          </Button>
-          {hint(
-            llmStopped ? t('settings.server.llmStartHint') : t('settings.server.llmRestartHint'),
-          )}
-        </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 

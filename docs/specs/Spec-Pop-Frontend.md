@@ -731,3 +731,18 @@ The composer textarea keeps its neutral enclosing border when focused, without
 an inner accent outline. Other controls retain the shared focus treatment.
 
 The composer Add button has no accent focus ring or native touch tap highlight.
+
+## Settings hierarchy and server controls
+
+The Settings header exposes a wrapping, keyboard-accessible breadcrumb on all
+viewports: Settings > section > open detail. Ancestors return to their actual
+index/list without browser-history guessing. Provider configuration, device
+connection setup and skill editing publish their detail to the header; leaving
+or switching sections clears it. Existing Back and Cancel paths remain available.
+
+Server actions are separated into AI responses (Pause responses, Resume responses
+or Reset AI sessions) and Pop Agent server (Restart Pop Agent). Shutdown sits in
+a collapsed disclosure explaining that recovery requires SSH and `popman start`.
+State is shown as unknown until loaded; failed actions remain visible and never
+pretend success. Resetting active AI sessions requires confirmation, as do pause,
+restart and shutdown. These labels do not change the existing server endpoints.

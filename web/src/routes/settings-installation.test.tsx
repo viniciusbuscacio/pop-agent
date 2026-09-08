@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -252,4 +252,18 @@ it('requires confirmation to remove a computer and clears its selection after su
   expect(localAccessMocks.remove).toHaveBeenCalledWith('machine-m1');
   expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
   confirm.mockRestore();
+});
+
+it('returns from Connect a computer using the parent breadcrumb and clears it on navigation', async () => {
+  window.history.replaceState({}, '', '/settings');
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/settings?section=devices']}><SettingsPage /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Connect a computer' }));
+  const trail = screen.getByRole('navigation', { name: 'Settings navigation' });
+  expect(within(trail).getByText('Connect a computer').getAttribute('aria-current')).toBe('page');
+  await user.click(within(trail).getByRole('button', { name: 'Devices' }));
+  expect(screen.queryByRole('button', { name: 'Back to Devices' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Connect a computer' }));
+  await user.click(screen.getByTestId('settings-tab-appearance'));
+  expect(within(trail).queryByText('Connect a computer')).toBeNull();
 });
