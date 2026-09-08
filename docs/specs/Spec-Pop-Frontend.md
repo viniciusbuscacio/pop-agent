@@ -568,7 +568,8 @@ same-origin and never embed credentials in notification URLs.
 - Streaming/status changes use appropriate polite live/status semantics and
   sensitive confirmation remains an inline alert dialog.
 - Tests prefer role/name semantics. Stable kebab-case `data-testid` is used
-  when semantic queries cannot uniquely express the product element.
+  when semantic queries cannot uniquely express the product element and on
+  high-value navigation/filter controls such as the Settings search field.
 
 Detailed control variants, tokens, responsive typography and prohibited styles
 live in the Style Guide specification and `docs/ui-style-guide.md`.
@@ -630,6 +631,13 @@ frontend build, complete tests and smoke.
 ## REST integrations
 
 Agent navigation includes REST API, presenting inbound Server credentials/reference and outbound Clients configuration on the same responsive page. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).
+
+The live UI bridge enumerates every visible application-owned interactive
+element and assigns an ephemeral `controlId`, so complete UI access does not
+depend on manually adding test IDs to every future button. Stable test IDs
+remain preferred for durable automation targets. The bridge can scroll the
+viewport or an addressed visible container and returns a fresh state after the
+movement; controls below the fold must not require a human-only scroll gesture.
 
 
 ### Provider health refresh

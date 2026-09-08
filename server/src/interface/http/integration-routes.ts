@@ -48,7 +48,7 @@ export function integrationOpenApi(): Record<string, unknown> {
     };
     for (const e of INTEGRATION_ENDPOINTS) {
         if (e.scope === 'ui:control') {
-            const commandSchema = { type: 'object', required: ['sessionId'], additionalProperties: false, properties: { sessionId: string, testid: string, index: { type: 'integer', minimum: 0 }, value: { type: 'string', maxLength: 32000 }, key: string } };
+            const commandSchema = { type: 'object', required: ['sessionId'], additionalProperties: false, properties: { sessionId: string, controlId: string, testid: string, index: { type: 'integer', minimum: 0 }, value: { type: 'string', maxLength: 32000 }, key: string, deltaX: { type: 'integer', minimum: -100000, maximum: 100000 }, deltaY: { type: 'integer', minimum: -100000, maximum: 100000 } } };
             paths[e.path] = { [e.method]: { summary: e.summary, security: [{ integrationBearer: [] }], 'x-required-scope': e.scope,
               ...(e.method === 'post' ? { requestBody: { required: true, content: { 'application/json': { schema: commandSchema } } } } : { parameters: e.path.endsWith('/state') || e.path.endsWith('/screenshot') ? [{ name: 'sessionId', in: 'query', required: true, schema: string }] : [] }),
               responses: { '200': { description: e.summary, content: { [e.path.endsWith('/screenshot') ? 'image/png' : 'application/json']: { schema: e.path.endsWith('/screenshot') ? { type: 'string', format: 'binary' } : { type: 'object' } } } }, ...Object.fromEntries(['400', '401', '403', '404', '409', '429', '503'].map(code => [code, { description: 'UI request rejected; inspect state before retrying a mutation.' }])) } } };

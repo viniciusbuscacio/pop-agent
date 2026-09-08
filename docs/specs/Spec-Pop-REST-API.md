@@ -96,9 +96,22 @@ Like the go-notepad/go-apiserver bridge, operations act on the real browser DOM 
 
 Signed-in tabs register automatically while REST API Server is enabled, with a platform/browser label. The REST Server switch is the sole UI-access switch; no tab-name field, Connect/Disconnect action or separate Stop UI control is shown. Authenticated per-tab DELETE cleanup remains available while the module is disabled, so toggling cannot leave stale registrations. Turning the switch off stops UI access and screen sharing; sign-out and app teardown also disconnect. Registration is retried every five seconds after transport loss, without replaying commands. Connection IDs are mandatory for every command; multiple tabs are never selected implicitly. The owner-only transport registers, polls and acknowledges using a per-tab capability header. Capabilities are never returned by the public session list. Closing, signing out, disconnecting, or 45 seconds without polling expires access. Eight sessions maximum, one command in flight per session; concurrent calls return `ui_busy`. Commands are delivered once, expire after eight seconds, and a timeout removes the session. Never retry writes automatically: their outcome may be unknown.
 
-`GET /v1/integration/ax` discovers the contract; `/v1/ax` is its owner-session equivalent. UI-scoped integration tokens use `/v1/integration/ui/sessions`, `/state?sessionId=...`, `/screenshot?sessionId=...`, and POST `/press`, `/dblclick`, `/input`, `/key`. Owner sessions use `/v1/ui/*`. UI access checks the module switch, token scope and rate limit, rechecks authorization before command delivery and before returning results. The single key includes UI control, which grants owner actions and screen contents. Legacy scoped tokens still require `ui:control`. Native text state excludes password values and elements marked `data-ui-private`. Screenshots are raw user-authorized captures and may contain visible secrets.
+`GET /v1/integration/ax` discovers the contract; `/v1/ax` is its owner-session equivalent. UI-scoped integration tokens use `/v1/integration/ui/sessions`, `/state?sessionId=...`, `/screenshot?sessionId=...`, and POST `/press`, `/dblclick`, `/input`, `/key`, `/scroll`. Owner sessions use `/v1/ui/*`. UI access checks the module switch, token scope and rate limit, rechecks authorization before command delivery and before returning results. The single key includes UI control, which grants owner actions and screen contents. Legacy scoped tokens still require `ui:control`. Native text state excludes password values and elements marked `data-ui-private`. Screenshots are raw user-authorized captures and may contain visible secrets.
 
-State lists visible controls with testid, index, role, name and disabled state. Repeated IDs require an explicit index. Empty input clears a supported text/select field. Missing, ambiguous and disabled targets fail explicitly. Keyboard events invoke application handlers, not trusted browser/OS shortcuts. Native dialogs/file pickers require the user. The bridge does not execute arbitrary JavaScript.
+UI control covers every visible application-owned interactive element, not only
+elements that happen to carry a test ID. State gives every visible control an
+ephemeral `controlId`, plus stable `testid` and repeated-control `index` when
+defined, along with role, name and disabled state. Commands accept one locator:
+the `controlId` from the latest state or a stable `testid` plus index. A stale
+control ID fails explicitly instead of acting on a replacement element.
+
+Scroll moves the viewport by bounded pixel deltas or, when addressed, a visible
+scroll container. Its result is a fresh state so an integration can discover
+controls that entered the viewport. Empty input clears a supported text/select
+field. Missing, ambiguous and disabled targets fail explicitly. Keyboard events
+invoke application handlers, not trusted browser/OS shortcuts. Native
+dialogs/file pickers require the user. The bridge does not execute arbitrary
+JavaScript.
 
 Screenshots require an independent user gesture and browser `getDisplayMedia` consent. The captured surface is exactly the tab/window/screen selected by the user; it is not a synthetic DOM reconstruction. PNGs scale to at most 1920 pixels wide and 3.5 MB base64. The transport caps replies at 4 MiB. No captures or screen contents are persisted or logged. Sharing ends with track stop, disconnect or page close; unsupported browsers return a clear message. JSON discovery remains available without screen sharing. The settings UI no longer exposes a sharing action; automatic capture requires a separate browser integration and is not implied by enabling the REST server.
 

@@ -20,3 +20,25 @@ it('requires owner authentication for registration and explicit UI scope for rem
   f.integrations.configure({ serverEnabled: true });
   expect(await (await f.app.request('/v1/ui/sessions', { headers: headers(owner) })).json()).toEqual({ sessions: [] });
 });
+
+it('discovers and dispatches bounded scroll commands through either UI surface', async () => {
+  const f = createTestApp(); const owner = await setupTestSession(f.app);
+  const operator = f.integrations.create('operator', ['ui:control'], 7);
+  const registered = await f.app.request('/v1/ui/sessions', { method: 'POST', headers: headers(owner), body: JSON.stringify({ name: 'Tab' }) });
+  const tab = await registered.json() as { id: string; key: string };
+
+  const ax = await (await f.app.request('/v1/integration/ax', { headers: headers(operator.secret) })).json() as { schemaVersion: number; capabilities: string[] };
+  expect(ax.schemaVersion).toBe(2);
+  expect(ax.capabilities).toContain('ui.scroll');
+
+  expect((await f.app.request('/v1/integration/ui/scroll', { method: 'POST', headers: headers(operator.secret), body: JSON.stringify({ sessionId: tab.id }) })).status).toBe(400);
+  expect((await f.app.request('/v1/integration/ui/scroll', { method: 'POST', headers: headers(operator.secret), body: JSON.stringify({ sessionId: tab.id, deltaY: 100001 }) })).status).toBe(400);
+
+  const pending = f.app.request('/v1/integration/ui/scroll', { method: 'POST', headers: headers(operator.secret), body: JSON.stringify({ sessionId: tab.id, controlId: 'control-9', deltaY: 600 }) });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const polled = await f.app.request(`/v1/ui/sessions/${tab.id}/poll`, { headers: { ...headers(owner), 'X-Pop-UI-Key': tab.key } });
+  const { command } = await polled.json() as { command: { id: string; kind: string; controlId: string; deltaY: number } };
+  expect(command).toMatchObject({ kind: 'scroll', controlId: 'control-9', deltaY: 600 });
+  await f.app.request(`/v1/ui/sessions/${tab.id}/ack`, { method: 'POST', headers: { ...headers(owner), 'X-Pop-UI-Key': tab.key }, body: JSON.stringify({ commandId: command.id, reply: { state: { url: '/settings' } } }) });
+  expect((await pending).status).toBe(200);
+});

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let REST UI control discover and address every visible app control, scroll the viewport or a visible container, and operate Settings search through a stable target.
+
 - Add navigable Settings breadcrumbs, including nested forms, and separate AI response controls from server restart/shutdown with clearer consequences and action failures.
 
 - Add Remove computer in Devices, revoking active local access and blocking automatic re-registration until a fresh sign-in.

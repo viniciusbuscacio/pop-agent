@@ -16,12 +16,28 @@ POST /v1/integration/ui/press
      {"sessionId":"<chosen-id>","testid":"shell-new-chat"}
 POST /v1/integration/ui/input
      {"sessionId":"<chosen-id>","testid":"composer-input","value":"Draft only"}
+POST /v1/integration/ui/scroll
+     {"sessionId":"<chosen-id>","deltaY":600}
+POST /v1/integration/ui/scroll
+     {"sessionId":"<chosen-id>","controlId":"<visible-scroll-container>","deltaY":600}
 POST /v1/integration/ui/key
      {"sessionId":"<chosen-id>","key":"Escape"}
 GET  /v1/integration/ui/screenshot?sessionId=<chosen-id>
 ```
 
-Use the testid and, for repeated controls, index from the latest state. POST dblclick takes the same target as press. Empty value clears a text field. These operations run in the selected real UI, including its current chat, model, permissions and local-machine selection. Application keyboard handlers work; native browser shortcuts, file pickers and system dialogs require human interaction. Read pendingRequests before assuming an asynchronous action completed. No automatic mutation retries or idempotent replay are provided.
+Every visible application control is returned with an ephemeral `controlId`.
+Stable `testid` and repeated-control `index` are also returned when the element
+defines one. Read the latest state and use either `controlId`, or `testid` plus
+`index`; never combine the two addressing forms. A `controlId` may change after
+rendering or navigation. POST dblclick takes the same target as press. Empty
+input clears a text field. Scroll without a target moves the viewport; address
+a visible scroll container to move that container instead, then read state
+again to discover newly visible controls. These operations run in the selected
+real UI, including its current chat, model, permissions and local-machine
+selection. Application keyboard handlers work; native browser shortcuts, file
+pickers and system dialogs require human interaction. Read pendingRequests
+before assuming an asynchronous action completed. No automatic mutation
+retries or idempotent replay are provided.
 
 The settings screen has no separate screenshot or sharing controls. The existing screenshot transport returns `screen_not_shared` without an active capture source. Enabling REST API Server cannot bypass browser display-capture restrictions; automatic screenshot capture requires a separate browser integration. Do not assume a screenshot is available from UI connectivity alone.
 

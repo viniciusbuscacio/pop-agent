@@ -257,6 +257,7 @@ function SettingsIndex({
     <nav aria-label="Settings" className={`${className} min-w-0 max-w-full border-[var(--border)] p-4 md:min-h-[calc(100dvh-65px)] md:border-r md:p-5`}>
       <SearchField
         id="settings-search"
+        data-testid="settings-search"
         aria-label="Search settings"
         placeholder="Search settings"
         value={query}

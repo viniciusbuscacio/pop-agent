@@ -17,6 +17,7 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
       'GET  /v1/integration/ax -> how it works + where to click',
       'GET  /v1/integration/ui/sessions -> available tabs',
       'GET  /v1/integration/ui/state?sessionId=ID -> visible controls',
+      'POST /v1/integration/ui/scroll -> {"sessionId":"ID","deltaY":600}',
       'POST /v1/integration/ui/input -> {"sessionId":"ID","testid":"composer-input","value":"Draft"}',
       'POST /v1/integration/ui/press -> {"sessionId":"ID","testid":"shell-new-chat"}',
       'GET  /v1/integration/activity -> run activity',

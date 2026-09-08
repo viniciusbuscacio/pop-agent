@@ -4,6 +4,8 @@ interface Connection { id: string; key: string }
 let connection: Connection | undefined;
 let starting = false;
 let generation = 0;
+let nextControlId = 0;
+const controlIds = new WeakMap<HTMLElement, string>();
 let stream: MediaStream | undefined;
 let video: HTMLVideoElement | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -11,22 +13,46 @@ let snapshot = { connected: false, sessionId: '', sharing: false, error: '' };
 const listeners = new Set<() => void>();
 function emit(error = ''): void { snapshot = { connected: !!connection, sessionId: connection?.id ?? '', sharing: !!stream, error }; listeners.forEach(fn => fn()); }
 function visible(e: HTMLElement): boolean { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && s.visibility !== 'hidden' && s.display !== 'none'; }
-function controls(): HTMLElement[] { return Array.from(document.querySelectorAll<HTMLElement>('[data-testid]')).filter(visible).slice(0, 1000); }
+const CONTROL_SELECTOR = '[data-testid],button,input:not([type="hidden"]),select,textarea,a[href],[role="button"],[role="checkbox"],[role="menuitem"],[role="option"],[role="radio"],[role="slider"],[role="switch"],[role="tab"],[contenteditable="true"]';
+function controls(): HTMLElement[] { return Array.from(document.querySelectorAll<HTMLElement>(CONTROL_SELECTOR)).filter(visible).slice(0, 1000); }
+function controlId(e: HTMLElement): string {
+  const existing = controlIds.get(e);
+  if (existing !== undefined) return existing;
+  const created = `control-${++nextControlId}`;
+  controlIds.set(e, created);
+  return created;
+}
 function disabled(e: HTMLElement): boolean { return e.matches(':disabled,[aria-disabled="true"]') || !!e.closest('[inert]'); }
+function controlName(e: HTMLElement): string {
+  const aria = e.getAttribute('aria-label');
+  if (aria) return aria;
+  if (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement || e instanceof HTMLSelectElement) {
+    const label = e.labels?.[0]?.innerText;
+    return label || e.getAttribute('placeholder') || e.id || e.getAttribute('name') || e.tagName.toLowerCase();
+  }
+  return e.innerText || e.textContent || e.getAttribute('title') || e.id || e.tagName.toLowerCase();
+}
 export function collectUiState(): UiStateDTO {
   const counts = new Map<string, number>();
   const entries: UiControlDTO[] = controls().map(e => {
-    const testid = e.dataset.testid!; const index = counts.get(testid) ?? 0; counts.set(testid, index + 1);
+    const testid = e.dataset.testid;
+    const index = testid === undefined ? undefined : counts.get(testid) ?? 0;
+    if (testid !== undefined) counts.set(testid, (index ?? 0) + 1);
+    const stableAddress = testid === undefined ? {} : { testid, index: index ?? 0 };
     const value = e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement || e instanceof HTMLSelectElement ? e.value : undefined;
     const secret = !!e.querySelector('[data-ui-private],input[type="password"]') || e instanceof HTMLInputElement && e.type === 'password' || !!e.closest('[data-ui-private]');
-    return { testid, index, role: e.getAttribute('role') ?? e.tagName.toLowerCase(), name: secret ? '[private]' : (e.getAttribute('aria-label') ?? e.innerText ?? e.textContent ?? '').slice(0, 300), disabled: disabled(e), ...(value === undefined || secret ? {} : { value: value.slice(0, 32000) }) };
+    return { controlId: controlId(e), ...stableAddress, role: e.getAttribute('role') ?? e.tagName.toLowerCase(), name: secret ? '[private]' : controlName(e).slice(0, 300), disabled: disabled(e), ...(value === undefined || secret ? {} : { value: value.slice(0, 32000) }) };
   });
   return { url: location.pathname + location.search, title: document.title, width: innerWidth, height: innerHeight, controls: entries, text: Array.from(document.querySelectorAll<HTMLElement>('h1,h2,[role="alert"]')).filter(e => visible(e) && !e.closest('[data-ui-private]')).map(e => e.innerText).join('\n').slice(0, 16000), screenshotAvailable: !!stream, pendingRequests: pendingUiRequests() };
 }
 const fail = (code: string, message: string): UiReplyDTO => ({ error: { code, message } });
 function target(cmd: UiCommandDTO): HTMLElement | UiReplyDTO {
-  const nodes = controls().filter(e => e.dataset.testid === cmd.testid);
-  if (!nodes.length) return fail('unknown_testid', 'No visible control has that testid.');
+  const nodes = cmd.controlId === undefined
+    ? controls().filter(e => e.dataset.testid === cmd.testid)
+    : controls().filter(e => controlId(e) === cmd.controlId);
+  if (!nodes.length) return cmd.controlId === undefined
+    ? fail('unknown_testid', 'No visible control has that testid.')
+    : fail('unknown_control', 'That control is no longer visible. Read the latest UI state.');
   if (cmd.index === undefined && nodes.length > 1) return fail('ambiguous_testid', 'Use the index from UI state.');
   const e = nodes[cmd.index ?? 0]; if (!e) return fail('unknown_testid', 'No visible control has that index.');
   if (disabled(e)) return fail('disabled_control', 'The control is disabled.');
@@ -56,6 +82,14 @@ export async function performUiCommand(cmd: UiCommandDTO): Promise<UiReplyDTO> {
     const accepted = e.dispatchEvent(new KeyboardEvent('keydown', init));
     if (accepted && (key === 'Enter' || key === ' ') && e instanceof HTMLButtonElement && !disabled(e)) e.click();
     e.dispatchEvent(new KeyboardEvent('keyup', init));
+  } else if (cmd.kind === 'scroll') {
+    const options: ScrollToOptions = { left: cmd.deltaX ?? 0, top: cmd.deltaY ?? 0, behavior: 'auto' };
+    if (cmd.controlId !== undefined || cmd.testid !== undefined) {
+      const found = target(cmd); if (!(found instanceof HTMLElement)) return found;
+      found.scrollBy(options);
+    } else {
+      window.scrollBy(options);
+    }
   } else if (cmd.kind !== 'state') {
     const found = target(cmd); if (!(found instanceof HTMLElement)) return found; const e = found;
     if (cmd.kind === 'input') {

@@ -1,6 +1,6 @@
 import { entityId } from '../../domain/ids.js';
 import { IntegrationError } from '../../domain/integrations/integration.js';
-export interface UiCommand { id: string; kind: 'state' | 'press' | 'dblclick' | 'key' | 'input' | 'screenshot'; expiresAt: number; testid?: string | undefined; index?: number | undefined; value?: string | undefined; key?: string | undefined }
+export interface UiCommand { id: string; kind: 'state' | 'press' | 'dblclick' | 'key' | 'input' | 'scroll' | 'screenshot'; expiresAt: number; controlId?: string | undefined; testid?: string | undefined; index?: number | undefined; value?: string | undefined; key?: string | undefined; deltaX?: number | undefined; deltaY?: number | undefined }
 interface Pending { guard: () => void; command: UiCommand; delivered: boolean; finish: (value: unknown) => void; timer: ReturnType<typeof setTimeout> }
 interface UiSession { id: string; key: string; name: string; lastSeen: number; pending?: Pending }
 /** Ephemeral authenticated browser tabs; never persists screen contents. */

@@ -22,6 +22,28 @@ it('does not choose between repeated controls and refuses missing/disabled targe
   expect(click).not.toHaveBeenCalled();
   await performUiCommand({ ...command, kind: 'press', testid: 'item', index: 0 }); expect(click).toHaveBeenCalledOnce();
 });
+it('discovers and operates every visible interactive control without requiring a testid', async () => {
+  visible(); const click = vi.fn(); render(<button onClick={click}>Unlabelled in source</button>);
+  const control = collectUiState().controls.find(item => item.name === 'Unlabelled in source');
+  expect(control).toMatchObject({ role: 'button' });
+  expect(control?.testid).toBeUndefined();
+  await performUiCommand({ ...command, kind: 'press', controlId: control!.controlId });
+  expect(click).toHaveBeenCalledOnce();
+});
+it('scrolls the viewport or an addressed visible container', async () => {
+  visible(); render(<div data-testid="scroll-region" />);
+  const viewportScroll = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined);
+  const region = screen.getByTestId('scroll-region');
+  const regionScroll = vi.fn();
+  Object.defineProperty(region, 'scrollBy', { configurable: true, value: regionScroll });
+
+  await performUiCommand({ ...command, kind: 'scroll', deltaY: 600 });
+  expect(viewportScroll).toHaveBeenCalledWith({ left: 0, top: 600, behavior: 'auto' });
+
+  const control = collectUiState().controls.find(item => item.testid === 'scroll-region');
+  await performUiCommand({ ...command, kind: 'scroll', controlId: control!.controlId, deltaX: 120 });
+  expect(regionScroll).toHaveBeenCalledWith({ left: 120, top: 0, behavior: 'auto' });
+});
 it('omits password values and private descendants from state', () => {
   visible(); render(<><input data-testid="password" type="password" defaultValue="never-export" /><div data-testid="wrapper"><code data-ui-private>private-token</code></div></>);
   const state = JSON.stringify(collectUiState()); expect(state).not.toContain('never-export'); expect(state).not.toContain('private-token');
