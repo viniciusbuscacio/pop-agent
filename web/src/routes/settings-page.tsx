@@ -179,12 +179,12 @@ export function SettingsPage() {
         <nav aria-label={t('settings.breadcrumbs')} className="min-w-0">
           <ol className="flex flex-wrap items-center gap-1 text-sm">
             <li>{activeEntry === undefined ? <span aria-current="page">Settings</span> : (
-              <Button variant="ghost" size="sm" onClick={() => void navigate('/settings', { state: location.state })}>Settings</Button>
+              <Pressable className="underline-offset-2 hover:underline" onClick={() => void navigate('/settings', { state: location.state })}>Settings</Pressable>
             )}</li>
             {activeEntry !== undefined ? <>
               <li aria-hidden="true"><ChevronRight size={14} /></li>
               <li>{detail === undefined ? <span aria-current="page">{activeEntry.label}</span> : (
-                <Button variant="ghost" size="sm" onClick={detail.back}>{activeEntry.label}</Button>
+                <Pressable className="underline-offset-2 hover:underline" onClick={detail.back}>{activeEntry.label}</Pressable>
               )}</li>
             </> : null}
             {activeEntry !== undefined && detail !== undefined ? <>

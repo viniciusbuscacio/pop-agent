@@ -160,7 +160,11 @@ describe('Settings navigation', () => {
     render(<MemoryRouter initialEntries={['/settings?section=appearance']}><SettingsPage /></MemoryRouter>);
     const trail = screen.getByRole('navigation', { name: 'Settings navigation' });
     expect(within(trail).getByText('Appearance').getAttribute('aria-current')).toBe('page');
-    await user.click(within(trail).getByRole('button', { name: 'Settings' }));
+    const settingsCrumb = within(trail).getByRole('button', { name: 'Settings' });
+    expect(settingsCrumb.className).toContain('hover:underline');
+    expect(settingsCrumb.className).not.toContain('border');
+    expect(settingsCrumb.className).not.toContain('font-medium');
+    await user.click(settingsCrumb);
     expect(screen.queryByTestId('settings-theme')).toBeNull();
     expect(within(trail).queryByText('Appearance')).toBeNull();
   });
