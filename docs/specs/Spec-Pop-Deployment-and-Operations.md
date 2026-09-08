@@ -29,8 +29,12 @@ integrity and exact commit before atomically activating a new checkout without
 network acquisition.
 
 Both acquisition paths hand explicit checkout/data/workspace/port values to the
-delivered non-root Ubuntu amd64/arm64 bootstrap. The fresh-host path
-explicitly opts in to the same narrowly scoped apt build/download prerequisite
+delivered non-root Ubuntu bootstrap. Published production server releases support
+AMD64 only; ARM64 publication is paused, and normal ARM64 installation is refused
+before package installation or artifact downloads. Explicit developer preparation
+and source-build paths retain ARM64 support without implying a published
+production target. See [Spec-Pop-Installation.md](Spec-Pop-Installation.md).
+The fresh-host path explicitly opts in to the same narrowly scoped apt build/download prerequisite
 allowlist needed for a fresh supported host. The bootstrap installs an exact
 repository-pinned Node/whisper.cpp runtime per user, installs ffmpeg and
 Tailscale for the default guided path, then hands the checkout to the
@@ -146,19 +150,27 @@ configures an external system.
 
 ## Source deployment coordinator
 
-The in-product deployment coordinator is still constrained by the operator
-checkout and supervisor. An accepted deployment:
+Source preparation and server activation are separate operations. The operator
+or release builder prepares and validates the candidate before activation is
+requested. The in-product coordinator does not fetch source, install
+dependencies, build the candidate or run the gate.
 
-1. serializes against another deployment/pi activation;
-2. records pre-deploy commit/version and marks deployment state;
-3. pauses new scheduled/run admission and drains bounded accepted work;
-4. fetches/validates the intended source candidate;
-5. installs with lockfile discipline;
-6. runs the repository gate/build in candidate context;
-7. stages activation rather than mutating the live checkout piecemeal;
-8. asks the supervisor/service manager to activate/restart;
-9. verifies health and expected version;
-10. commits success or rolls back to the exact prior state.
+Activation is explicit during beta. The coordinator:
+
+1. requires a clean committed candidate at `HEAD` with a fresh exact-tree gate
+   receipt and refuses an overlapping scheduled deployment;
+2. records the running commit, target commit and last-known-good commit;
+3. waits passively for idle without interrupting active use, then closes task/run
+   admission and waits for accepted work to finish;
+4. rechecks candidate identity and checkout cleanliness before handing the plan
+   to a supervisor outside the server process.
+
+The supervisor checks the candidate again before restarting the service, records
+success only after its bounded health check passes, and preserves a failed
+candidate under a separate ref before attempting last-known-good rollback.
+Rollback failure remains an explicit failure. Exact gate-receipt requirements,
+activation policy and rollback behavior are defined in
+[Spec-Pop-Installation.md](Spec-Pop-Installation.md).
 
 No update is declared complete because `git pull` returned zero. Gate, service
 activation and post-restart health are separate mandatory evidence. Untracked or
@@ -214,9 +226,23 @@ secure operator process or re-entry of SecretsRepo credentials. New archives use
 are not encrypted and can include pi-managed provider sign-in tokens. Protect
 legacy storage and transfer independently of `secret.key`.
 
-Restore is offline through `popman restore <name>` and restarts the service
-around extraction. After restore, verify migration, health, Files/notes/skills,
-provider configuration and a fake/low-cost chat path before declaring recovery.
+Restore has two entry points; neither replaces data beneath a live database:
+
+- **Settings → Backup**, on the installed systemd service: the owner confirms
+  replacement and provides the archive password when required. The running
+  server validates and stages the snapshot, then exits for a systemd restart.
+  Cold boot installs the prepared directory before SQLite opens or jobs start,
+  retaining the previous data directory for operator recovery.
+- **`popman restore <exact-backup-name>`**: the operator supplies the archive
+  password when required; the manager stops the service before offline
+  restoration and restarts it afterwards. This CLI path retains its documented
+  legacy overlay semantics and is not a crash-atomic directory swap.
+
+Archive authentication, validation, interrupted-restore recovery and host-key
+handling are defined in
+[Spec-Pop-Memory-and-Storage.md](Spec-Pop-Memory-and-Storage.md). After either
+path, verify migration, health, Files/notes/skills, provider configuration and a
+fake/low-cost chat path before declaring recovery.
 
 ## Security and privilege
 
