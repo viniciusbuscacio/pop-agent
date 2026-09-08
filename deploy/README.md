@@ -322,7 +322,9 @@ are not encrypted by Pop Agent. SecretsRepo values use separate field
 encryption. The service uses `UMask=0077` for newly created files; existing data
 and backups must also be restricted to the owner.
 
-Backup archives are not encrypted and can include provider sign-in tokens, even
-though `secret.key` is excluded. Use disk encryption on the Ubuntu server and
+New `.popbackup` archives require a separate password configured in Settings →
+Backup. The password is saved encrypted for reuse by manual and operator-scheduled
+backups. Legacy `.tar.gz` archives remain unencrypted and can include provider
+sign-in tokens. `secret.key` is excluded from both formats. Use disk encryption on the Ubuntu server and
 protect backups during storage and transfer. Preserve `secret.key` separately
 if you need to recover SecretsRepo credentials on another host.

@@ -777,6 +777,7 @@ const app = createApp({
   piActivation,
   deployment,
   backups: new TarBackupService({
+    secrets: context.secrets,
     dataDir: context.dataDir,
     backupsDir,
     now: () => new Date(systemClock.now()).toISOString(),

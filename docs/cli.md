@@ -176,3 +176,14 @@ The CLI source lives under `cli/src`: `application` owns session behavior,
 `interface` owns commands and the TUI. `main.ts` composes these adapters.
 `launcher/` contains the native bootstrap/update executable. Shared wire DTOs
 live in `shared/`.
+
+### Encrypted backups
+
+Set and confirm an independent backup password in Settings → Backup. Pop stores
+it encrypted for future `popman backup` invocations, including operator-scheduled
+ones. New files use `.popbackup`; older `.tar.gz` files remain unencrypted.
+
+`popman restore <exact-name>` prompts for the password used to create an encrypted
+archive, without echoing it. Save it outside Pop. Changing the saved password
+affects only new backups. Restore on another host recovers content, but without
+the original host key, SecretsRepo integration credentials must be re-entered.

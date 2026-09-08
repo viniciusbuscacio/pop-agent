@@ -2,6 +2,9 @@ import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import { apiDownload, apiRequest } from './api';
 
 export const backupsService = {
+  setPassword(password: string, confirmation: string): Promise<void> {
+    return apiRequest<void>('/backups/password', { method: 'PUT', body: { password, confirmation } });
+  },
   list(): Promise<BackupsResponse> {
     return apiRequest<BackupsResponse>('/backups');
   },

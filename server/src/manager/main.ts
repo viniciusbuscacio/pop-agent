@@ -66,10 +66,11 @@ async function askPassword(prompt: string): Promise<string | undefined> {
   const hidden = input.isTTY === true;
 
   const rl = createInterface({ input, output, terminal: hidden });
+  const originalWrite = output.write.bind(output);
   try {
     if (hidden) output.write(prompt);
-    const answer = await new Promise<string>((resolve) => {
-      const originalWrite = output.write.bind(output);
+    const answer = await new Promise<string | undefined>((resolve) => {
+      rl.once('close', () => resolve(undefined));
       if (hidden) {
         // Swallow the echo, keep the newline behaviour readline expects.
         (output as unknown as { write: (chunk: string) => boolean }).write = () => true;
@@ -82,13 +83,26 @@ async function askPassword(prompt: string): Promise<string | undefined> {
         resolve(line);
       });
     });
-    return answer.trim().length === 0 ? undefined : answer;
+    return answer === undefined || answer.trim().length === 0 ? undefined : answer;
   } finally {
+    if (hidden) (output as unknown as { write: typeof originalWrite }).write = originalWrite;
     rl.close();
   }
 }
 
 async function deps(): Promise<ManagerDeps> {
+  // Restore must not open SQLite or create a key before replacing offline data.
+  if (process.argv[2] === 'restore' || process.argv[2] === 'backups') {
+    const { TarBackupService } = await import('../infrastructure/backup/tar-backup-service.js');
+    const { resolveDataDir } = await import('../infrastructure/config/data-dir.js');
+    const dataDir = resolveDataDir();
+    const backups = new TarBackupService({ dataDir, backupsDir: join(dataDir, '..', 'pop-backups'), now: () => new Date().toISOString() });
+    return {
+      out: (line) => process.stdout.write(`${line}\n`), err: (line) => process.stderr.write(`${line}\n`),
+      service, unit: UNIT, backups, askPassword, onboardingCode,
+      resetPassword: () => Promise.resolve({ ok: false as const }), updateSteps: () => [],
+    };
+  }
   const { bootstrap } = await import('../infrastructure/bootstrap.js');
   const { TarBackupService } = await import('../infrastructure/backup/tar-backup-service.js');
   const { AuthService } = await import('../application/auth/auth-service.js');
@@ -98,6 +112,7 @@ async function deps(): Promise<ManagerDeps> {
   // Beside the data directory, never inside it, exactly as the server has it:
   // a backup must not end up inside the next backup.
   const backups = new TarBackupService({
+    secrets: context.secrets,
     dataDir: context.dataDir,
     backupsDir: join(context.dataDir, '..', 'pop-backups'),
     now: () => new Date().toISOString(),
@@ -117,7 +132,7 @@ async function deps(): Promise<ManagerDeps> {
     backups: {
       create: () => backups.create(),
       list: () => backups.list(),
-      restore: (name) => backups.restore(name),
+      restore: (name, password) => backups.restore(name, password),
     },
     resetPassword: (next) => auth.resetPassword(next),
     askPassword,

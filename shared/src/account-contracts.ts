@@ -144,10 +144,12 @@ export interface BackupDTO {
   name: string;
   size: number;
   createdAt: string;
+  encrypted?: boolean;
 }
 
 export interface BackupsResponse {
   backups: BackupDTO[];
+  passwordConfigured?: boolean;
 }
 
 /**

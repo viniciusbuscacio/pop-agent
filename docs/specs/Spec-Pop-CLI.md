@@ -210,7 +210,11 @@ popman update
 ```
 
 Service commands name the actual unit. Backup uses the same consistent snapshot
-implementation as Settings. Restore stops the service before extraction and
+implementation and saved backup password as Settings. Configure the independent
+password in Settings → Backup before using `popman backup` in an operator
+scheduler. Restore of `.popbackup` asks for its original password without echo;
+legacy `.tar.gz` restore does not. Restore does not open the live database.
+Restore stops the service before extraction and
 starts it in `finally`; live HTTP restore is forbidden.
 
 `reset-password` is shell-owner recovery when password and recovery key are both

@@ -15,6 +15,8 @@
  * behaviour can be tested without a systemd or a database.
  */
 
+import { BackupError } from '../application/backup/backup-password.js';
+
 export interface ManagerIo {
   out(line: string): void;
   err(line: string): void;
@@ -30,7 +32,7 @@ export interface ManagerDeps extends ManagerIo {
   backups: {
     create(): Promise<{ name: string; size: number }>;
     list(): { name: string; size: number; createdAt: string }[];
-    restore(name: string): boolean;
+    restore(name: string, password?: string): boolean | Promise<boolean>;
   };
   /** Replaces the password and returns the new recovery key. */
   resetPassword(next: string): Promise<{ ok: true; recoveryKey: string } | { ok: false }>;
@@ -80,9 +82,14 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
       return deps.service(command);
 
     case 'backup': {
-      const made = await deps.backups.create();
-      deps.out(`${made.name}  ${megabytes(made.size)}`);
-      return 0;
+      try {
+        const made = await deps.backups.create();
+        deps.out(`${made.name}  ${megabytes(made.size)}`);
+        return 0;
+      } catch (error) {
+        deps.err(error instanceof BackupError ? error.message : 'Could not create backup.');
+        return 1;
+      }
     }
 
     case 'backups': {
@@ -103,6 +110,14 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
         deps.err('Which backup? `popman backups` lists them.');
         return 1;
       }
+      let password: string | undefined;
+      if (name.endsWith('.popbackup')) {
+        password = await deps.askPassword('Backup password: ');
+        if (password === undefined) {
+          deps.err('No password entered; nothing was restored.');
+          return 1;
+        }
+      }
       // Not confirmed here, and that is deliberate: restore is reached by
       // typing a specific filename that had to be read off `backups` first.
       // The database must not be replaced while repositories hold it open.
@@ -113,7 +128,10 @@ export async function run(argv: string[], deps: ManagerDeps): Promise<number> {
       let restored = false;
       let restarted = false;
       try {
-        restored = deps.backups.restore(name);
+        restored = await deps.backups.restore(name, password);
+      } catch (error) {
+        deps.err(error instanceof BackupError ? error.message : 'Could not restore backup. Check the archive and available disk space.');
+        return 1;
       } finally {
         restarted = deps.service('start') === 0;
         if (!restarted) deps.err(`Could not restart ${deps.unit}.`);

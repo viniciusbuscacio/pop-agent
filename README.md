@@ -170,8 +170,11 @@ separately: it is intentionally excluded from backup archives.
 Conversations, files, notes, and pi-managed provider sign-in tokens are not
 encrypted by Pop Agent. They rely on filesystem access permissions. Use disk
 encryption on the Ubuntu server (for example, LUKS) to protect data at rest.
-Backup archives are **not encrypted** and can include provider sign-in tokens;
-store and transfer them securely.
+New backups are encrypted with a separate **backup password**, configured in
+Settings → Backup and saved encrypted for reuse. Keep that password elsewhere:
+restoring requires the password used when the archive was created. Older
+`.tar.gz` backups remain unencrypted and can include provider sign-in tokens.
+Protect those legacy archives during storage and transfer.
 
 For custom paths, network setup, logs, and installation recovery, see the
 [deployment guide](deploy/README.md).

@@ -537,6 +537,7 @@ export function createTestApp(
         }),
     },
     backups: new TarBackupService({
+      secrets,
       dataDir,
       backupsDir: mkdtempSync(join(tmpdir(), 'pop-test-backups-')),
       now: () => new Date(clock.now()).toISOString(),

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Encrypt new backup archives with an independent, confirmed password saved in encrypted secret storage for reuse; authenticate archives before offline restore, support legacy backups, and label their encryption status in Settings.
+
 - Align installation and operator documentation with the actual backup confidentiality limits, including pi-managed sign-in tokens.
 
 - Clarify that SQLite, files, pi-managed provider sign-in tokens, and backup archives are not encrypted; show a privacy notice beside backup creation and download controls.

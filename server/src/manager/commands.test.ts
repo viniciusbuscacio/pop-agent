@@ -38,6 +38,33 @@ function harness(overrides: Partial<ManagerDeps> = {}) {
 }
 
 describe('popman', () => {
+  it('asks for the archive password and waits for restore before restarting', async () => {
+    const order: string[] = [];
+    const restore = vi.fn(async (_name: string, password?: string) => {
+      expect(password).toBe('archive-password');
+      await Promise.resolve();
+      order.push('restored');
+      return true;
+    });
+    const h = harness({
+      askPassword: () => Promise.resolve('archive-password'),
+      service: (verb) => { order.push(verb); return 0; },
+      backups: { create: () => Promise.resolve({ name: '', size: 0 }), list: () => [], restore },
+    });
+    expect(await run(['restore', 'pop-backup-example.popbackup'], h.deps)).toBe(0);
+    expect(order).toEqual(['stop', 'restored', 'start']);
+  });
+
+  it('cancels encrypted restore before stopping and restarts after authentication failure', async () => {
+    const h = harness({ askPassword: () => Promise.resolve(undefined) });
+    expect(await run(['restore', 'pop-backup-example.popbackup'], h.deps)).toBe(1);
+    expect(h.calls).toEqual([]);
+    h.deps.askPassword = () => Promise.resolve('wrong-password');
+    h.deps.backups.restore = () => Promise.reject(new Error('sensitive details'));
+    expect(await run(['restore', 'pop-backup-example.popbackup'], h.deps)).toBe(1);
+    expect(h.calls).toEqual(['stop', 'start']);
+    expect(h.err.join('\n')).not.toContain('sensitive details');
+  });
   it('passes the service verbs straight through', async () => {
     const h = harness();
     expect(await run(['restart'], h.deps)).toBe(0);

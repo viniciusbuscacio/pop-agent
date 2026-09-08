@@ -142,56 +142,68 @@ SQLite. Measurements are observational and may change during the scan; totals
 must never become negative. Model weights stay visible as a separate category
 because they commonly dominate disk use.
 
-## Backup creation and retention
+## Backup password, creation and retention
 
-Settings and `popman backup` create an on-demand `tar.gz` snapshot. The shipped
-retention policy keeps the ten newest archives. Pop currently does not claim a
-built-in automatic daily/weekly scheduler; an operator scheduler must invoke the
-same snapshot implementation rather than copying files itself.
+Settings → Backup stores one independent backup password (10–128 characters),
+confirmed by the owner and encrypted through SecretsRepo as
+`backup.archive-password`. It is never returned by the API. The UI supports
+Save and Cancel, shows only whether a password exists, and clears password
+fields after saving/cancelling. This is not the app password or recovery key.
+Keep the password outside Pop: restore requires the password used for that
+archive. A password change affects only new archives.
 
-Creation uses a private staging directory:
+Settings and `popman backup` reuse the saved password. Creation refuses to run
+without one; there is no plaintext fallback. Operator schedulers can invoke
+`popman backup` noninteractively after password setup. A built-in scheduling UI
+is not included in this change. Retention keeps the ten newest completed
+archives, including legacy archives.
 
-1. copy non-database data while excluding `secret.key` and live DB/WAL/SHM;
-2. create `pop-agent.db` through SQLite's online backup API, which includes
-   committed WAL content as one consistent database image without blocking the
-   Node event loop;
-3. archive the staged tree;
-4. delete staging in `finally` and prune only completed archives.
+New files end in `.popbackup`. Format v1 is `POPBAK01` (8 bytes), random salt
+(16), random nonce (12), AES-256-GCM ciphertext, and authentication tag (16).
+The entire header is authenticated as AAD. The 32-byte key uses async scrypt
+with fixed N=32768, r=8, p=1 and maxmem=64 MiB. Each archive gets new randomness;
+archive bytes cannot select KDF parameters. Compression precedes encryption.
+The implementation uses Node crypto and the pinned tar package, not shell
+arguments containing passwords. No plaintext tar.gz is written during creation.
 
-Backups are data-sensitive even without the key: they contain conversations,
-files, notes and metadata. Excluding `secret.key` means encrypted provider
-credentials and session signing material cannot be decrypted from the archive
-alone; it does not make all backup content public-safe. Pi-managed provider
-sign-in tokens in `pi-auth.json` are outside SecretsRepo encryption and can be
-included in the archive. The backup UI must disclose that archives are not
-encrypted and can contain private content and provider sign-in tokens. A new
-host without the original key requires re-entering SecretsRepo credentials.
+Creation copies non-database data into private staging, excludes `secret.key`
+and live DB/WAL/SHM, and uses SQLite's online backup API for a consistent database
+snapshot including committed WAL records. The compressed stream is encrypted
+with backpressure into a private pending file and renamed only after completion.
+Staging is removed in finally; failed creations are not listed or pruned as
+completed backups. The private snapshot staging is plaintext, like live data;
+this feature encrypts exported archives, not the server filesystem.
 
-Archive names are generated server-side and path-validated for listing,
-download and deletion. A failed snapshot must not replace a previous archive or
-leave staging as a visible backup.
+Archive contents include conversations, files, notes, sessions and pi-managed
+provider sign-in tokens. The saved backup password may exist inside the SQLite
+snapshot only as SecretsRepo ciphertext; `secret.key` remains excluded.
+Legacy `.tar.gz` archives remain unencrypted, downloadable and restorable, with
+an explicit label in the UI. New encryption does not rewrite old archives.
 
 ## Offline restore
 
-Restore is forbidden through the live HTTP process. Replacing SQLite while
-repositories hold it open can combine restored disk state with old process
-state.
+Live HTTP restore remains forbidden. `popman restore <exact-backup-name>` asks
+for the archive password with terminal echo disabled for `.popbackup` files.
+It does not retrieve a saved password as a shortcut: older archives may need an
+older password. No password is passed via argv or environment. Missing input
+cancels before stopping the service.
 
-The operator command is:
+The manager does not bootstrap/open the application database for restore.
+It stops the service before restoration and restarts in finally, reporting
+failure if either operation fails. Decryption writes only into private staging;
+GCM authentication must complete before parsing/extracting any archive. Wrong
+passwords, truncation and tampering never alter live data.
 
-```text
-popman restore <exact-backup-name>
-```
-
-It stops `pop-agent-service`, extracts the selected known archive, and starts
-the service in `finally`, including when the archive name is invalid. Failure to
-stop prevents extraction; failure to restart is reported as failure. The key is
-not in the archive and the existing host key is left in place.
-
-Restore does not silently migrate or validate with a running server. Normal boot
-then opens the restored database, runs any newer migrations and performs other
-boot reconciliation. Cross-version restoration must be tested against the
-oldest supported backup.
+Validate archive paths, link destinations and entry types, reject host-key and
+WAL/SHM entries, extract in isolation, and verify the SQLite snapshot before
+copying into the stopped data directory. Restore retains legacy overlay
+semantics; it is not a crash-atomic filesystem transaction. Storage failures
+during the final copy require operator recovery from the original archive.
+The existing host key is preserved. On a new/different host, unreadable
+SecretsRepo values are cleared and session-signing material is recreated under
+the destination key; the app login hash and private content are retained.
+SecretsRepo integrations then require credential re-entry. The supplied backup
+password is re-saved under the destination key for future backups.
 
 ## Failure and test obligations
 
