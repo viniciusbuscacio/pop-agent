@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the accent focus outline from every text-entry field, retaining the neutral box and caret.
+
 - Theme the search clear icon instead of showing Chromium's native blue glyph.
 
 - Let REST UI control discover and address every visible app control, scroll the viewport or a visible container, and operate Settings search through a stable target.

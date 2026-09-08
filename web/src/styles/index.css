@@ -29,8 +29,10 @@ body {
   outline-offset: 2px;
 }
 
-/* The chat input uses its own enclosing box and caret, without an inner focus rectangle. */
-#composer-input:focus {
+/* Text-entry fields already have a neutral enclosing box and a caret. Keep
+   the global keyboard-focus ring on actions and choices, not inside inputs. */
+input.outline-none:focus,
+textarea.outline-none:focus {
   outline: none;
 }
 

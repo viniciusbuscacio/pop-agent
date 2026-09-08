@@ -736,8 +736,10 @@ Stop replaces Send while recording or during a run without a sendable draft.
 During a run with a draft, Send retains queue/steering behavior and Stop remains
 available inside Add. Opening or navigating actions never sends a draft.
 
-The composer textarea keeps its neutral enclosing border when focused, without
-an inner accent outline. Other controls retain the shared focus treatment.
+Every text-entry field, including search, password, number and textarea
+controls, keeps its neutral enclosing border when focused without an inner
+accent outline. Actions and choice/navigation controls retain the shared focus
+treatment.
 
 The composer Add button has no accent focus ring or native touch tap highlight.
 

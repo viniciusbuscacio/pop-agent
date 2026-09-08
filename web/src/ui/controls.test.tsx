@@ -39,6 +39,9 @@ describe('UI design-system primitives', () => {
       expect(control.className).toContain('border-[var(--border)]');
       expect(control.className).not.toContain('focus:border-[var(--accent)]');
     }
+    for (const control of [...screen.getAllByRole('textbox'), screen.getByRole('searchbox')]) {
+      expect(control.className).toContain('outline-none');
+    }
   });
 
   it('provides the standard choice, file and action families', () => {

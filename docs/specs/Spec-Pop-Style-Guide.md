@@ -34,7 +34,8 @@ choices.
 - Accent indicates selected location/state, not every primary action.
 - Primary buttons are raised neutral surfaces; ghost actions are flat; danger
   is text-semantic and does not turn whole screens red.
-- There is one global `:focus-visible` treatment. Fields retain neutral borders.
+- The global `:focus-visible` treatment remains on actions and choice/navigation
+  controls. Text-entry fields retain neutral borders without a focus outline.
 - Disabled controls remain readable and non-interactive.
 - Loading prevents duplicate submission and uses honest action text/status.
 - Success/error messages use semantic status, not color alone.

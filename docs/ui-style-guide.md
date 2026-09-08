@@ -6,7 +6,10 @@
 
 ## Focus
 
-The single focus treatment is the global `:focus-visible` ring in `styles/index.css`. A field keeps its neutral border while focused. Do not add `focus:border-[var(--accent)]`, a ring utility, or a second outline.
+The global `:focus-visible` ring identifies actions and choice/navigation
+controls. Text-entry fields keep their neutral border with no focus outline;
+their caret and selection show the active editing target. Do not add
+`focus:border-[var(--accent)]`, a ring utility, or a second outline.
 
 ## Primitives
 
