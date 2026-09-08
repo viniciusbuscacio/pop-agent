@@ -32,17 +32,17 @@ it('discovers and operates every visible interactive control without requiring a
 });
 it('scrolls the viewport or an addressed visible container', async () => {
   visible(); render(<div data-testid="scroll-region" />);
-  const viewportScroll = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined);
+  const viewport = document.scrollingElement as HTMLElement;
+  viewport.scrollTop = 20;
   const region = screen.getByTestId('scroll-region');
-  const regionScroll = vi.fn();
-  Object.defineProperty(region, 'scrollBy', { configurable: true, value: regionScroll });
+  region.scrollLeft = 5;
 
   await performUiCommand({ ...command, kind: 'scroll', deltaY: 600 });
-  expect(viewportScroll).toHaveBeenCalledWith({ left: 0, top: 600, behavior: 'auto' });
+  expect(viewport.scrollTop).toBe(620);
 
   const control = collectUiState().controls.find(item => item.testid === 'scroll-region');
   await performUiCommand({ ...command, kind: 'scroll', controlId: control!.controlId, deltaX: 120 });
-  expect(regionScroll).toHaveBeenCalledWith({ left: 120, top: 0, behavior: 'auto' });
+  expect(region.scrollLeft).toBe(125);
 });
 it('omits password values and private descendants from state', () => {
   visible(); render(<><input data-testid="password" type="password" defaultValue="never-export" /><div data-testid="wrapper"><code data-ui-private>private-token</code></div></>);

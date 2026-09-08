@@ -83,12 +83,17 @@ export async function performUiCommand(cmd: UiCommandDTO): Promise<UiReplyDTO> {
     if (accepted && (key === 'Enter' || key === ' ') && e instanceof HTMLButtonElement && !disabled(e)) e.click();
     e.dispatchEvent(new KeyboardEvent('keyup', init));
   } else if (cmd.kind === 'scroll') {
-    const options: ScrollToOptions = { left: cmd.deltaX ?? 0, top: cmd.deltaY ?? 0, behavior: 'auto' };
+    const move = (element: HTMLElement): void => {
+      element.scrollLeft += cmd.deltaX ?? 0;
+      element.scrollTop += cmd.deltaY ?? 0;
+    };
     if (cmd.controlId !== undefined || cmd.testid !== undefined) {
       const found = target(cmd); if (!(found instanceof HTMLElement)) return found;
-      found.scrollBy(options);
+      move(found);
     } else {
-      window.scrollBy(options);
+      const scrollingElement = document.scrollingElement;
+      if (scrollingElement instanceof HTMLElement) move(scrollingElement);
+      else window.scrollBy({ left: cmd.deltaX ?? 0, top: cmd.deltaY ?? 0, behavior: 'auto' });
     }
   } else if (cmd.kind !== 'state') {
     const found = target(cmd); if (!(found instanceof HTMLElement)) return found; const e = found;
