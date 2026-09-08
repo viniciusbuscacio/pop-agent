@@ -46,7 +46,7 @@ before accepting a master password. Use `popman onboarding-code` if the code
 expires. Use `--skip-network-onboarding` only when another HTTPS edge such as
 Caddy is already operator-managed.
 
-## Fixed-ref GitHub acquisition
+## Install a specific version
 
 Retrieve the immutable v0.2.78 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
