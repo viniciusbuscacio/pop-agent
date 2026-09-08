@@ -245,6 +245,11 @@ export class SqliteChatRepo implements ChatRepo {
     return rows.reverse().map(toMessage);
   }
 
+  hasA2aMessages(chatId: string): boolean {
+    return this.db.prepare(`SELECT 1 FROM messages WHERE chat_id = ?
+      AND client IN ('a2a-owner', 'a2a-agent', 'a2a-unknown') LIMIT 1`).get(chatId) !== undefined;
+  }
+
   lastMessageIds(): { chatId: string; lastMessageId?: string }[] {
     // Same ordering getMessages uses for its tail page, so the id compared
     // against the distiller's watermark is exactly the message a tail read

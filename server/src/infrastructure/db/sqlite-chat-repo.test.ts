@@ -300,3 +300,13 @@ describe('messages', () => {
     expect(repo.get(stored.id)?.title).toBe('second');
   });
 });
+
+
+it('remembers A2A origin beyond the latest message and does not confuse other chats', () => {
+  const incoming = repo.create(chat());
+  const local = repo.create(chat());
+  repo.appendMessage(message(incoming.id, { client: { kind: 'a2a-agent' } }));
+  for (let i = 0; i < 65; i++) repo.appendMessage(message(incoming.id));
+  expect(repo.hasA2aMessages(incoming.id)).toBe(true);
+  expect(repo.hasA2aMessages(local.id)).toBe(false);
+});

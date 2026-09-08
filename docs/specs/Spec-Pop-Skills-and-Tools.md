@@ -68,8 +68,8 @@ the configured z-score and floor; a smaller vault uses the conservative
 small-sample floor. Vector dimension mismatches are discarded. Editing routing
 text invalidates only that skill's vector.
 
-The embedding index covers the complete active vault, including entries that
-cannot route. Auto-Skill deduplication consumes the same index, so selection
+The embedding index covers the active vault and archived skills, including entries that
+cannot route. Archived entries participate only in deduplication, never in routing. Auto-Skill deduplication consumes the same index, so selection
 filters must never be applied before indexing. Every injected skill increments
 its use count and last-used timestamp. Route logs contain slugs and lexical,
 semantic and fused scores, never the user's message.
@@ -111,7 +111,15 @@ not disable already published skills. Legacy multi-level values migrate to this
 boolean.
 
 One conversation is evaluated per scheduler tick. Explicit multilingual skill
-requests skip idle waiting; ordinary conversations must first become idle. An
+requests skip the idle delay, but never active or queued execution; ordinary
+conversations must first become idle. Manual retries follow the same execution
+guard. Recheck source activity and revision after creator/reviewer calls; a
+changed source remains retryable without advancing its watermark.
+
+Conversations containing incoming A2A messages are excluded from automatic
+learning, including manual retries and windows after the incoming message.
+The exclusion records `a2a_source_excluded` without creator/reviewer spend;
+existing published skills remain unchanged. An
 initial unread window below 500 raw characters advances as
 `below_minimum_content` without a model call. Later concise additions remain
 eligible. A tainted window or unresolved failed/interrupted implementation also
@@ -142,7 +150,9 @@ a model.
 
 Dedup requires both semantic similarity (currently cosine ≥ 0.88) and lexical
 vocabulary overlap (currently ≥ 0.25), plus exact/rewording checks. The complete
-vault and archive remain comparison material.
+vault and archive remain comparison material. An archived match is a protected
+duplicate: automatic learning must not restore or revise it. The distiller
+refreshes missing archived vectors before comparing candidates.
 
 - a builtin/user match becomes `protected_duplicate` before reviewer spend;
 - an auto match may become a revision;

@@ -231,6 +231,9 @@ function harness(options: {
   chats?: ChatSummary[];
   messages?: Record<string, Message[]>;
   skills?: Skill[];
+  archived?: Skill[];
+  busy?: (chatId: string) => boolean;
+  hasA2aMessages?: (chatId: string) => boolean;
   answer?: string | (() => Promise<string>);
   mode?: 'disabled' | 'medium' | 'full';
   reviewer?: 'approve' | 'reject' | 'invalid';
@@ -246,13 +249,15 @@ function harness(options: {
   const journal: string[] = [];
 
   const distiller = new SkillDistiller({
-    chats: chats(
+    chats: { ...chats(
       options.chats ?? [chat('c1', LONG_AGO)],
       options.messages ?? {
         c1: [message('m1', 'how do I deploy the blog?')],
       },
       options.tailReads,
-    ),
+    ), ...(options.hasA2aMessages === undefined ? {} : { hasA2aMessages: options.hasA2aMessages }) },
+    ...(options.busy === undefined ? {} : { busy: options.busy }),
+    archive: { archived: () => options.archived ?? [] },
     marks,
     revisions,
     skills,
@@ -942,4 +947,82 @@ describe('SkillDistiller and a truncated answer', () => {
     expect(world.skills.written.map((input) => input.slug)).toEqual(['one']);
     expect(world.marks.get('c1')?.messageId).toBe('m1');
   });
+});
+
+
+describe('learning eligibility and archived knowledge', () => {
+  it('waits for an explicit skill request to finish without advancing the watermark', async () => {
+    let busy = true;
+    const world = harness({ busy: () => busy, messages: { c1: [message('m1', 'crie uma skill para publicar o blog')] } });
+    await world.distiller.run();
+    expect(world.prompts).toHaveLength(0);
+    expect(world.marks.get('c1')).toBeUndefined();
+    busy = false;
+    await world.distiller.run();
+    expect(world.skills.written).toHaveLength(1);
+  });
+
+  it('does not publish or advance a source that became busy during creation', async () => {
+    let busy = false;
+    const world = harness({ busy: () => busy, answer: async () => { busy = true; return ANSWER; } });
+    await world.distiller.run();
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.get('c1')).toBeUndefined();
+    expect(world.marks.attempts()[0]?.errorCode).toBe('source_changed');
+  });
+
+  it.each(['a2a-owner', 'a2a-agent', 'a2a-unknown'])('excludes %s input before any model spend', async kind => {
+    const incoming = { ...message('m1', 'crie uma skill para publicar o blog'), client: { kind } };
+    const world = harness({ messages: { c1: [incoming] } });
+    await world.distiller.run();
+    expect(world.prompts).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.errorCode).toBe('a2a_source_excluded');
+  });
+
+  it('excludes old A2A sources even when the unread window contains only local messages', async () => {
+    const world = harness({ hasA2aMessages: () => true });
+    await world.distiller.run();
+    expect(world.prompts).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.errorCode).toBe('a2a_source_excluded');
+  });
+
+  it('does not recreate an archived skill under a different slug after the vector cache is lost', async () => {
+    const archived: Skill = { slug: 'retired-blog', name: 'Deploy the blog', description: 'How to publish a post', whenToUse: 'when the user wants to publish', body: 'Review the post and publish the blog.', source: 'auto' };
+    const world = harness({ archived: [archived], embedder: new TwinEmbedder() });
+    await world.distiller.run();
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.results[0]).toMatchObject({ disposition: 'protected_duplicate', targetSlug: 'retired-blog', reason: 'dedup_match' });
+    expect(world.prompts).toHaveLength(1);
+  });
+
+  it('rejects an archived slug even without embeddings', async () => {
+    const archived: Skill = { slug: 'deploy-blog', name: 'Old', description: 'Old procedure', whenToUse: 'when publishing', body: 'Old steps', source: 'auto' };
+    const world = harness({ archived: [archived] });
+    await world.distiller.run();
+    expect(world.skills.written).toHaveLength(0);
+    expect(world.marks.attempts()[0]?.results[0]?.reason).toBe('slug_collision');
+  });
+});
+
+
+it('leaves a manual retry queued while its conversation is busy', async () => {
+  let busy = false;
+  const world = harness({ busy: () => busy, reviewer: 'invalid' });
+  await world.distiller.run();
+  const failed = world.marks.attempts()[0]!;
+  world.marks.queueRetry(failed.id, 'retry-busy', new Date(NOW).toISOString());
+  busy = true;
+  const calls = world.prompts.length;
+  await world.distiller.run();
+  expect(world.marks.attempt('retry-busy')?.state).toBe('queued');
+  expect(world.prompts).toHaveLength(calls);
+});
+
+it('retains the watermark when archived similarity cannot be checked', async () => {
+  const archived: Skill = { slug: 'retired-blog', name: 'Deploy', description: 'Publish a post', whenToUse: 'when publishing', body: 'Review then publish', source: 'auto' };
+  const world = harness({ archived: [archived], embedder: { dimension: 2, embed: async () => [] } });
+  await world.distiller.run();
+  expect(world.skills.written).toHaveLength(0);
+  expect(world.marks.get('c1')).toBeUndefined();
+  expect(world.marks.attempts()[0]?.errorCode).toBe('archive_index_unavailable');
 });

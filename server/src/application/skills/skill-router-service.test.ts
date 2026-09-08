@@ -187,3 +187,16 @@ describe('SkillRouterService', () => {
     expect(await service.route('what git branches exist?')).toEqual([]);
   });
 });
+
+
+it('retains archived vectors across cold starts without routing archived skills', async () => {
+  const archived = skill('retired', 'Retired cooking recipes', 'when cooking food');
+  const vectors = new FakeVectors();
+  const embedder = new StubEmbedder(() => [1, 0]);
+  const deps = { skills: repo(SKILLS), archive: { archived: () => [archived] }, vectors, embedder };
+  await new SkillRouterService(deps).route('cooking');
+  expect(vectors.rows.has('retired')).toBe(true);
+  const result = await new SkillRouterService(deps).route('cooking');
+  expect(vectors.rows.has('retired')).toBe(true);
+  expect(result).not.toContain(archived.body);
+});

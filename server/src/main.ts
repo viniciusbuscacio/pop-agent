@@ -241,6 +241,7 @@ const hybridMemory = new HybridMemory({
 // Selections are logged so router thresholds are tuned from data, not guessed
 // (docs/specs/Spec-Pop-General.md §8). Slugs and scores only -- message content stays out of logs.
 const skillRouter = new SkillRouterService({
+  archive: skillsVault,
   skills: skillsVault,
   ...(embedder === undefined ? {} : { embedder }),
   vectors: context.skillVectors,
@@ -591,6 +592,8 @@ const taskScheduler = new TaskScheduler({
     // is why changing it takes effect on the next tick instead of the next
     // restart.
     new SkillDistiller({
+      archive: skillsVault,
+      busy: (chatId) => runs.liveRun(chatId) !== undefined || queuedMessages.list(chatId).length > 0,
       chats: context.chats,
       marks: context.distillation,
       revisions: context.skillRevisions,

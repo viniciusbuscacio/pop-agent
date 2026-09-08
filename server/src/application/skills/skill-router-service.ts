@@ -4,7 +4,7 @@ import type { Embedder } from '../ports/embedder.js';
 import type { Clock } from '../ports/clock.js';
 import type { SkillUsageRepo } from '../ports/skill-usage-repo.js';
 import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
-import type { SkillsRepo } from '../ports/skills-repo.js';
+import type { SkillsRepo, SkillArchiveRepo } from '../ports/skills-repo.js';
 
 /**
  * The Skill Router with its embedding cache (docs/specs/Spec-Pop-General.md §8). It keeps a vector
@@ -32,6 +32,7 @@ export interface RoutedSkill {
 
 export interface SkillRouterDeps {
   skills: SkillsRepo;
+  archive?: Pick<SkillArchiveRepo, 'archived'>;
   embedder?: Embedder;
   /** Where vectors survive a restart. Without it the cache is per-process. */
   vectors?: SkillVectorsRepo;
@@ -71,7 +72,7 @@ export class SkillRouterService {
     if (embedder === undefined) {
       selected = selectSkills(message, vault.filter(routable));
     } else {
-      const vectors = await this.skillVectors(vault);
+      const vectors = await this.skillVectors([...vault, ...(this.deps.archive?.archived() ?? [])]);
       const candidates = vault
         .map((skill, index) => ({ skill, vector: vectors[index] }))
         .filter((entry) => routable(entry.skill));

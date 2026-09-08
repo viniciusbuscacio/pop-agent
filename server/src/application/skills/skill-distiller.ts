@@ -31,7 +31,7 @@ import type {
   SkillRevisionsRepo,
 } from '../ports/skill-distillation-repo.js';
 import type { SkillVectorsRepo } from '../ports/skill-vectors-repo.js';
-import { SkillsError, type SkillsRepo } from '../ports/skills-repo.js';
+import { SkillsError, type SkillsRepo, type SkillArchiveRepo } from '../ports/skills-repo.js';
 
 /**
  * The background distiller (docs/specs/Spec-Pop-General.md §8, auto-skill fase c): the half of
@@ -111,6 +111,8 @@ export interface SkillDistillerDeps {
   marks: DistillationRepo;
   revisions: SkillRevisionsRepo;
   skills: SkillsRepo;
+  archive?: Pick<SkillArchiveRepo, 'archived'>;
+  busy?: (chatId: string) => boolean;
   /** Without an embedder the dedup leg is off and only a slug collision is an update. */
   embedder?: Embedder;
   vectors?: SkillVectorsRepo;
@@ -165,6 +167,7 @@ export class SkillDistiller implements MaintenanceJob {
     if (target === undefined) return;
 
     const { chat, window, requested } = target;
+    const revision = this.deps.chats.get(chat.id)?.updatedAt;
     const lastId = window[window.length - 1]!.id;
     const now = (): string => new Date(this.deps.clock.now()).toISOString();
     const attemptId = target.attemptId ?? entityId('distillation');
@@ -184,6 +187,21 @@ export class SkillDistiller implements MaintenanceJob {
     const finish = (
       value: Parameters<DistillationRepo['finishAttempt']>[1],
     ): void => this.deps.marks.finishAttempt(attemptId, value);
+
+    // Exclude the whole conversation: assistant replies can carry remote input
+    // forward even when the original incoming message is outside this window.
+    if (this.deps.chats.hasA2aMessages?.(chat.id) || window.some(message => message.client?.kind.startsWith('a2a-'))) {
+      this.advanceTarget(target, lastId);
+      finish({ state: 'completed', outcome: 'nothing', errorCode: 'a2a_source_excluded',
+        errorMessage: 'Conversations containing incoming A2A messages are excluded from automatic learning.', finishedAt: now() });
+      return;
+    }
+    const sourceChanged = (): boolean => {
+      if (!this.deps.busy?.(chat.id) && this.deps.chats.get(chat.id)?.updatedAt === revision && !this.deps.chats.hasA2aMessages?.(chat.id)) return false;
+      finish({ state: 'failed', outcome: 'failed', errorCode: 'source_changed',
+        errorMessage: 'The conversation changed during learning. Retry after it becomes idle.', finishedAt: now() });
+      return true;
+    };
 
     // Apply the cheap raw-size cut only once. A short correction added to an established
     // chat can be valuable, while an entire first window below this floor is obvious noise.
@@ -253,6 +271,8 @@ export class SkillDistiller implements MaintenanceJob {
       return;
     }
 
+    if (sourceChanged()) return;
+
     const parsed = parseDistillAnswer(answer);
     if (parsed.candidates.length === 0) {
       if (parsed.truncated) {
@@ -316,6 +336,7 @@ export class SkillDistiller implements MaintenanceJob {
         } catch (error) {
           throw new ReviewFailure('reviewer_failure', safeError(error));
         }
+        if (sourceChanged()) return;
         const expected = new Set(prepared.map((entry) => entry.hash));
         const decisions = parseReviewAnswer(reviewAnswer, expected);
         if (decisions === undefined) throw new ReviewFailure('invalid_review', 'The reviewer returned an incomplete or invalid verdict.');
@@ -358,7 +379,7 @@ export class SkillDistiller implements MaintenanceJob {
    */
   private pick(chats: readonly Chat[]): Target | undefined {
     const queued = this.deps.marks.nextQueuedAttempt();
-    if (queued !== undefined) {
+    if (queued !== undefined && !this.deps.busy?.(queued.chatId)) {
       const chat = chats.find((entry) => entry.id === queued.chatId);
       if (chat === undefined) {
         this.deps.marks.markAttemptRunning(queued.id, new Date(this.deps.clock.now()).toISOString());
@@ -412,6 +433,7 @@ export class SkillDistiller implements MaintenanceJob {
 
     let idle: Target | undefined;
     for (const chat of ordered) {
+      if (this.deps.busy?.(chat.id)) continue;
       const lastId = lastByChat.get(chat.id);
       if (lastId === undefined) continue; // no messages at all
       const mark = this.deps.marks.get(chat.id);
@@ -448,8 +470,13 @@ export class SkillDistiller implements MaintenanceJob {
 
   /** Classifies a baseline-safe candidate before the independent review call. */
   private async prepare(candidate: SkillCandidate): Promise<PreparedCandidate | { result: DistillationResult }> {
+    const archived = this.deps.archive?.archived() ?? [];
+    const archivedExact = archived.find(skill => skill.slug === candidate.slug || skillVersionHash(skill) === skillVersionHash({ ...candidate, slug: skill.slug }));
+    if (archivedExact !== undefined) return { result: { slug: candidate.slug, disposition: 'protected_duplicate', targetSlug: archivedExact.slug, reason: archivedExact.slug === candidate.slug ? 'slug_collision' : 'dedup_match' } };
     const existing = this.deps.skills.get(candidate.slug);
     const measured = await this.measure(candidate, existing?.slug);
+    const archivedMatch = archived.find(skill => skill.slug === measured.best?.slug);
+    if (archivedMatch !== undefined) return { result: { slug: candidate.slug, disposition: 'protected_duplicate', targetSlug: archivedMatch.slug, reason: 'dedup_match', similarity: measured.best!.score, overlap: measured.best!.overlap } };
     const target = existing ?? (measured.best === undefined ? undefined : this.deps.skills.get(measured.best.slug));
 
     if (target !== undefined && target.source !== 'auto') {
@@ -568,7 +595,23 @@ export class SkillDistiller implements MaintenanceJob {
     if (embedder === undefined) return {};
 
     const [vector] = await embedder.embed([candidateRoutingText(candidate)], 'passage').catch(() => []);
-    if (vector === undefined) return {};
+    if (vector === undefined) {
+      if ((this.deps.archive?.archived().length ?? 0) > 0) throw new ReviewFailure('archive_index_unavailable', 'Archived skill comparison could not complete.');
+      return {};
+    }
+
+    // Refresh archived references independently of routing. A cold router may
+    // prune archive vectors, but that must never remove dedup protection.
+    const rows = new Map((this.deps.vectors?.all() ?? []).map(row => [row.slug, row]));
+    for (const skill of this.deps.archive?.archived() ?? []) {
+      const signature = candidateRoutingText(skill);
+      const cached = rows.get(skill.slug);
+      if (cached?.signature === signature && cached.vector.length === embedder.dimension) continue;
+      const [archiveVector] = await embedder.embed([signature], 'passage');
+      if (archiveVector === undefined || archiveVector.length !== embedder.dimension) throw new ReviewFailure('archive_index_unavailable', 'Archived skill comparison could not complete.');
+      rows.set(skill.slug, { slug: skill.slug, signature, vector: archiveVector });
+      this.deps.vectors?.save(skill.slug, signature, archiveVector);
+    }
 
     // `signature` is the stored skill's routing text, which is what the
     // candidate's text has to be compared against -- so the second bar costs
@@ -578,7 +621,7 @@ export class SkillDistiller implements MaintenanceJob {
     let best: Neighbour | undefined;
     let against: number | undefined;
     let againstOverlap: number | undefined;
-    for (const entry of this.deps.vectors?.all() ?? []) {
+    for (const entry of rows.values()) {
       if (entry.vector.length !== vector.length) continue;
       const score = dot(vector, entry.vector);
       if (entry.slug === alsoAgainst) {

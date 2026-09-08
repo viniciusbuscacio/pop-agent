@@ -72,6 +72,9 @@ export interface ChatRepo {
    */
   lastClientKind(chatId: string): string | undefined;
 
+  /** True if any retained message came from an A2A peer, including older turns. */
+  hasA2aMessages?(chatId: string): boolean;
+
   /** How many turns the user has taken -- the auto-title cadence counts these. */
   countUserMessages(chatId: string): number;
 

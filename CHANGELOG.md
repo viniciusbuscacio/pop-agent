@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep archived skills in Auto-Skill deduplication without routing or restoring them; exclude incoming A2A conversations from learning and defer active, queued, or changing source conversations.
+
 - Supply the current chat ID directly in each pi session system prompt, so answering its identity does not require a memory lookup.
 
 - Give incoming A2A message bubbles a distinct theme-aware background while preserving their authorship labels.
