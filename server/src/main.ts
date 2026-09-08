@@ -782,10 +782,9 @@ const app = createApp({
   backups: new TarBackupService({
     ...(process.env['INVOCATION_ID'] !== undefined && process.env['POP_AGENT_SERVICE_CONTROL'] !== 'fake' ? {
       restartForRestore: () => {
-        runs.flushInterrupted();
         // The installed unit uses Restart=on-failure. All repositories close with
         // this process; the next boot applies the staged snapshot before bootstrap.
-        process.exit(75);
+        try { runs.flushInterrupted(); } finally { process.exit(75); }
       },
     } : {}),
     secrets: context.secrets,

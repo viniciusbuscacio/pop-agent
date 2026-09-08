@@ -8,13 +8,14 @@ const list = vi.fn();
 const remove = vi.fn();
 const setPassword = vi.fn();
 const restore = vi.fn();
+const create = vi.fn();
 
 vi.mock('../services/backups', () => ({
   backupsService: {
     restore: (name: string, password?: string) => restore(name, password) as Promise<unknown>,
     setPassword: (password: string, confirmation: string) => setPassword(password, confirmation) as Promise<void>,
     list: () => list() as Promise<unknown>,
-    create: vi.fn(),
+    create: (includeFiles: boolean) => create(includeFiles) as Promise<unknown>,
     download: vi.fn(),
     remove: (name: string) => remove(name) as Promise<unknown>,
   },
@@ -24,6 +25,7 @@ beforeEach(() => {
   list.mockReset().mockResolvedValue({
     backups: [{ name: 'backup-2026.tar.gz', size: 1024, createdAt: '2026-08-31T12:00:00Z' }],
   });
+  create.mockReset().mockResolvedValue({});
   restore.mockReset().mockResolvedValue({ accepted: true });
   remove.mockReset().mockResolvedValue(undefined);
   setPassword.mockReset().mockResolvedValue(undefined);
@@ -109,4 +111,27 @@ it('recovers a running operation when the page is reopened and disables conflict
   render(<BackupSection />);
   await screen.findByRole('status');
   expect((screen.getByTestId('backup-create') as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('includes Files by default and sends an explicit exclusion when the switch is off', async () => {
+  list.mockResolvedValue({ backups: [], passwordConfigured: true, fileSelectionAvailable: true });
+  const user = userEvent.setup();
+  render(<BackupSection />);
+  const toggle = await screen.findByRole('switch', { name: /Include files/ });
+  await waitFor(() => expect((screen.getByTestId('backup-create') as HTMLButtonElement).disabled).toBe(false));
+  expect((toggle as HTMLInputElement).checked).toBe(true);
+  await user.click(screen.getByTestId('backup-create'));
+  await waitFor(() => expect(create).toHaveBeenCalledWith(true));
+  await user.click(toggle);
+  await user.click(screen.getByTestId('backup-create'));
+  await waitFor(() => expect(create).toHaveBeenCalledWith(false));
+});
+
+it('does not offer file exclusion before the connected server supports it', async () => {
+  list.mockResolvedValue({ backups: [], passwordConfigured: true });
+  render(<BackupSection />);
+  const toggle = await screen.findByRole('switch', { name: /Include files/ });
+  await screen.findByText('No backups yet.');
+  expect((toggle as HTMLInputElement).disabled).toBe(true);
+  expect((toggle as HTMLInputElement).checked).toBe(true);
 });

@@ -242,3 +242,30 @@ it('excludes downloadable model caches while retaining user files and conversati
   expect(names).toContain('./files/example');
   expect(names).toContain('./sessions/example');
 });
+
+it('can omit Files without omitting chats, and preserves current Files when browser-restoring that archive', async () => {
+  mkdirSync(join(dataDir, 'files'));
+  writeFileSync(join(dataDir, 'files', 'user-file'), 'keep this current content');
+  const backup = await service.create({ includeFiles: false });
+  expect(backup.includeFiles).toBe(false);
+  expect(service.list()[0]?.includeFiles).toBe(false);
+  const archive = join(root, 'without-files.tar.gz');
+  await decryptArchive(service.pathOf(backup.name) as string, archive, password);
+  const entries = execFileSync('tar', ['tzf', archive], { encoding: 'utf8' });
+  expect(entries).not.toContain('./files/');
+  expect(entries).toContain('./pop-agent.db');
+  const restart = vi.fn();
+  const browser = new TarBackupService({ dataDir, backupsDir, now: () => new Date().toISOString(), restartForRestore: restart });
+  browser.requestRestore(backup.name, password);
+  await vi.waitFor(() => expect(restart).toHaveBeenCalledOnce());
+  const { applyPendingRestore } = await import('./browser-restore.js');
+  await applyPendingRestore(dataDir);
+  expect(readFileSync(join(dataDir, 'files', 'user-file'), 'utf8')).toBe('keep this current content');
+});
+
+it('exposes failed creation after navigation instead of reporting an idle success', async () => {
+  rmSync(join(dataDir, 'pop-agent.db'));
+  await expect(service.create()).rejects.toThrow();
+  expect(service.status().state).toBe('failed');
+  expect(service.list()).toEqual([]);
+});

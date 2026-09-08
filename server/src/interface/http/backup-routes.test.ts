@@ -29,7 +29,7 @@ describe('backup restore boundary', () => {
     expect(await response.text()).toBe('');
     expect(backups.setPassword).toHaveBeenCalledWith('separate-password');
     const list = await app.request('/backups');
-    expect(await list.json()).toEqual({ backups: [], passwordConfigured: false, restoreAvailable: false });
+    expect(await list.json()).toEqual({ backups: [], passwordConfigured: false, restoreAvailable: false, fileSelectionAvailable: true });
   });
   it('refuses to replace data through the live HTTP process', async () => {
     const backups = service('/backups/pop-backup-now.tar.gz');
@@ -63,4 +63,17 @@ it('requires explicit confirmation and queues restore without touching the live 
   expect(backups.requestRestore).toHaveBeenCalledWith('pop-backup-now.popbackup', 'archive-password');
   expect(backups.restore).not.toHaveBeenCalled();
   expect(await response.text()).not.toContain('archive-password');
+});
+
+it('validates the optional Files choice while keeping empty-body clients compatible', async () => {
+  const backups = service(undefined);
+  backups.create = vi.fn(async () => ({ name: 'pop-backup-now.popbackup', size: 1, createdAt: '2026-09-08', includeFiles: false }));
+  const app = createBackupRoutes({ backups });
+  expect((await app.request('/backups', { method: 'POST' })).status).toBe(201);
+  expect(backups.create).toHaveBeenCalledWith({});
+  const response = await app.request('/backups', { method: 'POST', body: JSON.stringify({ includeFiles: false }) });
+  expect(response.status).toBe(201);
+  expect(backups.create).toHaveBeenCalledWith({ includeFiles: false });
+  expect((await response.json()).includeFiles).toBe(false);
+  expect((await app.request('/backups', { method: 'POST', body: JSON.stringify({ includeFiles: 'false' }) })).status).toBe(400);
 });

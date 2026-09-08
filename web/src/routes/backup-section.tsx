@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { backupsService } from '../services/backups';
-import { Button, Card, TextField } from '../ui/controls';
+import { Button, Card, SwitchField, TextField } from '../ui/controls';
 
 /** Server-owned operations remain visible after navigating away and back. */
 export function BackupSection() {
@@ -16,6 +16,8 @@ export function BackupSection() {
   const running = operation !== undefined && ['creating', 'preparing', 'restarting'].includes(operation.state);
   const busy = pending || running;
   const [error, setError] = useState<string | undefined>(undefined);
+  const [fileSelectionAvailable, setFileSelectionAvailable] = useState(false);
+  const [includeFiles, setIncludeFiles] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [editing, setEditing] = useState(false);
   const [password, setPassword] = useState('');
@@ -34,6 +36,7 @@ export function BackupSection() {
       setConfigured(result.passwordConfigured === true);
       setOperation(result.operation);
       setRestoreAvailable(result.restoreAvailable === true);
+      setFileSelectionAvailable(result.fileSelectionAvailable === true);
       setError(undefined);
     } catch {
       setError(t('backup.loadFailed'));
@@ -47,7 +50,7 @@ export function BackupSection() {
     setError(undefined);
     try {
       setOperation({ state: 'creating' });
-      await backupsService.create();
+      await backupsService.create(includeFiles);
       await reload();
     } catch {
       setOperation({ state: 'idle' });
@@ -147,6 +150,8 @@ export function BackupSection() {
             {t(configured ? 'backup.changePassword' : 'backup.setPassword')}
           </Button></div>
         )}
+        <SwitchField id="backup-include-files" label={t('backup.includeFiles')} hint={t('backup.includeFilesHint')}
+          checked={includeFiles} onChange={setIncludeFiles} disabled={busy || loading || !fileSelectionAvailable} />
         <div>
           <Button type="button" data-testid="backup-create" disabled={busy || loading || !configured || editing} onClick={() => void create()}>
             {operation?.state === 'creating' ? t('backup.creating') : t('backup.create')}
@@ -166,7 +171,7 @@ export function BackupSection() {
         <Card>
           <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void restore(); }}>
             <p className="text-sm font-medium">{t('backup.restoreTitle', { name: restoreTarget.name })}</p>
-            <p className="text-sm text-[var(--muted)]">{t('backup.restoreNotice')}</p>
+            <p className="text-sm text-[var(--muted)]">{t(restoreTarget.includeFiles === false ? 'backup.restoreWithoutFilesNotice' : 'backup.restoreNotice')}</p>
             {restoreTarget.encrypted === true ? <TextField id="restore-password" type="password" autoComplete="off"
               label={t('backup.archivePassword')} value={restorePassword} required maxLength={128} disabled={busy}
               onChange={(event) => setRestorePassword(event.target.value)} /> : null}
@@ -194,6 +199,7 @@ export function BackupSection() {
             <Card key={backup.name} className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate font-mono text-xs text-[var(--key-fg-dim)]">{backup.name}</p>
+                <p className="text-xs text-[var(--muted)]">{t(backup.includeFiles === false ? 'backup.withoutFiles' : 'backup.withFiles')}</p>
                 <p className="text-xs text-[var(--muted)]">{t(backup.encrypted === true ? 'backup.encrypted' : 'backup.legacy')}</p>
                 <p className="text-xs text-[var(--muted)]">
                   {(backup.size / 1024).toFixed(0)} KB · {backup.createdAt.slice(0, 16).replace('T', ' ')}

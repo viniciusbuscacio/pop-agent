@@ -145,9 +145,11 @@ export interface BackupDTO {
   size: number;
   createdAt: string;
   encrypted?: boolean;
+  includeFiles?: boolean;
 }
 
 export interface BackupsResponse {
+  fileSelectionAvailable?: boolean;
   restoreAvailable?: boolean;
   operation?: { state: 'idle' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed'; message?: string };
   backups: BackupDTO[];

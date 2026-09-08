@@ -9,8 +9,8 @@ export const backupsService = {
     return apiRequest<BackupsResponse>('/backups');
   },
 
-  create(): Promise<BackupDTO> {
-    return apiRequest<BackupDTO>('/backups', { method: 'POST' });
+  create(includeFiles = true): Promise<BackupDTO> {
+    return apiRequest<BackupDTO>('/backups', { method: 'POST', body: { includeFiles } });
   },
 
   restore(name: string, password?: string): Promise<{ accepted: boolean }> {

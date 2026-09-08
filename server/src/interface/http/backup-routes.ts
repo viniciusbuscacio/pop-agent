@@ -17,7 +17,7 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
 
   routes.get('/backups', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ backups: deps.backups.list().map(toDto), passwordConfigured: deps.backups.passwordConfigured(),
+    return c.json({ fileSelectionAvailable: true, backups: deps.backups.list().map(toDto), passwordConfigured: deps.backups.passwordConfigured(),
       ...(deps.backups.status === undefined ? {} : { operation: deps.backups.status() }),
       restoreAvailable: deps.backups.canRestore?.() === true } satisfies BackupsResponse);
   });
@@ -38,7 +38,12 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
   });
 
   routes.post('/backups', async (c) => {
-    try { return c.json(toDto(await deps.backups.create()), 201); }
+    const text = await c.req.text();
+    const parsed = z.object({ includeFiles: z.boolean().optional() }).strict().safeParse(
+      text === '' ? {} : await Promise.resolve().then(() => JSON.parse(text) as unknown).catch(() => null),
+    );
+    if (!parsed.success) return apiError(c, 400, 'validation_error', 'Choose whether to include Files.');
+    try { return c.json(toDto(await deps.backups.create(parsed.data.includeFiles === undefined ? {} : { includeFiles: parsed.data.includeFiles })), 201); }
     catch (error) {
       return apiError(c, error instanceof BackupError ? 409 : 500, 'operation_error',
         error instanceof BackupError ? error.message : 'Could not create backup.');
@@ -89,6 +94,6 @@ export function createBackupRoutes(deps: BackupRoutesDeps): Hono {
   return routes;
 }
 
-function toDto(info: { name: string; size: number; createdAt: string; encrypted?: boolean }): BackupDTO {
-  return { name: info.name, size: info.size, createdAt: info.createdAt, encrypted: info.encrypted === true };
+function toDto(info: { name: string; size: number; createdAt: string; encrypted?: boolean; includeFiles?: boolean }): BackupDTO {
+  return { name: info.name, size: info.size, createdAt: info.createdAt, encrypted: info.encrypted === true, includeFiles: info.includeFiles !== false };
 }

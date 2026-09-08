@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { BackupOperation } from '../../application/ports/backup-service.js';
+import { backupIncludesFiles } from './backup-content.js';
 import { BackupError } from '../../application/backup/backup-password.js';
 
 const pendingPath = (dataDir: string): string => `${resolve(dataDir)}.restore-pending`;
@@ -60,8 +61,15 @@ export async function applyPendingRestore(dataDir: string): Promise<void> {
     // Resumable rename sequence: a restart between either rename is safe.
     if (!existsSync(original)) await rename(dataDir, original);
     if (!existsSync(dataDir)) await rename(staged, dataDir);
+    // A conversation backup never deletes this host's existing Files tree.
+    if (!backupIncludesFiles(dataDir) && existsSync(join(original, 'files')) && !existsSync(join(dataDir, 'files'))) {
+      await rename(join(original, 'files'), join(dataDir, 'files'));
+    }
   } catch {
-    if (!existsSync(dataDir) && existsSync(original)) await rename(original, dataDir);
+    if (existsSync(original)) {
+      if (existsSync(dataDir)) await rename(dataDir, staged);
+      await rename(original, dataDir);
+    }
     // Disarm the failed operation before starting the unchanged data.
     await rm(join(pending, 'ready'), { force: true });
     await rm(pending, { recursive: true, force: true });

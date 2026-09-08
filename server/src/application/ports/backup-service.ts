@@ -11,6 +11,7 @@ export interface BackupInfo {
   size: number;
   createdAt: string;
   encrypted?: boolean;
+  includeFiles?: boolean;
 }
 
 export interface BackupOperation {
@@ -25,7 +26,7 @@ export interface BackupService {
   passwordConfigured(): boolean;
   setPassword(password: string): void;
   list(): BackupInfo[];
-  create(): Promise<BackupInfo>;
+  create(options?: { includeFiles?: boolean }): Promise<BackupInfo>;
   /** Absolute path of a backup, for the download route. Undefined if unknown. */
   pathOf(name: string): string | undefined;
   /** Replaces the live data with a backup's contents. Returns false if unknown. */

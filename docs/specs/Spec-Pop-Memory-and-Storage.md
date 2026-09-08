@@ -186,6 +186,16 @@ reuses existing host caches; a new host downloads them on demand. User files,
 conversation sessions, skills, settings, credentials and required pi runtime
 state remain included. Older archives containing model caches remain readable.
 
+Settings → Backup includes an enabled-by-default **Include files** switch per
+creation. Disabling it omits only the root `files/` tree, including file bytes
+used by attachments; conversation records, sessions, settings, skills and notes
+remain included. Every new archive contains authenticated content metadata.
+Restoring an archive without Files preserves the destination host's existing
+Files tree; on a fresh host it stays empty. A missing manifest identifies older
+complete backups. Restore policy comes from validated archive metadata, never
+from a caller-supplied filename. Listings label locally-created omissions as
+Without Files using their generated `-without-files.popbackup` suffix.
+
 ## Browser and offline restore
 
 Settings → Backup offers Restore for each saved archive on the installed systemd

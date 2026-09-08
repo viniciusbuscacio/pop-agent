@@ -10,11 +10,12 @@ import { SqliteSecretsRepo } from '../db/sqlite-secrets-repo.js';
 import type { SecretsRepo } from '../../application/ports/secrets-repo.js';
 import type { BackupInfo, BackupOperation, BackupService } from '../../application/ports/backup-service.js';
 import { prepareBrowserRestore, readRestoreStatus } from './browser-restore.js';
+import { BACKUP_CONTENT_FILE, backupIncludesFiles } from './backup-content.js';
 import { decryptArchive, encryptArchive } from './archive-crypto.js';
 
 const KEEP = 10;
 const DATABASE_FILE = 'pop-agent.db';
-const EXCLUDED = new Set(['secret.key', 'models', 'voice-models', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
+const EXCLUDED = new Set([BACKUP_CONTENT_FILE, 'secret.key', 'models', 'voice-models', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
 
 export interface TarBackupDeps {
   dataDir: string;
@@ -74,11 +75,12 @@ export class TarBackupService implements BackupService {
       const path = this.pathOf(name);
       if (path === undefined) return [];
       const info = lstatSync(path);
-      return [{ name, size: info.size, createdAt: info.mtime.toISOString(), encrypted: name.endsWith('.popbackup') }];
+      return [{ name, size: info.size, createdAt: info.mtime.toISOString(), encrypted: name.endsWith('.popbackup'), includeFiles: !name.endsWith('-without-files.popbackup') }];
     }).sort((left, right) => right.name.localeCompare(left.name));
   }
 
-  async create(): Promise<BackupInfo> {
+  async create(options: { includeFiles?: boolean } = {}): Promise<BackupInfo> {
+    const includeFiles = options.includeFiles !== false;
     if (this.busy) throw new BackupError('A backup is already running.');
     if (this.deps.secrets === undefined) throw new BackupError('Set a backup password in Settings → Backup first.');
     const password = new BackupPassword(this.deps.secrets).read();
@@ -87,7 +89,7 @@ export class TarBackupService implements BackupService {
     let stagingRoot: string | undefined;
     try {
       const stamp = this.deps.now().replace(/[:.]/g, '-');
-      const name = `pop-backup-${stamp}-${randomUUID()}.popbackup`;
+      const name = `pop-backup-${stamp}-${randomUUID()}${includeFiles ? '' : '-without-files'}.popbackup`;
       const target = join(this.deps.backupsDir, name);
       stagingRoot = await mkdtemp(join(this.deps.backupsDir, '.staging-'));
       const stagedData = join(stagingRoot, 'data');
@@ -97,19 +99,23 @@ export class TarBackupService implements BackupService {
         filter: (source) => {
           if (source === this.deps.dataDir) return true;
           const rootName = relative(this.deps.dataDir, source).split(/[\\/]/, 1)[0] ?? '';
-          return !EXCLUDED.has(rootName);
+          return !EXCLUDED.has(rootName) && (includeFiles || rootName !== 'files');
         },
       });
+      await writeFile(join(stagedData, BACKUP_CONTENT_FILE), JSON.stringify({ version: 1, includeFiles }), { mode: 0o600 });
       await snapshotDatabase(join(this.deps.dataDir, DATABASE_FILE), join(stagedData, DATABASE_FILE));
       const pending = join(stagingRoot, 'archive');
       // tar's stream respects backpressure; no unencrypted tar.gz is written.
       await encryptArchive(() => c({ gzip: true, cwd: stagedData, portable: true }, ['.']) as unknown as Readable, pending, password);
       await rename(pending, target);
       this.prune();
-      return { name, size: (await stat(target)).size, createdAt: this.deps.now(), encrypted: true };
+      return { name, size: (await stat(target)).size, createdAt: this.deps.now(), encrypted: true, includeFiles };
+    } catch (error) {
+      this.operation = { state: 'failed', message: 'Could not create backup. Check available disk space and try again.' };
+      throw error;
     } finally {
       try { if (stagingRoot !== undefined) await rm(stagingRoot, { recursive: true, force: true }); }
-      finally { this.busy = false; this.operation = { state: 'idle' }; }
+      finally { this.busy = false; if (this.operation.state === 'creating') this.operation = { state: 'idle' }; }
     }
   }
 
@@ -139,6 +145,9 @@ export class TarBackupService implements BackupService {
       try {
         if (database.pragma('quick_check', { simple: true }) !== 'ok') throw new BackupError('Backup database is damaged.');
       } finally { database.close(); }
+      if (!backupIncludesFiles(extracted) && await lstat(join(extracted, 'files')).then(() => true, () => false)) {
+        throw new BackupError('Backup content does not match its file policy.');
+      }
       const hostKey = await prepareRestoredSecrets(extracted, this.deps.dataDir, password);
       // Authentication and archive validation finish before touching live data.
       // Preserve the legacy overlay semantics and this host's excluded secret.key.

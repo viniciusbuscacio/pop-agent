@@ -171,7 +171,8 @@ no-store: encrypted `.popbackup` files use application/octet-stream; legacy
 passwordConfigured, restoreAvailable and the current operation state (without passwords). PUT /backups/password accepts a matching password and
 confirmation (10–128 characters), saves through SecretsRepo and returns no
 secret. POST /backups requires a configured password and never falls back to
-plaintext creation.
+plaintext creation. Its optional body `{ includeFiles: false }` omits the Files
+tree; an empty body defaults to including it. Backup DTOs report includeFiles.
 POST /backups/:name/restore accepts `{ confirm: true, password?: string }` and
 returns 202 after queuing background validation on the installed systemd service.
 Encrypted archives require their own password. Replacement occurs only at cold

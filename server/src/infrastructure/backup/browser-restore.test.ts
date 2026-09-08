@@ -75,3 +75,27 @@ describe('browser restore cold-boot transaction', () => {
     expect(readRestoreStatus(data).state).toBe('failed');
   });
 });
+
+it('resumes a no-Files restore after installation while keeping current Files', async () => {
+  await mkdir(join(data, 'files'));
+  await writeFile(join(data, 'files', 'kept'), 'current file');
+  await prepareBrowserRestore(data, async (destination) => {
+    await extract(destination);
+    await writeFile(join(destination, '.pop-backup-content.json'), JSON.stringify({ version: 1, includeFiles: false }));
+  });
+  await rename(data, join(`${data}.restore-pending`, 'original'));
+  await rename(join(`${data}.restore-pending`, 'data'), data);
+  await applyPendingRestore(data);
+  expect(await readFile(join(data, 'files', 'kept'), 'utf8')).toBe('current file');
+  expect(readRestoreStatus(data).state).toBe('restored');
+});
+
+it('rolls back if installed content metadata is invalid', async () => {
+  await prepareBrowserRestore(data, async (destination) => {
+    await extract(destination);
+    await writeFile(join(destination, '.pop-backup-content.json'), 'invalid json');
+  });
+  await applyPendingRestore(data);
+  expect(await readFile(join(data, 'value'), 'utf8')).toBe('current');
+  expect(readRestoreStatus(data).state).toBe('failed');
+});
