@@ -4,9 +4,7 @@
 
 - Encrypt new backup archives with an independent, confirmed password saved in encrypted secret storage for reuse; authenticate archives before offline restore, support legacy backups, and label their encryption status in Settings.
 
-- Align installation and operator documentation with the actual backup confidentiality limits, including pi-managed sign-in tokens.
-
-- Clarify that SQLite, files, pi-managed provider sign-in tokens, and backup archives are not encrypted; show a privacy notice beside backup creation and download controls.
+- Document the distinction between encrypted new backup archives and unencrypted live server data: SQLite, user files and pi-managed sign-in tokens are not encrypted at rest by Pop. Legacy `.tar.gz` backups remain unencrypted and are labeled in Settings; creating encrypted backups does not retroactively encrypt them.
 
 - Keep archived skills in Auto-Skill deduplication without routing or restoring them; exclude incoming A2A conversations from learning and defer active, queued, or changing source conversations.
 
