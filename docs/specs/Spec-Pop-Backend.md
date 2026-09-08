@@ -132,6 +132,19 @@ Additional rules:
   rules. Exceptions require an explicit architectural decision, not a casual
   allowlist entry.
 
+### Known implementation gaps
+
+The layer layout and static dependency checks do not establish complete I/O
+isolation. `domain/files/safe-path.ts` resolves filesystem paths directly;
+`application/files/files-service.ts` performs filesystem operations; and
+`application/mcp/mcp-service.ts` creates its runtime directory directly. These
+are existing implementation gaps relative to the responsibilities below, not
+exceptions to copy into new code. Their eventual extraction must preserve path
+containment, symlink checks, Files trash semantics and MCP working directories.
+
+The current boundary test scans static imports and allows Node built-ins. It
+does not verify dynamic imports, absence of I/O, or correctness of DTO mapping.
+
 ## Layer responsibilities
 
 ### Domain
