@@ -272,12 +272,12 @@ export class AuthService {
    */
   renewIfDue(payload: TokenPayload): string | undefined {
     const age = this.deps.clock.now() - payload.iat;
-    return age > RENEW_AFTER_MS ? this.issueToken(payload.epoch) : undefined;
+    return age > RENEW_AFTER_MS ? this.issueToken(payload.epoch, payload.authenticatedAt ?? payload.iat) : undefined;
   }
 
-  private issueToken(epoch: number): string {
+  private issueToken(epoch: number, authenticatedAt?: number): string {
     const now = this.deps.clock.now();
-    return signToken({ epoch, iat: now, exp: now + SESSION_TTL_MS }, this.sessionSecret());
+    return signToken({ epoch, iat: now, exp: now + SESSION_TTL_MS, ...(authenticatedAt === undefined ? {} : { authenticatedAt }) }, this.sessionSecret());
   }
 
   private issueSetupToken(epoch: number): string {

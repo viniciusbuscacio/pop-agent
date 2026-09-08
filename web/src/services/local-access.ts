@@ -10,6 +10,10 @@ export const localAccessService = {
     return apiRequest<LocalMachinesResponse>('/local-tools/machines');
   },
 
+  remove(machineId: string): Promise<void> {
+    return apiRequest(`/local-tools/machines/${encodeURIComponent(machineId)}`, { method: 'DELETE' });
+  },
+
   setEnabled(machineId: string, enabled: boolean): Promise<{ machineId: string; enabled: boolean }> {
     return apiRequest(`/local-tools/machines/${encodeURIComponent(machineId)}`, {
       method: 'PATCH',

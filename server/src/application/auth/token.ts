@@ -13,6 +13,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export interface TokenPayload {
   /** Session generation; a token is stale once the stored epoch moves past it. */
   epoch: number;
+  /** Original sign-in time; sliding renewal never advances it. */
+  authenticatedAt?: number;
   /** Issued at, epoch milliseconds. */
   iat: number;
   /** Expires at, epoch milliseconds. */
@@ -76,12 +78,13 @@ function decodePayload(encoded: string): TokenPayload | undefined {
   try {
     const parsed: unknown = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (typeof parsed !== 'object' || parsed === null) return undefined;
-    const { epoch, iat, exp, purpose } = parsed as Record<string, unknown>;
+    const { epoch, iat, exp, purpose, authenticatedAt } = parsed as Record<string, unknown>;
     if (typeof epoch !== 'number' || typeof iat !== 'number' || typeof exp !== 'number') {
       return undefined;
     }
+    if (authenticatedAt !== undefined && (typeof authenticatedAt !== 'number' || !Number.isFinite(authenticatedAt) || authenticatedAt > iat)) return undefined;
     if (purpose !== undefined && purpose !== 'setup') return undefined;
-    return purpose === 'setup' ? { epoch, iat, exp, purpose } : { epoch, iat, exp };
+    return { epoch, iat, exp, ...(purpose === 'setup' ? { purpose } : {}), ...(authenticatedAt === undefined ? {} : { authenticatedAt: authenticatedAt as number }) };
   } catch {
     return undefined;
   }

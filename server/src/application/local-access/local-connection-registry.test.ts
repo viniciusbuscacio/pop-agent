@@ -1,3 +1,5 @@
+import { LocalAccessPolicyService } from './local-access-policy-service.js';
+import { MemorySettings } from '../../testing/app-fixture.js';
 import { describe, expect, it } from 'vitest';
 import {
   LocalConnectionRegistry,
@@ -189,4 +191,31 @@ describe('LocalConnectionRegistry', () => {
     registry.attach(fake('c1', 'macbook').connection);
     expect(registry.attached().map((entry) => entry.hostname)).toEqual(['macbook']);
   });
+});
+
+it('removes every transport, rejects stale socket attachment and keeps other machines connected', () => {
+  const policy = new LocalAccessPolicyService(new MemorySettings());
+  const registry = new LocalConnectionRegistry(undefined, () => 200, policy);
+  const first = fake('first');
+  const second = fake('second');
+  const other = fake('other');
+  first.connection.machine.machineId = 'same-machine';
+  second.connection.machine.machineId = 'same-machine';
+  other.connection.machine.machineId = 'other-machine';
+  first.connection.authenticatedAt = second.connection.authenticatedAt = 100;
+  registry.attach(first.connection);
+  registry.attach(second.connection);
+  registry.attach(other.connection);
+  registry.setAccessEnabled('same-machine', true);
+  first.connection.close = () => { throw new Error('broken socket'); };
+  expect(registry.removeMachine('same-machine')).toBe(true);
+  expect(second.isClosed()).toBe(true);
+  expect(registry.transportConnection('first')).toBeUndefined();
+  expect(registry.transportConnection('second')).toBeUndefined();
+  expect(registry.transportConnection('other')).toBeDefined();
+  expect(registry.attach(second.connection)).toBe(false);
+  expect(registry.knownMachines().map(m => m.machineId)).toEqual(['other-machine']);
+  second.connection.authenticatedAt = 201;
+  expect(registry.attach(second.connection)).toBe(true);
+  expect(registry.accessEnabled('same-machine')).toBe(false);
 });

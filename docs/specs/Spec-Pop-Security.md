@@ -86,7 +86,9 @@ A session token is a compact HMAC-SHA256 signed payload containing epoch,
 issued-at and expiry. Signature comparison is constant-time. Lifetime is seven
 days. An authenticated request using a token older than 24 hours may receive a
 replacement in `x-pop-agent-token`; clients atomically replace their stored
-copy.
+copy. Renewed tokens carry the original authenticatedAt timestamp (falling back
+to iat for older tokens); renewal must not simulate a fresh sign-in for local
+computer removal policy.
 
 The PWA defaults to `sessionStorage`. “Keep me signed in” uses `localStorage`
 for both password and passkey unlock.

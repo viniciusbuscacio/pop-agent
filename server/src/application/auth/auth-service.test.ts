@@ -282,3 +282,22 @@ describe('sign out other devices', () => {
     expect(auth.verifySession(token).ok).toBe(true);
   });
 });
+
+it('preserves the original sign-in time across repeated sliding renewals', async () => {
+  const setup = await completeSetup();
+  const original = auth.verifySession(setup.token);
+  if (!original.ok) throw new Error('invalid original');
+  clock.advance(DAY + 1);
+  const first = auth.verifySession(auth.renewIfDue(original.payload) as string);
+  if (!first.ok) throw new Error('invalid renewal');
+  expect(first.payload.authenticatedAt).toBe(original.payload.iat);
+  clock.advance(DAY + 1);
+  const second = auth.verifySession(auth.renewIfDue(first.payload) as string);
+  if (!second.ok) throw new Error('invalid renewal');
+  expect(second.payload.authenticatedAt).toBe(original.payload.iat);
+  const login = await auth.login(PASSWORD);
+  if (!login.ok) throw new Error('invalid login');
+  const fresh = auth.verifySession(login.token);
+  if (!fresh.ok) throw new Error('invalid fresh token');
+  expect(fresh.payload.authenticatedAt ?? fresh.payload.iat).toBeGreaterThan(original.payload.iat);
+});

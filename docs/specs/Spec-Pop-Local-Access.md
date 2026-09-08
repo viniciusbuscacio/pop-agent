@@ -554,3 +554,16 @@ The Windows installer creates or repairs a per-user **Pop Local Access** Start m
 The Windows tray release uses the Windows GUI subsystem, so launching it from Start or Explorer never opens a console window. The installer also starts it hidden. The CLI launcher remains a console application.
 
 The Windows PLA installer provisions the verified managed Node runtime before login, without requiring Node on the shell PATH. Upgrading a running tray terminates its whole process tree before executable replacement.
+
+## Removing a computer
+
+Settings → Devices offers Remove computer with confirmation. DELETE
+`/v1/local-tools/machines/:id` removes the visible record, denies local access,
+cancels pending calls and closes all transports for that stable machine ID.
+A persisted removal timestamp blocks automatic reattachment with credentials
+from before removal, including sliding renewals and server restarts. A fresh
+`pop login <server>` followed by restarting PLA permits registration again, with
+file access disabled by default. Tombstones remain after re-registration so old
+credentials never regain local attachment authority. Ordinary chat sign-in is
+separate from revoking this local-tools binding. Clients clear a removed selected
+machine; existing SSE invalidation updates other open Devices pages.

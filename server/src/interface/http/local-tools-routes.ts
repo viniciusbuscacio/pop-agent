@@ -147,16 +147,17 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
               ws.close(4003, 'client_outdated');
               return;
             }
-            attached = true;
-            deps.localConnections.attach({
+            attached = deps.localConnections.attach({
               id,
               machine: attach.machine,
               ...(attach.role === undefined ? {} : { role: attach.role }),
               epoch: session.epoch,
               expiresAt: session.exp,
+              authenticatedAt: session.authenticatedAt ?? session.iat,
               send: (payload) => ws.send(JSON.stringify(payload)),
               close: (code, reason) => ws.close(code, reason),
             });
+            if (!attached) return;
             ws.send(JSON.stringify({
               kind: 'attached',
               connectionId: id,
@@ -219,6 +220,13 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     return c.json({ machineId, enabled });
   });
 
+  routes.delete('/local-tools/machines/:id', (c) => {
+    if (!deps.localConnections.removeMachine(c.req.param('id'))) {
+      return apiError(c, 404, 'local_machine_not_found', 'That computer is not known to Pop Agent.');
+    }
+    return c.body(null, 204);
+  });
+
   routes.post('/local-tools/connections', async (c) => {
     const session = sessionOf(c, deps.auth);
     if (session === undefined) return invalidSession(c);
@@ -234,15 +242,17 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
       deps.localConnections.detach(connectionId);
     });
     polling.set(connection.id, connection);
-    deps.localConnections.attach({
+    const attached = deps.localConnections.attach({
       id: connection.id,
       machine: attach.machine,
       ...(attach.role === undefined ? {} : { role: attach.role }),
       epoch: session.epoch,
       expiresAt: session.exp,
+      authenticatedAt: session.authenticatedAt ?? session.iat,
       send: connection.send,
       close: connection.close,
     });
+    if (!attached) return apiError(c, 401, 'local_machine_removed', 'This computer was removed. Sign in again with pop login and restart Pop Local Access.');
     deps.localConnections.publishAccessPolicy(connection.id);
     const frames = compatibility.warning === undefined ? [] : [compatibility.warning];
     return c.json(

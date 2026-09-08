@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { LocalMachineAccessDTO } from '@pop-agent/shared';
 import { clientEnvironment } from '../services/api';
 import { t } from '../i18n';
@@ -95,6 +95,9 @@ export function InstallationSection() {
 
 /** Daily computer access management is separate from installing the app. */
 export function DevicesSection() {
+  const snapshotGeneration = useRef(0);
+  const [removing, setRemoving] = useState<string>();
+  const [removeError, setRemoveError] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [platform, setPlatform] = useState<InstallPlatform>(() => {
     const current = currentPlatform();
@@ -112,9 +115,10 @@ export function DevicesSection() {
     let request = 0;
     const refresh = async (): Promise<void> => {
       const current = ++request;
+      const generation = snapshotGeneration.current;
       try {
         const response = await localAccessService.machines();
-        if (!active || current !== request) return;
+        if (!active || current !== request || generation !== snapshotGeneration.current) return;
         setMachines(response.machines);
         const selectedId = selectedLocalConnection();
         const selected = response.machines.find((machine) => machine.machineId === selectedId);
@@ -129,7 +133,7 @@ export function DevicesSection() {
           setSelectedConnection(selectedId ?? '');
         }
       } catch {
-        if (active && current === request) setMachines([]);
+        if (active && current === request && generation === snapshotGeneration.current) setMachines([]);
       }
     };
     void refresh();
@@ -158,6 +162,22 @@ export function DevicesSection() {
     }
   }
 
+
+  async function removeMachine(machine: LocalMachineAccessDTO): Promise<void> {
+    if (!window.confirm(t('settings.devices.removeConfirm', { name: machine.hostname }))) return;
+    setRemoving(machine.machineId);
+    setRemoveError(false);
+    try {
+      await localAccessService.remove(machine.machineId);
+      snapshotGeneration.current += 1;
+      setMachines((current) => current.filter((entry) => entry.machineId !== machine.machineId));
+      if (selectedLocalConnection() === machine.machineId) {
+        selectLocalConnection(undefined);
+        setSelectedConnection('');
+      }
+    } catch { setRemoveError(true); }
+    finally { setRemoving(undefined); }
+  }
 
   if (connecting) return (
     <div className="flex flex-col gap-4">
@@ -189,8 +209,8 @@ export function DevicesSection() {
         {machines.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">{t('settings.installation.localAccessNone')}</p>
         ) : machines.map((machine) => (
-          <div key={machine.machineId} className="rounded-[var(--radius-control)] border border-[var(--border)] p-3">
-            <SwitchField
+          <div key={machine.machineId} className="flex flex-col items-start gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-3">
+            <div className="w-full"><SwitchField
               id={`local-access-${machine.machineId}`}
               testId={`local-access-${machine.machineId}`}
               label={t('settings.installation.localAccessForMachine', { machine: machine.hostname })}
@@ -198,8 +218,11 @@ export function DevicesSection() {
                 ? t('settings.installation.localAccessOnline')
                 : t('settings.installation.localAccessOffline')}`}
               checked={machine.enabled}
+              disabled={removing !== undefined}
               onChange={(enabled) => void setMachineEnabled(machine.machineId, enabled)}
-            />
+            /></div>
+            <Button type="button" size="sm" variant="danger" disabled={removing !== undefined}
+              onClick={() => void removeMachine(machine)}>{t('settings.devices.remove')}</Button>
           </div>
         ))}
         {selectableMachines.length > 0 ? (
@@ -223,6 +246,7 @@ export function DevicesSection() {
             ))}
           </Select>
         ) : null}
+        {removeError ? <p role="alert" className="text-sm text-[var(--danger)]">{t('settings.devices.removeFailed')}</p> : null}
         <div><Button type="button" data-testid="devices-connect" onClick={() => setConnecting(true)}>
           {t('settings.devices.connect')}
         </Button></div>

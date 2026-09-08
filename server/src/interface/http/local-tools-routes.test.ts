@@ -198,3 +198,26 @@ describe('HTTPS local-tools fallback', () => {
     expect(fixture.localConnections.transportConnection(id)).toBeUndefined();
   });
 });
+
+it('removes online access, cancels calls, rejects old and renewed credentials, and requires a fresh sign-in', async () => {
+  const connected = await attach();
+  const id = (await connected.json()).connectionId as string;
+  await request('/v1/local-tools/machines/machine-test', 'PATCH', { enabled: true });
+  const pending = fixture.localConnections.call(id, { tool: 'local_bash', input: {} }, () => {});
+  fixture.clock.advance(1);
+  expect((await request('/v1/local-tools/machines/machine-test', 'DELETE')).status).toBe(204);
+  expect((await pending).ok).toBe(false);
+  expect(fixture.localConnections.transportConnection(id)).toBeUndefined();
+  expect(await (await request('/v1/local-tools/machines', 'GET')).json()).toEqual({ machines: [] });
+  expect((await attach()).status).toBe(401);
+  fixture.clock.advance(24 * 60 * 60 * 1000 + 1);
+  const refreshed = await request('/v1/session/refresh', 'POST');
+  const renewed = refreshed.headers.get('x-pop-agent-token');
+  expect(renewed).toBeTruthy();
+  token = renewed as string;
+  expect((await attach()).status).toBe(401);
+  const login = await request('/v1/login', 'POST', { password: 'correct horse battery' });
+  token = (await login.json()).token as string;
+  expect((await attach()).status).toBe(201);
+  expect(fixture.localConnections.accessEnabled('machine-test')).toBe(false);
+});

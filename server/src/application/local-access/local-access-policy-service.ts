@@ -14,11 +14,27 @@ export interface KnownLocalMachine {
 
 interface StoredState {
   machines: Record<string, KnownLocalMachine>;
+  removed: Record<string, number>;
 }
 
 /** Persistent, server-authoritative permission for every known computer. */
 export class LocalAccessPolicyService {
   constructor(private readonly settings: SettingsRepo) {}
+
+  canAttach(machineId: string | undefined, authenticatedAt?: number): boolean {
+    if (machineId === undefined) return true;
+    const removed = this.read().removed;
+    return !Object.hasOwn(removed, machineId) || (authenticatedAt !== undefined && authenticatedAt > (removed[machineId] ?? Infinity));
+  }
+
+  remove(machineId: string, now: number): boolean {
+    const state = this.read();
+    if (!Object.hasOwn(state.machines, machineId)) return false;
+    delete state.machines[machineId];
+    state.removed[machineId] = now;
+    this.write(state);
+    return true;
+  }
 
   remember(machine: LocalMachine): void {
     const machineId = machine.machineId;
@@ -58,14 +74,20 @@ export class LocalAccessPolicyService {
   private read(): StoredState {
     const stored = this.settings.get<Partial<StoredState>>(SETTINGS_KEY);
     const machines: Record<string, KnownLocalMachine> = Object.create(null) as Record<string, KnownLocalMachine>;
+    const removed: Record<string, number> = Object.create(null) as Record<string, number>;
+    if (stored !== undefined && stored !== null && typeof stored.removed === 'object' && stored.removed !== null) {
+      for (const [id, timestamp] of Object.entries(stored.removed)) {
+        if (typeof timestamp === 'number' && Number.isFinite(timestamp)) removed[id] = timestamp;
+      }
+    }
     if (stored === undefined || typeof stored !== 'object' || typeof stored.machines !== 'object' || stored.machines === null) {
-      return { machines };
+      return { machines, removed };
     }
     for (const [machineId, candidate] of Object.entries(stored.machines)) {
       if (!validMachine(machineId, candidate)) continue;
       machines[machineId] = { ...candidate };
     }
-    return { machines };
+    return { machines, removed };
   }
 
   private write(state: StoredState): void {

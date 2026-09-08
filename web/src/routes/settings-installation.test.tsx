@@ -10,7 +10,7 @@ vi.mock('../services/pwa-update', () => ({
   checkForUpdateNow: vi.fn(),
 }));
 
-const localAccessMocks = vi.hoisted(() => ({ machines: vi.fn(), setEnabled: vi.fn() }));
+const localAccessMocks = vi.hoisted(() => ({ machines: vi.fn(), setEnabled: vi.fn(), remove: vi.fn() }));
 const eventMocks = vi.hoisted(() => ({
   listeners: new Set<(event: { kind: string }) => void>(),
   resumeListeners: new Set<() => void>(),
@@ -40,6 +40,7 @@ beforeEach(() => {
   eventMocks.resumeListeners.clear();
   localAccessMocks.machines.mockReset();
   localAccessMocks.setEnabled.mockReset();
+  localAccessMocks.remove.mockReset().mockResolvedValue(undefined);
   localAccessMocks.machines.mockResolvedValue({ machines: [] });
   localAccessMocks.setEnabled.mockResolvedValue({ machineId: 'machine-m1', enabled: true });
 });
@@ -230,4 +231,25 @@ it('shows phone instructions without desktop shell commands or another device in
   expect(screen.queryByTestId('installation-cli-windows')).toBeNull();
   expect(screen.queryByTestId('installation-cli-unix')).toBeNull();
   expect(screen.queryByTestId('pwa-install')).toBeNull();
+});
+
+it('requires confirmation to remove a computer and clears its selection after success', async () => {
+  window.history.replaceState({}, '', '/settings?section=devices');
+  window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-m1');
+  localAccessMocks.machines.mockResolvedValue({ machines: [{ machineId: 'machine-m1', hostname: 'm1', platform: 'win32', enabled: true, connected: true }] });
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  const user = userEvent.setup();
+  render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Remove computer' }));
+  expect(localAccessMocks.remove).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);
+  localAccessMocks.remove.mockRejectedValueOnce(new Error('offline'));
+  await user.click(screen.getByRole('button', { name: 'Remove computer' }));
+  await screen.findByRole('alert');
+  expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m1');
+  await user.click(screen.getByRole('button', { name: 'Remove computer' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove computer' })).toBeNull());
+  expect(localAccessMocks.remove).toHaveBeenCalledWith('machine-m1');
+  expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
+  confirm.mockRestore();
 });

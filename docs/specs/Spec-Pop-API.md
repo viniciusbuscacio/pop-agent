@@ -182,6 +182,12 @@ The offline `popman restore` command remains available.
 
 ## Local Access transport
 
+DELETE /local-tools/machines/:id removes a known computer (204, or 404 if
+unknown), cancels its local calls and closes all its transports. A persisted
+revocation cutoff requires fresh sign-in before reattachment; renewed older
+credentials receive 401 on HTTPS attach or close code 4001 on WebSocket attach.
+
+
 PLA WebSocket upgrade authenticates the ordinary bearer session, then requires
 a bounded protocol-1 attach frame. HTTPS fallback uses authenticated create,
 poll and event endpoints with the same frames, leases, backpressure and replay

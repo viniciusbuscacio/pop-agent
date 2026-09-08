@@ -43,3 +43,21 @@ describe('local access policy', () => {
     ]);
   });
 });
+
+it('persists removal and rejects old sign-ins even after a fresh binding is registered', () => {
+  const settings = new MemorySettings();
+  const policy = new LocalAccessPolicyService(settings);
+  policy.remember(machine);
+  policy.setEnabled(machine.machineId, true);
+  expect(policy.remove(machine.machineId, 200)).toBe(true);
+  const reloaded = new LocalAccessPolicyService(settings);
+  expect(reloaded.machines()).toEqual([]);
+  expect(reloaded.enabled(machine.machineId)).toBe(false);
+  expect(reloaded.canAttach(machine.machineId, 199)).toBe(false);
+  expect(reloaded.canAttach(machine.machineId, 200)).toBe(false);
+  expect(reloaded.canAttach(machine.machineId)).toBe(false);
+  expect(reloaded.canAttach(machine.machineId, 201)).toBe(true);
+  reloaded.remember(machine);
+  expect(reloaded.enabled(machine.machineId)).toBe(false);
+  expect(reloaded.canAttach(machine.machineId, 199)).toBe(false);
+});

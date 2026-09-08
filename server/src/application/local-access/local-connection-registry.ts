@@ -22,6 +22,7 @@ export interface LocalConnection {
   machine: LocalMachine;
   role?: LocalConnectionRole;
   epoch?: number;
+  authenticatedAt?: number;
   expiresAt?: number;
   send(frame: unknown): void;
   close(code?: number, reason?: string): void;
@@ -64,13 +65,18 @@ export class LocalConnectionRegistry {
     private readonly onMachinesChanged?: () => void,
   ) {}
 
-  attach(connection: LocalConnection): void {
+  attach(connection: LocalConnection): boolean {
+    if (this.accessPolicy?.canAttach(connection.machine.machineId, connection.authenticatedAt) === false) {
+      connection.close(4001, 'machine_removed');
+      return false;
+    }
     this.entries.set(connection.id, { connection, unanswered: 0, pingId: 0, calls: 0 });
     this.accessPolicy?.remember(connection.machine);
     this.onJournal?.(
       `pop local access: attached ${connection.machine.platform}/${connection.machine.arch} (${connection.role ?? 'interactive'})`,
     );
     this.onMachinesChanged?.();
+    return true;
   }
 
   detach(connectionId: string, message = 'The local connection disconnected before this finished.'): void {
@@ -151,6 +157,18 @@ export class LocalConnectionRegistry {
 
   knownAndEnabled(selector: string): boolean {
     return this.knownWithAccess(selector, true);
+  }
+
+  removeMachine(machineId: string): boolean {
+    if (!this.accessPolicy?.remove(machineId, this.now())) return false;
+    for (const { connection } of [...this.entries.values()]) {
+      if (connection.machine.machineId !== machineId) continue;
+      try { this.cancelCalls(connection, 'This computer was removed.'); } catch { /* A failed transport must not stop revocation. */ }
+      this.detach(connection.id, 'This computer was removed.');
+      try { connection.close(4001, 'machine_removed'); } catch { /* Already detached and denied. */ }
+    }
+    this.onMachinesChanged?.();
+    return true;
   }
 
   setAccessEnabled(machineId: string, enabled: boolean): boolean {
