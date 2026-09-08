@@ -6,7 +6,7 @@ Chat from your browser, phone, or terminal. Work with files, automate tasks,
 connect tools, and talk to other agents — with one conversation history across
 all your devices.
 
-![Pop Agent desktop interface in dark mode, with Chat, Files, and Agent navigation](docs/images/pop-agent-desktop.png)
+![Pop Agent PWA on Windows in dark mode, with Chat, Files, and Agent navigation](docs/images/pop-agent-desktop.png)
 
 [Install](#install) · [Features](#what-you-can-do) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
 
@@ -31,6 +31,15 @@ creator and is currently **beta (pre-1.0)**.
 - **Connect other software and agents.** REST API Server and Client support
   integrations. A2A Server and Client exchange text requests and results with
   remote agents, with labels distinguishing owner and agent submissions.
+
+### On iPhone
+
+The conversation list and chat view adapt to the smaller screen.
+
+<p>
+  <img src="docs/images/pop-agent-iphone-conversations.jpeg" alt="Pop Agent on iPhone showing the conversation list and Chat, Files, and Agent navigation" width="240" />
+  <img src="docs/images/pop-agent-iphone-chat.jpeg" alt="Pop Agent on iPhone showing a new chat and the message composer" width="240" />
+</p>
 
 ## Built on pi
 
