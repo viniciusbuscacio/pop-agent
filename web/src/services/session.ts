@@ -1,4 +1,5 @@
 import { chatCache } from './chat-cache';
+import { clearSubscriptionUsageCache } from './subscription-usage-cache';
 
 /**
  * Where the session token lives, and the only module that knows.
@@ -82,6 +83,7 @@ export const session = {
 
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
+    clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = token;
     volatileStore = keepSignedIn ? 'local' : 'page';
@@ -105,6 +107,7 @@ export const session = {
   },
 
   clear(): void {
+    clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = undefined;
     volatileStore = undefined;

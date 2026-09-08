@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { ProvidersSection } from './providers-section';
+import { clearSubscriptionUsageCache } from '../services/subscription-usage-cache';
 
 const checkHealth = vi.fn();
 vi.mock('../services/health', () => ({ healthMonitor: { refreshAfterProviderChange: () => checkHealth() } }));
@@ -65,6 +66,7 @@ const CODEX: ProviderStatusDTO = {
 afterEach(cleanup);
 
 beforeEach(() => {
+  clearSubscriptionUsageCache();
   checkHealth.mockClear();
   models.mockReset().mockResolvedValue({ models: [], source: 'engine' });
   refreshModels.mockReset().mockResolvedValue({ models: [], source: 'engine' });
@@ -83,6 +85,28 @@ beforeEach(() => {
 });
 
 describe('OpenAI subscription card', () => {
+  it('retains cached usage on remount, refresh failure and replacement', async () => {
+    const first = render(<ProvidersSection />);
+    await screen.findByText('3%');
+    first.unmount();
+    subscriptionUsage.mockRejectedValueOnce(new Error('temporarily unavailable'));
+    const second = render(<ProvidersSection />);
+    await screen.findByTestId('provider-card-openai-codex');
+    expect(screen.getByText('3%')).toBeTruthy();
+    await waitFor(() => expect(subscriptionUsage).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Plus plan')).toBeTruthy();
+    second.unmount();
+    let finish!: (value: unknown) => void;
+    subscriptionUsage.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<ProvidersSection />);
+    await screen.findByTestId('provider-card-openai-codex');
+    expect(screen.getByText('3%')).toBeTruthy();
+    finish({ plan: 'plus', allowed: true, limitReached: false,
+      primary: { usedPercent: 31, windowSeconds: 604800, resetAt: 1786894871 } });
+    await screen.findByText('31%');
+    expect(screen.queryByText('3%')).toBeNull();
+  });
+
   it('shows the provider allowance inside Settings > Model', async () => {
     render(<ProvidersSection />);
 

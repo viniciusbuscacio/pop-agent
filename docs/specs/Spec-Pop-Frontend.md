@@ -197,6 +197,9 @@ Model catalog count and provenance belong to Models & Providers, not Instruction
 Provider cards show separate Model, Priority and Access rows in readable small
 body text, with primary-theme values and muted labels. Model names come from the
 provider catalog, falling back to the configured identifier when unavailable.
+Subscription usage retains its last successful local snapshot during refreshes
+and temporary failures. The browser-session cache survives navigation and reload,
+is replaced after successful refresh, and is cleared on sign-in/sign-out.
 
 MCP and A2A remain first-class shell explorers beside Skills rather than
 Settings destinations.

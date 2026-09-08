@@ -14,6 +14,8 @@ import { formatDollars } from '../lib/money';
 import { loadProviderCredits } from '../lib/provider-credits-cache';
 import { normalizeBaseUrl, providersService } from '../services/providers';
 import { chatsService } from '../services/chats';
+import { cachedSubscriptionUsage, cacheSubscriptionUsage } from '../services/subscription-usage-cache';
+import { session } from '../services/session';
 import {
   BackButton,
   Button,
@@ -387,17 +389,21 @@ function SubscriptionUsage({
   providerId: string;
   listVersion: number;
 }) {
-  const [usage, setUsage] = useState<ProviderSubscriptionUsageResponse | null>(null);
+  const [usage, setUsage] = useState<ProviderSubscriptionUsageResponse | null>(() => cachedSubscriptionUsage(providerId));
 
   useEffect(() => {
     let live = true;
+    const generation = session.generation();
     void providersService
       .subscriptionUsage(providerId)
       .then((value) => {
-        if (live) setUsage(value);
+        if (live && generation === session.generation()) {
+          cacheSubscriptionUsage(providerId, value);
+          setUsage(value);
+        }
       })
       .catch(() => {
-        if (live) setUsage(null);
+        // Keep the last successful snapshot while the provider is unavailable.
       });
     return () => {
       live = false;
