@@ -290,7 +290,7 @@ function ProviderCard({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="md"
           className="w-full sm:w-28"
           data-testid="provider-edit"
           onClick={onEdit}
@@ -300,7 +300,7 @@ function ProviderCard({
         <Button
           type="button"
           variant="danger"
-          size="sm"
+          size="md"
           className="w-full sm:w-28"
           data-testid="provider-delete"
           onClick={onDelete}

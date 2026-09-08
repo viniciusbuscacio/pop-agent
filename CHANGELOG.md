@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match provider Edit and Delete typography and padding to Add provider.
+
 - Keep local chat command output (including `/model list`) anchored in the timeline as new messages arrive.
 
 - Make Refresh models fetch the selected subscription provider's current upstream pi catalog with a bounded forced refresh.
