@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Split Devices from Install Pop in Settings, show local-access setup only under Connect a computer, and filter app installation instructions by target device.
+
 - Reorganize Settings groups and names; move model catalog information from Instructions to Models & Providers.
 
 - Use neutral Settings navigation icons and selection, reserving a soft blue surface for mouse hover.

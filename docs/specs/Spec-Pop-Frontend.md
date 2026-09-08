@@ -189,7 +189,7 @@ Pop Agent uses route-based navigation, not hidden drawers:
 Settings is a searchable hierarchy, not a row of tabs:
 
 - **Agent:** Models & Providers, Instructions, Memory, Auto-Skills, Voice;
-- **App:** Appearance, Notifications, Devices & Installation;
+- **App:** Appearance, Notifications, Devices, Install Pop;
 - **Data:** Storage, Backup & Restore;
 - **System:** Security, Server, Updates, About.
 
@@ -212,6 +212,14 @@ Binary state uses switches, multiple-choice state uses selects, and buttons
 perform actions. Save flows provide Cancel. Large accessibility fonts must not
 truncate provider identity, allowance or actions merely to preserve a desktop
 row.
+
+Devices manages connected computers, local-access permissions and explicit file
+routing. Connection commands appear only after Connect a computer, with a Back
+action to the device list. Install Pop owns the server address, PWA installation
+and CLI instructions, selected by target platform (defaulting to this device).
+Only the current device can invoke its browser-owned installation prompt.
+The existing `section=installation` URL opens Install Pop; `section=devices`
+opens computer access management.
 
 Installation derives the current same-origin server at runtime. It never embeds
 one deployment's URL or advertises a native wrapper that does not exist.

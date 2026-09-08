@@ -10,6 +10,7 @@ import {
   LockKeyhole,
   Mic,
   MonitorDown,
+  Monitor,
   Network,
   Server as ServerIcon,
   SlidersHorizontal,
@@ -27,7 +28,7 @@ import {
   type StorageResponse,
 } from '@pop-agent/shared';
 import { t } from '../i18n';
-import { InstallationSection } from './installation-section';
+import { DevicesSection, InstallationSection } from './installation-section';
 import { ProvidersSection } from './providers-section';
 import { BackupSection } from './backup-section';
 import { ApiError, clientEnvironment } from '../services/api';
@@ -59,6 +60,7 @@ type Section =
   | 'server'
   | 'general'
   | 'installation'
+  | 'devices'
   | 'model'
   | 'audio'
   | 'auto-skills'
@@ -95,7 +97,8 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     entries: [
       { id: 'appearance', label: 'Appearance', summary: 'Theme and text size' },
       { id: 'notifications', label: 'Notifications', summary: 'Push notification preferences' },
-      { id: 'installation', label: 'Devices & Installation', summary: 'Install and connect your devices' },
+      { id: 'devices', label: 'Devices', summary: 'Connected computers and local access' },
+      { id: 'installation', label: 'Install Pop', summary: 'Install the app or command-line client' },
     ],
   },
   {
@@ -302,6 +305,7 @@ const SETTINGS_ICONS: Record<Section, LucideIcon> = {
   backup: ArchiveRestore,
   updates: Download,
   installation: MonitorDown,
+  devices: Monitor,
   appearance: Sun,
   memory: BookOpen,
   'auto-skills': Sparkles,
@@ -319,6 +323,7 @@ function SettingsIcon({ section }: { section: Section }) {
 function SettingsSection({ section }: { section: Section }): ReactNode {
   if (section === 'server') return <ServerSection />;
   if (section === 'general') return <InstructionsSection />;
+  if (section === 'devices') return <DevicesSection />;
   if (section === 'installation') return <InstallationSection />;
   if (section === 'model') return <ProvidersSection />;
   if (section === 'audio') return <AudioSection />;

@@ -48,22 +48,27 @@ afterEach(cleanup);
 
 describe('Settings installation guide', () => {
   it('builds personal commands from the current server', async () => {
+    const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'windows');
     expect(screen.getByTestId('installation-cli-windows').textContent).toContain(
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'linux');
+    expect(screen.queryByTestId('installation-cli-windows')).toBeNull();
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
       `curl -fsSL ${window.location.origin}/install.sh | sh`,
     );
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
       `$HOME/.local/bin/pop login ${window.location.origin}`,
     );
-    expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('status=$?');
-    expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('exit ');
+    expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
+    expect(localAccessMocks.machines).not.toHaveBeenCalled();
   });
 
   it('explains local computer access without platform jargon', async () => {
+    window.history.replaceState({}, '', '/settings?section=devices');
     localAccessMocks.machines.mockResolvedValueOnce({
       machines: [{
         machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',
@@ -75,7 +80,7 @@ describe('Settings installation guide', () => {
 
     const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
     expect(screen.getByText(
-      'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
+      'Manage which computers Pop Agent can access. Allowing access and choosing where to use files are separate settings.',
     )).toBeTruthy();
     expect(screen.getByText('Mac — Online')).toBeTruthy();
     expect(document.body.textContent).not.toContain('darwin');
@@ -94,6 +99,7 @@ describe('Settings installation guide', () => {
   });
 
   it('keeps an explicitly selected stable machine while its tray reconnects', async () => {
+    window.history.replaceState({}, '', '/settings?section=devices');
     window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-m1');
     localAccessMocks.machines.mockResolvedValueOnce({
       machines: [{
@@ -109,6 +115,7 @@ describe('Settings installation guide', () => {
   });
 
   it('clears an unknown persisted stable machine during snapshot reconciliation', async () => {
+    window.history.replaceState({}, '', '/settings?section=devices');
     window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-removed');
     localAccessMocks.machines.mockResolvedValueOnce({ machines: [] });
 
@@ -120,6 +127,7 @@ describe('Settings installation guide', () => {
   });
 
   it('refreshes computer access from the shared SSE stream without polling', async () => {
+    window.history.replaceState({}, '', '/settings?section=devices');
     const machine = {
       machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',
       clientVersion: '0.2.35', enabled: false, connected: true,
@@ -140,6 +148,7 @@ describe('Settings installation guide', () => {
   });
 
   it('does not let an older machine snapshot overwrite a newer SSE refresh', async () => {
+    window.history.replaceState({}, '', '/settings?section=devices');
     const machine = {
       machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', arch: 'arm64',
       clientVersion: '0.2.35', enabled: false, connected: true,
@@ -186,6 +195,7 @@ describe('Settings installation guide', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'windows');
     await user.click(screen.getByTestId('installation-cli-windows-copy'));
 
     expect(writeText).toHaveBeenCalledWith(
@@ -193,4 +203,31 @@ describe('Settings installation guide', () => {
     );
     expect(screen.getByTestId('installation-cli-windows-copy').textContent).toBe('Copied');
   });
+});
+
+it('shows connection instructions only after Connect a computer and returns to Devices', async () => {
+  window.history.replaceState({}, '', '/settings?section=devices');
+  const user = userEvent.setup();
+  render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+  expect(screen.queryByTestId('installation-local-access-windows')).toBeNull();
+  expect(screen.queryByTestId('installation-server-url')).toBeNull();
+  await user.click(screen.getByTestId('devices-connect'));
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'windows');
+  expect(screen.getByTestId('installation-local-access-windows').textContent).toContain(window.location.origin);
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'linux');
+  expect(screen.getByTestId('installation-local-access-unix').textContent).not.toContain('exit ');
+  expect(screen.queryByTestId('installation-local-access-windows')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Back to Devices' }));
+  expect(screen.getByTestId('devices-connect')).toBeTruthy();
+  expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
+});
+
+it('shows phone instructions without desktop shell commands or another device install prompt', async () => {
+  const user = userEvent.setup();
+  render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'ios');
+  expect(screen.getByText(/iPhone or iPad: open in Safari/)).toBeTruthy();
+  expect(screen.queryByTestId('installation-cli-windows')).toBeNull();
+  expect(screen.queryByTestId('installation-cli-unix')).toBeNull();
+  expect(screen.queryByTestId('pwa-install')).toBeNull();
 });
