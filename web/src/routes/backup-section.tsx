@@ -75,6 +75,7 @@ export function BackupSection() {
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
         <p className="text-sm text-[var(--muted)]">{t('backup.intro')}</p>
+        <p className="text-sm text-[var(--muted)]">{t('backup.privacy')}</p>
         <div>
           <Button type="button" data-testid="backup-create" disabled={busy} onClick={() => void create()}>
             {busy ? t('backup.creating') : t('backup.create')}

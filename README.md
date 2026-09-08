@@ -35,7 +35,7 @@ Pop Agent is built around four decisions:
 2. **Multiple LLM providers.** Choose your provider and model, switch models
    per conversation, and configure provider failover.
 3. **Your data stays under your control.** Conversations, memory, files, notes,
-   skills, schedules, usage records, and encrypted provider credentials live
+   skills, schedules, usage records, and provider credentials live
    on your server.
 4. **"Infinite" memory through searchable history.** Past conversations remain
    available for the agent to search and revisit unless you delete them. It
@@ -56,7 +56,7 @@ Pop Agent is built around four decisions:
 - **Agent to Agent:** A2A Client and Server for communicating with other agents.
 - **REST API:** Client and Server for connecting other software.
 - **SQLite storage:** persistent conversation and application data, with
-  encrypted storage for provider credentials and other secrets.
+  encrypted storage for API keys and other values in its secrets store.
 
 The SQLite database as a whole is **not encrypted**. Keep your server and
 backups protected. Save your password and the recovery key shown during setup;
@@ -102,8 +102,10 @@ See the [architecture and specification index](docs/specs/Spec-Pop-General.md).
 
 ## Your server, your data
 
-Conversations, files, memory, and encrypted provider credentials live on your
-server. Pop Agent has no telemetry and is permanently single-user.
+Conversations, files, memory, and provider credentials live on your server.
+API keys in Pop's secrets store are encrypted at rest. Provider sign-in tokens
+managed by pi are stored in an unencrypted, owner-only file. Pop Agent has no
+telemetry and is permanently single-user.
 
 Self-hosting does not make the language model local: requests and relevant
 context are sent to your selected provider. Connected tools and integrations
@@ -164,6 +166,12 @@ moving to HTTPS. Do **not** expose port 8787 directly.
 Data defaults to `~/.pop-agent`, and the agent workspace to
 `~/pop-agent-workspace`. Create a backup after setup and protect `secret.key`
 separately: it is intentionally excluded from backup archives.
+
+Conversations, files, notes, and pi-managed provider sign-in tokens are not
+encrypted by Pop Agent. They rely on filesystem access permissions. Use disk
+encryption on the Ubuntu server (for example, LUKS) to protect data at rest.
+Backup archives are **not encrypted** and can include provider sign-in tokens;
+store and transfer them securely.
 
 For custom paths, network setup, logs, and installation recovery, see the
 [deployment guide](deploy/README.md).

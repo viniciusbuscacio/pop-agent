@@ -419,6 +419,7 @@ export const en = {
   'settings.section.backup': 'Backup',
   'settings.section.appearance': 'Appearance',
 
+  'backup.privacy': 'Backups are not encrypted. They can contain conversations, files, notes, and provider sign-in tokens. Store and transfer them securely.',
   'backup.intro': 'A backup contains your data but not the encryption key. Restore is an offline operator action: popman restore <backup>.',
   'backup.create': 'Create backup',
   'backup.creating': 'Creating…',

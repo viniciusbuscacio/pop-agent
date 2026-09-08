@@ -161,8 +161,11 @@ Creation uses a private staging directory:
 Backups are data-sensitive even without the key: they contain conversations,
 files, notes and metadata. Excluding `secret.key` means encrypted provider
 credentials and session signing material cannot be decrypted from the archive
-alone; it does not make all backup content public-safe. A new host requires
-re-entering credentials.
+alone; it does not make all backup content public-safe. Pi-managed provider
+sign-in tokens in `pi-auth.json` are outside SecretsRepo encryption and can be
+included in the archive. The backup UI must disclose that archives are not
+encrypted and can contain private content and provider sign-in tokens. A new
+host without the original key requires re-entering SecretsRepo credentials.
 
 Archive names are generated server-side and path-validated for listing,
 download and deletion. A failed snapshot must not replace a previous archive or

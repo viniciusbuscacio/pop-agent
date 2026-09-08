@@ -108,10 +108,13 @@ Pop never uses camera APIs. Password and recovery remain available.
 
 ## Secret storage and redaction
 
-Provider credentials and session-signing material are encrypted at rest in
-SQLite using `POP_AGENT_DATA_DIR/secret.key`, created owner-only (`0600`). The
+Credentials stored through SecretsRepo and session-signing material are encrypted
+at rest in SQLite using `POP_AGENT_DATA_DIR/secret.key`, created owner-only (`0600`). The
 key is excluded from backups, so an archive alone cannot decrypt those fields.
-Restoring to a new host requires credential re-entry. The database and backup
+Restoring to a new host without the original key requires re-entry of credentials
+from SecretsRepo. Pi-managed provider sign-in tokens are stored separately in
+owner-only, unencrypted `pi-auth.json`; they are not covered by this encryption
+and may be included in backup archives. The database and backup
 still contain private conversations/files and must be handled as sensitive.
 
 Durable prose stores are not secret stores. Living-memory writes from both UI
