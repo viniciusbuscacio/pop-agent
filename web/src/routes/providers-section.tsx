@@ -709,10 +709,19 @@ function ConfigureProvider({
     (apiKey.trim().length === 0 ||
       (isCustom && (name.trim().length === 0 || normalizeBaseUrl(baseURL).length === 0)));
 
+  const testAction = <Button
+    type="button" variant="ghost" size="md" data-testid="provider-test"
+    disabled={testing || (!provider.configured && apiKey.trim().length === 0)}
+    onClick={() => void test()}
+  >{testing ? t('provider.test.running') : t('provider.test.run')}</Button>;
+
   return (
     <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3">
-        <StepHeader title={provider.name} onBack={onDone} />
+      <Card className="flex flex-col gap-5">
+        <StepHeader title={provider.id === 'github-copilot' ? 'GitHub Copilot' : provider.id === 'openai-codex' ? 'OpenAI — ChatGPT' : provider.name} onBack={onDone} />
+
+        <section className="flex min-w-0 flex-col gap-3" aria-label={t('provider.connection')}>
+        <h3 className="text-sm font-medium">{t('provider.connection')}</h3>
 
         {isCustom ? (
           <>
@@ -738,7 +747,7 @@ function ConfigureProvider({
         {isOAuth ? (
           // The subscription sign-in runs on the server and is its own little
           // machine; the wizard hosts it rather than reimplementing it.
-          <OAuthSection provider={provider} onChanged={onChanged} />
+          <OAuthSection provider={provider} onChanged={onChanged} actions={testAction} />
         ) : (
           <>
             <TextField
@@ -759,31 +768,24 @@ function ConfigureProvider({
             checks those with pi's own auth check rather than a paid probe, so
             there is no reason to hide the one button that answers "is this
             actually going to work?" (Vinicius, 03/08). */}
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-testid="provider-test"
-            disabled={testing || (!provider.configured && apiKey.trim().length === 0)}
-            onClick={() => void test()}
-          >
-            {testing ? t('provider.test.running') : t('provider.test.run')}
-          </Button>
+        {!isOAuth ? <div className="flex flex-wrap items-center gap-3">{testAction}</div> : null}
           {note === undefined ? null : (
             <span className="text-sm text-[var(--muted)]" data-testid="provider-note">
               {note}
             </span>
           )}
-        </div>
-        <p className="-mt-1 text-xs text-[var(--muted)]">{t('provider.test.hint')}</p>
+        </section>
+
+        <section className="flex min-w-0 flex-col gap-3" aria-label={t('provider.modelsHeading')}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-medium">{t('provider.modelsHeading')}</h3>
 
         {isOAuth ? (
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="md"
               data-testid="provider-refresh-models"
               disabled={!provider.configured || refreshingModels}
               onClick={() => void refreshModels()}
@@ -793,6 +795,7 @@ function ConfigureProvider({
             {catalogNote ? <span role="status" className="text-sm text-[var(--muted)]">{catalogNote}</span> : null}
           </div>
         ) : null}
+        </div>
 
         {/* A dropdown of what this provider actually offers, which is the
             only way to choose among OpenRouter's hundreds. A custom endpoint
@@ -806,14 +809,14 @@ function ConfigureProvider({
           // ancestor happens to be positioned.
           <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor="provider-model" className="text-sm font-medium">
-              {t('provider.model')}
+              {t('provider.chatModel')}
             </label>
             {/* `relative` wraps the control ALONE: with the hint inside it,
                 the list opened a line below the field and read as detached. */}
             <div className="relative">
             <ModelPicker
               id="provider-model"
-              label={t('provider.model')}
+              label={t('provider.chatModel')}
               value={model}
               options={catalogue}
               placeholder={t('chat.searchModels')}
@@ -828,7 +831,7 @@ function ConfigureProvider({
           <TextField
             id="provider-model"
             data-testid="provider-model"
-            label={t('provider.model')}
+            label={t('provider.chatModel')}
             hint={t('provider.modelHint')}
             value={model}
             onChange={(event) => setModel(event.target.value)}
@@ -875,6 +878,7 @@ function ConfigureProvider({
           />
         )}
 
+        </section>
         <Select
           id="provider-priority"
           data-testid="provider-priority"

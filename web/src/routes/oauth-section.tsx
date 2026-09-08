@@ -1,5 +1,5 @@
 import { healthMonitor } from '../services/health';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { OAuthStateResponse, ProviderStatusDTO, ProvidersResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { providersService } from '../services/providers';
@@ -40,9 +40,11 @@ const METHOD_COPY: Record<string, { label: string; hint: string; rank: number }>
 export function OAuthSection({
   provider,
   onChanged,
+  actions,
 }: {
   provider: ProviderStatusDTO;
   onChanged: (response: ProvidersResponse) => void;
+  actions?: ReactNode;
 }) {
   const [flow, setFlow] = useState<OAuthStateResponse | undefined>(undefined);
   const [answer, setAnswer] = useState('');
@@ -246,7 +248,7 @@ export function OAuthSection({
 
   return (
     <div className="flex flex-col gap-3" data-testid={`provider-oauth-${provider.id}`}>
-      <p className="text-xs text-[var(--muted)]">{t('provider.oauth.hint')}</p>
+      <p className="text-sm text-[var(--muted)]">{t(provider.configured ? 'provider.oauth.connected' : 'provider.oauth.hint')}</p>
 
       {flow !== undefined ? (
         <div className="flex flex-col gap-2">
@@ -354,7 +356,7 @@ export function OAuthSection({
             disabled={busy}
             onClick={() => void start()}
           >
-            {busy ? t('provider.oauth.starting') : t('provider.oauth.signIn')}
+            {busy ? t('provider.oauth.starting') : t(provider.configured ? 'provider.oauth.reconnect' : 'provider.oauth.signIn')}
           </Button>
         ) : (
           <Button type="button" variant="ghost" onClick={() => void cancel()}>
@@ -371,6 +373,7 @@ export function OAuthSection({
             {t('provider.oauth.disconnect')}
           </Button>
         ) : null}
+        {actions}
       </div>
     </div>
   );

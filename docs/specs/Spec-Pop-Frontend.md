@@ -200,6 +200,11 @@ provider catalog, falling back to the configured identifier when unavailable.
 Subscription usage retains its last successful local snapshot during refreshes
 and temporary failures. The browser-session cache survives navigation and reload,
 is replaced after successful refresh, and is cleared on sign-in/sign-out.
+Provider editors suppress the repeated section heading below the breadcrumb,
+show one provider title, group credentials and connection actions under Connection,
+and group Chat model, Service model and Refresh models under Models. Existing
+subscriptions offer Reconnect. Editor action buttons use the same medium size
+as Add provider; Priority and the paired Save/Cancel actions follow the groups.
 
 MCP and A2A remain first-class shell explorers beside Skills rather than
 Settings destinations.

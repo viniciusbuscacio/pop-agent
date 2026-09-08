@@ -217,10 +217,10 @@ export function SettingsPage() {
             </div>
           ) : (
             <div data-testid="settings-section-content" className="min-w-0 w-full">
-              <div className="mb-5 hidden md:block">
+              {!(section === 'model' && detail !== undefined) ? <div className="mb-5 hidden md:block">
                 <h2 className="text-xl font-semibold">{activeEntry?.label}</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
-              </div>
+              </div> : null}
               <SettingsDetailContext.Provider value={setDetail}>
                 <SettingsSection key={section} section={section} />
               </SettingsDetailContext.Provider>
