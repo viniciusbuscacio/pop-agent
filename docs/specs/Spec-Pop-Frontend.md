@@ -224,6 +224,9 @@ Binary state uses switches, multiple-choice state uses selects, and buttons
 perform actions. Save flows provide Cancel. Large accessibility fonts must not
 truncate provider identity, allowance or actions merely to preserve a desktop
 row.
+Settings and its nested configuration action buttons use the medium Button
+size, matching Add provider typography and padding. Breadcrumbs, navigation
+arrows and switches retain their dedicated interaction styles.
 
 Devices manages connected computers, local-access permissions and explicit file
 routing. Connection commands appear only after Connect a computer, with a Back

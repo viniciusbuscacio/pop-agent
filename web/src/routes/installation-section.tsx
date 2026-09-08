@@ -52,7 +52,7 @@ export function InstallationSection() {
           <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.webBody')}</p>
         </div>
         {platform === currentPlatform() && pwaStatus === 'available' ? (
-          <Button type="button" size="sm" data-testid="pwa-install" onClick={() => void requestPwaInstall()}>
+          <Button type="button" size="md" data-testid="pwa-install" onClick={() => void requestPwaInstall()}>
             {t('settings.installation.pwaInstall')}
           </Button>
         ) : null}
@@ -223,7 +223,7 @@ export function DevicesSection() {
               disabled={removing !== undefined}
               onChange={(enabled) => void setMachineEnabled(machine.machineId, enabled)}
             /></div>
-            <Button type="button" size="sm" variant="danger" disabled={removing !== undefined}
+            <Button type="button" size="md" variant="danger" disabled={removing !== undefined}
               onClick={() => void removeMachine(machine)}>{t('settings.devices.remove')}</Button>
           </div>
         ))}
@@ -302,7 +302,7 @@ function CopyBlock({ value, testId }: { value: string; testId: string }) {
       >
         {value}
       </pre>
-      <Button type="button" size="sm" variant="ghost" data-testid={`${testId}-copy`} onClick={() => void copy()}>
+      <Button type="button" size="md" variant="ghost" data-testid={`${testId}-copy`} onClick={() => void copy()}>
         {copied ? t('common.copied') : t('common.copy')}
       </Button>
     </div>

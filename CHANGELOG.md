@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Standardize Settings, device installation and REST/A2A configuration action buttons on the medium Add provider size.
+
 - Place Priority first in the provider editor, before connection and model settings.
 
 - Simplify the provider editor into Connection, Models and Priority, remove the repeated section heading, and use standard-size actions with Reconnect for existing subscriptions.

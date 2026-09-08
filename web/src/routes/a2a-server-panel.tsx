@@ -57,14 +57,14 @@ export function A2aServerPanel({ enabled, changing = false, onToggle }: { enable
       <div className="grid gap-3">
         <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0"><h2 className="font-medium">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
-          <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="sm" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button></div>
+          <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="md" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button></div>
         </Card>
         <Card><h2 className="font-medium">Access control</h2><p className="text-sm text-[var(--muted)]">This key lets another agent send requests to Pop and retrieve their results. Pop can use its available tools to carry out those requests. The key does not grant access to REST API or browser UI control. It remains valid until replaced; incoming requests must also pass Allowed IP addresses and your server network rules.</p></Card>
       </div>
       <Button type="button" variant="ghost" disabled={!enabled} onClick={() => { void integrationsService.test().then(value => { if (!value.ok) throw new Error(); setStatus('Server is enabled. Test the key and IP permissions from your remote agent.'); }).catch(() => setError('Connection test failed.')); }}>Test connection</Button>
       <RestAllowedIps service={integrationsService} protocol="A2A Server" />
       <section className="space-y-3" aria-labelledby="a2a-agent-instructions">
-        <div className="flex items-center justify-between gap-3"><h2 id="a2a-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="sm" data-testid="a2a-copy-instructions" disabled={!secret || busy} onClick={() => void copy(instructions)}>Copy instructions</Button></div>
+        <div className="flex items-center justify-between gap-3"><h2 id="a2a-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="md" data-testid="a2a-copy-instructions" disabled={!secret || busy} onClick={() => void copy(instructions)}>Copy instructions</Button></div>
         <Card><pre data-ui-private={secret ? true : undefined} data-testid="a2a-agent-instructions" className="overflow-x-auto text-xs leading-relaxed">{instructions}</pre></Card>
         <p className="text-sm text-[var(--muted)]">The instructions include the current access key and are ready to paste into your agent.</p>
       </section>
@@ -78,8 +78,8 @@ export function A2aServerPanel({ enabled, changing = false, onToggle }: { enable
         <h2 className="font-medium">Access key</h2>
         <div className="flex flex-wrap items-center gap-3">
           <code data-ui-private data-testid="a2a-access-key" className="min-w-0 break-all text-sm">{secret ? `${secret.slice(0, 9)}••••••••${secret.slice(-4)}` : loaded ? 'Key unavailable' : 'Loading…'}</code>
-          <Button type="button" size="sm" variant="ghost" disabled={!secret || busy} onClick={() => secret && void copy(secret)}>Copy key</Button>
-          <Button type="button" size="sm" variant="ghost" data-testid="a2a-rotate-key" disabled={!loaded || !secret || busy} onClick={() => void rotate()}>Generate new key</Button>
+          <Button type="button" size="md" variant="ghost" disabled={!secret || busy} onClick={() => secret && void copy(secret)}>Copy key</Button>
+          <Button type="button" size="md" variant="ghost" data-testid="a2a-rotate-key" disabled={!loaded || !secret || busy} onClick={() => void rotate()}>Generate new key</Button>
         </div>
         <p className="text-sm text-[var(--muted)]">A key is created automatically. Generating a new key replaces all previous A2A keys immediately. Update the instructions in every connected integration.</p>
       </Card>
