@@ -268,7 +268,9 @@ Core environment settings:
 
 Provider secrets are not configuration-file defaults. The session signing
 secret is encrypted in SQLite; `secret.key` is excluded from backups so copied
-archives cannot forge or decrypt credentials by themselves.
+archives cannot decrypt SecretsRepo values or obtain the session-signing secret
+from that store alone. Pi-managed sign-in tokens are stored separately in
+unencrypted `pi-auth.json` and can be included in backups; see the Security spec.
 
 ## 19. Versioning and roadmap
 

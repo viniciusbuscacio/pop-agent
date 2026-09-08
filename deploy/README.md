@@ -314,3 +314,15 @@ Package-manager output is retained there; passwords, authentication and the
 one-time setup code are excluded. Existing structured installation logs remain
 available. Piped/noninteractive installation retains plain output without a key
 listener. No new system package is needed for this presentation.
+
+## Data and backup privacy
+
+The database, conversations, files, notes, and pi-managed provider sign-in tokens
+are not encrypted by Pop Agent. SecretsRepo values use separate field
+encryption. The service uses `UMask=0077` for newly created files; existing data
+and backups must also be restricted to the owner.
+
+Backup archives are not encrypted and can include provider sign-in tokens, even
+though `secret.key` is excluded. Use disk encryption on the Ubuntu server and
+protect backups during storage and transfer. Preserve `secret.key` separately
+if you need to recover SecretsRepo credentials on another host.

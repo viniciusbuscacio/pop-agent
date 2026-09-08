@@ -41,6 +41,15 @@ remains unavailable until Tailscale Serve HTTPS is verified, and a guided
 install accepts it only through the loopback proxy carrying
 `X-Forwarded-Proto: https`.
 
+## Known backup confidentiality gap
+
+The no-secrets-in-backups rule above is not fully met by the current legacy
+archive format: `pi-auth.json` can include unencrypted provider sign-in tokens
+and is copied into backups. Excluding `secret.key` protects only the encrypted
+SecretsRepo values. Treat archives as credential-bearing private data. README
+and the backup UI disclose this limitation; archive encryption and recovery
+are a separate pending change.
+
 ## Password setup and recovery
 
 There is one account and no username. Password length is 10–128 characters with

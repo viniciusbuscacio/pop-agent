@@ -193,7 +193,9 @@ advertised wire minimum/event version.
 Source deployment never substitutes for data backup. Before risky operator
 changes, create/download a consistent snapshot. Backup excludes the encryption
 key, so host recovery also requires preservation of the key through a separate
-secure operator process or re-entry of provider credentials.
+secure operator process or re-entry of SecretsRepo credentials. Archives are
+not encrypted and can include pi-managed provider sign-in tokens; their storage
+and transfer require protection independently of `secret.key`.
 
 Restore is offline through `popman restore <name>` and restarts the service
 around extraction. After restore, verify migration, health, Files/notes/skills,

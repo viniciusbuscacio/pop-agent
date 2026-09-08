@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align installation and operator documentation with the actual backup confidentiality limits, including pi-managed sign-in tokens.
+
 - Clarify that SQLite, files, pi-managed provider sign-in tokens, and backup archives are not encrypted; show a privacy notice beside backup creation and download controls.
 
 - Keep archived skills in Auto-Skill deduplication without routing or restoring them; exclude incoming A2A conversations from learning and defer active, queued, or changing source conversations.
