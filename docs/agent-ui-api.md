@@ -19,7 +19,7 @@ POST /v1/integration/ui/input
 POST /v1/integration/ui/scroll
      {"sessionId":"<chosen-id>","deltaY":600}
 POST /v1/integration/ui/scroll
-     {"sessionId":"<chosen-id>","controlId":"<control-inside-scroll-region>","deltaY":600}
+     {"sessionId":"<chosen-id>","testid":"settings-scroll","deltaY":600}
 POST /v1/integration/ui/key
      {"sessionId":"<chosen-id>","key":"Escape"}
 GET  /v1/integration/ui/screenshot?sessionId=<chosen-id>

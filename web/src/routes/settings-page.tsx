@@ -169,7 +169,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="min-h-dvh max-w-full overflow-x-clip">
+    <div data-testid="settings-scroll" className="h-dvh max-w-full overflow-x-clip overflow-y-auto">
       <header
         data-testid="settings-header"
         className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] p-3"
