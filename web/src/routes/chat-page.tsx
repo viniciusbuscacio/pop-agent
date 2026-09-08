@@ -54,7 +54,16 @@ export function ChatPage() {
   const [queueActionError, setQueueActionError] = useState(false);
   // Local command output belongs to the visible transcript, but not to the
   // durable conversation sent back to the model.
-  const [localSystemMessages, setLocalSystemMessages] = useState<string[]>([]);
+  const [localSystemMessages, setLocalSystemMessages] = useState<{
+    content: string;
+    afterMessageId: string | undefined;
+    createdAt: string;
+  }[]>([]);
+  function showSystemMessage(content: string): void {
+    const history = useChatStore.getState().messages[chatId] ?? [];
+    const entry = { content, afterMessageId: history.at(-1)?.id, createdAt: new Date().toISOString() };
+    setLocalSystemMessages((current) => [...current, entry]);
+  }
   const [compacting, setCompacting] = useState(false);
   const currentModel = activeChatModel(chat, providers);
   const scroller = useRef<HTMLDivElement>(null);
@@ -176,6 +185,23 @@ export function ChatPage() {
     [chatId, idle, messages, pending.length, resendingId, send],
   );
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
+  const transcriptWithCommands = useMemo(() => {
+    const history = messages ?? [];
+    const slots = new Map<number, React.ReactNode[]>();
+    localSystemMessages.forEach((entry, index) => {
+      const anchor = history.findIndex((message) => message.id === entry.afterMessageId);
+      // IDs survive snapshot reconciliation. If an anchor was removed, retain
+      // chronological placement instead of moving the output to the latest row.
+      const next = history.findIndex((message) => message.createdAt >= entry.createdAt);
+      const position = entry.afterMessageId === undefined ? 0 : anchor >= 0 ? anchor + 1 : next >= 0 ? next : history.length;
+      const rows = slots.get(position) ?? [];
+      rows.push(<ChatMessage key={`local-system-${String(index)}`} systemTone="info" message={{
+        role: 'system', content: entry.content, thinking: '', tools: [], attachments: [],
+      }} />);
+      slots.set(position, rows);
+    });
+    return [...settledTranscript.flatMap((row, index) => [...(slots.get(index) ?? []), row]), ...(slots.get(history.length) ?? [])];
+  }, [messages, settledTranscript, localSystemMessages]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
@@ -333,7 +359,7 @@ export function ChatPage() {
         ) : null}
 
         <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[95%]">
-          {settledTranscript}
+          {transcriptWithCommands}
 
           {live?.status === 'running' ? (
             <ChatMessage
@@ -396,20 +422,6 @@ export function ChatPage() {
                 </Pressable>
               </div>
             </div>
-          ))}
-
-          {localSystemMessages.map((content, index) => (
-            <ChatMessage
-              key={`local-system-${String(index)}`}
-              systemTone="info"
-              message={{
-                role: 'system',
-                content,
-                thinking: '',
-                tools: [],
-                attachments: [],
-              }}
-            />
           ))}
 
           {queueActionError ? (
@@ -527,7 +539,7 @@ export function ChatPage() {
           providers.find((provider) => provider.id === currentModel?.currentProvider)?.name ?? ''
         }
         currentModel={currentModel?.currentModel ?? ''}
-        onShowSystemMessage={(message) => setLocalSystemMessages((current) => [...current, message])}
+        onShowSystemMessage={showSystemMessage}
         onCommand={async (command, argument) => {
           const isCompact = command === 'compact';
           if (isCompact) setCompacting(true);
@@ -537,7 +549,7 @@ export function ChatPage() {
               const message = points.length === 0
                 ? 'No user messages are available to fork.'
                 : `Choose a point with /fork <number>:\n${points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n')}`;
-              setLocalSystemMessages((current) => [...current, message]);
+              showSystemMessage(message);
               return;
             }
             const result = await chatsService.command(chatId, command, argument);
@@ -559,7 +571,7 @@ export function ChatPage() {
               return;
             }
             const message = result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`);
-            setLocalSystemMessages((current) => [...current, message]);
+            showSystemMessage(message);
           } catch (error) {
             if (isCompact) setCompacting(false);
             throw error;

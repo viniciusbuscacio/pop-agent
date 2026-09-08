@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
@@ -163,6 +163,40 @@ describe('chat transcript', () => {
     expect(chatMessageRender).toHaveBeenLastCalledWith(
       expect.objectContaining({ role: 'system', content: expect.stringContaining('openai-codex') }),
     );
+  });
+
+  it('keeps command output between the same messages as history grows and refreshes', async () => {
+    const message = (id: string): MessageDTO => ({
+      id, chatId: chat.id, role: 'user', content: id, thinking: '', tools: [], attachments: [], createdAt: '',
+    });
+    useChatStore.setState({ openChat: vi.fn(async () => undefined), messages: { [chat.id]: [message('before')] } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('composer-system-message'));
+    const output = 'Provider: openai-codex · Model: gpt-5.6-sol';
+    const contents = () => screen.getAllByTestId('chat-message').map((row) => row.textContent);
+    act(() => useChatStore.setState({ messages: { [chat.id]: [message('before'), message('after')] } }));
+    expect(contents()).toEqual(['before', output, 'after']);
+    fireEvent.click(screen.getByTestId('composer-system-message'));
+    act(() => useChatStore.setState({ messages: { [chat.id]: [message('older'), message('before'), message('after'), message('latest')] } }));
+    expect(contents()).toEqual(['older', 'before', output, 'after', output, 'latest']);
+  });
+
+  it('keeps a command in an empty conversation before later streaming and settled answers', async () => {
+    renderPage();
+    await screen.findByTestId('empty-chat-icon');
+    fireEvent.click(screen.getByTestId('composer-system-message'));
+    act(() => useChatStore.setState({ live: { [chat.id]: {
+      runId: 'later-run', status: 'running', seq: 1, content: 'Streaming answer', thinking: '', tools: [],
+    } } }));
+    expect(screen.getAllByTestId('chat-message').map((row) => row.textContent)).toEqual([
+      'Provider: openai-codex · Model: gpt-5.6-sol', 'Streaming answer',
+    ]);
+    act(() => useChatStore.setState({ live: {}, messages: { [chat.id]: [{
+      id: 'answer', chatId: chat.id, role: 'assistant', content: 'Finished answer', thinking: '', tools: [], attachments: [], createdAt: '',
+    }] } }));
+    expect(screen.getAllByTestId('chat-message').map((row) => row.textContent)).toEqual([
+      'Provider: openai-codex · Model: gpt-5.6-sol', 'Finished answer',
+    ]);
   });
 
   it('shows compact progress in the working slot, then puts completion in the timeline', async () => {

@@ -405,7 +405,9 @@ at a time. Leaving the chat stops an active recorder and its media tracks.
 
 Slash/session commands are recognized client-side only where they invoke a
 specific API/UI action. Local command output is visible transcript UI but never
-pretends to be durable model context.
+pretends to be durable model context. Each output is anchored to the settled
+history boundary at invocation, before any live answer or pending input. Later
+messages and snapshot refreshes must not move it to the end of the transcript.
 
 ## Model and provider presentation
 

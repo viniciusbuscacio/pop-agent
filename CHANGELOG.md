@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep local chat command output (including `/model list`) anchored in the timeline as new messages arrive.
+
 - Make Refresh models fetch the selected subscription provider's current upstream pi catalog with a bounded forced refresh.
 
 - Keep provider Edit and Delete actions touch-friendly on phones while capping and right-aligning them on wider screens.
