@@ -740,6 +740,69 @@ export function Composer({
       ) : null}
 
       <div data-testid="composer-row" className="flex min-w-0 items-end gap-1">
+        <div className="shrink-0 pb-1.5">
+          <ComposerActions chatId={chatId} modelRequest={modelPickerRequest} locked={locked}
+            onOpen={() => { setSlashMode('commands'); setSlashQuery(undefined); setMentionQuery(undefined); }}
+            modelLabel={currentProviderLabel && currentModel ? `${currentProviderLabel} / ${currentModel}` : t('chat.defaultModel')}
+            thinking={showThinking}
+            onThinking={() => {
+              toggleThinking();
+              notify(showThinking ? t('chat.thinkingHidden') : t('chat.thinkingShown'));
+            }}
+            plan={executionMode === 'plan'} planPending={planPending}
+            onPlan={() => {
+              if (planPending) return;
+              setPlanPending(true);
+              const next = executionMode === 'plan' ? 'normal' : 'plan';
+              void onSetExecutionMode(next)
+                .then(() => notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden')))
+                .catch(() => notify(t('chat.planChangeFailed')))
+                .finally(() => setPlanPending(false));
+            }}
+            onAttach={() => picker.current?.click()} voice={voice} onVoice={() => void toggleRecording()}
+            busy={busy} onStop={onStop}
+            modelPicker={close => (
+              <ModelPicker
+                id="composer-model"
+                label={t('chat.model')}
+                placeholder={t('chat.searchModels')}
+                noResults={t('chat.noModelsFound')}
+                groupsLabel={t('chat.providers')}
+                backToGroupsLabel={t('chat.backToProviders')}
+                layout="embedded"
+                value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
+                options={[
+                  {
+                    value: '',
+                    label:
+                      currentProviderLabel.length > 0 && currentModel.length > 0
+                        ? `${currentProviderLabel} / ${currentModel}`
+                        : t('chat.defaultModel'),
+                  },
+                  ...models.map((choice) => ({
+                    value: `${choice.provider}||${choice.model}`,
+                    label: choice.model,
+                    group: choice.provider,
+                    groupLabel: choice.providerLabel ?? choice.provider,
+                    ...(choice.providerOrder === undefined ? {} : { groupOrder: choice.providerOrder }),
+                  })),
+                ]}
+                onChange={(value) => {
+                  const [provider = '', model = ''] = value.split('||');
+                  const choice = models.find(
+                    (candidate) => candidate.provider === provider && candidate.model === model,
+                  ) ?? {
+                    provider,
+                    model,
+                    label: model,
+                  };
+                  void selectModel(choice);
+                  close();
+                }}
+              />
+            )}
+          />
+        </div>
       <div data-testid="composer-box" className="flex min-w-0 flex-1 items-end rounded-[var(--radius-composer)] border border-[var(--border)] bg-[var(--input-bg)]">
         <FileInput
           inputRef={picker}
@@ -846,69 +909,6 @@ export function Composer({
           )}
         </div>
       </div>
-        <div className="shrink-0 pb-1.5">
-          <ComposerActions chatId={chatId} modelRequest={modelPickerRequest} locked={locked}
-            onOpen={() => { setSlashMode('commands'); setSlashQuery(undefined); setMentionQuery(undefined); }}
-            modelLabel={currentProviderLabel && currentModel ? `${currentProviderLabel} / ${currentModel}` : t('chat.defaultModel')}
-            thinking={showThinking}
-            onThinking={() => {
-              toggleThinking();
-              notify(showThinking ? t('chat.thinkingHidden') : t('chat.thinkingShown'));
-            }}
-            plan={executionMode === 'plan'} planPending={planPending}
-            onPlan={() => {
-              if (planPending) return;
-              setPlanPending(true);
-              const next = executionMode === 'plan' ? 'normal' : 'plan';
-              void onSetExecutionMode(next)
-                .then(() => notify(next === 'plan' ? t('chat.planShown') : t('chat.planHidden')))
-                .catch(() => notify(t('chat.planChangeFailed')))
-                .finally(() => setPlanPending(false));
-            }}
-            onAttach={() => picker.current?.click()} voice={voice} onVoice={() => void toggleRecording()}
-            busy={busy} onStop={onStop}
-            modelPicker={close => (
-              <ModelPicker
-                id="composer-model"
-                label={t('chat.model')}
-                placeholder={t('chat.searchModels')}
-                noResults={t('chat.noModelsFound')}
-                groupsLabel={t('chat.providers')}
-                backToGroupsLabel={t('chat.backToProviders')}
-                layout="embedded"
-                value={activeModel === '' ? '' : `${activeProvider}||${activeModel}`}
-                options={[
-                  {
-                    value: '',
-                    label:
-                      currentProviderLabel.length > 0 && currentModel.length > 0
-                        ? `${currentProviderLabel} / ${currentModel}`
-                        : t('chat.defaultModel'),
-                  },
-                  ...models.map((choice) => ({
-                    value: `${choice.provider}||${choice.model}`,
-                    label: choice.model,
-                    group: choice.provider,
-                    groupLabel: choice.providerLabel ?? choice.provider,
-                    ...(choice.providerOrder === undefined ? {} : { groupOrder: choice.providerOrder }),
-                  })),
-                ]}
-                onChange={(value) => {
-                  const [provider = '', model = ''] = value.split('||');
-                  const choice = models.find(
-                    (candidate) => candidate.provider === provider && candidate.model === model,
-                  ) ?? {
-                    provider,
-                    model,
-                    label: model,
-                  };
-                  void selectModel(choice);
-                  close();
-                }}
-              />
-            )}
-          />
-        </div>
       </div>
     </div>
   );

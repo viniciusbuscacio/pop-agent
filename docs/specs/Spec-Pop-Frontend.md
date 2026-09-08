@@ -740,17 +740,19 @@ The shell shows an 8px green REST API Server dot beside Settings when enabled an
 
 ## Composer action surface
 
-The composer has exactly two persistent action buttons: Send (right-pointing
-chevron) inside the message box at the bottom right, then Add (+) outside the
-box on its right, aligned with Send. The box starts
+The composer has exactly two persistent action buttons: Add (+) outside the
+message box on its left, bottom-aligned with Send (right-pointing chevron)
+inside the box at the bottom right on every viewport. DOM and keyboard order
+follow the visual order: Add, message input, Send. The box starts
 with one text line; 32px buttons sit beside the textarea, aligned to its bottom,
 and remain visible when text reaches its height cap and scrolls.
 Show Thinking and Plan mode are switches inside Add; no persistent mode labels
 occupy the message box. Plan mode retains its distinct input placeholder. Model opens an in-place page with Back, reusing the shared grouped
 model picker. Attach files and voice recording are direct actions. Controls
 remain English and share behavior across desktop, phone and installed PWA.
-The popup fits the viewport above the trigger, scrolls when necessary, closes
-on outside press/Escape/navigation, and returns focus on explicit close.
+The popup opens above the message box, left-aligned to Add and clamped to an
+8px viewport inset. It scrolls when necessary, closes on outside
+press/Escape/navigation, and returns focus on explicit close.
 Stop replaces Send while recording or during a run without a sendable draft.
 During a run with a draft, Send retains queue/steering behavior and Stop remains
 available inside Add. Opening or navigating actions never sends a draft.
