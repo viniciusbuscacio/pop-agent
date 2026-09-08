@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Focus subscription editors on priority and model choices, with status below the title and connection maintenance in a collapsed disclosure.
+
 - Standardize Settings, device installation and REST/A2A configuration action buttons on the medium Add provider size.
 
 - Place Priority first in the provider editor, before connection and model settings.

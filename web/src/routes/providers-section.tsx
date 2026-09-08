@@ -715,29 +715,8 @@ function ConfigureProvider({
     onClick={() => void test()}
   >{testing ? t('provider.test.running') : t('provider.test.run')}</Button>;
 
-  return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-5">
-        <StepHeader title={provider.id === 'github-copilot' ? 'GitHub Copilot' : provider.id === 'openai-codex' ? 'OpenAI — ChatGPT' : provider.name} onBack={onDone} />
-
-        <Select
-          id="provider-priority"
-          data-testid="provider-priority"
-          label={t('provider.priority')}
-          hint={t('provider.priorityHint')}
-          value={String(priority)}
-          disabled={positions <= 1}
-          onChange={(event) => setPriority(Number(event.target.value))}
-        >
-          {Array.from({ length: Math.max(positions, 1) }, (_, index) => (
-            <option key={index + 1} value={index + 1}>
-              {index + 1}
-            </option>
-          ))}
-        </Select>
-
+  const connectionSection = (
         <section className="flex min-w-0 flex-col gap-3" aria-label={t('provider.connection')}>
-        <h3 className="text-sm font-medium">{t('provider.connection')}</h3>
 
         {isCustom ? (
           <>
@@ -763,7 +742,7 @@ function ConfigureProvider({
         {isOAuth ? (
           // The subscription sign-in runs on the server and is its own little
           // machine; the wizard hosts it rather than reimplementing it.
-          <OAuthSection provider={provider} onChanged={onChanged} actions={testAction} />
+          <OAuthSection provider={provider} onChanged={onChanged} actions={testAction} showIntro={!provider.configured} />
         ) : (
           <>
             <TextField
@@ -791,38 +770,42 @@ function ConfigureProvider({
             </span>
           )}
         </section>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-5">
+        <StepHeader title={provider.id === 'github-copilot' ? 'GitHub Copilot' : provider.id === 'openai-codex' ? 'OpenAI — ChatGPT' : provider.name} onBack={onDone} />
+        {isOAuth && provider.configured ? <p className="text-sm text-[var(--muted)]">{t('provider.oauth.connected')}</p> : null}
+
+        <Select
+          id="provider-priority"
+          data-testid="provider-priority"
+          label={t('provider.priority')}
+          className="w-full sm:max-w-xs"
+          value={String(priority)}
+          disabled={positions <= 1}
+          onChange={(event) => setPriority(Number(event.target.value))}
+        >
+          {Array.from({ length: Math.max(positions, 1) }, (_, index) => (
+            <option key={index + 1} value={index + 1}>
+              {index + 1} — {t(index === 0 ? 'provider.card.firstChoice' : 'provider.card.fallback')}
+            </option>
+          ))}
+        </Select>
+
+        {!isOAuth ? connectionSection : null}
 
         <section className="flex min-w-0 flex-col gap-3" aria-label={t('provider.modelsHeading')}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-medium">{t('provider.modelsHeading')}</h3>
 
-        {isOAuth ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              data-testid="provider-refresh-models"
-              disabled={!provider.configured || refreshingModels}
-              onClick={() => void refreshModels()}
-            >
-              {refreshingModels ? t('provider.models.refreshing') : t('provider.models.refresh')}
-            </Button>
-            {catalogNote ? <span role="status" className="text-sm text-[var(--muted)]">{catalogNote}</span> : null}
-          </div>
-        ) : null}
-        </div>
 
         {/* A dropdown of what this provider actually offers, which is the
             only way to choose among OpenRouter's hundreds. A custom endpoint
             usually publishes no catalogue at all, so there it stays a field
             you type into -- an empty picker would be a dead end. */}
         {catalogue.length > 0 ? (
-          // ModelPicker keeps its label sr-only, which is right in the
-          // composer toolbar and wrong in a form: here the label is the only
-          // thing saying what the chip is. `relative` is what its popup
-          // anchors to -- without it the list positions against whatever
-          // ancestor happens to be positioned.
+          // Form labels appear once above their picker. The relative wrapper
+          // anchors the popup to the control rather than the hint below it.
           <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor="provider-model" className="text-sm font-medium">
               {t('provider.chatModel')}
@@ -841,14 +824,12 @@ function ConfigureProvider({
               layout="field"
             />
             </div>
-            <span className="text-xs text-[var(--muted)]">{t('provider.modelHint')}</span>
           </div>
         ) : (
           <TextField
             id="provider-model"
             data-testid="provider-model"
             label={t('provider.chatModel')}
-            hint={t('provider.modelHint')}
             value={model}
             onChange={(event) => setModel(event.target.value)}
           />
@@ -894,6 +875,21 @@ function ConfigureProvider({
           />
         )}
 
+        {isOAuth ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="md"
+              data-testid="provider-refresh-models"
+              disabled={!provider.configured || refreshingModels}
+              onClick={() => void refreshModels()}
+            >
+              {refreshingModels ? t('provider.models.refreshing') : t('provider.models.refresh')}
+            </Button>
+            {catalogNote ? <span role="status" className="text-sm text-[var(--muted)]">{catalogNote}</span> : null}
+          </div>
+        ) : null}
         </section>
 
         <div className="flex gap-2">
@@ -904,6 +900,10 @@ function ConfigureProvider({
             {t('common.cancel')}
           </Button>
         </div>
+        {isOAuth ? <details open={!provider.configured} className="border-t border-[var(--border)] pt-4">
+          <summary className="cursor-pointer text-sm font-medium">{t('provider.connectionOptions')}</summary>
+          <div className="mt-3">{connectionSection}</div>
+        </details> : null}
       </Card>
     </div>
   );

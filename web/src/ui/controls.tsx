@@ -520,7 +520,7 @@ export function ModelPicker({
 
   return (
     <div ref={root} className={`min-w-0 ${className}`}>
-      <span id={`${id}-label`} className="sr-only">{label}</span>
+      {layout !== 'field' ? <span id={`${id}-label`} className="sr-only">{label}</span> : null}
       <button
         ref={trigger}
         id={id}

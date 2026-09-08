@@ -41,10 +41,12 @@ export function OAuthSection({
   provider,
   onChanged,
   actions,
+  showIntro = true,
 }: {
   provider: ProviderStatusDTO;
   onChanged: (response: ProvidersResponse) => void;
   actions?: ReactNode;
+  showIntro?: boolean;
 }) {
   const [flow, setFlow] = useState<OAuthStateResponse | undefined>(undefined);
   const [answer, setAnswer] = useState('');
@@ -248,7 +250,7 @@ export function OAuthSection({
 
   return (
     <div className="flex flex-col gap-3" data-testid={`provider-oauth-${provider.id}`}>
-      <p className="text-sm text-[var(--muted)]">{t(provider.configured ? 'provider.oauth.connected' : 'provider.oauth.hint')}</p>
+      {showIntro ? <p className="text-sm text-[var(--muted)]">{t(provider.configured ? 'provider.oauth.connected' : 'provider.oauth.hint')}</p> : null}
 
       {flow !== undefined ? (
         <div className="flex flex-col gap-2">

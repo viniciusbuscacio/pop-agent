@@ -410,6 +410,7 @@ export const en = {
   'provider.priority': 'Priority',
   'provider.priorityHint': 'Providers are tried in this order if the previous one is unavailable.',
   'provider.connection': 'Connection',
+  'provider.connectionOptions': 'Connection options',
   'provider.modelsHeading': 'Models',
   'provider.key': 'API key',
   'provider.key.replace': 'Replace the API key',
