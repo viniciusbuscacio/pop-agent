@@ -501,7 +501,7 @@ function MemorySection() {
         data-testid="settings-memory"
         label={t('settings.memory.label')}
         hint={t('settings.memory.hint')}
-        rows={10}
+        rows={15}
         maxLength={8000}
         value={doc}
         placeholder={t('settings.memory.empty')}

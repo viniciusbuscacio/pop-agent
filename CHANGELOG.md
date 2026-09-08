@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match the Memory editor to the fifteen-row Instructions editor.
+
 - Increase the Instructions editor from five to fifteen visible text rows.
 
 - Focus subscription editors on priority and model choices, with status below the title and connection maintenance in a collapsed disclosure.
