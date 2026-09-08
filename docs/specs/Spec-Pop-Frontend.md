@@ -202,6 +202,10 @@ wide screen, index and destination share a 98%-viewport split view and Back
 returns to the chat/explorer that opened Settings. Route state is preferred;
 the session's last active chat is the fallback after reload/direct entry.
 
+Settings navigation uses neutral icons and a subtle neutral selected-row surface,
+with stronger selected text and no accent bar. A soft theme-aware blue surface
+appears only on hover-capable pointers, not as a persistent mobile tap state.
+
 Binary state uses switches, multiple-choice state uses selects, and buttons
 perform actions. Save flows provide Cancel. Large accessibility fonts must not
 truncate provider identity, allowance or actions merely to preserve a desktop

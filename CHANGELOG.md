@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use neutral Settings navigation icons and selection, reserving a soft blue surface for mouse hover.
+
 - Widen the desktop Settings layout to 98% of the viewport.
 
 - Add an enabled-by-default Include files switch for backups. Archives without Files keep conversations and settings; restoring them preserves existing Files on the destination server.
