@@ -286,11 +286,12 @@ function ProviderCard({
         <SubscriptionUsage providerId={provider.id} listVersion={listVersion} />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
         <Button
           type="button"
           variant="ghost"
           size="sm"
+          className="w-full sm:w-28"
           data-testid="provider-edit"
           onClick={onEdit}
         >
@@ -300,6 +301,7 @@ function ProviderCard({
           type="button"
           variant="danger"
           size="sm"
+          className="w-full sm:w-28"
           data-testid="provider-delete"
           onClick={onDelete}
         >

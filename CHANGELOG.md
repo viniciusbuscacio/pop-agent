@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep provider Edit and Delete actions touch-friendly on phones while capping and right-aligning them on wider screens.
+
 - Remove the accent focus outline from every text-entry field, retaining the neutral box and caret.
 
 - Theme the search clear icon instead of showing Chromium's native blue glyph.
