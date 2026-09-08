@@ -91,10 +91,14 @@ The conversation list and chat view adapt to the smaller screen.
 
 ## Built on pi
 
-Pop Agent uses **pi agent** (`@earendil-works/pi-coding-agent`) as its execution
-engine, including session handling and context compaction. Pop adds the personal
-server experience: authentication, web and terminal interfaces, persistent data,
-provider configuration, integrations, and access across devices.
+Pop Agent embeds **pi agent** (`@earendil-works/pi-coding-agent`) directly in
+its server process through the TypeScript SDK. Pi provides agent execution,
+sessions, and context compaction. Pop connects providers, tools, and selected
+context through its infrastructure adapter, using pi's supported APIs.
+
+Pop owns authentication, application data, integrations, and the web and CLI
+experience. The execution engine runs on the server; your browser and terminal
+connect to that same personal agent.
 
 The application is a TypeScript monorepo with a React frontend and SQLite
 storage. Small Go programs provide the client launcher and Local Access tray.

@@ -93,3 +93,28 @@ Before publication, fix the committed tree and build it again. Once a tag or
 release exists, keep it immutable and use a new version for changed bytes.
 For an installed-server failure, preserve data and use the recorded last-known-good
 activation path; verify health and the running version afterwards.
+
+
+## First public release preparation
+
+The intended first public version is `0.1.0`. Prepare it as a coordinated
+source/client/bundle transition; existing `0.2.x` installations must not be
+silently stranded by downgrade checks. Do not relabel an older bundle.
+
+- [x] Explain the in-process pi TypeScript SDK boundary in the README.
+- [x] Preserve the private Git history before any proposed history reset.
+- [ ] Review encrypted backup setup in Settings with an owner-chosen password,
+  create an encrypted archive, and verify restoration in an isolated directory.
+- [ ] Prepare the agreed new Git history and synchronized `0.1.0` version,
+  preserving the private backup and explicitly handling existing clients.
+- [ ] Replace development release notes with the initial public changelog.
+- [ ] Build and validate the exact final tree, then publish its matching bundle.
+- [ ] Complete the public visibility and security-reporting checks above.
+- [ ] Finalize the owner-approved LinkedIn announcement.
+
+Backup encryption applies to new exported `.popbackup` archives. It does not
+encrypt the live SQLite database, change FTS5 behavior, or rewrite legacy
+`.tar.gz` archives. Restore authenticates and decrypts an archive before opening
+its database. Source integration alone does not establish runtime activation;
+verify `/v1/backups` reports `passwordConfigured` and archive encryption labels
+before completing the owner acceptance item.
