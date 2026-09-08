@@ -1,61 +1,71 @@
 # Pop Agent
 
-**A personal, self-hosted agent that keeps conversations in sync across web,
-installed PWA, and terminal clients, connects to multiple LLM providers, and
-keeps your data under your control.**
+**Your personal AI agent, running on your own server.**
 
-> [!IMPORTANT]
-> Pop Agent is a **beta** and remains pre-1.0. It is a working personal
-> system and an AI engineering portfolio project, not a hosted service. Expect
-> intentional compatibility changes, read the changelog before updating, and
-> keep current backups.
+Chat from your browser, phone, or terminal. Work with files, automate tasks,
+connect tools, and talk to other agents — with one conversation history across
+all your devices.
 
-## Why it exists
+![Pop Agent desktop interface in dark mode, with Chat, Files, and Agent navigation](docs/images/pop-agent-desktop.png)
 
-Pop Agent is built around four product decisions:
+[Install](#install) · [Features](#what-you-can-do) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
 
-- **One continuous conversation surface.** Use the browser, install the PWA on
-  a phone or desktop, or work from the `pop` CLI without creating separate
-  histories.
-- **Provider choice without a second data silo.** Configure supported API or
-  subscription providers and choose models per conversation.
-- **Local ownership.** Conversations, memory, files, notes, skills, schedules,
-  usage records, and encrypted provider credentials live on your server.
-- **An agent that can actually work.** Server tools, web access, MCP, outbound
-  A2A, scheduled tasks, voice transcription, and optional access to a selected
-  desktop through Pop Local Access share one explicit security boundary.
+Pop Agent is built for one person and their own server. It is used daily by its
+creator and is currently **beta (pre-1.0)**.
 
-Pop Agent is permanently single-user and has no telemetry. Network calls happen
-only for configured or explicitly used features.
+## What you can do
 
-## What is included
+- **Continue across devices.** Use the responsive web app, install it as a PWA
+  on desktop or mobile, or open the `pop` terminal client. Conversations and
+  their history stay on the server.
+- **Choose your model.** Connect supported API or subscription providers,
+  select a model per conversation, and configure provider failover.
+- **Give the agent tools.** Work with server files and commands, connect MCP
+  servers, add reusable Skills, and schedule tasks.
+- **Connect your computer.** Optional Pop Local Access lets the agent use files
+  and tools on a selected Windows or macOS computer.
+- **Manage files in the app.** Upload files or entire folders, edit plain text,
+  preview images, HTML, and PDFs, and recover deleted files from the trash.
+- **Use voice and memory.** Transcribe voice notes on your server, search past
+  conversations, and maintain personal memory and Notes.
+- **Connect other software and agents.** REST API Server and Client support
+  integrations. A2A Server and Client exchange text requests and results with
+  remote agents, with labels distinguishing owner and agent submissions.
 
-- Durable streaming chat with queued follow-ups, attachments, image input,
-  local voice transcription, model selection, and usage accounting
-- Searchable history, living memory, a plain-folder Files area, private Notes,
-  reviewed Skills, and scheduled background tasks
-- Multiple providers with failover, encrypted credentials, OAuth where
-  supported, and provider-specific usage views
-- Native MCP client integration and outbound A2A agents with persisted tasks
-- Scoped REST API access for external clients and configured outbound REST calls
-- Installable responsive PWA, terminal client, and optional macOS/Windows Pop
-  Local Access tray
-- Manual backups, recovery keys, passkeys, session controls, update validation,
-  and rollback-aware server activation
+## Built on pi
 
-## Install on Ubuntu
+Pop Agent uses **pi agent** (`@earendil-works/pi-coding-agent`) as its execution
+engine, including session handling and context compaction. Pop adds the personal
+server experience: authentication, web and terminal interfaces, persistent data,
+provider configuration, integrations, and access across devices.
 
-The supported server is a fresh **Ubuntu systemd** host on **amd64 (Intel/AMD x86-64)**.
-Use a non-root account with `sudo`, Git, and outbound HTTPS. The bootstrap
-installs only missing base/runtime apt prerequisites plus Tailscale, downloads repository-pinned Node
-and `whisper.cpp` archives with size/SHA-256 verification, installs a prebuilt
-server release, checks the production application, and activates a loopback-only
-systemd service. An audio-only FFmpeg binary and Whisper are included; the normal
-installation does not install Ubuntu's FFmpeg package or its graphical/video
-dependencies. Client runtime downloads are fetched and cached on demand. Python, C/C++ compilers, Go,
-TypeScript builds and the full test suite are only needed on release builders,
-not on the normal installation host. Prebuilt releases support Ubuntu 24.04 or
-newer on amd64; the manifest checks the actual glibc and Node versions.
+The application is a TypeScript monorepo with a React frontend and SQLite
+storage. Small Go programs provide the client launcher and Local Access tray.
+See the [architecture and specification index](docs/specs/Spec-Pop-General.md).
+
+## Your server, your data
+
+Conversations, files, memory, and encrypted provider credentials live on your
+server. Pop Agent has no telemetry and is permanently single-user.
+
+Self-hosting does not make the language model local: requests and relevant
+context are sent to your selected provider. Connected tools and integrations
+may also exchange data with their configured services.
+
+Remote access uses private HTTPS through Tailscale. REST API and A2A servers
+start disabled on fresh installations; each has its own access key and IP
+allowlist. Incoming A2A requests can invoke the tools available to your agent.
+
+## Install
+
+You need:
+
+- **Ubuntu 24.04 or newer**, with systemd, on **amd64 / x86-64**;
+- a non-root account with `sudo`, Git, and outbound internet access;
+- Tailscale on the device you will use to access Pop;
+- a supported model provider account or API key.
+
+Run on the Ubuntu server:
 
 ```sh
 git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
@@ -63,74 +73,67 @@ cd pop-agent
 ./deploy/bootstrap-server.sh --install-apt-packages
 ```
 
-For private repository access, complete the [GitHub authentication steps](deploy/README.md#private-repositories) before cloning.
+If the repository is private, complete the
+[GitHub authentication steps](deploy/README.md#private-repositories) before cloning.
 
-Defaults:
+The installer downloads a verified prebuilt release and the managed Node and
+Whisper runtimes, installs missing prerequisites and Tailscale, and starts the
+service. An audio-only FFmpeg binary is included. Normal installation does not
+compile the project or run the full development test suite.
 
-- source: the cloned repository;
-- installed runtime: `~/.local/share/pop-agent/server-releases/` (a verified isolated generation);
-- data: `$HOME/.pop-agent`;
-- user workspace: `$HOME/pop-agent-workspace`;
-- service: `pop-agent-service.service`;
-- server manager: `/usr/local/bin/popman`;
-- app origin: loopback-only `http://127.0.0.1:8787` behind Tailscale Serve;
-- temporary setup page: `http://<private-LAN-IP>:8788/setup`.
+Installation shows concise progress. Press **D** for detailed output; the full
+installation log path is printed for troubleshooting.
 
-Do not run the bootstrap as root. Custom paths, ports, preparation-only mode,
-verified offline bundles, exact trust boundaries, and failure recovery are in
-the [deployment guide](deploy/README.md) and
-[installation specification](docs/specs/Spec-Pop-Installation.md).
+### Finish in your browser
 
-### Private HTTPS with Tailscale
+1. Open the private-LAN setup URL printed by the installer and enter its
+   one-time code.
+2. Connect the server to Tailscale. Keep your browser device on the same tailnet.
+3. Follow the setup flow to the private HTTPS address, create your password,
+   and save the recovery key.
+4. Connect a model provider and start a conversation.
+5. Optionally install the PWA and CLI from **Settings → Installation**.
 
-The installer prints a temporary private-LAN URL and a one-time code. Open that
-URL, enter the code, sign the server into your tailnet, and explicitly enable
-private HTTPS. Pop Agent configures Tailscale Serve for its loopback origin and
-never enables Funnel. The browser device must be connected to the same tailnet.
-Do **not** expose port 8787 directly.
+The setup code lasts 15 minutes. Generate another on the server with:
 
-No password is accepted on the temporary HTTP surface. It exposes only this
-bounded network setup and disappears after first-owner setup completes. If its
-15-minute code expires, run `popman onboarding-code` on the server. Existing
-Caddy or manually managed installations can use `--skip-network-onboarding`;
-`deploy/configure-tailscale.sh` remains an explicit repair/manual helper.
+```sh
+popman onboarding-code
+```
 
-### First run
+The app listens on `127.0.0.1:8787` behind Tailscale Serve. The temporary setup
+page uses `http://<private-LAN-IP>:8788/setup`; passwords are created only after
+moving to HTTPS. Do **not** expose port 8787 directly.
 
-1. Follow the printed HTTP URL through Tailscale login and private HTTPS.
-2. Continue at the generated `https://…ts.net` URL and create the one owner password.
-3. Save the one-time recovery key somewhere separate and secure.
-4. Add and test a model provider in Settings.
-5. Create a manual backup and separately protect the host's `secret.key`, which
-   is intentionally excluded from Pop Agent backup archives.
-6. Optionally install the PWA and the CLI from Settings → Installation.
+Data defaults to `~/.pop-agent`, and the agent workspace to
+`~/pop-agent-workspace`. Create a backup after setup and protect `secret.key`
+separately: it is intentionally excluded from backup archives.
+
+For custom paths, network setup, logs, and installation recovery, see the
+[deployment guide](deploy/README.md).
 
 ## Current limits
 
-- Ubuntu is the only supported server OS; there is no Docker or Windows server
-  distribution.
-- The product is permanently single-user. Multi-user accounts and hosted cloud
-  sync are out of scope.
-- Remote use requires a stable HTTPS origin, normally Tailscale Serve or a
-  correctly configured reverse proxy.
-- Model/provider accounts and their charges are external to Pop Agent.
-- Voice runs on the server and requires local disk for the selected Whisper
-  model. The installer supplies an audio-only `ffmpeg` and the pinned `whisper.cpp` runtime.
-- Files uploads are limited to 100 MiB per file. Chat accepts up to eight
-  attachments, 25 MiB each and 100 MiB combined. Audio notes remain 25 MiB.
-- PWA builds update automatically. Server and AI-runtime activation remain
-  explicit, gate-verified actions during beta.
-- There is no telemetry, hosted monitoring, uptime SLA, or guaranteed support
-  response time.
+- The supported server distribution is Ubuntu amd64. There is no packaged
+  Windows server, Docker distribution, or ARM64 release.
+- Each installation has one owner. Multi-user accounts and hosted cloud sync
+  are outside the project scope.
+- Model subscriptions, API charges, and provider availability are separate
+  from Pop Agent.
+- Files uploads allow 100 MiB per file. Chat supports up to eight attachments,
+  25 MiB each and 100 MiB combined; voice notes are limited to 25 MiB.
+- A2A Server currently supports text tasks without protocol streaming, file
+  exchange, or push notifications. Continuing a completed A2A conversation is
+  supported by the server protocol but is not yet exposed by the client UI;
+  its Continue action handles tasks waiting for more input.
+- Beta updates can include compatibility changes. Read the
+  [changelog](CHANGELOG.md) and keep backups. See the [support policy](SUPPORT.md).
 
 ## Development
 
 Development requires Node.js `>=22.19.0`, npm, Go `>=1.23`, Git, and the native
-build tools used by the locked dependencies.
+build tools required by the locked dependencies.
 
 ```sh
-git clone --depth 1 https://github.com/viniciusbuscacio/pop-agent.git
-cd pop-agent
 npm ci
 npm run build
 dev_root=$(mktemp -d)
@@ -139,35 +142,34 @@ POP_AGENT_DATA_DIR="$dev_root/data" \
   npm run dev
 ```
 
-For live PWA rebuilds, use a second terminal:
+For live frontend development, use a second terminal:
 
 ```sh
 npm run dev -w @pop-agent/web
 ```
 
-Before opening a pull request, run the same gate used by CI:
+The full validation gate runs locally before a release batch is published:
 
 ```sh
 npm run gate
 ```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before making a change. Use GitHub
-Issues for reproducible bugs, Discussions for questions and ideas, and the
-private process in [SECURITY.md](SECURITY.md) for vulnerabilities.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before making a change. Report reproducible
+bugs through GitHub Issues; report vulnerabilities privately using
+[SECURITY.md](SECURITY.md).
 
 ## Documentation
 
-- [General specification and normative index](docs/specs/Spec-Pop-General.md)
-- [Deployment guide](deploy/README.md)
-- [Installation, distribution, and updates](docs/specs/Spec-Pop-Installation.md)
-- [Deployment and operations](docs/specs/Spec-Pop-Deployment-and-Operations.md)
+- [Installation and deployment](deploy/README.md)
+- [CLI and Pop Local Access](docs/cli.md)
+- [MCP compatibility](docs/mcp.md)
+- [REST API Server and Client](docs/specs/Spec-Pop-REST-API.md)
+- [A2A Server and Client](docs/specs/Spec-Pop-A2A.md)
 - [Security model](docs/specs/Spec-Pop-Security.md)
-- [CLI and Local Access guide](docs/cli.md)
-- [MCP compatibility notes](docs/mcp.md)
-- [REST API server and outbound clients](docs/specs/Spec-Pop-REST-API.md)
-- [Changelog](CHANGELOG.md)
-- [Support policy](SUPPORT.md)
-- [Maintainer release runbook](docs/RELEASING.md)
+- [Architecture and specification index](docs/specs/Spec-Pop-General.md)
+- [Updates and distribution](docs/specs/Spec-Pop-Installation.md)
+- [Maintainer release guide](docs/RELEASING.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## License
 
