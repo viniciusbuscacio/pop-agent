@@ -1,38 +1,86 @@
 # Pop Agent
 
-**Your personal AI agent, running on your own server.**
+A personal, self-hosted AI agent. Install it on your server, connect it to your
+Tailscale VPN, add your LLM provider, and start chatting.
 
-Chat from your browser, phone, or terminal. Work with files, automate tasks,
-connect tools, and talk to other agents — with one conversation history across
-all your devices.
+It is available through:
+
+- **Web browser**
+- **Desktop:** Windows, Linux, and macOS via PWA
+- **Mobile:** Android and iPhone via PWA
+- **CLI:** Windows, Linux, and macOS
+
+The PWA also works with **Pop Local Access**, an optional companion that lets
+the agent access files and run commands on a computer you explicitly enable.
 
 ![Pop Agent PWA on Windows in dark mode, with Chat, Files, and Agent navigation](docs/images/pop-agent-desktop.png)
 
-[Install](#install) · [Features](#what-you-can-do) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
+[Install](#install) · [What's included](#what-is-included) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
 
-Pop Agent is built for one person and their own server. It is used daily by its
-creator and is currently **beta (pre-1.0)**.
+## Why it exists
 
-## What you can do
+Pop Agent started as a learning project. I wanted to understand how an AI agent
+works. It has since become my main personal agent, and I'm very happy with how
+far it has come.
 
-- **Continue across devices.** Use the responsive web app, install it as a PWA
-  on desktop or mobile, or open the `pop` terminal client. Conversations and
-  their history stay on the server.
-- **Choose your model.** Connect supported API or subscription providers,
-  select a model per conversation, and configure provider failover.
-- **Give the agent tools.** Work with server files and commands, connect MCP
-  servers, add reusable Skills, and schedule tasks.
-- **Connect your computer.** Optional Pop Local Access lets the agent use files
-  and tools on a selected Windows or macOS computer.
-- **Manage files in the app.** Upload files or entire folders, edit plain text,
-  preview images, HTML, and PDFs, and recover deleted files from the trash.
-- **Use voice and memory.** Transcribe voice notes on your server, search past
-  conversations, and maintain personal memory and Notes.
-- **Connect other software and agents.** REST API Server and Client support
-  integrations. A2A Server and Client exchange text requests and results with
-  remote agents, with labels distinguishing owner and agent submissions.
+I use it every day. It is still **beta (pre-1.0)**, and some ideas are still
+being tested and improved.
 
-### On iPhone
+## Product decisions
+
+Pop Agent is built around four decisions:
+
+1. **One conversation across clients.** Start a chat in your browser, continue
+   it on your phone, and reopen it in the CLI.
+2. **Multiple LLM providers.** Choose your provider and model, switch models
+   per conversation, and configure provider failover.
+3. **Your data stays under your control.** Conversations, memory, files, notes,
+   skills, schedules, usage records, and encrypted provider credentials live
+   on your server.
+4. **"Infinite" memory through searchable history.** Past conversations remain
+   available for the agent to search and revisit unless you delete them. It
+   retrieves relevant history as needed; this does not mean unlimited model
+   context or perfect recall of every detail.
+
+## What is included
+
+- **Skills:** reusable instructions, including Agent Skills directories with
+  a `SKILL.md` file. Add your own or manage them in the app.
+- **File storage:** share files and folders with the agent, edit text, preview
+  documents, and recover deleted files from the trash.
+- **Memory and Notes:** searchable conversation history, a personal memory
+  document, and a private Markdown notes vault.
+- **Scheduled tasks:** ask the agent to do work on a schedule.
+- **Voice input:** transcribe voice notes on your server.
+- **MCP Client:** connect to remote MCP servers or local stdio servers.
+- **Agent to Agent:** A2A Client and Server for communicating with other agents.
+- **REST API:** Client and Server for connecting other software.
+- **SQLite storage:** persistent conversation and application data, with
+  encrypted storage for provider credentials and other secrets.
+
+The SQLite database as a whole is **not encrypted**. Keep your server and
+backups protected. Save your password and the recovery key shown during setup;
+the recovery key lets you reset a forgotten password.
+
+## Auto-Skill and Skill Router
+
+Auto-Skill and the Skill Router are two ideas I'm experimenting with in Pop
+Agent. They still need improvement.
+
+**Auto-Skill** can automatically create reusable skills from your conversations.
+It looks for procedures worth keeping, checks for duplicates, and reviews
+candidates before making them available. You can disable automatic learning
+and edit or remove the skills it creates.
+
+**The Skill Router** uses a small, local retrieval process — a kind of mini-RAG —
+to select relevant skills for the current request. It combines keyword and
+semantic search, adding only selected skills to the context instead of loading
+the whole collection. Selection itself does not require an LLM call.
+
+The idea is to help the agent become more useful as you talk to it normally,
+while keeping its context focused.
+
+## On iPhone
 
 The conversation list and chat view adapt to the smaller screen.
 
