@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Standardize Settings typography by role across prose editors, model labels, cards, status messages and integration forms; enforce shared field/button typography against regressions.
+
 - Guarantee fifteen visible text lines in Instructions and Memory with a line-height-based minimum, and match their font sizes.
 
 - Match the Memory editor to the fifteen-row Instructions editor.

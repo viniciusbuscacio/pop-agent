@@ -4,7 +4,26 @@
 
 `web/src/styles/tokens.css` owns theme values. Components consume semantic variables; literal colors in components are forbidden.
 
-## Focus
+## Settings typography
+
+Equivalent roles use the same family, size and weight across Settings and its
+detail forms, at every viewport width. Use the application sans-serif family
+for prose, including Instructions, Memory and skill instructions. Reserve
+monospace for actual commands, code, URLs and access/recovery keys.
+
+- Page titles: `text-xl font-semibold`.
+- Card and editor titles: `text-base font-semibold`.
+- Subsection/disclosure titles: `text-sm font-medium`.
+- Field labels: shared `FieldLabel`, `text-sm font-normal`, dim foreground.
+- Standard form values: shared medium field, `text-base font-normal`.
+- Body copy and standalone status/errors: `text-sm`; hints and metadata: `text-xs`.
+- Settings action buttons: shared `Button size="md"` (`text-sm font-medium`).
+
+Search remains the shared compact search size. Navigation category captions
+and prominent storage metrics retain their distinct semantic roles. Do not
+override a field or button's typography with page-level classes.
+
+## Focus treatment
 
 The global `:focus-visible` ring identifies actions and choice/navigation
 controls. Text-entry fields keep their neutral border with no focus outline;

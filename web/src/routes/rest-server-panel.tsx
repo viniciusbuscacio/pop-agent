@@ -63,19 +63,19 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}
       <div className="grid gap-3">
         <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0"><h2 className="font-medium">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
+          <div className="min-w-0"><h2 className="text-base font-semibold">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
           <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="md" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button><Button type="button" size="md" variant="ghost" disabled={!enabled} onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div>
         </Card>
-        <Card><h2 className="font-medium">Access control</h2><p className="text-sm text-[var(--muted)]">One access key authorizes all REST API operations, including conversations and UI control. It stays valid until you generate a new key. Network access follows your Tailscale and server configuration.</p></Card>
+        <Card><h2 className="text-base font-semibold">Access control</h2><p className="text-sm text-[var(--muted)]">One access key authorizes all REST API operations, including conversations and UI control. It stays valid until you generate a new key. Network access follows your Tailscale and server configuration.</p></Card>
       </div>
       <RestAllowedIps />
       <section className="space-y-3" aria-labelledby="rest-agent-instructions">
-        <div className="flex items-center justify-between gap-3"><h2 id="rest-agent-instructions" className="font-medium">Agent instructions</h2><Button type="button" variant="ghost" size="md" data-testid="rest-copy-instructions" disabled={!secret || busy} onClick={() => void copy(instructions)}>Copy instructions</Button></div>
+        <div className="flex items-center justify-between gap-3"><h2 id="rest-agent-instructions" className="text-base font-semibold">Agent instructions</h2><Button type="button" variant="ghost" size="md" data-testid="rest-copy-instructions" disabled={!secret || busy} onClick={() => void copy(instructions)}>Copy instructions</Button></div>
         <Card><pre data-ui-private={secret ? true : undefined} data-testid="rest-agent-instructions" className="overflow-x-auto text-xs leading-relaxed">{instructions}</pre></Card>
         <p className="text-sm text-[var(--muted)]">The instructions include the current access key and are ready to paste into your agent.</p>
       </section>
       <Card className="space-y-3">
-        <h2 className="font-medium">Access key</h2>
+        <h2 className="text-base font-semibold">Access key</h2>
         <div className="flex flex-wrap items-center gap-3">
           <code data-ui-private data-testid="rest-access-key" className="min-w-0 break-all text-sm">{secret ? `${secret.slice(0, 9)}••••••••${secret.slice(-4)}` : loaded ? 'Key unavailable' : 'Loading…'}</code>
           <Button type="button" size="md" variant="ghost" disabled={!secret || busy} onClick={() => secret && void copy(secret)}>Copy key</Button>

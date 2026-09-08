@@ -149,7 +149,6 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
         rows={10}
         value={body}
         onChange={(event) => setBody(event.target.value)}
-        className="font-mono text-sm"
       />
 
       {error !== undefined ? (

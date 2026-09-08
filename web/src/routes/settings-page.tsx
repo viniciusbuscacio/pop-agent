@@ -510,7 +510,7 @@ function MemorySection() {
           setDoc(event.target.value);
           setSaved(false);
         }}
-        className="min-h-[calc(15lh+1rem+2px)] shrink-0 font-mono"
+        className="min-h-[calc(15lh+1rem+2px)] shrink-0"
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -590,7 +590,7 @@ function PasskeyControls() {
   }
 
   if (!supported) {
-    return <p className="text-xs text-[var(--muted)]">{t('settings.security.passkeyUnsupported')}</p>;
+    return <p className="text-sm text-[var(--muted)]">{t('settings.security.passkeyUnsupported')}</p>;
   }
 
   return (
@@ -610,7 +610,7 @@ function PasskeyControls() {
         </Button>
       </div>
       {error !== undefined ? (
-        <p role="alert" className="text-xs text-[var(--danger)]">
+        <p role="alert" className="text-sm text-[var(--danger)]">
           {error}
         </p>
       ) : null}
@@ -796,7 +796,7 @@ export function SkillsSection() {
           <Card key={skill.slug} className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-medium">{skill.name}</span>
+                <span className="text-base font-semibold">{skill.name}</span>
                 {skill.source === 'builtin' ? (
                   <span className="rounded bg-[var(--panel-bg)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
                     {t('skills.builtin')}
@@ -840,7 +840,7 @@ export function SkillsSection() {
               className="flex flex-wrap items-start justify-between gap-3"
             >
               <div className="min-w-0 flex-1">
-                <span className="font-medium">{skill.name}</span>
+                <span className="text-base font-semibold">{skill.name}</span>
                 <p className="truncate text-sm text-[var(--muted)]">{skill.description}</p>
               </div>
               <Button
@@ -1243,7 +1243,7 @@ function NotificationsSection() {
           hint={t('settings.notifications.note')}
         />
       ) : (
-        <p className="text-xs text-[var(--muted)]">{t('settings.notifications.unsupported')}</p>
+        <p className="text-sm text-[var(--muted)]">{t('settings.notifications.unsupported')}</p>
       )}
     </Card>
   );
@@ -1636,12 +1636,12 @@ function UpdatesSection() {
         </div>
 
         {deployment?.clean === false ? (
-          <p role="alert" className="text-xs text-[var(--danger)]">
+          <p role="alert" className="text-sm text-[var(--danger)]">
             {t('settings.updates.dirtyTree')}
           </p>
         ) : null}
         {deployment?.error !== undefined ? (
-          <p role="alert" className="text-xs text-[var(--danger)]">{deployment.error}</p>
+          <p role="alert" className="text-sm text-[var(--danger)]">{deployment.error}</p>
         ) : null}
         {deployment?.failedRef !== undefined ? (
           <p className="text-xs text-[var(--muted)]">
@@ -2046,7 +2046,7 @@ function Row({ label, value, testId }: { label: string; value: string; testId: s
   return (
     <div className="flex min-w-0 items-start justify-between gap-4 text-sm">
       <span className="min-w-0 text-[var(--key-fg-dim)]">{label}</span>
-      <span data-testid={testId} className="min-w-0 break-words text-right font-mono text-[var(--muted)]">
+      <span data-testid={testId} className="min-w-0 break-words text-right text-[var(--screen-fg)]">
         {value}
       </span>
     </div>

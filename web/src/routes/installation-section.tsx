@@ -57,21 +57,21 @@ export function InstallationSection() {
           </Button>
         ) : null}
         {platform === currentPlatform() && pwaStatus === 'installed' ? (
-          <p className="text-sm text-[var(--key-fg-dim)]" data-testid="pwa-installed">
+          <p className="text-sm text-[var(--muted)]" data-testid="pwa-installed">
             {t('settings.installation.pwaInstalled')}
           </p>
         ) : null}
         {platform === currentPlatform() && pwaStatus === 'unavailable' ? (
-          <p className="text-sm text-[var(--key-fg-dim)]" data-testid="pwa-install-manual">
+          <p className="text-sm text-[var(--muted)]" data-testid="pwa-install-manual">
             {t('settings.installation.pwaInstallManual')}
           </p>
         ) : null}
         {platform === currentPlatform() && pwaDismissed ? (
-          <p className="text-xs text-[var(--muted)]" data-testid="pwa-install-dismissed">
+          <p className="text-sm text-[var(--muted)]" data-testid="pwa-install-dismissed">
             {t('settings.installation.pwaInstallDismissed')}
           </p>
         ) : null}
-        <p className="text-sm text-[var(--key-fg-dim)]">{t(WEB_INSTRUCTIONS[platform])}</p>
+        <p className="text-sm text-[var(--muted)]">{t(WEB_INSTRUCTIONS[platform])}</p>
       </Card>
 
       <Card className="flex flex-col gap-4">
@@ -80,11 +80,11 @@ export function InstallationSection() {
           <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.cliBody')}</p>
         </div>
         {platform === 'windows' ? <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">{t('settings.installation.cliWindows')}</h3>
+          <h3 className="text-sm font-medium">{t('settings.installation.cliWindows')}</h3>
           <p className="text-xs text-[var(--muted)]">{t('settings.installation.cliWindowsHint')}</p>
           <CopyBlock value={windowsCommand} testId="installation-cli-windows" />
         </section> : platform === 'macos' || platform === 'linux' ? <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">{t('settings.installation.cliUnix')}</h3>
+          <h3 className="text-sm font-medium">{t('settings.installation.cliUnix')}</h3>
           <p className="text-xs text-[var(--muted)]">{t('settings.installation.cliUnixHint')}</p>
           <CopyBlock value={unixCommands} testId="installation-cli-unix" />
         </section> : <p className="text-sm text-[var(--muted)]">{t('settings.installation.cliDesktopOnly')}</p>}
@@ -190,11 +190,11 @@ export function DevicesSection() {
       <PlatformChoice platform={platform} onChange={setPlatform} desktopOnly />
       <Card className="flex flex-col gap-3">
         {platform === 'windows' ? <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">{t('settings.installation.localAccessWindows')}</h3>
+          <h3 className="text-sm font-medium">{t('settings.installation.localAccessWindows')}</h3>
           <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessWindowsHint')}</p>
           <CopyBlock value={localAccessWindowsCommand} testId="installation-local-access-windows" />
         </section> : <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">{t('settings.installation.localAccessUnix')}</h3>
+          <h3 className="text-sm font-medium">{t('settings.installation.localAccessUnix')}</h3>
           <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessUnixHint')}</p>
           <CopyBlock value={localAccessUnixCommand} testId="installation-local-access-unix" />
         </section>}

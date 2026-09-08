@@ -17,6 +17,13 @@ const skinnedPrimitives = new Set([
 ]);
 const forbiddenSkinClass = /(?:^|[\s'"`])(?:rounded(?:-|\b)|border(?:-|\b)|bg-|shadow(?:-|\b)|outline(?:-|\b)|focus:|ring(?:-|\b))/;
 const implementationFile = 'web/src/ui/controls.tsx';
+const settingsFiles = new Set([
+  'settings-page.tsx', 'providers-section.tsx', 'oauth-section.tsx',
+  'skill-editor.tsx', 'installation-section.tsx', 'backup-section.tsx',
+  'rest-server-panel.tsx', 'rest-clients-panel.tsx', 'a2a-server-panel.tsx',
+]);
+const typedControls = new Set(['Button', 'TextField', 'TextArea', 'Select', 'SearchField']);
+const typographyOverride = /(?:^|[\s'"`])(?:[\w-]+:)*(?:font-|text-(?:xs|sm|base|lg|[2-9]?xl)(?=[\s'"`])|leading-|tracking-)/;
 
 export function uiPrimitiveErrors(root: string): string[] {
   const sourceRoot = join(root, 'web/src');
@@ -41,6 +48,10 @@ export function uiPrimitiveErrors(root: string): string[] {
           const className = attributeSource(node.attributes, 'className', source);
           if (className !== undefined && forbiddenSkinClass.test(className)) {
             report(node, `${tag} className may contain layout only; its visual skin belongs to ui/controls.tsx`);
+          }
+          if (settingsFiles.has(repoPath.split('/').at(-1) ?? '') && typedControls.has(tag)
+            && className !== undefined && typographyOverride.test(className)) {
+            report(node, `${tag} Settings typography must use the shared primitive, not a className override`);
           }
         }
       }

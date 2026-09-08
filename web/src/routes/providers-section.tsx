@@ -20,6 +20,7 @@ import {
   BackButton,
   Button,
   Card,
+  FieldLabel,
   ModelPicker,
   Select,
   TextField,
@@ -280,7 +281,7 @@ function ProviderCard({
             }
           />
         </Pressable>
-        <p className="min-w-0 break-words font-semibold" data-testid="provider-card-name">
+        <p className="min-w-0 break-words text-base font-semibold" data-testid="provider-card-name">
           {provider.name}
         </p>
       </div>
@@ -325,14 +326,15 @@ function ProviderCard({
       </div>
 
       {authErrorAt === undefined ? null : (
-        <Pressable
+        <Button
           type="button"
+          variant="danger"
           data-testid="provider-sign-in-again"
           onClick={onEdit}
-          className="self-start rounded-md border border-[var(--danger)] bg-[var(--danger)]/10 px-2 py-0.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/20"
+          className="self-start"
         >
           {t('provider.signInAgain')}
-        </Pressable>
+        </Button>
       )}
       {toggleError === undefined ? null : (
         <p className="text-sm text-[var(--danger)]" data-testid="provider-toggle-error">
@@ -372,7 +374,7 @@ function Balance({
 
   if (credits === undefined || credits === null) return null;
   return (
-    <p className="break-words text-xs text-[var(--muted)]" data-testid="provider-credits">
+    <p className="break-words text-sm text-[var(--screen-fg)]" data-testid="provider-credits">
       {t('provider.credits', {
         remaining: formatDollars(credits.remaining),
         used: formatDollars(credits.used),
@@ -438,7 +440,7 @@ function UsageWindow({ window }: { window: ProviderUsageWindowDTO }) {
         });
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-sm">
         <span className="text-[var(--muted)]">{label}</span>
         <span className="font-medium">{Math.round(percent * 10) / 10}%</span>
       </div>
@@ -807,9 +809,9 @@ function ConfigureProvider({
           // Form labels appear once above their picker. The relative wrapper
           // anchors the popup to the control rather than the hint below it.
           <div className="flex min-w-0 flex-col gap-1.5">
-            <label htmlFor="provider-model" className="text-sm font-medium">
+            <FieldLabel htmlFor="provider-model">
               {t('provider.chatModel')}
-            </label>
+            </FieldLabel>
             {/* `relative` wraps the control ALONE: with the hint inside it,
                 the list opened a line below the field and read as detached. */}
             <div className="relative">
@@ -843,9 +845,9 @@ function ConfigureProvider({
             else -- and picking the chat model again is what clears it. */}
         {catalogue.length > 0 ? (
           <div className="flex min-w-0 flex-col gap-1.5">
-            <label htmlFor="provider-service-model" className="text-sm font-medium">
+            <FieldLabel htmlFor="provider-service-model">
               {t('provider.serviceModel')}
-            </label>
+            </FieldLabel>
             <div className="relative">
               <ModelPicker
                 id="provider-service-model"

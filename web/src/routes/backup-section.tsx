@@ -170,7 +170,7 @@ export function BackupSection() {
       {restoreTarget === undefined ? null : (
         <Card>
           <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void restore(); }}>
-            <p className="text-sm font-medium">{t('backup.restoreTitle', { name: restoreTarget.name })}</p>
+            <p className="text-base font-semibold">{t('backup.restoreTitle', { name: restoreTarget.name })}</p>
             <p className="text-sm text-[var(--muted)]">{t(restoreTarget.includeFiles === false ? 'backup.restoreWithoutFilesNotice' : 'backup.restoreNotice')}</p>
             {restoreTarget.encrypted === true ? <TextField id="restore-password" type="password" autoComplete="off"
               label={t('backup.archivePassword')} value={restorePassword} required maxLength={128} disabled={busy}
@@ -198,7 +198,7 @@ export function BackupSection() {
           {backups.map((backup) => (
             <Card key={backup.name} className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate font-mono text-xs text-[var(--key-fg-dim)]">{backup.name}</p>
+                <p className="truncate text-base font-semibold text-[var(--screen-fg)]">{backup.name}</p>
                 <p className="text-xs text-[var(--muted)]">{t(backup.includeFiles === false ? 'backup.withoutFiles' : 'backup.withFiles')}</p>
                 <p className="text-xs text-[var(--muted)]">{t(backup.encrypted === true ? 'backup.encrypted' : 'backup.legacy')}</p>
                 <p className="text-xs text-[var(--muted)]">

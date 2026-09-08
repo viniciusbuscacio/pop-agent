@@ -21,6 +21,23 @@ import {
 afterEach(cleanup);
 
 describe('UI design-system primitives', () => {
+  it('uses the same explicit typography for standard form values and labels', () => {
+    render(<>
+      <TextField id="title" label="Title" />
+      <TextArea id="instructions" label="Instructions" />
+      <Select id="priority" label="Priority"><option>First choice</option></Select>
+    </>);
+    for (const name of ['Title', 'Instructions', 'Priority']) {
+      const control = screen.getByLabelText(name);
+      expect(control.classList.contains('text-base')).toBe(true);
+      expect(control.classList.contains('font-normal')).toBe(true);
+      expect(control.classList.contains('font-mono')).toBe(false);
+      const label = screen.getByText(name);
+      expect(label.classList.contains('text-sm')).toBe(true);
+      expect(label.classList.contains('font-normal')).toBe(true);
+    }
+  });
+
   it('owns the neutral field skin and leaves focus to the global ring', () => {
     render(
       <>

@@ -55,6 +55,12 @@ but still use tokens, focus rules and accessible interaction.
 
 ## Forms and actions
 
+Settings uses the role-based typography scale in the detailed guide across all
+sections and nested editors. Equivalent headings, labels, values, hints and
+actions must match in family, size and weight. Prose editors use the normal
+application font, not a smaller monospaced skin. Medium Settings action buttons
+share the Add provider typography and spacing.
+
 Labels, hints, errors and `aria-describedby` follow the shared field structure.
 A field shows error instead of hint when invalid. Unlabelled toolbar fields need
 an accessible name. Icon-only actions always have `aria-label` or equivalent.

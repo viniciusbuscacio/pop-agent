@@ -112,7 +112,7 @@ const FIELD_BASE =
 
 const FIELD_SIZES = {
   /** A form field with a label above it. */
-  md: 'px-3 py-2 text-[var(--screen-fg)]',
+  md: 'px-3 py-2 text-base font-normal text-[var(--screen-fg)]',
   /** A control that lives in a dense picker, so it reads quieter. */
   sm: 'px-2 py-1 text-xs text-[var(--key-fg-dim)]',
   /** Search in a sidebar or toolbar: compact without shrinking its label. */
@@ -139,6 +139,10 @@ function fieldClass(size: FieldSize, extra: string, shape: 'control' | 'composer
  * Shared by TextField, Select and TextArea so a labelled field is laid out
  * identically whatever is inside it.
  */
+export function FieldLabel({ htmlFor, children }: { htmlFor: string; children: ReactNode }) {
+  return <label htmlFor={htmlFor} className="text-sm font-normal text-[var(--key-fg-dim)]">{children}</label>;
+}
+
 function Field({
   id,
   label,
@@ -154,9 +158,9 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm text-[var(--key-fg-dim)]">
+      <FieldLabel htmlFor={id}>
         {label}
-      </label>
+      </FieldLabel>
       {children}
       {error !== undefined ? (
         <p id={`${id}-error`} role="alert" className="text-xs text-[var(--danger)]">
