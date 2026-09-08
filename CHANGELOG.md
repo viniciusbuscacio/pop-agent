@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Widen the chat message box by reducing the composer's outer horizontal margins, preserving device safe areas, the one-line initial height and action button sizes.
+
 - Move the chat composer Add (+) button outside the message box on the left on every viewport, bottom-aligned with Send; anchor its action menu to the left trigger while keeping it inside the viewport.
 
 - Add native macOS PLA sign-in with a secure password dialog and automatic reconnect, and clear stale live-access indicators after disconnection or session rejection.

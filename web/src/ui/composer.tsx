@@ -675,7 +675,7 @@ export function Composer({
       data-testid="composer"
       aria-busy={locked}
       inert={locked}
-      className={`min-w-0 overflow-x-clip border-t border-[var(--border)] bg-[var(--bg)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${locked ? 'pointer-events-none opacity-60' : ''}`}
+      className={`min-w-0 overflow-x-clip border-t border-[var(--border)] bg-[var(--bg)] pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${locked ? 'pointer-events-none opacity-60' : ''}`}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();

@@ -74,6 +74,18 @@ afterEach(() => {
 });
 
 describe('composer action placement', () => {
+  it('gives the message box more horizontal room without changing its one-line height or controls', () => {
+    renderComposer();
+    const composer = screen.getByTestId('composer');
+    const input = screen.getByTestId('composer-input');
+    expect(composer.classList.contains('pl-[max(0.25rem,env(safe-area-inset-left))]')).toBe(true);
+    expect(composer.classList.contains('pr-[max(0.25rem,env(safe-area-inset-right))]')).toBe(true);
+    expect(composer.classList.contains('px-3')).toBe(false);
+    expect(input.getAttribute('rows')).toBe('1');
+    expect(input.classList.contains('max-h-[33dvh]')).toBe(true);
+    expect(screen.getByTestId('composer-actions').classList.contains('w-8')).toBe(true);
+  });
+
   it.each([375, 1280])('keeps Add before and outside the box at viewport width %i, with Send inside', async (width) => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
     const user = userEvent.setup();
