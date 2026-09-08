@@ -204,7 +204,8 @@ Provider editors suppress the repeated section heading below the breadcrumb,
 show one provider title, group credentials and connection actions under Connection,
 and group Chat model, Service model and Refresh models under Models. Existing
 subscriptions offer Reconnect. Editor action buttons use the same medium size
-as Add provider; Priority and the paired Save/Cancel actions follow the groups.
+as Add provider. Priority is the first field below the provider title, before
+Connection and Models; the paired Save/Cancel actions remain at the end.
 
 MCP and A2A remain first-class shell explorers beside Skills rather than
 Settings destinations.

@@ -720,6 +720,22 @@ function ConfigureProvider({
       <Card className="flex flex-col gap-5">
         <StepHeader title={provider.id === 'github-copilot' ? 'GitHub Copilot' : provider.id === 'openai-codex' ? 'OpenAI — ChatGPT' : provider.name} onBack={onDone} />
 
+        <Select
+          id="provider-priority"
+          data-testid="provider-priority"
+          label={t('provider.priority')}
+          hint={t('provider.priorityHint')}
+          value={String(priority)}
+          disabled={positions <= 1}
+          onChange={(event) => setPriority(Number(event.target.value))}
+        >
+          {Array.from({ length: Math.max(positions, 1) }, (_, index) => (
+            <option key={index + 1} value={index + 1}>
+              {index + 1}
+            </option>
+          ))}
+        </Select>
+
         <section className="flex min-w-0 flex-col gap-3" aria-label={t('provider.connection')}>
         <h3 className="text-sm font-medium">{t('provider.connection')}</h3>
 
@@ -879,21 +895,6 @@ function ConfigureProvider({
         )}
 
         </section>
-        <Select
-          id="provider-priority"
-          data-testid="provider-priority"
-          label={t('provider.priority')}
-          hint={t('provider.priorityHint')}
-          value={String(priority)}
-          disabled={positions <= 1}
-          onChange={(event) => setPriority(Number(event.target.value))}
-        >
-          {Array.from({ length: Math.max(positions, 1) }, (_, index) => (
-            <option key={index + 1} value={index + 1}>
-              {index + 1}
-            </option>
-          ))}
-        </Select>
 
         <div className="flex gap-2">
           <Button type="button" data-testid="provider-save" disabled={saving || missingRequiredConfiguration} onClick={() => void save()}>

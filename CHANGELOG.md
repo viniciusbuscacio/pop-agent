@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Place Priority first in the provider editor, before connection and model settings.
+
 - Simplify the provider editor into Connection, Models and Priority, remove the repeated section heading, and use standard-size actions with Reconnect for existing subscriptions.
 
 - Cache subscription usage locally during the browser session and retain it during refreshes or temporary failures to prevent flicker.
