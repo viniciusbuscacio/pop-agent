@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reorganize Settings groups and names; move model catalog information from Instructions to Models & Providers.
+
 - Use neutral Settings navigation icons and selection, reserving a soft blue surface for mouse hover.
 
 - Widen the desktop Settings layout to 98% of the viewport.

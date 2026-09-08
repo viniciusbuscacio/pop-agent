@@ -1,6 +1,8 @@
 import { healthMonitor } from '../services/health';
 import { useEffect, useRef, useState } from 'react';
 import type {
+  ModelCatalogSource,
+  ModelDTO,
   ProviderStatusDTO,
   ProviderSubscriptionUsageResponse,
   ProviderUsageWindowDTO,
@@ -191,6 +193,7 @@ export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } =
           />
         ))
       )}
+      <CatalogSourceCard />
     </div>
   );
 }
@@ -870,5 +873,42 @@ function ConfigureProvider({
         </div>
       </Card>
     </div>
+  );
+}
+
+/** How fresh the catalog is, said plainly (aw's source label). */
+const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> = {
+  live: 'provider.source.live',
+  cache: 'provider.source.cache',
+  engine: 'provider.source.engine',
+  static: 'provider.source.static',
+};
+
+/** Catalog provenance belongs with the model provider list. */
+function CatalogSourceCard() {
+  const [models, setModels] = useState<ModelDTO[]>([]);
+  const [source, setSource] = useState<ModelCatalogSource | undefined>(undefined);
+
+  useEffect(() => {
+    void chatsService
+      .models()
+      .then((catalog) => {
+        setModels(catalog.models);
+        setSource(catalog.source);
+      })
+      .catch(() => setModels([]));
+  }, []);
+
+  if (source === undefined) return null;
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
+        {t('provider.modelsInfo', {
+          count: models.length,
+          source: t(CATALOG_SOURCE_KEYS[source]),
+        })}
+      </p>
+    </Card>
   );
 }

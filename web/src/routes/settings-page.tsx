@@ -21,8 +21,6 @@ import {
   compareVersions,
   type AboutResponse,
   type DistillerStatusDTO,
-  type ModelCatalogSource,
-  type ModelDTO,
   type ServerInfoResponse,
   type SettingsDTO,
   type SkillDTO,
@@ -86,10 +84,10 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     label: 'Agent',
     entries: [
       { id: 'model', label: 'Models & Providers', summary: 'Choose how Pop Agent answers' },
-      { id: 'audio', label: 'Audio', summary: 'Voice transcription and cleanup' },
       { id: 'general', label: 'Instructions', summary: 'Response preferences for every conversation' },
       { id: 'memory', label: 'Memory', summary: 'What Pop Agent knows about you' },
-      { id: 'auto-skills', label: 'Auto-skills', summary: 'Reusable abilities learned from chats' },
+      { id: 'auto-skills', label: 'Auto-Skills', summary: 'Reusable abilities learned from chats' },
+      { id: 'audio', label: 'Voice', summary: 'Voice transcription and cleanup' },
     ],
   },
   {
@@ -97,22 +95,22 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     entries: [
       { id: 'appearance', label: 'Appearance', summary: 'Theme and text size' },
       { id: 'notifications', label: 'Notifications', summary: 'Push notification preferences' },
-      { id: 'updates', label: 'Updates', summary: 'PWA, server and runtime versions' },
-      { id: 'installation', label: 'Installation', summary: 'Install and connect your devices' },
+      { id: 'installation', label: 'Devices & Installation', summary: 'Install and connect your devices' },
     ],
   },
   {
     label: 'Data',
     entries: [
       { id: 'storage', label: 'Storage', summary: 'Space used by Pop Agent' },
-      { id: 'backup', label: 'Backup', summary: 'Create, download and restore snapshots' },
+      { id: 'backup', label: 'Backup & Restore', summary: 'Create, download and restore snapshots' },
     ],
   },
   {
     label: 'System',
     entries: [
-      { id: 'server', label: 'Server & Connections', summary: 'Health, hardware and server actions' },
       { id: 'security', label: 'Security', summary: 'Password, passkeys and sessions' },
+      { id: 'server', label: 'Server', summary: 'Health, hardware and server actions' },
+      { id: 'updates', label: 'Updates', summary: 'PWA, server and runtime versions' },
       { id: 'about', label: 'About', summary: 'Version, licenses and project information' },
     ],
   },
@@ -409,11 +407,6 @@ function InstructionsSection() {
       {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
     </Card>
 
-    {/* Which model does the work nobody asked for -- titles, summaries. It
-        used to sit under Model, which is now only about providers (Vinicius,
-        03/08). It is a background behaviour, so it lives with the other
-        general ones rather than being dropped along with the old screen. */}
-    <CatalogSourceCard />
     </div>
   );
 }
@@ -849,54 +842,6 @@ function distillerLine(status: DistillerStatusDTO): string {
   return status.lastRunAt === undefined
     ? t('skills.distiller.never')
     : t('skills.distiller.lastRun', { when: relativeTime(status.lastRunAt) });
-}
-
-/** How fresh the catalog is, said plainly (aw's source label). */
-const CATALOG_SOURCE_KEYS: Record<ModelCatalogSource, Parameters<typeof t>[0]> = {
-  live: 'provider.source.live',
-  cache: 'provider.source.cache',
-  engine: 'provider.source.engine',
-  static: 'provider.source.static',
-};
-
-/**
- * The providers and the models (docs/specs/Spec-Pop-General.md §15). One card picks the global
- * default pair; below it, one card per provider carries its write-only key,
- * its key test and its default model. Provider is data: the list comes from
- * GET /v1/providers, never hardcoded here.
- */
-/**
- * Where the model catalogue came from -- live, cached, or the engine's offline
- * list. It used to also carry the global Service Model picker; that moved onto
- * each provider's own card on 07/08 (docs/specs/Spec-Pop-General.md §15), because one model id
- * cannot be right for every provider at once. What is left is the diagnosis.
- */
-function CatalogSourceCard() {
-  const [models, setModels] = useState<ModelDTO[]>([]);
-  const [source, setSource] = useState<ModelCatalogSource | undefined>(undefined);
-
-  useEffect(() => {
-    void chatsService
-      .models()
-      .then((catalog) => {
-        setModels(catalog.models);
-        setSource(catalog.source);
-      })
-      .catch(() => setModels([]));
-  }, []);
-
-  return (
-    <Card className="flex flex-col gap-4">
-      {source !== undefined ? (
-        <p data-testid="catalog-source" className="text-xs text-[var(--muted)]">
-          {t('provider.modelsInfo', {
-            count: models.length,
-            source: t(CATALOG_SOURCE_KEYS[source]),
-          })}
-        </p>
-      ) : null}
-    </Card>
-  );
 }
 
 /**

@@ -188,10 +188,12 @@ Pop Agent uses route-based navigation, not hidden drawers:
 
 Settings is a searchable hierarchy, not a row of tabs:
 
-- **Agent:** Models & Providers, Audio, Instructions, Memory, Auto-skills;
-- **App:** Appearance, Notifications, Updates, Installation;
-- **Data:** Storage, Backup;
-- **System:** Server & Connections, Security, About.
+- **Agent:** Models & Providers, Instructions, Memory, Auto-Skills, Voice;
+- **App:** Appearance, Notifications, Devices & Installation;
+- **Data:** Storage, Backup & Restore;
+- **System:** Security, Server, Updates, About.
+
+Model catalog count and provenance belong to Models & Providers, not Instructions.
 
 MCP and A2A remain first-class shell explorers beside Skills rather than
 Settings destinations.
