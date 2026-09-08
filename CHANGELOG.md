@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Widen the chat message box by reducing the composer's outer horizontal margins, preserving device safe areas, the one-line initial height and action button sizes.
+- Widen the chat message box toward the left by removing extra padding and spacing around Add, retaining its full touch target, the original right margin, device safe areas and the one-line initial height.
 
 - Move the chat composer Add (+) button outside the message box on the left on every viewport, bottom-aligned with Send; anchor its action menu to the left trigger while keeping it inside the viewport.
 

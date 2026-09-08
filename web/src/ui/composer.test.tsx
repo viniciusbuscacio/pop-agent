@@ -74,12 +74,13 @@ afterEach(() => {
 });
 
 describe('composer action placement', () => {
-  it('gives the message box more horizontal room without changing its one-line height or controls', () => {
+  it('compacts the Add gutter while retaining the original right margin, one-line height and touch target', () => {
     renderComposer();
     const composer = screen.getByTestId('composer');
     const input = screen.getByTestId('composer-input');
-    expect(composer.classList.contains('pl-[max(0.25rem,env(safe-area-inset-left))]')).toBe(true);
-    expect(composer.classList.contains('pr-[max(0.25rem,env(safe-area-inset-right))]')).toBe(true);
+    expect(composer.classList.contains('pl-[env(safe-area-inset-left)]')).toBe(true);
+    expect(composer.classList.contains('pr-[max(0.75rem,env(safe-area-inset-right))]')).toBe(true);
+    expect(screen.getByTestId('composer-row').classList.contains('gap-0')).toBe(true);
     expect(composer.classList.contains('px-3')).toBe(false);
     expect(input.getAttribute('rows')).toBe('1');
     expect(input.classList.contains('max-h-[33dvh]')).toBe(true);
@@ -107,7 +108,7 @@ describe('composer action placement', () => {
     expect(box.lastElementChild).toBe(toolbar);
     expect(within(row).getAllByRole('button')).toEqual([add, send]);
     // These unprefixed layout classes keep the same bottom-aligned row on all viewports.
-    expect(row.className).toBe('flex min-w-0 items-end gap-1');
+    expect(row.className).toBe('flex min-w-0 items-end gap-0');
     expect(add.parentElement?.className).toBe('shrink-0 pb-1.5');
     expect(box.classList.contains('items-end')).toBe(true);
     expect(toolbar.classList.contains('pb-1.5')).toBe(true);
