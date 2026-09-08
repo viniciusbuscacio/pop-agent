@@ -52,6 +52,16 @@ outside the checkout through `POP_AGENT_DATA_DIR` and workspace configuration.
 Deployments do not overwrite data, secret key, notes, skills, Files or backup
 archives.
 
+Keep installation, release preparation and diagnosis separate. Normal production
+installation verifies and activates prebuilt artifacts; dependency installation,
+builds and the full release gate belong to the isolated release builder.
+`--build-from-source` and direct `npm run install:server` are explicit developer
+paths that retain host-side dependency installation and the full gate, not a
+production health-check procedure. A request to inspect an existing service does
+not authorize reinstallation, restart or reboot. See
+[Spec-Pop-Installation.md](Spec-Pop-Installation.md) and
+[../RELEASING.md](../RELEASING.md).
+
 ## Network exposure and TLS
 
 The application binds loopback by default. Production HTTPS is terminated by
@@ -74,9 +84,16 @@ credential or product route and is removed after first-owner setup.
 A stable HTTPS origin is required for installable PWA, WebAuthn RP binding,
 service worker and remote launcher profiles.
 
-Pop currently has no CIDR/IP access-list product and no `/v1/ax` control plane.
-Historical proposals naming those features are non-delivered. Access control is
-password/passkey session auth plus the network boundary chosen by the operator.
+Owner sessions use `GET /v1/ax` for live UI discovery and `/v1/ui/*` for UI
+automation; integrations use `GET /v1/integration/ax` and
+`/v1/integration/ui/*` with the dedicated REST API bearer key. REST API Server's
+IP/CIDR allowlist covers `/v1/integration/*` and owner-equivalent UI automation,
+not the normal PWA, owner configuration or owner-only tab transport; it is not
+a global firewall. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md) for access and
+trusted-proxy rules. A2A has an independent enabled switch, key and IP allowlist;
+see [Spec-Pop-A2A.md](Spec-Pop-A2A.md). These controls do not replace owner
+password/passkey session authentication, production HTTPS or the operator-managed
+network boundary; see [Spec-Pop-Security.md](Spec-Pop-Security.md).
 
 ## Service process
 
