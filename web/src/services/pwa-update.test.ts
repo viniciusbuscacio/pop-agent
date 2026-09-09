@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { activateNewestServiceWorker, checkServiceWorker, createUpdateApplier } from './pwa-update-lifecycle';
+import { updateDiagnostics } from './update-diagnostics';
 
 class Worker extends EventTarget {
   readonly postMessage = vi.fn();
@@ -70,6 +71,9 @@ describe('bounded PWA update activation', () => {
     await rejected;
     worker.moveTo('activated');
     expect(reload).not.toHaveBeenCalled();
+    expect(JSON.parse(updateDiagnostics()).entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ phase: 'activated', outcome: 'timeout', reason: 'timeout', worker: 'installed', elapsedMs: 10_000 }),
+    ]));
     expect(vi.getTimerCount()).toBe(0);
   });
   it('fails discarded installations and does not fall back to an older worker', async () => {

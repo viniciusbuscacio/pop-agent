@@ -46,6 +46,7 @@ import { settingsService } from '../services/settings';
 import { skillsService } from '../services/skills';
 import { SkillEditor } from './skill-editor';
 import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
+import { UpdateDiagnostics } from '../ui/update-diagnostics';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
@@ -999,6 +1000,7 @@ function AppUpdatesCard() {
         </Button>
       </div>
       <p data-testid="updates-automatic-status" className="text-xs text-[var(--muted)]">{t('settings.updates.automaticApplyHint')}</p>
+      <UpdateDiagnostics />
     </Card>
   );
 }

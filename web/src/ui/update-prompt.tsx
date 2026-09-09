@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable } from './controls';
 import { t } from '../i18n';
+import { UpdateDiagnostics } from './update-diagnostics';
 import {
   applyUpdate,
   checkForUpdateNow,
@@ -51,7 +52,7 @@ export function UpdatePrompt() {
     <div
       role="status"
       data-testid="update-prompt"
-      className="fixed top-3 right-3 z-50 flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-sm shadow-lg"
+      className="fixed top-3 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-4 py-2 text-sm shadow-lg"
     >
       {state === 'applying' ? (
         <>
@@ -74,6 +75,7 @@ export function UpdatePrompt() {
           >
             {t('update.retry')}
           </Pressable>
+          <UpdateDiagnostics />
         </>
       )}
       {state === 'applying' ? (

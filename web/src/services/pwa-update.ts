@@ -1,6 +1,7 @@
 import { registerSW } from 'virtual:pwa-register';
 import { checkServiceWorker, createUpdateApplier } from './pwa-update-lifecycle';
 import type { UpdateCheckResult } from './update-signal';
+import { logUpdate } from './update-diagnostics';
 
 /**
  * One service worker registration, in one place (docs/specs/Spec-Pop-General.md §15).
@@ -28,14 +29,25 @@ const UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 export function startUpdateChecks(onNeedRefresh: () => void): void {
   if (started) return;
   started = true;
+  const registrationStarted = Date.now();
+  logUpdate('registration', 'start');
+  let refreshPending = false;
 
   registerSW({
     immediate: true,
-    onNeedRefresh,
+    onNeedRefresh() {
+      // Workbox can report an already-waiting worker before onRegisteredSW.
+      // Never start activation until its registration is available.
+      if (!registration) { refreshPending = true; return; }
+      onNeedRefresh();
+    },
     onRegisteredSW(_scriptUrl, r) {
       registration = r;
+      logUpdate('registration', r ? 'ready' : 'unavailable', registrationStarted, r?.waiting ?? r?.active);
       restartTimer();
+      if (r && refreshPending) { refreshPending = false; onNeedRefresh(); }
     },
+    onRegisterError(error) { logUpdate('registration', 'failed', registrationStarted, undefined, error); },
   });
 
   document.addEventListener('visibilitychange', () => {

@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UpdatePrompt } from './update-prompt';
+import { logUpdate } from '../services/update-diagnostics';
 
 const { applyUpdate, startUpdateChecks } = vi.hoisted(() => ({
   applyUpdate: vi.fn(),
@@ -53,8 +54,21 @@ describe('automatic PWA update prompt', () => {
 
     onNeedRefresh?.();
     expect(await screen.findByText('The app update could not be applied.')).toBeTruthy();
+    logUpdate('activated', 'timeout');
+    const copy = vi.spyOn(navigator.clipboard, 'writeText');
+    await user.click(screen.getByTestId('update-copy-diagnostics'));
+    expect(copy).toHaveBeenCalledWith(expect.stringContaining('"phase": "activated"'));
     await user.click(screen.getByTestId('update-reload'));
 
     await waitFor(() => expect(applyUpdate).toHaveBeenCalledTimes(2));
+  });
+  it('offers selectable diagnostics when clipboard permission is denied', async () => {
+    applyUpdate.mockRejectedValue(new Error('failed'));
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'));
+    render(<UpdatePrompt />);
+    (startUpdateChecks.mock.calls[0]?.[0] as () => void)();
+    await user.click(await screen.findByTestId('update-copy-diagnostics'));
+    expect(await screen.findByLabelText('Update diagnostics — select and copy')).toHaveProperty('readOnly', true);
   });
 });

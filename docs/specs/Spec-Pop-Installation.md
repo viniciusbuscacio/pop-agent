@@ -497,6 +497,20 @@ and pi updates.
   an old worker. Automatic/manual activation shares one in-flight attempt.
 - `sw.js` and the HTML shell use `no-cache` revalidation. Hashed assets use
   immutable caching.
+- Keep the last 100 structured update events locally across document reloads:
+  timestamp, loaded bundle identifier, phase, duration, worker state and a safe
+  failure category. Cover registration, checking, installation, activation and
+  reload. Never record raw exceptions, URLs, credentials, messages or settings;
+  never upload automatically. Storage denial retains an in-memory log.
+  Offer Copy update diagnostics in the failure banner and Settings Updates,
+  with selectable text if clipboard permission is denied.
+- An already-waiting worker notification may precede registration readiness;
+  defer automatic activation until the registration callback supplies it.
+- An explicit refresh-wheel click also checks app software. If a new worker
+  cannot activate, permit one health-checked fresh-shell navigation through the
+  existing cache-bypass marker. This owner-requested recovery may visibly reload
+  the page; it must not unregister workers or clear credentials/IndexedDB.
+  Automatic background attempts never use this navigation fallback.
 
 A failed background check is silent and retried later. A manual check reports
 unavailable, current, found or error. Service-worker state is local to one

@@ -9,6 +9,7 @@ import { useDismiss } from '../lib/dismiss';
 import { refreshClientData } from '../services/client-sync';
 import { syncQueue } from '../services/sync-queue';
 import { chatCache } from '../services/chat-cache';
+import { refreshAppSoftware } from '../services/update-signal';
 import { useNotificationsStore } from '../store/notifications';
 
 /**
@@ -95,16 +96,26 @@ function useOpenSettings(): () => void {
 
 /** Retry a manual refresh quietly; only exhaustion posts a normal top toast. */
 export function RefreshButton() {
-  const { busy, errors } = useSyncExternalStore(syncQueue.subscribe, syncQueue.getState);
+  const { busy: syncing, errors } = useSyncExternalStore(syncQueue.subscribe, syncQueue.getState);
+  const [manual, setManual] = useState(false);
+  const busy = syncing || manual;
   const notify = useNotificationsStore(state => state.notify);
   async function refresh(): Promise<void> {
     if (busy) return;
+    const clickedAt = Date.now();
+    setManual(true);
     try {
       await refreshClientData();
       if (syncQueue.getState().errors.length) notify(t('shell.refreshFailed'));
       else if (chatCache.storageFailed()) notify(t('shell.cacheLimited'));
+      if (await refreshAppSoftware() === 'error') notify(t('settings.updates.checkFailed'));
     }
     catch { notify(t('shell.refreshFailed')); }
+    finally {
+      // A quick no-change round still visibly acknowledges the owner's click.
+      await new Promise<void>(resolve => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - clickedAt))));
+      setManual(false);
+    }
   }
   return <>
     <Pressable
@@ -116,7 +127,7 @@ export function RefreshButton() {
       onClick={() => void refresh()}
       className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"
     >
-      <span className={busy ? 'block motion-safe:animate-spin' : 'block'}><RefreshIcon /></span>
+      <span className={busy ? 'block motion-safe:animate-spin' : 'block'} style={{ animationDuration: '1s' }}><RefreshIcon /></span>
     </Pressable>
   </>;
 }

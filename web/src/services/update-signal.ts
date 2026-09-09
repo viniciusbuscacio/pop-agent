@@ -9,6 +9,9 @@
  * pull-to-refresh. So screens come through here, and the virtual module stays
  * behind ui/update-prompt alone, which registers the real check on mount.
  */
+import { hardRefreshPage } from './hard-refresh';
+import { logUpdate } from './update-diagnostics';
+
 export type UpdateCheckResult = 'update-found' | 'up-to-date' | 'unavailable' | 'error';
 type Checker = () => Promise<UpdateCheckResult>;
 type Applier = () => Promise<void>;
@@ -37,5 +40,21 @@ export function checkForUpdate(): Promise<UpdateCheckResult> {
 export async function checkForAndApplyUpdate(): Promise<UpdateCheckResult> {
   const result = await checker();
   if (result === 'update-found') await applier();
+  return result;
+}
+
+/** Explicit owner recovery only: fetch a fresh shell if worker activation fails.
+ * Keep IndexedDB, credentials and worker registration; never silently reinstall. */
+export async function refreshAppSoftware(): Promise<UpdateCheckResult> {
+  const result = await checker();
+  if (result === 'update-found') {
+    try { await applier(); }
+    catch (error) {
+      logUpdate('apply', 'failed', Date.now(), undefined, error);
+      logUpdate('reload', 'start');
+      try { await hardRefreshPage(); }
+      catch (failure) { logUpdate('reload', 'failed', Date.now(), undefined, failure); throw failure; }
+    }
+  }
   return result;
 }

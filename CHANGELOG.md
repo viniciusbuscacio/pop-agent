@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve bounded, privacy-safe local PWA update diagnostics with copy/fallback controls; defer activation until registration is ready. Let explicit refresh recover failed software activation with a fresh shell without clearing data, and show at least one slow refresh-wheel revolution per click.
+
 - Make manual client sync revision-aware: unchanged warm data needs only one manifest request; download only changed, missing or invalidated snapshots and retry failed items independently.
 
 - Exclude archived transcript downloads from client warmup and refresh; retain the archive list and load archived contents only when opened.

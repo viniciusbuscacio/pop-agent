@@ -28,11 +28,17 @@ screen may refresh normally. Preserve existing cached transcripts; an ignored
 invalidation must cause verification when that conversation is reopened.
 
 The existing refresh wheel spins while reads are pending. Clicking it requests
-one full data round, with concurrent requests sharing that round. It does not
-install software or navigate/reload the document. Once the finite work succeeds
+one full data round, with concurrent requests sharing that round. Data-only
+refresh never navigates/reloads the document. An explicit click also checks PWA
+software; applying a new build or its explicit fresh-shell recovery may reload
+as specified in Installation. Once the finite work succeeds
 or fails, the wheel stops. Individual reads have deadlines; failures preserve
 last-good data, allow later items to finish and expose a retryable error.
 Neither failures nor route mounts start an indefinite polling cycle.
+Each manual click keeps the indicator active for at least one slow one-second
+revolution (respect reduced-motion preferences), even for an immediate no-change
+result. This presentation floor never delays starting network work; longer work
+keeps the indicator active until completion.
 
 Full means verifying all in-scope resources, not downloading them unconditionally.
 Read the revision manifest first. Within the authenticated app lifetime, retain

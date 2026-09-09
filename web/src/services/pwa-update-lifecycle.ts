@@ -1,3 +1,5 @@
+import { logUpdate, updateFailureReason } from './update-diagnostics';
+
 /** Returns one callback that invokes its action at most once. */
 export function once(action: () => void): () => void {
   let invoked = false;
@@ -11,9 +13,15 @@ export function createUpdateApplier(getRegistration: () => ServiceWorkerRegistra
   let pending: Promise<void> | undefined;
   const reloadOnce = once(reload);
   return () => {
-    if (!pending) pending = Promise.resolve()
-      .then(() => activateNewestServiceWorker(getRegistration(), reloadOnce))
-      .then(() => undefined).finally(() => { pending = undefined; });
+    if (!pending) {
+      const started = Date.now();
+      logUpdate('apply', 'start');
+      pending = Promise.resolve()
+        .then(() => activateNewestServiceWorker(getRegistration(), reloadOnce))
+        .then(applied => { logUpdate('apply', applied ? 'success' : 'no-update', started); })
+        .catch((error: unknown) => { logUpdate('apply', 'failed', started, undefined, error); throw error; })
+        .finally(() => { pending = undefined; });
+    }
     return pending;
   };
 }
@@ -22,11 +30,15 @@ export function createUpdateApplier(getRegistration: () => ServiceWorkerRegistra
 export function checkServiceWorker(registration: ServiceWorkerRegistration): Promise<void> {
   const pending = checks.get(registration);
   if (pending) return pending;
+  const started = Date.now();
+  logUpdate('check', 'start');
   let timer: ReturnType<typeof setTimeout>;
   const check = Promise.race([
     Promise.resolve().then(() => registration.update()).then(() => undefined),
     new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Update check timed out')), 15_000); }),
-  ]).finally(() => { clearTimeout(timer); checks.delete(registration); });
+  ]).then(() => { logUpdate('check', 'success', started, registration.waiting ?? registration.installing); })
+    .catch((error: unknown) => { logUpdate('check', updateFailureReason(error) === 'timeout' ? 'timeout' : 'failed', started, undefined, error); throw error; })
+    .finally(() => { clearTimeout(timer); checks.delete(registration); });
   checks.set(registration, check);
   return check;
 }
@@ -34,9 +46,15 @@ export function checkServiceWorker(registration: ServiceWorkerRegistration): Pro
 /** Every phase settles and removes its listeners, including failure and timeout. */
 function waitForWorker(worker: ServiceWorker, phase: 'installed' | 'activated', timeout: number, start?: () => void): Promise<void> {
   return new Promise((resolve, reject) => {
+    const started = Date.now();
+    let settled = false;
+    logUpdate(phase, 'start', started, worker);
     const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       worker.removeEventListener('statechange', changed);
+      logUpdate(phase, !error ? 'success' : updateFailureReason(error) === 'timeout' ? 'timeout' : worker.state === 'redundant' ? 'discarded' : 'failed', started, worker, error);
       if (error) reject(error); else resolve();
     };
     const changed = () => {
@@ -67,6 +85,7 @@ export async function activateNewestServiceWorker(
   await waitForWorker(worker, 'activated', 10_000, () => {
     if (worker.state !== 'activated') worker.postMessage({ type: 'SKIP_WAITING' });
   });
+  logUpdate('reload', 'start', Date.now(), worker);
   reload();
   return true;
 }

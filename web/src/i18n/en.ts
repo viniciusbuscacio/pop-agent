@@ -1052,6 +1052,8 @@ export const en = {
     'Checks whether a newer Pop Agent app build is available on this device.',
 
   'update.failed': 'The app update could not be applied.',
+  'update.copyDiagnostics': 'Copy update diagnostics',
+  'update.diagnostics': 'Update diagnostics — select and copy',
   'update.retry': 'Retry',
 
 
