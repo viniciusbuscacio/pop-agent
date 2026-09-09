@@ -18,6 +18,12 @@ const loadedChats = new Set<string>();
 const fullChats = new Set<string>();
 
 function syncChat(id: string, foreground = false): Promise<void> {
+  // Archive contents are demand-loaded, including during reconnect recovery.
+  // Forget verification on invalidation so reopening still reconciles the cache.
+  if (!foreground && selectedChat !== id && !useChatStore.getState().chats.some(chat => chat.id === id)) {
+    loadedChats.delete(id); fullChats.delete(id);
+    return Promise.resolve();
+  }
   const started = generation;
   return syncQueue.add(`chat:${id}`, async signal => {
     if (generation !== started || signal.aborted) return;
@@ -86,8 +92,9 @@ export function refreshClientData(): Promise<void> {
       syncQueue.add('archived', signal => useChatStore.getState().loadArchived(signal)),
     ]);
     if (generation !== started) return;
-    const { chats, archived } = useChatStore.getState();
-    for (const chat of [...chats, ...archived]) reads.push(syncChat(chat.id));
+    const { chats } = useChatStore.getState();
+    for (const chat of chats) reads.push(syncChat(chat.id));
+    if (selectedChat && !chats.some(chat => chat.id === selectedChat)) reads.push(syncChat(selectedChat, true));
     for (const key of Object.keys(settingsLoaders)) reads.push(syncSetting(key));
     await Promise.all(reads);
     if (generation !== started) return;

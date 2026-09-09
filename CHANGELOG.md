@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Exclude archived transcript downloads from client warmup and refresh; retain the archive list and load archived contents only when opened.
+
 - Synchronize chats and Settings through a finite, cache-first read queue, prioritize navigation, preserve content during manual refresh, and recover missed events with a process-scoped revision manifest. Persist conversation lists and retain warmed transcripts without cross-chat LRU eviction; expose Settings invalidations to compatible clients.
 
 - Bound every PWA update phase, deduplicate automatic/manual attempts, expose Retry on timeout and clear settled Updating indicators without deleting caches or blindly reloading an old worker.

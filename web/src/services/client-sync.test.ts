@@ -24,7 +24,7 @@ vi.mock('./settings-cache', () => ({ settingsCache: { read: vi.fn(async () => un
 vi.mock('./providers', () => ({ providersService: { subscriptionUsage: vi.fn() } }));
 vi.mock('../store/chat', () => ({ useChatStore: {
   getState: () => ({
-    chats: [{ id: 'a' }, { id: 'b' }], archived: [], messages: test.messages,
+    chats: [{ id: 'a' }, { id: 'b' }], archived: [{ id: 'old' }], messages: test.messages,
     loadChats: async () => { test.calls.push('list'); },
     loadArchived: async () => { test.calls.push('archived'); },
     openChat: test.openChat,
@@ -47,13 +47,38 @@ beforeEach(() => {
 afterEach(() => { stop?.(); stop = undefined; syncQueue.stop(); });
 
 describe('authenticated client synchronization', () => {
-  it('warms all chats then Settings once and shares a simultaneous manual refresh', async () => {
+  it('warms only active chats then Settings and shares a simultaneous manual refresh', async () => {
     stop = startClientSync();
     const first = refreshClientData(); expect(refreshClientData()).toBe(first);
     await first;
     expect(test.calls).toEqual(['list', 'archived', 'chat:a', 'chat:b', 'setting:providers', 'setting:memory']);
     expect(test.openChat.mock.calls.every(([, background]) => background === true)).toBe(true);
     expect(syncQueue.getState().busy).toBe(false);
+    test.calls.length = 0;
+    await refreshClientData();
+    expect(test.calls).toEqual(['list', 'archived', 'chat:a', 'chat:b', 'setting:providers', 'setting:memory']);
+  });
+  it('loads an archived transcript on navigation and refreshes it only while selected', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    const leave = ensureChat('old');
+    await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
+    expect(test.calls).toEqual(['chat:old']);
+    test.calls.length = 0; await refreshClientData();
+    expect(test.calls).toContain('chat:old');
+    leave(); test.calls.length = 0; await refreshClientData();
+    expect(test.calls).not.toContain('chat:old');
+  });
+  it('does not download changed archived transcripts during reconnect or event recovery', async () => {
+    stop = startClientSync(); await refreshClientData();
+    const leave = ensureChat('old');
+    await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
+    leave(); test.calls.length = 0;
+    test.manifest.revisions['chat:old'] = 1;
+    test.opened?.(); await new Promise(resolve => setTimeout(resolve, 0));
+    test.events?.({ kind: 'resources-changed', keys: ['chat:old'] });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(test.calls).toEqual([]);
+    ensureChat('old'); await vi.waitFor(() => expect(test.calls).toEqual(['chat:old']));
   });
   it('does not fetch snapshots after an unchanged reconnect, then reads only a changed resource', async () => {
     stop = startClientSync(); await refreshClientData(); test.calls.length = 0;

@@ -15,11 +15,17 @@ Cached permissions and connection states never grant authority.
 ## One finite queue
 
 Each authenticated app lifetime starts one full round: open and archived chat
-lists, every conversation's displayed transcript snapshot one at a time, then
+lists, each non-archived conversation's displayed transcript snapshot one at a time, then
 every server-backed Settings resource one at a time. The currently requested
 destination takes priority. Navigation promotes/deduplicates its read rather
 than restarting the whole round. A foreground lane may bypass one already
 running background read; background work itself remains sequential.
+
+Archived transcript contents are excluded from startup, manual full refresh and
+reconnect/event background reads. Keep the archive list available, but fetch an
+archived transcript only when opened. An archived conversation currently on
+screen may refresh normally. Preserve existing cached transcripts; an ignored
+invalidation must cause verification when that conversation is reopened.
 
 The existing refresh wheel spins while reads are pending. Clicking it requests
 one full data round, with concurrent requests sharing that round. It does not
