@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AboutResponse, SettingsDTO } from '@pop-agent/shared';
 import type { AppSettings, SettingsService } from '../../application/settings/settings-service.js';
 import { badBody, readJson, schemaError } from './body.js';
+import { apiError } from './errors.js';
 
 /**
  * Settings and About (docs/specs/Spec-Pop-General.md §13). Both need a session; the middleware has
@@ -36,7 +37,7 @@ const settingsSchema = z
   })
   .strict();
 
-const settingsPatchSchema = settingsSchema.partial().refine((patch) => Object.keys(patch).length > 0);
+const settingsPatchSchema = settingsSchema.partial().extend({ expectedInstructions: z.string().max(MAX_INSTRUCTIONS).optional() }).refine((patch) => Object.keys(patch).length > 0);
 
 export interface SettingsRoutesDeps {
   settings: SettingsService;
@@ -76,11 +77,16 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
     const parsed = settingsPatchSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
+    if (parsed.data.expectedInstructions !== undefined && deps.settings.read().customInstructions !== parsed.data.expectedInstructions) {
+      return apiError(c, 409, 'edit_conflict', 'Instructions changed on the server. Review the latest version before saving.');
+    }
+
     // Zod represents optional properties as `T | undefined`; JSON cannot carry
     // undefined, so normalize that inference before the exact optional app type.
     const patch = Object.fromEntries(
       Object.entries(parsed.data).filter(
         ([key, value]) => value !== undefined
+          && key !== 'expectedInstructions'
           && key !== 'autoActivatePreparedUpdates'
           && key !== 'autoRestartIdleMinutes',
       ),

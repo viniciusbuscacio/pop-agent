@@ -4,6 +4,7 @@ import type { UserMemoryDTO } from '@pop-agent/shared';
 import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
 import { scrubSecrets } from '../../domain/safety/secret-scrub.js';
 import { badBody, readJson, schemaError } from './body.js';
+import { apiError } from './errors.js';
 
 /**
  * The living user-memory document over HTTP (docs/specs/Spec-Pop-General.md §13): Settings → Memory
@@ -12,7 +13,7 @@ import { badBody, readJson, schemaError } from './body.js';
  */
 
 const MAX_DOC = 8_000;
-const putSchema = z.object({ doc: z.string().max(MAX_DOC) }).strict();
+const putSchema = z.object({ doc: z.string().max(MAX_DOC), expectedDoc: z.string().max(MAX_DOC).optional() }).strict();
 
 export interface MemoryRoutesDeps {
   userMemory: UserMemoryRepo;
@@ -29,6 +30,10 @@ export function createMemoryRoutes(deps: MemoryRoutesDeps): Hono {
     const parsed = putSchema.safeParse(body);
     if (!parsed.success) return schemaError(c, parsed.error);
 
+    // No await between compare and write: all repository operations are synchronous.
+    if (parsed.data.expectedDoc !== undefined && deps.userMemory.read().doc !== parsed.data.expectedDoc) {
+      return apiError(c, 409, 'edit_conflict', 'Memory changed on the server. Review the latest version before saving.');
+    }
     deps.userMemory.write(scrubSecrets(parsed.data.doc));
     return c.json(toDto(deps.userMemory.read()));
   });

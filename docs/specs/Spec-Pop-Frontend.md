@@ -186,6 +186,33 @@ Pop Agent uses route-based navigation, not hidden drawers:
 
 ## Settings information architecture
 
+Settings retains allowlisted last-successful display snapshots in a separate
+IndexedDB cache (`pop-agent-settings-cache`, schema 1), capped at 2 MiB total and
+512 KiB per entry. Oldest snapshots are evicted under the size cap; age alone
+never blanks a page. Login/logout clears authenticated snapshots. Storage denial,
+corruption and obsolete shapes fall back to online reads. Cache projections omit
+credentials and live computer presence/backup operation state. Server diagnostics,
+update operations and security records are not persisted.
+
+A shared resource layer deduplicates reads, rejects stale responses after saves
+or session changes, hydrates disk independently of the network and retains the
+last successful value on failure. Mounted Settings consumers revalidate on
+foreground/pageshow, network recovery, SSE resume and a visible-only 60-second
+interval. Failed requests time out after 15 seconds and expose Retry. Saved
+snapshots carry a last-saved timestamp and unconfirmed-state notice; actions
+remain unavailable until required data is verified. Optional subscription usage
+failure must not disable provider configuration. Devices never label cached
+presence as Online/Offline, and a failed fetch does not erase the machine list.
+
+Instructions and Memory track server base, local draft and latest remote text
+separately. Revalidation never overwrites dirty text; a changed remote base shows
+both versions and explicit Use server version/Keep my edits choices. Save needs
+a successfully loaded, verified base and changes; it does not queue offline.
+The PWA supplies expected original text for synchronous server-side comparison.
+A conflict preserves the draft. A successful save only replaces the submitted
+draft when the owner has not typed more while it was pending. This is not durable
+offline draft storage: the cache contains successful server snapshots only.
+
 Settings is a searchable hierarchy, not a row of tabs:
 
 - **Agent:** Models & Providers, Instructions, Memory, Auto-Skills, Voice;

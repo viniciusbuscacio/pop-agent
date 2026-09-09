@@ -1,4 +1,5 @@
 import { chatCache } from './chat-cache';
+import { settingsResources } from './settings-resources';
 import { clearSubscriptionUsageCache } from './subscription-usage-cache';
 
 /**
@@ -83,6 +84,7 @@ export const session = {
 
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
+    settingsResources.clear();
     clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = token;
@@ -107,6 +109,7 @@ export const session = {
   },
 
   clear(): void {
+    settingsResources.clear();
     clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = undefined;

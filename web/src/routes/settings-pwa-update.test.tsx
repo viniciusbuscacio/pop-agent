@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { settingsResources } from '../services/settings-resources';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -46,6 +47,7 @@ vi.mock('../services/settings', () => ({
 }));
 
 beforeEach(() => {
+  settingsResources.clear();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   window.history.replaceState({}, '', '/settings?section=updates');
   vi.mocked(checkForUpdateNow).mockReset();

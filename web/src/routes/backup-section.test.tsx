@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { settingsResources } from '../services/settings-resources';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,7 @@ vi.mock('../services/backups', () => ({
 }));
 
 beforeEach(() => {
+  settingsResources.clear();
   list.mockReset().mockResolvedValue({
     backups: [{ name: 'backup-2026.tar.gz', size: 1024, createdAt: '2026-08-31T12:00:00Z' }],
   });

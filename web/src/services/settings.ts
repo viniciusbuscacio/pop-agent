@@ -12,6 +12,8 @@ import type {
   UserMemoryDTO,
 } from '@pop-agent/shared';
 import { apiRequest } from './api';
+import { settingsResources } from './settings-resources';
+import { session } from './session';
 
 export const settingsService = {
   read(): Promise<SettingsDTO> {
@@ -24,8 +26,11 @@ export const settingsService = {
   },
 
   /** Merge only the fields owned by the control that changed. */
-  update(patch: SettingsPatchDTO): Promise<SettingsDTO> {
-    return apiRequest<SettingsDTO>('/settings', { method: 'PATCH', body: patch });
+  async update(patch: SettingsPatchDTO, expectedInstructions?: string): Promise<SettingsDTO> {
+    const generation = session.generation();
+    const result = await apiRequest<SettingsDTO>('/settings', { method: 'PATCH', body: { ...patch, ...(expectedInstructions === undefined ? {} : { expectedInstructions }) } });
+    if (generation === session.generation()) settingsResources.accept('settings', result);
+    return result;
   },
 
   about(): Promise<AboutResponse> {
@@ -36,8 +41,11 @@ export const settingsService = {
     return apiRequest<UserMemoryDTO>('/memory');
   },
 
-  writeMemory(doc: string): Promise<UserMemoryDTO> {
-    return apiRequest<UserMemoryDTO>('/memory', { method: 'PUT', body: { doc } });
+  async writeMemory(doc: string, expectedDoc?: string): Promise<UserMemoryDTO> {
+    const generation = session.generation();
+    const result = await apiRequest<UserMemoryDTO>('/memory', { method: 'PUT', body: { doc, ...(expectedDoc === undefined ? {} : { expectedDoc }) } });
+    if (generation === session.generation()) settingsResources.accept('memory', result);
+    return result;
   },
 
   restoreMemory(): Promise<UserMemoryDTO> {

@@ -40,6 +40,14 @@ const DEFAULT_DOC = {
 };
 
 describe('GET /v1/settings', () => {
+  it('compares the instructions base atomically without conflicting with unrelated fields', async () => {
+    await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ voiceCleanup: true }) });
+    expect((await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ customInstructions: 'new', expectedInstructions: '' }) })).status).toBe(200);
+    expect((await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ customInstructions: 'stale', expectedInstructions: '' }) })).status).toBe(409);
+    const result = await (await authed('/v1/settings')).json();
+    expect(result.customInstructions).toBe('new'); expect(result.voiceCleanup).toBe(true);
+    expect(result).not.toHaveProperty('expectedInstructions');
+  });
   it('needs a session', async () => {
     expect((await app.request('/v1/settings')).status).toBe(401);
   });

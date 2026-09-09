@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { settingsResources } from '../services/settings-resources';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -43,6 +44,7 @@ vi.mock('../services/passkey', () => ({
 }));
 
 beforeEach(() => {
+  settingsResources.clear();
   sessionStorage.clear();
   readMemory.mockReset().mockResolvedValue({ doc: 'Known fact', hasBackup: true });
   writeMemory.mockReset();

@@ -49,11 +49,13 @@ import { applyUpdate, checkForUpdateNow } from '../services/pwa-update';
 import { useAuthStore } from '../store/auth';
 import { useFontStore, type FontSizeChoice } from '../store/font';
 import { useThemeStore, type ThemeChoice } from '../store/theme';
-import { BackButton, Button, Card, CheckField, SearchField, Select, SwitchField, TextArea, TextField, Pressable } from '../ui/controls';
+import { BackButton, Button, Card, CheckField, SearchField, Select, SwitchField, TextField, Pressable } from '../ui/controls';
 import { RecoveryKeyPanel } from '../ui/recovery-key-panel';
 import { relativeTime } from '../lib/time';
 import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 import { lastActiveChatPath } from '../lib/last-active-chat';
+import { SettingsDocumentEditor } from '../ui/settings-document-editor';
+import { SettingsSyncBoundary, useSettingsLoad } from '../ui/settings-sync';
 
 /** Settings is route navigation, not a row of tabs. On phones the index and
  * section are separate screens; wide screens keep the index beside the open
@@ -222,7 +224,7 @@ export function SettingsPage() {
                 <p className="mt-1 text-sm text-[var(--muted)]">{activeEntry?.summary}</p>
               </div> : null}
               <SettingsDetailContext.Provider value={setDetail}>
-                <SettingsSection key={section} section={section} />
+                <SettingsSyncBoundary key={section}><SettingsSection section={section} /></SettingsSyncBoundary>
               </SettingsDetailContext.Provider>
             </div>
           )}
@@ -358,189 +360,8 @@ function SettingsSection({ section }: { section: Section }): ReactNode {
   return <AboutSection />;
 }
 
-function InstructionsSection() {
-  const [settings, setSettings] = useState<SettingsDTO | undefined>(undefined);
-  const [instructions, setInstructions] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    settingsService
-      .read()
-      .then((doc) => {
-        setSettings(doc);
-        setInstructions(doc.customInstructions);
-      })
-      .catch(() => setError(t('settings.general.loadFailed')));
-  }, []);
-
-  async function save(): Promise<void> {
-    if (settings === undefined) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const next = await settingsService.update({ customInstructions: instructions });
-      setSettings(next);
-      setSaved(true);
-    } catch {
-      setSaved(false);
-      setError(t('settings.general.saveFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-    <Card className="flex flex-col gap-4">
-      <TextArea
-        id="settings-instructions"
-        data-testid="settings-instructions"
-        label={t('settings.general.instructions')}
-        hint={t('settings.general.instructionsHint')}
-        rows={15}
-        className="min-h-[calc(15lh+1rem+2px)] shrink-0"
-        maxLength={4000}
-        value={instructions}
-        onChange={(event) => {
-          setInstructions(event.target.value);
-          setSaved(false);
-        }}
-      />
-
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          data-testid="settings-general-save"
-          disabled={busy || settings === undefined}
-          onClick={() => void save()}
-        >
-          {t('common.save')}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            setInstructions(settings?.customInstructions ?? '');
-            setSaved(false);
-          }}
-        >
-          {t('common.cancel')}
-        </Button>
-        {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
-      </div>
-      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
-    </Card>
-
-    </div>
-  );
-}
-
-/**
- * The living document Pop Agent keeps about the user (docs/specs/Spec-Pop-General.md §7). The agent
- * writes it through its tools; here the user can read, edit, and restore the
- * one-level backup.
- */
-function MemorySection() {
-  const [doc, setDoc] = useState('');
-  const [savedDoc, setSavedDoc] = useState('');
-  const [hasBackup, setHasBackup] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    settingsService
-      .readMemory()
-      .then((memory) => {
-        setDoc(memory.doc);
-        setSavedDoc(memory.doc);
-        setHasBackup(memory.hasBackup);
-      })
-      .catch(() => setError(t('settings.memory.loadFailed')));
-  }, []);
-
-  async function save(): Promise<void> {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const memory = await settingsService.writeMemory(doc);
-      setDoc(memory.doc);
-      setSavedDoc(memory.doc);
-      setHasBackup(memory.hasBackup);
-      setSaved(true);
-    } catch {
-      setSaved(false);
-      setError(t('settings.memory.saveFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function restore(): Promise<void> {
-    if (!window.confirm(t('settings.memory.restoreConfirm'))) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const memory = await settingsService.restoreMemory();
-      setDoc(memory.doc);
-      setSavedDoc(memory.doc);
-      setHasBackup(memory.hasBackup);
-      setSaved(false);
-    } catch {
-      setError(t('settings.memory.restoreFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="flex flex-col gap-4">
-      <TextArea
-        id="settings-memory"
-        data-testid="settings-memory"
-        label={t('settings.memory.label')}
-        hint={t('settings.memory.hint')}
-        rows={15}
-        maxLength={8000}
-        value={doc}
-        placeholder={t('settings.memory.empty')}
-        onChange={(event) => {
-          setDoc(event.target.value);
-          setSaved(false);
-        }}
-        className="min-h-[calc(15lh+1rem+2px)] shrink-0"
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" data-testid="settings-memory-save" disabled={busy} onClick={() => void save()}>
-          {t('common.save')}
-        </Button>
-        {hasBackup ? (
-          <Button type="button" variant="ghost" data-testid="settings-memory-restore" disabled={busy} onClick={() => void restore()}>
-            {t('settings.memory.restore')}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          data-testid="settings-memory-cancel"
-          disabled={busy || doc === savedDoc}
-          onClick={() => {
-            setDoc(savedDoc);
-            setSaved(false);
-            setError(undefined);
-          }}
-        >
-          {t('common.cancel')}
-        </Button>
-        {saved ? <span className="text-sm text-[var(--success)]">{t('settings.general.saved')}</span> : null}
-      </div>
-      {error === undefined ? null : <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
-    </Card>
-  );
-}
+function InstructionsSection() { return <SettingsDocumentEditor kind="instructions" />; }
+function MemorySection() { return <SettingsDocumentEditor kind="memory" />; }
 
 /** Passkey / Face ID setup and management (docs/specs/Spec-Pop-General.md §9). */
 function PasskeyControls() {
@@ -549,9 +370,9 @@ function PasskeyControls() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (supported) void reload();
-  }, [supported]);
+  useSettingsLoad('passkeys', () => supported ? passkeyService.list() : Promise.resolve({ credentials: [] }), (result) => {
+    setCredentials(result.credentials); setError(undefined);
+  });
 
   async function reload(): Promise<void> {
     try {
@@ -628,12 +449,7 @@ function PasskeyControls() {
 function StorageSection() {
   const [storage, setStorage] = useState<StorageResponse | undefined>(undefined);
 
-  useEffect(() => {
-    settingsService
-      .storage()
-      .then(setStorage)
-      .catch(() => setStorage(undefined));
-  }, []);
+  useSettingsLoad('storage', () => settingsService.storage(), setStorage);
 
   if (storage === undefined) return <Card>{t('app.loading')}</Card>;
 
@@ -731,9 +547,9 @@ export function SkillsSection() {
   const [editing, setEditing] = useState<SkillDTO | 'new' | undefined>(undefined);
   useSettingsDetail(editing === undefined ? undefined : editing === 'new' ? t('skills.new') : editing.name, () => setEditing(undefined));
 
-  useEffect(() => {
-    void reload();
-  }, []);
+  useSettingsLoad('skills', () => skillsService.list(), (response) => {
+    setSkills(response.skills); setArchived(response.archived); setDistiller(response.distiller);
+  });
 
   async function reload(): Promise<void> {
     try {
@@ -896,12 +712,7 @@ function AutoSkillsSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    void settingsService
-      .read()
-      .then(setSettings)
-      .catch(() => setSettings(undefined));
-  }, []);
+  useSettingsLoad('settings', () => settingsService.read(), setSettings);
 
   if (settings === undefined) return null;
 
@@ -944,16 +755,8 @@ function VoiceCleanupCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    void settingsService
-      .read()
-      .then(setSettings)
-      .catch(() => setSettings(undefined));
-    void chatsService
-      .models()
-      .then(({ models: available }) => setModels(available.map((model) => model.id)))
-      .catch(() => setModels([]));
-  }, []);
+  useSettingsLoad('settings', () => settingsService.read(), setSettings);
+  useSettingsLoad('model-catalog', () => chatsService.models(), ({ models: available }) => setModels(available.map((model) => model.id)));
 
   async function save(next: Partial<SettingsDTO>): Promise<void> {
     if (settings === undefined || busy) return;
@@ -1011,9 +814,9 @@ function VoiceModelCard() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    void reload();
-  }, []);
+  useSettingsLoad('voice-models', () => voiceService.models(), (result) => {
+    setStatus(result.models); setSelected(result.selected);
+  });
 
   async function reload(): Promise<void> {
     try {
@@ -1476,10 +1279,8 @@ function UpdatesSection() {
     }
   }
 
-  useEffect(() => {
-    void load(false);
-    void settingsService.read().then(setAppSettings).catch(() => undefined);
-  }, []);
+  useSettingsLoad('update-status', () => settingsService.updateStatus(false), setUpdate);
+  useSettingsLoad('settings', () => settingsService.read(), setAppSettings);
 
   const popAgentOutdated =
     update?.popAgent.latest !== undefined &&
@@ -1808,12 +1609,7 @@ function UpdatesSection() {
 function ServerSection() {
   const [info, setInfo] = useState<ServerInfoResponse | undefined>(undefined);
 
-  useEffect(() => {
-    serverService
-      .info()
-      .then(setInfo)
-      .catch(() => setInfo(undefined));
-  }, []);
+  useSettingsLoad('server-info', () => serverService.info(), setInfo);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1856,9 +1652,7 @@ function ServerSection() {
 function ServerSoftwareCard() {
   const [software, setSoftware] = useState<import('@pop-agent/shared').UpdateStatusResponse | undefined>(undefined);
 
-  useEffect(() => {
-    void settingsService.updateStatus(false).then(setSoftware).catch(() => undefined);
-  }, []);
+  useSettingsLoad('update-status', () => settingsService.updateStatus(false), setSoftware);
 
   return (
     <Card className="flex flex-col gap-3">
@@ -2014,12 +1808,7 @@ function formatDuration(seconds: number): string {
 function AboutSection() {
   const [about, setAbout] = useState<AboutResponse | undefined>(undefined);
 
-  useEffect(() => {
-    settingsService
-      .about()
-      .then(setAbout)
-      .catch(() => setAbout(undefined));
-  }, []);
+  useSettingsLoad('about', () => settingsService.about(), setAbout);
 
   return (
     <div className="flex flex-col gap-4">

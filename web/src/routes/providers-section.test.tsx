@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderStatusDTO } from '@pop-agent/shared';
 import { ProvidersSection } from './providers-section';
 import { clearSubscriptionUsageCache } from '../services/subscription-usage-cache';
+import { settingsResources } from '../services/settings-resources';
 
 const checkHealth = vi.fn();
-vi.mock('../services/health', () => ({ healthMonitor: { refreshAfterProviderChange: () => checkHealth() } }));
+vi.mock('../services/health', () => ({ healthMonitor: { refreshAfterProviderChange: () => checkHealth(), getState: () => ({ kind: 'ok' }), subscribe: () => () => undefined } }));
 
 const oauthState = vi.fn();
 const list = vi.fn();
@@ -66,6 +67,7 @@ const CODEX: ProviderStatusDTO = {
 afterEach(cleanup);
 
 beforeEach(() => {
+  settingsResources.clear();
   clearSubscriptionUsageCache();
   checkHealth.mockClear();
   models.mockReset().mockResolvedValue({ models: [], source: 'engine' });

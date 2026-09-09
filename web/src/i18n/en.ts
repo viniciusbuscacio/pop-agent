@@ -4,6 +4,17 @@
  * without hunting through JSX.
  */
 export const en = {
+  'settings.sync.conflict': 'This document changed on the server. Your edits are preserved. Compare the latest version before saving.',
+  'settings.sync.serverVersion': 'Latest server version',
+  'settings.sync.useServer': 'Use server version',
+  'settings.sync.keepEdits': 'Keep my edits',
+  'settings.sync.failedCached': 'Could not refresh. Showing saved data; live status is unconfirmed.',
+  'settings.sync.failed': 'Could not load these settings. Please retry.',
+  'settings.sync.cached': 'Showing saved data. Checking the server…',
+  'settings.sync.loading': 'Loading settings…',
+  'settings.sync.retry': 'Retry',
+  'settings.sync.unconfirmed': 'Status unconfirmed',
+  'settings.sync.savedAt': 'Last saved: {when}',
   'agent.tasksTitle': 'Tasks',
   'agent.tasksDescription': 'Create and manage scheduled tasks.',
   'agent.skillsTitle': 'Skills',

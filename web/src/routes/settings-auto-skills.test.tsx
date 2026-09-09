@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { settingsResources } from '../services/settings-resources';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -34,6 +35,7 @@ const SETTINGS: SettingsDTO = {
 };
 
 beforeEach(() => {
+  settingsResources.clear();
   window.history.replaceState({}, '', '/settings?section=auto-skills');
   read.mockReset().mockResolvedValue(SETTINGS);
   update.mockReset().mockImplementation((patch: Partial<SettingsDTO>) =>

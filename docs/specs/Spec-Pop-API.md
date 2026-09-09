@@ -1,6 +1,13 @@
 # Pop Agent — API contract
 
 **Status:** normative
+
+Settings PATCH accepts optional `expectedInstructions`, and Memory PUT accepts
+optional `expectedDoc`. These compare-and-write preconditions return 409
+`edit_conflict` when the corresponding current text differs. Comparisons and
+synchronous writes occur without an intervening await. Preconditions are not
+stored or echoed as settings; legacy clients may omit them. Unrelated settings
+fields do not conflict with an Instructions-only precondition.
 **Legacy coverage:** §13
 **Primary implementation:** `shared/src/`, `server/src/interface/http/`, `web/src/services/`, `cli/src/infrastructure/api.ts`
 **Related:** [`Spec-Pop-Events-Synchronization.md`](Spec-Pop-Events-Synchronization.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md), [`Spec-Pop-A2A.md`](Spec-Pop-A2A.md), [`Spec-Pop-Local-Access.md`](Spec-Pop-Local-Access.md)

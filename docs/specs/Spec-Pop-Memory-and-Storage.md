@@ -1,6 +1,13 @@
 # Pop Agent — memory and storage
 
 **Status:** normative
+
+Settings Memory writes may carry `expectedDoc` for compare-and-write protection.
+When present, the HTTP adapter compares it to the current document immediately
+before the synchronous write, without an intervening await; mismatch returns
+409 `edit_conflict` without modifying the document or backup. Legacy clients
+without this field retain their existing contract. The PWA always supplies the
+loaded/reviewed base and preserves drafts on conflict.
 **Legacy coverage:** §§7, 11, 14 and 16
 **Primary implementation:** `server/src/application/{memory,files,storage}/`, `server/src/infrastructure/{db,memory,notes,files,backup}/`
 **Related:** [`Spec-Pop-Backend.md`](Spec-Pop-Backend.md), [`Spec-Pop-Pi-Agent-Integration.md`](Spec-Pop-Pi-Agent-Integration.md), [`Spec-Pop-Security.md`](Spec-Pop-Security.md)

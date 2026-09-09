@@ -1,4 +1,5 @@
 import { useSettingsDetail } from './settings-breadcrumbs';
+import { useSettingsLoad } from '../ui/settings-sync';
 import { healthMonitor } from '../services/health';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -15,7 +16,7 @@ import { loadProviderCredits } from '../lib/provider-credits-cache';
 import { normalizeBaseUrl, providersService } from '../services/providers';
 import { chatsService } from '../services/chats';
 import { cachedSubscriptionUsage, cacheSubscriptionUsage } from '../services/subscription-usage-cache';
-import { session } from '../services/session';
+import { settingsResources } from '../services/settings-resources';
 import {
   BackButton,
   Button,
@@ -89,13 +90,12 @@ export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } =
     () => setView({ kind: 'list' }),
   );
 
+  const resource = useSettingsLoad('providers', () => providersService.list(), (response) => {
+    setProviders(response.providers); setLoaded(true); setError(undefined);
+  });
   useEffect(() => {
-    void providersService
-      .list()
-      .then((response) => absorb(response))
-      .catch(() => setError(t('provider.loadFailed')))
-      .finally(() => setLoaded(true));
-  }, []);
+    if (resource.error) { setError(t('provider.loadFailed')); setLoaded(true); }
+  }, [resource.error]);
 
   /** Configured is the only thing this screen counts: it is what you have. */
   const configured = providers
@@ -393,23 +393,12 @@ function SubscriptionUsage({
 }) {
   const [usage, setUsage] = useState<ProviderSubscriptionUsageResponse | null>(() => cachedSubscriptionUsage(providerId));
 
+  useSettingsLoad(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId), (value) => {
+    cacheSubscriptionUsage(providerId, value);
+    setUsage(value);
+  }, false);
   useEffect(() => {
-    let live = true;
-    const generation = session.generation();
-    void providersService
-      .subscriptionUsage(providerId)
-      .then((value) => {
-        if (live && generation === session.generation()) {
-          cacheSubscriptionUsage(providerId, value);
-          setUsage(value);
-        }
-      })
-      .catch(() => {
-        // Keep the last successful snapshot while the provider is unavailable.
-      });
-    return () => {
-      live = false;
-    };
+    void settingsResources.load(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId));
   }, [providerId, listVersion]);
 
   if (usage === null) return null;

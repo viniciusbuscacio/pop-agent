@@ -28,6 +28,14 @@ function authed(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 describe('/v1/memory', () => {
+  it('rejects a stale edit without replacing the document or its backup', async () => {
+    await authed('/v1/memory', { method: 'PUT', body: JSON.stringify({ doc: 'agent edit' }) });
+    const result = await authed('/v1/memory', { method: 'PUT', body: JSON.stringify({ doc: 'stale user edit', expectedDoc: '' }) });
+    expect(result.status).toBe(409);
+    expect((await result.json()).error.code).toBe('edit_conflict');
+    expect(await (await authed('/v1/memory')).json()).toEqual({ doc: 'agent edit', hasBackup: false });
+    expect((await authed('/v1/memory', { method: 'PUT', body: JSON.stringify({ doc: 'reviewed edit', expectedDoc: 'agent edit' }) })).status).toBe(200);
+  });
   it('needs a session', async () => {
     expect((await app.request('/v1/memory')).status).toBe(401);
   });

@@ -1,5 +1,7 @@
+import { useSettingsLoad } from '../ui/settings-sync';
+import { settingsResources } from '../services/settings-resources';
 import { useSettingsDetail } from './settings-breadcrumbs';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { LocalMachineAccessDTO } from '@pop-agent/shared';
 import { clientEnvironment } from '../services/api';
 import { t } from '../i18n';
@@ -96,7 +98,6 @@ export function InstallationSection() {
 
 /** Daily computer access management is separate from installing the app. */
 export function DevicesSection() {
-  const snapshotGeneration = useRef(0);
   const [removing, setRemoving] = useState<string>();
   const [removeError, setRemoveError] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -112,43 +113,18 @@ export function DevicesSection() {
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
   const selectableMachines = machines.filter((machine) => machine.enabled);
 
-  useEffect(() => {
-    let active = true;
-    let request = 0;
-    const refresh = async (): Promise<void> => {
-      const current = ++request;
-      const generation = snapshotGeneration.current;
-      try {
-        const response = await localAccessService.machines();
-        if (!active || current !== request || generation !== snapshotGeneration.current) return;
-        setMachines(response.machines);
-        const selectedId = selectedLocalConnection();
-        const selected = response.machines.find((machine) => machine.machineId === selectedId);
-        // Permission and routing are separate choices. Never make ordinary
-        // messages depend on PLA merely because one enabled computer exists.
-        // An explicit enabled selection survives a reconnect; an unknown or
-        // disabled selection returns visibly to Server only.
-        if (selectedId !== undefined && (selected === undefined || !selected.enabled)) {
-          selectLocalConnection(undefined);
-          setSelectedConnection('');
-        } else {
-          setSelectedConnection(selectedId ?? '');
-        }
-      } catch {
-        if (active && current === request && generation === snapshotGeneration.current) setMachines([]);
-      }
-    };
-    void refresh();
-    const unsubscribe = eventStream.subscribe((event) => {
-      if (event.kind === 'local-machines-changed') void refresh();
-    });
-    const stopResume = eventStream.onResume(() => void refresh());
-    return () => {
-      active = false;
-      unsubscribe();
-      stopResume();
-    };
-  }, []);
+  const machineState = useSettingsLoad('devices', () => localAccessService.machines(), (response) => {
+    setMachines(response.machines);
+    if (!settingsResources.state('devices').fresh) return;
+    const selectedId = selectedLocalConnection();
+    const selected = response.machines.find((machine) => machine.machineId === selectedId);
+    if (selectedId !== undefined && (!selected || !selected.enabled)) {
+      selectLocalConnection(undefined); setSelectedConnection('');
+    } else setSelectedConnection(selectedId ?? '');
+  });
+  useEffect(() => eventStream.subscribe((event) => {
+    if (event.kind === 'local-machines-changed') void settingsResources.load('devices', () => localAccessService.machines(), true);
+  }), []);
 
   async function setMachineEnabled(machineId: string, enabled: boolean): Promise<void> {
     try {
@@ -156,8 +132,7 @@ export function DevicesSection() {
     } catch {
       return;
     }
-    setMachines((current) => current.map((machine) =>
-      machine.machineId === machineId ? { ...machine, enabled } : machine));
+    settingsResources.accept('devices', { machines: machines.map((machine) => machine.machineId === machineId ? { ...machine, enabled } : machine) });
     if (!enabled && selectedConnection === machineId) {
       selectLocalConnection(undefined);
       setSelectedConnection('');
@@ -171,7 +146,7 @@ export function DevicesSection() {
     setRemoveError(false);
     try {
       await localAccessService.remove(machine.machineId);
-      snapshotGeneration.current += 1;
+      settingsResources.accept('devices', { machines: machines.filter((entry) => entry.machineId !== machine.machineId) });
       setMachines((current) => current.filter((entry) => entry.machineId !== machine.machineId));
       if (selectedLocalConnection() === machine.machineId) {
         selectLocalConnection(undefined);
@@ -216,7 +191,7 @@ export function DevicesSection() {
               id={`local-access-${machine.machineId}`}
               testId={`local-access-${machine.machineId}`}
               label={t('settings.installation.localAccessForMachine', { machine: machine.hostname })}
-              hint={`${platformName(machine.platform)} — ${machine.connected
+              hint={`${platformName(machine.platform)} — ${!machineState.fresh ? t('settings.sync.unconfirmed') : machine.connected
                 ? t('settings.installation.localAccessOnline')
                 : t('settings.installation.localAccessOffline')}`}
               checked={machine.enabled}
@@ -241,7 +216,7 @@ export function DevicesSection() {
             <option value="">{t('settings.installation.localAccessServerOnly')}</option>
             {selectableMachines.map((machine) => (
               <option key={machine.machineId} value={machine.machineId}>
-                {machine.hostname} — {platformName(machine.platform)} — {machine.connected
+                {machine.hostname} — {platformName(machine.platform)} — {!machineState.fresh ? t('settings.sync.unconfirmed') : machine.connected
                   ? t('settings.installation.localAccessOnline')
                   : t('settings.installation.localAccessOffline')}
               </option>

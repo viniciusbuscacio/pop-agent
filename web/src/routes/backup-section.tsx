@@ -3,6 +3,8 @@ import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { backupsService } from '../services/backups';
 import { Button, Card, SwitchField, TextField } from '../ui/controls';
+import { useSettingsLoad } from '../ui/settings-sync';
+import { settingsResources } from '../services/settings-resources';
 
 /** Server-owned operations remain visible after navigating away and back. */
 export function BackupSection() {
@@ -23,26 +25,23 @@ export function BackupSection() {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
 
+  const resource = useSettingsLoad('backups', () => backupsService.list(), (result) => {
+    setBackups(result.backups);
+    setConfigured(result.passwordConfigured === true);
+    setOperation(result.operation);
+    setRestoreAvailable(result.restoreAvailable === true);
+    setFileSelectionAvailable(result.fileSelectionAvailable === true);
+    setError(undefined); setLoading(false);
+  });
+  useEffect(() => { if (resource.error) { setError(t('backup.loadFailed')); setLoading(false); } }, [resource.error]);
+
   useEffect(() => {
-    void reload();
     const timer = window.setInterval(() => { void reload(); }, 10_000);
     return () => window.clearInterval(timer);
   }, []);
 
   async function reload(): Promise<void> {
-    try {
-      const result = await backupsService.list();
-      setBackups(result.backups);
-      setConfigured(result.passwordConfigured === true);
-      setOperation(result.operation);
-      setRestoreAvailable(result.restoreAvailable === true);
-      setFileSelectionAvailable(result.fileSelectionAvailable === true);
-      setError(undefined);
-    } catch {
-      setError(t('backup.loadFailed'));
-    } finally {
-      setLoading(false);
-    }
+    await settingsResources.load('backups', () => backupsService.list());
   }
 
   async function create(): Promise<void> {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Persist allowlisted Settings snapshots locally, revalidate on resume/reconnect, retain data on failure and show explicit loading/stale/error states with Retry.
+- Protect Instructions and Memory edits with server compare-and-write checks, conflict review and preservation of typing during background refresh or Save.
+
 - Add native macOS PLA sign-in with a secure password dialog and automatic reconnect, and clear stale live-access indicators after disconnection or session rejection.
 
 - Standardize Settings typography by role across prose editors, model labels, cards, status messages and integration forms; enforce shared field/button typography against regressions.
