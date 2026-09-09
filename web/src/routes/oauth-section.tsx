@@ -42,11 +42,13 @@ export function OAuthSection({
   onChanged,
   actions,
   showIntro = true,
+  reauthenticate = false,
 }: {
   provider: ProviderStatusDTO;
   onChanged: (response: ProvidersResponse) => void;
   actions?: ReactNode;
   showIntro?: boolean;
+  reauthenticate?: boolean;
 }) {
   const [flow, setFlow] = useState<OAuthStateResponse | undefined>(undefined);
   const [answer, setAnswer] = useState('');
@@ -96,8 +98,9 @@ export function OAuthSection({
     providersService
       .oauthState(provider.id)
       .then((state) => {
-        if (dropped || state.done) return;
-        if (provider.configured) {
+        if (dropped) return;
+        if (state.done) { if (reauthenticate) void start(); return; }
+        if (provider.configured && !reauthenticate) {
           // Already signed in, yet a flow is still waiting for a code: the
           // leftover of a second attempt nobody needed. Rendering it under
           // "Connected" states two contradictory things at once, which is
@@ -107,11 +110,11 @@ export function OAuthSection({
         }
         setFlow(state);
       })
-      .catch(() => undefined);
+      .catch(() => { if (!dropped && reauthenticate) void start(); });
     return () => {
       dropped = true;
     };
-  }, [provider.id, provider.configured]);
+  }, [provider.id, reauthenticate]);
 
   // The poll is what moves this card, and it used to swallow its own
   // failures: one refused request and the card sat on "waiting" forever while
@@ -133,8 +136,9 @@ export function OAuthSection({
         const response = await providersService.list();
         if (stopped) return;
         onChanged(response);
-        const landed =
-          response.providers.find((entry) => entry.id === provider.id)?.configured === true;
+        const currentProvider = response.providers.find((entry) => entry.id === provider.id);
+        const landed = currentProvider?.configured === true && (!reauthenticate ||
+          (provider.authErrorAt !== undefined && currentProvider.authErrorAt === undefined));
         if (landed) healthMonitor.refreshAfterProviderChange();
         setFlow((current) => {
           if (current === undefined) return current;

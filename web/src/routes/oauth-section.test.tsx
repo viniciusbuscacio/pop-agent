@@ -325,3 +325,18 @@ describe('OAuthSection', () => {
     }
   });
 });
+
+describe('explicit reauthentication', () => {
+  it('resumes a pending login while old credentials are still configured', async () => {
+    oauthState.mockResolvedValue(CHOOSING_METHOD);
+    render(<OAuthSection provider={{ ...PROVIDER, configured: true }} onChanged={vi.fn()} reauthenticate />);
+    expect(await screen.findByText('How do you want to sign in?')).toBeTruthy();
+    expect(oauthCancel).not.toHaveBeenCalled();
+  });
+  it('starts a new flow when no flow is active', async () => {
+    oauthState.mockRejectedValueOnce(new Error('not found')).mockResolvedValue(CHOOSING_METHOD);
+    render(<OAuthSection provider={{ ...PROVIDER, configured: true }} onChanged={vi.fn()} reauthenticate />);
+    await waitFor(() => expect(oauthStart).toHaveBeenCalledWith('openai-codex'));
+    expect(await screen.findByText('How do you want to sign in?')).toBeTruthy();
+  });
+});

@@ -244,3 +244,7 @@ loading state, prevent duplicate clicks, retain the last list on failure, and
 ignore stale initial catalog responses. It may refresh the stored OAuth token
 and account availability as required by pi, but does not initiate OAuth, change
 account model policies or refresh every provider.
+
+Sign in again opens and starts a dedicated OAuth reauthentication flow. Existing
+credentials are preserved while it runs; their presence alone cannot prove that
+the new flow succeeded. Reopening this flow resumes it instead of cancelling it.

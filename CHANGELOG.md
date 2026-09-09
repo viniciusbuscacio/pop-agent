@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Start a dedicated subscription reauthentication flow from Sign in again; resume it without cancelling it or mistaking old credentials for successful sign-in.
+
 - Align provider reauthentication with Edit and Delete in the same action row.
 
 - Let API requests bypass the service worker and keep optional subscription-usage failures inside the provider card, preserving saved data and explicit retry.

@@ -69,6 +69,7 @@ const CATALOGUE: Catalogue[] = [
 type View =
   | { kind: 'list' }
   | { kind: 'pick' }
+  | { kind: 'sign-in'; providerId: string }
   | { kind: 'configure'; providerId: string; adding: true }
   | { kind: 'configure'; providerId: string; adding: false };
 
@@ -150,6 +151,15 @@ export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } =
     );
   }
 
+  if (view.kind === 'sign-in') {
+    const provider = providers.find(entry => entry.id === view.providerId);
+    if (!provider) return null;
+    return <Card className="flex flex-col gap-5">
+      <StepHeader title={t('provider.signInAgain')} onBack={() => setView({ kind: 'list' })} />
+      <OAuthSection provider={provider} onChanged={absorb} showIntro={false} reauthenticate />
+    </Card>;
+  }
+
   if (view.kind === 'configure') {
     const provider = providers.find((entry) => entry.id === view.providerId);
     if (provider === undefined) {
@@ -196,6 +206,7 @@ export function ProvidersSection({ onSetupDone }: { onSetupDone?: () => void } =
             listVersion={listVersion}
             onChanged={absorb}
             onEdit={() => setView({ kind: 'configure', providerId: provider.id, adding: false })}
+            onSignIn={() => setView(provider.authType === 'oauth' ? { kind: 'sign-in', providerId: provider.id } : { kind: 'configure', providerId: provider.id, adding: false })}
             onDelete={() => {
               setError(undefined);
               void remove(provider, absorb).catch(() => setError(t('provider.deleteFailed')));
@@ -214,6 +225,7 @@ function ProviderCard({
   listVersion,
   onChanged,
   onEdit,
+  onSignIn,
   onDelete,
 }: {
   provider: ProviderStatusDTO;
@@ -221,6 +233,7 @@ function ProviderCard({
   listVersion: number;
   onChanged: (response: ProvidersResponse) => void;
   onEdit: () => void;
+  onSignIn: () => void;
   onDelete: () => void;
 }) {
   const [toggling, setToggling] = useState(false);
@@ -329,7 +342,7 @@ function ProviderCard({
             variant="danger"
             size="md"
             data-testid="provider-sign-in-again"
-            onClick={onEdit}
+            onClick={onSignIn}
             className="w-full whitespace-nowrap sm:w-auto sm:min-w-28"
           >
             {t('provider.signInAgain')}

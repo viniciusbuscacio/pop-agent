@@ -87,6 +87,17 @@ beforeEach(() => {
 });
 
 describe('OpenAI subscription card', () => {
+  it('opens reauthentication instead of the model editor', async () => {
+    list.mockResolvedValue({ providers: [{ ...CODEX, authErrorAt: '2026-09-09T20:49:44Z' }] });
+    oauthState.mockResolvedValue({ flowId: 'reauth', providerId: CODEX.id, events: [], done: false,
+      pending: { type: 'select', message: 'Choose login', options: [{ id: 'device_code', label: 'Device code' }] } });
+    render(<ProvidersSection />);
+    await userEvent.click(await screen.findByTestId('provider-sign-in-again'));
+    expect(await screen.findByTestId('provider-oauth-openai-codex')).toBeTruthy();
+    expect(screen.queryByTestId('provider-priority')).toBeNull();
+    expect(await screen.findByText('How do you want to sign in?')).toBeTruthy();
+  });
+
   it('retains cached usage on remount, refresh failure and replacement', async () => {
     const first = render(<ProvidersSection />);
     await screen.findByText('3%');
