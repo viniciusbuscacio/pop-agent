@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
 import { ChatPage } from './chat-page';
 import { useChatStore } from '../store/chat';
+import { syncQueue } from '../services/sync-queue';
+
+vi.mock('../services/api', () => ({
+  apiRequest: vi.fn(async (path: string) => {
+    if (path === '/sync') return { epoch: 'chat-page-test', revisions: {} };
+    throw new Error(`Unexpected request: ${path}`);
+  }),
+}));
 
 const listMessages = vi.hoisted(() => vi.fn());
 const listModels = vi.hoisted(() => vi.fn());
@@ -116,6 +124,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  syncQueue.stop();
   vi.restoreAllMocks();
 });
 
