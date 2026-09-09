@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align provider reauthentication with Edit and Delete in the same action row.
+
 - Let API requests bypass the service worker and keep optional subscription-usage failures inside the provider card, preserving saved data and explicit retry.
 
 ## 0.2.79 — 2026-09-09

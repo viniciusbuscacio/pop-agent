@@ -302,7 +302,7 @@ function ProviderCard({
         <SubscriptionUsage providerId={provider.id} listVersion={listVersion} />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+      <div className={`grid gap-2 sm:flex sm:justify-end ${authErrorAt === undefined ? 'grid-cols-2' : 'grid-cols-[1fr_1fr_auto]'}`}>
         <Button
           type="button"
           variant="ghost"
@@ -323,19 +323,19 @@ function ProviderCard({
         >
           {t('shell.delete')}
         </Button>
+        {authErrorAt === undefined ? null : (
+          <Button
+            type="button"
+            variant="danger"
+            size="md"
+            data-testid="provider-sign-in-again"
+            onClick={onEdit}
+            className="w-full whitespace-nowrap sm:w-auto sm:min-w-28"
+          >
+            {t('provider.signInAgain')}
+          </Button>
+        )}
       </div>
-
-      {authErrorAt === undefined ? null : (
-        <Button
-          type="button"
-          variant="danger"
-          data-testid="provider-sign-in-again"
-          onClick={onEdit}
-          className="self-start"
-        >
-          {t('provider.signInAgain')}
-        </Button>
-      )}
       {toggleError === undefined ? null : (
         <p className="text-sm text-[var(--danger)]" data-testid="provider-toggle-error">
           {toggleError}
