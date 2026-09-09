@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamEvent } from '@pop-agent/shared';
 import { ensureChat, refreshClientData, startClientSync } from './client-sync';
 import { syncQueue } from './sync-queue';
+import { settingsResources } from './settings-resources';
+import { apiRequest } from './api';
 
 const test = vi.hoisted(() => ({
   calls: [] as string[],
@@ -24,7 +26,7 @@ vi.mock('./settings-cache', () => ({ settingsCache: { read: vi.fn(async () => un
 vi.mock('./providers', () => ({ providersService: { subscriptionUsage: vi.fn() } }));
 vi.mock('../store/chat', () => ({ useChatStore: {
   getState: () => ({
-    chats: [{ id: 'a' }, { id: 'b' }], archived: [{ id: 'old' }], messages: test.messages,
+    chats: [{ id: 'a' }, { id: 'b' }], archived: [{ id: 'old' }], messages: test.messages, listsLoaded: true,
     loadChats: async () => { test.calls.push('list'); },
     loadArchived: async () => { test.calls.push('archived'); },
     openChat: test.openChat,
@@ -34,13 +36,15 @@ vi.mock('../store/chat', () => ({ useChatStore: {
 } }));
 vi.mock('./settings-preload', async () => {
   const { syncQueue: queue } = await import('./sync-queue');
+  const { settingsResources: resources } = await import('./settings-resources');
   return {
     settingsLoaders: { providers: async () => ({}), memory: async () => ({}) },
-    syncSetting: async (key: string) => queue.add(`settings:${key}`, async () => { test.calls.push(`setting:${key}`); }),
+    syncSetting: async (key: string) => queue.add(`settings:${key}`, async () => { test.calls.push(`setting:${key}`); resources.accept(key, {}); }),
   };
 });
 let stop: (() => void) | undefined;
 beforeEach(() => {
+  settingsResources.clear(); vi.mocked(apiRequest).mockClear();
   test.calls.length = 0; test.manifest = { epoch: 'one', revisions: {} }; test.messages = {}; test.token = 'session';
   test.openChat.mockReset().mockImplementation(async id => { test.calls.push(`chat:${id}`); test.messages[id] = []; });
 });
@@ -55,14 +59,17 @@ describe('authenticated client synchronization', () => {
     expect(test.openChat.mock.calls.every(([, background]) => background === true)).toBe(true);
     expect(syncQueue.getState().busy).toBe(false);
     test.calls.length = 0;
+    vi.mocked(apiRequest).mockClear();
     await refreshClientData();
-    expect(test.calls).toEqual(['list', 'archived', 'chat:a', 'chat:b', 'setting:providers', 'setting:memory']);
+    expect(test.calls).toEqual([]);
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/sync');
   });
   it('loads an archived transcript on navigation and refreshes it only while selected', async () => {
     stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
     const leave = ensureChat('old');
     await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
     expect(test.calls).toEqual(['chat:old']);
+    test.manifest.revisions['chat:old'] = 1;
     test.calls.length = 0; await refreshClientData();
     expect(test.calls).toContain('chat:old');
     leave(); test.calls.length = 0; await refreshClientData();
@@ -102,5 +109,43 @@ describe('authenticated client synchronization', () => {
   });
   it('does not issue an anonymous warmup', async () => {
     test.token = undefined; await refreshClientData(); expect(test.calls).toEqual([]);
+  });
+  it('refreshes only changed or missing snapshots', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    test.manifest.revisions['chat:a'] = 1;
+    test.manifest.revisions.memory = 1;
+    await refreshClientData();
+    expect(test.calls).toEqual(['chat:a', 'setting:memory']);
+    test.calls.length = 0; delete test.messages.b;
+    settingsResources.invalidate('providers');
+    await refreshClientData();
+    expect(test.calls).toEqual(['chat:b', 'setting:providers']);
+  });
+  it('retries only the failed changed snapshot, not successful resources', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    test.manifest.revisions['chat:a'] = 1; test.manifest.revisions.memory = 1;
+    test.openChat.mockRejectedValueOnce(new Error('offline'));
+    await refreshClientData();
+    expect(syncQueue.getState().errors).toContain('chat:a');
+    test.calls.length = 0; await refreshClientData();
+    expect(test.calls).toEqual(['chat:a']);
+  });
+  it('does not acknowledge a revision that changes during a snapshot read', async () => {
+    stop = startClientSync(); await refreshClientData();
+    test.manifest.revisions['chat:a'] = 1;
+    test.openChat.mockImplementationOnce(async id => {
+      test.calls.push(`chat:${id}`); test.manifest.revisions['chat:a'] = 2;
+    });
+    await refreshClientData(); test.calls.length = 0;
+    await refreshClientData(); expect(test.calls).toEqual(['chat:a']);
+  });
+  it('preserves snapshots and settles when the manifest cannot be read', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    vi.mocked(apiRequest).mockRejectedValueOnce(new Error('offline'));
+    await refreshClientData();
+    expect(test.calls).toEqual([]);
+    expect(test.messages.a).toEqual([]);
+    expect(syncQueue.getState()).toEqual({ busy: false, errors: ['manifest'] });
+    await refreshClientData(); expect(test.calls).toEqual([]);
   });
 });

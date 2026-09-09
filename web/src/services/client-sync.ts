@@ -10,8 +10,8 @@ import { providersService } from './providers';
 import { syncQueue } from './sync-queue';
 
 let fullRound: Promise<void> | undefined;
-let recovery: Promise<void> | undefined;
 let manifest: SyncManifestResponse | undefined;
+const verified = new Map<string, number>();
 let generation = 0;
 let selectedChat: string | undefined;
 const loadedChats = new Set<string>();
@@ -73,7 +73,7 @@ async function readManifest(): Promise<SyncManifestResponse> {
   return apiRequest<SyncManifestResponse>('/sync');
 }
 
-/** One round per explicit request; another click/open joins the existing work. */
+/** Verify every in-scope resource, downloading only missing or changed snapshots. */
 export function refreshClientData(): Promise<void> {
   if (fullRound) return fullRound;
   if (!session.token()) return Promise.resolve();
@@ -86,24 +86,50 @@ export function refreshClientData(): Promise<void> {
     // The manifest precedes snapshots, so a change during reads remains dirty
     // at the next recovery. Never acknowledge a later revision speculatively.
     await syncQueue.add('manifest', async () => { before = await readManifest(); });
-    if (generation !== started) return;
-    await Promise.all([
-      syncQueue.add('chats', signal => useChatStore.getState().loadChats(signal)),
-      syncQueue.add('archived', signal => useChatStore.getState().loadArchived(signal)),
-    ]);
+    if (generation !== started || !before) return;
+    if (manifest?.epoch !== before.epoch) verified.clear();
+    manifest = before;
+    const snapshot = before;
+    const revision = (key: string) => snapshot.revisions[key] ?? 0;
+    const needs = (key: string) => !verified.has(key) || verified.get(key) !== revision(key);
+    const record = async (key: string, jobKey: string, read: Promise<void>) => {
+      const expected = revision(key);
+      await read;
+      if (generation === started && !syncQueue.getState().errors.includes(jobKey)) verified.set(key, expected);
+    };
+    if (needs('chats') || !useChatStore.getState().listsLoaded) {
+      await Promise.all([
+        syncQueue.add('chats', signal => useChatStore.getState().loadChats(signal)),
+        syncQueue.add('archived', signal => useChatStore.getState().loadArchived(signal)),
+      ]);
+      if (generation === started && !syncQueue.getState().errors.some(key => key === 'chats' || key === 'archived')) verified.set('chats', revision('chats'));
+    }
     if (generation !== started) return;
     const { chats } = useChatStore.getState();
-    for (const chat of chats) reads.push(syncChat(chat.id));
-    if (selectedChat && !chats.some(chat => chat.id === selectedChat)) reads.push(syncChat(selectedChat, true));
-    for (const key of Object.keys(settingsLoaders)) reads.push(syncSetting(key));
+    const ids = new Set(chats.map(chat => chat.id));
+    if (selectedChat) ids.add(selectedChat);
+    for (const id of loadedChats) {
+      if (!ids.has(id) && needs(`chat:${id}`)) { loadedChats.delete(id); fullChats.delete(id); }
+    }
+    for (const id of ids) {
+      const key = `chat:${id}`;
+      if (needs(key) || !loadedChats.has(id) || useChatStore.getState().messages[id] === undefined) {
+        reads.push(record(key, key, syncChat(id, selectedChat === id)));
+      }
+    }
+    const readSetting = (key: string) => {
+      const state = settingsResources.state(key);
+      if (needs(key) || !state.fresh || state.data === undefined) return record(key, `settings:${key}`, syncSetting(key));
+      return Promise.resolve();
+    };
+    for (const key of Object.keys(settingsLoaders)) reads.push(readSetting(key));
     await Promise.all(reads);
     if (generation !== started) return;
     const providers = settingsResources.state('providers').data as { providers?: { id: string; configured: boolean }[] } | undefined;
     if (providers?.providers?.some(provider => provider.id === 'openai-codex' && provider.configured)) {
       settingsLoaders['subscription:openai-codex'] = () => providersService.subscriptionUsage('openai-codex');
-      await syncSetting('subscription:openai-codex');
+      await readSetting('subscription:openai-codex');
     }
-    if (generation === started && syncQueue.getState().errors.length === 0) manifest = before;
   })().finally(() => { if (generation === started) fullRound = undefined; });
   return fullRound;
 }
@@ -122,19 +148,7 @@ function synchronizeKeys(keys: string[]): Promise<void> {
 }
 
 function recover(): void {
-  if (recovery) return;
-  const started = generation;
-  recovery = (async () => {
-    if (fullRound) await fullRound;
-    if (generation !== started) return;
-    const next = await readManifest();
-    if (generation !== started) return;
-    if (!manifest || manifest.epoch !== next.epoch) { await refreshClientData(); return; }
-    const changed = Object.keys(next.revisions).filter(key => next.revisions[key] !== manifest?.revisions[key]);
-    await synchronizeKeys(changed);
-    if (generation === started && syncQueue.getState().errors.length === 0) manifest = next;
-  })().catch(() => { /* Retain the old revision; explicit refresh or next reconnect retries. */ })
-    .finally(() => { if (generation === started) recovery = undefined; });
+  void refreshClientData();
 }
 
 function apply(event: StreamEvent): void {
@@ -160,7 +174,7 @@ export function startClientSync(): () => void {
   void refreshClientData();
   return () => {
     generation++; unsubscribe(); resume(); syncQueue.stop();
-    manifest = undefined; fullRound = undefined; recovery = undefined;
+    manifest = undefined; fullRound = undefined; verified.clear();
     loadedChats.clear(); fullChats.clear(); selectedChat = undefined;
     useChatStore.getState().reset();
   };

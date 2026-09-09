@@ -34,6 +34,21 @@ or fails, the wheel stops. Individual reads have deadlines; failures preserve
 last-good data, allow later items to finish and expose a retryable error.
 Neither failures nor route mounts start an indefinite polling cycle.
 
+Full means verifying all in-scope resources, not downloading them unconditionally.
+Read the revision manifest first. Within the authenticated app lifetime, retain
+the verified revision of each successful snapshot independently. An unchanged
+round with complete, fresh in-memory data makes only the manifest request. Read
+only changed, missing or invalidated snapshots, preserving chat-before-Settings
+ordering and navigation priority. A failed item does not invalidate successful
+items. Record the revision observed before its read, never a newer revision
+observed afterward. Manifest failure preserves content and reports a retryable
+error without starting a blind full download.
+
+Revision verification is session-memory state, not proof inferred from an old
+disk cache. A cold app start or new server epoch revalidates the in-scope data;
+cached content stays visible throughout. Reconnect uses the same deduplicated
+revision-aware round as the refresh wheel.
+
 Warmup is read-only. It never sends messages, migrates a pending send, downloads
 attachment bodies, signs in providers, tests paid connections, creates backups
 or starts software updates. A transcript snapshot is the same bounded tail
