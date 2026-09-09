@@ -111,7 +111,8 @@ export class WebAuthnService implements WebAuthnGateway {
       expectedRPID: rpId,
       credential: {
         id: credential.id,
-        publicKey: credential.publicKey,
+        // The verifier requires an ArrayBuffer-backed view, not a shared buffer.
+        publicKey: Uint8Array.from(credential.publicKey),
         counter: credential.counter,
         transports: credential.transports as never,
       },
