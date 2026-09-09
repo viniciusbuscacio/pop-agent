@@ -52,6 +52,16 @@ describe('Settings document recovery', () => {
     fireEvent.click(screen.getByTestId('settings-memory-save'));
     await waitFor(() => expect(settingsService.writeMemory).toHaveBeenCalledWith('My edit', 'Agent edit'));
   });
+  it('keeps typing available while an invalidated document refreshes, but blocks Save', async () => {
+    show(); await ready();
+    const field = screen.getByTestId('settings-memory') as HTMLTextAreaElement;
+    fireEvent.change(field, { target: { value: 'Editing' } });
+    act(() => settingsResources.invalidate('memory'));
+    expect(field.closest('[inert]')).toBeNull();
+    fireEvent.change(field, { target: { value: 'Still editing' } });
+    expect(field.value).toBe('Still editing');
+    expect(screen.getByTestId('settings-memory-save')).toHaveProperty('disabled', true);
+  });
   it('preserves typing that happens while Save is in flight', async () => {
     show(); await ready();
     let done!: (value: { doc: string; hasBackup: boolean }) => void;

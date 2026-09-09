@@ -35,7 +35,7 @@ export function SettingsDocumentEditor({ kind }: { kind: 'instructions' | 'memor
       if (base.current === undefined || draftRef.current === base.current) {
         base.current = incoming; edit(incoming); setConflict(false);
       } else setConflict(incoming !== base.current);
-    });
+    }, false); // Draft typing stays available; every server action below checks freshness.
 
   async function save() {
     if (!state.fresh || base.current === undefined || busy || conflict) return;
