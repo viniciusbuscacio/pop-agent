@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.80
+## 0.2.80 — 2026-09-09
 
 - Update Sharp (including the Transformers override), Hono and SimpleWebAuthn to security-patched versions.
 - Use a new immutable release version for the accumulated application and client changes.
