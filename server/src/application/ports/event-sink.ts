@@ -7,6 +7,7 @@ import type { QueuedMessage } from './queued-message-repo.js';
  * wire DTOs, so the application never learns that HTTP exists.
  */
 export type RunEvent =
+  | { kind: 'resources-changed'; keys: string[] }
   /** A conversation was durably created, whichever client or task opened it. */
   | { kind: 'chat-created'; chatId: string; chat: Chat }
   /** A conversation was durably deleted and must disappear from every client. */

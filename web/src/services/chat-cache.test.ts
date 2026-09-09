@@ -103,7 +103,7 @@ describe('chat transcript cache', () => {
     expect(await chatCache.get('chat-one')).toBeUndefined();
   });
 
-  it('evicts the least recently used transcripts at the 50 MB cap', async () => {
+  it('does not evict previously warmed chats when total text exceeds 50 MB', async () => {
     vi.spyOn(Date, 'now').mockImplementation(incrementingClock());
     useEncodedSizes();
     const { chatCache } = await import('./chat-cache');
@@ -114,17 +114,18 @@ describe('chat transcript cache', () => {
     await chatCache.put('chat-c', [message('chat-c', 'size-20mb')]);
 
     expect(await chatCache.get('chat-a')).toBeDefined();
-    expect(await chatCache.get('chat-b')).toBeUndefined();
+    expect(await chatCache.get('chat-b')).toBeDefined();
     expect(await chatCache.get('chat-c')).toBeDefined();
   });
 
-  it('does not retain one transcript larger than the complete cache budget', async () => {
+  it('retains last-good data and reports an oversized snapshot', async () => {
     useEncodedSizes();
     const { chatCache } = await import('./chat-cache');
     await chatCache.put('chat-large', [message('chat-large', 'ordinary')]);
     await chatCache.put('chat-large', [message('chat-large', 'size-51mb')]);
 
-    expect(await chatCache.get('chat-large')).toBeUndefined();
+    expect((await chatCache.get('chat-large'))?.[0]?.content).toBe('ordinary');
+    expect(chatCache.storageFailed()).toBe(true);
   });
 
   it('degrades to no cache when IndexedDB cannot be opened', async () => {

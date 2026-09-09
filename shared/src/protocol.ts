@@ -35,7 +35,7 @@ export const CLIENT_HEADER = 'x-pop-agent-client';
 export const CLIENT_PLATFORM_HEADER = 'x-pop-agent-client-platform';
 /** Additive SSE schema understood by this client; absent means legacy v1. */
 export const EVENT_STREAM_VERSION_HEADER = 'x-pop-agent-event-version';
-export const EVENT_STREAM_VERSION = 2;
+export const EVENT_STREAM_VERSION = 3;
 
 /**
  * The terminal that typed this message, named by the id its local-tools channel

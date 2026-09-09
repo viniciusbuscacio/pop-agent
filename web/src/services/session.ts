@@ -84,6 +84,7 @@ export const session = {
 
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
+    chatCache.clear();
     settingsResources.clear();
     clearSubscriptionUsageCache();
     generation += 1;

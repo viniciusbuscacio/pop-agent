@@ -56,7 +56,7 @@ import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 import { lastActiveChatPath } from '../lib/last-active-chat';
 import { SettingsDocumentEditor } from '../ui/settings-document-editor';
 import { SettingsSyncBoundary, useSettingsLoad } from '../ui/settings-sync';
-import { preloadSettings } from '../services/settings-preload';
+import { RefreshButton } from './shell-header';
 import { settingsResources } from '../services/settings-resources';
 
 /** Settings is route navigation, not a row of tabs. On phones the index and
@@ -145,11 +145,6 @@ function settingsReturnTo(state: unknown): string {
 export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  useEffect(() => {
-    const controller = new AbortController();
-    void preloadSettings(controller.signal);
-    return () => controller.abort();
-  }, [location.key]);
   // happy-dom's MemoryRouter does not inherit window.history; the fallback also
   // keeps old embedders that mount this route directly working.
   const requested = new URLSearchParams(location.search || window.location.search).get('section');
@@ -202,6 +197,7 @@ export function SettingsPage() {
             </> : null}
           </ol>
         </nav>
+        <span className="ml-auto"><RefreshButton /></span>
       </header>
 
       <div

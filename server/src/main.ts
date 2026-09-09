@@ -183,6 +183,11 @@ if (agent === 'pi') {
 
 const workspace = ensureWorkspace(resolveWorkspace());
 const hub = new SseHub();
+context.userMemory.onChanged = () => hub.invalidate(['memory']);
+context.settings.onChanged = (key) => {
+  if (key === 'app') hub.invalidate(['settings']);
+  else if (key.startsWith('provider.')) hub.invalidate(['providers', 'model-catalog']);
+};
 const restClients = new RestClientService({config: new RestApiSettingsService(context.settings),repo:context.integrations,secrets:context.secrets,gateway:new ScreenedRestGateway(),now:()=>systemClock.now()});
 // Which computers are allowed and which secure transports are currently attached.
 const localAccessPolicy = new LocalAccessPolicyService(context.settings);
@@ -327,6 +332,7 @@ const oauthFlows = new OAuthFlowService({
   cooldownStore: new FileOAuthCooldownStore(join(context.dataDir, 'oauth-cooldowns.json')),
   // A fresh sign-in is new evidence: the provider's penalty is forgiven.
   onSuccess: (providerId) => {
+    hub.invalidate(['providers', 'model-catalog', `subscription:${providerId}`]);
     cooldown.clear(providerId);
     providers.noteOAuthSuccess(providerId);
   },

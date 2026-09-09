@@ -224,8 +224,8 @@ function ActionButton({
  * new tab -- the data URI is the file.
  */
 function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }) {
-  const images = attachments.filter((entry) => entry.type.startsWith('image/'));
-  const files = attachments.filter((entry) => !entry.type.startsWith('image/'));
+  const images = attachments.filter((entry) => entry.type.startsWith('image/') && entry.dataUri !== '');
+  const files = attachments.filter((entry) => !entry.type.startsWith('image/') || entry.dataUri === '');
 
   return (
     <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">

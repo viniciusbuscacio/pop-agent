@@ -47,7 +47,7 @@ describe('browser session storage', () => {
     expect(session.token()).toBe('renewed-token');
     expect(() => session.clear()).not.toThrow();
     expect(session.token()).toBeUndefined();
-    expect(clearCache).toHaveBeenCalledOnce();
+    expect(clearCache).toHaveBeenCalledTimes(2); // Explicit sign-in and sign-out.
   });
 
   it('clears both stores and the authenticated transcript cache', () => {

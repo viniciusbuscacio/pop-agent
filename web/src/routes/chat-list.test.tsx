@@ -73,6 +73,8 @@ function LocationProbe() {
 }
 
 function renderList(path = '/') {
+  // Boot owns list synchronization; this isolated route receives its snapshot.
+  useChatStore.setState({ chats: activeList, archived: archivedList, listsLoaded: true });
   return render(
     <MemoryRouter initialEntries={[path]}>
       <ChatList />

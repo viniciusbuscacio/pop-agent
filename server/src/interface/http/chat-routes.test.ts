@@ -43,6 +43,19 @@ beforeEach(async () => {
   token = await setupTestSession(app, PASSWORD);
 });
 
+it('warms transcript and queued attachment metadata without downloading bodies', async () => {
+  const chat = await newChat();
+  const attachment = { name: 'note.txt', type: 'text/plain', dataUri: 'data:text/plain;base64,aGVsbG8=' };
+  await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: attached', attachments: [attachment] } });
+  fixture.queuedMessages.enqueue(chat.id, { text: 'later', attachments: [attachment], filePaths: [], deliveryMode: 'follow_up' });
+  const metadata = await (await api(`/v1/chats/${chat.id}/messages?attachments=metadata`)).json() as { messages: MessageDTO[]; pending: { attachments: typeof attachment[] }[] };
+  expect(metadata.messages[0]?.attachments).toEqual([{ ...attachment, dataUri: '' }]);
+  expect(metadata.pending[0]?.attachments).toEqual([{ ...attachment, dataUri: '' }]);
+  const full = await (await api(`/v1/chats/${chat.id}/messages`)).json() as { messages: MessageDTO[] };
+  expect(full.messages[0]?.attachments).toEqual([attachment]);
+  fixture.runs.stopRun(chat.id);
+});
+
 describe('pi session commands', () => {
   it('runs compact, session, name and export through the bridge', async () => {
     const chat = await newChat();

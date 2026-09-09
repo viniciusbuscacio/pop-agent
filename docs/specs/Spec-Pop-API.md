@@ -2,6 +2,15 @@
 
 **Status:** normative
 
+`GET /v1/sync` requires an owner session and returns `{ epoch, revisions }`
+with no-store caching. Its process-scoped counters identify changed resource
+snapshots; a new epoch invalidates previous comparisons. Additive SSE schema 3
+includes `resources-changed` with keys only, withheld from older subscribers.
+`GET /v1/chats/:id/messages?attachments=metadata` returns the normal bounded
+snapshot with attachment names/types and empty `dataUri` strings, including
+queued attachments. Omitting the parameter retains existing full-body behavior.
+See [Client synchronization](Spec-Pop-Client-Synchronization.md).
+
 Settings PATCH accepts optional `expectedInstructions`, and Memory PUT accepts
 optional `expectedDoc`. These compare-and-write preconditions return 409
 `edit_conflict` when the corresponding current text differs. Comparisons and

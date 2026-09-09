@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { eventStream } from '../services/events';
-import { useChatStore } from '../store/chat';
 import { PopBubbleMark } from '../ui/pop-bubble-mark';
 import { ChatList } from './chat-list';
 import { forgetLastActiveChat, rememberLastActiveChat } from '../lib/last-active-chat';
@@ -18,7 +17,6 @@ import { forgetLastActiveChat, rememberLastActiveChat } from '../lib/last-active
  * a slide-over drawer would have thrown away.
  */
 export function ChatLayout() {
-  const apply = useChatStore((state) => state.apply);
   const navigate = useNavigate();
   const openChat = useMatch('/chat/:chatId');
   // /files/* covers the root and any folder path, however deep.
@@ -46,12 +44,6 @@ export function ChatLayout() {
     const chatId = openChat?.params.chatId;
     if (chatId !== undefined) rememberLastActiveChat(chatId);
   }, [openChat?.params.chatId]);
-
-  useEffect(() => {
-    // Boot owns the one session-wide stream; this shell only feeds chat events
-    // into the chat store while it is mounted.
-    return eventStream.subscribe(apply);
-  }, [apply]);
 
   useEffect(() => {
     // The store owns lifecycle data; the shell owns routing. If another client

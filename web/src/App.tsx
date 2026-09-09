@@ -7,6 +7,7 @@ import { LoadingState } from './ui/loading-state';
 import { setSessionLostHandler } from './services/api';
 import { authService } from './services/auth';
 import { eventStream } from './services/events';
+import { startClientSync } from './services/client-sync';
 import { session } from './services/session';
 import { useAuthStore } from './store/auth';
 import { ChatLayout, NoChatSelected } from './routes/chat-layout';
@@ -70,9 +71,10 @@ function Boot() {
 
   useEffect(() => {
     if (status !== 'signed-in') { uiControl.stop(); return; }
+    const stopSync = startClientSync();
     eventStream.start();
     const stopUiControl = startAutomaticUiControl();
-    return () => { eventStream.stop(); stopUiControl(); };
+    return () => { eventStream.stop(); stopSync(); stopUiControl(); };
   }, [status]);
 
   useEffect(() => {
@@ -81,6 +83,9 @@ function Boot() {
       return;
     }
     let cancelled = false;
+    // A remembered session may read its own cache while the server is asleep.
+    // The authenticated API still rejects/revokes an invalid token normally.
+    if (session.token()) setStatus('signed-in');
     authService
       .state()
       .then(({ setupDone }) => {
@@ -89,7 +94,7 @@ function Boot() {
         setStatus(session.token() === undefined ? 'signed-out' : 'signed-in');
       })
       .catch(() => {
-        if (!cancelled) setStatus('signed-out');
+        if (!cancelled && !session.token()) setStatus('signed-out');
       });
     return () => {
       cancelled = true;

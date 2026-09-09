@@ -32,6 +32,7 @@ export interface EventStreamService {
   stop(): void;
   subscribe(listener: Listener): () => void;
   onResume(listener: ResumeListener): () => void;
+  onOpen(listener: ResumeListener): () => void;
 }
 
 /** Creates an isolated stream controller; exported so lifecycle races are testable. */
@@ -46,6 +47,7 @@ export function createEventStream(environment: EventStreamEnvironment): EventStr
   let wasHidden = false;
   const listeners = new Set<Listener>();
   const resumeListeners = new Set<ResumeListener>();
+  const openListeners = new Set<ResumeListener>();
   const bufferedEvents = createStreamEventBatcher((event) => {
     for (const listener of listeners) listener(event);
   });
@@ -93,6 +95,7 @@ export function createEventStream(environment: EventStreamEnvironment): EventStr
     connection.addEventListener('open', () => {
       if (source !== connection || stopped) return;
       retryMs = FIRST_RETRY_MS;
+      for (const listener of openListeners) listener();
       // A retry may cover an arbitrarily long gap. Consumers need a canonical
       // snapshot after the replacement is actually open, including foreground
       // recovery: a snapshot before opening would leave an unobserved gap.
@@ -204,6 +207,10 @@ export function createEventStream(environment: EventStreamEnvironment): EventStr
     onResume(listener: ResumeListener): () => void {
       resumeListeners.add(listener);
       return () => resumeListeners.delete(listener);
+    },
+    onOpen(listener: ResumeListener): () => void {
+      openListeners.add(listener);
+      return () => { openListeners.delete(listener); };
     },
   };
 }

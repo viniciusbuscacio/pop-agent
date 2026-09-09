@@ -178,6 +178,13 @@ is in the pi and agent-flow documents.
 
 ### Snapshot invalidation
 
+Version 3 adds `resources-changed` with resource keys only. Successful Settings
+mutations and repository/OAuth callbacks invalidate snapshots without values
+or credentials. Owner-session-guarded `GET /v1/sync` returns a process epoch
+plus resource revision counters. Counters change before broadcast; restart
+changes the epoch. This is not event replay. See
+[Client synchronization](Spec-Pop-Client-Synchronization.md).
+
 `local-machines-changed` carries no machine list. It means:
 
 > The known/connected computer projection changed; fetch
@@ -203,7 +210,7 @@ New event kinds require a new `EVENT_STREAM_VERSION`. `SseHub` withholds those
 kinds from subscribers whose ticket declared an older version; established
 events remain broadcast normally. Legacy clients continue converging through
 initial/resume snapshots instead of receiving an unknown discriminant. The
-current archive/model event additions require version 2.
+archive/model event additions require version 2; resource invalidations require 3.
 
 Removing or changing an existing event payload is not made safe by this header;
 such a breaking wire change requires the formal client-compatibility policy and
@@ -275,7 +282,7 @@ Initial `pageshow` is not a resume and must not create a second connection.
 SSE has no replay, so reliable product projection uses three complementary
 mechanisms:
 
-1. initial HTTP snapshot when a consumer mounts;
+1. a finite cache-first startup snapshot round;
 2. incremental/invalidation events while connected;
 3. HTTP snapshot after reconnection or foreground restoration.
 
@@ -288,14 +295,13 @@ Examples:
 
 - Installation fetches machines initially, on `local-machines-changed`, on
   retry-open and foreground recovery;
-- chat lists fetch open/archived snapshots on mount and resume while applying
-  lifecycle events live;
-- an open transcript refetches server messages/live/FIFO state on reconnect;
+- chat lists and transcripts share one route-independent synchronization
+  service, applying and persisting events even while Settings is open;
+- reconnect compares revisions and fetches changed messages/live/FIFO state;
 - routes remove a selected chat immediately after `chat-deleted`.
 
-Consumers that unmount while in Settings or another explorer need not retain
-local listeners if their next mount performs the authoritative initial query.
-The EventSource itself remains session-wide.
+Projection and invalidation listeners live above routes. A destination reads
+their cache and promotes missing work without restarting a whole batch.
 
 ## Polling policy
 

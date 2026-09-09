@@ -225,6 +225,31 @@ describe('stopping a run', () => {
 });
 
 describe('mounting mid-run', () => {
+  it('replays fragments arriving during a snapshot without losing its prefix', async () => {
+    let resolve!: (value: unknown) => void;
+    messagesBody.value = new Promise(done => { resolve = done; });
+    const loading = useChatStore.getState().openChat(CHAT, true);
+    apply({ kind: 'delta', chatId: CHAT, runId: RUN, seq: 4, text: 'new fragment' });
+    resolve({ messages: [], live: { runId: RUN, status: 'running', seq: 3, content: 'prefix ', thinking: '', tools: [] } });
+    await loading;
+    expect(live()?.content).toBe('prefix new fragment');
+    expect(live()?.seq).toBe(4);
+  });
+  it('does not resurrect a deleted chat after its snapshot completes', async () => {
+    let resolve!: (value: unknown) => void;
+    messagesBody.value = new Promise(done => { resolve = done; });
+    const loading = useChatStore.getState().openChat(CHAT, true);
+    apply({ kind: 'chat-deleted', chatId: CHAT });
+    resolve({ messages: [{ id: 'old', content: 'deleted' }] }); await loading;
+    expect(useChatStore.getState().messages[CHAT]).toBeUndefined();
+  });
+  it('never migrates a queued send during background warmup', async () => {
+    localStorage.setItem(`pop-agent.queued.${CHAT}`, JSON.stringify({ text: 'unsent', attachments: [], filePaths: [] }));
+    messagesBody.value = { messages: [] };
+    await useChatStore.getState().openChat(CHAT, true);
+    expect(send).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`pop-agent.queued.${CHAT}`)).toContain('unsent');
+  });
   it('seeds the live view from the server snapshot and drops what it already contains', async () => {
     // aw's partial-reply buffer: a reload mid-run starts from everything that
     // already streamed, and seq keeps the overlap from being counted twice.

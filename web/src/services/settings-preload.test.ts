@@ -1,105 +1,50 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { preloadSettings } from './settings-preload';
+import { ensureSetting, settingsLoaders, syncSetting } from './settings-preload';
 import { settingsResources } from './settings-resources';
-import { apiRequest, pendingUiRequests } from './api';
-import { session } from './session';
+import { syncQueue } from './sync-queue';
+import { apiRequest } from './api';
 import { passkeyService } from './passkey';
 
-vi.mock('./api', () => ({ apiRequest: vi.fn(), apiDownload: vi.fn(), pendingUiRequests: vi.fn(() => 0) }));
+vi.mock('./api', () => ({ apiRequest: vi.fn(), apiDownload: vi.fn() }));
 vi.mock('./settings-cache', () => ({ settingsCache: { read: vi.fn(async () => undefined), write: vi.fn(), clear: vi.fn() } }));
 beforeEach(() => {
-  settingsResources.clear();
-  vi.mocked(pendingUiRequests).mockReturnValue(0);
-  vi.mocked(apiRequest).mockReset().mockImplementation(async (path) => path === '/providers' ? { providers: [] } : { loaded: path });
-  vi.spyOn(session, 'token').mockReturnValue('test-session');
+  syncQueue.stop(); settingsResources.clear();
+  vi.mocked(apiRequest).mockReset().mockImplementation(async path => path === '/providers' ? { providers: [] } : { loaded: path });
   vi.spyOn(passkeyService, 'supported').mockReturnValue(true);
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { syncQueue.stop(); vi.restoreAllMocks(); });
 
-describe('Settings index preload', () => {
-  it('waits for foreground traffic and cancels queued work on navigation', async () => {
-    vi.mocked(pendingUiRequests).mockReturnValue(1);
-    const controller = new AbortController();
-    const preload = preloadSettings(controller.signal);
-    await new Promise(resolve => setTimeout(resolve, 350));
-    expect(apiRequest).not.toHaveBeenCalled();
-    const foreground = vi.fn(async () => ({ doc: 'visible page' }));
-    await settingsResources.load('memory', foreground);
-    expect(foreground).toHaveBeenCalledOnce();
-    controller.abort();
-    await preload;
-    expect(apiRequest).not.toHaveBeenCalled();
-  });
-  it('runs only one background read at a time and stops the queue after leaving', async () => {
-    let finish!: (value: unknown) => void;
-    vi.mocked(apiRequest).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-    const controller = new AbortController();
-    const preload = preloadSettings(controller.signal);
-    await vi.waitFor(() => expect(finish).toBeDefined());
-    await new Promise(resolve => setTimeout(resolve, 200));
-    expect(apiRequest).toHaveBeenCalledOnce();
-    controller.abort();
-    finish({ providers: [] });
-    await preload;
-    expect(apiRequest).toHaveBeenCalledOnce();
-  });
-  it('loads every server-backed menu using reads only, before visiting destinations', async () => {
-    await preloadSettings();
+describe('shared Settings reads', () => {
+  it('loads every server-backed menu using reads only', async () => {
+    await Promise.all(Object.keys(settingsLoaders).map(key => syncSetting(key)));
     expect(vi.mocked(apiRequest).mock.calls.map(([path]) => path).sort()).toEqual([
       '/providers', '/settings', '/memory', '/storage', '/backups', '/local-tools/machines',
       '/voice/models', '/models', '/server/info', '/update/status', '/about', '/auth/webauthn/credentials',
     ].sort());
     for (const [, options] of vi.mocked(apiRequest).mock.calls) expect(options?.method ?? 'GET').toBe('GET');
-    expect(settingsResources.state('providers')).toMatchObject({ fresh: true, data: { providers: [] } });
-    expect(settingsResources.state('memory')).toMatchObject({ fresh: true, data: { loaded: '/memory' } });
   });
-  it('shares pending reads with navigation, then permits destination revalidation', async () => {
+  it('does not revalidate an already verified resource on route navigation', async () => {
+    settingsResources.accept('navigation-test', { value: 'cached' });
+    const loader = vi.fn(async () => ({})); ensureSetting('navigation-test', loader);
+    await Promise.resolve(); expect(loader).not.toHaveBeenCalled();
+    delete settingsLoaders['navigation-test'];
+  });
+  it('deduplicates a visible request with queued work and follows an actual invalidation', async () => {
     let finish!: (value: unknown) => void;
-    vi.mocked(apiRequest).mockImplementation(async (path) => path === '/providers'
-      ? new Promise((resolve) => { finish = resolve; }) : {});
-    const preload = preloadSettings();
-    await vi.waitFor(() => expect(finish).toBeDefined());
-    const navigationLoader = vi.fn(async () => ({ providers: [] }));
-    const navigation = settingsResources.load('providers', navigationLoader);
-    await vi.waitFor(() => expect(finish).toBeDefined());
-    finish({ providers: [] });
-    await Promise.all([preload, navigation]);
-    expect(navigationLoader).not.toHaveBeenCalled();
-    await settingsResources.load('providers', navigationLoader);
-    expect(navigationLoader).toHaveBeenCalledOnce();
+    const loader = vi.fn<() => Promise<unknown>>().mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue({ doc: 'new' });
+    const first = syncSetting('race-test', false, loader);
+    const second = syncSetting('race-test', true, loader);
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+    settingsResources.invalidate('race-test'); finish({ doc: 'old' });
+    await Promise.all([first, second]);
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(settingsResources.state('race-test').data).toEqual({ doc: 'new' });
   });
-  it('keeps other menus available when one request fails', async () => {
-    vi.mocked(apiRequest).mockImplementation(async (path) => {
-      if (path === '/memory') throw new Error('offline');
-      return path === '/providers' ? { providers: [] } : {};
-    });
-    await preloadSettings();
-    expect(settingsResources.state('memory').error).toBe(true);
-    expect(settingsResources.state('providers').fresh).toBe(true);
-    expect(settingsResources.state('settings').fresh).toBe(true);
-  });
-  it('warms supported subscription usage after provider discovery', async () => {
-    vi.mocked(apiRequest).mockImplementation(async (path) => path === '/providers'
-      ? { providers: [{ id: 'openai-codex', configured: true }] } : {});
-    await preloadSettings();
-    expect(settingsResources.state('subscription:openai-codex').fresh).toBe(true);
-  });
-  it('does not preload without an owner session', async () => {
-    vi.mocked(session.token).mockReturnValue(undefined);
-    await preloadSettings();
-    expect(apiRequest).not.toHaveBeenCalled();
-  });
-  it('does not start subscription follow-ups after logout', async () => {
-    let finish!: (value: unknown) => void;
-    vi.mocked(apiRequest).mockImplementation(async (path) => path === '/providers'
-      ? new Promise((resolve) => { finish = resolve; }) : {});
-    const preload = preloadSettings();
-    await vi.waitFor(() => expect(finish).toBeDefined());
-    session.clear();
-    finish({ providers: [{ id: 'openai-codex', configured: true }] });
-    await preload;
-    expect(settingsResources.state('subscription:openai-codex').data).toBeUndefined();
-    expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('subscription-usage'))).toBe(false);
+  it('finishes failed work without retrying it and continues other resources', async () => {
+    const failed = vi.fn(async () => { throw new Error('offline'); });
+    await Promise.all([syncSetting('failed-test', false, failed), syncSetting('good-test', false, async () => ({ ready: true }))]);
+    expect(failed).toHaveBeenCalledOnce(); expect(syncQueue.getState().busy).toBe(false);
+    expect(settingsResources.state('good-test').fresh).toBe(true);
   });
 });

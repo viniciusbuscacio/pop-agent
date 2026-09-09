@@ -36,9 +36,10 @@ export function BackupSection() {
   useEffect(() => { if (resource.error) { setError(t('backup.loadFailed')); setLoading(false); } }, [resource.error]);
 
   useEffect(() => {
+    if (!running) return;
     const timer = window.setInterval(() => { void reload(); }, 10_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [running]);
 
   async function reload(): Promise<void> {
     await settingsResources.load('backups', () => backupsService.list());

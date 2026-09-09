@@ -5,9 +5,9 @@ import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import type { ChatDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useDismiss } from '../lib/dismiss';
-import { eventStream } from '../services/events';
 import { useChatStore } from '../store/chat';
 import { ShellFooter } from './shell-header';
+import { SnapshotLoading } from '../ui/snapshot-loading';
 import { useNotificationsStore } from '../store/notifications';
 import { useA2aStore } from '../store/a2a';
 import { useMcpStore } from '../store/mcp';
@@ -31,6 +31,7 @@ const chatHeaderIconButton =
 
 /** The conversation list: the sidebar on a wide screen, the home on a phone. */
 export function ChatList() {
+  const listsLoaded = useChatStore(state => state.listsLoaded);
   const navigate = useNavigate();
   const chats = useChatStore((state) => state.chats);
   const archived = useChatStore((state) => state.archived);
@@ -88,21 +89,6 @@ export function ChatList() {
     keepChat === undefined
       ? 0
       : chats.filter((chat) => chat.id !== keepChat.id && !chat.pinned).length;
-
-  useEffect(() => {
-    void loadChats();
-    void loadArchived();
-  }, [loadChats, loadArchived]);
-
-  // Lifecycle events update connected clients immediately. A sleeping PWA or
-  // disconnected desktop can still miss them, so reconcile with the canonical
-  // lists whenever the shared stream resumes or reconnects.
-  useEffect(() => {
-    return eventStream.onResume(() => {
-      void loadChats();
-      void loadArchived();
-    });
-  }, [loadChats, loadArchived]);
 
   // Both lists, because the archived one is a click away and a stale count in
   // that heading is the kind of thing a pull is meant to fix.
@@ -203,6 +189,7 @@ export function ChatList() {
   return (
     <>
       <SidebarNav />
+      {!listsLoaded ? <SnapshotLoading resource="chats" /> : null}
       <div className="flex flex-col gap-2 p-3">
         {/* The primary action and the list menu share one line: the ⋯ on a row
             of its own was a strip of empty sidebar above the button. */}

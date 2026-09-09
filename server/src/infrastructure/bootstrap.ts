@@ -61,7 +61,7 @@ export interface AppContext {
   dataDir: string;
   /** The raw key that unlocks secrets and signs Files download links (§9, §14). */
   secretKey: Buffer;
-  settings: SettingsRepo;
+  settings: SettingsRepo & { onChanged?: (key: string) => void };
   secrets: SecretsRepo;
   chats: ChatRepo;
   /** One durable follow-up row per chat. */
@@ -84,7 +84,7 @@ export interface AppContext {
   skillRevisions: SkillRevisionsRepo;
   /** Crash journal for reviewed filesystem publications. */
   autoSkillPublications: AutoSkillPublicationRepo;
-  userMemory: UserMemoryRepo;
+  userMemory: UserMemoryRepo & { onChanged?: () => void };
   usage: UsageRepo;
   /** What the database can say about its own weight (docs/specs/Spec-Pop-General.md §14). */
   storage: StorageRepo;

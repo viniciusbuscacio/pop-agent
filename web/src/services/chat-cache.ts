@@ -1,4 +1,4 @@
-import type { MessageDTO } from '@pop-agent/shared';
+import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
 
 /**
  * A small, device-local transcript cache. The server remains authoritative:
@@ -7,7 +7,9 @@ import type { MessageDTO } from '@pop-agent/shared';
  */
 const DATABASE = 'pop-agent-chat-cache';
 const STORE = 'transcripts';
-const VERSION = 1;
+const VERSION = 2;
+let generation = 0;
+let storageFailed = false;
 export const CHAT_CACHE_MAX_BYTES = 50 * 1024 * 1024;
 
 interface CachedTranscript {
@@ -41,6 +43,7 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(DATABASE, VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
+      if (!database.objectStoreNames.contains('lists')) database.createObjectStore('lists');
       if (!database.objectStoreNames.contains(STORE)) {
         const store = database.createObjectStore(STORE, { keyPath: 'chatId' });
         store.createIndex('accessedAt', 'accessedAt');
@@ -67,7 +70,31 @@ function encodedSize(messages: MessageDTO[]): number {
 }
 
 export const chatCache = {
+  storageFailed: () => storageFailed,
+  async getLists(): Promise<{ chats: ChatDTO[]; archived: ChatDTO[] } | undefined> {
+    const started = generation;
+    const db = await database();
+    if (!db) return undefined;
+    try {
+      const result = await requestResult(db.transaction('lists').objectStore('lists').get('all')) as { chats: ChatDTO[]; archived: ChatDTO[] } | undefined;
+      return started === generation && Array.isArray(result?.chats) && Array.isArray(result?.archived) ? result : undefined;
+    } catch { return undefined; }
+    finally { db.close(); }
+  },
+  async putLists(chats: ChatDTO[], archived: ChatDTO[]): Promise<void> {
+    const started = generation;
+    const db = await database();
+    if (!db) return;
+    try {
+      if (started !== generation) return;
+      const tx = db.transaction('lists', 'readwrite');
+      tx.objectStore('lists').put({ chats, archived }, 'all');
+      await transactionDone(tx);
+    } catch { storageFailed = true; }
+    finally { db.close(); }
+  },
   async get(chatId: string): Promise<MessageDTO[] | undefined> {
+    const started = generation;
     const db = await database();
     if (db === undefined) return undefined;
     try {
@@ -76,7 +103,7 @@ export const chatCache = {
       const cached = await requestResult(store.get(chatId)) as CachedTranscript | undefined;
       if (cached !== undefined) store.put({ ...cached, accessedAt: Date.now() });
       await transactionDone(transaction);
-      return cached?.messages;
+      return started === generation ? cached?.messages : undefined;
     } catch {
       return undefined;
     } finally {
@@ -85,27 +112,21 @@ export const chatCache = {
   },
 
   async put(chatId: string, messages: MessageDTO[]): Promise<void> {
+    const started = generation;
     const db = await database();
     if (db === undefined) return;
     try {
+      if (started !== generation) return;
       const byteSize = encodedSize(messages);
+      if (byteSize > CHAT_CACHE_MAX_BYTES) { storageFailed = true; return; }
       const transaction = db.transaction(STORE, 'readwrite');
       const store = transaction.objectStore(STORE);
-      if (byteSize > CHAT_CACHE_MAX_BYTES) {
-        store.delete(chatId);
-      } else {
         store.put({ chatId, messages, byteSize, accessedAt: Date.now() } satisfies CachedTranscript);
-        const entries = await requestResult(store.getAll()) as CachedTranscript[];
-        let total = entries.reduce((sum, entry) => sum + entry.byteSize, 0);
-        for (const entry of entries.sort((a, b) => a.accessedAt - b.accessedAt)) {
-          if (total <= CHAT_CACHE_MAX_BYTES) break;
-          store.delete(entry.chatId);
-          total -= entry.byteSize;
-        }
-      }
+        // Browser quota bounds total storage. Do not evict other conversations
+        // during a full warmup, which would create a perpetual redownload loop.
       await transactionDone(transaction);
     } catch {
-      // Quota pressure or a denied write only disables this optimization.
+      storageFailed = true;
     } finally {
       db.close();
     }
@@ -126,6 +147,8 @@ export const chatCache = {
   },
 
   clear(): void {
+    generation++;
+    storageFailed = false;
     if (!available()) return;
     // Deleting the database also removes entries from older schema versions.
     try {

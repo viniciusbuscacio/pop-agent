@@ -3,6 +3,7 @@ import type { Db } from './types.js';
 
 /** SQLite adapter for {@link SettingsRepo}: one JSON document per key. */
 export class SqliteSettingsRepo implements SettingsRepo {
+  onChanged?: (key: string) => void;
   constructor(private readonly db: Db) {}
 
   get<T>(key: string): T | undefined {
@@ -19,5 +20,6 @@ export class SqliteSettingsRepo implements SettingsRepo {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       )
       .run(key, JSON.stringify(value));
+    this.onChanged?.(key);
   }
 }

@@ -71,7 +71,7 @@ export class Transcript {
       event.kind === 'chat-pin-changed' ||
       event.kind === 'chat-model-changed' ||
       event.kind === 'chat-execution-mode-changed' ||
-      event.kind === 'local-machines-changed'
+      event.kind === 'local-machines-changed' || event.kind === 'resources-changed'
     ) return false;
     if (event.chatId !== this.state.chatId) return false;
     // `title` is the one event about the chat rather than a run: it carries no

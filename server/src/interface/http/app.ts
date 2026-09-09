@@ -77,6 +77,7 @@ import { createStorageRoutes } from './storage-routes.js';
 import { createSettingsRoutes } from './settings-routes.js';
 import { createServerRoutes } from './server-routes.js';
 import { type SseHub } from './sse-hub.js';
+import { createSyncRoutes, changedSettingsResources } from './sync-routes.js';
 import { createStaticSite } from './static-site.js';
 import { createMcpRoutes } from './mcp-routes.js';
 import { createA2aRoutes } from './a2a-routes.js';
@@ -201,6 +202,13 @@ export function createApp(deps: AppDeps): Hono {
   // session-guarded or a declared public surface with a written reason --
   // an unauthenticated URL cannot be mounted by accident, and the probe in
   // route-guard.test.ts verifies the runtime half of the same invariant.
+  app.use('/v1/*', async (c, next) => {
+    await next();
+    if (c.res.status >= 200 && c.res.status < 300) {
+      const keys = changedSettingsResources(c.req.method, c.req.path);
+      if (keys.length) deps.hub.invalidate(keys);
+    }
+  });
   mountApi(app, authMiddleware(deps.auth, deps.integrations), {
     public: [
       ...(deps.a2aSettings && deps.a2aProtocol ? [publicSurface('A2A card and protocol enforce their own independent enabled switch, IP allowlist and bearer key.', createA2aServerRoutes(deps.a2aSettings, deps.a2aProtocol))] : []),
@@ -226,6 +234,7 @@ export function createApp(deps: AppDeps): Hono {
       ),
     ],
     guarded: [
+      sessionGuarded(createSyncRoutes(deps.hub)),
       ...(deps.a2aSettings && deps.a2aProtocol ? [sessionGuarded(createA2aSettingsRoutes(deps.a2aSettings, deps.a2aProtocol))] : []),
       ...(deps.uiBridge && deps.integrations ? [sessionGuarded(createUiControlRoutes(deps.uiBridge, deps.integrations))] : []),
       ...(deps.integrations === undefined ? [] : [sessionGuarded(createIntegrationRoutes(deps.integrations, deps.chats, deps.restClients))]),

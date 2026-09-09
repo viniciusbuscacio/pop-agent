@@ -3,6 +3,7 @@ import type { Db } from './types.js';
 
 /** SQLite adapter for {@link UserMemoryRepo}: the one-row living document. */
 export class SqliteUserMemoryRepo implements UserMemoryRepo {
+  onChanged?: () => void;
   constructor(private readonly db: Db) {}
 
   read(): UserMemory {
@@ -21,6 +22,7 @@ export class SqliteUserMemoryRepo implements UserMemoryRepo {
     this.db
       .prepare('UPDATE user_memory SET backup = doc, doc = ? WHERE id = 1')
       .run(doc);
+    this.onChanged?.();
   }
 
   restoreBackup(): void {
@@ -28,6 +30,7 @@ export class SqliteUserMemoryRepo implements UserMemoryRepo {
     this.db
       .prepare('UPDATE user_memory SET doc = ?, backup = ? WHERE id = 1')
       .run(current.backup, current.doc);
+    this.onChanged?.();
   }
 
   markCondensed(at: string): void {

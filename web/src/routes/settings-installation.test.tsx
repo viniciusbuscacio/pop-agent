@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { settingsResources } from '../services/settings-resources';
+import { syncSetting } from '../services/settings-preload';
+import { syncQueue } from '../services/sync-queue';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -35,6 +37,7 @@ vi.mock('../services/events', () => ({
 }));
 
 beforeEach(() => {
+  syncQueue.stop();
   settingsResources.clear();
   window.history.replaceState({}, '', '/settings?section=installation');
   window.localStorage.clear();
@@ -143,7 +146,8 @@ describe('Settings installation guide', () => {
     expect(toggle).toHaveProperty('checked', false);
 
     await act(async () => {
-      for (const listener of eventMocks.listeners) listener({ kind: 'local-machines-changed' });
+      settingsResources.invalidate('devices');
+      await syncSetting('devices');
     });
 
     await waitFor(() => expect(toggle).toHaveProperty('checked', true));
@@ -165,14 +169,15 @@ describe('Settings installation guide', () => {
     await waitFor(() => expect(localAccessMocks.machines).toHaveBeenCalledOnce());
 
     await act(async () => {
-      for (const listener of eventMocks.listeners) listener({ kind: 'local-machines-changed' });
+      settingsResources.invalidate('devices');
+      void syncSetting('devices');
     });
+    await act(async () => resolveFirst({ machines: [machine] }));
     await waitFor(() => expect(localAccessMocks.machines).toHaveBeenCalledTimes(2));
     await act(async () => resolveSecond({ machines: [{ ...machine, enabled: true }] }));
     const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
     expect(toggle).toHaveProperty('checked', true);
 
-    await act(async () => resolveFirst({ machines: [machine] }));
     expect(toggle).toHaveProperty('checked', true);
   });
 

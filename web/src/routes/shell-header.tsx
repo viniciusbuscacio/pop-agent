@@ -6,7 +6,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
 import { healthMonitor, type HealthState } from '../services/health';
 import { useDismiss } from '../lib/dismiss';
-import { retryHardRefresh } from '../services/hard-refresh';
+import { refreshClientData } from '../services/client-sync';
+import { syncQueue } from '../services/sync-queue';
+import { chatCache } from '../services/chat-cache';
 import { useNotificationsStore } from '../store/notifications';
 
 /**
@@ -92,22 +94,24 @@ function useOpenSettings(): () => void {
 }
 
 /** Retry a manual refresh quietly; only exhaustion posts a normal top toast. */
-function RefreshButton() {
-  const [busy, setBusy] = useState(false);
+export function RefreshButton() {
+  const { busy, errors } = useSyncExternalStore(syncQueue.subscribe, syncQueue.getState);
   const notify = useNotificationsStore(state => state.notify);
   async function refresh(): Promise<void> {
     if (busy) return;
-    setBusy(true);
-    try { await retryHardRefresh(); }
+    try {
+      await refreshClientData();
+      if (syncQueue.getState().errors.length) notify(t('shell.refreshFailed'));
+      else if (chatCache.storageFailed()) notify(t('shell.cacheLimited'));
+    }
     catch { notify(t('shell.refreshFailed')); }
-    finally { setBusy(false); }
   }
   return <>
     <Pressable
       type="button"
       data-testid="shell-refresh"
       aria-label={t('shell.refresh')}
-      title={t('shell.refresh')}
+      title={errors.length ? t('shell.refreshFailed') : chatCache.storageFailed() ? t('shell.cacheLimited') : t('shell.refresh')}
       disabled={busy}
       onClick={() => void refresh()}
       className="rounded-md p-2 text-[var(--key-fg-dim)] hover:bg-[var(--hover-overlay)]"

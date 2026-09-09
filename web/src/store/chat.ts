@@ -12,6 +12,7 @@ import type {
 import { ApiError } from '../services/api';
 import { chatCache } from '../services/chat-cache';
 import { chatsService } from '../services/chats';
+import { session } from '../services/session';
 
 /**
  * Everything the chat UI reads. The interesting part is what happens between a
@@ -39,6 +40,7 @@ export interface LiveRun {
 }
 
 interface ChatState {
+  listsLoaded: boolean;
   chats: ChatDTO[];
   archived: ChatDTO[];
   messages: Record<string, MessageDTO[]>;
@@ -50,10 +52,10 @@ interface ChatState {
   /** A risky action paused mid-run, waiting for Allow or Deny (docs/specs/Spec-Pop-General.md §10). */
   confirms: Record<string, { runId: string; action: string; detail: string }>;
 
-  loadChats: () => Promise<void>;
-  loadArchived: () => Promise<void>;
+  loadChats: (signal?: AbortSignal) => Promise<void>;
+  loadArchived: (signal?: AbortSignal) => Promise<void>;
   createChat: () => Promise<ChatDTO>;
-  openChat: (chatId: string) => Promise<void>;
+  openChat: (chatId: string, background?: boolean, signal?: AbortSignal, textOnly?: boolean) => Promise<void>;
   send: (
     chatId: string,
     text: string,
@@ -82,6 +84,12 @@ interface ChatState {
 
 /** Runs that have ended, so their stragglers are not mistaken for a new run. */
 const finished = new Set<string>();
+const chatReads = new Map<string, number>();
+let listRead = 0;
+let archiveRead = 0;
+let listEvents = 0;
+const deletedChats = new Set<string>();
+const snapshotEvents = new Map<string, { events: StreamEvent[]; bytes: number; overflow: boolean }>();
 /** Legacy v0.2 queue keys, read once and migrated to the server on open. */
 const QUEUED_STORAGE_PREFIX = 'pop-agent.queued.';
 const FINISHED_MEMORY = 50;
@@ -151,6 +159,7 @@ function moveChatArchive(
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
+  listsLoaded: false,
   chats: [],
   archived: [],
   messages: {},
@@ -159,14 +168,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
   failures: {},
   confirms: {},
 
-  async loadChats() {
-    const { chats } = await chatsService.list(false);
-    set({ chats });
+  async loadChats(signal) {
+    const generation = session.generation();
+    const revision = ++listRead;
+    const events = listEvents;
+    const { chats } = await chatsService.list(false, signal);
+    if (generation !== session.generation() || signal?.aborted || revision !== listRead) return;
+    if (events !== listEvents) throw new Error('Chat list changed during synchronization');
+    set({ chats, listsLoaded: true });
+    void chatCache.putLists(chats, get().archived);
   },
 
-  async loadArchived() {
-    const { chats } = await chatsService.list(true);
+  async loadArchived(signal) {
+    const generation = session.generation();
+    const revision = ++archiveRead;
+    const events = listEvents;
+    const { chats } = await chatsService.list(true, signal);
+    if (generation !== session.generation() || signal?.aborted || revision !== archiveRead) return;
+    if (events !== listEvents) throw new Error('Archived list changed during synchronization');
     set({ archived: chats });
+    void chatCache.putLists(get().chats, chats);
   },
 
   async createChat() {
@@ -187,19 +208,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * streamed instead of a blank bubble (aw's partial-reply buffer). Fragments
    * older than the snapshot's `seq` are dropped in {@link apply}.
    */
-  async openChat(chatId) {
+  async openChat(chatId, background = false, signal, textOnly = background) {
+    const generation = session.generation();
+    const read = (chatReads.get(chatId) ?? 0) + 1;
+    chatReads.set(chatId, read);
+    const received = { events: [] as StreamEvent[], bytes: 0, overflow: false };
+    snapshotEvents.set(chatId, received);
     // Stale-while-revalidate: paint the cached tail first after a cold launch,
     // then let the server response below reconcile history and all live state.
-    const cachedRequest = chatCache.get(chatId);
-    const serverRequest = chatsService.messages(chatId);
-    const cached = await cachedRequest;
-    if (cached !== undefined && get().messages[chatId] === undefined) {
-      set((state) => ({ messages: { ...state.messages, [chatId]: cached } }));
-    }
+    void chatCache.get(chatId).then(cached => {
+      if (generation === session.generation() && !deletedChats.has(chatId) && cached !== undefined && get().messages[chatId] === undefined) {
+        set((state) => ({ messages: { ...state.messages, [chatId]: cached } }));
+      }
+    });
+    const serverRequest = chatsService.messages(chatId, undefined, textOnly, signal);
 
-    const { messages, live, queued, pending: snapshot } = await serverRequest;
+    const result = await serverRequest.finally(() => {
+      if (snapshotEvents.get(chatId) === received) snapshotEvents.delete(chatId);
+    });
+    if (generation !== session.generation() || signal?.aborted || chatReads.get(chatId) !== read || deletedChats.has(chatId)) return;
+    if (received.overflow) throw new Error('Snapshot event buffer exceeded');
+    const { live, queued, pending: snapshot } = result;
+    const messages = result.messages;
+    // Replay only the window that raced this HTTP read. Snapshot sequence
+    // filtering drops older fragments; terminal events remain after their data.
+    for (const event of received.events) {
+      if (event.kind === 'done' || event.kind === 'error') finished.delete(event.runId);
+    }
     const pending = snapshot ?? (queued === undefined ? [] : [queued]);
-    const legacy = readQueuedMessage(chatId);
+    const legacy = background ? undefined : readQueuedMessage(chatId);
     // Another upgraded tab may already have uploaded this exact legacy row.
     // Delete only that duplicate. If the server slot contains different text,
     // keep the older local row until the slot frees instead of silently eating
@@ -226,11 +263,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? without(state.pending, chatId)
           : { ...state.pending, [chatId]: pending },
     }));
-    void chatCache.put(chatId, messages);
+    for (const event of received.events) get().apply(event);
+    await chatCache.put(chatId, get().messages[chatId] ?? messages);
     // One-time upgrade path from the former localStorage queue. The ordinary
     // send endpoint decides atomically whether this starts now or occupies the
     // server slot, then the old browser copy can be removed.
-    if (pending.length === 0 && legacy !== undefined) {
+    if (generation === session.generation() && !signal?.aborted && pending.length === 0 && legacy !== undefined) {
       try {
         await get().send(chatId, legacy.text, legacy.attachments, legacy.filePaths);
         deleteQueuedMessage(chatId);
@@ -476,6 +514,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   apply(event) {
+    if ('chatId' in event) {
+      const snapshot = snapshotEvents.get(event.chatId);
+      if (snapshot) {
+        snapshot.bytes += new TextEncoder().encode(JSON.stringify(event)).byteLength;
+        if (snapshot.events.length < 4096 && snapshot.bytes <= 8 * 1024 * 1024) snapshot.events.push(event);
+        else snapshot.overflow = true;
+      }
+      if (event.kind === 'chat-deleted') deletedChats.add(event.chatId);
+      if (event.kind.startsWith('chat-') || event.kind === 'title') listEvents++;
+    }
     if (event.kind === 'chat-created') {
       set((state) => ({
         chats: upsertChat(state.chats, event.chat),
@@ -635,7 +683,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
-    if (event.kind === 'local-machines-changed') return;
+    if (event.kind === 'local-machines-changed' || event.kind === 'resources-changed') return;
 
     const { chatId, runId } = event;
     const current = get().live[chatId];
@@ -746,7 +794,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             stored.length > 0
               ? {
                   ...state.messages,
-                  [chatId]: [...(state.messages[chatId] ?? []), ...stored],
+                  [chatId]: [...(state.messages[chatId] ?? []), ...stored.filter(message => !(state.messages[chatId] ?? []).some(existing => existing.id === message.id))],
                 }
               : state.messages,
           live: without(state.live, chatId),
@@ -762,9 +810,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   reset() {
+    chatReads.clear(); deletedChats.clear(); snapshotEvents.clear();
+    listRead++; archiveRead++; listEvents++;
     finished.clear();
     clearQueuedMessages();
     set({
+      listsLoaded: false,
       chats: [],
       archived: [],
       messages: {},
@@ -778,7 +829,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 function sameMessages(current: MessageDTO[] | undefined, fresh: MessageDTO[]): boolean {
   if (current === undefined || current.length !== fresh.length) return false;
-  return current.every((message, index) => message.id === fresh[index]?.id);
+  return current.every((message, index) => message.id === fresh[index]?.id && JSON.stringify(message) === JSON.stringify(fresh[index]));
 }
 
 function upsertPending(items: QueuedMessageDTO[], message: QueuedMessageDTO): QueuedMessageDTO[] {

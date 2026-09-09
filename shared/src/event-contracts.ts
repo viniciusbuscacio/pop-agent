@@ -9,12 +9,19 @@ export interface EventTicketResponse {
   ticket: string;
 }
 
+/** Process-scoped revisions, not an event log or authorization grant. */
+export interface SyncManifestResponse {
+  epoch: string;
+  revisions: Record<string, number>;
+}
+
 /**
  * Events delivered over the single SSE channel `GET /v1/events`. Fragments
  * (`delta`, `thinking`, `tool`) carry a per-run `seq` so a client holding a
  * live snapshot can drop what the snapshot already contains.
  */
 export type StreamEvent =
+  | { kind: 'resources-changed'; keys: string[] }
   | { kind: 'chat-created'; chatId: string; chat: ChatDTO }
   | { kind: 'chat-deleted'; chatId: string }
   | { kind: 'chat-archived-changed'; chatId: string; archived: boolean }

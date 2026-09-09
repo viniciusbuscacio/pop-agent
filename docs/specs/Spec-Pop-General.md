@@ -45,6 +45,7 @@ to silently choose one side.
 | §§19–20 — versioning and working conventions | this document |
 | §21 — background tasks and maintenance | [Spec-Pop-Background-Tasks.md](Spec-Pop-Background-Tasks.md) |
 | SSE and snapshot synchronization | [Spec-Pop-Events-Synchronization.md](Spec-Pop-Events-Synchronization.md) |
+| Cache-first client synchronization | [Spec-Pop-Client-Synchronization.md](Spec-Pop-Client-Synchronization.md) |
 | UI design system | [Spec-Pop-Style-Guide.md](Spec-Pop-Style-Guide.md) |
 | Detailed historical decisions | [History-Pop-Spec.md](History-Pop-Spec.md) and Git history |
 

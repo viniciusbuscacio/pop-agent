@@ -152,8 +152,16 @@ export const pendingUiRequests = (): number => activeUiRequests;
 export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal } = {}, runtime: ApiRequestRuntime = {}): Promise<T> {
   const counted = !path.startsWith('/ui/');
   if (counted) activeUiRequests++;
-  try { return await performApiRequest<T>(path, init, runtime); }
-  finally { if (counted) activeUiRequests--; }
+  // Snapshot reads must release the network lane even if the server/proxy
+  // accepts a connection and never completes its body. Mutations retain their
+  // operation-specific policies (an aborted write can still finish remotely).
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  if (init.signal?.aborted) abort();
+  const timer = (init.method ?? 'GET') === 'GET' || path === '/events/ticket' ? setTimeout(abort, 14_000) : undefined;
+  try { return await performApiRequest<T>(path, { ...init, signal: controller.signal }, runtime); }
+  finally { clearTimeout(timer); init.signal?.removeEventListener('abort', abort); if (counted) activeUiRequests--; }
 }
 
 async function performApiRequest<T>(

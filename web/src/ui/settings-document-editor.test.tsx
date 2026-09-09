@@ -6,6 +6,8 @@ import { SettingsSyncBoundary } from './settings-sync';
 import { settingsResources } from '../services/settings-resources';
 import { settingsCache } from '../services/settings-cache';
 import { settingsService } from '../services/settings';
+import { syncSetting } from '../services/settings-preload';
+import { syncQueue } from '../services/sync-queue';
 vi.mock('../services/settings-cache', () => ({ settingsCache: { read: vi.fn(), write: vi.fn(), clear: vi.fn() } }));
 vi.mock('../services/settings', () => ({ settingsService: { readMemory: vi.fn(), writeMemory: vi.fn(), restoreMemory: vi.fn() } }));
 vi.mock('../services/health', () => ({ healthMonitor: { getState: () => ({ kind: 'ok' }), subscribe: () => () => undefined } }));
@@ -15,7 +17,7 @@ beforeEach(() => {
   vi.mocked(settingsCache.read).mockResolvedValue(undefined);
   vi.mocked(settingsService.readMemory).mockResolvedValue({ doc: 'Original', hasBackup: false });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); syncQueue.stop(); });
 function show() { render(<SettingsSyncBoundary><SettingsDocumentEditor kind="memory" /></SettingsSyncBoundary>); }
 async function ready() { await waitFor(() => expect((screen.getByTestId('settings-memory') as HTMLTextAreaElement).value).toBe('Original')); }
 
@@ -61,11 +63,11 @@ describe('Settings document recovery', () => {
     expect((screen.getByTestId('settings-memory') as HTMLTextAreaElement).value).toBe('Newer typing');
     expect((screen.getByTestId('settings-memory-save') as HTMLButtonElement).disabled).toBe(false);
   });
-  it('revalidates on returning online without replacing a dirty draft', async () => {
+  it('reconciles a changed resource after recovery without replacing a dirty draft', async () => {
     show(); await ready();
     fireEvent.change(screen.getByTestId('settings-memory'), { target: { value: 'Draft' } });
     vi.mocked(settingsService.readMemory).mockResolvedValue({ doc: 'Remote', hasBackup: true });
-    fireEvent(window, new Event('online'));
+    await act(async () => { settingsResources.invalidate('memory'); await syncSetting('memory'); });
     await screen.findByLabelText('Latest server version');
     expect((screen.getByTestId('settings-memory') as HTMLTextAreaElement).value).toBe('Draft');
     fireEvent.click(screen.getByTestId('settings-memory-cancel'));

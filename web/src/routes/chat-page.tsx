@@ -7,7 +7,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { chatsService } from '../services/chats';
-import { eventStream } from '../services/events';
+import { ensureChat } from '../services/client-sync';
+import { SnapshotLoading } from '../ui/snapshot-loading';
 import { providersService } from '../services/providers';
 import type { ModelChoice } from '../ui/slash-menu';
 import { useChatStore } from '../store/chat';
@@ -81,7 +82,7 @@ export function ChatPage() {
     }
     // On mount and on every chat change, the stored history replaces whatever
     // was on screen: a reload mid-run must not show the answer twice.
-    void openChat(chatId);
+    const leaveChat = ensureChat(chatId);
     setContext(undefined);setQuoteRequest(undefined);
     setShowJump(false);
     setEditingPendingId(undefined);
@@ -90,14 +91,7 @@ export function ChatPage() {
     setCompacting(false);
     atBottom.current = true;
     lastScrollTop.current = 0;
-  }, [chatId, openChat]);
-
-  useEffect(() => {
-    // Whatever arrived while the phone had the app suspended was never
-    // delivered; the stored history is the only way to catch up.
-    return eventStream.onResume(() => {
-      void openChat(chatId);
-    });
+    return leaveChat;
   }, [chatId, openChat]);
 
   useEffect(() => {
@@ -359,6 +353,7 @@ export function ChatPage() {
         ) : null}
 
         <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[95%]">
+          {messages === undefined ? <SnapshotLoading resource={`chat:${chatId}`} /> : null}
           {transcriptWithCommands}
 
           {live?.status === 'running' ? (

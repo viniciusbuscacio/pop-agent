@@ -1,7 +1,7 @@
 import { useSettingsLoad } from '../ui/settings-sync';
 import { settingsResources } from '../services/settings-resources';
 import { useSettingsDetail } from './settings-breadcrumbs';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { LocalMachineAccessDTO } from '@pop-agent/shared';
 import { clientEnvironment } from '../services/api';
 import { t } from '../i18n';
@@ -11,7 +11,6 @@ import {
   subscribePwaInstall,
 } from '../services/pwa-install';
 import { localAccessService } from '../services/local-access';
-import { eventStream } from '../services/events';
 import {
   selectLocalConnection,
   selectedLocalConnection,
@@ -122,9 +121,6 @@ export function DevicesSection() {
       selectLocalConnection(undefined); setSelectedConnection('');
     } else setSelectedConnection(selectedId ?? '');
   });
-  useEffect(() => eventStream.subscribe((event) => {
-    if (event.kind === 'local-machines-changed') void settingsResources.load('devices', () => localAccessService.machines(), true);
-  }), []);
 
   async function setMachineEnabled(machineId: string, enabled: boolean): Promise<void> {
     try {

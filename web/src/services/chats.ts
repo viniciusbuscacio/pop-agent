@@ -21,8 +21,8 @@ import type {
 import { apiRequest } from './api';
 
 export const chatsService = {
-  list(archived = false): Promise<ChatListResponse> {
-    return apiRequest<ChatListResponse>(`/chats?archived=${String(archived)}`);
+  list(archived = false, signal?: AbortSignal): Promise<ChatListResponse> {
+    return apiRequest<ChatListResponse>(`/chats?archived=${String(archived)}`, signal ? { signal } : {});
   },
 
   create(): Promise<ChatDTO> {
@@ -55,9 +55,12 @@ export const chatsService = {
     return apiRequest<void>(`/chats/${id}`, { method: 'DELETE' });
   },
 
-  messages(id: string, before?: string): Promise<MessagesResponse> {
-    const query = before === undefined ? '' : `?before=${encodeURIComponent(before)}`;
-    return apiRequest<MessagesResponse>(`/chats/${id}/messages${query}`);
+  messages(id: string, before?: string, textOnly = false, signal?: AbortSignal): Promise<MessagesResponse> {
+    const params = new URLSearchParams();
+    if (before !== undefined) params.set('before', before);
+    if (textOnly) params.set('attachments', 'metadata');
+    const query = params.size ? `?${params}` : '';
+    return apiRequest<MessagesResponse>(`/chats/${id}/messages${query}`, signal ? { signal } : {});
   },
 
   send(

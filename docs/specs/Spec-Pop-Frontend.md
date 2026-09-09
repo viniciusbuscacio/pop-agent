@@ -196,32 +196,28 @@ update operations and security records are not persisted.
 
 A shared resource layer deduplicates reads, rejects stale responses after saves
 or session changes, hydrates disk independently of the network and retains the
-last successful value on failure. Mounted Settings consumers revalidate on
-foreground/pageshow, network recovery, SSE resume and a visible-only 60-second
-interval. Failed requests time out after 15 seconds and expose Retry. Saved
+last successful value on failure. The authenticated-app queue owns startup,
+manual refresh and revision-based reconnect recovery. Mounted consumers promote
+missing reads instead of polling; see [Client synchronization](Spec-Pop-Client-Synchronization.md).
+Failed requests time out after 15 seconds and expose Retry. Saved
 snapshots carry a last-saved timestamp and unconfirmed-state notice; actions
 remain unavailable until required data is verified. Optional subscription usage
 failure must not disable provider configuration. Devices never label cached
 presence as Online/Offline, and a failed fetch does not erase the machine list.
 
-Opening the Settings index or a direct destination queues independent reads for
-all server-backed Settings menus, warming the same shared resources and allowed
-persistent snapshots before those menus are visited. Navigation does not wait
-for the batch; one failure does not block other resources. Entering a destination
-still revalidates, sharing an already pending preload instead of duplicating it.
+Authenticated startup queues every server-backed Settings menu after chat
+snapshots, warming shared resources and allowed persistent snapshots before
+those menus are visited. Navigation promotes missing reads and shares pending
+work without revalidating an already verified resource or restarting the batch.
 The supported subscription allowance is prefetched after provider discovery,
 with session-generation protection. Preloading never starts connection tests,
 model requests, downloads, forced upstream update checks, permission prompts or
 mutations. Appearance, installation and notification preferences remain
 device-owned; security and live-operation snapshots remain memory-only.
 
-Foreground navigation never waits in the preload queue. Background preloading
-runs one read at a time, yields between reads and pauses while ordinary UI
-requests are pending or the document is hidden. Navigation cancels queued work;
-within Settings a new queue starts after the new destination has had a chance
-to load. Recently verified resources are skipped by preloading, but destination
-reads still revalidate normally. An already running read may finish and populate
-the shared cache; cancellation does not abort a read another consumer needs.
+Foreground navigation has a priority lane past an already running background
+read. Background work is sequential and finite. Navigation does not restart
+the queue. Logout cancels authenticated work and rejects late results.
 Storage scans, server diagnostics and upstream version checks run after basic
 configuration reads. This is client-side scheduling, not server preemption.
 
@@ -387,11 +383,12 @@ live, queue and routing remnant.
 - It stores the latest bounded transcript snapshot returned by the server.
 - Opening a chat starts cache and server reads together, paints cached content
   when available, then reconciles with the complete current server snapshot.
-- The server request is still the normal messages snapshot; there is no separate
-  revision-check endpoint in the current API.
+- Background reads request attachment metadata rather than binary bodies.
+  The authenticated `/v1/sync` manifest detects missed resource changes.
 - Each record stores encoded byte size and last-access time.
-- The global budget is 50 MB. Writes evict least-recently-used records until
-  under budget; a single record larger than the budget is not retained.
+- Browser quota bounds total storage; warmup never evicts other chats.
+  A single snapshot above 50 MiB retains the previous valid entry and reports
+  reduced offline availability. This tail cache is not an offline archive.
 - Reading refreshes recency. Chat deletion removes its record. Session clear
   deletes the entire database.
 - IndexedDB denial, private browsing, quota pressure and cache corruption must
@@ -683,7 +680,7 @@ Performance-sensitive chat tests must prove:
 - a large prior transcript does not re-render its Markdown for each delta;
 - scroll intent disarms follow without blocking native pan;
 - cached history paints before server reconciliation;
-- LRU/oversized/denied-cache paths remain bounded and safe.
+- oversized/denied-cache paths remain bounded and safe.
 
 PWA update tests must cover an old waiting worker plus a newer slow installing
 worker, installation-before-activation, fallback timing and reload-once.
@@ -739,14 +736,10 @@ REST API presents Server and Client as full-width rows with toggles and Edit.
 Tasks and Skills show existing entries with Edit links to their existing editors.
 Sidebar navigation and editor workflows remain canonical.
 
-The shell refresh button performs a full document navigation, not a list refresh.
-It first checks server reachability with a no-store request. Failure retains the
-current page and shows a retryable error. Success navigates the current route with
-a unique `_pop_refresh` query parameter; Workbox excludes that navigation from its
-app-shell fallback, forcing a network document. The marker is removed before the
-router starts. Other query parameters, fragment, authentication, preferences and
-service-worker registration (including push subscription) are preserved. This
-refresh does not clear all browser storage or install a server release.
+The shell and Settings refresh wheel share the finite client-data queue. They
+refresh content in place, preserving route, scroll, drafts and service-worker
+registration. They never perform document navigation or software installation.
+Explicit browser reload and PWA software recovery remain separate operations.
 
 Task creation is offered in the task explorer (sidebar on desktop, list screen on mobile); the Tasks overview does not duplicate New task.
 
@@ -774,7 +767,8 @@ The Files top bin is explicitly labelled Trash and opens the trash when no items
 
 Files previews render raster images and SVG as images fitted to the pane, never executable SVG documents. HTML/HTM has Preview and Source modes: downloaded content is rendered in an opaque sandbox without scripts, forms or parent navigation; its CSP permits inline styles and embedded images/fonts but no remote resources. Relative companion assets are not resolved. The server continues to refuse inline HTML/SVG. PDF retains the native browser viewer with explicit Open in browser and Download fallbacks; text editing remains unchanged. Object URLs are revoked on close/path change, including late loads.
 
-A manual shell refresh retries failed health probes at ten-second start intervals, up to ten attempts total, stopping immediately on successful navigation. Concurrent callers share one finite cycle. There is no fixed inline error; exhaustion emits a normal top notification, stops polling and enables a new manual attempt.
+A manual data refresh shares concurrent callers, bounds every read and stops
+after its finite batch. Failure retains content and permits a new manual attempt.
 
 Files accepts dropped folders and mixed files/folders. Capture entry handles synchronously during drop, read every directory batch until exhausted, and preserve the root folder name and nested paths under the folder open at drop time, including empty directories. Reading shows progress and allows cancellation; simultaneous uploads are blocked throughout traversal and upload. Files use the existing sequential upload/retry/limit pipeline. A traversal error is visible and never reported as success.
 

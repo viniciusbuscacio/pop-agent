@@ -449,11 +449,15 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
     const live = before === undefined ? deps.runs.liveRun(chatId) : undefined;
     const pending = before === undefined ? deps.queuedMessages.list(chatId) : [];
     const queued = pending[0];
+    const metadataOnly = c.req.query('attachments') === 'metadata';
+    const projectAttachments = <T extends { attachments: { name: string; type: string; dataUri: string }[] }>(value: T): T => metadataOnly
+      ? { ...value, attachments: value.attachments.map(attachment => ({ ...attachment, dataUri: '' })) }
+      : value;
     return c.json({
-      messages: messages.map(toMessageDto),
+      messages: messages.map(message => projectAttachments(toMessageDto(message))),
       ...(live === undefined ? {} : { live }),
-      ...(pending.length === 0 ? {} : { pending: pending.map(toQueuedMessageDto) }),
-      ...(queued === undefined ? {} : { queued: toQueuedMessageDto(queued) }),
+      ...(pending.length === 0 ? {} : { pending: pending.map(message => projectAttachments(toQueuedMessageDto(message))) }),
+      ...(queued === undefined ? {} : { queued: projectAttachments(toQueuedMessageDto(queued)) }),
     });
   });
 

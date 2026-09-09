@@ -8,12 +8,12 @@ export interface ResourceState {
   fresh: boolean;
   error: boolean;
 }
-interface Entry { state: ResourceState; listeners: Set<() => void>; revision: number; pending?: Promise<void> | undefined }
+interface Entry { state: ResourceState; listeners: Set<() => void>; revision: number; invalidations: number; pending?: Promise<void> | undefined }
 const entries = new Map<string, Entry>();
 let generation = 0;
 function entry(key: string): Entry {
   let result = entries.get(key);
-  if (!result) { result = { state: { loading: false, fresh: false, error: false }, listeners: new Set(), revision: 0 }; entries.set(key, result); }
+  if (!result) { result = { state: { loading: false, fresh: false, error: false }, listeners: new Set(), revision: 0, invalidations: 0 }; entries.set(key, result); }
   return result;
 }
 function publish(item: Entry, state: ResourceState): void {
@@ -22,6 +22,19 @@ function publish(item: Entry, state: ResourceState): void {
 }
 
 export const settingsResources = {
+  async hydrate(key: string): Promise<void> {
+    const item = entry(key);
+    const started = generation;
+    const cached = await settingsCache.read(key);
+    if (cached && generation === started && item.state.data === undefined) {
+      publish(item, { ...item.state, data: cached.data, savedAt: cached.savedAt });
+    }
+  },
+  invalidate(key: string): void {
+    const item = entry(key);
+    item.invalidations++;
+    publish(item, { ...item.state, fresh: false });
+  },
   state(key: string): ResourceState { return entry(key).state; },
   subscribe(key: string, listener: () => void): () => void {
     const item = entry(key); item.listeners.add(listener);
@@ -39,6 +52,7 @@ export const settingsResources = {
     const item = entry(key);
     if (item.pending && !force) return item.pending;
     const revision = ++item.revision;
+    const invalidations = item.invalidations;
     const started = generation;
     const current = () => generation === started && item.revision === revision;
     publish(item, { ...item.state, loading: true });
@@ -54,7 +68,10 @@ export const settingsResources = {
           Promise.resolve().then(loader),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Settings request timed out')), 15_000); }),
         ]);
-        if (current()) this.accept(key, data);
+        if (current()) {
+          if (invalidations === item.invalidations) this.accept(key, data);
+          else publish(item, { ...item.state, loading: false, fresh: false });
+        }
       } catch {
         if (current()) publish(item, { ...item.state, loading: false, fresh: false, error: true });
       } finally {

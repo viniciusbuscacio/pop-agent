@@ -78,7 +78,7 @@ describe('apiRequest', () => {
 
     expect((fetch.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({
       'x-pop-agent-local-connection': 'machine-mac',
-      'x-pop-agent-event-version': '2',
+      'x-pop-agent-event-version': '3',
     });
   });
 

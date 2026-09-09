@@ -1,5 +1,6 @@
 import { EVENT_STREAM_VERSION, type StreamEvent } from '@pop-agent/shared';
 import type { EventSink, RunEvent } from '../../application/ports/event-sink.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * The SSE hub: the adapter that turns application events into the single
@@ -13,10 +14,21 @@ import type { EventSink, RunEvent } from '../../application/ports/event-sink.js'
 export type Subscriber = (payload: string) => void;
 
 export class SseHub implements EventSink {
+  private readonly epoch = randomUUID();
+  private readonly revisions: Record<string, number> = {};
+  manifest() { return { epoch: this.epoch, revisions: { ...this.revisions } }; }
+  invalidate(keys: string[]): void { this.emit({ kind: 'resources-changed', keys }); }
   onIntegrationEvent?: (event: RunEvent) => void;
   private readonly subscribers = new Map<Subscriber, number>();
 
   emit(event: RunEvent): void {
+    const keys = event.kind === 'resources-changed' ? event.keys
+      : event.kind === 'local-machines-changed' ? ['devices']
+      : event.kind === 'chat-deleted' ? ['chats']
+      : event.kind === 'done' || event.kind === 'error' ? [`chat:${event.chatId}`, 'chats', 'storage', 'subscription:openai-codex']
+      : 'chatId' in event ? [`chat:${event.chatId}`, 'chats'] : [];
+    for (const key of keys) this.revisions[key] = (this.revisions[key] ?? 0) + 1;
+    if (event.kind === 'chat-deleted') delete this.revisions[`chat:${event.chatId}`];
     this.onIntegrationEvent?.(event);
     const wire = toStreamEvent(event);
     const payload = JSON.stringify(wire);
@@ -47,6 +59,7 @@ export class SseHub implements EventSink {
 
 /** New additive event kinds are withheld from legacy cached web bundles. */
 function minimumEventVersion(event: StreamEvent): number {
+  if (event.kind === 'resources-changed') return 3;
   return event.kind === 'chat-archived-changed' || event.kind === 'chat-model-changed' ? 2 : 1;
 }
 
@@ -57,6 +70,7 @@ function minimumEventVersion(event: StreamEvent): number {
  */
 export function toStreamEvent(event: RunEvent): StreamEvent {
   switch (event.kind) {
+    case 'resources-changed': return { kind: 'resources-changed', keys: [...event.keys] };
     case 'chat-created':
       return {
         kind: 'chat-created',

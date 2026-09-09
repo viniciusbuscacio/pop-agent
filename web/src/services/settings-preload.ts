@@ -8,54 +8,46 @@ import { voiceService } from './voice';
 import { serverService } from './server';
 import { passkeyService } from './passkey';
 import { session } from './session';
-import type { ProvidersResponse } from '@pop-agent/shared';
-import { pendingUiRequests } from './api';
+import { syncQueue } from './sync-queue';
 
-/** Yield between reads so input/navigation effects can start their requests. */
-function pause(signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); };
-    const timer = setTimeout(done, 150);
-    if (signal?.aborted) done();
-    else signal?.addEventListener('abort', done, { once: true });
+export const settingsLoaders: Record<string, () => Promise<unknown>> = {
+  providers: () => providersService.list(),
+  settings: () => settingsService.read(),
+  memory: () => settingsService.readMemory(),
+  devices: () => localAccessService.machines(),
+  'voice-models': () => voiceService.models(),
+  'model-catalog': () => chatsService.models(),
+  about: () => settingsService.about(),
+  passkeys: () => passkeyService.supported() ? passkeyService.list() : Promise.resolve({ credentials: [] }),
+  backups: () => backupsService.list(),
+  storage: () => settingsService.storage(),
+  'server-info': () => serverService.info(),
+  'update-status': () => settingsService.updateStatus(false),
+};
+
+/** Shared by boot, events and visible Settings controls. */
+export function syncSetting(key: string, foreground = false, loader = settingsLoaders[key]): Promise<void> {
+  if (!loader) return Promise.resolve();
+  const generation = session.generation();
+  const queueGeneration = syncQueue.generation();
+  void settingsResources.hydrate(key);
+  return syncQueue.add(`settings:${key}`, async (signal) => {
+    if (signal.aborted || session.generation() !== generation) return;
+    await settingsResources.load(key, loader);
+    if (settingsResources.state(key).error) throw new Error('Settings synchronization failed');
+  }, foreground).then(() => {
+    // An event during an in-flight read invalidates that response. Follow the
+    // actual change once, not a periodic timer or an automatic error retry.
+    const state = settingsResources.state(key);
+    if (syncQueue.generation() === queueGeneration && session.generation() === generation && !state.fresh && !state.error && !syncQueue.getState().errors.includes(`settings:${key}`)) {
+      return syncSetting(key, foreground, loader);
+    }
   });
 }
 
-/** Warm every server-backed Settings destination on entry, without mounting
- * hidden forms, starting operations or waiting for the slowest menu. */
-export async function preloadSettings(signal?: AbortSignal): Promise<void> {
-  if (!session.token()) return;
-  const generation = session.generation();
-  const current = () => !signal?.aborted && session.generation() === generation && !!session.token();
-  const queue: [string, () => Promise<unknown>][] = [
-    ['providers', () => providersService.list()],
-    ['settings', () => settingsService.read()],
-    ['memory', () => settingsService.readMemory()],
-    ['devices', () => localAccessService.machines()],
-    ['voice-models', () => voiceService.models()],
-    ['model-catalog', () => chatsService.models()],
-    ['about', () => settingsService.about()],
-    ['passkeys', () => passkeyService.supported() ? passkeyService.list() : Promise.resolve({ credentials: [] })],
-    ['backups', () => backupsService.list()],
-    ['storage', () => settingsService.storage()],
-    ['server-info', () => serverService.info()],
-    ['update-status', () => settingsService.updateStatus(false)],
-  ];
-  for (const [key, loader] of queue) {
-    do {
-      await pause(signal);
-      if (!current()) return;
-    } while (document.hidden || pendingUiRequests() > 0);
-    const state = settingsResources.state(key);
-    // A destination may already have loaded this resource while we yielded.
-    if (!state.fresh || Date.now() - (state.savedAt ?? 0) > 30_000) {
-      await settingsResources.load(key, loader);
-    }
-    if (key === 'providers' && current() && settingsResources.state(key).fresh) {
-      const response = settingsResources.state(key).data as ProvidersResponse;
-      if (response.providers.some((provider) => provider.id === 'openai-codex' && provider.configured)) {
-        queue.push(['subscription:openai-codex', () => providersService.subscriptionUsage('openai-codex')]);
-      }
-    }
-  }
+export function ensureSetting(key: string, loader: () => Promise<unknown>): void {
+  settingsLoaders[key] = loader;
+  void settingsResources.hydrate(key);
+  if (!settingsResources.state(key).fresh) void syncSetting(key, true, loader);
+  else syncQueue.promote(`settings:${key}`);
 }
