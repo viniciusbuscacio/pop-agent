@@ -57,6 +57,7 @@ import { lastActiveChatPath } from '../lib/last-active-chat';
 import { SettingsDocumentEditor } from '../ui/settings-document-editor';
 import { SettingsSyncBoundary, useSettingsLoad } from '../ui/settings-sync';
 import { preloadSettings } from '../services/settings-preload';
+import { settingsResources } from '../services/settings-resources';
 
 /** Settings is route navigation, not a row of tabs. On phones the index and
  * section are separate screens; wide screens keep the index beside the open
@@ -997,14 +998,7 @@ function AppUpdatesCard() {
               : t('settings.updates.checkForUpdates')}
         </Button>
       </div>
-      <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
-        <Row
-          label={t('settings.updates.checkAutomatically')}
-          value={t('settings.updates.everyMinutes', { count: 10 })}
-          testId="updates-automatic-status"
-        />
-        <p className="text-xs text-[var(--muted)]">{t('settings.updates.automaticApplyHint')}</p>
-      </div>
+      <p data-testid="updates-automatic-status" className="text-xs text-[var(--muted)]">{t('settings.updates.automaticApplyHint')}</p>
     </Card>
   );
 }
@@ -1270,18 +1264,15 @@ function UpdatesSection() {
       setRefreshNote(undefined);
     }
     try {
-      setUpdate(await settingsService.updateStatus(refresh));
-      if (refresh) setRefreshNote(t('settings.updates.refreshed'));
-    } catch {
-      if (refresh) setRefreshNote(t('settings.updates.refreshFailed'));
-      // During a supervised restart the server is expected to disappear for a
-      // moment. Keep the last truthful deployment card while polling it back.
+      await settingsResources.load('update-status', () => settingsService.updateStatus(refresh), refresh);
+      if (refresh) setRefreshNote(t(settingsResources.state('update-status').error
+        ? 'settings.updates.refreshFailed' : 'settings.updates.refreshed'));
     } finally {
       if (refresh) setRefreshing(false);
     }
   }
 
-  useSettingsLoad('update-status', () => settingsService.updateStatus(false), setUpdate);
+  const updateResource = useSettingsLoad('update-status', () => settingsService.updateStatus(false), setUpdate);
   useSettingsLoad('settings', () => settingsService.read(), setAppSettings);
 
   const popAgentOutdated =
@@ -1321,16 +1312,14 @@ function UpdatesSection() {
   }
 
   async function preparePiCandidate(): Promise<void> {
+    const generation = session.generation();
     setPreparingPi(true);
     setRefreshNote(undefined);
     try {
       const result = await settingsService.preparePiCandidate();
-      if (result.ok) {
-        setUpdate((current) =>
-          current === undefined
-            ? current
-            : { ...current, pi: { ...current.pi, candidate: result.candidate } },
-        );
+      if (result.ok && generation === session.generation()) {
+        const current = settingsResources.state('update-status').data as typeof update;
+        if (current) settingsResources.accept('update-status', { ...current, pi: { ...current.pi, candidate: result.candidate } });
       }
     } catch {
       setRefreshNote(t('settings.updates.piPrepareFailed'));
@@ -1341,16 +1330,14 @@ function UpdatesSection() {
 
   async function activatePiCandidate(): Promise<void> {
     if (!window.confirm(t('settings.updates.piActivateConfirm'))) return;
+    const generation = session.generation();
     setActivatingPi(true);
     setRefreshNote(undefined);
     try {
       const result = await settingsService.activatePiCandidate();
-      if (result.ok) {
-        setUpdate((current) =>
-          current === undefined
-            ? current
-            : { ...current, pi: { ...current.pi, candidate: result.candidate } },
-        );
+      if (result.ok && generation === session.generation()) {
+        const current = settingsResources.state('update-status').data as typeof update;
+        if (current) settingsResources.accept('update-status', { ...current, pi: { ...current.pi, candidate: result.candidate } });
       }
     } catch {
       setRefreshNote(t('settings.updates.piActivateFailed'));
@@ -1361,14 +1348,14 @@ function UpdatesSection() {
 
   async function restartWhenIdle(): Promise<void> {
     if (!window.confirm(t('settings.updates.restartConfirm'))) return;
+    const generation = session.generation();
     setDeploying(true);
     setRefreshNote(undefined);
     try {
       const result = await settingsService.restartWhenIdle();
-      if (result.ok) {
-        setUpdate((current) =>
-          current === undefined ? current : { ...current, deployment: result.deployment },
-        );
+      if (result.ok && generation === session.generation()) {
+        const current = settingsResources.state('update-status').data as typeof update;
+        if (current) settingsResources.accept('update-status', { ...current, deployment: result.deployment });
         setRefreshNote(t('settings.updates.restartScheduled'));
       }
     } catch {
@@ -1415,33 +1402,29 @@ function UpdatesSection() {
             testId="update-pop-agent-version"
           />
           <Row
-            label={t('settings.updates.serverBuild')}
-            value={deployment?.runningCommit ?? '…'}
-            testId="update-pop-agent-current"
-          />
-          <Row
             label={t('settings.updates.serverStatus')}
-            value={deployment === undefined ? '…' : t(`settings.updates.status.${deployment.phase}`)}
+            value={deployment === undefined ? t('settings.updates.unknown')
+              : deployment.phase === 'pending' && !deployment.prepared ? t('settings.updates.validationRequired')
+              : t(`settings.updates.status.${deployment.phase}`)}
             testId="update-deployment-phase"
           />
           <Row
             label={t('settings.updates.availableUpdate')}
-            value={popAgentOutdated ? (update?.popAgent.latest ?? '…') : t('settings.updates.none')}
+            value={updateResource.error ? t('settings.updates.checkFailed')
+              : update === undefined ? t('settings.updates.notChecked')
+              : update.popAgent.latest === undefined ? t('settings.updates.checkUnavailableRelease')
+              : popAgentOutdated ? update.popAgent.latest : t('settings.updates.noNewerRelease')}
             testId="update-server-available"
           />
-          {deployment?.pending ? (
-            <Row
-              label={t('settings.updates.readyToActivate')}
-              value={deployment.headCommit}
-              testId="update-head-commit"
-            />
-          ) : null}
         </div>
 
         {deployment?.clean === false ? (
           <p role="alert" className="text-sm text-[var(--danger)]">
             {t('settings.updates.dirtyTree')}
           </p>
+        ) : null}
+        {deployment?.pending && deployment.clean && !deployment.prepared ? (
+          <p role="status" className="text-sm text-[var(--muted)]">{t('settings.updates.validationHint')}</p>
         ) : null}
         {deployment?.error !== undefined ? (
           <p role="alert" className="text-sm text-[var(--danger)]">{deployment.error}</p>
@@ -1490,8 +1473,11 @@ function UpdatesSection() {
         </div>
 
         <details className="border-t border-[var(--border)] pt-4">
-          <summary className="cursor-pointer text-sm font-medium">{t('settings.updates.manualUpdate')}</summary>
+          <summary className="cursor-pointer text-sm font-medium">{t('settings.updates.technicalDetails')}</summary>
           <div className="mt-3 flex flex-col gap-3">
+            <Row label={t('settings.updates.runningCommit')} value={deployment?.runningCommit ?? '…'} testId="update-pop-agent-current" />
+            {deployment?.pending ? <Row label={t('settings.updates.checkoutCommit')} value={deployment.headCommit} testId="update-head-commit" /> : null}
+            <h3 className="text-sm font-medium">{t('settings.updates.manualUpdate')}</h3>
             <p className="text-xs text-[var(--muted)]">{t('settings.updates.how')}</p>
             <pre className="overflow-x-auto rounded bg-[var(--input-bg)] p-2 font-mono text-xs">
               {update?.updateCommand ?? '…'}
@@ -1501,6 +1487,7 @@ function UpdatesSection() {
                 type="button"
                 variant="ghost"
                 data-testid="update-copy-command"
+                disabled={!update?.updateCommand}
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(update?.updateCommand ?? '')
@@ -1519,6 +1506,7 @@ function UpdatesSection() {
           {t('settings.updates.aiRuntime')} · <span className="text-[var(--muted)]">{t('settings.updates.advanced')}</span>
         </summary>
         <div className="mt-4 flex flex-col gap-4">
+          <p className="text-xs text-[var(--muted)]">{t('settings.updates.piDescription')}</p>
           <div className="flex flex-col gap-2">
             <Row
               label={t('settings.updates.piActive')}

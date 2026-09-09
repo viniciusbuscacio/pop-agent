@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify Updates with explicit Pi agent identity, honest release availability, separate deployment status, collapsed technical details and shared refresh/operation snapshots.
+
 - Preload all server-backed Settings menus on entry, sharing cached snapshots and in-flight reads with destination navigation.
 
 - Persist allowlisted Settings snapshots locally, revalidate on resume/reconnect, retain data on failure and show explicit loading/stale/error states with Retry.

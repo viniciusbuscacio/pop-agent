@@ -809,6 +809,18 @@ The composer Add button has no accent focus ring or native touch tap highlight.
 
 ## Settings hierarchy and server controls
 
+Updates separates this device's PWA, the Pop Agent server and **Pi agent** under
+Advanced. Explain that Pi agent runs conversations/tools and is not a selected
+model or provider. Show one concise automatic-PWA-update note. Server published
+release availability is distinct from local deployment status: an unavailable
+latest release is unknown, never “no update”; failed reads preserve installed
+version data. Local “current” means running the installed build, not necessarily
+the newest published release. Commit IDs and shell instructions belong in
+collapsed Technical details. “Apply prepared update” retains confirmation and
+idle activation; unvalidated builds explain why application is disabled. Manual
+refresh, operation polling and accepted operation responses update the shared
+memory-only update resource with stale-response/session protection.
+
 The Settings header exposes a wrapping, keyboard-accessible breadcrumb on all
 viewports: Settings > section > open detail. Ancestors return to their actual
 index/list without browser-history guessing. Provider configuration, device
