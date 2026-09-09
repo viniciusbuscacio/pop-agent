@@ -427,3 +427,17 @@ Use supported pi APIs and inherit native behavior wherever it satisfies the prod
 ## Current conversation identity
 
 Every chat session receives its server-owned Pop chat ID in the appended system prompt, independently of memory availability and transcript compaction. Resuming a session preserves the current chat ID; opening a fork uses the fork ID rather than an ID copied in its history. The agent answers requests for its current conversation ID directly from this metadata without calling memory tools.
+
+
+## Per-turn temporal context
+
+Every initial and steering prompt receives the current server UTC instant and
+its local representation in the device-supplied validated IANA time zone.
+Web/PWA and CLI send `x-pop-time-zone`; clients without this metadata use an
+explicit UTC fallback, never an inferred location. Client clocks are not used.
+The original server receipt time is distinct from processing time and survives
+queueing and journal recovery. Temporal framing is model-only: original product
+message text and timestamps remain unchanged, and skill routing excludes it.
+A reused/resumed session receives a fresh clock on its next turn. Historical
+clock notes are not current; delayed relative-date requests may require clarification.
+Existing pre-feature turns keep their historical records without invented times.

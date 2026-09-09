@@ -129,6 +129,7 @@ export class QueuedMessageService {
       if (referenced === undefined) break;
       if (!this.deps.runs.offerSteering(chatId, {
         id: queued.id,
+        receivedAt: queued.createdAt,
         text: queued.text,
         attachments: [...queued.attachments, ...referenced],
         executionMode: queued.executionMode,
@@ -190,6 +191,7 @@ export class QueuedMessageService {
           : { localConnectionId: queued.localConnectionId }),
         executionMode: queued.executionMode,
         queuedMessageId: queued.id,
+        receivedAt: queued.createdAt,
       },
     );
     if (!started.ok) {

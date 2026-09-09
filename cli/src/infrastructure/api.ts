@@ -147,6 +147,7 @@ export class PopAgentApi {
       // ones nobody has written yet (docs/specs/Spec-Pop-General.md §13).
       [CLIENT_HEADER]: 'cli',
       [CLIENT_PLATFORM_HEADER]: process.platform,
+    'x-pop-time-zone': Intl.DateTimeFormat().resolvedOptions().timeZone,
       [EVENT_STREAM_VERSION_HEADER]: String(EVENT_STREAM_VERSION),
     };
     const localConnectionId = this.options.localConnectionId?.();

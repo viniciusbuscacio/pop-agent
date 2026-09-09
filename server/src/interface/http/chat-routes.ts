@@ -1,3 +1,4 @@
+import { validTimeZone } from '../../application/chat/channel-note.js';
 import { Hono, type Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { streamSSE } from 'hono/streaming';
@@ -215,6 +216,7 @@ function readClient(c: Context): MessageClient | undefined {
   if (kind === undefined || !isClientKind(kind)) return undefined;
 
   const platform = c.req.header(CLIENT_PLATFORM_HEADER);
+  const timeZone = validTimeZone(c.req.header('x-pop-time-zone'));
   // Two sources, in that order. Behind a reverse proxy the socket is the
   // proxy and only the forwarded header knows the caller; connecting straight
   // to the port there IS no header, and reading only that recorded nothing at
@@ -225,6 +227,7 @@ function readClient(c: Context): MessageClient | undefined {
 
   return {
     kind,
+    ...(timeZone === undefined ? {} : { timeZone }),
     ...(platform === undefined || platform.length === 0 ? {} : { platform: platform.slice(0, 40) }),
     ...(ip === undefined ? {} : { ip }),
   };

@@ -1,6 +1,7 @@
+import { withMessageTime } from "../../application/chat/channel-note.js";
 import Database from 'better-sqlite3';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentEvent,
   AgentRunControl,
@@ -419,6 +420,7 @@ describe('mapping pi events', () => {
     });
     const prompt = engine.next.steering[0];
     expect(prompt).toContain('change course');
+    expect(prompt).toContain('[Pop current time:');
     engine.next.emit({
       type: 'message_start',
       message: {
@@ -1060,4 +1062,22 @@ it('routes only user text and frames skill bodies as reference rather than tasks
   expect(result).toContain('Ignore unrelated procedures');
   expect(result.endsWith(prompt)).toBe(true);
   subject.close();
+});
+
+
+it('refreshes the clock in a reused session without changing original receipt metadata', async () => {
+  const now = vi.spyOn(Date, 'now');
+  try {
+    now.mockReturnValue(Date.parse('2026-09-10T02:59:00Z'));
+    const request = {
+      chatId: CHAT, prompt: withMessageTime('Tomorrow?', '2026-09-10T02:50:00Z', 'America/Sao_Paulo'),
+      model: '', attachments: [], onEvent: () => undefined, signal: new AbortController().signal,
+    };
+    await bridge.run(request);
+    now.mockReturnValue(Date.parse('2026-09-10T03:01:00Z'));
+    await bridge.run(request);
+    expect(engine.next.prompts[0]).toContain('September 9, 2026');
+    expect(engine.next.prompts[1]).toContain('September 10, 2026');
+    expect(engine.next.prompts[1]).toContain('Original message received at: 2026-09-10T02:50:00.000Z');
+  } finally { now.mockRestore(); }
 });

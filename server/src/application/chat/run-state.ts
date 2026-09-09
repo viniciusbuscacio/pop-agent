@@ -13,6 +13,8 @@ export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Per-run knobs. Everything absent is the ordinary chat behaviour. */
 export interface StartRunOptions {
+  /** Original server receipt time for a durable queued message. */
+  receivedAt?: string;
   /**
    * Push a notification when this run finishes. Default true. A background
    * task whose notification is switched off passes false (docs/specs/Spec-Pop-General.md §21) --
@@ -163,6 +165,7 @@ export interface PendingRun {
 }
 
 export interface SteeringInput {
+  receivedAt?: string;
   id: string;
   text: string;
   attachments: Attachment[];

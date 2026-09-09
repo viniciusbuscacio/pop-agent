@@ -1,3 +1,4 @@
+import { withoutMessageTime } from '../chat/channel-note.js';
 import Database from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../infrastructure/db/migrate.js';
@@ -58,7 +59,7 @@ class ScriptedBridge implements AgentBridge {
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     this.prompts.push(request.prompt);
-    await this.script(request);
+    await this.script({ ...request, prompt: withoutMessageTime(request.prompt) });
     return {};
   }
 
@@ -139,7 +140,8 @@ describe('a due task', () => {
 
     await scheduler.tick();
 
-    expect(bridge.prompts).toEqual(['What happened overnight?']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['What happened overnight?']);
+    expect(bridge.prompts[0]).toContain(new Date(NOW).toISOString());
     const stored = taskRepo.get(task.id);
     expect(stored?.lastStatus).toBe('ok');
     expect(stored?.lastRunAt).toBe(NOW);
@@ -196,7 +198,7 @@ describe('a due task', () => {
 
     await scheduler.tick();
 
-    expect(bridge.prompts).toEqual([]);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual([]);
     expect(chatRepo.list({ archived: false })).toEqual([]);
     expect(taskRepo.get(task.id)?.lastRunAt).toBeUndefined();
     expect(taskRepo.get(task.id)?.nextRunAt).toBe(clock.now() + MINUTE);
@@ -226,11 +228,11 @@ describe('a due task', () => {
     clock.advance(MINUTE);
 
     await scheduler.tick();
-    expect(bridge.prompts).toEqual(['Find one improvement']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['Find one improvement']);
 
     clock.advance(MINUTE);
     await scheduler.tick();
-    expect(bridge.prompts).toEqual(['Find one improvement']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['Find one improvement']);
     expect(taskRepo.get(task.id)?.nextRunAt).toBe(clock.now() + MINUTE);
   });
 
@@ -246,7 +248,7 @@ describe('a due task', () => {
     expect(scheduler.runNow(task.id)).toBe('started');
     await scheduler.whenIdle();
 
-    expect(bridge.prompts).toEqual(['Run explicitly']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['Run explicitly']);
   });
 
   it('is not picked up again while it is still running', async () => {
@@ -394,7 +396,7 @@ describe('the queue', () => {
     const stored = taskRepo.get(task.id);
     expect(stored?.lastStatus).toBe('ok');
     expect(stored?.enabled).toBe(false);
-    expect(bridge.prompts).toEqual(['a']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['a']);
   });
 
   it('run-now says no to a task that does not exist', () => {
@@ -410,7 +412,7 @@ describe('the queue', () => {
     tasks.delete(second.id);
     await scheduler.whenIdle();
 
-    expect(bridge.prompts).toEqual(['a']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['a']);
   });
 });
 
@@ -430,7 +432,7 @@ describe('the timer', () => {
     timer.fire?.();
     await scheduler.whenIdle();
 
-    expect(bridge.prompts).toEqual(['a']);
+    expect(bridge.prompts.map(withoutMessageTime)).toEqual(['a']);
   });
 });
 

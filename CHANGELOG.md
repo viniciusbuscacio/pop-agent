@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Supply fresh per-turn server time, validated device time zone and original message receipt time to chat and steering prompts, including delayed queued messages.
+
 - Separate owner-requested skill maintenance from background Auto-Skill learning;
   add on-demand skill reading and the linked Pop Agent Internals built-in.
 - Report background publication as conditional, permit fully checked retries of

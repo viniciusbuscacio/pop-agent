@@ -98,6 +98,8 @@ export interface Message {
 
 /** Where a message came from. `ip` is for audit and never reaches the model. */
 export interface MessageClient {
+  /** Validated IANA zone supplied by the device; not its clock. */
+  timeZone?: string;
   kind: string;
   platform?: string;
   ip?: string;

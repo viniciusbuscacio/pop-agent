@@ -8,7 +8,7 @@ import type {
   AgentRunResult,
 } from '../ports/agent-bridge.js';
 import { billsPerToken } from '../providers/provider-definitions.js';
-import { channelNote } from './channel-note.js';
+import { channelNote, withMessageTime } from './channel-note.js';
 import { shouldFailOver, isAuthFailure, type RunFailure } from './failover.js';
 
 /**
@@ -156,7 +156,7 @@ export class RunService {
       chatId,
       // The note rides this turn's prompt only; the stored message keeps the
       // user's own words, so the history is not littered with framing.
-      prompt: note === undefined ? text : `${note}\n\n${text}`,
+      prompt: withMessageTime(note === undefined ? text : `${note}\n\n${text}`, options.receivedAt ?? now, options.client?.timeZone),
       model: chat.model,
       provider: chat.provider,
       attachments,
@@ -452,7 +452,7 @@ export class RunService {
     const note = channelNote(input.client, previousClient);
     const steering: PendingSteering = {
       ...input,
-      prompt: note === undefined ? input.text : `${note}\n\n${input.text}`,
+      prompt: withMessageTime(note === undefined ? input.text : `${note}\n\n${input.text}`, input.receivedAt ?? new Date(this.deps.clock.now()).toISOString(), input.client?.timeZone),
     };
     run.steering.set(input.id, steering);
     const control = run.control;

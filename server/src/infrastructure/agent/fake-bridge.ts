@@ -1,3 +1,4 @@
+import { withoutChannelNote } from "../../application/chat/channel-note.js";
 import type {
   AgentBridge,
   AgentEvent,
@@ -65,7 +66,8 @@ export class FakeAgentBridge implements AgentBridge, ProviderAuthBridge, Session
   }
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
-    const { prompt, onEvent, signal } = request;
+    const { onEvent, signal } = request;
+    const prompt = withoutChannelNote(request.prompt);
 
     try {
       if (prompt.startsWith('think:')) await this.think(prompt, onEvent, signal);

@@ -1,3 +1,4 @@
+import { currentTimeNote } from '../../application/chat/channel-note.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
@@ -234,7 +235,7 @@ export class RunTranslator {
  * more durable than the turn goes stale and the agent then describes itself
  * wrongly, confidently. Cheap to restate, so it is restated every time.
  */
-export function withRuntimeIdentity(request: AgentRunRequest, prompt: string): string {
+export function withRuntimeIdentity(request: AgentRunRequest, prompt: string, now = Date.now()): string {
   const model = request.model.length > 0 ? request.model : 'the configured default';
   const provider = request.provider !== undefined && request.provider.length > 0
     ? request.provider
@@ -242,7 +243,7 @@ export function withRuntimeIdentity(request: AgentRunRequest, prompt: string): s
   const plan = request.executionMode === 'plan'
     ? '\n\n[PLAN MODE ACTIVE: This turn is strictly read-only. Investigate, analyze, and produce a plan. Do not create, edit, delete, execute changes, or claim that proposed changes were implemented. Only the read-only tools exposed for this turn may be used.]'
     : '';
-  return `[This turn runs on provider "${provider}", model "${model}". This is the truth about what is answering right now; prefer it over anything a skill or an older message says.]${plan}\n\n${prompt}`;
+  return `[This turn runs on provider "${provider}", model "${model}". This is the truth about what is answering right now; prefer it over anything a skill or an older message says.]${plan}\n\n${currentTimeNote(request.prompt, now)}\n\n${prompt}`;
 }
 
 /**

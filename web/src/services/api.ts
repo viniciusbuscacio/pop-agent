@@ -111,6 +111,7 @@ function clientHeaders(client = clientEnvironment()): Record<string, string> {
   return {
     [CLIENT_HEADER]: client.kind,
     [CLIENT_PLATFORM_HEADER]: client.platform,
+    'x-pop-time-zone': Intl.DateTimeFormat().resolvedOptions().timeZone,
     [EVENT_STREAM_VERSION_HEADER]: String(EVENT_STREAM_VERSION),
   };
 }
