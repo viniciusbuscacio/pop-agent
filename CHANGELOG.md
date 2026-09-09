@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give foreground navigation precedence over Settings preloading: serialize background reads, yield to active requests, skip warm resources and stop queued work on navigation.
+
 - Clarify Updates with explicit Pi agent identity, honest release availability, separate deployment status, collapsed technical details and shared refresh/operation snapshots.
 
 - Preload all server-backed Settings menus on entry, sharing cached snapshots and in-flight reads with destination navigation.

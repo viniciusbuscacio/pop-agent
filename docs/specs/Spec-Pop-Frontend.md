@@ -204,7 +204,7 @@ remain unavailable until required data is verified. Optional subscription usage
 failure must not disable provider configuration. Devices never label cached
 presence as Online/Offline, and a failed fetch does not erase the machine list.
 
-Opening the Settings index or a direct destination starts independent reads for
+Opening the Settings index or a direct destination queues independent reads for
 all server-backed Settings menus, warming the same shared resources and allowed
 persistent snapshots before those menus are visited. Navigation does not wait
 for the batch; one failure does not block other resources. Entering a destination
@@ -214,6 +214,16 @@ with session-generation protection. Preloading never starts connection tests,
 model requests, downloads, forced upstream update checks, permission prompts or
 mutations. Appearance, installation and notification preferences remain
 device-owned; security and live-operation snapshots remain memory-only.
+
+Foreground navigation never waits in the preload queue. Background preloading
+runs one read at a time, yields between reads and pauses while ordinary UI
+requests are pending or the document is hidden. Navigation cancels queued work;
+within Settings a new queue starts after the new destination has had a chance
+to load. Recently verified resources are skipped by preloading, but destination
+reads still revalidate normally. An already running read may finish and populate
+the shared cache; cancellation does not abort a read another consumer needs.
+Storage scans, server diagnostics and upstream version checks run after basic
+configuration reads. This is client-side scheduling, not server preemption.
 
 Instructions and Memory track server base, local draft and latest remote text
 separately. Revalidation never overwrites dirty text; a changed remote base shows

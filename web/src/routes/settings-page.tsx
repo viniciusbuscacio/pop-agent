@@ -143,9 +143,13 @@ function settingsReturnTo(state: unknown): string {
 }
 
 export function SettingsPage() {
-  useEffect(() => { void preloadSettings(); }, []);
   const navigate = useNavigate();
   const location = useLocation();
+  useEffect(() => {
+    const controller = new AbortController();
+    void preloadSettings(controller.signal);
+    return () => controller.abort();
+  }, [location.key]);
   // happy-dom's MemoryRouter does not inherit window.history; the fallback also
   // keeps old embedders that mount this route directly working.
   const requested = new URLSearchParams(location.search || window.location.search).get('section');
