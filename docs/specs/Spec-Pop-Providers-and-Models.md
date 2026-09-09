@@ -248,3 +248,9 @@ account model policies or refresh every provider.
 Sign in again opens and starts a dedicated OAuth reauthentication flow. Existing
 credentials are preserved while it runs; their presence alone cannot prove that
 the new flow succeeded. Reopening this flow resumes it instead of cancelling it.
+
+Codex sign-in uses the pi device-code method automatically for this server-hosted
+product. Do not offer the browser-local callback method. Preserve device-code
+notifications, cancellation and credential persistence through the SDK. If a
+runtime only offers a browser callback, fail with an actionable message instead
+of sending the owner to an unreachable localhost page.

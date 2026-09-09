@@ -171,7 +171,7 @@ describe('OAuthSection', () => {
     expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
-  it('offers the code method first, in Pop Agent words, not pi defaults', async () => {
+  it('offers only code login for the server-hosted Codex flow', async () => {
     oauthState.mockResolvedValue(CHOOSING_METHOD);
 
     render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
@@ -183,7 +183,7 @@ describe('OAuthSection', () => {
     const code = buttons.findIndex((text) => text.includes('With a code'));
     const browser = buttons.findIndex((text) => text.includes('With a browser redirect'));
     expect(code).toBeGreaterThanOrEqual(0);
-    expect(code).toBeLessThan(browser);
+    expect(browser).toBe(-1);
     // pi calls the redirect "(default)"; on a self-hosted install it is not.
     expect(screen.queryByText(/default/i)).toBeNull();
   });

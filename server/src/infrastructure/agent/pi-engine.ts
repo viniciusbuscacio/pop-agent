@@ -33,6 +33,7 @@ import { buildSkillTools } from '../skills/skill-tools.js';
 import type { SkillsRepo } from '../../application/ports/skills-repo.js';
 import type { NotesVault } from '../notes/notes-vault.js';
 import { buildWebTools } from '../web/web-tools.js';
+import { serverLoginInteraction } from './codex-login-interaction.js';
 import { parseOpenAISubscriptionUsage } from './pi-subscription-usage.js';
 import { SdkPiSession } from './sdk-pi-session.js';
 import {
@@ -748,7 +749,7 @@ export class SdkPiEngine implements PiEngine {
   async providerLogin(providerId: string, interaction: ProviderAuthInteraction): Promise<void> {
     const runtime = await this.modelRuntime();
     const before = this.readCredentialEntry(providerId);
-    const login = runtime.login(providerId, 'oauth', interaction);
+    const login = runtime.login(providerId, 'oauth', serverLoginInteraction(providerId, interaction));
     void login.then(
       () =>
         console.log(`pop oauth: provider=${providerId} component=engine_bookkeeping result=ok`),

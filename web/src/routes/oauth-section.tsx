@@ -401,10 +401,12 @@ function MethodChoice({
   providerId: string;
   onChoose: (optionId: string) => void;
 }) {
-  const known = options.length > 0 && options.every((option) => METHOD_COPY[option.id] !== undefined);
+  // Older pending flows may still expose a method choice after an upgrade.
+  const available = providerId === 'openai-codex' ? options.filter(option => option.id !== METHOD_BROWSER) : options;
+  const known = available.length > 0 && available.every((option) => METHOD_COPY[option.id] !== undefined);
   const ordered = known
-    ? [...options].sort((a, b) => (METHOD_COPY[a.id]?.rank ?? 0) - (METHOD_COPY[b.id]?.rank ?? 0))
-    : options;
+    ? [...available].sort((a, b) => (METHOD_COPY[a.id]?.rank ?? 0) - (METHOD_COPY[b.id]?.rank ?? 0))
+    : available;
 
   return (
     <div className="flex flex-col gap-2" data-testid={`provider-oauth-method-${providerId}`}>
