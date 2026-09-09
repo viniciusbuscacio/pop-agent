@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preload all server-backed Settings menus on entry, sharing cached snapshots and in-flight reads with destination navigation.
+
 - Persist allowlisted Settings snapshots locally, revalidate on resume/reconnect, retain data on failure and show explicit loading/stale/error states with Retry.
 - Protect Instructions and Memory edits with server compare-and-write checks, conflict review and preservation of typing during background refresh or Save.
 

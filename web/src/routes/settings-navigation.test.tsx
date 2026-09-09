@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './settings-page';
 import { useFontStore } from '../store/font';
 import { rememberLastActiveChat } from '../lib/last-active-chat';
+import { preloadSettings } from '../services/settings-preload';
+
+vi.mock('../services/settings-preload', () => ({ preloadSettings: vi.fn(async () => undefined) }));
 
 vi.mock('../services/pwa-update', () => ({
   applyUpdate: vi.fn(),
@@ -23,6 +26,7 @@ vi.mock('../services/push', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.mocked(preloadSettings).mockClear();
   useFontStore.getState().setChoice('default');
   localStorage.removeItem('pop-agent.fontSize');
   sessionStorage.clear();
@@ -37,6 +41,8 @@ describe('Settings navigation', () => {
   it('starts with a searchable, grouped index instead of tabs', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/settings']}><SettingsPage /></MemoryRouter>);
+
+    expect(preloadSettings).toHaveBeenCalledOnce();
 
     expect(screen.getByText('Agent')).toBeTruthy();
     expect(screen.getByText('App')).toBeTruthy();

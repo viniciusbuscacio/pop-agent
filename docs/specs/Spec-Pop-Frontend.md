@@ -204,6 +204,17 @@ remain unavailable until required data is verified. Optional subscription usage
 failure must not disable provider configuration. Devices never label cached
 presence as Online/Offline, and a failed fetch does not erase the machine list.
 
+Opening the Settings index or a direct destination starts independent reads for
+all server-backed Settings menus, warming the same shared resources and allowed
+persistent snapshots before those menus are visited. Navigation does not wait
+for the batch; one failure does not block other resources. Entering a destination
+still revalidates, sharing an already pending preload instead of duplicating it.
+The supported subscription allowance is prefetched after provider discovery,
+with session-generation protection. Preloading never starts connection tests,
+model requests, downloads, forced upstream update checks, permission prompts or
+mutations. Appearance, installation and notification preferences remain
+device-owned; security and live-operation snapshots remain memory-only.
+
 Instructions and Memory track server base, local draft and latest remote text
 separately. Revalidation never overwrites dirty text; a changed remote base shows
 both versions and explicit Use server version/Keep my edits choices. Save needs

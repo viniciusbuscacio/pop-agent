@@ -56,6 +56,7 @@ import { LOCAL_POP_AGENT_VERSION } from '../build-info';
 import { lastActiveChatPath } from '../lib/last-active-chat';
 import { SettingsDocumentEditor } from '../ui/settings-document-editor';
 import { SettingsSyncBoundary, useSettingsLoad } from '../ui/settings-sync';
+import { preloadSettings } from '../services/settings-preload';
 
 /** Settings is route navigation, not a row of tabs. On phones the index and
  * section are separate screens; wide screens keep the index beside the open
@@ -141,6 +142,7 @@ function settingsReturnTo(state: unknown): string {
 }
 
 export function SettingsPage() {
+  useEffect(() => { void preloadSettings(); }, []);
   const navigate = useNavigate();
   const location = useLocation();
   // happy-dom's MemoryRouter does not inherit window.history; the fallback also
