@@ -77,7 +77,7 @@
   "dependencies": {
     "sharp": "0.35.4",
     "ws": "^8.21.1",
-    "@huggingface/transformers": "3.0.2"
+    "@huggingface/transformers": "4.2.0"
   },
   "overrides": {
     "@levischuck/tiny-cbor": "0.2.11",
