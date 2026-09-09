@@ -1,5 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
-import { activateNewestServiceWorker, once } from './pwa-update-lifecycle';
+import { checkServiceWorker, createUpdateApplier } from './pwa-update-lifecycle';
 import type { UpdateCheckResult } from './update-signal';
 
 /**
@@ -20,7 +20,6 @@ import type { UpdateCheckResult } from './update-signal';
  * component that could remount.
  */
 
-let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
 let registration: ServiceWorkerRegistration | undefined;
 let started = false;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -30,7 +29,7 @@ export function startUpdateChecks(onNeedRefresh: () => void): void {
   if (started) return;
   started = true;
 
-  updateSW = registerSW({
+  registerSW({
     immediate: true,
     onNeedRefresh,
     onRegisteredSW(_scriptUrl, r) {
@@ -47,7 +46,7 @@ export function startUpdateChecks(onNeedRefresh: () => void): void {
 export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
   if (registration === undefined) return 'unavailable';
   try {
-    await registration.update();
+    await checkServiceWorker(registration);
     // update() resolves once the check is done; a new worker is now either
     // installing or already waiting. onNeedRefresh raises the reload banner
     // separately -- this return only drives the Settings feedback line.
@@ -59,24 +58,7 @@ export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
   }
 }
 
-export async function applyUpdate(): Promise<void> {
-  // Reload exactly once, and only when the new worker actually owns the
-  // page. The old 1.5s blind timer raced activation: on a phone the page
-  // often reloaded still under the previous worker, the banner came back,
-  // and Reload read as a button that must be pressed several times.
-  const reload = once(() => window.location.reload());
-  // Fires thanks to clientsClaim in the generated worker (vite.config.ts).
-  navigator.serviceWorker?.addEventListener('controllerchange', reload, { once: true });
-
-  // One press must jump to the newest build, not an older worker that happened
-  // to be waiting when the banner first appeared. The testable lifecycle waits
-  // for any new installation, activates it, and starts its fallback only then.
-  if (await activateNewestServiceWorker(registration, reload)) return;
-
-  // Nothing waited (already current, or the direct check was unavailable):
-  // hand off to the library, which messages its own tracked worker and reloads.
-  await updateSW?.(true);
-}
+export const applyUpdate = createUpdateApplier(() => registration, () => window.location.reload());
 
 function restartTimer(): void {
   if (timer !== undefined) clearInterval(timer);
@@ -87,7 +69,7 @@ function restartTimer(): void {
 
 async function safeUpdate(): Promise<void> {
   try {
-    await registration?.update();
+    if (registration) await checkServiceWorker(registration);
   } catch {
     // A failed check is not worth surfacing; the next tick tries again.
   }

@@ -491,8 +491,10 @@ and pi updates.
   device toggle or frequency setting; manual **Check for updates** remains
   available.
 - Applying an update waits for the newest installing/waiting worker, requests
-  activation, and reloads once after `controllerchange`; fallback begins only
-  after installation can no longer complete normally.
+  activation, and reloads once after the worker reaches activated. Checks are
+  bounded to 15 seconds, installation to 60 seconds and activation to 10 seconds.
+  Timeout/discarded workers fail visibly with Retry; no timer blindly reloads
+  an old worker. Automatic/manual activation shares one in-flight attempt.
 - `sw.js` and the HTML shell use `no-cache` revalidation. Hashed assets use
   immutable caching.
 

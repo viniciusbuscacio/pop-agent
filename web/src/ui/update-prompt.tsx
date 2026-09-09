@@ -28,9 +28,11 @@ export function UpdatePrompt() {
     setState('applying');
     try {
       await applyUpdate();
+      setState('idle');
     } catch {
-      activating.current = false;
       setState('failed');
+    } finally {
+      activating.current = false;
     }
   }
 

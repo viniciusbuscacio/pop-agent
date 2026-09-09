@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bound every PWA update phase, deduplicate automatic/manual attempts, expose Retry on timeout and clear settled Updating indicators without deleting caches or blindly reloading an old worker.
+
 - Give foreground navigation precedence over Settings preloading: serialize background reads, yield to active requests, skip warm resources and stop queued work on navigation.
 
 - Clarify Updates with explicit Pi agent identity, honest release availability, separate deployment status, collapsed technical details and shared refresh/operation snapshots.

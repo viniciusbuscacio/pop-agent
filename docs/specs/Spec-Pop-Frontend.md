@@ -596,9 +596,17 @@ manual activation path:
 3. select the resulting newest `waiting` worker rather than an older worker
    that was already waiting;
 4. send `SKIP_WAITING` only after installation completed;
-5. reload once on `controllerchange` or worker activation;
-6. start the 8-second fallback only after installation, never while the new
-   precache is still downloading.
+5. reload at most once per page after the target worker reaches activated;
+6. bound check, installation and activation to 15, 60 and 10 seconds respectively.
+   A timeout or discarded worker removes listeners/timers and exposes Retry;
+   never blindly reload an old worker or retain an infinite Updating indicator.
+
+Concurrent automatic/manual calls share a single activation promise and checks
+are deduplicated per registration. Failed attempts release the lock for retry.
+Settled no-op attempts clear the Updating indicator. Timed-out phase listeners
+cannot later trigger a reload; existing product caches and registration remain
+intact. A successful check with no waiting/installing worker is already current,
+not a reason to call an unbounded fallback updater.
 
 The active page may still contain an older handler from before this rule shipped;
 one final manual browser reload can be necessary to acquire the fixed client.

@@ -954,7 +954,7 @@ function AppUpdatesCard() {
       setResult(
         outcome === 'up-to-date'
           ? t('settings.updates.current')
-          : t('settings.updates.checkUnavailable'),
+          : t(outcome === 'error' ? 'settings.updates.checkFailed' : 'settings.updates.checkUnavailable'),
       );
     } catch {
       setResult(t('settings.updates.applyFailed'));
