@@ -5,6 +5,10 @@
 - Persist allowlisted Settings snapshots locally, revalidate on resume/reconnect, retain data on failure and show explicit loading/stale/error states with Retry.
 - Protect Instructions and Memory edits with server compare-and-write checks, conflict review and preservation of typing during background refresh or Save.
 
+- Widen the chat message box toward the left by removing extra padding and spacing around Add, retaining its full touch target, the original right margin, device safe areas and the one-line initial height.
+
+- Move the chat composer Add (+) button outside the message box on the left on every viewport, bottom-aligned with Send; anchor its action menu to the left trigger while keeping it inside the viewport.
+
 - Add native macOS PLA sign-in with a secure password dialog and automatic reconnect, and clear stale live-access indicators after disconnection or session rejection.
 
 - Standardize Settings typography by role across prose editors, model labels, cards, status messages and integration forms; enforce shared field/button typography against regressions.

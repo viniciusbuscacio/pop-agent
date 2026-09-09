@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageDTO } from '@pop-agent/shared';
 import { ApiError } from '../services/api';
@@ -70,6 +71,108 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+describe('composer action placement', () => {
+  it('compacts the Add gutter while retaining the original right margin, one-line height and touch target', () => {
+    renderComposer();
+    const composer = screen.getByTestId('composer');
+    const input = screen.getByTestId('composer-input');
+    expect(composer.classList.contains('pl-[env(safe-area-inset-left)]')).toBe(true);
+    expect(composer.classList.contains('pr-[max(0.75rem,env(safe-area-inset-right))]')).toBe(true);
+    expect(screen.getByTestId('composer-row').classList.contains('gap-0')).toBe(true);
+    expect(composer.classList.contains('px-3')).toBe(false);
+    expect(input.getAttribute('rows')).toBe('1');
+    expect(input.classList.contains('max-h-[33dvh]')).toBe(true);
+    expect(screen.getByTestId('composer-actions').classList.contains('w-8')).toBe(true);
+  });
+
+  it.each([375, 1280])('keeps Add before and outside the box at viewport width %i, with Send inside', async (width) => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+    const user = userEvent.setup();
+    // Happy DOM does not load Tailwind; keep the file picker out of tab order as in the browser.
+    render(<style>{'.hidden { display: none; }'}</style>);
+    renderComposer();
+    const row = screen.getByTestId('composer-row');
+    const box = screen.getByTestId('composer-box');
+    const add = screen.getByTestId('composer-actions');
+    const input = screen.getByTestId('composer-input');
+    fireEvent.change(input, { target: { value: 'A multiline draft\nwith another line' } });
+    const send = screen.getByTestId('composer-send');
+    const toolbar = screen.getByTestId('composer-toolbar');
+
+    expect(Array.from(row.children)).toEqual([add.parentElement, box]);
+    expect(box.contains(add)).toBe(false);
+    expect(box.contains(input)).toBe(true);
+    expect(toolbar.contains(send)).toBe(true);
+    expect(box.lastElementChild).toBe(toolbar);
+    expect(within(row).getAllByRole('button')).toEqual([add, send]);
+    // These unprefixed layout classes keep the same bottom-aligned row on all viewports.
+    expect(row.className).toBe('flex min-w-0 items-end gap-0');
+    expect(add.parentElement?.className).toBe('shrink-0 pb-1.5');
+    expect(box.classList.contains('items-end')).toBe(true);
+    expect(toolbar.classList.contains('pb-1.5')).toBe(true);
+    for (const button of [add, send]) {
+      expect(button.classList.contains('h-8')).toBe(true);
+      expect(button.classList.contains('w-8')).toBe(true);
+    }
+    expect(add.id).toBe('composer-add'); // Retains the existing no-accent focus/tap styles.
+
+    add.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(input);
+    await user.tab();
+    expect(document.activeElement).toBe(send);
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(add);
+  });
+
+  it.each([
+    { viewportWidth: 1280, triggerLeft: 400, expectedLeft: 400, expectedWidth: 352 },
+    { viewportWidth: 1280, triggerLeft: 0, expectedLeft: 8, expectedWidth: 352 },
+    { viewportWidth: 1280, triggerLeft: 1220, expectedLeft: 920, expectedWidth: 352 },
+    { viewportWidth: 320, triggerLeft: 12, expectedLeft: 8, expectedWidth: 304 },
+  ])('anchors the menu to the left trigger with viewport clamping: $viewportWidth / $triggerLeft', ({
+    viewportWidth, triggerLeft, expectedLeft, expectedWidth,
+  }) => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(viewportWidth);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+    renderComposer();
+    const add = screen.getByTestId('composer-actions');
+    vi.spyOn(add, 'getBoundingClientRect').mockReturnValue(new DOMRect(triggerLeft, 700, 32, 32));
+    vi.spyOn(screen.getByTestId('composer-box'), 'getBoundingClientRect').mockReturnValue(new DOMRect(triggerLeft + 36, 600, 200, 140));
+
+    fireEvent.click(add);
+    const menu = screen.getByTestId('composer-actions-panel');
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu.style.left).toBe(`${String(expectedLeft)}px`);
+    expect(menu.style.width).toBe(`${String(expectedWidth)}px`);
+    expect(menu.style.bottom).toBe('208px'); // Eight pixels above the growing message box.
+    expect(menu.style.maxHeight).toBe('584px');
+    expect(menu.classList.contains('overflow-y-auto')).toBe(true);
+
+    fireEvent.click(screen.getByTestId('composer-model'));
+    expect(menu.style.left).toBe(`${String(expectedLeft)}px`);
+    expect(menu.style.width).toBe(`${String(expectedWidth)}px`);
+  });
+
+  it('reclamps an open menu when the viewport narrows', () => {
+    const width = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    renderComposer();
+    const add = screen.getByTestId('composer-actions');
+    const rect = vi.spyOn(add, 'getBoundingClientRect').mockReturnValue(new DOMRect(400, 700, 32, 32));
+    fireEvent.click(add);
+    const menu = screen.getByTestId('composer-actions-panel');
+    expect(menu.style.left).toBe('400px');
+    expect(menu.style.width).toBe('352px');
+
+    width.mockReturnValue(320);
+    rect.mockReturnValue(new DOMRect(12, 700, 32, 32));
+    fireEvent(window, new Event('resize'));
+    expect(menu.style.left).toBe('8px');
+    expect(menu.style.width).toBe('304px');
+  });
 });
 
 describe('pending message composition', () => {

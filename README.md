@@ -50,6 +50,8 @@ Pop Agent is built around four decisions:
   documents, and recover deleted files from the trash.
 - **Memory and Notes:** searchable conversation history, a personal memory
   document, and a private Markdown notes vault.
+- **Automatic subagents:** the agent can delegate implementation work to
+  isolated workers, with up to five independent tasks running in parallel.
 - **Scheduled tasks:** ask the agent to do work on a schedule.
 - **Voice input:** transcribe voice notes on your server.
 - **MCP Client:** connect to remote MCP servers or local stdio servers.
@@ -79,6 +81,25 @@ the whole collection. Selection itself does not require an LLM call.
 
 The idea is to help the agent become more useful as you talk to it normally,
 while keeping its context focused.
+
+## Automatic subagents
+
+For substantial code changes, Pop Agent can automatically delegate bounded
+implementation tasks to worker subagents through `pi-subagents`. You do not
+need to create or manage a separate agent for each task.
+
+Up to five independent tasks can run in parallel, each in its own isolated Git
+worktree with a fresh context. Workers return patches; the main agent remains
+responsible for reviewing and integrating them, resolving overlaps, running
+the repository's final checks, and committing the result.
+
+Delegation runs as part of the current request, not as a background mission.
+Stopping the main run also cancels its workers. It is unavailable in Plan Mode
+and currently requires the selected provider's saved OAuth/subscription sign-in;
+API-key-only authentication is not supported for workers.
+
+See the [subagent specification](docs/specs/Spec-Pop-Subagents.md) for isolation
+and runtime limits.
 
 ## On iPhone
 
