@@ -499,7 +499,7 @@ function OAuthEventRow({ event }: { event: OAuthStateResponse['events'][number] 
       return (
         <div className="flex flex-col gap-1">
           <p className="text-sm text-[var(--screen-fg)]">{t('provider.oauth.deviceCode')}</p>
-          <p className="font-mono text-2xl tracking-widest">{event.userCode}</p>
+          <DeviceCode code={event.userCode} />
           <a
             href={event.verificationUri}
             target="_blank"
@@ -513,4 +513,28 @@ function OAuthEventRow({ event }: { event: OAuthStateResponse['events'][number] 
     case 'progress':
       return <p className="text-sm text-[var(--muted)]">{event.message}</p>;
   }
+}
+
+/** Copy only the short code, keeping the provider URL separate. */
+function DeviceCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setCopied(false); setFailed(false); }, [code]);
+  async function copy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true); setFailed(false);
+    } catch {
+      setCopied(false); setFailed(true);
+    }
+  }
+  return <div>
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="select-text font-mono text-2xl tracking-widest">{code}</p>
+      <Button type="button" variant="ghost" onClick={() => void copy()}>
+        {t(copied ? 'common.copied' : 'common.copy')}
+      </Button>
+    </div>
+    {failed ? <p role="status" className="text-sm text-[var(--muted)]">{t('provider.oauth.copyFailed')}</p> : null}
+  </div>;
 }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Copy beside OAuth device codes, with success feedback and a manual-copy fallback.
+
 - Use device-code Codex login automatically and remove the localhost browser-redirect choice from the server-hosted sign-in flow.
 
 - Start a dedicated subscription reauthentication flow from Sign in again; resume it without cancelling it or mistaking old credentials for successful sign-in.

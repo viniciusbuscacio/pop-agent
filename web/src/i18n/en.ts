@@ -71,6 +71,7 @@ export const en = {
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'common.back': 'Back',
+  'provider.oauth.copyFailed': 'Could not copy. Select the code and copy it manually.',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
   'common.download': 'Download',

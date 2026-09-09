@@ -340,3 +340,17 @@ describe('explicit reauthentication', () => {
     expect(await screen.findByText('How do you want to sign in?')).toBeTruthy();
   });
 });
+
+describe('device code copying', () => {
+  it('copies only the code and confirms success', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    oauthState.mockResolvedValue({ flowId: 'device-copy', providerId: PROVIDER.id, done: false,
+      events: [{ type: 'device_code', userCode: 'ABCD-12345', verificationUri: 'https://example.invalid/device' }] });
+    render(<OAuthSection provider={PROVIDER} onChanged={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('ABCD-12345');
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+    writeText.mockRestore();
+  });
+});
