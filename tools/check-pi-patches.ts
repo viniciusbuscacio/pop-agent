@@ -30,4 +30,9 @@ if (source.includes('enableAllGitHubCopilotModels') ||
   throw new Error('The Copilot login patch is not applied. Run npm install before using OAuth.');
 }
 
-console.log('pi patch check passed (read-only Copilot catalog, isolated transient failures)');
+const codexSource = readFileSync(join(sourcePath, '../../../api/openai-codex-responses.js'), 'utf8');
+if (!codexSource.includes('throw new Error(`${response.status}: ${info.friendlyMessage || info.message}`)')) {
+  throw new Error('The Codex refusal status patch is not applied. Run npm install before using Codex failover.');
+}
+
+console.log('pi patch check passed (read-only Copilot catalog, isolated transient failures, Codex refusal status)');

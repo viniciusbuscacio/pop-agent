@@ -999,6 +999,38 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     { providerId: 'p2', modelId: 'p2/model' },
   ];
 
+  it('retries GitHub Copilot with its own model after a Codex usage-limit refusal', async () => {
+    withChain([
+      { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
+      { providerId: 'github-copilot', modelId: 'gpt-5.6-luna' },
+    ]);
+    const chatId = newChat();
+    bridge.script = (request) => {
+      if (request.provider === 'openai-codex') {
+        request.onEvent({ kind: 'error', code: 'provider_error', status: 429 });
+      } else {
+        request.onEvent({ kind: 'delta', text: 'Answered by Copilot' });
+      }
+      return Promise.resolve();
+    };
+    runs.startRun(chatId, 'question');
+    await runs.whenIdle();
+
+    expect(bridge.seen.map(({ provider, model }) => ({ provider, model }))).toEqual([
+      { provider: 'openai-codex', model: 'gpt-5.6-sol' },
+      { provider: 'github-copilot', model: 'gpt-5.6-luna' },
+    ]);
+    expect(penalized).toEqual(['openai-codex']);
+    expect(authFailures).toEqual([]);
+    expect(sink.of('error')).toHaveLength(0);
+    expect(sink.of('done')).toHaveLength(1);
+    expect(repo.getMessages(chatId, { limit: 10 }).find(message => message.notice)?.notice).toMatchObject({
+      kind: 'model-fallback',
+      failed: { providerId: 'openai-codex', status: 429 },
+      fallback: { providerId: 'github-copilot', modelId: 'gpt-5.6-luna' },
+    });
+  });
+
   it('forgives a provider on the cooldown ladder after a successful answer', async () => {
     withChain(TWO);
     const chatId = newChat();

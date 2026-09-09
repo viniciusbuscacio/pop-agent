@@ -1,5 +1,20 @@
 # Dependency patches
 
+## pi 0.84.1 — Codex refusal status
+
+The Codex HTTP adapter replaced refusal bodies with friendly messages and lost
+the HTTP status. In particular, a 429 became “You have hit your ChatGPT usage
+limit”, which Pop correctly refused to classify from arbitrary prose and thus
+never failed over. Preserve the original HTTP status as a prefix before the
+friendly message. Pop's existing adapter then emits the typed refusal and its
+normal replay-safe fallback policy applies. This also preserves other Codex
+HTTP refusals without changing which statuses permit replay.
+
+`tools/codex-failover.test.ts` exercises the installed SDK with mocked HTTP and
+feeds its actual output through Pop's translator and failover classifier.
+`pi-patch:check` requires this patch after installation. Remove it only when
+upstream preserves equivalent refusal evidence.
+
 ## pi 0.84.1 — GitHub Copilot login and catalog isolation
 
 The original SDK enables every known model policy during login. The previous

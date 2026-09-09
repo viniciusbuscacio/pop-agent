@@ -1011,9 +1011,9 @@ describe('session rewind on retry (docs/specs/Spec-Pop-General.md §15)', () => 
     expect(engine.sessions[0]?.tree.userPromptsOnMainPath()).toHaveLength(1);
   });
 
-  it('rewinds the leaf on a failover-class failure so the main path stays clean', async () => {
+  it.each(['402 Payment Required', '429: You have hit your ChatGPT usage limit (plus plan).'])('rewinds the leaf on refusal %s so the main path stays clean', async (message) => {
     engine.next.script = [
-      settled('error', { input: 5, output: 0, cost: 0 }, '402 Payment Required'),
+      settled('error', { input: 5, output: 0, cost: 0 }, message),
     ];
     const { onEvent } = collect();
 

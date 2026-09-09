@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve Codex HTTP refusal status so subscription usage limits trigger the configured provider fallback, including GitHub Copilot, before observable work.
+
 - Check conversation revisions silently on navigation; show cached messages immediately and spin the refresh wheel only when content actually needs downloading.
 
 - Preserve bounded, privacy-safe local PWA update diagnostics with copy/fallback controls; defer activation until registration is ready. Let explicit refresh recover failed software activation with a fresh shell without clearing data, and show at least one slow refresh-wheel revolution per click.

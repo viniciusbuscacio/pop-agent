@@ -1,3 +1,16 @@
+diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+--- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
++++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+@@ -304,7 +304,8 @@
+                         statusText: response.statusText,
+                     });
+                     const info = await parseErrorResponse(fakeResponse);
+-                    throw new Error(info.friendlyMessage || info.message);
++                    // Preserve the refusal status when replacing the body with friendly prose.
++                    throw new Error(`${response.status}: ${info.friendlyMessage || info.message}`);
+                 }
+                 catch (error) {
+                     if (error instanceof Error) {
 diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
 --- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
 +++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
