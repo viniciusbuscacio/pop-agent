@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { selectSkills } from '../../domain/skills/skill-router.js';
 import type { Skill } from '../../domain/skills/skill.js';
+import { sanitize } from "../../domain/safety/sanitize.js";
 import { DEFAULT_SKILLS } from './default-skills.js';
 
 /**
@@ -70,7 +71,21 @@ describe('default skills routing', () => {
     expect(body).toContain('## UI map');
   });
 
-  it('ships exactly seven built-in skills', () => {
-    expect(DEFAULT_SKILLS).toHaveLength(7);
+  it('ships exactly eight built-in skills', () => {
+    expect(DEFAULT_SKILLS).toHaveLength(8);
+  });
+});
+
+
+describe('on-demand internals reference', () => {
+  it('links a real unpinned skill from the pinned manual', () => {
+    const manual = DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-manual')!;
+    const linked = /skill_read\(\{ slug: "([^"]+)"/.exec(manual.body)?.[1];
+    const internals = DEFAULT_SKILLS.find((skill) => skill.slug === linked);
+    expect(internals).toBeDefined();
+    expect(internals?.pinned).not.toBe(true);
+    expect(internals?.body).toContain('## Auto-Skill workflow');
+    expect(sanitize(JSON.stringify(internals)).riskLevel).toBe('low');
+    expect(manual.body).not.toContain('## Auto-Skill workflow');
   });
 });

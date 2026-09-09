@@ -256,7 +256,7 @@ function readWarnings(raw: string): string[] {
 }
 
 function isRetryable(attempt: DistillationAttempt): boolean {
-  return attempt.state === 'failed' || attempt.outcome === 'invalid_output';
+  return attempt.state === 'failed' || attempt.outcome === 'invalid_output' || attempt.outcome === 'tainted';
 }
 
 /** SQLite adapter for {@link SkillRevisionsRepo}. */

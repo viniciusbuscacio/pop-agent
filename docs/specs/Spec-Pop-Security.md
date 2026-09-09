@@ -313,3 +313,19 @@ focused unit test.
 ## REST integrations
 
 REST API Server uses one separate, non-expiring access key, authenticated by its hash and stored recoverably through encrypted SecretsRepo. Owner-only endpoints return it with no-store for copying instructions. Rotation atomically invalidates all previous tokens. The key grants all REST operations, including owner actions through authenticated UI tabs, while direct owner administration endpoints remain blocked. REST calls also enforce an IP/CIDR allowlist, defaulting to 127.0.0.1/32. Only local loopback proxies may supply a trusted last X-Forwarded-For hop; remote peers cannot spoof the source through headers. Legacy scoped credentials retain their restrictions until replaced. Outbound REST client secrets use encrypted SecretsRepo storage and screened public HTTPS transport. See [Spec-Pop-REST-API.md](Spec-Pop-REST-API.md).
+
+
+## Skill maintenance and detector precision
+
+Owner-requested personal skill writes use the Normal Mode `skill_write` tool;
+that tool remains refused under external-content taint. Built-in source
+maintenance follows the authorized repository workflow. Automatic learning
+retains its independent review and deterministic checks.
+
+A bare technical mention of "system prompt" is not an extraction request.
+Explicit prompt-extraction language remains detected. A directly negated
+command such as "Never run ... rm -rf" is not destructive bait; separate
+positive execution instructions, including later instructions in the same text,
+remain checked. No file path, source label or code fence exempts content from
+scanning. Owner-requested retries of tainted distillation windows re-evaluate
+all checks against the immutable source without clearing the historical verdict.

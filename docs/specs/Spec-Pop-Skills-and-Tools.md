@@ -93,16 +93,34 @@ The authenticated Skills API/UI provides:
 - create/edit, enable/disable, delete and restore actions according to source;
 - use counts and last-used time;
 - Auto-Skill status and bounded distillation history;
-- retry only for retryable failed/invalid immutable windows.
+- retry for failed/invalid/tainted immutable windows, without bypassing checks.
 
 Saving validates field lengths and slug syntax. Automatic publication is not an
 approval inbox: a skill is active only after all mandatory checks. Editing it is
 ordinary owner control and promotes an auto source to user.
 
-The agent receives only `skills_list`. It has no live `skill_write` tool and
-must not narrate internal learning decisions. An explicit request for a skill
-prioritizes that completed conversation for the same background pipeline; it
-does not bypass review or safety.
+The agent receives `skills_list`, on-demand `skill_read`, and Normal Mode
+`skill_write`. An explicit owner request to create or edit a personal skill is
+performed in the foreground, saved as `user`, and verified before delivery.
+Existing entries require explicit replacement; built-ins are maintained through
+repository definitions, relevant validation and a commit. Preserve modified
+installed copies when merging updates. Background settings do not disable this
+owner workflow. No unsolicited creation or authorization from external content
+is allowed. Plan Mode and taint guards still block writes; filesystem tools
+must not be used to bypass a rejected write. The write tool validates sizes and
+slugs, rejects credentials and injection signals, and cannot publish `auto`
+content or introduce a pinned skill.
+
+`pop-agent-manual` links to `pop-agent-internals` through `skill_read`; the
+internals body remains unpinned and available on demand independently of router
+selection. It distinguishes component responsibilities and operation, result and
+quality evidence. The focused specifications remain the source of detailed rules.
+
+Requests for background learning prioritize the eligible conversation but never
+guarantee publication or activation time. The UI history exposes warning labels
+and outcomes. Owners can retry failed, invalid or tainted windows after reviewing
+a cause; retries preserve the original window and rerun every safety and review
+gate. A retry never overrides a veto or approves a candidate.
 
 ## Auto-Skills policy
 

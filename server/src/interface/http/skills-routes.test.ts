@@ -257,6 +257,29 @@ describe('the distiller queue on /v1/skills', () => {
     expect(body.distiller).toMatchObject({ enabled: true, candidates: 0, published: 0, policyRejected: 0, reviewRejected: 0, systematicBlocking: false });
   });
 
+  it('exposes taint reasons and queues re-evaluation without clearing the verdict', async () => {
+    fixture.distillation.startAttempt({
+      id: 'tainted-source', chatId: 'chat-source', chatTitle: 'Source',
+      fromMessageId: 'm1', throughMessageId: 'm9', trigger: 'explicit_request',
+      requested: true, startedAt: '2026-08-07T20:00:00.000Z',
+    });
+    fixture.distillation.finishAttempt('tainted-source', {
+      state: 'completed', outcome: 'tainted', riskLevel: 'high',
+      warnings: ['injection:destructive-bait'], finishedAt: '2026-08-07T20:01:00.000Z',
+    });
+    const listed = (await (await authed('/v1/skills/distillations')).json()) as {
+      attempts: { id: string; retryable: boolean; warnings: string[] }[];
+    };
+    expect(listed.attempts[0]).toMatchObject({ retryable: true, warnings: ['injection:destructive-bait'] });
+    const response = await authed('/v1/skills/distillations/tainted-source/retry', { method: 'POST' });
+    expect(response.status).toBe(202);
+    const retried = await response.json() as { id: string };
+    expect(fixture.distillation.attempt(retried.id)).toMatchObject({
+      state: 'queued', fromMessageId: 'm1', throughMessageId: 'm9', retryOf: 'tainted-source',
+    });
+    expect(fixture.distillation.attempt('tainted-source')?.outcome).toBe('tainted');
+  });
+
   it('lists a routine nothing result without presenting it as retryable work', async () => {
     fixture.distillation.startAttempt({
       id: 'distillation-source',

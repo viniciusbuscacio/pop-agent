@@ -94,7 +94,6 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   // -- Prompt exfiltration (EN)
   { pattern: /\b(reveal|show|print|repeat|output|display)\b.{0,40}\b(system prompt|initial prompt|your instructions|hidden instructions)/i, level: 'high', label: 'prompt-exfiltration' },
   { pattern: /what (is|are) your (system prompt|initial instructions|hidden rules)/i, level: 'suspicious', label: 'prompt-exfiltration' },
-  { pattern: /\bsystem prompt\b/i, level: 'suspicious', label: 'prompt-exfiltration' },
   // -- Prompt exfiltration (PT, accent-folded)
   { pattern: /\b(revele|mostre|imprima|repita|exiba)\b.{0,40}\b(prompt (do|de) sistema|suas instrucoes|instrucoes (ocultas|iniciais))/i, level: 'high', label: 'prompt-exfiltration' },
   { pattern: /qual e o seu prompt (do|de) sistema/i, level: 'suspicious', label: 'prompt-exfiltration' },
@@ -130,7 +129,7 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /<\s*(system|assistant|tool_call|function_call|im_start)\b/i, level: 'high', label: 'markup-smuggling' },
   { pattern: /\[(system|assistant)\]:/i, level: 'suspicious', label: 'markup-smuggling' },
   // -- Destructive-command bait
-  { pattern: /\b(run|execute|rode)\b.{0,30}\brm -rf\b/i, level: 'high', label: 'destructive-bait' },
+  { pattern: /(?<!never )(?<!do not )(?<!don\x27t )(?<!nao )\b(run|execute|rode)\b.{0,30}\brm -rf\b/i, level: 'high', label: 'destructive-bait' },
   { pattern: /curl[^|\n]{0,120}\|\s*(ba)?sh\b/i, level: 'high', label: 'destructive-bait' },
 ];
 

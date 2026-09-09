@@ -204,8 +204,10 @@ classified risky follow-up actions automatically. Files deletion uses Pop's
 recoverable `delete_file`; destructive shell deletion inside Files is not an
 acceptable substitute.
 
-pi's own skill discovery is disabled. `skills_list` is read-only; skill
-creation belongs to the reviewed background distiller, not a live tool call.
+pi's own skill discovery is disabled. `skills_list` and `skill_read` are
+read-only. `skill_write` supports explicit owner-requested personal maintenance
+in Normal Mode and remains blocked under taint. Built-ins use the repository
+workflow; unsolicited learning stays in the reviewed background distiller.
 
 ## 5.7 Plan Mode
 

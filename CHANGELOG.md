@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Separate owner-requested skill maintenance from background Auto-Skill learning;
+  add on-demand skill reading and the linked Pop Agent Internals built-in.
+- Report background publication as conditional, permit fully checked retries of
+  tainted windows, and avoid false injection alerts on prompt terminology and
+  directly negated destructive commands in technical documentation.
+
 - Add Copy beside OAuth device codes, with success feedback and a manual-copy fallback.
 
 - Use device-code Codex login automatically and remove the localhost browser-redirect choice from the server-hosted sign-in flow.
