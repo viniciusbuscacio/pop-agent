@@ -8,6 +8,7 @@ import { settingsResources } from './settings-resources';
 import { settingsLoaders, syncSetting } from './settings-preload';
 import { providersService } from './providers';
 import { syncQueue } from './sync-queue';
+import { selectMemoryChat, startChatMemory } from './chat-memory';
 
 let fullRound: Promise<void> | undefined;
 let manifest: SyncManifestResponse | undefined;
@@ -40,6 +41,8 @@ function syncChat(id: string, foreground = false): Promise<void> {
 
 export function ensureChat(id: string): () => void {
   selectedChat = id;
+  selectMemoryChat(id);
+  const wasResident = useChatStore.getState().messages[id] !== undefined;
   const started = generation;
   let active = true;
   void chatCache.get(id).then(messages => {
@@ -62,7 +65,9 @@ export function ensureChat(id: string): () => void {
       || (manifest?.epoch === next.epoch && verified.get(`chat:${id}`) === revision);
     const messages = useChatStore.getState().messages[id];
     const missingAttachments = messages?.some(message => message.attachments?.some(attachment => !attachment.dataUri));
-    if (!known || messages === undefined || missingAttachments) {
+    // Disk snapshots have no revision proof and may predate a failed write.
+    // Paint them immediately, but verify a restored transcript with the server.
+    if (!known || !wasResident || messages === undefined || missingAttachments) {
       await syncChat(id, true);
       // Navigation may have joined a text-only warmup already in flight.
       if (active && generation === started && loadedChats.has(id) && !fullChats.has(id)) await syncChat(id, true);
@@ -70,7 +75,7 @@ export function ensureChat(id: string): () => void {
     }
     navigationVersions.set(id, { epoch: next.epoch, revision });
   });
-  return () => { active = false; if (selectedChat === id) selectedChat = undefined; };
+  return () => { active = false; if (selectedChat === id) { selectedChat = undefined; selectMemoryChat(); } };
 }
 
 function hydrate(): void {
@@ -133,7 +138,7 @@ export function refreshClientData(): Promise<void> {
     }
     for (const id of ids) {
       const key = `chat:${id}`;
-      if (needs(key) || !loadedChats.has(id) || useChatStore.getState().messages[id] === undefined) {
+      if (needs(key) || !loadedChats.has(id)) {
         reads.push(record(key, key, syncChat(id, selectedChat === id)));
       }
     }
@@ -189,11 +194,12 @@ function apply(event: StreamEvent): void {
 
 /** Lives above routes: Settings must not stop chat projection/persistence. */
 export function startClientSync(): () => void {
+  const stopMemory = startChatMemory();
   const unsubscribe = eventStream.subscribe(apply);
   const resume = eventStream.onOpen(recover);
   void refreshClientData();
   return () => {
-    generation++; unsubscribe(); resume(); syncQueue.stop();
+    generation++; unsubscribe(); resume(); syncQueue.stop(); stopMemory();
     manifest = undefined; fullRound = undefined; verified.clear();
     loadedChats.clear(); fullChats.clear(); navigationVersions.clear(); navigationChecks.clear(); selectedChat = undefined;
     useChatStore.getState().reset();

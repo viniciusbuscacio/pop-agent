@@ -16,10 +16,15 @@ export function createStreamEventBatcher(
 ): { push: (event: StreamEvent) => void; clear: () => void } {
   let queued: StreamEvent[] = [];
   let scheduled: number | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  let bytes = 0;
 
   const flush = (): void => {
     if (scheduled !== undefined) cancel(scheduled);
     scheduled = undefined;
+    if (deadline !== undefined) clearTimeout(deadline);
+    deadline = undefined;
+    bytes = 0;
     const events = queued;
     queued = [];
     for (const event of events) deliver(event);
@@ -34,13 +39,20 @@ export function createStreamEventBatcher(
       }
 
       queued.push(event);
+      // Bound retention even if background frames AND timers are throttled.
+      bytes += JSON.stringify(event).length * 2;
+      if (queued.length >= 256 || bytes >= 256 * 1024) { flush(); return; }
       scheduled ??= schedule(flush);
+      deadline ??= setTimeout(flush, 100);
     },
 
     clear() {
       if (scheduled !== undefined) cancel(scheduled);
       scheduled = undefined;
       queued = [];
+      bytes = 0;
+      if (deadline !== undefined) clearTimeout(deadline);
+      deadline = undefined;
     },
   };
 }

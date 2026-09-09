@@ -343,7 +343,8 @@ session-wide stream and filter/apply relevant events.
   purposes.
 
 High-rate `delta`, `thinking` and `tool` fragments are queued until at most one
-animation-frame delivery. Every non-fragment event first flushes queued
+animation-frame delivery, with a bounded queue and independent timer fallback
+for background windows as specified in Client synchronization. Every non-fragment event first flushes queued
 fragments and then delivers immediately, preserving terminal ordering.
 
 Detailed ticket, retry and event rules live in the Events specification.

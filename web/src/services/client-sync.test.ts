@@ -5,6 +5,7 @@ import { ensureChat, refreshClientData, startClientSync } from './client-sync';
 import { syncQueue } from './sync-queue';
 import { settingsResources } from './settings-resources';
 import { apiRequest } from './api';
+import { chatCache } from './chat-cache';
 
 const test = vi.hoisted(() => ({
   calls: [] as string[],
@@ -15,6 +16,7 @@ const test = vi.hoisted(() => ({
   openChat: vi.fn(async (_id: string, _background?: boolean, _signal?: AbortSignal) => undefined),
   token: 'session' as string | undefined,
 }));
+vi.mock('./chat-memory', () => ({ selectMemoryChat: vi.fn(), startChatMemory: () => vi.fn() }));
 vi.mock('./session', () => ({ session: { token: () => test.token, generation: () => 0 } }));
 vi.mock('./api', () => ({ apiRequest: vi.fn(async () => structuredClone(test.manifest)) }));
 vi.mock('./events', () => ({ eventStream: {
@@ -45,6 +47,7 @@ vi.mock('./settings-preload', async () => {
 let stop: (() => void) | undefined;
 beforeEach(() => {
   settingsResources.clear(); vi.mocked(apiRequest).mockReset().mockImplementation(async () => structuredClone(test.manifest));
+  vi.mocked(chatCache.get).mockReset().mockResolvedValue(undefined);
   test.calls.length = 0; test.manifest = { epoch: 'one', revisions: {} }; test.messages = {}; test.token = 'session';
   test.openChat.mockReset().mockImplementation(async id => { test.calls.push(`chat:${id}`); test.messages[id] = []; });
 });
@@ -121,7 +124,10 @@ describe('authenticated client synchronization', () => {
     test.calls.length = 0; delete test.messages.b;
     settingsResources.invalidate('providers');
     await refreshClientData();
-    expect(test.calls).toEqual(['chat:b', 'setting:providers']);
+    // A verified transcript evicted from RAM must not cause a warmup loop.
+    expect(test.calls).toEqual(['setting:providers']);
+    ensureChat('b');
+    await vi.waitFor(() => expect(test.calls).toContain('chat:b'));
   });
   it('retries only the failed changed snapshot, not successful resources', async () => {
     stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
@@ -180,4 +186,19 @@ describe('authenticated client synchronization', () => {
     const leave = ensureChat('a'); leave(); ensureChat('a');
     await vi.waitFor(() => expect(test.calls).toEqual(['chat:a']));
   });
+});
+
+
+it('revalidates an evicted transcript even when an old disk cache paints before the revision check', async () => {
+  stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+  delete test.messages.b;
+  vi.mocked(chatCache.get).mockImplementation(async id => {
+    if (id !== 'b') return undefined;
+    // Simulate disk hydration completing before the manifest read. The disk
+    // write may have failed even though this session verified the new revision.
+    test.messages.b = [];
+    return [];
+  });
+  ensureChat('b');
+  await vi.waitFor(() => expect(test.calls).toEqual(['chat:b']));
 });

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bound PWA transcript memory to 15 chats or 300 MiB of estimated content,
+  preserving the visible chat, active runs, queued sends and durable history.
+- Bound background stream buffering, serialize/coalesce chat-cache writes and
+  stop rewriting cached transcripts during reads.
+- Load earlier messages in pages on demand with scroll preservation and retry.
+
 - Supply fresh per-turn server time, validated device time zone and original message receipt time to chat and steering prompts, including delayed queued messages.
 
 - Separate owner-requested skill maintenance from background Auto-Skill learning;

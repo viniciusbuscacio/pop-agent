@@ -73,3 +73,30 @@ describe('stream event batching', () => {
     expect(deliver).not.toHaveBeenCalled();
   });
 });
+
+it('bounds background retention even when frames and timers cannot run', () => {
+  vi.useFakeTimers();
+  const delivered: StreamEvent[] = [];
+  const batcher = createStreamEventBatcher(event => delivered.push(event), () => 1, vi.fn());
+  for (let seq = 1; seq <= 100_000; seq++) batcher.push(delta(seq, 'part'));
+  expect(100_000 - delivered.length).toBeLessThan(256);
+  vi.advanceTimersByTime(100);
+  expect(delivered).toHaveLength(100_000);
+  expect(delivered.map(event => 'seq' in event ? event.seq : undefined)).toEqual(Array.from({ length: 100_000 }, (_, n) => n + 1));
+  batcher.clear(); vi.useRealTimers();
+});
+it('flushes a small background queue by deadline and clears its timer on logout', () => {
+  vi.useFakeTimers();
+  const deliver = vi.fn();
+  const batcher = createStreamEventBatcher(deliver, () => 1, vi.fn());
+  batcher.push(delta(1, 'first')); vi.advanceTimersByTime(100);
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(delta(1, 'first'));
+  batcher.push(delta(2, 'private')); batcher.clear(); vi.runAllTimers();
+  expect(deliver).toHaveBeenCalledTimes(1); vi.useRealTimers();
+});
+it('flushes large fragments at the byte budget', () => {
+  const deliver = vi.fn();
+  const batcher = createStreamEventBatcher(deliver, () => 1, vi.fn());
+  batcher.push(delta(1, 'x'.repeat(130 * 1024)));
+  expect(deliver).toHaveBeenCalledTimes(1); batcher.clear();
+});

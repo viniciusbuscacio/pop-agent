@@ -56,6 +56,7 @@ interface ChatState {
   loadArchived: (signal?: AbortSignal) => Promise<void>;
   createChat: () => Promise<ChatDTO>;
   openChat: (chatId: string, background?: boolean, signal?: AbortSignal, textOnly?: boolean) => Promise<void>;
+  loadOlder: (chatId: string, signal?: AbortSignal) => Promise<number | undefined>;
   send: (
     chatId: string,
     text: string,
@@ -221,7 +222,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((state) => ({ messages: { ...state.messages, [chatId]: cached } }));
       }
     });
-    const serverRequest = chatsService.messages(chatId, undefined, textOnly, signal);
+    const previousLength = get().messages[chatId]?.length ?? 0;
+    const serverRequest = (async () => {
+      const result = await chatsService.messages(chatId, undefined, textOnly, signal);
+      // Reconcile pages the reader explicitly opened instead of discarding
+      // them on a terminal event/reconnect. Never expand an untouched tail.
+      if (!textOnly) {
+        let remaining = Math.max(0, previousLength - result.messages.length);
+        while (remaining > 0 && result.messages.length && !signal?.aborted && generation === session.generation()) {
+          const before = result.messages[0]!.id;
+          const page = await chatsService.messages(chatId, before, false, signal);
+          const ids = new Set(result.messages.map(message => message.id));
+          const older = page.messages.filter(message => !ids.has(message.id));
+          if (!older.length) break;
+          result.messages = [...older, ...result.messages];
+          remaining -= older.length;
+        }
+      }
+      return result;
+    })();
 
     const result = await serverRequest.finally(() => {
       if (snapshotEvents.get(chatId) === received) snapshotEvents.delete(chatId);
@@ -277,6 +296,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // delaying migration while the server is unavailable.
       }
     }
+  },
+
+  async loadOlder(chatId, signal) {
+    const before = get().messages[chatId]?.[0]?.id;
+    if (!before) return 0;
+    const generation = session.generation();
+    const read = chatReads.get(chatId);
+    const result = await chatsService.messages(chatId, before, false, signal);
+    // A navigation, deletion or newer canonical snapshot wins over this page.
+    if (signal?.aborted || generation !== session.generation() || deletedChats.has(chatId)
+      || chatReads.get(chatId) !== read || get().messages[chatId]?.[0]?.id !== before) return undefined;
+    const current = get().messages[chatId]!;
+    const ids = new Set(current.map(message => message.id));
+    const older = result.messages.filter(message => !ids.has(message.id));
+    if (older.length) {
+      const messages = [...older, ...current];
+      set(state => ({ messages: { ...state.messages, [chatId]: messages } }));
+      void chatCache.put(chatId, messages);
+    }
+    return older.length;
   },
 
   async send(chatId, text, attachments = [], filePaths = [], delivery = 'steer', executionMode = 'normal') {

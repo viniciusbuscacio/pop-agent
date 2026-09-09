@@ -164,3 +164,28 @@ function useEncodedSizes(): void {
   }
   vi.stubGlobal('TextEncoder', SizedTextEncoder);
 }
+
+it('reads without rewriting the stored transcript', async () => {
+  const { chatCache } = await import('./chat-cache');
+  await chatCache.put('read-only', [message('read-only', 'saved')]);
+  const stored = rows.get('read-only');
+  await chatCache.get('read-only');
+  expect(rows.get('read-only')).toBe(stored);
+});
+it('coalesces same-turn writes and keeps deletion ordered after them', async () => {
+  const { chatCache } = await import('./chat-cache');
+  const first = chatCache.put('burst', [message('burst', 'first')]);
+  const latest = chatCache.put('burst', [message('burst', 'latest')]);
+  await Promise.all([first, latest]);
+  expect((await chatCache.get('burst'))?.[0]?.content).toBe('latest');
+  const pending = chatCache.put('burst', [message('burst', 'obsolete')]);
+  const removed = chatCache.remove('burst');
+  await Promise.all([pending, removed]);
+  expect(await chatCache.get('burst')).toBeUndefined();
+});
+it('does not write snapshots queued before session teardown', async () => {
+  const { chatCache } = await import('./chat-cache');
+  const pending = chatCache.put('private', [message('private', 'secret history')]);
+  chatCache.clear(); await pending; await Promise.resolve();
+  expect(rows.has('private')).toBe(false);
+});

@@ -2,7 +2,7 @@ import { menuAnchor, menuKeyboard, nativeContext, selectionIn, type MenuAnchor }
 import { useNotificationsStore } from '../store/notifications';
 import type { ContextAction } from '../ui/action-surface';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BackButton, Pressable, ContextMenu, MenuItem } from '../ui/controls';
+import { BackButton, Button, Pressable, ContextMenu, MenuItem } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -34,6 +34,7 @@ export function ChatPage() {
   const failure = useChatStore((state) => state.failures[chatId]);
   const confirm = useChatStore((state) => state.confirms[chatId]);
   const openChat = useChatStore((state) => state.openChat);
+  const loadOlder = useChatStore(state => state.loadOlder);
   const send = useChatStore((state) => state.send);
   const updateQueued = useChatStore((state) => state.updateQueued);
   const cancelQueued = useChatStore((state) => state.cancelQueued);
@@ -72,6 +73,33 @@ export function ChatPage() {
   const lastScrollTop = useRef(0);
   // The floating "↓" is the visible half of follow mode being off.
   const [showJump, setShowJump] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [oldestReached, setOldestReached] = useState<string>();
+  const [olderError, setOlderError] = useState(false);
+  const olderRequest = useRef<AbortController | undefined>(undefined);
+  const prependAnchor = useRef<{ firstId?: string; height: number; top: number } | undefined>(undefined);
+
+  async function showOlder(): Promise<void> {
+    const element = scroller.current;
+    const first = messages?.[0]?.id;
+    if (!element || !first || olderRequest.current || first === oldestReached) return;
+    const request = new AbortController(); olderRequest.current = request;
+    prependAnchor.current = { firstId: first, height: element.scrollHeight, top: element.scrollTop };
+    atBottom.current = false;
+    setOlderLoading(true); setOlderError(false);
+    try {
+      const count = await loadOlder(chatId, request.signal);
+      if (!request.signal.aborted && count === 0) setOldestReached(first);
+    } catch {
+      if (!request.signal.aborted) setOlderError(true);
+    } finally {
+      if (olderRequest.current === request) {
+        olderRequest.current = undefined;
+        if (useChatStore.getState().messages[chatId]?.[0]?.id === first) prependAnchor.current = undefined;
+        setOlderLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     // Remembered per device, so the Chats segment reopens where you were.
@@ -85,13 +113,17 @@ export function ChatPage() {
     const leaveChat = ensureChat(chatId);
     setContext(undefined);setQuoteRequest(undefined);
     setShowJump(false);
+    setOlderLoading(false); setOldestReached(undefined); setOlderError(false);
     setEditingPendingId(undefined);
     setQueueActionError(false);
     setLocalSystemMessages([]);
     setCompacting(false);
     atBottom.current = true;
     lastScrollTop.current = 0;
-    return leaveChat;
+    return () => {
+      olderRequest.current?.abort(); olderRequest.current = undefined; prependAnchor.current = undefined;
+      leaveChat();
+    };
   }, [chatId, openChat]);
 
   useEffect(() => {
@@ -201,6 +233,12 @@ export function ChatPage() {
     const element = scroller.current;
     if (element === null) return;
 
+    const anchor = prependAnchor.current;
+    if (anchor && messages?.[0]?.id !== anchor.firstId) {
+      element.scrollTop = anchor.top + element.scrollHeight - anchor.height;
+      lastScrollTop.current = element.scrollTop;
+      prependAnchor.current = undefined;
+    }
     // Polite autoscroll: follow the answer only if the reader was already at
     // the bottom. Somebody who scrolled up to re-read something is not
     // dragged back down.
@@ -279,6 +317,7 @@ export function ChatPage() {
     const distance = distanceFromBottom();
     lastScrollTop.current = current;
 
+    if (current < previous && current < 120 && !olderError) void showOlder();
     if (distance >= BOTTOM_TOLERANCE_PX) {
       atBottom.current = false;
       setShowJump(true);
@@ -354,6 +393,11 @@ export function ChatPage() {
 
         <div data-testid="chat-transcript" className="mx-auto flex w-full min-w-0 flex-col gap-5 p-4 md:w-[95%]">
           {messages === undefined ? <SnapshotLoading resource={`chat:${chatId}`} /> : null}
+          {(messages?.length ?? 0) > 0 && messages?.[0]?.id !== oldestReached ? (
+            <Button variant="ghost" size="sm" disabled={olderLoading} onClick={() => { void showOlder(); }} data-testid="chat-load-older">
+              {olderLoading ? 'Loading earlier messages…' : olderError ? 'Retry earlier messages' : 'Load earlier messages'}
+            </Button>
+          ) : null}
           {transcriptWithCommands}
 
           {live?.status === 'running' ? (

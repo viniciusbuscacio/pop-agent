@@ -51,7 +51,9 @@ keeps the indicator active until completion.
 Full means verifying all in-scope resources, not downloading them unconditionally.
 Read the revision manifest first. Within the authenticated app lifetime, retain
 the verified revision of each successful snapshot independently. An unchanged
-round with complete, fresh in-memory data makes only the manifest request. Read
+round with successfully warmed, verified snapshots makes only the manifest request.
+Evicting a transcript from RAM does not invalidate its revision or restart its
+background download; foreground navigation restores the cache or reads the server. Read
 only changed, missing or invalidated snapshots, preserving chat-before-Settings
 ordering and navigation priority. A failed item does not invalidate successful
 items. Record the revision observed before its read, never a newer revision
@@ -107,3 +109,32 @@ API requests bypass service-worker runtime handlers; the client owns network
 failure and reconnect recovery. Optional provider subscription allowance failures
 remain visible in their provider card with retry and last-good data, without
 marking chat or Settings synchronization as failed.
+
+## Bounded client memory
+
+Retain at most 15 transcript caches or 300 MiB of estimated content in RAM,
+whichever is reached first. Estimate immutable DTO content without allocating
+whole-transcript serialization copies. This is a content budget, not a browser
+heap cap. The visible conversation, active runs and queued sends are protected;
+if protected histories alone exceed the budget, preserve them until eligible.
+Evict the least recently visited eligible transcript, preserving lists, drafts,
+run/queue state and persistent/server history. New unvisited warmup snapshots
+must not displace recently visited conversations solely because they arrived later.
+
+Start with the server's bounded recent tail. Earlier messages load in pages on
+upward scrolling or the accessible Load earlier messages action, with retry and
+scroll-anchor preservation. Navigation/cancellation/newer snapshots invalidate
+late page results. Canonical refresh reconciles the pages explicitly loaded by
+the reader, without downloading the entire archive preemptively.
+
+Serialize persistent chat-cache writes and coalesce waiting snapshots by key.
+A cache read is read-only; it never rewrites the transcript just to touch an
+access timestamp. Session teardown drops pending writes. Eviction preserves
+persistent snapshots where browser quota permits and never clears the app.
+
+Streaming delivery has a 100 ms fallback independent of animation frames and
+flushes synchronously at 256 queued fragments or 256 KiB of estimated serialized
+content, even when background timers are throttled. Preserve every event and
+sequence order; terminal events flush preceding fragments. A single incoming
+fragment may exceed the threshold and must be delivered immediately. Stop clears
+both frame and timer callbacks and retained fragments.

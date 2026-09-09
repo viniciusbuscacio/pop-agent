@@ -1,3 +1,4 @@
+import { createCoalescedWriter } from './coalesced-writer';
 import type { ChatDTO, MessageDTO } from '@pop-agent/shared';
 
 /**
@@ -10,6 +11,7 @@ const STORE = 'transcripts';
 const VERSION = 2;
 let generation = 0;
 let storageFailed = false;
+const writer = createCoalescedWriter();
 export const CHAT_CACHE_MAX_BYTES = 50 * 1024 * 1024;
 
 interface CachedTranscript {
@@ -83,25 +85,26 @@ export const chatCache = {
   },
   async putLists(chats: ChatDTO[], archived: ChatDTO[]): Promise<void> {
     const started = generation;
-    const db = await database();
-    if (!db) return;
-    try {
-      if (started !== generation) return;
-      const tx = db.transaction('lists', 'readwrite');
-      tx.objectStore('lists').put({ chats, archived }, 'all');
-      await transactionDone(tx);
-    } catch { storageFailed = true; }
-    finally { db.close(); }
+    return writer.add('lists', async () => {
+      const db = await database();
+      if (!db) return;
+      try {
+        if (started !== generation) return;
+        const tx = db.transaction('lists', 'readwrite');
+        tx.objectStore('lists').put({ chats, archived }, 'all');
+        await transactionDone(tx);
+      } catch { storageFailed = true; }
+      finally { db.close(); }
+    });
   },
   async get(chatId: string): Promise<MessageDTO[] | undefined> {
     const started = generation;
     const db = await database();
     if (db === undefined) return undefined;
     try {
-      const transaction = db.transaction(STORE, 'readwrite');
+      const transaction = db.transaction(STORE, 'readonly');
       const store = transaction.objectStore(STORE);
       const cached = await requestResult(store.get(chatId)) as CachedTranscript | undefined;
-      if (cached !== undefined) store.put({ ...cached, accessedAt: Date.now() });
       await transactionDone(transaction);
       return started === generation ? cached?.messages : undefined;
     } catch {
@@ -113,41 +116,48 @@ export const chatCache = {
 
   async put(chatId: string, messages: MessageDTO[]): Promise<void> {
     const started = generation;
-    const db = await database();
-    if (db === undefined) return;
-    try {
-      if (started !== generation) return;
-      const byteSize = encodedSize(messages);
-      if (byteSize > CHAT_CACHE_MAX_BYTES) { storageFailed = true; return; }
-      const transaction = db.transaction(STORE, 'readwrite');
-      const store = transaction.objectStore(STORE);
+    return writer.add(`chat:${chatId}`, async () => {
+      const db = await database();
+      if (db === undefined) return;
+      try {
+        if (started !== generation) return;
+        const byteSize = encodedSize(messages);
+        if (byteSize > CHAT_CACHE_MAX_BYTES) { storageFailed = true; return; }
+        const transaction = db.transaction(STORE, 'readwrite');
+        const store = transaction.objectStore(STORE);
         store.put({ chatId, messages, byteSize, accessedAt: Date.now() } satisfies CachedTranscript);
         // Browser quota bounds total storage. Do not evict other conversations
         // during a full warmup, which would create a perpetual redownload loop.
-      await transactionDone(transaction);
-    } catch {
-      storageFailed = true;
-    } finally {
-      db.close();
-    }
+        await transactionDone(transaction);
+      } catch {
+        storageFailed = true;
+      } finally {
+        db.close();
+      }
+    });
   },
 
   async remove(chatId: string): Promise<void> {
-    const db = await database();
-    if (db === undefined) return;
-    try {
-      const transaction = db.transaction(STORE, 'readwrite');
-      transaction.objectStore(STORE).delete(chatId);
-      await transactionDone(transaction);
-    } catch {
-      // Best-effort cache invalidation; the server still rejects a deleted id.
-    } finally {
-      db.close();
-    }
+    const started = generation;
+    return writer.add(`chat:${chatId}`, async () => {
+      const db = await database();
+      if (db === undefined) return;
+      try {
+        if (started !== generation) return;
+        const transaction = db.transaction(STORE, 'readwrite');
+        transaction.objectStore(STORE).delete(chatId);
+        await transactionDone(transaction);
+      } catch {
+        // Best-effort cache invalidation; the server still rejects a deleted id.
+      } finally {
+        db.close();
+      }
+    });
   },
 
   clear(): void {
     generation++;
+    writer.clear();
     storageFailed = false;
     if (!available()) return;
     // Deleting the database also removes entries from older schema versions.
