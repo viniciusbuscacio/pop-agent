@@ -4,7 +4,7 @@ export const SELF_MAP = [
   "",
   "Monorepo, npm workspaces: shared, server, web, cli. `shared` is the wire",
   "contract (pure DTOs); `server` and `web` both import it.",
-  "Key dependencies: pi 0.84.1, hono ^4.13.1, better-sqlite3 ^13.0.2, react ^19.0.0.",
+  "Key dependencies: pi 0.84.1, hono ^4.13.5, better-sqlite3 ^13.0.2, react ^19.0.0.",
   "",
   "server/src, clean architecture -- dependencies point inward only:",
   "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (98 modules)",

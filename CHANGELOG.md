@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.80
+
+- Update Sharp (including the Transformers override), Hono and SimpleWebAuthn to security-patched versions.
+- Use a new immutable release version for the accumulated application and client changes.
+
 - Bound PWA transcript memory to 15 chats or 300 MiB of estimated content,
   preserving the visible chat, active runs, queued sends and durable history.
 - Bound background stream buffering, serialize/coalesce chat-cache writes and

@@ -1,7 +1,7 @@
 {
   "name": "pop-agent",
   "private": true,
-  "version": "0.2.79",
+  "version": "0.2.80",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -75,13 +75,13 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "sharp": "^0.35.3",
-    "ws": "^8.21.1"
+    "sharp": "0.35.4",
+    "ws": "^8.21.1",
+    "@huggingface/transformers": "3.0.2"
   },
   "overrides": {
-    "@huggingface/transformers": {
-      "sharp": "0.35.3"
-    },
-    "@levischuck/tiny-cbor": "0.2.11"
+    "@levischuck/tiny-cbor": "0.2.11",
+    "sharp": "$sharp",
+    "hono": "^4.13.5"
   }
 }
