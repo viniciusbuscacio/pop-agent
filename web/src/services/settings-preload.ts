@@ -34,7 +34,8 @@ export function syncSetting(key: string, foreground = false, loader = settingsLo
   return syncQueue.add(`settings:${key}`, async (signal) => {
     if (signal.aborted || session.generation() !== generation) return;
     await settingsResources.load(key, loader);
-    if (settingsResources.state(key).error) throw new Error('Settings synchronization failed');
+    // Allowance is optional provider metadata; keep its error in the card.
+    if (settingsResources.state(key).error && !key.startsWith('subscription:')) throw new Error('Settings synchronization failed');
   }, foreground).then(() => {
     // An event during an in-flight read invalidates that response. Follow the
     // actual change once, not a periodic timer or an automatic error retry.

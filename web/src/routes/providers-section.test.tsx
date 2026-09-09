@@ -97,6 +97,7 @@ describe('OpenAI subscription card', () => {
     expect(screen.getByText('3%')).toBeTruthy();
     await waitFor(() => expect(subscriptionUsage).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Plus plan')).toBeTruthy();
+    expect(await screen.findByText(/Subscription usage unavailable/)).toBeTruthy();
     second.unmount();
     let finish!: (value: unknown) => void;
     subscriptionUsage.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

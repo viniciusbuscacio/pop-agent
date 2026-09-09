@@ -393,20 +393,27 @@ function SubscriptionUsage({
 }) {
   const [usage, setUsage] = useState<ProviderSubscriptionUsageResponse | null>(() => cachedSubscriptionUsage(providerId));
 
-  useSettingsLoad(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId), (value) => {
+  const usageState = useSettingsLoad(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId), (value) => {
     cacheSubscriptionUsage(providerId, value);
     setUsage(value);
-  }, false);
+  }, false, false);
   useEffect(() => {
     void settingsResources.load(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId));
   }, [providerId, listVersion]);
 
-  if (usage === null) return null;
+  const unavailable = usageState.error ? <div className="mt-2 text-sm text-[var(--muted)]" role="status">
+    <p>{t('provider.subscriptionUsage.unavailable')}</p>
+    <Button type="button" variant="ghost" disabled={usageState.loading} onClick={() => {
+      void settingsResources.load(`subscription:${providerId}`, () => providersService.subscriptionUsage(providerId));
+    }}>{t('settings.sync.retry')}</Button>
+  </div> : null;
+  if (usage === null) return unavailable;
   const windows = [usage.primary, usage.secondary].filter(
     (window): window is ProviderUsageWindowDTO => window !== undefined,
   );
   return (
     <div className="mt-2 flex w-72 max-w-full flex-col gap-2" data-testid="provider-subscription-usage">
+      {unavailable}
       {windows.map((window) => (
         <UsageWindow key={`${String(window.windowSeconds)}-${String(window.resetAt)}`} window={window} />
       ))}

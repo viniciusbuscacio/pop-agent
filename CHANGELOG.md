@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let API requests bypass the service worker and keep optional subscription-usage failures inside the provider card, preserving saved data and explicit retry.
+
 ## 0.2.79 — 2026-09-09
 
 - Preserve Codex HTTP refusal status and stream error codes so subscription usage limits trigger the configured provider fallback, including GitHub Copilot, before observable work.

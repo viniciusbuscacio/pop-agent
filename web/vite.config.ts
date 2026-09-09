@@ -63,12 +63,9 @@ export default defineConfig({
         // preview with a second copy of the PWA inside its own viewer on iOS.
         // A manual refresh must fetch the HTML from the server, not precache.
         navigateFallbackDenylist: [/[?&]_pop_refresh=/,/^\/v1\//, /^\/healthz$/, /^\/files\/download(?:\?|$)/],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/v1/'),
-            handler: 'NetworkOnly',
-          },
-        ],
+        // API requests pass directly to fetch. The client owns deadlines and
+        // reconnect recovery; Workbox must not wrap network failures.
+
       },
     }),
   ],

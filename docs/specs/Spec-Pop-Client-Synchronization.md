@@ -102,3 +102,8 @@ refetch all Settings or chats.
 Cover cache-first rendering, empty-cache loading, finite ordering, navigation
 priority, duplicate requests, deadlines, logout races, reconnect revisions,
 event compatibility, draft preservation and refresh without document reload.
+
+API requests bypass service-worker runtime handlers; the client owns network
+failure and reconnect recovery. Optional provider subscription allowance failures
+remain visible in their provider card with retry and last-good data, without
+marking chat or Settings synchronization as failed.

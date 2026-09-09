@@ -38,7 +38,7 @@ export function SettingsSyncBoundary({ children }: { children: ReactNode }) {
 }
 
 /** Callback reads current component state, so background reads never capture old drafts. */
-export function useSettingsLoad<T>(key: string, loader: () => Promise<T>, receive: (data: T) => void, blocking = true): ResourceState {
+export function useSettingsLoad<T>(key: string, loader: () => Promise<T>, receive: (data: T) => void, blocking = true, reportStatus = true): ResourceState {
   const id = useId();
   const loaderRef = useRef(loader); loaderRef.current = loader;
   const receiveRef = useRef(receive); receiveRef.current = receive;
@@ -51,7 +51,7 @@ export function useSettingsLoad<T>(key: string, loader: () => Promise<T>, receiv
   useLayoutEffect(() => {
     if (state.data !== undefined) receiveRef.current(state.data as T);
   }, [state.data, state.received]);
-  useEffect(() => { report(id, { state, retry, blocking }); return () => report(id); }, [id, report, state, retry, blocking]);
+  useEffect(() => { if (reportStatus) report(id, { state, retry, blocking }); return () => report(id); }, [id, report, state, retry, blocking, reportStatus]);
   useEffect(() => {
     ensureSetting(key, () => loaderRef.current());
   }, [key]);

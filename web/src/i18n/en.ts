@@ -286,6 +286,7 @@ export const en = {
   'provider.subscriptionUsage.weekly': 'Weekly usage',
   'provider.subscriptionUsage.hours': '{hours}-hour usage',
   'provider.subscriptionUsage.resets': 'Resets {date}',
+  'provider.subscriptionUsage.unavailable': 'Subscription usage unavailable. Any displayed figures are from the last successful check.',
   'provider.subscriptionUsage.plan': '{plan} plan',
   'settings.section.server': 'Server',
   'settings.section.general': 'Instructions',

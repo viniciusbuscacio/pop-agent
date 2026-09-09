@@ -41,6 +41,17 @@ describe('shared Settings reads', () => {
     expect(loader).toHaveBeenCalledTimes(2);
     expect(settingsResources.state('race-test').data).toEqual({ doc: 'new' });
   });
+  it('keeps subscription failures local, preserves cached figures and retries explicitly', async () => {
+    const key = 'subscription:openai-codex';
+    settingsResources.accept(key, { plan: 'plus' });
+    const failed = vi.fn(async () => { throw new Error('provider unavailable'); });
+    await syncSetting(key, false, failed);
+    expect(failed).toHaveBeenCalledOnce();
+    expect(settingsResources.state(key)).toMatchObject({ data: { plan: 'plus' }, error: true, fresh: false });
+    expect(syncQueue.getState()).toEqual({ busy: false, errors: [] });
+    await syncSetting(key, true, async () => ({ plan: 'pro' }));
+    expect(settingsResources.state(key)).toMatchObject({ data: { plan: 'pro' }, error: false, fresh: true });
+  });
   it('finishes failed work without retrying it and continues other resources', async () => {
     const failed = vi.fn(async () => { throw new Error('offline'); });
     await Promise.all([syncSetting('failed-test', false, failed), syncSetting('good-test', false, async () => ({ ready: true }))]);
