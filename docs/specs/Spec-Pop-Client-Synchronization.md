@@ -21,6 +21,14 @@ destination takes priority. Navigation promotes/deduplicates its read rather
 than restarting the whole round. A foreground lane may bypass one already
 running background read; background work itself remains sequential.
 
+Opening a conversation shows its available cache immediately and performs a
+silent, prioritized revision check. This check alone never animates the refresh
+wheel. If the verified snapshot is unchanged, do not download it or show sync
+activity. Show activity only for an actual changed/missing transcript or missing
+attachment content. Deduplicate checks across remounts and discard navigation
+results after leaving the screen or ending the session. Check failures retain
+the last-good content and expose retryable queue errors without a polling loop.
+
 Archived transcript contents are excluded from startup, manual full refresh and
 reconnect/event background reads. Keep the archive list available, but fetch an
 archived transcript only when opened. An archived conversation currently on

@@ -1,7 +1,7 @@
 /** Finite, keyed reads. Navigation has its own lane so a slow background read
  * cannot hold the screen hostage. No timers restart completed/failed work. */
 export function createSyncQueue(deadlineMs = 16_000) {
-  type Job = { key: string; foreground: boolean; run: (signal: AbortSignal) => Promise<void>; resolve: () => void; promise: Promise<void> };
+  type Job = { key: string; foreground: boolean; visible: boolean; run: (signal: AbortSignal) => Promise<void>; resolve: () => void; promise: Promise<void> };
   const waiting: Job[] = [];
   const jobs = new Map<string, Job>();
   const active = new Map<Job, AbortController>();
@@ -10,7 +10,7 @@ export function createSyncQueue(deadlineMs = 16_000) {
   let state = { busy: false, errors };
   let generation = 0;
   const publish = () => {
-    state = { busy: jobs.size > 0, errors };
+    state = { busy: [...jobs.values()].some(job => job.visible), errors };
     for (const listener of listeners) listener();
   };
   const execute = (job: Job) => {
@@ -46,15 +46,16 @@ export function createSyncQueue(deadlineMs = 16_000) {
     generation: () => generation,
     clearErrors() { errors = []; publish(); },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    add(key: string, run: Job['run'], foreground = false): Promise<void> {
+    add(key: string, run: Job['run'], foreground = false, visible = true): Promise<void> {
       const existing = jobs.get(key);
       if (existing) {
+        if (visible && !existing.visible) { existing.visible = true; publish(); }
         if (foreground) this.promote(key);
         return existing.promise;
       }
       let resolve!: () => void;
       const promise = new Promise<void>((done) => { resolve = done; });
-      const job = { key, foreground, run, resolve, promise };
+      const job = { key, foreground, visible, run, resolve, promise };
       jobs.set(key, job);
       waiting.push(job);
       if (foreground) this.promote(key);

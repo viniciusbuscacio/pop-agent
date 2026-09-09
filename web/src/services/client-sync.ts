@@ -16,6 +16,8 @@ let generation = 0;
 let selectedChat: string | undefined;
 const loadedChats = new Set<string>();
 const fullChats = new Set<string>();
+const navigationVersions = new Map<string, { epoch: string; revision: number }>();
+const navigationChecks = new Map<string, { snapshot?: SyncManifestResponse }>();
 
 function syncChat(id: string, foreground = false): Promise<void> {
   // Archive contents are demand-loaded, including during reconnect recovery.
@@ -39,18 +41,36 @@ function syncChat(id: string, foreground = false): Promise<void> {
 export function ensureChat(id: string): () => void {
   selectedChat = id;
   const started = generation;
+  let active = true;
   void chatCache.get(id).then(messages => {
-    if (generation === started && messages && useChatStore.getState().messages[id] === undefined) {
+    if (active && generation === started && messages && useChatStore.getState().messages[id] === undefined) {
       useChatStore.setState(state => ({ messages: { ...state.messages, [id]: messages } }));
     }
   });
-  if (!fullChats.has(id) || useChatStore.getState().messages[id] === undefined) {
-    void syncChat(id, true).then(() => {
-      // A text-only warmup may already have been running when navigation won.
-      if (generation === started && loadedChats.has(id) && !fullChats.has(id)) void syncChat(id, true);
-    });
-  } else syncQueue.promote(`chat:${id}`);
-  return () => { if (selectedChat === id) selectedChat = undefined; };
+  const check = navigationChecks.get(id) ?? {};
+  navigationChecks.set(id, check);
+  void syncQueue.add(`check-chat:${id}`, async signal => {
+    if (generation !== started) return;
+    check.snapshot = await apiRequest<SyncManifestResponse>('/sync', { signal });
+  }, true, false).then(async () => {
+    if (navigationChecks.get(id) === check) navigationChecks.delete(id);
+    const next = check.snapshot;
+    if (!active || generation !== started || !next) return;
+    const revision = next.revisions[`chat:${id}`] ?? 0;
+    const previous = navigationVersions.get(id);
+    const known = (previous?.epoch === next.epoch && previous.revision === revision)
+      || (manifest?.epoch === next.epoch && verified.get(`chat:${id}`) === revision);
+    const messages = useChatStore.getState().messages[id];
+    const missingAttachments = messages?.some(message => message.attachments?.some(attachment => !attachment.dataUri));
+    if (!known || messages === undefined || missingAttachments) {
+      await syncChat(id, true);
+      // Navigation may have joined a text-only warmup already in flight.
+      if (active && generation === started && loadedChats.has(id) && !fullChats.has(id)) await syncChat(id, true);
+      if (generation !== started || syncQueue.getState().errors.includes(`chat:${id}`)) return;
+    }
+    navigationVersions.set(id, { epoch: next.epoch, revision });
+  });
+  return () => { active = false; if (selectedChat === id) selectedChat = undefined; };
 }
 
 function hydrate(): void {
@@ -175,7 +195,7 @@ export function startClientSync(): () => void {
   return () => {
     generation++; unsubscribe(); resume(); syncQueue.stop();
     manifest = undefined; fullRound = undefined; verified.clear();
-    loadedChats.clear(); fullChats.clear(); selectedChat = undefined;
+    loadedChats.clear(); fullChats.clear(); navigationVersions.clear(); navigationChecks.clear(); selectedChat = undefined;
     useChatStore.getState().reset();
   };
 }

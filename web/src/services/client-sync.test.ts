@@ -44,7 +44,7 @@ vi.mock('./settings-preload', async () => {
 });
 let stop: (() => void) | undefined;
 beforeEach(() => {
-  settingsResources.clear(); vi.mocked(apiRequest).mockClear();
+  settingsResources.clear(); vi.mocked(apiRequest).mockReset().mockImplementation(async () => structuredClone(test.manifest));
   test.calls.length = 0; test.manifest = { epoch: 'one', revisions: {} }; test.messages = {}; test.token = 'session';
   test.openChat.mockReset().mockImplementation(async id => { test.calls.push(`chat:${id}`); test.messages[id] = []; });
 });
@@ -67,6 +67,7 @@ describe('authenticated client synchronization', () => {
   it('loads an archived transcript on navigation and refreshes it only while selected', async () => {
     stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
     const leave = ensureChat('old');
+    await vi.waitFor(() => expect(test.calls).toContain('chat:old'));
     await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
     expect(test.calls).toEqual(['chat:old']);
     test.manifest.revisions['chat:old'] = 1;
@@ -78,6 +79,7 @@ describe('authenticated client synchronization', () => {
   it('does not download changed archived transcripts during reconnect or event recovery', async () => {
     stop = startClientSync(); await refreshClientData();
     const leave = ensureChat('old');
+    await vi.waitFor(() => expect(test.calls).toContain('chat:old'));
     await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
     leave(); test.calls.length = 0;
     test.manifest.revisions['chat:old'] = 1;
@@ -147,5 +149,35 @@ describe('authenticated client synchronization', () => {
     expect(test.messages.a).toEqual([]);
     expect(syncQueue.getState()).toEqual({ busy: false, errors: ['manifest'] });
     await refreshClientData(); expect(test.calls).toEqual([]);
+  });
+  it('checks navigation silently and skips unchanged warmed messages', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    let finish!: (value: unknown) => void;
+    vi.mocked(apiRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const states: boolean[] = []; const unsubscribe = syncQueue.subscribe(() => states.push(syncQueue.getState().busy));
+    ensureChat('a');
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(syncQueue.getState().busy).toBe(false);
+    finish(structuredClone(test.manifest));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(test.calls).toEqual([]); expect(states).not.toContain(true); unsubscribe();
+  });
+  it('spins only after navigation discovers a changed transcript', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    test.manifest.revisions['chat:a'] = 1;
+    let finish!: () => void;
+    test.openChat.mockImplementationOnce(async id => { test.calls.push(`chat:${id}`); await new Promise<void>(resolve => { finish = resolve; }); });
+    const leave = ensureChat('a');
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(syncQueue.getState().busy).toBe(true);
+    finish(); await vi.waitFor(() => expect(syncQueue.getState().busy).toBe(false));
+    leave(); test.calls.length = 0; ensureChat('a');
+    await new Promise(resolve => setTimeout(resolve, 0)); expect(test.calls).toEqual([]);
+  });
+  it('shares a check across a navigation remount without dropping its result', async () => {
+    stop = startClientSync(); await refreshClientData(); test.calls.length = 0;
+    test.manifest.revisions['chat:a'] = 1;
+    const leave = ensureChat('a'); leave(); ensureChat('a');
+    await vi.waitFor(() => expect(test.calls).toEqual(['chat:a']));
   });
 });

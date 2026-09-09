@@ -5,6 +5,14 @@ afterEach(() => vi.useRealTimers());
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 
 describe('finite synchronization queue', () => {
+  it('keeps lightweight checks silent and shows a joined visible request', async () => {
+    const queue = createSyncQueue(); const pending = deferred();
+    const check = queue.add('check', () => pending.promise, true, false);
+    expect(queue.getState().busy).toBe(false);
+    expect(queue.add('check', () => pending.promise, true)).toBe(check);
+    expect(queue.getState().busy).toBe(true);
+    pending.resolve(); await check; expect(queue.getState().busy).toBe(false);
+  });
   it('serializes background reads, deduplicates keys and stops after completion', async () => {
     const queue = createSyncQueue();
     const first = deferred(); const calls: string[] = [];
