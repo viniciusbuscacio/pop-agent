@@ -31,7 +31,8 @@ if (source.includes('enableAllGitHubCopilotModels') ||
 }
 
 const codexSource = readFileSync(join(sourcePath, '../../../api/openai-codex-responses.js'), 'utf8');
-if (!codexSource.includes('throw new Error(`${response.status}: ${info.friendlyMessage || info.message}`)')) {
+if (!codexSource.includes('throw new Error(`${response.status}: ${info.friendlyMessage || info.message}`)') ||
+    !codexSource.includes('super(options?.code ? `Codex error (${options.code}): ${message}` : message)')) {
   throw new Error('The Codex refusal status patch is not applied. Run npm install before using Codex failover.');
 }
 

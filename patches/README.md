@@ -10,6 +10,11 @@ friendly message. Pop's existing adapter then emits the typed refusal and its
 normal replay-safe fallback policy applies. This also preserves other Codex
 HTTP refusals without changing which statuses permit replay.
 
+Codex can also send `error` or `response.failed` events inside a successful
+HTTP/WebSocket stream. Preserve `CodexApiError.code` in a stable message prefix
+before pi flattens the error. Pop maps only the known usage/rate-limit codes to
+`provider_rate_limit`; it does not infer an HTTP status from a stream error.
+
 `tools/codex-failover.test.ts` exercises the installed SDK with mocked HTTP and
 feeds its actual output through Pop's translator and failover classifier.
 `pi-patch:check` requires this patch after installation. Remove it only when

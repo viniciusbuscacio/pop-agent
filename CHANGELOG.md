@@ -4,7 +4,7 @@
 
 ## 0.2.79 — 2026-09-09
 
-- Preserve Codex HTTP refusal status so subscription usage limits trigger the configured provider fallback, including GitHub Copilot, before observable work.
+- Preserve Codex HTTP refusal status and stream error codes so subscription usage limits trigger the configured provider fallback, including GitHub Copilot, before observable work.
 
 - Check conversation revisions silently on navigation; show cached messages immediately and spin the refresh wheel only when content actually needs downloading.
 

@@ -999,7 +999,10 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     { providerId: 'p2', modelId: 'p2/model' },
   ];
 
-  it('retries GitHub Copilot with its own model after a Codex usage-limit refusal', async () => {
+  it.each([
+    { code: 'provider_error', status: 429 },
+    { code: 'provider_rate_limit' },
+  ])('retries GitHub Copilot with its own model after a Codex usage-limit refusal (%j)', async failure => {
     withChain([
       { providerId: 'openai-codex', modelId: 'gpt-5.6-sol' },
       { providerId: 'github-copilot', modelId: 'gpt-5.6-luna' },
@@ -1007,7 +1010,7 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     const chatId = newChat();
     bridge.script = (request) => {
       if (request.provider === 'openai-codex') {
-        request.onEvent({ kind: 'error', code: 'provider_error', status: 429 });
+        request.onEvent({ kind: 'error', ...failure });
       } else {
         request.onEvent({ kind: 'delta', text: 'Answered by Copilot' });
       }
@@ -1026,7 +1029,7 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     expect(sink.of('done')).toHaveLength(1);
     expect(repo.getMessages(chatId, { limit: 10 }).find(message => message.notice)?.notice).toMatchObject({
       kind: 'model-fallback',
-      failed: { providerId: 'openai-codex', status: 429 },
+      failed: { providerId: 'openai-codex', ...failure },
       fallback: { providerId: 'github-copilot', modelId: 'gpt-5.6-luna' },
     });
   });

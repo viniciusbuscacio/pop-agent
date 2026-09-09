@@ -11,6 +11,15 @@ diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil
                  }
                  catch (error) {
                      if (error instanceof Error) {
+@@ -482,7 +483,7 @@
+     code;
+     payload;
+     constructor(message, options) {
+-        super(message);
++        super(options?.code ? `Codex error (${options.code}): ${message}` : message);
+         this.name = "CodexApiError";
+         this.code = options?.code;
+         this.payload = options?.payload;
 diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
 --- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
 +++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js

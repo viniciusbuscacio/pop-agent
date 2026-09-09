@@ -191,7 +191,8 @@ export class RunTranslator {
       // its own code, and an HTTP refusal carries its status when the
       // provider's message names one.
       const message = this.lastErrorMessage;
-      if (isNetworkFailure(message)) this.fail('network_error', message);
+      if (isCodexRateLimit(message)) this.fail('provider_rate_limit', message);
+      else if (isNetworkFailure(message)) this.fail('network_error', message);
       else this.fail('provider_error', message, extractHttpStatus(message));
     }
   }
@@ -324,10 +325,16 @@ function isContextOverflow(message: string | undefined): boolean {
 
 export function errorCode(error: unknown): string {
   if (error instanceof PiEngineError) return error.code;
+  if (isCodexRateLimit(messageOf(error))) return 'provider_rate_limit';
   if (isNetworkFailure(messageOf(error)) || networkCodeOf(error) !== undefined) {
     return 'network_error';
   }
   return 'operation_error';
+}
+
+/** Machine codes preserved by the pinned SDK patch, never a prose quota guess. */
+function isCodexRateLimit(message: string | undefined): boolean {
+  return message !== undefined && /^Codex error \((usage_limit_reached|usage_not_included|rate_limit_exceeded)\): /.test(message);
 }
 
 export function messageOf(error: unknown): string | undefined {

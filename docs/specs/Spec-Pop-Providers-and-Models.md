@@ -135,6 +135,10 @@ Provider adapters must preserve HTTP refusal status through SDK error formatting
 including Codex's friendly subscription-limit messages. A Codex HTTP 429 before
 observable work follows the configured provider chain, including GitHub Copilot
 when it is the next usable provider.
+Codex stream errors must also preserve their machine code: `usage_limit_reached`,
+`usage_not_included` and `rate_limit_exceeded` map to `provider_rate_limit`, even
+when the HTTP stream itself succeeded. Do not invent an HTTP status or classify
+arbitrary quota-related prose. The same replay-safety checks apply.
 Unsafe/ambiguous work, owner Stop and deterministic local/tool failures are not
 blindly replayed.
 

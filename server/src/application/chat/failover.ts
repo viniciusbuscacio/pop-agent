@@ -28,6 +28,7 @@ const FAILOVER_STATUSES = new Set([401, 402, 403, 404, 408, 429]);
 
 /** Codes that fail over regardless of status. */
 const FAILOVER_CODES = new Set([
+  'provider_rate_limit',
   'network_error',
   'provider_not_configured',
   // The pair is invalid for this provider, but the same prompt can still be
