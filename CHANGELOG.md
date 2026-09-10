@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show 30 rows in the skill Instructions editor while retaining textarea scrolling.
+
 - Refresh all nine built-in skills: compact pinned identity, accurate capability discovery, portable release instructions, and separate browser history from model context.
 
 - Ship Publish Pop Agent as a routed built-in skill, including release recovery, private publication without Actions, and supervised activation.

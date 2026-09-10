@@ -146,7 +146,7 @@ export function SkillEditor({ skill, onDone }: { skill: SkillDTO | undefined; on
         id="skill-body"
         data-testid="skill-body"
         label={t('skills.field.body')}
-        rows={10}
+        rows={30}
         value={body}
         onChange={(event) => setBody(event.target.value)}
       />
