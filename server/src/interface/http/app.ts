@@ -209,6 +209,9 @@ export function createApp(deps: AppDeps): Hono {
       if (keys.length) deps.hub.invalidate(keys);
     }
   });
+  // File URLs are not bearer capabilities: even an old valid signature requires
+  // a current owner session, including after password changes or revocation.
+  app.use('/files/download', authMiddleware(deps.auth));
   mountApi(app, authMiddleware(deps.auth, deps.integrations), {
     public: [
       ...(deps.a2aSettings && deps.a2aProtocol ? [publicSurface('A2A card and protocol enforce their own independent enabled switch, IP allowlist and bearer key.', createA2aServerRoutes(deps.a2aSettings, deps.a2aProtocol))] : []),
@@ -217,7 +220,7 @@ export function createApp(deps: AppDeps): Hono {
         health,
       ),
       publicSurface(
-        'the HMAC in the Files download URL is the whole authorisation (docs/specs/Spec-Pop-General.md §14, plain-folder design); the signature covers path and expiry together, the path jail gets the last word, and it must sit before the static site could mistake it for a missing file',
+        'Files downloads require the explicit owner-session middleware above as well as the path/expiry signature and filesystem jail; this non-v1 route must precede the static site',
         createFilesDownloadRoutes(deps),
       ),
       publicSurface(

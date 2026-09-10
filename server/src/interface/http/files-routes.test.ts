@@ -44,7 +44,7 @@ describe('files routes', () => {
     expect(fixture.files.read('inbox/hello.txt')?.toString()).toBe('hello');
   });
 
-  it('mints a signed link and serves the bytes only with a valid signature', async () => {
+  it('requires a current session as well as a valid signature for file bytes', async () => {
     const fixture = await signedIn();
     fixture.files.write('reports/pesca.pdf', Buffer.from('%PDF-fake'));
 
@@ -56,16 +56,26 @@ describe('files routes', () => {
     expect(mint.status).toBe(200);
     const { url } = (await mint.json()) as { url: string };
 
-    const good = await fixture.app.request(url);
+    const anonymous = await fixture.app.request(url);
+    expect(anonymous.status).toBe(401);
+    const good = await fixture.app.request(url, { headers: json(fixture.token) });
     expect(good.status).toBe(200);
     expect(await good.text()).toBe('%PDF-fake');
     expect(good.headers.get('content-type')).toBe('application/pdf');
 
-    const forged = await fixture.app.request(url.replace('sig=', 'sig=X'));
+    const forged = await fixture.app.request(url.replace('sig=', 'sig=X'), { headers: json(fixture.token) });
     expect(forged.status).toBe(403);
 
-    const noSig = await fixture.app.request('/files/download?path=reports%2Fpesca.pdf');
+    const noSig = await fixture.app.request('/files/download?path=reports%2Fpesca.pdf', { headers: json(fixture.token) });
     expect(noSig.status).toBe(403);
+    const revoked = await fixture.app.request('/v1/auth/change-password', {
+      method: 'POST', headers: json(fixture.token),
+      body: JSON.stringify({ currentPassword: PASSWORD, newPassword: 'replacement password 123' }),
+    });
+    expect(revoked.status).toBe(200);
+    expect((await fixture.app.request(url, { headers: json(fixture.token) })).status).toBe(401);
+    const { token: replacement } = await revoked.json() as { token: string };
+    expect((await fixture.app.request(url, { headers: json(replacement) })).status).toBe(200);
   });
 
   it('refuses a link request whose path escapes the tree', async () => {

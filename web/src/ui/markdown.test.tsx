@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Markdown, internalFilePath } from './markdown';
 
 const link = vi.fn();
+const blob = vi.fn();
 const saveFromLink = vi.fn();
 const highlightCode = vi.hoisted(() => vi.fn());
 
@@ -12,6 +13,7 @@ vi.mock('../lib/syntax-highlighter', () => ({ highlightCode }));
 
 vi.mock('../services/artifacts', () => ({
   filesService: {
+    blob: (url: string) => blob(url),
     link: (path: string) => link(path) as Promise<string>,
   },
 }));
@@ -22,12 +24,16 @@ vi.mock('../lib/download', () => ({
 
 beforeEach(() => {
   link.mockReset();
+  blob.mockReset();
+  blob.mockResolvedValue({ blob: new Blob(['image'], { type: 'image/png' }), filename: 'chart.png' });
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:authenticated-preview');
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   saveFromLink.mockReset();
   highlightCode.mockReset();
   highlightCode.mockResolvedValue('<pre class="shiki"><code>highlighted</code></pre>');
 });
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function markDecoded(image: HTMLImageElement): void {
   Object.defineProperties(image, {
@@ -81,9 +87,10 @@ describe('generated images in markdown', () => {
     const image = await screen.findByTestId('markdown-image');
     expect(link).toHaveBeenCalledWith('previews/chart.png');
     expect(image.getAttribute('src')).toBe(
-      '/files/download?path=previews%2Fchart.png&expires=2&sig=fresh&inline=1',
+      'blob:authenticated-preview',
     );
 
+    expect(blob).toHaveBeenCalledWith('/files/download?path=previews%2Fchart.png&expires=2&sig=fresh&inline=1');
     markDecoded(image as HTMLImageElement);
     fireEvent.load(image);
     expect(screen.queryByTestId('markdown-image-fallback')).toBeNull();
@@ -136,4 +143,20 @@ describe('internal image paths', () => {
     await waitFor(() => expect(screen.getByTestId('markdown-image')).toBeDefined());
     expect(link).not.toHaveBeenCalled();
   });
+});
+
+
+it('downloads a persisted file link through the authenticated service', async () => {
+  link.mockResolvedValue('/files/download?path=report.pdf&expires=9&sig=new');
+  render(<Markdown text="[Download report](/files/download?path=report.pdf&expires=1&sig=old)" />);
+  await userEvent.click(screen.getByRole('button', { name: 'Download report' }));
+  await waitFor(() => expect(saveFromLink).toHaveBeenCalledWith('/files/download?path=report.pdf&expires=9&sig=new'));
+  expect(link).toHaveBeenCalledWith('report.pdf');
+});
+it('revokes an image object URL when its chat message leaves the screen', async () => {
+  link.mockResolvedValue('/files/download?path=chart.png&expires=9&sig=new');
+  const rendered = render(<Markdown text="![Chart](files://chart.png)" />);
+  await screen.findByTestId('markdown-image');
+  rendered.unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:authenticated-preview');
 });

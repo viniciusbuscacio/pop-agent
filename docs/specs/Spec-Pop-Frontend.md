@@ -512,7 +512,10 @@ The Files UI:
   exact returned Garbage handle;
 - restores parent selections before separately selected children;
 - never uses a stale frontend catalog as Files authority;
-- requests signed links from the API rather than constructing signatures;
+- requests file links from the API and fetches bytes with the current bearer
+  session, never by unauthenticated navigation or a token in the URL;
+- renders image/PDF previews through local object URLs and revokes them on
+  close, path change or discarded late loads;
 - treats hidden metadata and path-jail decisions as server policy.
 
 The detailed Files layout, retention, provenance and backup rules live in the

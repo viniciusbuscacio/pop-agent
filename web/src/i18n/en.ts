@@ -497,6 +497,7 @@ export const en = {
   'backup.empty': 'No backups yet.',
   'backup.loadFailed': 'The backup list could not be loaded.',
   'backup.createFailed': 'The backup could not be created.',
+  'files.downloadFailed': 'The file could not be downloaded. Check your connection and sign-in.',
   'backup.downloadFailed': 'The backup could not be downloaded.',
   'backup.deleteFailed': 'The backup could not be deleted.',
 

@@ -65,6 +65,7 @@ export function FileViewer({ path, name, onClose, onSaved }: FileViewerProps) {
 
   useEffect(() => {
     let live = true;
+    const controller = new AbortController();
     let objectUrl: string | undefined;
     setPreview(undefined);
     setSource(false);
@@ -74,13 +75,14 @@ export function FileViewer({ path, name, onClose, onSaved }: FileViewerProps) {
     async function load(): Promise<Preview> {
       if (isTextFile(name)) return { kind: 'text', ...await filesService.readText(path) };
       if (['html', 'htm', 'svg'].includes(extension)) {
-        const { blob } = await filesService.blob(await filesService.link(path));
+        const { blob } = await filesService.blob(await filesService.link(path), controller.signal);
         if (extension !== 'svg') return { kind: 'html', content: await blob.text() };
         const url = URL.createObjectURL(new Blob([blob], { type: 'image/svg+xml' }));
         if (!live) URL.revokeObjectURL(url); else objectUrl = url;
         return { kind: 'image', url };
       }
-      const url = await filesService.viewUrl(path);
+      const url = await filesService.viewUrl(path, controller.signal);
+      if (!live) URL.revokeObjectURL(url); else objectUrl = url;
       return { kind: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico'].includes(extension) ? 'image' : 'frame', url };
     }
     const pending = load();
@@ -94,6 +96,7 @@ export function FileViewer({ path, name, onClose, onSaved }: FileViewerProps) {
     );
     return () => {
       live = false;
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [name, path]);

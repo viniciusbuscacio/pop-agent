@@ -31,9 +31,16 @@ function MarkdownView({ text }: { text: string }) {
               <code className={className}>{children}</code>
             ),
           // `urlTransform` keeps the internal image scheme long enough for
-          // MarkdownImage to resolve it. Links still get the stock sanitizer:
-          // an assistant cannot turn attachment:// into an external app launch.
+          // MarkdownImage to resolve it. Internal file links use authenticated downloads;
+          // external links still get the stock sanitizer.
           a: ({ href, children }) => {
+            const filePath = internalFilePath(href ?? '');
+            if (filePath !== undefined) return (
+              <Pressable type="button" className="text-left text-[var(--accent)] underline underline-offset-2"
+                onClick={() => { void filesService.link(filePath).then(saveFromLink).catch(() => window.alert(t('files.downloadFailed'))); }}>
+                {children}
+              </Pressable>
+            );
             const safe = defaultUrlTransform(href ?? '');
             return (
               <a
@@ -73,7 +80,7 @@ export const Markdown = memo(MarkdownView);
 
 /**
  * A generated image is persisted in Files, not copied into the message row.
- * Keep a stable path in markdown and mint a fresh signed URL when it is viewed:
+ * Keep a stable path in markdown and fetch previews with the current session:
  * unlike a URL saved in message content, this still works after the 30-day link
  * lifetime. The browser's load event is the final witness that the bytes really
  * decoded; file existence on the server alone cannot prove that.
@@ -93,6 +100,8 @@ function MarkdownImage({
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | undefined;
+    const controller = new AbortController();
     setFailed(src.length === 0);
 
     if (path === undefined) {
@@ -104,15 +113,20 @@ function MarkdownImage({
 
     setResolved(undefined);
     void filesService.link(path).then(
-      (download) => {
-        if (!cancelled) setResolved({ preview: `${download}&inline=1`, download });
+      async (download) => {
+        const { blob } = await filesService.blob(`${download}&inline=1`, controller.signal);
+        const preview = URL.createObjectURL(blob);
+        if (cancelled) URL.revokeObjectURL(preview);
+        else { objectUrl = preview; setResolved({ preview, download }); }
       },
       () => {
         if (!cancelled) setFailed(true);
       },
-    );
+    ).catch(() => { if (!cancelled) setFailed(true); });
     return () => {
       cancelled = true;
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [path, src]);
 

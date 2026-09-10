@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.81 — 2026-09-09
+
+- Require a current owner session for every Files download, including old signed URLs; password changes and session revocation block further downloads with old credentials.
+- Fetch file downloads and image/PDF previews with authenticated requests, reject cross-origin targets and redirects, and release preview object URLs after use.
+
 ## 0.2.80 — 2026-09-09
 
 - Update Sharp (including the Transformers override), Hono and SimpleWebAuthn to security-patched versions.

@@ -9,17 +9,9 @@ import { inlineView } from '../../domain/files/inline-view.js';
 import { apiError } from './errors.js';
 
 /**
- * The public Files download (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder"). This
- * route sits OUTSIDE `/v1`, so it carries no session — the HMAC signature in
- * the URL is the whole authorisation, and it covers the path and the expiry
- * together. A bad or forged signature, an expired link, an unknown path or a
- * path the jail refuses are all denied.
- *
- * `?inline=1` asks to display rather than save (the Files screen's "Open
- * file"). It is a request, not an instruction: only the types
- * `domain/artifacts/inline-view` allows are shown, everything else still
- * downloads. The flag deliberately sits outside the signature — it cannot
- * reach anything the signature did not already authorise.
+ * Files bytes require the owner-session guard installed by createApp, plus the
+ * path/expiry signature and filesystem jail. An old URL alone grants no access.
+ * Inline display remains limited to approved non-scriptable media types.
  */
 export interface FilesDownloadRoutesDeps {
   files: FilesService;

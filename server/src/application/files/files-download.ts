@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /**
  * Signed download links for Files (docs/specs/Spec-Pop-General.md §14, "Files as a plain folder").
  *
- * Same contract the artifact links had, re-anchored on the path: no file is
- * reachable by a public URL without a signature. The signing key is derived
+ * Same contract the artifact links had, re-anchored on the path: the signature is an additional integrity check, never a substitute for
+ * the current owner session required by the HTTP route. The signing key is derived
  * from `secret.key` -- never a fresh standalone secret -- so a rotated key
  * invalidates every outstanding link at once. The signature covers both the
  * path and the expiry, so tampering with either breaks the signature rather

@@ -239,16 +239,28 @@ async function performApiRequest<T>(
 
 /** A binary GET (e.g. a backup archive), returned as a Blob with the bearer token. */
 export async function apiDownload(path: string): Promise<Blob> {
+  return (await authenticatedDownloadResponse(`${BASE}${path}`)).blob();
+}
+
+/** Only the same-origin Files endpoint may receive the owner's bearer token. */
+export async function fileDownloadResponse(url: string, signal?: AbortSignal): Promise<Response> {
+  const target = new URL(url, window.location.origin);
+  if (target.origin !== window.location.origin || target.pathname !== '/files/download'
+    || target.username || target.password || target.hash) throw new Error('Invalid file download URL');
+  return authenticatedDownloadResponse(`${target.pathname}${target.search}`, signal);
+}
+
+async function authenticatedDownloadResponse(url: string, signal?: AbortSignal): Promise<Response> {
   const token = session.token();
   const generation = session.generation();
   const isCurrentSession = (): boolean => session.generation() === generation && session.token() === token;
   const headers: Record<string, string> = clientHeaders();
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
 
-  const response = await probed(() => fetch(`${BASE}${path}`, { headers }));
+  const response = await probed(() => fetch(url, { headers, redirect: 'error', ...(signal === undefined ? {} : { signal }) }));
   refreshSessionFrom(response, isCurrentSession);
   if (!response.ok) throw handleSessionError(classifyServerReachability(await toApiError(response)), isCurrentSession);
-  return response.blob();
+  return response;
 }
 
 /** A multipart upload (e.g. an artifact), returning the parsed JSON reply. */

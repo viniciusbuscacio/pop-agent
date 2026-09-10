@@ -8,7 +8,7 @@ import type {
   GarbageEntryDTO,
   GarbageResponse,
 } from '@pop-agent/shared';
-import { apiRequest, apiUpload } from './api';
+import { apiRequest, apiUpload, fileDownloadResponse } from './api';
 
 /**
  * Files as a plain folder (docs/specs/Spec-Pop-General.md §14): the tree is the disk, and a path
@@ -66,7 +66,7 @@ export const filesService = {
     return fallback;
   },
 
-  /** Mints a fresh signed download URL (public, no session). */
+  /** Gets a file URL; fetching it still requires the current owner session. */
   async link(path: string): Promise<string> {
     const { url } = await apiRequest<FileLinkResponse>('/files/link', {
       method: 'POST',
@@ -75,14 +75,14 @@ export const filesService = {
     return url;
   },
 
-  /**
-   * The same signed link, asking the server to display the file rather than
-   * save it. The server has the last word: a type it will not show inline
-   * (anything scriptable, anything it does not recognise) downloads as usual.
-   */
-  async viewUrl(path: string): Promise<string> {
-    const url = await filesService.link(path);
-    return `${url}&inline=1`;
+  /** Caller owns and must revoke this authenticated, browser-local preview URL. */
+  async viewUrl(path: string, signal?: AbortSignal): Promise<string> {
+    const response = await fileDownloadResponse(`${await filesService.link(path)}&inline=1`, signal);
+    if (!response.headers.get('content-disposition')?.toLowerCase().startsWith('inline')) {
+      await response.body?.cancel();
+      throw new Error('The server did not approve inline viewing.');
+    }
+    return URL.createObjectURL(await response.blob());
   },
 
   /**
@@ -91,9 +91,7 @@ export const filesService = {
    * flashing Safari's separate white, monospace document viewer.
    */
   async textView(path: string): Promise<string> {
-    const response = await fetch(await filesService.viewUrl(path), {
-      credentials: 'same-origin',
-    });
+    const response = await fileDownloadResponse(`${await filesService.link(path)}&inline=1`);
     if (!response.ok) throw new Error(`Preview failed (${String(response.status)})`);
     const type = response.headers.get('content-type')?.toLowerCase() ?? '';
     const disposition = response.headers.get('content-disposition')?.toLowerCase() ?? '';
@@ -112,10 +110,10 @@ export const filesService = {
    * fails the gate, and the rule is right: this is an HTTP call, and HTTP
    * calls live behind a named function whose signature says what it returns.
    *
-   * The link is already authorised by its HMAC, so no session travels with it.
+   * The current session is sent only to the same-origin Files endpoint.
    */
-  async blob(url: string): Promise<{ blob: Blob; filename: string }> {
-    const response = await fetch(url, { credentials: 'same-origin' });
+  async blob(url: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
+    const response = await fileDownloadResponse(url, signal);
     if (!response.ok) throw new Error(`Download failed (${String(response.status)})`);
     const header = response.headers.get('content-disposition') ?? '';
     const match = /filename="?([^";]+)"?/i.exec(header);

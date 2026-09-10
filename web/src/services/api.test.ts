@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   apiDownload,
+  fileDownloadResponse,
   apiRequest,
   apiUpload,
   clientEnvironment,
@@ -263,5 +264,25 @@ describe('binary and multipart requests', () => {
 
     await apiDownload('/backups/test.tar.gz');
     expect(session.token()).toBe('renewed-token');
+  });
+});
+
+
+describe('authenticated Files downloads', () => {
+  it('sends the session only to the Files endpoint and refuses redirects', async () => {
+    session.start('owner-test-session', false);
+    const fetch = vi.fn().mockResolvedValue(new Response('file'));
+    vi.stubGlobal('fetch', fetch);
+    await fileDownloadResponse('/files/download?path=test.txt&sig=legacy');
+    expect(fetch).toHaveBeenCalledWith('/files/download?path=test.txt&sig=legacy', expect.objectContaining({
+      headers: expect.objectContaining({ authorization: 'Bearer owner-test-session' }), redirect: 'error',
+    }));
+  });
+  it('never sends a token to an external URL or unrelated endpoint', async () => {
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    for (const url of ['https://external.invalid/files/download?path=x', '//external.invalid/files/download', '/v1/settings', 'data:text/plain,hello']) {
+      await expect(fileDownloadResponse(url)).rejects.toThrow('Invalid file download URL');
+    }
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

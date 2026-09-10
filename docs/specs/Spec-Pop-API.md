@@ -47,8 +47,8 @@ session state and returns to login.
 Public/session-establishing `/v1` paths are declared once in
 `route-registry.ts`. Every other registered route is probed to require a valid
 session. SSE uses a short-lived single-use session-bound ticket because native
-EventSource cannot send Authorization headers. Signed file downloads use their
-own path-and-expiry HMAC authorization.
+EventSource cannot send Authorization headers. Files downloads require a current owner bearer session as well as their
+path-and-expiry signature. Previously issued URLs do not bypass that guard.
 
 Fresh guided installation adds a separate pre-account authorization boundary:
 `GET /v1/onboarding/public` exposes only whether pairing or secure handoff is
@@ -180,8 +180,8 @@ Uploads validate names, paths, type and size before final placement. Downloads
 stream rather than buffering whole files. Active HTML/SVG content is forced to
 download. `Content-Disposition` filenames are server-generated/escaped.
 
-Signed public download URLs bind canonical path and expiry and remain subject to
-the final filesystem jail. Backup downloads are guarded and streamed with
+Files download URLs bind canonical path and expiry, require a current owner
+session, and remain subject to the final filesystem jail. Backup downloads are guarded and streamed with
 no-store: encrypted `.popbackup` files use application/octet-stream; legacy
 `.tar.gz` files use application/gzip. GET /backups reports encrypted status and
 passwordConfigured, restoreAvailable and the current operation state (without passwords). PUT /backups/password accepts a matching password and

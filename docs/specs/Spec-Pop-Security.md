@@ -152,8 +152,11 @@ registered `/v1` route without a session; undeclared routes must return 401.
 HMAC download routes must reject an absent/invalid/expired signature.
 
 Public surfaces are intentionally narrow: liveness/setup/login/recovery,
-one-time-ticket SSE entry, pre-session passkey login, signed file downloads and
-immutable public installer/runtime artifacts. Public bootstrap contains code,
+one-time-ticket SSE entry, pre-session passkey login and immutable public
+installer/runtime artifacts. Files downloads always require a current owner
+session in addition to their path/expiry signature, including previously issued
+links. A copied URL alone grants no file access; session revocation and password
+changes invalidate further downloads using the old session. Public bootstrap contains code,
 origin, version, hash and size only—never a bearer token.
 
 Bodies, query limits, path parameters and protocol metadata are validated and
@@ -167,7 +170,9 @@ Filesystem operations use canonical root jails and reject absolute paths,
 traversal and symlink escape. User HTML/SVG and other active content is forced
 to download rather than rendered inline on Pop's origin, preventing an uploaded
 file from reading browser session storage. Download signatures bind path and
-expiry together.
+expiry together, but never replace session authorization. The PWA fetches bytes
+with its bearer header and uses revocable local object URLs for previews. Tokens
+never enter download URLs or redirects.
 
 Destructive user-interface taps retain explicit confirmation when there is no
 undo and must state the real subtree blast radius. Agent deletion in `Files/`
