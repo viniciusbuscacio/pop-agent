@@ -80,6 +80,7 @@ function packageDmg(root: string, output: string, binary: string, version: strin
     copyFileSync(binary, join(contents, 'MacOS', 'Pop Local Access Setup'));
     mkdirSync(join(contents, 'Resources'), { recursive: true });
     copyFileSync(binary, join(contents, 'Resources', 'Pop Local Access'));
+    copyFileSync(join(root, 'local-access/tray/app.icns'), join(contents, 'Resources', 'app.icns'));
     writeFileSync(join(contents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -87,6 +88,7 @@ function packageDmg(root: string, output: string, binary: string, version: strin
 <key>CFBundleName</key><string>Pop Local Access Setup</string>
 <key>CFBundleExecutable</key><string>Pop Local Access Setup</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>app.icns</string>
 <key>CFBundleShortVersionString</key><string>${version}</string>
 <key>CFBundleVersion</key><string>${version}</string>
 </dict></plist>`);

@@ -70,6 +70,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer log.Close()
+	if err := installAppIcon(); err != nil {
+		fmt.Fprintln(log, "app icon:", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &app{ctx: ctx, cancel: cancel, status: "Starting", log: log}
 	if err := installTray(a); err != nil {

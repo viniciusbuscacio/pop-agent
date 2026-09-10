@@ -664,3 +664,10 @@ clicking retains reconnect/sign-in behavior. Permission is shown separately in
 the Computer access checkbox. While a newer installer
 is available, the parent reads **Settings · Update available**, including during
 download and retry, so discovering the update does not require opening a submenu.
+
+The macOS PLA bundle and setup wizard use the Pop logo as an ICNS app icon. The
+tray embeds this asset and repairs its own installed bundle icon and
+CFBundleIconFile on startup, so fresh installations and existing installations
+receive the icon without changing login or local-access permission. Icon repair
+failures are logged and do not prevent the local connection from starting. The
+monochrome menu-bar template remains separate from the Finder/Spotlight app icon.
