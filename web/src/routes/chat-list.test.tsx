@@ -200,7 +200,7 @@ describe('MCP explorer controls', () => {
 });
 
 describe('archive one chat', () => {
-  it('clears the detail route after archiving the open chat', async () => {
+  it('moves the archived chat out of the active list', async () => {
     renderList('/chat/chat-other');
     await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));
 
@@ -208,8 +208,7 @@ describe('archive one chat', () => {
     await userEvent.click(screen.getByTestId('chat-archive'));
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith('chat-other', { archived: true }));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
-    expect(screen.queryByText('File this chat')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('File this chat')).toBeNull());
   });
 });
 

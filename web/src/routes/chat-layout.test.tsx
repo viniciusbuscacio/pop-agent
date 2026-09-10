@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamEvent } from '@pop-agent/shared';
@@ -82,4 +82,31 @@ it('opens the A2A module pane on mobile while retaining Settings navigation', ()
   expect(main.classList.contains('hidden')).toBe(false);
   expect(main.classList.contains('flex')).toBe(true);
   expect(screen.getByText('Settings footer')).toBeTruthy();
+});
+
+
+function renderOpenChat() {
+  return render(<MemoryRouter initialEntries={['/chat/chat-open']}><Routes>
+    <Route element={<ChatLayout />}><Route path="chat/:chatId" element={<Location />} /><Route index element={<Location />} /></Route>
+  </Routes></MemoryRouter>);
+}
+it('closes the selected pane when an archive event arrives from another client', async () => {
+  renderOpenChat();
+  act(() => { for (const listener of listeners) listener({ kind: 'chat-archived-changed', chatId: 'chat-open', archived: true }); });
+  await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+  expect(sessionStorage.getItem('pop-agent.lastActiveChat')).toBeNull();
+});
+it('closes an archived selection on list reconciliation without an SSE event', async () => {
+  const chat = { id: 'chat-open', title: 'Open', archived: false, pinned: false, model: '', provider: '', createdAt: '', updatedAt: '', preview: '' };
+  useChatStore.setState({ chats: [chat], archived: [] });
+  renderOpenChat();
+  act(() => useChatStore.setState({ chats: [], archived: [{ ...chat, archived: true }] }));
+  await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+  expect(sessionStorage.getItem('pop-agent.lastActiveChat')).toBeNull();
+});
+it('allows explicitly viewing an archived chat and ignores other chat archive events', () => {
+  useChatStore.setState({ archived: [{ id: 'chat-open', title: 'Archived', archived: true, pinned: false, model: '', provider: '', createdAt: '', updatedAt: '', preview: '' }] });
+  renderOpenChat();
+  act(() => { for (const listener of listeners) listener({ kind: 'chat-archived-changed', chatId: 'chat-other', archived: true }); });
+  expect(screen.getByTestId('location').textContent).toBe('/chat/chat-open');
 });

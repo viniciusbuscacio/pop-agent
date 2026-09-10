@@ -849,3 +849,13 @@ a collapsed disclosure explaining that recovery requires SSH and `popman start`.
 State is shown as unknown until loaded; failed actions remain visible and never
 pretend success. Resetting active AI sessions requires confirmation, as do pause,
 restart and shutdown. These labels do not change the existing server endpoints.
+
+
+## Archived conversation selection
+
+Archiving the selected active conversation clears its detail pane and remembered
+return target, replacing the route with the conversation list. This applies to
+local mutation acknowledgements, live events from other clients, and list
+reconciliation; successful archiving must not depend on subsequent list reads.
+Archiving a different chat must not interrupt the selected one. Explicitly
+opening a chat from the archive remains supported.

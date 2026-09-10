@@ -424,9 +424,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async setArchived(chatId, archived) {
+    const generation = session.generation();
     await chatsService.patch(chatId, { archived });
-    // The chat leaves one list and joins the other, so refresh both.
-    await Promise.all([get().loadChats(), get().loadArchived()]);
+    if (generation !== session.generation()) return;
+    // The successful mutation is authoritative. A concurrent SSE event can
+    // invalidate list reads, so navigation must not depend on refetching them.
+    listEvents++;
+    set((state) => moveChatArchive(state.chats, state.archived, chatId, archived));
+    void chatCache.putLists(get().chats, get().archived);
   },
 
   async setPinned(chatId, pinned) {

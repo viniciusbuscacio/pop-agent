@@ -500,8 +500,6 @@ function ChatRow({
   /** Marks an archived row inside mixed search results. */
   badge?: boolean;
 }) {
-  const navigate = useNavigate();
-  const openChat = useMatch('/chat/:chatId');
   const rename = useChatStore((state) => state.rename);
   const setArchived = useChatStore((state) => state.setArchived);
   const setPinned = useChatStore((state) => state.setPinned);
@@ -534,12 +532,7 @@ function ChatRow({
   }
 
   async function toggleArchived(): Promise<void> {
-    const filing = !archived;
-    await setArchived(chat.id, filing);
-    // Archiving removes the selected row from the active conversation list,
-    // so its detail pane must leave with it. Replace the invalid selection in
-    // history; Back must not immediately reopen the chat that was just filed.
-    if (filing && openChat?.params.chatId === chat.id) void navigate('/', { replace: true });
+    await setArchived(chat.id, !archived);
   }
 
   function onPointerDown(event: React.PointerEvent): void {

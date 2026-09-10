@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.82 — 2026-09-09
+
+- Close the selected conversation pane when it is archived locally or from another client, and clear its remembered return target.
+- Apply confirmed archive changes without waiting for racing list refreshes; archived conversations remain available for explicit viewing.
+
 ## 0.2.81 — 2026-09-09
 
 - Require a current owner session for every Files download, including old signed URLs; password changes and session revocation block further downloads with old credentials.

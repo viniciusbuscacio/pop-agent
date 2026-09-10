@@ -737,6 +737,18 @@ describe('archiving', () => {
     expect(useChatStore.getState().archived.map((entry) => entry.id)).toEqual([CHAT]);
   });
 
+  it('completes a confirmed archive even when list refresh is unavailable', async () => {
+    const { loadChats, loadArchived } = useChatStore.getState();
+    const unavailable = vi.fn().mockRejectedValue(new Error('list unavailable'));
+    useChatStore.setState({ chats: [chat], loadChats: unavailable, loadArchived: unavailable });
+    try {
+      await expect(useChatStore.getState().setArchived(CHAT, true)).resolves.toBeUndefined();
+      expect(useChatStore.getState().chats).toEqual([]);
+      expect(useChatStore.getState().archived.map(entry => entry.id)).toEqual([CHAT]);
+      expect(unavailable).not.toHaveBeenCalled();
+    } finally { useChatStore.setState({ loadChats, loadArchived }); }
+  });
+
   it('unarchive puts the chat back in the main list without a reload', async () => {
     useChatStore.setState({ archived: [{ ...chat, archived: true }] });
     listBody.active = [chat];

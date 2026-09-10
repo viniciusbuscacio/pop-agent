@@ -3,6 +3,7 @@ import { SidebarNav } from './sidebar-nav';
 import { useEffect } from 'react';
 import { Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
+import { useChatStore } from '../store/chat';
 import { eventStream } from '../services/events';
 import { PopBubbleMark } from '../ui/pop-bubble-mark';
 import { ChatList } from './chat-list';
@@ -46,15 +47,25 @@ export function ChatLayout() {
   }, [openChat?.params.chatId]);
 
   useEffect(() => {
-    // The store owns lifecycle data; the shell owns routing. If another client
-    // deletes the selected conversation, replace that now-invalid history row
-    // with the list instead of leaving an empty conversation pane behind.
-    return eventStream.subscribe((event) => {
-      if (event.kind === 'chat-deleted' && event.chatId === openChat?.params.chatId) {
-        forgetLastActiveChat(event.chatId);
-        void navigate('/', { replace: true });
-      }
+    const selected = openChat?.params.chatId;
+    const leave = (): void => {
+      if (selected === undefined) return;
+      forgetLastActiveChat(selected);
+      void navigate('/', { replace: true });
+    };
+    // Local mutation acknowledgements and reconciled lists also work when SSE
+    // is delayed. Only an active -> archived transition closes the pane:
+    // explicitly opening an archived conversation must remain possible.
+    const unsubscribeStore = useChatStore.subscribe((state, previous) => {
+      if (previous.chats.some(chat => chat.id === selected)
+        && state.archived.some(chat => chat.id === selected)) leave();
     });
+    const unsubscribeEvents = eventStream.subscribe((event) => {
+      if ((event.kind === 'chat-deleted'
+        || (event.kind === 'chat-archived-changed' && event.archived))
+        && event.chatId === selected) leave();
+    });
+    return () => { unsubscribeStore(); unsubscribeEvents(); };
   }, [navigate, openChat?.params.chatId]);
 
   return (
