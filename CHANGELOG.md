@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.85 — 2026-09-10
 
 - Combine computer permission and browser selection into one Allow access to this computer switch in Devices, with visible failure feedback.
 
