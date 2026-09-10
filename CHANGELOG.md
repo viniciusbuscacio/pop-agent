@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give REST API Start and Stop the same button style and show Enabled/Stopped as plain status text.
+
 ## 0.2.84 — 2026-09-10
 
 - Show 30 rows in the skill Instructions editor while retaining textarea scrolling.

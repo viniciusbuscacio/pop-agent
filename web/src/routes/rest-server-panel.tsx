@@ -56,8 +56,8 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
         return; const url = URL.createObjectURL(new Blob([JSON.stringify(reference.openapi, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'pop-agent-openapi.json'; a.click(); URL.revokeObjectURL(url); };
     return <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" data-testid="rest-server-power" variant={enabled ? 'danger' : 'primary'} disabled={changing} onClick={onToggle}>{enabled ? 'Stop' : 'Start'}</Button>
-        <span data-testid="rest-server-status" className={`rounded-md border px-4 py-2 text-sm font-medium ${enabled ? 'border-[var(--success)] text-[var(--success)]' : 'border-[var(--border)] text-[var(--muted)]'}`}>{enabled ? 'Enabled' : 'Stopped'}</span>
+        <Button type="button" data-testid="rest-server-power" variant="primary" disabled={changing} onClick={onToggle}>{enabled ? 'Stop' : 'Start'}</Button>
+        <span data-testid="rest-server-status" role="status" className={`text-sm ${enabled ? 'text-[var(--success)]' : 'text-[var(--muted)]'}`}>{enabled ? 'Enabled' : 'Stopped'}</span>
       </div>
       <p className="text-sm text-[var(--muted)]">This state is saved and restored when Pop Agent starts. Stopping the API keeps the app available.</p>
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}
