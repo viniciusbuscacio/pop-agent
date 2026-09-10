@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const trayVersion = "0.2.86"
+const trayVersion = "0.2.87"
 
 type childEvent struct {
 	Kind      string `json:"kind"`
@@ -29,22 +29,29 @@ type childEvent struct {
 }
 
 type app struct {
-	mu            sync.Mutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-	command       *exec.Cmd
-	commandInput  io.WriteCloser
-	server        string
-	status        string
-	accessEnabled bool
-	accessKnown   bool
-	quitting      bool
-	signingIn     bool
-	log           *os.File
-	view          trayView
+	updateTitle     string
+	updateBusy      bool
+	availableUpdate *installerUpdate
+	updateServer    string
+	mu              sync.Mutex
+	ctx             context.Context
+	cancel          context.CancelFunc
+	command         *exec.Cmd
+	commandInput    io.WriteCloser
+	server          string
+	status          string
+	accessEnabled   bool
+	accessKnown     bool
+	quitting        bool
+	signingIn       bool
+	log             *os.File
+	view            trayView
 }
 
 func main() {
+	if runSetupIfRequested() {
+		return
+	}
 	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		fmt.Fprintln(os.Stderr, "Pop Local Access tray currently supports Windows and macOS.")
 		os.Exit(1)
@@ -69,6 +76,7 @@ func main() {
 		os.Exit(1)
 	}
 	go a.start()
+	go a.updateLoop()
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
@@ -86,7 +94,7 @@ func (a *app) snapshot() viewState {
 	return viewState{
 		Server: a.server, Status: a.status, AccessEnabled: a.accessEnabled,
 		AccessKnown: a.accessKnown, StartAtLogin: autostart,
-		SigningIn: a.signingIn,
+		SigningIn: a.signingIn, UpdateTitle: a.updateTitle, UpdateBusy: a.updateBusy,
 	}
 }
 

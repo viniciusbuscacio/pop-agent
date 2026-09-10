@@ -11,6 +11,8 @@ import (
 )
 
 type viewState struct {
+	UpdateTitle   string
+	UpdateBusy    bool
 	Server        string
 	Status        string
 	AccessEnabled bool
@@ -20,7 +22,7 @@ type viewState struct {
 }
 
 type trayView struct {
-	status, server, open, access, reconnect, diagnostics, startAtLogin, quit, signIn *systray.MenuItem
+	update, status, server, open, access, reconnect, diagnostics, startAtLogin, quit, signIn *systray.MenuItem
 }
 
 var activeView trayView
@@ -47,6 +49,8 @@ func runTray() {
 			bind(activeView.signIn, func(a *app) { a.signIn() })
 		}
 		activeView.access = systray.AddMenuItemCheckbox("Allow access to local files", "Allow Pop Agent to access files on this computer", false)
+		activeView.update = systray.AddMenuItem("Check for updates…", "Download an update installer from your Pop Server")
+		bind(activeView.update, func(a *app) { a.activateUpdate() })
 		activeView.reconnect = systray.AddMenuItem("Reconnect", "Restart the secure outbound connection")
 		systray.AddSeparator()
 		activeView.startAtLogin = systray.AddMenuItemCheckbox("Start at Login", "Start Pop Local Access when you sign in", false)
@@ -81,6 +85,14 @@ func bind(item *systray.MenuItem, action func(*app)) {
 func (v trayView) Update(state viewState) {
 	if v.status == nil {
 		return
+	}
+	if state.UpdateTitle != "" {
+		v.update.SetTitle(state.UpdateTitle)
+	}
+	if state.UpdateBusy {
+		v.update.Disable()
+	} else {
+		v.update.Enable()
 	}
 	v.status.SetStatusTitle(state.Status, state.AccessEnabled && state.AccessKnown)
 	if state.Server == "" {

@@ -590,3 +590,56 @@ file access disabled by default. Tombstones remain after re-registration so old
 credentials never regain local attachment authority. Ordinary chat sign-in is
 separate from revoking this local-tools binding. Clients clear a removed selected
 machine; existing SSE invalidation updates other open Devices pages.
+
+
+## Native installer update flow
+
+The native Go tray owns its update discovery. It checks its configured Pop Server
+at startup, every six hours, and on **Check for updates…**. Checks use public
+release metadata only; they send no login token. HTTPS is required except for
+loopback development. Redirects are rejected. Checks are bounded, serialized,
+and canceled when the app quits. They never download installers in the background.
+
+`GET /local-access-update.json?platform=darwin&arch=arm64` returns the current
+version and installer filename, size and SHA-256 for the requested target.
+Supported targets are macOS arm64/amd64 and Windows amd64. Missing targets return
+404. A missing installer must not be reported as a confirmed current version.
+Only a strictly newer semantic version produces **Update available…** in the
+menu. A failed check remains retryable and must not revoke local access.
+
+Clicking **Update available…** downloads from `/local-access/<file>` on the same
+configured server, with redirects rejected, a bounded size and timeout, and
+SHA-256 verification before opening. Partial or corrupt downloads are removed.
+The verified installer is saved in a unique Downloads subdirectory. The download
+has a visible busy state and failures offer retry. No downloaded code runs before
+integrity validation; opening an installer does not imply installation consent.
+
+macOS uses a DMG with a **Pop Local Access Setup.app** wizard (Continue, Install,
+Finish). Reuse the historical Pop Desktop Setup's pinned go-installer setup DMG
+layout; do not ship the old desktop application or its credential wizard.
+Windows uses a dedicated `-setup.exe` entry point with native confirmation steps.
+These installers update an existing per-user PLA installation; fresh installation
+continues through Settings → Devices → Connect a computer. Cancel performs no
+installation. The installer reminds the user to finish local operations before
+confirming. It replaces only the native executable and restarts it, preserving
+profiles, stable machine identity, server permission and Start at Login.
+Windows stops the exact installed process tree before replacement. macOS updates
+the existing LaunchAgent via kickstart instead of racing bootout/bootstrap.
+Previous executable bytes remain available; restart failure attempts restoration
+and reports failure rather than success. Installer invocation is detected before
+the tray's single-instance guard so an update can run while the old tray is open.
+
+All native setup artifacts are immutable, included in the server's local-access
+manifest, verified by the publisher, and cached for private-repository servers.
+The Mac stage builds both architectures and DMGs and verifies codesign/hdiutil;
+the Linux stage builds Windows and requires the exact-commit Mac manifest before
+the gate. Ad-hoc macOS signatures are not notarization. Public distribution must
+validate publisher signing and platform prompts separately. Native installer
+acceptance testing distinguishes compilation from actually running on each OS.
+
+The routed built-in **pop-local-access** skill teaches these distinctions and
+points to maintained implementation/specs. It is not pinned into every prompt.
+Tests cover version comparison, malformed metadata, absent targets, download
+integrity/redirects, installation cancellation and rollback, preserved user state,
+and packaged installer inclusion. Neither the PWA refresh nor an updated CLI
+version alone proves that the native tray was replaced.

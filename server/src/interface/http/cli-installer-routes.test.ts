@@ -32,6 +32,8 @@ describe('native Pop launcher installers', () => {
     const localRelease = {
       version: '0.2.30',
       artifacts: {
+        'darwin-arm64-setup': { file: 'pop-local-access-0.2.30-darwin-arm64-setup.dmg', size: 10, sha256: '4'.repeat(64) },
+        'windows-amd64-setup': { file: 'pop-local-access-0.2.30-windows-amd64-setup.exe', size: 10, sha256: '5'.repeat(64) },
         'darwin-arm64': { file: 'pop-local-access-0.2.30-darwin-arm64', size: 10, sha256: '1'.repeat(64) },
         'darwin-amd64': { file: 'pop-local-access-0.2.30-darwin-amd64', size: 10, sha256: '2'.repeat(64) },
         'windows-amd64': { file: 'pop-local-access-0.2.30-windows-amd64.exe', size: 10, sha256: '3'.repeat(64) },
@@ -44,6 +46,20 @@ describe('native Pop launcher installers', () => {
   });
 
   afterEach(() => rmSync(cliPack, { recursive: true, force: true }));
+
+  it('publishes installer metadata and downloads without exposing any account data', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.30' } });
+    const response = await routes.request('http://localhost/local-access-update.json?platform=darwin&arch=arm64');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const metadata = await response.json();
+    expect(metadata).toEqual({ version: '0.2.30', file: 'pop-local-access-0.2.30-darwin-arm64-setup.dmg', size: 10, sha256: '4'.repeat(64) });
+    const download = await routes.request(`http://localhost/local-access/${metadata.file}`);
+    expect(download.status).toBe(200);
+    expect(await download.text()).toBe('0123456789');
+    expect((await routes.request('http://localhost/local-access-update.json?platform=darwin&arch=amd64')).status).toBe(404);
+    expect((await routes.request('http://localhost/local-access-update.json?platform=linux&arch=arm64')).status).toBe(404);
+  });
 
   it('builds the Windows launcher URL from the server that received the request', async () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });

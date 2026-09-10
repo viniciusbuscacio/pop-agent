@@ -1,3 +1,4 @@
+import { POP_LOCAL_ACCESS_SKILL } from './pop-local-access-skill.js';
 import { PUBLISH_POP_AGENT_SKILL } from './publish-pop-agent-skill.js';
 import { SELF_MAP } from './self-map.generated.js';
 
@@ -13,6 +14,7 @@ export interface DefaultSkill {
 
 export const DEFAULT_SKILLS: DefaultSkill[] = [
   PUBLISH_POP_AGENT_SKILL,
+  POP_LOCAL_ACCESS_SKILL,
 {
   slug: "pop-agent-manual",
   name: "About Pop Agent (self-knowledge)",
@@ -32,6 +34,7 @@ export const DEFAULT_SKILLS: DefaultSkill[] = [
     "- pop-agent-codebase: source layout and the generated UI map.",
     "- code-work: investigate or implement code changes.",
     "- publish-pop-agent: an authorized publication or activation batch.",
+    "- pop-local-access: native tray, local computer permission, installer downloads and updates.",
     "",
     "Provider configuration is under Settings → Models & Providers. Check actual status before explaining an unavailable model; missing configuration is only one possible cause.",
   ].join('\n'),

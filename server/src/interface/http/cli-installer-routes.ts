@@ -77,6 +77,16 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
     });
   });
 
+  routes.get('/local-access-update.json', (c) => {
+    const platform = c.req.query('platform');
+    const arch = c.req.query('arch');
+    if (!['darwin', 'windows'].includes(platform ?? '') || !['arm64', 'amd64'].includes(arch ?? '')) return c.notFound();
+    const release = readLocalAccessRelease(deps.cliPack);
+    const artifact = release?.artifacts[`${platform}-${arch}-setup`];
+    if (!release || !artifact) return c.notFound();
+    return c.json({ version: release.version, ...artifact }, 200, { 'cache-control': 'no-store' });
+  });
+
   routes.get('/local-access/:file', async (c) => {
     const release = readLocalAccessRelease(deps.cliPack);
     const artifact = release === undefined
@@ -375,7 +385,7 @@ function readRelease(path: string): LauncherRelease | undefined {
     const files = new Set<string>();
     for (const [target, artifact] of entries) {
       if (
-        !/^(?:darwin|linux|windows)-(?:arm64|amd64)$/.test(target) ||
+        !/^(?:darwin|linux|windows)-(?:arm64|amd64)(?:-setup)?$/.test(target) ||
         artifact.file.includes('/') || artifact.file.includes('\\') || files.has(artifact.file) ||
         !Number.isSafeInteger(artifact.size) || artifact.size <= 0 ||
         !/^[a-f0-9]{64}$/.test(artifact.sha256)

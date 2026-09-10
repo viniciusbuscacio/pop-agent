@@ -1,0 +1,33 @@
+import type { DefaultSkill } from './default-skills.js';
+
+export const POP_LOCAL_ACCESS_SKILL: DefaultSkill = {
+  slug: 'pop-local-access',
+  name: 'Pop Local Access',
+  description: 'Explain, update and troubleshoot the PLA tray, local computer access, DMG and Windows setup installers.',
+  whenToUse: 'Questions about Pop Local Access (PLA), the Mac menu bar or Windows tray, Update available, DMG/setup downloads, or updating a connected computer.',
+  body: [
+    '# Pop Local Access',
+    '',
+    'PLA is the optional native Go menu-bar/tray application. It supervises the Node/TypeScript local-access CLI. The server runs the agent; the PWA is a client. These are separate update surfaces: a server update does not itself replace the native tray. The pop launcher can refresh the CLI runtime independently.',
+    '',
+    '## User update flow',
+    '',
+    'The tray checks its configured Pop Server at startup, every six hours, and through Check for updates. A newer installer produces Update available…. Clicking downloads and verifies the matching installer from that same server, then opens it. No installer is downloaded automatically, and replacement requires the native installer confirmation. macOS uses a DMG containing Pop Local Access Setup.app; Windows uses a setup.exe. These are update installers for an existing PLA installation. Fresh setup remains Settings → Devices → Connect a computer. Never claim unattended installation or a first-install wizard without inspecting the installed version.',
+    '',
+    'Updates preserve the saved server/login, stable machine identity, access policy and Start at Login preference. Finish local tool operations before confirming installation. Cancellation leaves the installation intact. The updater keeps previous executable bytes and attempts restoration if restart fails. Do not log in on the owner’s behalf to test an update.',
+    '',
+    '## Diagnose with evidence',
+    '',
+    'Compare the tray tooltip version, the server release, and the per-platform installer metadata at /local-access-update.json?platform=darwin&arch=arm64 (use the actual OS/architecture). A 404 means there is no installer for that target, not that the tray is current. The metadata and /local-access/<file> distribute public release artifacts, never user data or credentials. Verify version, platform, size and SHA-256. Check the tray process and a refreshed local-tools machine snapshot before claiming it reconnected. An online CLI version alone does not prove the Go tray binary was replaced.',
+    '',
+    'Devices uses Allow access to this computer to grant permission and select that computer for this browser. The native tray permission switch controls server permission; it cannot write another browser’s localStorage. Do not infer a routing selection from a tray permission change. Revocation can affect other clients, while choosing another machine in Devices does not automatically revoke unrelated machines.',
+    '',
+    '## Maintain and release',
+    '',
+    'Read docs/specs/Spec-Pop-Local-Access.md and Spec-Pop-Installation.md in the actual source checkout. Implementation: local-access/tray/update.go and setup*; server/src/interface/http/cli-installer-routes.ts; tools/macos-tray-artifacts.ts; tools/pack-cli.ts. The old Pop Desktop Setup DMG is historical: reuse its go-installer setup layout, not its old desktop payload or login wizard.',
+    '',
+    'Windows executables cross-compile on Linux. macOS binaries and DMGs require a Mac with Xcode, Go, Python and hdiutil. Prepare both Apple Silicon and Intel from the exact clean release commit; transfer only manifest.json, native executables and DMGs into release-builder/cache/macos-tray/<commit> on the configured Linux builder. The container verifies them before its full gate and publication. An existing DMG filename is not proof that the current server publishes it.',
+    '',
+    'For an authorized GitHub/server release, load publish-pop-agent. Preserve repository visibility and disabled GitHub Actions. Never alter a published version to change embedded client manifests. Private releases need verified native installer assets available in the server cache. Ad-hoc signing verifies local build integrity; it is not Apple notarization or Windows publisher trust. Public installer distribution requires its separate signing/reputation validation. Report which native platforms were compiled versus actually exercised.',
+  ].join('\n'),
+};

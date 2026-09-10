@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const architectures = ['arm64', 'amd64'] as const;
@@ -21,6 +22,10 @@ export function importMacosTray(directory: string, output: string | undefined, v
     const cpu = arch === 'arm64' ? 0x0100000c : 0x01000007;
     if (bytes.length < 8 || bytes.readUInt32LE(0) !== 0xfeedfacf || bytes.readUInt32LE(4) !== cpu) throw new Error(`Invalid macOS executable: ${target}`);
     if (bytes.length !== entry.size || hash(bytes) !== entry.sha256) throw new Error(`macOS tray integrity failed: ${target}`);
+    const setup = manifest.artifacts[`${target}-setup`];
+    if (!setup || setup.file !== `pop-local-access-${version}-${target}-setup.dmg`) throw new Error(`Missing macOS installer: ${target}`);
+    const dmg = readFileSync(join(directory, setup.file));
+    if (dmg.length < 512 || dmg.toString('ascii', dmg.length - 512, dmg.length - 508) !== 'koly' || dmg.length !== setup.size || hash(dmg) !== setup.sha256) throw new Error(`macOS installer integrity failed: ${target}`);
   }
   if (output !== undefined) {
     mkdirSync(output, { recursive: true });
@@ -32,6 +37,9 @@ export function importMacosTray(directory: string, output: string | undefined, v
       const entry = manifest.artifacts[target]!;
       copyFileSync(join(directory, entry.file), join(output, entry.file));
       packed.artifacts[target] = entry;
+      const installer = manifest.artifacts[`${target}-setup`]!;
+      copyFileSync(join(directory, installer.file), join(output, installer.file));
+      packed.artifacts[`${target}-setup`] = installer;
     }
     writeFileSync(path, JSON.stringify(packed, null, 2) + '\n');
   }
@@ -54,10 +62,48 @@ function build(root: string, directory: string, version: string, commit: string)
     execFileSync('codesign', ['--verify', '--strict', destination], { stdio: 'inherit' });
     const bytes = readFileSync(destination);
     manifest.artifacts[`darwin-${arch}`] = { file, size: bytes.length, sha256: hash(bytes) };
+    manifest.artifacts[`darwin-${arch}-setup`] = packageDmg(root, directory, destination, version, arch);
   }
   writeFileSync(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   importMacosTray(directory, undefined, version, commit);
   console.log(`Verified macOS tray artifacts for ${version} at ${commit}`);
+}
+
+/** Reuse the existing Pop setup DMG layout, with the PLA update wizard payload. */
+function packageDmg(root: string, output: string, binary: string, version: string, arch: string): Artifact {
+  const temporary = mkdtempSync(join(tmpdir(), 'pop-pla-dmg-'));
+  const venv = join(output, '.dmg-tools');
+  try {
+    const app = join(temporary, 'Pop Local Access Setup.app');
+    const contents = join(app, 'Contents');
+    mkdirSync(join(contents, 'MacOS'), { recursive: true });
+    copyFileSync(binary, join(contents, 'MacOS', 'Pop Local Access Setup'));
+    mkdirSync(join(contents, 'Resources'), { recursive: true });
+    copyFileSync(binary, join(contents, 'Resources', 'Pop Local Access'));
+    writeFileSync(join(contents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.popagent.local-access.setup</string>
+<key>CFBundleName</key><string>Pop Local Access Setup</string>
+<key>CFBundleExecutable</key><string>Pop Local Access Setup</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${version}</string>
+</dict></plist>`);
+    execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
+    if (!existsSync(join(venv, 'bin/python'))) {
+      execFileSync('python3', ['-m', 'venv', venv], { stdio: 'inherit' });
+      execFileSync(join(venv, 'bin/pip'), ['install', 'ds-store==1.3.1', 'mac-alias==2.2.2'], { stdio: 'inherit' });
+    }
+    const file = `pop-local-access-${version}-darwin-${arch}-setup.dmg`;
+    const destination = join(output, file);
+    if (existsSync(destination)) throw new Error('Installer already packed; use a fresh output directory');
+    execFileSync('go', ['run', 'github.com/viniciusbuscacio/go-installer/cmd/mkdmg@v0.4.0', '-layout', 'setup', '-python', join(venv, 'bin/python'), '-app', app, '-volname', 'Pop Local Access Setup', '-out', destination], { cwd: root, stdio: 'inherit' });
+    execFileSync('hdiutil', ['verify', destination], { stdio: 'inherit' });
+    const bytes = readFileSync(destination);
+    return { file, size: bytes.length, sha256: hash(bytes) };
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {

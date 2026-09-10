@@ -15,6 +15,9 @@ function fixture() {
     const file = `pop-local-access-1.2.3-darwin-${arch}`;
     writeFileSync(join(root, file), bytes);
     artifacts[`darwin-${arch}`] = { file, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+    const dmg = Buffer.alloc(512); dmg.write('koly');
+    const setupFile = `pop-local-access-1.2.3-darwin-${arch}-setup.dmg`; writeFileSync(join(root, setupFile), dmg);
+    artifacts[`darwin-${arch}-setup`] = { file: setupFile, size: dmg.length, sha256: createHash('sha256').update(dmg).digest('hex') };
   }
   const manifest = { version: '1.2.3', commit: 'release-commit', artifacts };
   const save = () => writeFileSync(join(root, 'manifest.json'), JSON.stringify(manifest)); save();
@@ -25,7 +28,7 @@ it('imports both architectures while preserving the Windows entry', () => {
   writeFileSync(join(output, 'manifest.json'), JSON.stringify({ version: '1.2.3', artifacts: { 'windows-amd64': { file: 'windows.exe' } } }));
   importMacosTray(root, output, '1.2.3', 'release-commit');
   const packed = JSON.parse(readFileSync(join(output, 'manifest.json'), 'utf8'));
-  expect(Object.keys(packed.artifacts)).toEqual(['windows-amd64', 'darwin-arm64', 'darwin-amd64']);
+  expect(Object.keys(packed.artifacts)).toEqual(['windows-amd64', 'darwin-arm64', 'darwin-arm64-setup', 'darwin-amd64', 'darwin-amd64-setup']);
   expect(readFileSync(join(output, 'pop-local-access-1.2.3-darwin-arm64'))).toEqual(readFileSync(join(root, 'pop-local-access-1.2.3-darwin-arm64')));
 });
 it('rejects another version or commit', () => {

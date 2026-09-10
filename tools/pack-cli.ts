@@ -184,6 +184,12 @@ async function main(): Promise<void> {
       sha256: createHash('sha256').update(bytes).digest('hex'),
     };
   }
+  const windowsTray = localAccessArtifacts['windows-amd64'];
+  if (windowsTray) {
+    const file = `pop-local-access-${version}-windows-amd64-setup.exe`;
+    writeFileSync(join(localAccessOut, file), readFileSync(join(localAccessOut, windowsTray.file)));
+    localAccessArtifacts['windows-amd64-setup'] = { ...windowsTray, file };
+  }
   writeFileSync(
     join(localAccessOut, 'manifest.json'),
     `${JSON.stringify({ version, artifacts: localAccessArtifacts }, undefined, 2)}\n`,

@@ -5,6 +5,8 @@ package main
 import "errors"
 
 type viewState struct {
+	UpdateTitle   string
+	UpdateBusy    bool
 	Server        string
 	Status        string
 	AccessEnabled bool

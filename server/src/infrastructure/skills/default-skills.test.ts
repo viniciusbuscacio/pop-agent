@@ -15,6 +15,11 @@ import { DEFAULT_SKILLS } from './default-skills.js';
 const SKILLS: Skill[] = DEFAULT_SKILLS.map((skill) => ({ ...skill, source: 'builtin' }));
 
 describe('default skills routing', () => {
+  it('routes native installer questions to the PLA skill', () => {
+    const selected = selectSkills('Como atualizar o PLA no Mac usando o DMG?', SKILLS);
+    expect(selected.some((entry) => entry.skill.slug === 'pop-local-access')).toBe(true);
+  });
+
   it('routes a Portuguese question about self-programming', () => {
     const selected = selectSkills('Vc saberia se auto-programar?', SKILLS);
     expect(selected[0]?.skill.slug).toBe('pop-agent-codebase');
@@ -71,8 +76,8 @@ describe('default skills routing', () => {
     expect(body).toContain('## UI map');
   });
 
-  it('ships exactly nine built-in skills', () => {
-    expect(DEFAULT_SKILLS).toHaveLength(9);
+  it('ships ten built-in skills including native local access guidance', () => {
+    expect(DEFAULT_SKILLS).toHaveLength(10);
   });
 });
 

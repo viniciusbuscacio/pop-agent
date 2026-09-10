@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.87 — 2026-09-10
 
+- Add user-initiated PLA installer updates from the Pop Server, macOS setup DMGs and Windows setup executables, preserving existing login and startup settings.
+- Add a routed Pop Local Access built-in skill and internal specification for native updates and release packaging.
 - Align the desktop sidebar footer divider with the one-line chat composer divider.
 
 ## 0.2.86 — 2026-09-10

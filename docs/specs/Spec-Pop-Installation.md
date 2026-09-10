@@ -800,7 +800,7 @@ a VM snapshot only after collecting the failed attempt's diagnostics.
 Every owner-managed desktop release includes Pop Local Access for macOS arm64
 and amd64, alongside Windows. Run `tools/macos-tray-artifacts.ts build` on a Mac
 with Xcode and Go from the exact clean release commit. It runs native Go tests,
-builds both architectures, ad-hoc signs/verifies them, and records a versioned
+builds both architectures and their setup DMGs, verifies signatures and disk images, and records a versioned
 manifest with the commit, sizes and SHA-256 hashes. Transfer these artifacts to
 `release-builder/cache/macos-tray/<commit>/` on the Linux builder. The container
 validates both Mach-O architectures and integrity before its full gate, then

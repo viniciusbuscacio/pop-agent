@@ -28,6 +28,8 @@ export const PUBLISH_POP_AGENT_SKILL: DefaultSkill = {
     "",
     "Run cheap consistency checks and review the diff before committing the batch in English. In the prepared Node environment, `npm run version:check` and the installation-document test can catch release metadata mistakes early. Do not launch a second full host gate: the Docker builder owns the complete batch gate. Confirm the source checkout is clean before building.",
     "",
+    "Before the Linux builder, run tools/macos-tray-artifacts.ts build on a Mac from this exact clean commit. Transfer manifest.json, both native tray executables and their setup DMGs to the configured release-builder/cache/macos-tray/<commit> directory. Windows setup executables cross-compile on Linux. Missing or mismatched macOS artifacts block the build before the gate; read pop-local-access and the release spec for current packaging details.",
+    "",
     "## Build, observe, and recover",
     "",
     "From the source checkout run `./deploy/local-release.sh build`, redirecting output to a stable, version-specific log such as `/tmp/pop-VERSION-release-build.log`. Poll that process and tail a bounded part of its log. Report the actual stage and recent progress, not just planning/thinking messages. A tool timeout is not a process exit.",
