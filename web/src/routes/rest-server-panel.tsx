@@ -66,7 +66,6 @@ export function RestServerPanel({ enabled, changing = false, onToggle }: { enabl
           <div className="min-w-0"><h2 className="text-base font-semibold">Server address</h2><p className="break-all font-mono text-sm">{origin}</p></div>
           <div className="flex shrink-0 flex-wrap gap-2"><Button type="button" size="md" variant="ghost" onClick={() => void copy(origin)}>Copy URL</Button><Button type="button" size="md" variant="ghost" disabled={!enabled} onClick={() => { void integrationsService.test().then(() => setStatus('Connected using your owner session. Test integration tokens from your external client.')).catch(() => setError('Connection test failed.')); }}>Test connection</Button></div>
         </Card>
-        <Card><h2 className="text-base font-semibold">Access control</h2><p className="text-sm text-[var(--muted)]">One access key authorizes all REST API operations, including conversations and UI control. It stays valid until you generate a new key. Network access follows your Tailscale and server configuration.</p></Card>
       </div>
       <RestAllowedIps />
       <section className="space-y-3" aria-labelledby="rest-agent-instructions">

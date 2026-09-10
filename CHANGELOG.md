@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the redundant Access control explanation from REST API Server settings.
+
 - Give REST API Start and Stop the same button style and show Enabled/Stopped as plain status text.
 
 ## 0.2.84 — 2026-09-10
