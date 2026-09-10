@@ -16,6 +16,7 @@ type viewState struct {
 	UpdateAvailable bool
 	Server          string
 	Status          string
+	Connected       bool
 	AccessEnabled   bool
 	AccessKnown     bool
 	StartAtLogin    bool
@@ -41,6 +42,8 @@ func runTray() {
 	systray.Run(func() {
 		systray.SetTemplateIcon(trayIcon, trayIcon)
 		systray.SetTooltip(fmt.Sprintf("Pop Local Access %s", trayVersion))
+		activeView.status = systray.AddMenuItem("Server disconnected", "Connection status — click to reconnect")
+		systray.AddSeparator()
 		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open the PWA in your default browser")
 		computer := systray.AddMenuItem("Computer access", "Manage access to this computer")
 		activeView.access = computer.AddSubMenuItemCheckbox("Allow access to this computer", "Allow Pop Agent to use local tools on this computer", false)
@@ -53,7 +56,6 @@ func runTray() {
 		activeView.update = activeView.settings.AddSubMenuItem("Check for updates…", "Download an update installer from your Pop Server")
 		bind(activeView.update, func(a *app) { a.activateUpdate() })
 		troubleshooting := activeView.settings.AddSubMenuItem("Troubleshooting", "Connection details and local logs")
-		activeView.status = troubleshooting.AddSubMenuItem("Starting", "Connection status — click to reconnect")
 		activeView.reconnect = troubleshooting.AddSubMenuItem("Reconnect", "Restart the secure outbound connection")
 		activeView.diagnostics = troubleshooting.AddSubMenuItem("Open logs", "Open the local log")
 		activeView.server = troubleshooting.AddSubMenuItem("Server not configured", "Pop Agent server — click to open")
@@ -101,7 +103,12 @@ func (v trayView) Update(state viewState) {
 	} else {
 		v.update.Enable()
 	}
-	v.status.SetStatusTitle(state.Status, state.AccessEnabled && state.AccessKnown)
+	title := "Server disconnected"
+	if state.Connected {
+		title = "Server connected"
+	}
+	v.status.SetStatusTitle(title, state.Connected)
+	v.status.SetTooltip(state.Status + " — click to reconnect")
 	if state.Server == "" {
 		v.server.SetTitle("Server not configured")
 		v.open.Disable()

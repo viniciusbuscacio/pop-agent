@@ -42,6 +42,7 @@ type app struct {
 	status          string
 	accessEnabled   bool
 	accessKnown     bool
+	connected       bool
 	quitting        bool
 	signingIn       bool
 	log             *os.File
@@ -92,7 +93,7 @@ func (a *app) snapshot() viewState {
 	defer a.mu.Unlock()
 	autostart, _ := startAtLoginEnabled()
 	return viewState{
-		Server: a.server, Status: a.status, AccessEnabled: a.accessEnabled,
+		Server: a.server, Status: a.status, Connected: a.connected, AccessEnabled: a.accessEnabled,
 		AccessKnown: a.accessKnown, StartAtLogin: autostart,
 		SigningIn: a.signingIn, UpdateTitle: a.updateTitle, UpdateBusy: a.updateBusy,
 		UpdateAvailable: a.availableUpdate != nil,
@@ -107,6 +108,8 @@ func (a *app) start() {
 		a.mu.Unlock()
 		return
 	}
+	a.connected = false
+	a.accessKnown = false
 	pop, err := popPath()
 	if err != nil {
 		a.status = "Pop CLI not installed"
@@ -146,6 +149,8 @@ func (a *app) start() {
 		a.mu.Lock()
 		owned := a.command == cmd
 		if owned {
+			a.connected = false
+			a.accessKnown = false
 			a.command = nil
 			a.commandInput = nil
 		}
@@ -179,12 +184,16 @@ func (a *app) scan(reader io.Reader, cmd *exec.Cmd) {
 		}
 		switch event.Kind {
 		case "starting":
+			a.connected = false
+			a.accessKnown = false
 			a.server = safeOrigin(event.Server)
 			a.status = "Connecting"
 		case "attached":
+			a.connected = true
 			a.status = "Checking access"
 		case "access-policy":
 			if event.Enabled != nil {
+				a.connected = true
 				a.accessEnabled = *event.Enabled
 				a.accessKnown = true
 				if a.accessEnabled {
@@ -194,12 +203,16 @@ func (a *app) scan(reader io.Reader, cmd *exec.Cmd) {
 				}
 			}
 		case "closed":
+			a.connected = false
 			a.accessKnown = false
 			a.status = "Disconnected — reconnecting"
 		case "authentication-required":
+			a.connected = false
 			a.accessKnown = false
 			a.status = "Sign-in required"
 		case "outdated":
+			a.connected = false
+			a.accessKnown = false
 			a.status = "Update required"
 		}
 		a.mu.Unlock()
@@ -212,6 +225,8 @@ func (a *app) stop() {
 	cmd := a.command
 	a.command = nil
 	a.commandInput = nil
+	a.connected = false
+	a.accessKnown = false
 	a.mu.Unlock()
 	if cmd != nil {
 		terminateChild(cmd)
@@ -235,6 +250,7 @@ func (a *app) toggleAccess() {
 func (a *app) reconnect() {
 	a.mu.Lock()
 	a.status = "Connecting"
+	a.connected = false
 	a.accessKnown = false
 	a.mu.Unlock()
 	a.stop()

@@ -654,8 +654,13 @@ is supported, **Sign in again…**. This permission still does not select a comp
 in another PWA tab.
 
 Settings contains **Start at Login**, the update action, and **Troubleshooting**.
-Troubleshooting contains connection status (actionable for reconnect/sign-in),
-**Reconnect**, **Open logs**, and the configured server address (opens Pop).
-Status and server address do not occupy top-level rows. While a newer installer
+Troubleshooting contains **Reconnect**, **Open logs**, and the configured server address (opens Pop).
+The server address does not occupy a top-level row. Above the four actions,
+a connection indicator reads **Server connected** with a green dot after transport
+attachment, even when local access is disabled. It reads **Server disconnected**
+with a neutral dot before attachment, after disconnection, authentication failure,
+an unsupported version, or child shutdown. Its tooltip retains detailed state;
+clicking retains reconnect/sign-in behavior. Permission is shown separately in
+the Computer access checkbox. While a newer installer
 is available, the parent reads **Settings · Update available**, including during
 download and retry, so discovering the update does not require opening a submenu.

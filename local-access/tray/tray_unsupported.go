@@ -10,6 +10,7 @@ type viewState struct {
 	UpdateAvailable bool
 	Server          string
 	Status          string
+	Connected       bool
 	AccessEnabled   bool
 	AccessKnown     bool
 	StartAtLogin    bool

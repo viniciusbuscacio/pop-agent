@@ -203,6 +203,7 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
                      value:([connected boolValue] ? [NSColor systemGreenColor] : [NSColor secondaryLabelColor])
                      range:NSMakeRange(0, 1)];
   menuItem.image = nil;
+  menuItem.title = fullTitle;
   menuItem.attributedTitle = attributed;
 }
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show Server connected/disconnected at the top of the PLA menu, with the status dot reflecting connectivity independently of access permission.
+
 - Simplify the native Pop Local Access menu into four entries with access, settings and troubleshooting submenus, keeping available updates visible.
 
 ## 0.2.87 — 2026-09-10
