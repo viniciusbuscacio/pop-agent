@@ -49,8 +49,8 @@ export function A2aServerPanel({ enabled, changing = false, onToggle }: { enable
     } };
     return <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" data-testid="a2a-server-power" variant={enabled ? 'danger' : 'primary'} disabled={changing} onClick={onToggle}>{enabled ? 'Stop' : 'Start'}</Button>
-        <span data-testid="a2a-server-status" className={`rounded-md border px-4 py-2 text-sm font-medium ${enabled ? 'border-[var(--success)] text-[var(--success)]' : 'border-[var(--border)] text-[var(--muted)]'}`}>{enabled ? 'Enabled' : 'Stopped'}</span>
+        <Button type="button" data-testid="a2a-server-power" variant="primary" disabled={changing} onClick={onToggle}>{enabled ? 'Stop' : 'Start'}</Button>
+        <span data-testid="a2a-server-status" role="status" className={`text-sm ${enabled ? 'text-[var(--success)]' : 'text-[var(--muted)]'}`}>{enabled ? 'Enabled' : 'Stopped'}</span>
       </div>
       <p className="text-sm text-[var(--muted)]">This state is saved and restored when Pop Agent starts. Stopping A2A Server keeps the app and A2A Client available.</p>
       {error ? <p role="alert">{error}</p> : null}{status ? <p role="status">{status}</p> : null}

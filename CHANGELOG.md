@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match A2A Server Start/Stop styling and plain Enabled/Stopped status to REST API Server.
+
 - Remove the redundant Access control explanation from REST API Server settings.
 
 - Give REST API Start and Stop the same button style and show Enabled/Stopped as plain status text.
