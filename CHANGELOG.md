@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.84 — 2026-09-10
+
 - Show 30 rows in the skill Instructions editor while retaining textarea scrolling.
 
 - Refresh all nine built-in skills: compact pinned identity, accurate capability discovery, portable release instructions, and separate browser history from model context.
