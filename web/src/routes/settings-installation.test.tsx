@@ -84,9 +84,9 @@ describe('Settings installation guide', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
 
-    const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
+    const toggle = await screen.findByRole('switch', { name: /Allow access to this computer/ });
     expect(screen.getByText(
-      'Manage which computers Pop Agent can access. Allowing access and choosing where to use files are separate settings.',
+      'Turn on access to let Pop Agent use files and run commands on that computer from this browser. Choose one computer at a time.',
     )).toBeTruthy();
     expect(screen.getByText('Mac — Online')).toBeTruthy();
     expect(document.body.textContent).not.toContain('darwin');
@@ -95,13 +95,15 @@ describe('Settings installation guide', () => {
     await user.click(toggle);
 
     expect(localAccessMocks.setEnabled).toHaveBeenCalledWith('machine-m1', true);
-    expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
-    expect(toggle).toHaveProperty('checked', true);
-
-    const selector = await screen.findByRole('combobox', { name: 'Use files from' });
-    expect(selector).toHaveProperty('value', '');
-    await user.selectOptions(selector, 'machine-m1');
     expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m1');
+    expect(toggle).toHaveProperty('checked', true);
+    expect(screen.queryByRole('combobox', { name: 'Use files from' })).toBeNull();
+    expect(screen.getByText('Using m1')).toBeTruthy();
+    await user.click(toggle);
+    expect(localAccessMocks.setEnabled).toHaveBeenLastCalledWith('machine-m1', false);
+    expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
+    expect(toggle).toHaveProperty('checked', false);
+    expect(screen.getByText('Server only')).toBeTruthy();
   });
 
   it('keeps an explicitly selected stable machine while its tray reconnects', async () => {
@@ -142,7 +144,7 @@ describe('Settings installation guide', () => {
       .mockResolvedValueOnce({ machines: [machine] })
       .mockResolvedValue({ machines: [{ ...machine, enabled: true }] });
     render(<MemoryRouter><SettingsPage /></MemoryRouter>);
-    const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
+    const toggle = await screen.findByRole('switch', { name: /Allow access to this computer/ });
     expect(toggle).toHaveProperty('checked', false);
 
     await act(async () => {
@@ -150,8 +152,9 @@ describe('Settings installation guide', () => {
       await syncSetting('devices');
     });
 
-    await waitFor(() => expect(toggle).toHaveProperty('checked', true));
+    await waitFor(() => expect(toggle).toHaveProperty('checked', false));
     expect(localAccessMocks.machines).toHaveBeenCalledTimes(2);
+    expect((settingsResources.state('devices').data as { machines: { enabled: boolean }[] }).machines[0]?.enabled).toBe(true);
   });
 
   it('does not let an older machine snapshot overwrite a newer SSE refresh', async () => {
@@ -175,10 +178,10 @@ describe('Settings installation guide', () => {
     await act(async () => resolveFirst({ machines: [machine] }));
     await waitFor(() => expect(localAccessMocks.machines).toHaveBeenCalledTimes(2));
     await act(async () => resolveSecond({ machines: [{ ...machine, enabled: true }] }));
-    const toggle = await screen.findByRole('switch', { name: /Allow access to files on m1/ });
-    expect(toggle).toHaveProperty('checked', true);
+    const toggle = await screen.findByRole('switch', { name: /Allow access to this computer/ });
+    expect(toggle).toHaveProperty('checked', false);
 
-    expect(toggle).toHaveProperty('checked', true);
+    expect(toggle).toHaveProperty('checked', false);
   });
 
   it('opens the browser-owned PWA installation prompt', async () => {
@@ -273,4 +276,48 @@ it('returns from Connect a computer using the parent breadcrumb and clears it on
   await user.click(screen.getByRole('button', { name: 'Connect a computer' }));
   await user.click(screen.getByTestId('settings-tab-appearance'));
   expect(within(trail).queryByText('Connect a computer')).toBeNull();
+});
+
+it('switches this browser between computers without revoking another computer', async () => {
+  window.history.replaceState({}, '', '/settings?section=devices');
+  window.localStorage.setItem('pop-agent.local-machine-selection-v2', 'machine-m1');
+  localAccessMocks.machines.mockResolvedValue({ machines: [
+    { machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', enabled: true, connected: true },
+    { machineId: 'machine-m2', hostname: 'm2', platform: 'win32', enabled: true, connected: false },
+  ] });
+  const user = userEvent.setup();
+  render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+  const first = await screen.findByTestId('local-access-machine-m1');
+  const second = screen.getByTestId('local-access-machine-m2');
+  expect(first).toHaveProperty('checked', true);
+  expect(second).toHaveProperty('checked', false);
+  await user.click(second);
+  expect(localAccessMocks.setEnabled).toHaveBeenCalledExactlyOnceWith('machine-m2', true);
+  expect(first).toHaveProperty('checked', false);
+  expect(second).toHaveProperty('checked', true);
+  expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m2');
+  expect(screen.getByText('Using m2')).toBeTruthy();
+});
+
+it('keeps the previous selection on failed enable or disable and allows retry', async () => {
+  window.history.replaceState({}, '', '/settings?section=devices');
+  localAccessMocks.machines.mockResolvedValue({ machines: [
+    { machineId: 'machine-m1', hostname: 'm1', platform: 'darwin', enabled: false, connected: true },
+  ] });
+  const user = userEvent.setup();
+  render(<MemoryRouter><SettingsPage /></MemoryRouter>);
+  const toggle = await screen.findByRole('switch', { name: /Allow access to this computer/ });
+  localAccessMocks.setEnabled.mockRejectedValueOnce(new Error('offline'));
+  await user.click(toggle);
+  await screen.findByRole('alert');
+  expect(toggle).toHaveProperty('checked', false);
+  expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBeNull();
+  await user.click(toggle);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(toggle).toHaveProperty('checked', true);
+  localAccessMocks.setEnabled.mockRejectedValueOnce(new Error('offline'));
+  await user.click(toggle);
+  await screen.findByRole('alert');
+  expect(toggle).toHaveProperty('checked', true);
+  expect(window.localStorage.getItem('pop-agent.local-machine-selection-v2')).toBe('machine-m1');
 });

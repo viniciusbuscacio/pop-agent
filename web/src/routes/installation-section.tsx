@@ -99,6 +99,8 @@ export function InstallationSection() {
 export function DevicesSection() {
   const [removing, setRemoving] = useState<string>();
   const [removeError, setRemoveError] = useState(false);
+  const [changingAccess, setChangingAccess] = useState(false);
+  const [accessError, setAccessError] = useState(false);
   const [connecting, setConnecting] = useState(false);
   useSettingsDetail(connecting ? t('settings.devices.connect') : undefined, () => setConnecting(false));
   const [platform, setPlatform] = useState<InstallPlatform>(() => {
@@ -110,7 +112,6 @@ export function DevicesSection() {
   const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`;
   const [machines, setMachines] = useState<LocalMachineAccessDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
-  const selectableMachines = machines.filter((machine) => machine.enabled);
 
   const machineState = useSettingsLoad('devices', () => localAccessService.machines(), (response) => {
     setMachines(response.machines);
@@ -123,15 +124,22 @@ export function DevicesSection() {
   });
 
   async function setMachineEnabled(machineId: string, enabled: boolean): Promise<void> {
+    if (changingAccess) return;
+    setChangingAccess(true);
+    setAccessError(false);
     try {
       await localAccessService.setEnabled(machineId, enabled);
+      if (enabled) selectLocalConnection(machineId);
+      else if (selectedLocalConnection() === machineId) selectLocalConnection(undefined);
+      const selected = selectedLocalConnection() ?? '';
+      setSelectedConnection(selected);
+      if (enabled && selected !== machineId) setAccessError(true);
+      const current = settingsResources.state('devices').data as { machines: LocalMachineAccessDTO[] } | undefined;
+      settingsResources.accept('devices', { machines: (current?.machines ?? machines).map((machine) => machine.machineId === machineId ? { ...machine, enabled } : machine) });
     } catch {
-      return;
-    }
-    settingsResources.accept('devices', { machines: machines.map((machine) => machine.machineId === machineId ? { ...machine, enabled } : machine) });
-    if (!enabled && selectedConnection === machineId) {
-      selectLocalConnection(undefined);
-      setSelectedConnection('');
+      setAccessError(true);
+    } finally {
+      setChangingAccess(false);
     }
   }
 
@@ -183,42 +191,26 @@ export function DevicesSection() {
           <p className="text-sm text-[var(--muted)]">{t('settings.installation.localAccessNone')}</p>
         ) : machines.map((machine) => (
           <div key={machine.machineId} className="flex flex-col items-start gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-3">
+            <p className="text-sm font-medium">{machine.hostname}</p>
             <div className="w-full"><SwitchField
               id={`local-access-${machine.machineId}`}
               testId={`local-access-${machine.machineId}`}
-              label={t('settings.installation.localAccessForMachine', { machine: machine.hostname })}
+              label={t('settings.installation.localAccessForMachine')}
               hint={`${platformName(machine.platform)} — ${!machineState.fresh ? t('settings.sync.unconfirmed') : machine.connected
                 ? t('settings.installation.localAccessOnline')
                 : t('settings.installation.localAccessOffline')}`}
-              checked={machine.enabled}
-              disabled={removing !== undefined}
+              checked={machine.enabled && selectedConnection === machine.machineId}
+              disabled={removing !== undefined || changingAccess}
               onChange={(enabled) => void setMachineEnabled(machine.machineId, enabled)}
             /></div>
-            <Button type="button" size="md" variant="danger" disabled={removing !== undefined}
+            <Button type="button" size="md" variant="danger" disabled={removing !== undefined || changingAccess}
               onClick={() => void removeMachine(machine)}>{t('settings.devices.remove')}</Button>
           </div>
         ))}
-        {selectableMachines.length > 0 ? (
-          <Select
-            id="local-access-machine"
-            label={t('settings.installation.localAccessUseFrom')}
-            value={selectedConnection}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              selectLocalConnection(value === '' ? undefined : value);
-              setSelectedConnection(value);
-            }}
-          >
-            <option value="">{t('settings.installation.localAccessServerOnly')}</option>
-            {selectableMachines.map((machine) => (
-              <option key={machine.machineId} value={machine.machineId}>
-                {machine.hostname} — {platformName(machine.platform)} — {!machineState.fresh ? t('settings.sync.unconfirmed') : machine.connected
-                  ? t('settings.installation.localAccessOnline')
-                  : t('settings.installation.localAccessOffline')}
-              </option>
-            ))}
-          </Select>
-        ) : null}
+        <p role="status" className="text-sm text-[var(--muted)]">{selectedConnection
+          ? t('settings.devices.usingComputer', { name: machines.find((machine) => machine.machineId === selectedConnection)?.hostname ?? selectedConnection })
+          : t('settings.installation.localAccessServerOnly')}</p>
+        {accessError ? <p role="alert" className="text-sm text-[var(--danger)]">{t('settings.devices.accessFailed')}</p> : null}
         {removeError ? <p role="alert" className="text-sm text-[var(--danger)]">{t('settings.devices.removeFailed')}</p> : null}
         <div><Button type="button" data-testid="devices-connect" onClick={() => setConnecting(true)}>
           {t('settings.devices.connect')}

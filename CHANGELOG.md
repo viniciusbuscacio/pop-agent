@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Combine computer permission and browser selection into one Allow access to this computer switch in Devices, with visible failure feedback.
+
 - Match A2A Server Start/Stop styling and plain Enabled/Stopped status to REST API Server.
 
 - Remove the redundant Access control explanation from REST API Server settings.

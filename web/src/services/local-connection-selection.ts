@@ -6,7 +6,7 @@ export function selectedLocalConnection(): string | undefined {
     // Older builds could automatically persist a machine merely because it was
     // the only one online. That made every ordinary send depend on PLA without
     // an explicit user choice. Drop the old key once; v2 stores only selections
-    // made through the visible Server only / computer control.
+    // made through the visible computer access control.
     localStorage.removeItem(LEGACY_KEY);
     return localStorage.getItem(KEY) ?? undefined;
   } catch {

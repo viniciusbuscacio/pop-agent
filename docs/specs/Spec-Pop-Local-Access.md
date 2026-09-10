@@ -330,11 +330,19 @@ It is not an account setting and is not inferred from the browser’s OS name.
 Rules:
 
 - server-only is the default, even when exactly one enabled computer is online;
-- enabling local access grants permission but does not select that computer for
-  message routing;
-- whenever at least one computer is enabled, show an explicit selector including
-  **Server only** and the online/offline state of each choice;
-- only a choice made through that visible selector stores a stable `machineId`;
+- Devices uses one **Allow access to this computer** switch per named computer;
+  turning it on grants server permission and explicitly selects that stable
+  `machineId` for this browser only after the permission request succeeds;
+- the switch is on only for the enabled computer selected by this browser.
+  Selecting another computer leaves other computers' permissions intact for
+  other browsers; it does not reroute existing runs;
+- turning off the selected computer revokes its permission and clears this
+  browser's selection, returning to **Server only**;
+- show the active computer or **Server only** as plain status, and preserve
+  online/offline state on each computer; there is no separate routing dropdown;
+- enabling permission through the tray or another client never selects a
+  computer automatically in this browser; errors retain the previous selection
+  and display a retryable error; denied storage remains server-only;
 - PWA upgrades clear the former selection key because older builds could fill it
   automatically; the user may explicitly select the machine again;
 - selected machine becomes disabled or is no longer known: clear the local
@@ -522,8 +530,10 @@ machine inventory.
 - unknown persisted selectors clear while known offline selections remain;
 - disabled known selector is safe server-only;
 - stable machine resolves after reconnect and prefers its tray;
-- one or several enabled machines render the selector and remain server-only
-  until the user explicitly chooses one;
+- one or several enabled machines remain server-only until the user explicitly
+  turns on a computer's combined access switch in this browser;
+- combined access selects after permission success, clears after successful
+  disable, preserves selection on failure, and never revokes unrelated machines;
 - denied localStorage remains server-only;
 - initial/SSE/resume snapshots converge without polling;
 - local tool descriptions identify the exact machine/directory;
