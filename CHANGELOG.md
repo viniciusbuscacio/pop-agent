@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.2.83 — 2026-09-09
+
+- Open a newly created chat with its known-empty transcript immediately, without flashing a loading skeleton.
 - Make older chat history load transparently while scrolling upward, retaining the 50-message initial page and removing the redundant manual pagination button.
 
 ## 0.2.82 — 2026-09-09
