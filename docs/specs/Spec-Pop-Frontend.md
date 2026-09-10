@@ -173,7 +173,8 @@ Pop Agent uses route-based navigation, not hidden drawers:
 - On wide screens, the explorer remains in a fixed left pane while the selected
   content occupies the remaining width.
 - The sidebar app bar lives at the bottom above the scrolling list and exposes
-  wordmark, Settings and degraded-health diagnosis.
+  wordmark, Settings and degraded-health diagnosis. On wide chat layouts, its
+  top divider aligns with the top divider of the one-line composer.
 - The list reserves bottom space so its last item is never hidden behind the
   app bar.
 - Forms do not open in side drawers. Creation/editing uses routes or full page

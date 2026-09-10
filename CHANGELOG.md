@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Align the desktop sidebar footer divider with the one-line chat composer divider.
+
 ## 0.2.86 — 2026-09-10
 
 - Include native Pop Local Access executables for Apple Silicon and Intel Macs, and reject release builds missing verified macOS artifacts.

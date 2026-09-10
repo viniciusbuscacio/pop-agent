@@ -56,13 +56,15 @@ export function ShellHeader({
  * back off it drops the bar ~8px further while still leaving the indicator
  * its room. The max() is the floor for every screen that reports no inset --
  * they keep the plain 0.75rem and never move (Vinicius, 03/08).
+ * On desktop, one extra spacing step above the row makes this strip as tall as
+ * the one-line composer, so their top dividers meet across the pane boundary.
  */
 export function ShellFooter() {
   const openSettings = useOpenSettings();
   return (
     <footer
       data-testid="shell-footer"
-      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 pt-3 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)-0.5rem))] md:px-3 md:pb-3"
+      className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--panel-bg)] px-5 pt-3 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)-0.5rem))] md:px-3 md:pt-4 md:pb-3"
     >
       <span className="font-semibold">{t('app.name')}</span>
       <span className="flex items-center gap-1">

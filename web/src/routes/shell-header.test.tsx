@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { ShellHeader } from './shell-header';
+import { ShellFooter, ShellHeader } from './shell-header';
 
 afterEach(cleanup);
 
@@ -12,6 +12,20 @@ function SettingsDestination() {
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
   return <span data-testid="settings-origin">{returnTo}</span>;
 }
+
+describe('Shell footer layout', () => {
+  it('raises its desktop divider to align with the one-line composer', () => {
+    render(
+      <MemoryRouter>
+        <ShellFooter />
+      </MemoryRouter>,
+    );
+
+    const footer = screen.getByTestId('shell-footer');
+    expect(footer.classList.contains('md:pt-4')).toBe(true);
+    expect(footer.classList.contains('md:pb-3')).toBe(true);
+  });
+});
 
 describe('Settings origin', () => {
   it('carries the selected chat through the Settings route', async () => {
