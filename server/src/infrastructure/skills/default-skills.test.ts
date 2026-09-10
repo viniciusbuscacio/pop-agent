@@ -55,7 +55,7 @@ describe('default skills routing', () => {
     expect(DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-manual')?.pinned).toBe(true);
   });
 
-  it('teaches the files-and-memory-first instinct in pop-agent-manual', () => {
+  it('names local retrieval tools for questions about owner data', () => {
     const body = DEFAULT_SKILLS.find((skill) => skill.slug === 'pop-agent-manual')?.body ?? '';
     expect(body).toContain('files_search');
     expect(body).toContain('memory_search');
@@ -71,8 +71,8 @@ describe('default skills routing', () => {
     expect(body).toContain('## UI map');
   });
 
-  it('ships exactly eight built-in skills', () => {
-    expect(DEFAULT_SKILLS).toHaveLength(8);
+  it('ships exactly nine built-in skills', () => {
+    expect(DEFAULT_SKILLS).toHaveLength(9);
   });
 });
 
