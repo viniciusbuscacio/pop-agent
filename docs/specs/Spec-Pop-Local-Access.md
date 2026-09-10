@@ -135,7 +135,7 @@ the authoritative `access_policy` frame before presenting permission state.
 
 ## Authentication and session lifecycle
 
-On macOS, the tray offers **Sign in…** and makes **Sign-in required** actionable.
+On macOS, the tray offers **Computer access → Sign in again…** and makes **Sign-in required** actionable.
 Sign-in uses a native secure password dialog naming the configured server,
 without Terminal, shell commands or a local listener. It calls the existing
 password-login endpoint over HTTPS (HTTP only for explicit loopback development),
@@ -643,3 +643,19 @@ Tests cover version comparison, malformed metadata, absent targets, download
 integrity/redirects, installation cancellation and rollback, preserved user state,
 and packaged installer inclusion. Neither the PWA refresh nor an updated CLI
 version alone proves that the native tray was replaced.
+
+
+## Compact native menu
+
+The native tray has four top-level actions: **Open Pop Agent**, **Computer access**,
+**Settings**, and **Quit Pop Local Access**. Use native submenus with platform arrows.
+Computer access contains **Allow access to this computer** and, where native sign-in
+is supported, **Sign in again…**. This permission still does not select a computer
+in another PWA tab.
+
+Settings contains **Start at Login**, the update action, and **Troubleshooting**.
+Troubleshooting contains connection status (actionable for reconnect/sign-in),
+**Reconnect**, **Open logs**, and the configured server address (opens Pop).
+Status and server address do not occupy top-level rows. While a newer installer
+is available, the parent reads **Settings · Update available**, including during
+download and retry, so discovering the update does not require opening a submenu.

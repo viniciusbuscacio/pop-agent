@@ -95,6 +95,7 @@ func (a *app) snapshot() viewState {
 		Server: a.server, Status: a.status, AccessEnabled: a.accessEnabled,
 		AccessKnown: a.accessKnown, StartAtLogin: autostart,
 		SigningIn: a.signingIn, UpdateTitle: a.updateTitle, UpdateBusy: a.updateBusy,
+		UpdateAvailable: a.availableUpdate != nil,
 	}
 }
 

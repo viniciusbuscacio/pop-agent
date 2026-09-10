@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Simplify the native Pop Local Access menu into four entries with access, settings and troubleshooting submenus, keeping available updates visible.
+
 ## 0.2.87 — 2026-09-10
 
 - Add user-initiated PLA installer updates from the Pop Server, macOS setup DMGs and Windows setup executables, preserving existing login and startup settings.

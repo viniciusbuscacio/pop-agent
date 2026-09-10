@@ -11,18 +11,19 @@ import (
 )
 
 type viewState struct {
-	UpdateTitle   string
-	UpdateBusy    bool
-	Server        string
-	Status        string
-	AccessEnabled bool
-	AccessKnown   bool
-	StartAtLogin  bool
-	SigningIn     bool
+	UpdateTitle     string
+	UpdateBusy      bool
+	UpdateAvailable bool
+	Server          string
+	Status          string
+	AccessEnabled   bool
+	AccessKnown     bool
+	StartAtLogin    bool
+	SigningIn       bool
 }
 
 type trayView struct {
-	update, status, server, open, access, reconnect, diagnostics, startAtLogin, quit, signIn *systray.MenuItem
+	settings, update, status, server, open, access, reconnect, diagnostics, startAtLogin, quit, signIn *systray.MenuItem
 }
 
 var activeView trayView
@@ -40,21 +41,22 @@ func runTray() {
 	systray.Run(func() {
 		systray.SetTemplateIcon(trayIcon, trayIcon)
 		systray.SetTooltip(fmt.Sprintf("Pop Local Access %s", trayVersion))
-		activeView.status = systray.AddMenuItem("Starting", "Connection status — click to reconnect")
-		activeView.server = systray.AddMenuItem("—", "Pop Agent server — click to open")
-		systray.AddSeparator()
 		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open the PWA in your default browser")
+		computer := systray.AddMenuItem("Computer access", "Manage access to this computer")
+		activeView.access = computer.AddSubMenuItemCheckbox("Allow access to this computer", "Allow Pop Agent to use local tools on this computer", false)
 		if nativeSignInAvailable {
-			activeView.signIn = systray.AddMenuItem("Sign in…", "Sign in to reconnect this computer without opening Terminal")
+			activeView.signIn = computer.AddSubMenuItem("Sign in again…", "Sign in to reconnect this computer without opening Terminal")
 			bind(activeView.signIn, func(a *app) { a.signIn() })
 		}
-		activeView.access = systray.AddMenuItemCheckbox("Allow access to local files", "Allow Pop Agent to access files on this computer", false)
-		activeView.update = systray.AddMenuItem("Check for updates…", "Download an update installer from your Pop Server")
+		activeView.settings = systray.AddMenuItem("Settings", "Startup, updates and troubleshooting")
+		activeView.startAtLogin = activeView.settings.AddSubMenuItemCheckbox("Start at Login", "Start Pop Local Access when you sign in", false)
+		activeView.update = activeView.settings.AddSubMenuItem("Check for updates…", "Download an update installer from your Pop Server")
 		bind(activeView.update, func(a *app) { a.activateUpdate() })
-		activeView.reconnect = systray.AddMenuItem("Reconnect", "Restart the secure outbound connection")
-		systray.AddSeparator()
-		activeView.startAtLogin = systray.AddMenuItemCheckbox("Start at Login", "Start Pop Local Access when you sign in", false)
-		activeView.diagnostics = systray.AddMenuItem("Diagnostics…", "Open the local log")
+		troubleshooting := activeView.settings.AddSubMenuItem("Troubleshooting", "Connection details and local logs")
+		activeView.status = troubleshooting.AddSubMenuItem("Starting", "Connection status — click to reconnect")
+		activeView.reconnect = troubleshooting.AddSubMenuItem("Reconnect", "Restart the secure outbound connection")
+		activeView.diagnostics = troubleshooting.AddSubMenuItem("Open logs", "Open the local log")
+		activeView.server = troubleshooting.AddSubMenuItem("Server not configured", "Pop Agent server — click to open")
 		systray.AddSeparator()
 		activeView.quit = systray.AddMenuItem("Quit Pop Local Access", "Stop local access until opened again")
 		bind(activeView.status, func(a *app) { a.activateStatus() })
@@ -85,6 +87,11 @@ func bind(item *systray.MenuItem, action func(*app)) {
 func (v trayView) Update(state viewState) {
 	if v.status == nil {
 		return
+	}
+	if state.UpdateAvailable {
+		v.settings.SetTitle("Settings · Update available")
+	} else {
+		v.settings.SetTitle("Settings")
 	}
 	if state.UpdateTitle != "" {
 		v.update.SetTitle(state.UpdateTitle)
@@ -120,7 +127,7 @@ func (v trayView) Update(state viewState) {
 			v.reconnect.Disable()
 			v.status.Disable()
 		} else {
-			v.signIn.SetTitle("Sign in…")
+			v.signIn.SetTitle("Sign in again…")
 			v.signIn.Enable()
 			v.status.Enable()
 		}

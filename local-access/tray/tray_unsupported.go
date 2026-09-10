@@ -5,14 +5,15 @@ package main
 import "errors"
 
 type viewState struct {
-	UpdateTitle   string
-	UpdateBusy    bool
-	Server        string
-	Status        string
-	AccessEnabled bool
-	AccessKnown   bool
-	StartAtLogin  bool
-	SigningIn     bool
+	UpdateTitle     string
+	UpdateBusy      bool
+	UpdateAvailable bool
+	Server          string
+	Status          string
+	AccessEnabled   bool
+	AccessKnown     bool
+	StartAtLogin    bool
+	SigningIn       bool
 }
 
 type trayView struct{}
