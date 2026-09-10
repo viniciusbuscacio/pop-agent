@@ -3,6 +3,7 @@ int popSetupDialog(const char *title, const char *message, const char *button, i
  @autoreleasepool {
   [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+  if (![NSApp isRunning]) [NSApp finishLaunching];
   NSAlert *alert = [[NSAlert alloc] init];
   alert.messageText = [NSString stringWithUTF8String:title];
   alert.informativeText = [NSString stringWithUTF8String:message];
