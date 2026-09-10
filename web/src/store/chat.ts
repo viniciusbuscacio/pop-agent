@@ -195,7 +195,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const chat = await chatsService.create();
     // SSE can beat the POST response, so creation is an upsert rather than an
     // append. The initiating client and every other client use the same path.
-    set((state) => ({ chats: upsertChat(state.chats, chat) }));
+    // A chat created by this client is known to have an empty transcript. Seed
+    // that projection before navigation so ChatPage does not flash the generic
+    // snapshot skeleton while its background revision check catches up. Keep a
+    // transcript that may already have arrived through another event path.
+    set((state) => ({
+      chats: upsertChat(state.chats, chat),
+      messages: state.messages[chat.id] === undefined
+        ? { ...state.messages, [chat.id]: [] }
+        : state.messages,
+    }));
     return chat;
   },
 

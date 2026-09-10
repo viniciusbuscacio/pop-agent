@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamEvent } from '@pop-agent/shared';
 import { useChatStore } from './chat';
 
+const create = vi.fn();
 const send = vi.fn();
 const stop = vi.fn();
 const updateQueue = vi.fn();
@@ -15,6 +16,7 @@ const listBody: { active: unknown[]; archived: unknown[] } = { active: [], archi
 
 vi.mock('../services/chats', () => ({
   chatsService: {
+    create: () => create() as Promise<unknown>,
     send: (chatId: string, text: string) => send(chatId, text) as Promise<unknown>,
     stop: (chatId: string) => stop(chatId) as Promise<unknown>,
     updateQueue: (chatId: string, messageId: string, text: string) =>
@@ -31,6 +33,17 @@ vi.mock('../services/chats', () => ({
 
 const CHAT = 'chat-000000000001';
 const RUN = 'run-0000000000000001';
+const NEW_CHAT = {
+  id: 'chat-newly-created',
+  title: 'New chat',
+  model: '',
+  provider: '',
+  archived: false,
+  pinned: false,
+  createdAt: '2026-09-10T00:00:00.000Z',
+  updatedAt: '2026-09-10T00:00:00.000Z',
+  preview: '',
+};
 
 function apply(event: StreamEvent): void {
   useChatStore.getState().apply(event);
@@ -59,6 +72,7 @@ function queuedMessage(text: string, id = 'queued-00000000001') {
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  create.mockReset();
   send.mockReset();
   stop.mockReset();
   updateQueue.mockReset();
@@ -67,12 +81,45 @@ beforeEach(() => {
   archiveOthers.mockReset();
   patch.mockResolvedValue({});
   archiveOthers.mockResolvedValue({ archived: 0 });
+  create.mockResolvedValue(NEW_CHAT);
   send.mockResolvedValue({ runId: RUN, userMessageId: 'msg-0000000000000001' });
   updateQueue.mockResolvedValue({ message: queuedMessage('edited') });
   cancelQueue.mockResolvedValue(undefined);
   messagesBody.value = { messages: [] };
   listBody.active = [];
   listBody.archived = [];
+});
+
+describe('chat creation', () => {
+  it('seeds the known-empty transcript before the new chat is opened', async () => {
+    const chat = await useChatStore.getState().createChat();
+
+    expect(chat).toEqual(NEW_CHAT);
+    expect(useChatStore.getState().chats).toEqual([NEW_CHAT]);
+    expect(useChatStore.getState().messages[NEW_CHAT.id]).toEqual([]);
+  });
+
+  it('does not overwrite transcript state that raced the create response', async () => {
+    let finishCreate!: (chat: typeof NEW_CHAT) => void;
+    create.mockReturnValue(new Promise<typeof NEW_CHAT>((resolve) => { finishCreate = resolve; }));
+    const creation = useChatStore.getState().createChat();
+    const racedMessage = {
+      id: 'message-raced',
+      chatId: NEW_CHAT.id,
+      role: 'user' as const,
+      content: 'Already here',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: '2026-09-10T00:00:01.000Z',
+    };
+    useChatStore.setState({ messages: { [NEW_CHAT.id]: [racedMessage] } });
+
+    finishCreate(NEW_CHAT);
+    await creation;
+
+    expect(useChatStore.getState().messages[NEW_CHAT.id]).toEqual([racedMessage]);
+  });
 });
 
 describe('streaming into the live buffer', () => {

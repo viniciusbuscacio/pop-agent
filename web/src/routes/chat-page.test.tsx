@@ -129,6 +129,15 @@ afterEach(() => {
 });
 
 describe('chat transcript', () => {
+  it('opens a newly created empty transcript without flashing the loading skeleton', () => {
+    useChatStore.setState({ messages: { [chat.id]: [] } });
+
+    renderPage();
+
+    expect(screen.getByTestId('empty-chat-icon')).toBeTruthy();
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
   it('appears after an empty chat loads and disappears with the first message', async () => {
     renderPage();
 
