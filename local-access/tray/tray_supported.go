@@ -107,7 +107,7 @@ func (v trayView) Update(state viewState) {
 	if state.Connected {
 		title = "Server connected"
 	}
-	v.status.SetStatusTitle(title, state.Connected)
+	v.status.SetTitle(title)
 	v.status.SetTooltip(state.Status + " — click to reconnect")
 	if state.Server == "" {
 		v.server.SetTitle("Server not configured")
@@ -139,6 +139,7 @@ func (v trayView) Update(state viewState) {
 			v.status.Enable()
 		}
 	}
+	v.status.SetStatusTitle(title, state.Connected)
 	if state.StartAtLogin {
 		v.startAtLogin.Check()
 	} else {
