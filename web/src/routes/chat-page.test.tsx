@@ -568,23 +568,35 @@ describe('chat transcript', () => {
   });
 });
 
-it('loads older pages on demand, preserves the scroll anchor and offers retry', async () => {
+it('loads older pages transparently, preserves the scroll anchor and retries on later upward intent', async () => {
   const row = (id: string): MessageDTO => ({ id, chatId: chat.id, role: 'user', content: id, thinking: '', tools: [], attachments: [], createdAt: '2026-09-09T00:00:00Z' });
-  listMessages.mockImplementation(async (_id: string, before?: string) => ({ messages: before ? [row('old-1'), row('old-2')] : [row('new-1'), row('new-2')] }));
+  let olderAttempt = 0;
+  listMessages.mockImplementation(async (_id: string, before?: string) => {
+    if (before === undefined) return { messages: [row('new-1'), row('new-2')] };
+    olderAttempt += 1;
+    if (olderAttempt === 1) throw new Error('offline');
+    if (olderAttempt === 2) return { messages: [row('old-1'), row('old-2')] };
+    return { messages: [] };
+  });
   renderPage();
   await waitFor(() => expect(useChatStore.getState().messages[chat.id]).toHaveLength(2));
+  expect(screen.queryByTestId('chat-load-older')).toBeNull();
+
   const scroller = screen.getByTestId('chat-scroller');
   Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => (useChatStore.getState().messages[chat.id]?.length ?? 0) * 100 });
   scroller.scrollTop = 10;
-  fireEvent.click(screen.getByTestId('chat-load-older'));
+  fireEvent.wheel(scroller, { deltaY: -1 });
+  await waitFor(() => expect(olderAttempt).toBe(1));
+  expect(useChatStore.getState().messages[chat.id]).toHaveLength(2);
+
+  fireEvent.wheel(scroller, { deltaY: -1 });
   await waitFor(() => expect(useChatStore.getState().messages[chat.id]).toHaveLength(4));
   expect(scroller.scrollTop).toBe(210);
   expect(listMessages).toHaveBeenCalledWith(chat.id, 'new-1', false, expect.any(AbortSignal));
-  listMessages.mockRejectedValueOnce(new Error('offline'));
-  fireEvent.click(screen.getByTestId('chat-load-older'));
-  await waitFor(() => expect(screen.getByTestId('chat-load-older').textContent).toBe('Retry earlier messages'));
-  expect(useChatStore.getState().messages[chat.id]).toHaveLength(4);
-  listMessages.mockResolvedValueOnce({ messages: [] });
-  fireEvent.click(screen.getByTestId('chat-load-older'));
-  await waitFor(() => expect(screen.queryByTestId('chat-load-older')).toBeNull());
+
+  scroller.scrollTop = 10;
+  fireEvent.wheel(scroller, { deltaY: -1 });
+  await waitFor(() => expect(olderAttempt).toBe(3));
+  fireEvent.wheel(scroller, { deltaY: -1 });
+  expect(olderAttempt).toBe(3);
 });

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make older chat history load transparently while scrolling upward, retaining the 50-message initial page and removing the redundant manual pagination button.
+
 ## 0.2.82 — 2026-09-09
 
 - Close the selected conversation pane when it is archived locally or from another client, and clear its remembered return target.

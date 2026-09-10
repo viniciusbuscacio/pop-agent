@@ -121,11 +121,14 @@ Evict the least recently visited eligible transcript, preserving lists, drafts,
 run/queue state and persistent/server history. New unvisited warmup snapshots
 must not displace recently visited conversations solely because they arrived later.
 
-Start with the server's bounded recent tail. Earlier messages load in pages on
-upward scrolling or the accessible Load earlier messages action, with retry and
-scroll-anchor preservation. Navigation/cancellation/newer snapshots invalidate
-late page results. Canonical refresh reconciles the pages explicitly loaded by
-the reader, without downloading the entire archive preemptively.
+Start with the server's bounded recent tail of 50 messages by default. Earlier
+messages load transparently in pages as the reader scrolls upward, including
+wheel and touch intent at the top when the scroll position cannot move. Preserve
+the scroll anchor, retry on later upward interaction after a failed page, and
+stop requesting once the oldest page is known. Do not render a manual pagination
+action. Navigation/cancellation/newer snapshots invalidate late page results.
+Canonical refresh reconciles the pages explicitly loaded by the reader, without
+downloading the entire archive preemptively.
 
 Serialize persistent chat-cache writes and coalesce waiting snapshots by key.
 A cache read is read-only; it never rewrites the transcript just to touch an
