@@ -45,6 +45,11 @@ an untouched seed follows product updates while a user-modified copy is
 preserved. The generated repository/UI map is produced by the gate and must not
 be hand-maintained.
 
+The routed `publish-pop-agent` built-in documents the maintainer release builder,
+version consistency, private publication without Actions, and supervised activation.
+It is not pinned. An identical existing personal copy adopts the built-in seed on
+upgrade; customized copies remain owner-controlled.
+
 Pinned skills enter the session instruction block once. They do not compete for
 per-turn routing slots. The pinned set must remain tiny; broad procedural
 knowledge belongs in routed skills. Changes to pinned skills, the vault or its

@@ -1,3 +1,4 @@
+import { PUBLISH_POP_AGENT_SKILL } from './publish-pop-agent-skill.js';
 import { SELF_MAP } from './self-map.generated.js';
 
 /**
@@ -19,6 +20,7 @@ export interface DefaultSkill {
 }
 
 export const DEFAULT_SKILLS: DefaultSkill[] = [
+  PUBLISH_POP_AGENT_SKILL,
   {
     slug: 'pop-agent-manual',
     name: 'About Pop Agent (self-knowledge)',

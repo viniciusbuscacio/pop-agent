@@ -26,6 +26,20 @@ describe('SkillsVault', () => {
     expect(vault.get('pop-agent-manual')?.source).toBe('builtin');
   });
 
+  it('ships the release procedure unpinned and adopts an identical personal copy', () => {
+    const slug = 'publish-pop-agent';
+    expect(vault.get(slug)?.source).toBe('builtin');
+    expect(vault.get(slug)?.pinned).not.toBe(true);
+    const path = join(root, slug + '.md');
+    const shipped = readFileSync(path, 'utf8');
+    writeFileSync(path, shipped.replace('source: builtin', 'source: user').replace(/^seed: .*\n/m, ''));
+    expect(vault.get(slug)?.source).toBe('user');
+    const upgraded = new SkillsVault(root);
+    expect(upgraded.get(slug)?.source).toBe('builtin');
+    expect(upgraded.get(slug)?.body).toBe(parse(shipped).body);
+    expect(parse(readFileSync(path, 'utf8')).seed).toBeDefined();
+  });
+
   it('creates and reads back a user skill', () => {
     vault.write({
       slug: 'my-skill',

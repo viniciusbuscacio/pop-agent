@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ship Publish Pop Agent as a routed built-in skill, including release recovery, private publication without Actions, and supervised activation.
+
 ## 0.2.83 — 2026-09-09
 
 - Open a newly created chat with its known-empty transcript immediately, without flashing a loading skeleton.
