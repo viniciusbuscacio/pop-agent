@@ -48,13 +48,13 @@ Caddy is already operator-managed.
 
 ## Install a specific version
 
-Retrieve the immutable v0.2.85 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.86 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.85/server-install.sh && sh "$file" --ref v0.2.85)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.86/server-install.sh && sh "$file" --ref v0.2.86)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -290,6 +290,16 @@ Review service journal contents before sharing them. A restored snapshot removes
 the failed attempt's later state and diagnostics.
 
 ## Maintainer builds on ubuntu-home
+
+Before the Linux build, prepare the exact clean release commit on a Mac with
+Xcode command-line tools and Go. Run
+`node tools/macos-tray-artifacts.ts build /absolute/path/to/macos-tray-output`.
+Copy that directory's contents into the Ubuntu builder's
+`~/.local/share/pop-agent/release-builder/cache/macos-tray/<full-commit>/`.
+The Mac stage tests the native tray, builds Apple Silicon and Intel executables,
+and verifies their ad-hoc signatures. Linux validates commit, version, Mach-O
+architecture, size and SHA-256 before running its gate. Missing or mismatched
+Mac artifacts stop publication rather than producing a broken Mac installer.
 
 Run `./deploy/local-release.sh build` for a committed publication batch, then
 `./deploy/local-release.sh publish` when that batch should be sent to GitHub.

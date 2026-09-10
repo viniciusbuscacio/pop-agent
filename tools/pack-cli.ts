@@ -32,6 +32,7 @@
  * the entry keeps its shebang.
  */
 
+import { importMacosTray } from './macos-tray-artifacts.ts';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -187,6 +188,12 @@ async function main(): Promise<void> {
     join(localAccessOut, 'manifest.json'),
     `${JSON.stringify({ version, artifacts: localAccessArtifacts }, undefined, 2)}\n`,
   );
+
+  const macosDirectory = process.env['POP_AGENT_MACOS_TRAY_DIR'];
+  if (macosDirectory) {
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    importMacosTray(macosDirectory, localAccessOut, version, commit);
+  }
 
   process.stdout.write(`packed ${served}, Pop launcher ${launcherVersion}, and Pop Local Access ${version}\n`);
 }

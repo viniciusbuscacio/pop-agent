@@ -12,6 +12,9 @@ trap 'rm -rf -- "$TMPDIR"' EXIT
 ./deploy/bootstrap-server.sh --prepare-only --build-from-source
 export PATH="$HOME/.local/share/pop-agent/server-toolchain/current/node/bin:$HOME/.local/share/pop-agent/server-toolchain/current/go/bin:$PATH"
 export POP_AGENT_BUILD_CACHE=/cache/audio
+export POP_AGENT_MACOS_TRAY_DIR="/cache/macos-tray/$commit"
+# Fail before the full gate if the native Mac stage has not been supplied.
+node tools/macos-tray-artifacts.ts check "$POP_AGENT_MACOS_TRAY_DIR"
 # This cache belongs to one immutable Ubuntu builder image and locked dependency tree.
 dependency_key=$(node tools/local-release-cache.ts)
 if [[ ! -d node_modules || ! -f /cache/dependency-key || $(cat /cache/dependency-key) != "$dependency_key" ]]; then

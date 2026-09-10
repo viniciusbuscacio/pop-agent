@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.86 — 2026-09-10
+
+- Include native Pop Local Access executables for Apple Silicon and Intel Macs, and reject release builds missing verified macOS artifacts.
+
 ## 0.2.85 — 2026-09-10
 
 - Combine computer permission and browser selection into one Allow access to this computer switch in Devices, with visible failure feedback.

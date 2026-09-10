@@ -795,6 +795,19 @@ HTTPS interaction in the browser happen afterwards. Runtime/Tailscale failures
 also require bounded service journals and live client-to-server probes. Restore
 a VM snapshot only after collecting the failed attempt's diagnostics.
 
+## Native macOS release stage
+
+Every owner-managed desktop release includes Pop Local Access for macOS arm64
+and amd64, alongside Windows. Run `tools/macos-tray-artifacts.ts build` on a Mac
+with Xcode and Go from the exact clean release commit. It runs native Go tests,
+builds both architectures, ad-hoc signs/verifies them, and records a versioned
+manifest with the commit, sizes and SHA-256 hashes. Transfer these artifacts to
+`release-builder/cache/macos-tray/<commit>/` on the Linux builder. The container
+validates both Mach-O architectures and integrity before its full gate, then
+imports the verified binaries into the packed client manifest. The publisher
+ships them with the other immutable release assets. A missing Mac stage is an
+explicit build failure, never a silently unsupported macOS installer.
+
 ## Owner-managed local release builder
 
 Run `./deploy/local-release.sh build` on ubuntu-home. A pinned Ubuntu 24.04 Docker
