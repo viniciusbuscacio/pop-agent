@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refresh all nine built-in skills: compact pinned identity, accurate capability discovery, portable release instructions, and separate browser history from model context.
+
 - Ship Publish Pop Agent as a routed built-in skill, including release recovery, private publication without Actions, and supervised activation.
 
 ## 0.2.83 — 2026-09-09

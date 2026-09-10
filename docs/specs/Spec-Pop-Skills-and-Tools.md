@@ -50,6 +50,12 @@ version consistency, private publication without Actions, and supervised activat
 It is not pinned. An identical existing personal copy adopts the built-in seed on
 upgrade; customized copies remain owner-controlled.
 
+Built-in descriptions distinguish identity, architecture, mechanism diagnosis, code
+changes, publication, web research, notes, shell operations and daily review. Only
+the compact identity manual is pinned. Instructions discover actual deployment
+paths and available tools; browser dependencies and unrestricted tool access are
+not assumed. Conversation pagination is distinct from pi model context.
+
 Pinned skills enter the session instruction block once. They do not compete for
 per-turn routing slots. The pinned set must remain tiny; broad procedural
 knowledge belongs in routed skills. Changes to pinned skills, the vault or its
