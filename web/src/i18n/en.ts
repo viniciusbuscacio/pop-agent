@@ -322,6 +322,8 @@ export const en = {
     'iPhone or iPad: open in Safari, tap Share, then Add to Home Screen.',
   'settings.installation.webAndroid':
     'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
+  'settings.installation.desktopTitle': 'Pop Agent Desktop',
+  'settings.installation.desktopBody': 'The Windows installer includes Pop Agent Desktop and Pop Agent CLI. Choose either or keep both. Computer access stays disabled until you enable it.',
   'settings.installation.localAccessTitle': 'Local computer access',
   'settings.installation.localAccessBody':
     'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',
@@ -338,13 +340,13 @@ export const en = {
   'settings.installation.localAccessConnected': 'connected',
   'settings.installation.localAccessInstallTitle': 'Connect another computer',
   'settings.installation.localAccessWindows': 'Connect a Windows PC',
-  'settings.installation.localAccessDownloadWindows': 'Download Windows installer',
+  'settings.installation.localAccessDownloadWindows': 'Download Pop Agent Setup',
   'settings.installation.localAccessWindowsHint':
     'Copy this command into PowerShell. Enter your Pop Agent password when asked. The connection starts automatically when you sign in to Windows.',
   'settings.installation.localAccessUnix': 'Connect a Mac',
   'settings.installation.localAccessUnixHint':
     'Copy this command into Terminal. Enter your Pop Agent password when asked. The connection starts automatically when you sign in to your Mac.',
-  'settings.installation.cliTitle': 'Command-line app (Pop CLI)',
+  'settings.installation.cliTitle': 'Pop Agent CLI',
   'settings.installation.cliBody':
     'The CLI provides terminal chat and local tools from the computer where it runs.',
   'settings.installation.cliWindows': 'Windows (PowerShell)',

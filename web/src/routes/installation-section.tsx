@@ -78,8 +78,8 @@ export function InstallationSection() {
       {isLocalAccessInstallPlatform(platform) ? (
         <Card className="flex flex-col gap-4">
           <div>
-            <h2 className="text-base font-semibold">{t('settings.installation.localAccessTitle')}</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.localAccessBody')}</p>
+            <h2 className="text-base font-semibold">{t(platform === 'windows' ? 'settings.installation.desktopTitle' : 'settings.installation.localAccessTitle')}</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">{t(platform === 'windows' ? 'settings.installation.desktopBody' : 'settings.installation.localAccessBody')}</p>
           </div>
           {platform === 'windows' ? (
             <LinkButton

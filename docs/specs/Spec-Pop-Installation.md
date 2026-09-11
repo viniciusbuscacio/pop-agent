@@ -916,3 +916,8 @@ new terminal to pick up PATH changes. Uninstall removes only the owned CLI PATH
 entry and component shortcuts; profiles, runtime caches, WebView storage, external
 CLI installations and server data survive. Do not treat a development build as a
 published release; platform acceptance still requires clean-user and upgrade tests.
+
+Settings → Install Pop identifies the Windows package as **Pop Agent Desktop**,
+explains both selectable components and labels its download **Download Pop Agent Setup**.
+The terminal section is named **Pop Agent CLI**. Existing same-origin artifact
+routes remain compatible with earlier clients.

@@ -2,10 +2,14 @@
 
 ## Unreleased
 
+## 0.2.92 — 2026-09-11
+
+- Continue Windows-first distribution; macOS PLA artifacts remain outside this release.
+
 - Keep the Go setup wizard and add Pop Agent Desktop and Pop Agent CLI component choices, both selected by default, with empty-selection validation and component-aware Finish controls.
 - Add a Windows WebView2 Desktop window for the server UI and integrate Open Pop Agent with the computer-access tray. Web sign-in stays independent; no native tool bindings are exposed to pages.
 - Isolate the Desktop launcher from the optional terminal PATH entry, preserve existing components on upgrades, and include component files in rollback and scoped removal.
-- Native Windows installation/upgrade and browser-feature acceptance remain required before release.
+- Native Windows installation/upgrade and browser-feature acceptance remain an explicit owner follow-up; automated checks do not establish device support.
 
 ## 0.2.91 — 2026-09-11
 
