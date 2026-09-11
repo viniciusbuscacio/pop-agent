@@ -296,10 +296,15 @@ page. It shows:
 - the exact server origin;
 - browser-native PWA installation state/instructions;
 - optional Pop Local Access installation commands for Windows and macOS only;
+- a direct Windows setup download that resolves to the current immutable
+  installer;
 - CLI bootstrap commands for this server.
 
-Devices remains the home for connected-machine permission state and retains its
-Connect a computer installation path.
+The direct setup download updates an existing Windows PLA installation without
+requiring the user to discover an artifact filename. Fresh installation and
+repair still use the displayed same-origin PowerShell command. Devices remains
+the home for connected-machine permission state and retains its Connect a
+computer installation path.
 
 Examples must never contain a product-wide placeholder that could connect a
 client to somebody else’s instance. Copy controls preserve the exact same-origin

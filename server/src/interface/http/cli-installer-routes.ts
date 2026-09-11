@@ -78,13 +78,16 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
   });
 
   routes.get('/local-access-update.json', (c) => {
-    const platform = c.req.query('platform');
-    const arch = c.req.query('arch');
-    if (!['darwin', 'windows'].includes(platform ?? '') || !['arm64', 'amd64'].includes(arch ?? '')) return c.notFound();
-    const release = readLocalAccessRelease(deps.cliPack);
-    const artifact = release?.artifacts[`${platform}-${arch}-setup`];
-    if (!release || !artifact) return c.notFound();
-    return c.json({ version: release.version, ...artifact }, 200, { 'cache-control': 'no-store' });
+    const artifact = requestedLocalAccessInstaller(c, deps.cliPack);
+    if (artifact === undefined) return c.notFound();
+    return c.json({ version: artifact.release.version, ...artifact.file }, 200, { 'cache-control': 'no-store' });
+  });
+
+  routes.get('/local-access-installer', (c) => {
+    const artifact = requestedLocalAccessInstaller(c, deps.cliPack);
+    if (artifact === undefined) return c.notFound();
+    c.header('cache-control', 'no-store');
+    return c.redirect(`/local-access/${encodeURIComponent(artifact.file.file)}`, 302);
   });
 
   routes.get('/local-access/:file', async (c) => {
@@ -366,6 +369,18 @@ New-Item -Path $run -Force | Out-Null
 Set-ItemProperty -Path $run -Name 'Pop Local Access' -Value ('"' + $tray + '"')
 Write-Host 'Pop Local Access is installed. Open Pop Local Access from the Start menu or find its icon in the Windows tray.' -ForegroundColor Green
 `;
+}
+
+function requestedLocalAccessInstaller(
+  c: Context,
+  cliPack: string,
+): { release: LocalAccessRelease; file: LauncherArtifact } | undefined {
+  const platform = c.req.query('platform');
+  const arch = c.req.query('arch');
+  if (!['darwin', 'windows'].includes(platform ?? '') || !['arm64', 'amd64'].includes(arch ?? '')) return undefined;
+  const release = readLocalAccessRelease(cliPack);
+  const file = release?.artifacts[`${platform}-${arch}-setup`];
+  return release === undefined || file === undefined ? undefined : { release, file };
 }
 
 function readLauncherRelease(cliPack: string): LauncherRelease | undefined {

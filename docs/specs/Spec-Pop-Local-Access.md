@@ -602,8 +602,11 @@ and canceled when the app quits. They never download installers in the backgroun
 
 `GET /local-access-update.json?platform=darwin&arch=arm64` returns the current
 version and installer filename, size and SHA-256 for the requested target.
-Supported targets are macOS arm64/amd64 and Windows amd64. Missing targets return
-404. A missing installer must not be reported as a confirmed current version.
+`GET /local-access-installer?platform=windows&arch=amd64` is the stable,
+non-cacheable browser download link: it redirects only to the current immutable
+same-origin setup artifact. Supported targets are macOS arm64/amd64 and Windows
+amd64. Missing targets return 404. A missing installer must not be reported as a
+confirmed current version.
 Only a strictly newer semantic version produces **Update available…** in the
 menu. A failed check remains retryable and must not revoke local access.
 

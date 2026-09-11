@@ -1,6 +1,7 @@
 import { fitMenu, type MenuAnchor } from '../lib/context-menu';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
+  AnchorHTMLAttributes,
   ButtonHTMLAttributes,
   CSSProperties,
   HTMLAttributes,
@@ -91,6 +92,20 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
   return (
     <button
+      className={`${BUTTON_BASE} ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${className}`}
+      {...props}
+    />
+  );
+}
+
+export function LinkButton({
+  variant = 'primary',
+  size = 'md',
+  className = '',
+  ...props
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return (
+    <a
       className={`${BUTTON_BASE} ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${className}`}
       {...props}
     />

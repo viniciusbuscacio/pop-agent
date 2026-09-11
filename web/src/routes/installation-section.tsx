@@ -15,7 +15,7 @@ import {
   selectLocalConnection,
   selectedLocalConnection,
 } from '../services/local-connection-selection';
-import { BackButton, Button, Card, Select, SwitchField } from '../ui/controls';
+import { BackButton, Button, Card, LinkButton, Select, SwitchField } from '../ui/controls';
 
 /**
  * Device setup instructions are generated from the origin that served this page.
@@ -81,6 +81,14 @@ export function InstallationSection() {
             <h2 className="text-base font-semibold">{t('settings.installation.localAccessTitle')}</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.localAccessBody')}</p>
           </div>
+          {platform === 'windows' ? (
+            <LinkButton
+              href={`${origin}/local-access-installer?platform=windows&arch=amd64`}
+              data-testid="installation-local-access-windows-download"
+            >
+              {t('settings.installation.localAccessDownloadWindows')}
+            </LinkButton>
+          ) : null}
           <LocalAccessInstallInstructions origin={origin} platform={platform} />
         </Card>
       ) : null}

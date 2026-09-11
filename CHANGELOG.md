@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.89 — 2026-09-11
+
+- Add a prominent Download Windows installer action to Settings → Install Pop, backed by a stable no-cache redirect to the current immutable setup executable.
+
 ## 0.2.88 — 2026-09-11
 
 - Allow an explicit Windows-first release to omit macOS Pop Local Access artifacts without weakening the strict default release gate; macOS distribution resumes only through a new immutable version.

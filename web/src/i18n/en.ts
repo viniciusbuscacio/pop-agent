@@ -338,6 +338,7 @@ export const en = {
   'settings.installation.localAccessConnected': 'connected',
   'settings.installation.localAccessInstallTitle': 'Connect another computer',
   'settings.installation.localAccessWindows': 'Connect a Windows PC',
+  'settings.installation.localAccessDownloadWindows': 'Download Windows installer',
   'settings.installation.localAccessWindowsHint':
     'Copy this command into PowerShell. Enter your Pop Agent password when asked. The connection starts automatically when you sign in to Windows.',
   'settings.installation.localAccessUnix': 'Connect a Mac',

@@ -61,6 +61,17 @@ describe('native Pop launcher installers', () => {
     expect((await routes.request('http://localhost/local-access-update.json?platform=linux&arch=arm64')).status).toBe(404);
   });
 
+  it('redirects the stable installer link to the current immutable setup', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.30' } });
+    const response = await routes.request('http://localhost/local-access-installer?platform=windows&arch=amd64');
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('location')).toBe('/local-access/pop-local-access-0.2.30-windows-amd64-setup.exe');
+    expect((await routes.request('http://localhost/local-access-installer?platform=windows&arch=arm64')).status).toBe(404);
+    expect((await routes.request('http://localhost/local-access-installer?platform=linux&arch=amd64')).status).toBe(404);
+  });
+
   it('builds the Windows launcher URL from the server that received the request', async () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.23' } });
     const response = await routes.request('https://personal-pop.example/install.ps1');

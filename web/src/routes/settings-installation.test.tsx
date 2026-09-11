@@ -62,6 +62,9 @@ describe('Settings installation guide', () => {
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
     expect(screen.getByRole('heading', { name: 'Local computer access' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Download Windows installer' }).getAttribute('href')).toBe(
+      `${window.location.origin}/local-access-installer?platform=windows&arch=amd64`,
+    );
     expect(screen.getByTestId('installation-local-access-windows').textContent).toBe(
       `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${window.location.origin}/install-local-access.ps1' | iex"`,
     );
@@ -70,6 +73,7 @@ describe('Settings installation guide', () => {
     expect(screen.getByTestId('installation-local-access-unix').textContent).toBe(
       `tmp="$(mktemp)"\ncurl -fsSL ${window.location.origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`,
     );
+    expect(screen.queryByRole('link', { name: 'Download Windows installer' })).toBeNull();
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'linux');
     expect(screen.queryByTestId('installation-cli-windows')).toBeNull();

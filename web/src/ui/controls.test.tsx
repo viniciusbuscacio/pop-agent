@@ -7,6 +7,7 @@ import {
   Checkbox,
   FileInput,
   IconButton,
+  LinkButton,
   Menu,
   MenuItem,
   RadioGroup,
@@ -71,6 +72,7 @@ describe('UI design-system primitives', () => {
         <RangeField id="range" label="Range" value={5} onChange={vi.fn()} />
         <FileInput data-testid="file" hidden />
         <Button>Button</Button>
+        <LinkButton href="/download">Download</LinkButton>
         <IconButton aria-label="Icon">+</IconButton>
         <Menu><MenuItem testId="menu-item" label="Menu item" onClick={vi.fn()} /></Menu>
       </>,
@@ -79,6 +81,7 @@ describe('UI design-system primitives', () => {
     expect(screen.getByRole('radio')).toBeTruthy();
     expect(screen.getByRole('slider')).toBeTruthy();
     expect(screen.getByTestId('file').getAttribute('type')).toBe('file');
+    expect(screen.getByRole('link', { name: 'Download' }).getAttribute('href')).toBe('/download');
     expect(screen.getByRole('menu')).toBeTruthy();
   });
 
