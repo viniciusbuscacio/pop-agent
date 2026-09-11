@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.88 — 2026-09-11
+
 - Add Windows and macOS Pop Local Access installation commands to Install Pop while retaining Connect a computer in Devices.
 
 - Give macOS Pop Local Access and its setup wizard the Pop app icon, repairing existing installed bundles on startup.
