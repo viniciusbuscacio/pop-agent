@@ -61,7 +61,7 @@ describe('Settings installation guide', () => {
     expect(screen.getByTestId('installation-cli-windows').textContent).toContain(
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
-    expect(screen.getByRole('heading', { name: 'Local computer access' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Pop Agent Desktop' })).toBeTruthy();
     const download = screen.getByRole('link', { name: 'Download Pop Agent Setup' });
     expect(download.getAttribute('href')).toBe(
       `${window.location.origin}/local-access-installer?platform=windows&arch=amd64`,
