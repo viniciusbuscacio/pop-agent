@@ -401,7 +401,7 @@ func (a *Setup) Finish(startMenu, desktop, startAtLogin, open bool) string {
 			return "Could not save Start at Login. Please retry."
 		}
 		if open {
-			if err := launchTray(filepath.Join(a.installDir, "pop-agent-desktop.exe")); err != nil {
+			if err := launchDesktop(filepath.Join(a.installDir, "pop-agent-desktop.exe")); err != nil {
 				return "Pop Agent Desktop is installed, but could not open. Please retry."
 			}
 		}

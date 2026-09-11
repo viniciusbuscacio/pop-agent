@@ -178,6 +178,13 @@ func stopDesktop(ctx context.Context, target string) error {
 	}
 	return nil
 }
+// Desktop must not inherit the hidden startup state used for background processes.
+func launchDesktop(target string) error {
+	cmd := exec.Command(target)
+	cmd.Dir = filepath.Dir(target)
+	return cmd.Start()
+}
+
 func launchTray(target string) error {
 	cmd := exec.Command(target)
 	cmd.Dir = filepath.Dir(target)

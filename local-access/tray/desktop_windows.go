@@ -57,7 +57,6 @@ func openDesktop(server string) error {
 		return openExternal(server)
 	}
 	cmd := exec.Command(target)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	return cmd.Start()
 }
 
