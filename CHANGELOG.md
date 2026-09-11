@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.2.90 — 2026-09-11
+
+- Continue Windows-first distribution; macOS PLA artifacts remain outside this release.
 - Fix PLA installer downloads opening the PWA home screen: bypass service-worker navigation fallback for installer redirects and public download targets, and retain the current page through native download semantics.
 - Give the Windows PLA download a normal-sized, content-fit button using the theme's blue accent and matching foreground/hover colors.
 
