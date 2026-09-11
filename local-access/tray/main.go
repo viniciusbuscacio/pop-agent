@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const trayVersion = "0.2.92"
+const trayVersion = "0.2.93"
 
 type childEvent struct {
 	Kind      string `json:"kind"`
@@ -299,6 +299,12 @@ func popPath() (string, error) {
 		return "", err
 	}
 	path := filepath.Join(home, ".local", "bin", "pop")
+	if runtime.GOOS == "darwin" {
+		private := filepath.Join(home, "Library", "Application Support", "Pop Agent", "runtime", "pop")
+		if info, e := os.Stat(private); e == nil && info.Mode().IsRegular() {
+			path = private
+		}
+	}
 	if runtime.GOOS == "windows" {
 		path = filepath.Join(os.Getenv("LOCALAPPDATA"), "PopAgent", "bin", "pop.exe")
 		if self, err := os.Executable(); err == nil {

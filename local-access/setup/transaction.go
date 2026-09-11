@@ -11,6 +11,7 @@ type savedFile struct {
 	path   string
 	data   []byte
 	exists bool
+	mode   os.FileMode
 }
 
 func snapshotFiles(paths []string) ([]savedFile, error) {
@@ -28,7 +29,7 @@ func snapshotFiles(paths []string) ([]savedFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, savedFile{path: path, data: data, exists: true})
+		out = append(out, savedFile{path: path, data: data, exists: true, mode: info.Mode().Perm()})
 	}
 	return out, nil
 }
@@ -56,7 +57,7 @@ func restoreFiles(files []savedFile) error {
 	for _, file := range files {
 		var err error
 		if file.exists {
-			err = atomicFile(file.path, file.data, 0700)
+			err = atomicFile(file.path, file.data, file.mode)
 		} else {
 			err = os.Remove(file.path)
 			if os.IsNotExist(err) {

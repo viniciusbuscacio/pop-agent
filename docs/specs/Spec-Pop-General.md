@@ -170,7 +170,7 @@ between the server and an optional local runtime.
 - **Frontend:** React 19, React Router, Zustand, Vite, Tailwind CSS v4 over
   semantic CSS variables, and `vite-plugin-pwa`.
 - **Native support:** Go provides the stable `pop` launcher and local-access
-  tray. Windows Pop Agent Desktop hosts the server UI in WebView2 without a
+  tray. Pop Agent Desktop hosts the server UI in WebView2 on Windows or WKWebView on macOS without a
   native tool bridge. Pop Agent Setup keeps the Wails/go-installer wizard and
   offers Desktop and CLI as separate components, both selected by default.
 - **Tests:** Vitest, Testing Library/happy-dom, Go tests, contract probes and an
@@ -197,7 +197,7 @@ pop-agent/
 ├── web/                   # React PWA
 ├── cli/                   # terminal client and PLA runtime
 ├── launcher/              # native `pop` bootstrap/update launcher
-├── local-access/          # native tray hosts and installer-only Windows wizard
+├── local-access/          # native tray hosts and component setup wizard
 └── tools/                 # generators, checks, packaging and smoke
 ```
 

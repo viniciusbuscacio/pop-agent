@@ -13,7 +13,7 @@
     document.querySelectorAll('[data-step]').forEach(el => { el.hidden = el.dataset.step !== step; });
     $('back').hidden = !['license', 'components', 'connection', 'destination'].includes(step);
     $('next').hidden = step === 'installing';
-    text('next', { welcome:'Next', license:'I agree', components:'Next', connection:'Next', destination:'Install', done:'Finish', uninstall:'Uninstall' }[step] || 'Next');
+    text('next', { welcome:state?.platform === 'darwin' ? 'Continue' : 'Next', license:'I agree', components:state?.platform === 'darwin' ? 'Continue' : 'Next', connection:state?.platform === 'darwin' ? 'Continue' : 'Next', destination:'Install', done:'Finish', uninstall:'Uninstall' }[step] || 'Next');
     $('next').classList.toggle('danger', step === 'uninstall');
     $('cancel').hidden = step === 'done';
     setBusy(busy);
@@ -83,7 +83,14 @@
   async function start() {
     try {
       state = await api().GetState();
-      text('version', state.installed ? `Update to version ${state.version}${state.installedVersion ? ` (installed: ${state.installedVersion})` : ' from your existing installation'}.` : `Version ${state.version} · Installed for your Windows account.`);
+      if (state.platform === 'darwin') {
+        text('account-destination', 'Install for your macOS account in:');
+        $('start-menu').closest('label').hidden = true;
+        $('desktop').closest('label').hidden = true;
+        $('desktop').closest('label').removeAttribute('data-desktop-choice');
+        $('startup').closest('label').querySelector('span').textContent = 'Start at Login';
+      }
+      text('version', state.installed ? `Update to version ${state.version}${state.installedVersion ? ` (installed: ${state.installedVersion})` : ' from your existing installation'}.` : `Version ${state.version} · Installed for your ${state.platform === 'darwin' ? 'macOS' : 'Windows'} account.`);
       text('welcome-title', state.installed ? 'Update Pop Agent' : 'Welcome to Pop Agent');
       text('license', state.license);
       text('directory', state.directory);

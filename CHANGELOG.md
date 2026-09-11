@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.93 — 2026-09-11
+
+- Add the macOS Pop Agent Setup wizard with independent Desktop and CLI selections, runtime preparation, legacy PLA migration and file rollback.
+- Add a native WKWebView Desktop window with a separate background helper, restricted navigation and theme-synchronized title bar.
+- Package native Mac component installers as setup DMGs and preserve existing browser PWA installations.
+
 ## Unreleased
 
 - Synchronize the Windows Desktop native title bar with the resolved web theme, with a dark startup fallback.

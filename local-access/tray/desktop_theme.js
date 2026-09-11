@@ -9,7 +9,9 @@
       const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
       if (theme === previous) return;
       previous = theme;
-      window.chrome.webview.postMessage(`pop-desktop-theme:${theme}`);
+      const message = `pop-desktop-theme:${theme}`;
+      if (window.webkit?.messageHandlers?.popTheme) window.webkit.messageHandlers.popTheme.postMessage(message);
+      else window.chrome?.webview?.postMessage(message);
     };
     new MutationObserver(report).observe(document.documentElement, {
       attributes: true, attributeFilter: ['data-theme'],

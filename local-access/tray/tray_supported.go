@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"runtime"
 
 	"github.com/getlantern/systray"
 )
@@ -42,10 +41,7 @@ func installTray(a *app) error {
 func runTray() {
 	systray.Run(func() {
 		systray.SetTemplateIcon(trayIcon, trayIcon)
-		productName := "Pop Local Access"
-		if runtime.GOOS == "windows" {
-			productName = "Pop Agent Desktop"
-		}
+		productName := "Pop Agent Desktop"
 		systray.SetTooltip(fmt.Sprintf("%s %s", productName, trayVersion))
 		activeView.status = systray.AddMenuItem("Server disconnected", "Connection status — click to reconnect")
 		systray.AddSeparator()

@@ -629,7 +629,7 @@ The verified installer is saved in a unique Downloads subdirectory. The download
 has a visible busy state and failures offer retry. No downloaded code runs before
 integrity validation; opening an installer does not imply installation consent.
 
-macOS uses a DMG with a **Pop Local Access Setup.app** wizard (Continue, Install,
+macOS uses a DMG with a **Pop Agent Setup.app** wizard (Continue, Install,
 Finish). Reuse the historical Pop Desktop Setup's pinned go-installer setup DMG
 layout; do not ship the old desktop application or its credential wizard.
 Windows uses a separate Wails executable backed by the pinned
@@ -667,11 +667,10 @@ shared profiles, separately installed launchers, WebView data, runtime caches an
 server data. The uninstall wizard requires confirmation. The helper validates its
 manifest before any removal.
 
-macOS remains update-only: first-install commands remain in Settings → Install
-Pop and Settings → Devices → Connect a computer. Its updater replaces only the
-native executable, preserves owner state, and kickstarts the existing LaunchAgent
-rather than racing bootout/bootstrap. Restart failure attempts restoration and
-reports failure. Its setup invocation precedes the tray single-instance guard.
+macOS supports the same component wizard through a native Wails/WebKit setup.
+Its platform-specific transaction and migration contract is defined in the
+Installation specification. The legacy tray setup entry point is retained only
+for compatibility; published DMGs use the component wizard.
 
 All published native setup artifacts are immutable, included in the server's
 local-access manifest, verified by the publisher, and cached for
@@ -697,7 +696,7 @@ version alone proves that the native tray was replaced.
 ## Compact native menu
 
 The native tray has four top-level actions: **Open Pop Agent**, **Computer access**,
-**Settings**, and **Quit Pop Agent Desktop** on Windows (**Quit Pop Local Access** on macOS). Use native submenus with platform arrows.
+**Settings**, and **Quit Pop Agent Desktop**. Use native submenus with platform arrows.
 Computer access contains **Allow access to this computer** and, where native sign-in
 is supported, **Sign in again…**. This permission still does not select a computer
 in another PWA tab.
@@ -720,3 +719,18 @@ CFBundleIconFile on startup, so fresh installations and existing installations
 receive the icon without changing login or local-access permission. Icon repair
 failures are logged and do not prevent the local connection from starting. The
 monochrome menu-bar template remains separate from the Finder/Spotlight app icon.
+
+
+## macOS Desktop host
+
+Pop Agent Desktop uses a WKWebView window containing the configured server UI.
+It exposes no tool or credential bridge. The only script message accepts the two
+resolved theme values from the main frame at the configured origin and changes
+the Cocoa window appearance. Navigation stays within that origin; external HTTPS
+links open in the browser, and credentials in URLs or unsafe schemes are rejected.
+The window has ordinary independent web authentication and persistent WebKit data.
+
+The background local-access helper has its own nested app bundle and bundle ID,
+so LaunchServices does not mistake it for the Desktop window. Closing the window
+keeps the helper running; reopening the Desktop restores its window. The tray's
+Quit stops local access and the Desktop window. The browser PWA is independent.

@@ -32,7 +32,7 @@ both selected by default. Desktop hosts the server interface in WebView2 and
 includes optional computer access. CLI exposes the terminal command. The
 browser-owned PWA remains independently installable. The setup uses the existing
 Go/Wails wizard; its component and preservation contracts are defined below and
-in the Local Access specification. macOS retains its existing PLA/PWA arrangement.
+in the Local Access specification. macOS uses the equivalent component wizard and a native WKWebView window.
 
 ## Core invariants
 
@@ -921,3 +921,36 @@ Settings → Install Pop identifies the Windows package as **Pop Agent Desktop**
 explains both selectable components and labels its download **Download Pop Agent Setup**.
 The terminal section is named **Pop Agent CLI**. Existing same-origin artifact
 routes remain compatible with earlier clients.
+
+
+## macOS component installer
+
+Owner decision (2026-09-11): Pop Agent Setup.app in the go-installer setup-layout
+DMG offers Desktop and CLI independently, both selected, with Continue / Install /
+Finish. The shared wizard rejects an empty selection; updates preserve installed
+components even when unchecked. Installation uses the confirmed server origin and
+an existing valid login or an explicit password. It does not log in to the web
+window or close an existing PWA.
+
+Install Desktop in ~/Applications/Pop Agent Desktop.app. Its nested helper keeps
+com.popagent.local-access as its bundle/LaunchAgent identity. Keep the private
+launcher under ~/Library/Application Support/Pop Agent/runtime/pop and the optional
+terminal launcher under that root's cli/pop. Only the CLI component adds an
+idempotent marked PATH block to .zprofile and .bash_profile. Preserve separately
+installed CLI copies, saved profiles, machine identity and server permission.
+The wizard carries verified matching native payloads and prepares runtime caches
+before replacing programs. Existing program bytes, modes and shell configuration
+are snapshotted and restored on failure; retained recovery backups are reported.
+No automatic permission grant occurs. Existing startup choice is offered on Finish.
+The obsolete top-level PLA bundle is retained as previous-local-access outside the
+app search namespace after migration. No unrelated application is removed.
+
+The setup uninstaller removes only owned Desktop, private/optional launcher paths,
+component record, startup entry and its shell PATH block. Profiles, WebKit/browser
+data, shared runtime caches, independent CLI installations and server data remain.
+Native helper and main app identities must remain separate for correct opening.
+The setup and app are ad-hoc signed locally. This is not Developer ID notarization.
+
+Native acceptance distinguishes fixture transaction tests (component combinations,
+preparation failure and rollback) from a live update and the actual DMG wizard.
+Intel cross-build verification does not imply execution on an Intel Mac.

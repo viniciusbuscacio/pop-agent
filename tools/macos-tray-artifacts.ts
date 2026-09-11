@@ -1,3 +1,4 @@
+import { buildMacosSetup } from './macos-setup.ts';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -74,26 +75,7 @@ function packageDmg(root: string, output: string, binary: string, version: strin
   const temporary = mkdtempSync(join(tmpdir(), 'pop-pla-dmg-'));
   const venv = join(output, '.dmg-tools');
   try {
-    const app = join(temporary, 'Pop Local Access Setup.app');
-    const contents = join(app, 'Contents');
-    mkdirSync(join(contents, 'MacOS'), { recursive: true });
-    copyFileSync(binary, join(contents, 'MacOS', 'Pop Local Access Setup'));
-    mkdirSync(join(contents, 'Resources'), { recursive: true });
-    copyFileSync(binary, join(contents, 'Resources', 'Pop Local Access'));
-    copyFileSync(join(root, 'local-access/tray/app.icns'), join(contents, 'Resources', 'app.icns'));
-    writeFileSync(join(contents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.popagent.local-access.setup</string>
-<key>CFBundleName</key><string>Pop Local Access Setup</string>
-<key>CFBundleExecutable</key><string>Pop Local Access Setup</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleIconFile</key><string>app.icns</string>
-<key>CFBundleShortVersionString</key><string>${version}</string>
-<key>CFBundleVersion</key><string>${version}</string>
-</dict></plist>`);
-    execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
-    execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
+    const app = buildMacosSetup(root, temporary, binary, version, arch);
     if (!existsSync(join(venv, 'bin/python'))) {
       execFileSync('python3', ['-m', 'venv', venv], { stdio: 'inherit' });
       execFileSync(join(venv, 'bin/pip'), ['install', 'ds-store==1.3.1', 'mac-alias==2.2.2'], { stdio: 'inherit' });
@@ -101,7 +83,7 @@ function packageDmg(root: string, output: string, binary: string, version: strin
     const file = `pop-local-access-${version}-darwin-${arch}-setup.dmg`;
     const destination = join(output, file);
     if (existsSync(destination)) throw new Error('Installer already packed; use a fresh output directory');
-    execFileSync('go', ['run', 'github.com/viniciusbuscacio/go-installer/cmd/mkdmg@v0.4.0', '-layout', 'setup', '-python', join(venv, 'bin/python'), '-app', app, '-volname', 'Pop Local Access Setup', '-out', destination], { cwd: root, stdio: 'inherit' });
+    execFileSync('go', ['run', 'github.com/viniciusbuscacio/go-installer/cmd/mkdmg@v0.4.0', '-layout', 'setup', '-python', join(venv, 'bin/python'), '-app', app, '-volname', 'Pop Agent Setup', '-out', destination], { cwd: root, stdio: 'inherit' });
     execFileSync('hdiutil', ['verify', destination], { stdio: 'inherit' });
     const bytes = readFileSync(destination);
     return { file, size: bytes.length, sha256: hash(bytes) };

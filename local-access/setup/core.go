@@ -28,6 +28,7 @@ type payloadEntry struct {
 	SHA256 string `json:"sha256"`
 }
 type payloadManifest struct {
+	Platform string       `json:"platform,omitempty"`
 	Version  string       `json:"version"`
 	Tray     payloadEntry `json:"tray"`
 	Launcher payloadEntry `json:"launcher"`
@@ -42,14 +43,21 @@ func verifiedPayload(source fs.FS) (map[string][]byte, error) {
 	if json.Unmarshal(data, &manifest) != nil || manifest.Version != version {
 		return nil, errors.New("The installer payload version is invalid.")
 	}
+	if manifest.Platform != "" && manifest.Platform != "darwin" {
+		return nil, errors.New("Invalid payload platform")
+	}
 	result := map[string][]byte{}
 	for name, entry := range map[string]payloadEntry{"tray": manifest.Tray, "launcher": manifest.Launcher} {
-		if entry.File != name+".exe" || entry.Size < 2 || entry.Size > 128<<20 || len(entry.SHA256) != 64 {
+		suffix := ".exe"
+		if manifest.Platform == "darwin" {
+			suffix = ""
+		}
+		if entry.File != name+suffix || entry.Size < 2 || entry.Size > 128<<20 || len(entry.SHA256) != 64 {
 			return nil, errors.New("Invalid installer payload metadata.")
 		}
 		content, err := fs.ReadFile(source, entry.File)
 		digest := sha256.Sum256(content)
-		if err != nil || len(content) != entry.Size || !bytes.HasPrefix(content, []byte("MZ")) || hex.EncodeToString(digest[:]) != entry.SHA256 {
+		if err != nil || len(content) != entry.Size || !payloadExecutable(content, manifest.Platform) || hex.EncodeToString(digest[:]) != entry.SHA256 {
 			return nil, fmt.Errorf("The %s payload failed integrity verification.", name)
 		}
 		result[name] = content
@@ -240,4 +248,11 @@ func atomicFile(path string, data []byte, mode fs.FileMode) error {
 		return closeErr
 	}
 	return os.Rename(f.Name(), path)
+}
+
+func payloadExecutable(content []byte, platform string) bool {
+	if platform == "darwin" {
+		return len(content) >= 8 && bytes.Equal(content[:4], []byte{0xcf, 0xfa, 0xed, 0xfe})
+	}
+	return bytes.HasPrefix(content, []byte("MZ"))
 }

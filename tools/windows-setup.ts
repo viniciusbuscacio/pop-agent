@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface Artifact { file: string; size: number; sha256: string }
@@ -19,6 +19,7 @@ export function packWindowsSetup(root: string, version: string, pack: string, tr
   const source = join(root, 'local-access/setup');
   const payload = join(source, 'payload');
   mkdirSync(payload, { recursive: true });
+  for (const name of ["tray", "launcher", "app.icns"]) rmSync(join(payload, name), { force: true });
   const trayBytes = readFileSync(join(pack, 'local-access', tray.file));
   const launcherBytes = readFileSync(join(pack, 'launcher', launcher.file));
   const manifest = { version, tray: setupPayload(trayBytes, tray, 'tray'), launcher: setupPayload(launcherBytes, launcher, 'launcher') };

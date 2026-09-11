@@ -1,4 +1,4 @@
-# Windows Pop Agent Setup
+# Pop Agent Setup
 
 Wails v2 setup backed by `go-installer/windows` v0.4.0. The wizard offers **Pop Agent Desktop** and **Pop Agent CLI**, both checked by default. Desktop includes a view-only WebView2 window and optional computer-access tray; CLI exposes `pop` in new terminals.
 
@@ -33,3 +33,13 @@ Compilation and fixture tests do not prove a real clean-machine installation. Be
 5. Check both themes, Windows scaling, Explorer icon, WebView2 availability, signing and SmartScreen prompts. The package is not Authenticode-signed by this build.
 
 Do not publish the development rebuild under an already released version URL. Do not use the owner's live installation as the clean-user fixture.
+
+
+## macOS
+
+The shared Wails wizard is built by tools/macos-setup.ts and included in the
+native stage DMG. It supports Desktop/CLI installation and updates, keeping
+profiles and independent PWA installations. Desktop uses WKWebView and a nested
+background helper; the CLI component alone adds its owned path to zsh/bash login
+profiles. The macOS platform files implement the transaction, migration and
+uninstall behavior. Read Spec-Pop-Installation.md for destinations and acceptance.

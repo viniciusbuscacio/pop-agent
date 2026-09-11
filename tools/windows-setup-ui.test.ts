@@ -74,3 +74,15 @@ it('rejects an empty component selection without leaving the page', async () => 
  click('next'); expect(visible('components')).toBe(true);
  expect(element('error').textContent).toContain('Select Pop Agent Desktop'); expect(api.Install).not.toHaveBeenCalled();
 });
+
+it('uses macOS labels and hides Windows-only shortcut options', async () => {
+ const current = await api.GetState();
+ api.GetState.mockResolvedValue({ ...current, platform: 'darwin' });
+ await start(); expect(element('next').textContent).toBe('Continue');
+ expect(element('account-destination').textContent).toContain('macOS');
+ expect(element('start-menu').parentElement!.hidden).toBe(true);
+ click('next'); click('next'); click('next'); click('next'); click('next');
+ await vi.waitFor(() => expect(visible('done')).toBe(true));
+ expect(element('desktop').parentElement!.hidden).toBe(true);
+ expect(element('startup').parentElement!.textContent).toContain('Start at Login');
+});
