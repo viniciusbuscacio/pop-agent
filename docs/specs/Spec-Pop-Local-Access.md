@@ -572,11 +572,11 @@ access-policy check applies to prerequisite operations and file operations.
 
 Tray Quit terminates the launcher and its descendants before cancelling the app context. Context cancellation must also terminate the whole process tree, never only the launcher. Closing the tray must not leave a background Node transport with local file access.
 
-The Windows installer creates or repairs a per-user **Pop Local Access** Start menu shortcut on every installation, targeting the installed tray executable with its icon and working directory. This does not require administrator privileges.
+The Windows setup offers a per-user **Pop Local Access** Start menu shortcut (selected by default), targeting the installed tray executable with its icon and working directory. Creating or repairing this shortcut does not require administrator privileges.
 
 The Windows tray release uses the Windows GUI subsystem, so launching it from Start or Explorer never opens a console window. The installer also starts it hidden. The CLI launcher remains a console application.
 
-The Windows PLA installer provisions the verified managed Node runtime before login, without requiring Node on the shell PATH. Upgrading a running tray terminates its whole process tree before executable replacement.
+The Windows PLA setup wizard performs sign-in through its in-process binding, then provisions the verified managed Node and CLI runtimes without requiring Node on the shell PATH. No password or session token is passed to runtime subprocesses. Upgrading a running tray terminates its whole process tree before executable replacement.
 
 ## Removing a computer
 
@@ -620,19 +620,45 @@ integrity validation; opening an installer does not imply installation consent.
 macOS uses a DMG with a **Pop Local Access Setup.app** wizard (Continue, Install,
 Finish). Reuse the historical Pop Desktop Setup's pinned go-installer setup DMG
 layout; do not ship the old desktop application or its credential wizard.
-Windows uses a dedicated `-setup.exe` entry point with native confirmation steps.
-These native installers update an existing per-user PLA installation. Fresh
-installation commands are available from Settings → Install Pop for Windows and
-macOS and continue to be available through Settings → Devices → Connect a
-computer. Cancel performs no installation. The installer reminds the user to
-finish local operations before confirming. It replaces only the native
-executable and restarts it, preserving profiles, stable machine identity, server
-permission and Start at Login.
-Windows stops the exact installed process tree before replacement. macOS updates
-the existing LaunchAgent via kickstart instead of racing bootout/bootstrap.
-Previous executable bytes remain available; restart failure attempts restoration
-and reports failure rather than success. Installer invocation is detected before
-the tray's single-instance guard so an update can run while the old tray is open.
+Windows uses a separate Wails executable backed by the pinned
+`go-installer/windows` library, not a renamed tray or MessageBox sequence. The
+family-style wizard supports both a clean per-user installation and an update:
+Welcome → License → Server/sign-in → Installation → Finish. It provides light
+and dark themes, a fixed dedicated destination, progress, error/retry feedback,
+and final shortcut, Start at Login and Open choices. It does not require a
+terminal or an installed PWA. Existing saved sign-in may be reused only for the
+same confirmed origin; a changed origin requires a new sign-in. HTTPS is required
+except on loopback, login redirects are rejected, and secrets never appear in
+returned UI state, subprocess arguments, subprocess environment or logs.
+
+The Windows payload embeds version-matched tray/launcher bytes and validates
+size and SHA-256 before use. Source-only builds refuse installation; `--preview`
+is explicitly non-mutating and does not read the owner's profiles. Dependency
+preparation precedes replacement. Existing profiles, machine identity and server
+permission are preserved, and installation never enables local access. The
+existing startup choice is retained unless changed on Finish. A newer registered
+PLA or compatible shared launcher must not be silently downgraded.
+
+Cancel before Install performs no installation. Closing/canceling is disabled
+while the transaction is active. The wizard reminds the owner to finish local
+operations before continuing. It stops only the exact installed tray's process
+tree. Previous program files and uninstall registration are restored on commit
+failure; recovery failure is reported explicitly and backup bytes are retained.
+Verified dependency caches may remain after a preparation failure. A failure to
+start the installed tray on Finish is reported and remains retryable, never
+reported as a successful launch.
+
+The registered Windows uninstaller uses go-installer's helper handoff, restricted
+to the exact PLA-owned directory, shortcuts and registration. It removes the
+startup entry, but not shared CLI profiles, the launcher, runtime caches or server
+data. The uninstall wizard requires confirmation. The helper validates its
+manifest before any removal.
+
+macOS remains update-only: first-install commands remain in Settings → Install
+Pop and Settings → Devices → Connect a computer. Its updater replaces only the
+native executable, preserves owner state, and kickstarts the existing LaunchAgent
+rather than racing bootout/bootstrap. Restart failure attempts restoration and
+reports failure. Its setup invocation precedes the tray single-instance guard.
 
 All published native setup artifacts are immutable, included in the server's
 local-access manifest, verified by the publisher, and cached for

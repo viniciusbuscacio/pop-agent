@@ -170,7 +170,9 @@ between the server and an optional local runtime.
 - **Frontend:** React 19, React Router, Zustand, Vite, Tailwind CSS v4 over
   semantic CSS variables, and `vite-plugin-pwa`.
 - **Native support:** small Go programs provide the stable `pop` launcher and
-  optional local-access tray; they do not contain the agent or web UI.
+  optional local-access tray; they do not contain the agent or web UI. A separate
+  Windows Wails setup uses go-installer for the local companion's installation
+  wizard only; it is not a desktop wrapper for Pop Agent.
 - **Tests:** Vitest, Testing Library/happy-dom, Go tests, contract probes and an
   end-to-end smoke server with a fake provider.
 - **Validation/publication:** owner-managed Ubuntu 24.04 AMD64 Docker builder on
@@ -195,7 +197,7 @@ pop-agent/
 ├── web/                   # React PWA
 ├── cli/                   # terminal client and PLA runtime
 ├── launcher/              # native `pop` bootstrap/update launcher
-├── local-access/          # minimal native tray hosts
+├── local-access/          # native tray hosts and installer-only Windows wizard
 └── tools/                 # generators, checks, packaging and smoke
 ```
 

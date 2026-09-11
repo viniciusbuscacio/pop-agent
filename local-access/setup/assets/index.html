@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pop Local Access Setup</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="window">
+ <header class="titlebar"><img src="pop.svg" alt="" width="20" height="20"><span>Pop Local Access Setup</span><span class="spacer"></span><button id="minimize" aria-label="Minimize" class="caption">&#8722;</button><button id="close" aria-label="Close installer" class="caption close">&#215;</button></header>
+ <main class="wizard-body">
+  <div id="preview" class="preview" hidden>Preview only — installation is disabled.</div>
+  <section data-step="welcome">
+   <img class="hero-logo" src="pop.svg" alt="" width="56" height="56">
+   <h1 id="welcome-title">Welcome to Pop Local Access</h1>
+   <p>Let your personal Pop Agent work with files and run commands on this computer.</p>
+   <p class="muted">This optional companion works with the website or installed PWA. No terminal commands or administrator account are needed.</p>
+   <p id="version" class="muted"></p>
+   <button id="remove" class="link danger" hidden>Uninstall Local Access…</button>
+  </section>
+  <section data-step="license" hidden><h1>License</h1><pre id="license" class="license"></pre><button id="project" class="link">github.com/viniciusbuscacio/pop-agent</button></section>
+  <section data-step="connection" hidden>
+   <h1>Connect to your Pop Agent</h1>
+   <p>Confirm your server address. Keep Tailscale connected if your server uses it.</p>
+   <label for="server">Server address</label><input id="server" type="url" placeholder="https://your-server.ts.net" autocomplete="url" spellcheck="false" required>
+   <label for="password">Pop Agent password</label><input id="password" type="password" autocomplete="current-password">
+   <p id="login-hint" class="hint">Use the password you created on your Pop Agent server. It is sent only to the address shown above over a secure connection.</p>
+  </section>
+  <section data-step="destination" hidden>
+   <h1>Ready to install</h1><p>Install for your Windows account in:</p><code id="directory" class="path"></code>
+   <p class="muted">Setup includes Pop Local Access and the Pop launcher. It prepares the verified Node and CLI runtimes from your server when needed.</p>
+   <p class="muted">Existing sign-in, computer identity and access permission are preserved. Finish local agent operations before continuing.</p>
+   <p><strong>Installing does not grant access to your computer.</strong></p>
+  </section>
+  <section data-step="installing" hidden><h1>Installing…</h1><p id="stage" role="status" aria-live="polite">Preparing…</p><div class="progress" role="progressbar" aria-label="Installation in progress"><div></div></div><p class="muted">Please keep this window open. Preparing the runtime can take a few minutes.</p></section>
+  <section data-step="done" hidden>
+   <h1>All set</h1><p>Pop Local Access is installed.</p>
+   <label class="switch-row"><span>Start Menu shortcut</span><input id="start-menu" type="checkbox" role="switch" checked></label>
+   <label class="switch-row"><span>Desktop shortcut</span><input id="desktop" type="checkbox" role="switch"></label>
+   <label class="switch-row"><span>Start when I sign in to Windows</span><input id="startup" type="checkbox" role="switch" checked></label>
+   <label class="switch-row"><span>Open Pop Local Access now</span><input id="launch" type="checkbox" role="switch" checked></label>
+   <p class="hint">Your access permission has not changed. For a new computer, enable access in Pop Agent → Settings → Devices or in the tray menu when you are ready.</p>
+  </section>
+  <section data-step="uninstall" hidden><h1>Uninstall Pop Local Access?</h1><p>This removes the local companion, its shortcuts and startup entry.</p><p class="muted">Your Pop CLI installation, saved profiles and data on the server will not be deleted.</p></section>
+  <p id="error" class="error" role="alert" hidden></p>
+ </main>
+ <footer class="wizard-footer"><button id="theme" class="icon-btn" aria-label="Switch to light theme" title="Switch theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"></path></svg></button><span class="spacer"></span><button id="cancel" class="btn ghost">Cancel</button><button id="back" class="btn ghost" hidden>Back</button><button id="next" class="btn">Next</button></footer>
+</div><script src="wizard.js"></script>
+</body></html>

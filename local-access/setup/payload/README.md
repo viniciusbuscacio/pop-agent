@@ -1,0 +1,1 @@
+The release packer stages the verified `tray.exe`, `launcher.exe` and `manifest.json` here before compiling the Windows setup. Generated payload files are ignored by Git. A source-only build may show `--preview`, but refuses installation without a complete version-matching payload.

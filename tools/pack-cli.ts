@@ -33,6 +33,7 @@
  */
 
 import { importMacosTray } from './macos-tray-artifacts.ts';
+import { packWindowsSetup } from './windows-setup.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -185,10 +186,9 @@ async function main(): Promise<void> {
     };
   }
   const windowsTray = localAccessArtifacts['windows-amd64'];
-  if (windowsTray) {
-    const file = `pop-local-access-${version}-windows-amd64-setup.exe`;
-    writeFileSync(join(localAccessOut, file), readFileSync(join(localAccessOut, windowsTray.file)));
-    localAccessArtifacts['windows-amd64-setup'] = { ...windowsTray, file };
+  const windowsLauncher = launcherArtifacts['windows-amd64'];
+  if (windowsTray && windowsLauncher) {
+    localAccessArtifacts['windows-amd64-setup'] = packWindowsSetup(root, version, out, windowsTray, windowsLauncher);
   }
   writeFileSync(
     join(localAccessOut, 'manifest.json'),

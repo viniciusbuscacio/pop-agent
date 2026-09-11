@@ -9,3 +9,6 @@ coverage/
 *.tsbuildinfo
 # Packed clients are build outputs.
 cli/pack/
+# Generated, verified Windows setup payloads.
+local-access/setup/payload/*.exe
+local-access/setup/payload/manifest.json

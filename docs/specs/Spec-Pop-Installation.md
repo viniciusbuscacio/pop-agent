@@ -29,7 +29,9 @@ belongs to Pi Agent Integration.
 
 The product has no native Pop Desktop wrapper. “Install Pop Agent” means install
 the browser-owned PWA. Pop Local Access is a separate, optional tray component;
-installing either one never implies installing the other.
+installing either one never implies installing the other. The Windows PLA setup
+is an installer-only Wails application, not a revived Pop Desktop client. Its
+flow and preservation contract are defined in the Local Access specification.
 
 ## Core invariants
 
@@ -77,7 +79,7 @@ and bind downloaded bytes to the manifest or script the client already received.
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
 | Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
-| Pop Local Access | same-origin PowerShell/bash plus visible tray | Windows x64 and released macOS targets; permission starts disabled |
+| Pop Local Access | Windows go-installer/Wails setup wizard; existing PowerShell/bash bootstrap remains available | Windows x64 fresh installation/update and released macOS targets; permission starts disabled |
 | pi runtime candidate | authenticated Settings action and server-side isolated staging | exact npm versions allowed by `piUpdatePolicy` |
 | Pop Agent server update | prepared Git checkout plus external supervisor | clean committed checkout with a fresh gate receipt |
 

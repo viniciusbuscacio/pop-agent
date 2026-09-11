@@ -16,6 +16,14 @@ The same design system serves installed PWA windows, ordinary mobile browsers
 and wide desktop layouts. Responsive navigation may move; the meaning and
 appearance of controls must not fork by screen.
 
+## Installer-only Windows surface
+
+The PLA Wails setup follows the go-apps/go-installer family wizard, with shared
+light/dark semantic colors, restrained native-style controls and a frameless
+caption. Its static assets live in `local-access/setup/assets/`; this standalone
+installer does not import the React PWA primitives or serve the product UI.
+Within the PWA, the design-system authority below remains unchanged.
+
 ## Design-system authority
 
 `tokens.css` owns themes and semantic values. `controls.tsx` is the only

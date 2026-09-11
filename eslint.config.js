@@ -32,6 +32,11 @@ export default tseslint.config(
     },
   },
   {
+    // The installer-only Wails frontend uses its in-process Go binding, not network APIs.
+    files: ['local-access/setup/assets/*.js'],
+    languageOptions: { globals: { window: 'readonly', document: 'readonly', matchMedia: 'readonly', setInterval: 'readonly', clearInterval: 'readonly' } },
+  },
+  {
     // Plain-JS build scripts run under Node. TypeScript files get this from
     // the compiler, but no-undef still applies to .mjs.
     files: ['**/*.mjs'],
