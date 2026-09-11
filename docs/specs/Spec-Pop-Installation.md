@@ -800,22 +800,34 @@ a VM snapshot only after collecting the failed attempt's diagnostics.
 
 ## Native macOS release stage
 
-Every owner-managed desktop release includes Pop Local Access for macOS arm64
-and amd64, alongside Windows. Run `tools/macos-tray-artifacts.ts build` on a Mac
-with Xcode and Go from the exact clean release commit. It runs native Go tests,
-builds both architectures and their setup DMGs, verifies signatures and disk images, and records a versioned
-manifest with the commit, sizes and SHA-256 hashes. Transfer these artifacts to
+A complete owner-managed desktop release includes Pop Local Access for macOS
+arm64 and amd64 alongside Windows. Run `tools/macos-tray-artifacts.ts build` on a
+Mac with Xcode and Go from the exact clean release commit. It runs native Go
+tests, builds both architectures and their setup DMGs, verifies signatures and
+disk images, and records a versioned manifest with the commit, sizes and SHA-256
+hashes. Transfer these artifacts to
 `release-builder/cache/macos-tray/<commit>/` on the Linux builder. The container
 validates both Mach-O architectures and integrity before its full gate, then
 imports the verified binaries into the packed client manifest. The publisher
 ships them with the other immutable release assets. A missing Mac stage is an
-explicit build failure, never a silently unsupported macOS installer.
+explicit default-build failure, never a silently unsupported macOS installer.
+
+When the owner explicitly chooses Windows-first validation,
+`./deploy/local-release.sh build-windows` may produce a release containing only
+the Windows Pop Local Access executable and setup installer. The build prints
+that macOS PLA is intentionally omitted, and the packed manifest records the
+scope through the absence of Darwin PLA targets. macOS update discovery returns
+404 for that release; neither the UI nor release notes may claim macOS PLA
+availability. Published assets are immutable, so macOS artifacts cannot be
+added to that version later: restoring macOS distribution requires a new
+version built from its own exact clean commit. Ordinary `build` remains strict.
 
 ## Owner-managed local release builder
 
-Run `./deploy/local-release.sh build` on ubuntu-home. A pinned Ubuntu 24.04 Docker
-image builds native AMD64 artifacts independently of the Ubuntu 26.04 host and
-principal service. Docker may use existing passwordless sudo. The owner-only
+Run `./deploy/local-release.sh build` on ubuntu-home for a complete release, or
+the explicit `build-windows` mode described above for Windows-first validation.
+A pinned Ubuntu 24.04 Docker image builds native AMD64 artifacts independently
+of the Ubuntu 26.04 host and principal service. Docker may use existing passwordless sudo. The owner-only
 state directory defaults to `~/.local/share/pop-agent/release-builder`; an
 exclusive lock prevents overlapping build/publication. No production data or
 Docker socket is mounted into the builder. CPU and memory are bounded.

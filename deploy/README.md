@@ -291,18 +291,25 @@ the failed attempt's later state and diagnostics.
 
 ## Maintainer builds on ubuntu-home
 
-Before the Linux build, prepare the exact clean release commit on a Mac with
-Xcode command-line tools and Go. Run
+Before a complete Linux build, prepare the exact clean release commit on a Mac
+with Xcode command-line tools and Go. Run
 `node tools/macos-tray-artifacts.ts build /absolute/path/to/macos-tray-output`.
-Copy manifest.json, the native executables and setup DMGs (not the temporary tooling directory) into the Ubuntu builder's
+Copy manifest.json, the native executables and setup DMGs (not the temporary
+tooling directory) into the Ubuntu builder's
 `~/.local/share/pop-agent/release-builder/cache/macos-tray/<full-commit>/`.
 The Mac stage tests the native tray, builds Apple Silicon and Intel executables,
 and verifies their ad-hoc signatures. Linux validates commit, version, Mach-O
 architecture, size and SHA-256 before running its gate. Missing or mismatched
-Mac artifacts stop publication rather than producing a broken Mac installer.
+Mac artifacts stop the default build rather than producing a broken Mac
+installer.
 
-Run `./deploy/local-release.sh build` for a committed publication batch, then
-`./deploy/local-release.sh publish` when that batch should be sent to GitHub.
+Run `./deploy/local-release.sh build` for a complete committed publication batch.
+When the owner explicitly needs Windows-first validation, run
+`./deploy/local-release.sh build-windows`; this deliberately omits macOS Pop
+Local Access from that immutable version, so macOS update discovery returns 404
+until a later version is built with the Mac stage. Then run
+`./deploy/local-release.sh publish` when the verified batch should be sent to
+GitHub.
 The first build prepares an Ubuntu 24.04 Docker image; later builds reuse it,
 locked dependencies and verified audio artifacts. Authentication is configured
 once with `./deploy/local-release.sh auth` (GitHub token on stdin). Credentials

@@ -631,13 +631,18 @@ Previous executable bytes remain available; restart failure attempts restoration
 and reports failure rather than success. Installer invocation is detected before
 the tray's single-instance guard so an update can run while the old tray is open.
 
-All native setup artifacts are immutable, included in the server's local-access
-manifest, verified by the publisher, and cached for private-repository servers.
-The Mac stage builds both architectures and DMGs and verifies codesign/hdiutil;
-the Linux stage builds Windows and requires the exact-commit Mac manifest before
-the gate. Ad-hoc macOS signatures are not notarization. Public distribution must
-validate publisher signing and platform prompts separately. Native installer
-acceptance testing distinguishes compilation from actually running on each OS.
+All published native setup artifacts are immutable, included in the server's
+local-access manifest, verified by the publisher, and cached for
+private-repository servers. By default, the Mac stage builds both architectures
+and DMGs and verifies codesign/hdiutil; the Linux stage builds Windows and
+requires the exact-commit Mac manifest before the gate. An explicit owner-chosen
+Windows-first release may omit every Darwin PLA entry while retaining the
+Windows executable and setup installer. Its build output must identify that
+scope, macOS update discovery returns 404, and immutable macOS artifacts can
+only return in a new version rather than being appended later. Ad-hoc macOS
+signatures are not notarization. Public distribution must validate publisher
+signing and platform prompts separately. Native installer acceptance testing
+distinguishes compilation from actually running on each OS.
 
 The routed built-in **pop-local-access** skill teaches these distinctions and
 points to maintained implementation/specs. It is not pinned into every prompt.

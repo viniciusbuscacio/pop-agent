@@ -12,9 +12,14 @@ trap 'rm -rf -- "$TMPDIR"' EXIT
 ./deploy/bootstrap-server.sh --prepare-only --build-from-source
 export PATH="$HOME/.local/share/pop-agent/server-toolchain/current/node/bin:$HOME/.local/share/pop-agent/server-toolchain/current/go/bin:$PATH"
 export POP_AGENT_BUILD_CACHE=/cache/audio
-export POP_AGENT_MACOS_TRAY_DIR="/cache/macos-tray/$commit"
-# Fail before the full gate if the native Mac stage has not been supplied.
-node tools/macos-tray-artifacts.ts check "$POP_AGENT_MACOS_TRAY_DIR"
+if [[ ${POP_AGENT_WINDOWS_FIRST_RELEASE:-0} = 1 ]]; then
+  unset POP_AGENT_MACOS_TRAY_DIR
+  echo 'Windows-first release: macOS Pop Local Access artifacts are intentionally omitted. A later macOS release requires a new version.'
+else
+  export POP_AGENT_MACOS_TRAY_DIR="/cache/macos-tray/$commit"
+  # Default releases fail before the full gate if the exact native Mac stage has not been supplied.
+  node tools/macos-tray-artifacts.ts check "$POP_AGENT_MACOS_TRAY_DIR"
+fi
 # This cache belongs to one immutable Ubuntu builder image and locked dependency tree.
 dependency_key=$(node tools/local-release-cache.ts)
 if [[ ! -d node_modules || ! -f /cache/dependency-key || $(cat /cache/dependency-key) != "$dependency_key" ]]; then

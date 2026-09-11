@@ -4,6 +4,8 @@
 
 ## 0.2.88 — 2026-09-11
 
+- Allow an explicit Windows-first release to omit macOS Pop Local Access artifacts without weakening the strict default release gate; macOS distribution resumes only through a new immutable version.
+
 - Add Windows and macOS Pop Local Access installation commands to Install Pop while retaining Connect a computer in Devices.
 
 - Give macOS Pop Local Access and its setup wizard the Pop app icon, repairing existing installed bundles on startup.
