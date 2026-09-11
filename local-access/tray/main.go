@@ -50,6 +50,9 @@ type app struct {
 }
 
 func main() {
+	if runDesktopIfRequested() {
+		return
+	}
 	if runSetupIfRequested() {
 		return
 	}
@@ -274,7 +277,7 @@ func (a *app) openPop() {
 	server := a.server
 	a.mu.Unlock()
 	if server != "" {
-		_ = openExternal(server)
+		_ = openDesktop(server)
 	}
 }
 
@@ -285,6 +288,7 @@ func (a *app) quit() {
 	a.quitting = true
 	a.mu.Unlock()
 	a.stop()
+	closeDesktopWindow()
 	a.cancel()
 	stopTray()
 }
@@ -297,6 +301,12 @@ func popPath() (string, error) {
 	path := filepath.Join(home, ".local", "bin", "pop")
 	if runtime.GOOS == "windows" {
 		path = filepath.Join(os.Getenv("LOCALAPPDATA"), "PopAgent", "bin", "pop.exe")
+		if self, err := os.Executable(); err == nil {
+			private := filepath.Join(filepath.Dir(self), "runtime", "pop.exe")
+			if info, err := os.Stat(private); err == nil && info.Mode().IsRegular() {
+				path = private
+			}
+		}
 	}
 	if _, err := os.Stat(path); err != nil {
 		return "", err

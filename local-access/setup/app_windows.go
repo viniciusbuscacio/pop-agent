@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -27,20 +28,21 @@ var payload embed.FS
 const setupID = "pop-local-access-setup"
 
 type State struct {
-	Version          string `json:"version"`
-	InstalledVersion string `json:"installedVersion"`
-	Installed        bool   `json:"installed"`
-	Directory        string `json:"directory"`
-	Server           string `json:"server"`
-	SavedLogin       bool   `json:"savedLogin"`
-	StartAtLogin     bool   `json:"startAtLogin"`
-	Busy             bool   `json:"busy"`
-	Done             bool   `json:"done"`
-	Stage            string `json:"stage"`
-	Error            string `json:"error"`
-	License          string `json:"license"`
-	Preview          bool   `json:"preview"`
-	Uninstall        bool   `json:"uninstall"`
+	Components       Components `json:"components"`
+	Version          string     `json:"version"`
+	InstalledVersion string     `json:"installedVersion"`
+	Installed        bool       `json:"installed"`
+	Directory        string     `json:"directory"`
+	Server           string     `json:"server"`
+	SavedLogin       bool       `json:"savedLogin"`
+	StartAtLogin     bool       `json:"startAtLogin"`
+	Busy             bool       `json:"busy"`
+	Done             bool       `json:"done"`
+	Stage            string     `json:"stage"`
+	Error            string     `json:"error"`
+	License          string     `json:"license"`
+	Preview          bool       `json:"preview"`
+	Uninstall        bool       `json:"uninstall"`
 }
 
 type Setup struct {
@@ -55,7 +57,7 @@ type Setup struct {
 }
 
 func newSetup(preview bool) *Setup {
-	a := &Setup{state: State{Version: version, License: licenseText, Preview: preview, Uninstall: installer.UninstallRequested(), StartAtLogin: true}}
+	a := &Setup{state: State{Version: version, License: licenseText, Preview: preview, Uninstall: installer.UninstallRequested(), StartAtLogin: true, Components: Components{Desktop: true, CLI: true}}}
 	if preview {
 		a.state.Directory = `C:\Users\You\AppData\Local\PopAgent\LocalAccess`
 		a.state.Stage = "Preview only - no files or settings will be changed."
@@ -68,11 +70,12 @@ func newSetup(preview bool) *Setup {
 	}
 	a.installDir, a.launcherPath, a.profilePath = dir, launcher, profile
 	a.state.Directory = dir
-	a.state.Installed = regularFile(filepath.Join(dir, "pop-local-access.exe"))
+	existingDesktop := regularFile(filepath.Join(dir, "pop-local-access.exe"))
+	a.state.Installed = existingDesktop || regularFile(filepath.Join(dir, "cli", "pop.exe"))
 	if _, ver, ok := a.product().InstalledInfo(); ok {
 		a.state.InstalledVersion = ver
 	}
-	if a.state.Installed {
+	if existingDesktop {
 		a.state.StartAtLogin = startupEnabled()
 	}
 	if a.state.Uninstall {
@@ -99,7 +102,7 @@ func newSetup(preview bool) *Setup {
 	return a
 }
 func (a *Setup) product() installer.App {
-	return installer.App{ID: setupID, DisplayName: "Pop Local Access", Version: version, Publisher: "Vinicius Buscacio", URL: projectURL, Dir: a.installDir}
+	return installer.App{ID: setupID, DisplayName: "Pop Agent", Version: version, Publisher: "Vinicius Buscacio", URL: projectURL, Dir: a.installDir}
 }
 func (a *Setup) startup(ctx context.Context) { a.ctx = ctx }
 func (a *Setup) GetState() State             { a.mu.Lock(); defer a.mu.Unlock(); return a.state }
@@ -124,7 +127,11 @@ func (a *Setup) Minimize()         { wruntime.WindowMinimise(a.ctx) }
 func (a *Setup) stage(text string) { a.mu.Lock(); a.state.Stage = text; a.mu.Unlock() }
 
 // Password is accepted only through the in-process Wails binding. It is never returned, logged or passed to a process.
-func (a *Setup) Install(server, password string) string {
+func (a *Setup) Install(server, password string, desktop, cli bool) string {
+	selected := Components{Desktop: desktop, CLI: cli}
+	if err := selected.validate(); err != nil {
+		return err.Error()
+	}
 	a.mu.Lock()
 	if a.state.Preview {
 		a.mu.Unlock()
@@ -135,6 +142,7 @@ func (a *Setup) Install(server, password string) string {
 		return "The installer is not ready."
 	}
 	a.state.Busy = true
+	a.state.Components = selected
 	a.state.Error = ""
 	a.mu.Unlock()
 	var failure error
@@ -160,8 +168,21 @@ func (a *Setup) Install(server, password string) string {
 }
 
 func (a *Setup) performInstall(ctx context.Context, server, password string) error {
+	selected := a.GetState().Components
+	manifestPath := filepath.Join(a.installDir, "components.json")
+	installed := Components{Desktop: regularFile(filepath.Join(a.installDir, "pop-local-access.exe"))}
+	if data, err := readBoundedFile(manifestPath, 4096); err == nil {
+		if json.Unmarshal(data, &installed) != nil {
+			return errors.New("The installed component record is invalid.")
+		}
+	} else if !os.IsNotExist(err) {
+		return errors.New("Could not read the installed component record.")
+	}
+	selected = selected.including(installed)
+	desktopPath := filepath.Join(a.installDir, "pop-agent-desktop.exe")
+	cliPath := filepath.Join(a.installDir, "cli", "pop.exe")
 	if versionGreater(a.state.InstalledVersion, version) {
-		return errors.New("A newer Pop Local Access is already installed. Download the current installer from your server.")
+		return errors.New("A newer Pop Agent is already installed. Download the current installer from your server.")
 	}
 	origin, err := serverOrigin(server)
 	if err != nil {
@@ -232,7 +253,7 @@ func (a *Setup) performInstall(ctx context.Context, server, password string) err
 	}
 	// Keep original bytes until installation succeeds. Never replace a newer shared launcher.
 	tray := filepath.Join(a.installDir, "pop-local-access.exe")
-	targets := []string{tray, a.launcherPath, filepath.Join(a.installDir, setupID+".exe")}
+	targets := []string{tray, a.launcherPath, filepath.Join(a.installDir, setupID+".exe"), desktopPath, cliPath, manifestPath}
 	snapshots, err := snapshotFiles(targets)
 	if err != nil {
 		return err
@@ -244,6 +265,12 @@ func (a *Setup) performInstall(ctx context.Context, server, password string) err
 	if err != nil {
 		return errors.New("Could not preserve the existing Windows registration. Nothing was replaced.")
 	}
+	pathBefore, err := readUserPath()
+	if err != nil {
+		return errors.New("Could not read your terminal PATH. Nothing was replaced.")
+	}
+	pathAfter := componentPath(pathBefore, filepath.Join(a.installDir, "cli"), true)
+	pathChanged := false
 	launcherBytes := files["launcher"]
 	if snapshots[1].exists {
 		if output, e := launcherVersion(ctx, a.launcherPath); e != nil {
@@ -252,13 +279,27 @@ func (a *Setup) performInstall(ctx context.Context, server, password string) err
 			launcherBytes = snapshots[1].data
 		}
 	}
-	a.stage("Installing Pop Local Access…")
-	if err = stopTray(ctx, tray); err != nil {
-		return err
+	a.stage("Installing the selected Pop Agent components…")
+	if selected.Desktop {
+		if err = stopDesktop(ctx, desktopPath); err != nil {
+			return err
+		}
+		if err = stopTray(ctx, tray); err != nil {
+			return err
+		}
 	}
-	restartOld := a.state.Installed
+	restartOld := installed.Desktop
 	rollback := func(message string) error {
 		recovery := errors.Join(restoreFiles(snapshots), registration.restore())
+		if pathChanged {
+			current, err := readUserPath()
+			if err == nil && current == pathAfter {
+				err = writeUserPath(pathBefore)
+			} else if err == nil {
+				err = errors.New("Your terminal PATH changed during recovery.")
+			}
+			recovery = errors.Join(recovery, err)
+		}
 		if restartOld && recovery == nil {
 			recovery = launchTray(tray)
 		}
@@ -271,8 +312,32 @@ func (a *Setup) performInstall(ctx context.Context, server, password string) err
 	if err = atomicFile(a.launcherPath, launcherBytes, 0700); err != nil {
 		return rollback("Could not install the Pop launcher.")
 	}
-	if err = atomicFile(tray, files["tray"], 0700); err != nil {
-		return rollback("Could not install Local Access.")
+	if selected.Desktop {
+		if err = atomicFile(tray, files["tray"], 0700); err != nil {
+			return rollback("Could not install computer access.")
+		}
+		if err = atomicFile(desktopPath, files["tray"], 0700); err != nil {
+			return rollback("Could not install Pop Agent Desktop.")
+		}
+	}
+	if selected.CLI {
+		cliBytes := launcherBytes
+		if snapshots[4].exists {
+			previous, e := launcherVersion(ctx, cliPath)
+			if e != nil {
+				return rollback("Could not verify Pop Agent CLI.")
+			}
+			if versionGreater(previous, embeddedLauncherVersion) {
+				cliBytes = snapshots[4].data
+			}
+		}
+		if err = atomicFile(cliPath, cliBytes, 0700); err != nil {
+			return rollback("Could not install Pop Agent CLI.")
+		}
+	}
+	componentBytes, _ := json.Marshal(selected)
+	if err = atomicFile(manifestPath, componentBytes, 0600); err != nil {
+		return rollback("Could not save the component selection.")
 	}
 	if _, err = a.product().Install(); err != nil {
 		return rollback("Windows could not register the installer.")
@@ -284,10 +349,21 @@ func (a *Setup) performInstall(ctx context.Context, server, password string) err
 	if err != nil {
 		return rollback("Could not preserve the saved profiles.")
 	}
+	if selected.CLI {
+		current, err := readUserPath()
+		if err != nil || current != pathBefore {
+			return rollback("Your terminal PATH changed during installation. Please retry.")
+		}
+		if err := writeUserPath(pathAfter); err != nil {
+			return rollback("Could not add Pop Agent CLI to your terminal PATH.")
+		}
+		pathChanged = true
+	}
 	if err = savePrivateProfile(a.profilePath, updated); err != nil {
 		return rollback("Could not protect and save the login.")
 	}
 	a.mu.Lock()
+	a.state.Components = selected
 	a.state.Server = origin
 	a.state.SavedLogin = true
 	a.mu.Unlock()
@@ -303,16 +379,31 @@ func (a *Setup) Finish(startMenu, desktop, startAtLogin, open bool) string {
 	a.state.Busy = true
 	a.mu.Unlock()
 	defer func() { a.mu.Lock(); a.state.Busy = false; a.mu.Unlock() }()
+	components := a.GetState().Components
 	tray := filepath.Join(a.installDir, "pop-local-access.exe")
-	if err := a.product().CreateShortcuts(tray, installer.Shortcuts{StartMenu: startMenu, Desktop: desktop}); err != nil {
-		return "Could not create the selected shortcuts. Please retry."
+	if components.CLI {
+		cliProduct := a.product()
+		cliProduct.DisplayName = "Pop Agent CLI"
+		if err := cliProduct.CreateShortcuts(filepath.Join(a.installDir, "cli", "pop.exe"), installer.Shortcuts{StartMenu: startMenu}); err != nil {
+			return "Could not create the CLI shortcut. Please retry."
+		}
 	}
-	if err := setStartup(tray, startAtLogin); err != nil {
-		return "Could not save Start at Login. Please retry."
-	}
-	if open {
-		if err := launchTray(tray); err != nil {
-			return "Local Access is installed, but could not start. Please retry."
+	if components.Desktop {
+		if err := removeComponentShortcuts("Pop Local Access"); err != nil {
+			return "Could not replace the previous Local Access shortcuts. Please retry."
+		}
+		desktopProduct := a.product()
+		desktopProduct.DisplayName = "Pop Agent Desktop"
+		if err := desktopProduct.CreateShortcuts(filepath.Join(a.installDir, "pop-agent-desktop.exe"), installer.Shortcuts{StartMenu: startMenu, Desktop: desktop}); err != nil {
+			return "Could not create the Desktop shortcuts. Please retry."
+		}
+		if err := setStartup(tray, startAtLogin); err != nil {
+			return "Could not save Start at Login. Please retry."
+		}
+		if open {
+			if err := launchTray(filepath.Join(a.installDir, "pop-agent-desktop.exe")); err != nil {
+				return "Pop Agent Desktop is installed, but could not open. Please retry."
+			}
 		}
 	}
 	a.completedQuit()
@@ -339,12 +430,31 @@ func (a *Setup) Uninstall(confirm bool) string {
 	if err := stopTray(ctx, filepath.Join(a.installDir, "pop-local-access.exe")); err != nil {
 		return err.Error()
 	}
+	if err := stopDesktop(ctx, filepath.Join(a.installDir, "pop-agent-desktop.exe")); err != nil {
+		return err.Error()
+	}
+	oldPath, err := readUserPath()
+	if err != nil {
+		return "Could not read your terminal PATH."
+	}
+	if err := writeUserPath(componentPath(oldPath, filepath.Join(a.installDir, "cli"), false)); err != nil {
+		return "Could not remove Pop Agent CLI from your terminal PATH."
+	}
 	old := startupValue()
 	if err := setStartup("", false); err != nil {
+		_ = writeUserPath(oldPath)
 		return "Could not remove Start at Login."
+	}
+	for _, name := range []string{"Pop Agent Desktop", "Pop Agent CLI", "Pop Local Access"} {
+		if err := removeComponentShortcuts(name); err != nil {
+			restoreStartup(old)
+			_ = writeUserPath(oldPath)
+			return "Could not remove component shortcuts. Please retry."
+		}
 	}
 	if err := a.product().Uninstall(); err != nil {
 		restoreStartup(old)
+		_ = writeUserPath(oldPath)
 		return fmt.Sprintf("Could not start the uninstaller: %s", err)
 	}
 	a.completedQuit()

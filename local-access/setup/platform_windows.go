@@ -32,7 +32,7 @@ func installPaths() (string, string, string, error) {
 	if config == "" {
 		config = filepath.Join(home, ".config")
 	}
-	return filepath.Join(local, "PopAgent", "LocalAccess"), filepath.Join(local, "PopAgent", "bin", "pop.exe"), filepath.Join(config, "pop-agent", "profiles.json"), nil
+	return filepath.Join(local, "PopAgent", "LocalAccess"), filepath.Join(local, "PopAgent", "LocalAccess", "runtime", "pop.exe"), filepath.Join(config, "pop-agent", "profiles.json"), nil
 }
 func regularFile(path string) bool {
 	info, err := os.Lstat(path)
@@ -44,9 +44,9 @@ func checkInstallDirectory(path string) error {
 		return err
 	}
 	if !strings.EqualFold(filepath.Clean(path), filepath.Clean(expected)) {
-		return errors.New("The installation must use its dedicated Pop Local Access directory.")
+		return errors.New("The installation must use its dedicated Pop Agent directory.")
 	}
-	for _, target := range []string{path, filepath.Dir(launcher), filepath.Dir(profile)} {
+	for _, target := range []string{path, filepath.Dir(launcher), filepath.Join(path, "cli"), filepath.Dir(profile)} {
 		for current := target; filepath.Dir(current) != current; current = filepath.Dir(current) {
 			ptr, e := windows.UTF16PtrFromString(current)
 			if e != nil {
@@ -169,6 +169,15 @@ func stopTray(ctx context.Context, target string) error {
 	}
 	return nil
 }
+func stopDesktop(ctx context.Context, target string) error {
+	ps := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	cmd := hiddenCommand(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", `$ErrorActionPreference='Stop'; Get-CimInstance Win32_Process -Filter "Name = 'pop-agent-desktop.exe'" | Where-Object { $_.ExecutablePath -eq $env:POP_PLA_TARGET } | ForEach-Object { & "$env:SystemRoot\System32\taskkill.exe" /PID $_.ProcessId /T /F | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Could not stop Pop Agent Desktop' }; Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }`)
+	cmd.Env = append(os.Environ(), "POP_PLA_TARGET="+target)
+	if err := cmd.Run(); err != nil {
+		return errors.New("Could not stop the existing Pop Agent Desktop process. Close it from the tray and retry.")
+	}
+	return nil
+}
 func launchTray(target string) error {
 	cmd := exec.Command(target)
 	cmd.Dir = filepath.Dir(target)
@@ -226,4 +235,24 @@ func validCleanup() bool {
 		return validateCleanupManifest(manifest, expected)
 	}
 	return false
+}
+
+func removeComponentShortcuts(name string) error {
+	if name != "Pop Agent Desktop" && name != "Pop Agent CLI" && name != "Pop Local Access" {
+		return errors.New("Unknown component shortcut.")
+	}
+	for _, id := range []*windows.KNOWNFOLDERID{windows.FOLDERID_Programs, windows.FOLDERID_Desktop} {
+		root, err := windows.KnownFolderPath(id, 0)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(root, name+".lnk")
+		if !strings.EqualFold(filepath.Dir(target), filepath.Clean(root)) {
+			return errors.New("Invalid shortcut path.")
+		}
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }

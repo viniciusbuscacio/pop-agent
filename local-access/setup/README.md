@@ -1,6 +1,6 @@
-# Windows Pop Local Access setup
+# Windows Pop Agent Setup
 
-Installer-only Wails v2 host backed by `go-installer/windows` v0.4.0. This is separate from the lightweight tray and from the browser/PWA.
+Wails v2 setup backed by `go-installer/windows` v0.4.0. The wizard offers **Pop Agent Desktop** and **Pop Agent CLI**, both checked by default. Desktop includes a view-only WebView2 window and optional computer-access tray; CLI exposes `pop` in new terminals.
 
 ## Build and checks
 
@@ -8,19 +8,19 @@ Installer-only Wails v2 host backed by `go-installer/windows` v0.4.0. This is se
 
 On Windows, run `go test -v ./...` here to also test ACL-protected profile replacement and registry rollback against uniquely named disposable fixtures. These tests do not install PLA or modify its real registry/startup entries.
 
-The executable accepts `--preview` for a non-mutating UI preview. Preview does not read saved profiles, install, uninstall or change startup settings. Wails still creates its normal WebView2 application cache.
+The executable accepts `--preview` for a non-mutating UI preview. An unversioned development build opens this mode automatically. Preview does not read saved profiles, install, uninstall or change startup settings. Wails still creates its normal WebView2 application cache.
 
 ## Runtime contract
 
 - Windows x64 with Microsoft Edge WebView2 available; install per user without elevation.
 - Destination: the Windows LocalAppData known folder, `PopAgent/LocalAccess`.
-- Shared launcher: `PopAgent/bin/pop.exe`; shared profiles retain their existing `XDG_CONFIG_HOME` or home `.config/pop-agent` location.
+- Private launcher: `PopAgent/LocalAccess/runtime/pop.exe`; optional terminal launcher: `PopAgent/LocalAccess/cli/pop.exe`. Existing standalone launchers remain untouched. Shared profiles retain their existing location.
 - The owner confirms the HTTPS server origin (HTTP only on loopback). The browser download's Zone.Identifier may suggest an origin, but does not authorize it.
 - Sign-in uses the Go HTTPS client and rejects redirects. Tokens are not handed to runtime subprocesses or returned to the frontend.
 - The launcher prepares verified Node/CLI dependencies before PLA replacement. Cached dependencies may remain after a failed preparation. Proxy-only networks are not an accepted test target yet.
 - Upgrades preserve existing profiles, machine identity, access permission and startup choice. They never enable local access automatically.
 - On commit failure, previous program bytes and uninstall registration are restored. If recovery itself fails, backup program files remain in the reported `.prepare-*/backup` folder.
-- Uninstall removes only the dedicated PLA directory, its shortcuts/registration/startup entry. Shared launcher, profiles and runtimes remain.
+- Uninstall removes the dedicated component directory, its CLI PATH entry, shortcuts/registration/startup entry. Separately installed launchers, profiles, WebView data and shared runtimes remain.
 
 ## Release acceptance - still required
 

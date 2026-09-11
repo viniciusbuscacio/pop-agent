@@ -246,3 +246,12 @@ missing arguments fail with actionable guidance and never create a chat.
 Archived conversations remain read-only. Snapshot-covered stream events never
 resurrect a completed run; switching chats invalidates outstanding sends from
 the previous conversation.
+
+
+## Windows product name
+
+The user-facing terminal product is **Pop Agent CLI**, selectable independently
+in Pop Agent Setup. The executable remains `pop`. Pop Agent Desktop uses a
+private launcher even when the terminal component is unchecked; this does not
+install a terminal command or grant local access. See the Installation spec for
+per-user paths, preservation of existing installs and uninstall ownership.

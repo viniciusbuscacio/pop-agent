@@ -27,11 +27,12 @@ Production network exposure belongs to Deployment and Operations. Local-tool
 permission and routing belong to Local Access. Exact pi session/runtime behavior
 belongs to Pi Agent Integration.
 
-The product has no native Pop Desktop wrapper. “Install Pop Agent” means install
-the browser-owned PWA. Pop Local Access is a separate, optional tray component;
-installing either one never implies installing the other. The Windows PLA setup
-is an installer-only Wails application, not a revived Pop Desktop client. Its
-flow and preservation contract are defined in the Local Access specification.
+Windows Pop Agent Setup offers **Pop Agent Desktop** and **Pop Agent CLI**,
+both selected by default. Desktop hosts the server interface in WebView2 and
+includes optional computer access. CLI exposes the terminal command. The
+browser-owned PWA remains independently installable. The setup uses the existing
+Go/Wails wizard; its component and preservation contracts are defined below and
+in the Local Access specification. macOS retains its existing PLA/PWA arrangement.
 
 ## Core invariants
 
@@ -78,7 +79,8 @@ and bind downloaded bytes to the manifest or script the client already received.
 | Server | Git clone, authenticated/fixed-ref GitHub acquisition, or verified local Git bundle, followed by non-root host bootstrap and prepared-checkout systemd installer | Ubuntu systemd on Linux amd64; fixed clean commit, prebuilt production package and pinned private Node/whisper.cpp runtime |
 | PWA | browser install UI and web manifest | modern Chromium, Safari/iOS instructions and other capable browsers |
 | `pop` launcher | same-origin PowerShell or POSIX shell bootstrap | Windows/macOS/Linux release targets published by the server |
-| Pop CLI | launcher-managed version directory | Node 22.19+ or a compatible Pop-managed private runtime |
+| Pop Agent CLI | launcher-managed version directory; selectable in Windows setup | Node 22.19+ or a compatible Pop-managed private runtime |
+| Pop Agent Desktop | selectable in Windows Go/Wails setup | Windows WebView2 window and optional computer-access tray; agent remains server-side |
 | Pop Local Access | Windows go-installer/Wails setup wizard; existing PowerShell/bash bootstrap remains available | Windows x64 fresh installation/update and released macOS targets; permission starts disabled |
 | pi runtime candidate | authenticated Settings action and server-side isolated staging | exact npm versions allowed by `piUpdatePolicy` |
 | Pop Agent server update | prepared Git checkout plus external supervisor | clean committed checkout with a fresh gate receipt |
@@ -890,3 +892,27 @@ even without a trailing newline. Failure names the stage and detail log. Setup U
 one-time code and popman onboarding-code remain visible in summary mode, but the
 code is never stored in the detailed transcript. Preparation-only reports preparation,
 not successful service installation.
+
+
+## Windows component installer
+
+Owner decision (2026-09-11): retain the working Go/Wails go-installer wizard,
+named **Pop Agent Setup**, with **Pop Agent Desktop** and **Pop Agent CLI**
+both selected by default. Next/Back/Install/Finish and the family themes remain.
+Reject an empty selection both in the page and Go binding.
+
+Keep the legacy per-user `PopAgent/LocalAccess` directory and registration ID for
+upgrade compatibility. `runtime/pop.exe` is private; `cli/pop.exe` is the optional
+terminal launcher and only its directory is added to the user PATH. Existing
+separate `PopAgent/bin/pop.exe` installations and profiles remain untouched.
+The Desktop entry point is `pop-agent-desktop.exe`; its verified bytes are shared
+with the tray payload, whose separate process remains `pop-local-access.exe`.
+Program snapshots and rollback include both entry points, launchers and the
+component record. Stop the exact installed Desktop and tray paths before replacement.
+
+Finish creates the selected component shortcuts and only offers Desktop startup,
+desktop shortcut and Open controls when Desktop is installed. CLI users open a
+new terminal to pick up PATH changes. Uninstall removes only the owned CLI PATH
+entry and component shortcuts; profiles, runtime caches, WebView storage, external
+CLI installations and server data survive. Do not treat a development build as a
+published release; platform acceptance still requires clean-user and upgrade tests.

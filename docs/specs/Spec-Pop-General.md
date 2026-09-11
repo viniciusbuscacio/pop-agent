@@ -97,8 +97,8 @@ Permanent product rules:
   modules default off; inbound calls require a dedicated key and IP allowlist,
   and outbound results remain untrusted external content.
 - **Clients are views and optional hands.** The PWA and CLI present the product;
-  optional Pop Local Access lends explicitly selected local tools without
-  creating another agent.
+  Pop Agent Desktop includes optional computer access; Pop Agent CLI exposes
+  the terminal client. Both keep the agent on the server.
 - **Self-hosted data ownership.** Product data remains on the owner's server
   except for traffic required by features the owner invokes or configures.
 - **Zero telemetry and no analytics phone-home.** Outbound traffic is limited to
@@ -169,10 +169,10 @@ between the server and an optional local runtime.
 - **Embeddings:** local multilingual E5 through Transformers.js/ONNX on CPU.
 - **Frontend:** React 19, React Router, Zustand, Vite, Tailwind CSS v4 over
   semantic CSS variables, and `vite-plugin-pwa`.
-- **Native support:** small Go programs provide the stable `pop` launcher and
-  optional local-access tray; they do not contain the agent or web UI. A separate
-  Windows Wails setup uses go-installer for the local companion's installation
-  wizard only; it is not a desktop wrapper for Pop Agent.
+- **Native support:** Go provides the stable `pop` launcher and local-access
+  tray. Windows Pop Agent Desktop hosts the server UI in WebView2 without a
+  native tool bridge. Pop Agent Setup keeps the Wails/go-installer wizard and
+  offers Desktop and CLI as separate components, both selected by default.
 - **Tests:** Vitest, Testing Library/happy-dom, Go tests, contract probes and an
   end-to-end smoke server with a fake provider.
 - **Validation/publication:** owner-managed Ubuntu 24.04 AMD64 Docker builder on

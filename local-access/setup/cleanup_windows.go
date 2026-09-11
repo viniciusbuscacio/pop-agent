@@ -40,7 +40,7 @@ func validateCleanupManifest(path, expected string) bool {
 		if err != nil {
 			return false
 		}
-		allowed[strings.ToLower(filepath.Join(root, "Pop Local Access.lnk"))] = true
+		allowed[strings.ToLower(filepath.Join(root, "Pop Agent.lnk"))] = true
 	}
 	for _, path := range m.Shortcuts {
 		if !allowed[strings.ToLower(filepath.Clean(path))] {

@@ -22,16 +22,16 @@ beforeEach(() => {
 });
 afterEach(() => { Reflect.deleteProperty(window, 'go'); vi.restoreAllMocks(); });
 async function start(): Promise<void> { window.eval(script); await vi.waitFor(() => expect(element('version').textContent).toContain('0.2.91')); }
-async function ready(): Promise<void> { await start(); click('next'); expect(visible('license')).toBe(true); click('next'); input('password').value = 'fixture-secret'; click('next'); expect(visible('destination')).toBe(true); }
+async function ready(): Promise<void> { await start(); click('next'); expect(visible('license')).toBe(true); click('next'); expect(visible('components')).toBe(true); click('next'); input('password').value = 'fixture-secret'; click('next'); expect(visible('destination')).toBe(true); }
 
-describe('PLA visual setup wizard', () => {
+describe('Pop Agent component setup wizard', () => {
   it('cancels before installation without calling any privileged mutation', async () => {
     await ready(); click('cancel'); expect(api.Close).toHaveBeenCalledOnce(); expect(api.Install).not.toHaveBeenCalled(); expect(input('password').value).toBe('');
   });
   it('installs a fresh computer and explicitly applies finish choices', async () => {
     await ready(); click('next');
     await vi.waitFor(() => expect(visible('done')).toBe(true));
-    expect(api.Install).toHaveBeenCalledWith('https://fixture.test', 'fixture-secret');
+    expect(api.Install).toHaveBeenCalledWith('https://fixture.test', 'fixture-secret', true, true);
     expect(input('password').value).toBe('');
     input('startup').checked = false; click('next');
     await vi.waitFor(() => expect(api.Finish).toHaveBeenCalledWith(true, false, false, true));
@@ -57,4 +57,20 @@ describe('PLA visual setup wizard', () => {
   it('switches between family light and dark themes', async () => {
     await start(); const previous = document.documentElement.dataset['theme']; click('theme'); expect(document.documentElement.dataset['theme']).not.toBe(previous); click('theme'); expect(document.documentElement.dataset['theme']).toBe(previous);
   });
+});
+
+it.each([[true, false], [false, true], [true, true]])('installs desktop=%s cli=%s', async (desktop, cli) => {
+ await start(); click('next'); click('next');
+ expect(input('component-desktop').checked).toBe(true); expect(input('component-cli').checked).toBe(true);
+ input('component-desktop').checked = desktop; input('component-cli').checked = cli;
+ click('next'); click('next'); click('next');
+ await vi.waitFor(() => expect(visible('done')).toBe(true));
+ expect(api.Install).toHaveBeenCalledWith('https://fixture.test', '', desktop, cli);
+ expect((element('launch').parentElement as HTMLElement).hidden).toBe(!desktop);
+});
+it('rejects an empty component selection without leaving the page', async () => {
+ await start(); click('next'); click('next');
+ input('component-desktop').checked = false; input('component-cli').checked = false;
+ click('next'); expect(visible('components')).toBe(true);
+ expect(element('error').textContent).toContain('Select Pop Agent Desktop'); expect(api.Install).not.toHaveBeenCalled();
 });

@@ -6,7 +6,6 @@ import (
 	"embed"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -30,12 +29,9 @@ func main() {
 			return
 		}
 	}
-	preview := slices.Contains(os.Args[1:], "--preview")
+	preview := slices.Contains(os.Args[1:], "--preview") || version == "dev"
 	app := newSetup(preview)
-	if !preview && !installer.UninstallRequested() && app.initialized && app.product().Installed() {
-		_ = launchTray(filepath.Join(app.installDir, "pop-local-access.exe"))
-		return
-	}
+
 	name, _ := windows.UTF16PtrFromString(`Local\PopAgentLocalAccessSetup`)
 	if preview {
 		name, _ = windows.UTF16PtrFromString(`Local\PopAgentLocalAccessSetupPreview`)
@@ -50,7 +46,7 @@ func main() {
 	}
 	assets, _ := fs.Sub(frontend, "assets")
 	err = wails.Run(&options.App{
-		Title: "Pop Local Access Setup", Width: 680, Height: 560, MinWidth: 600, MinHeight: 500,
+		Title: "Pop Agent Setup", Width: 680, Height: 560, MinWidth: 600, MinHeight: 500,
 		Frameless: true, DisableResize: false,
 		BackgroundColour: &options.RGBA{R: 32, G: 32, B: 32, A: 255},
 		AssetServer:      &assetserver.Options{Assets: assets},

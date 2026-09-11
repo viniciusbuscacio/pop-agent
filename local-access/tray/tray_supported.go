@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/getlantern/systray"
 )
@@ -41,10 +42,14 @@ func installTray(a *app) error {
 func runTray() {
 	systray.Run(func() {
 		systray.SetTemplateIcon(trayIcon, trayIcon)
-		systray.SetTooltip(fmt.Sprintf("Pop Local Access %s", trayVersion))
+		productName := "Pop Local Access"
+		if runtime.GOOS == "windows" {
+			productName = "Pop Agent Desktop"
+		}
+		systray.SetTooltip(fmt.Sprintf("%s %s", productName, trayVersion))
 		activeView.status = systray.AddMenuItem("Server disconnected", "Connection status — click to reconnect")
 		systray.AddSeparator()
-		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open the PWA in your default browser")
+		activeView.open = systray.AddMenuItem("Open Pop Agent", "Open Pop Agent")
 		computer := systray.AddMenuItem("Computer access", "Manage access to this computer")
 		activeView.access = computer.AddSubMenuItemCheckbox("Allow access to this computer", "Allow Pop Agent to use local tools on this computer", false)
 		if nativeSignInAvailable {
@@ -52,7 +57,7 @@ func runTray() {
 			bind(activeView.signIn, func(a *app) { a.signIn() })
 		}
 		activeView.settings = systray.AddMenuItem("Settings", "Startup, updates and troubleshooting")
-		activeView.startAtLogin = activeView.settings.AddSubMenuItemCheckbox("Start at Login", "Start Pop Local Access when you sign in", false)
+		activeView.startAtLogin = activeView.settings.AddSubMenuItemCheckbox("Start at Login", "Start computer access when you sign in", false)
 		activeView.update = activeView.settings.AddSubMenuItem("Check for updates…", "Download an update installer from your Pop Server")
 		bind(activeView.update, func(a *app) { a.activateUpdate() })
 		troubleshooting := activeView.settings.AddSubMenuItem("Troubleshooting", "Connection details and local logs")
@@ -60,7 +65,7 @@ func runTray() {
 		activeView.diagnostics = troubleshooting.AddSubMenuItem("Open logs", "Open the local log")
 		activeView.server = troubleshooting.AddSubMenuItem("Server not configured", "Pop Agent server — click to open")
 		systray.AddSeparator()
-		activeView.quit = systray.AddMenuItem("Quit Pop Local Access", "Stop local access until opened again")
+		activeView.quit = systray.AddMenuItem("Quit "+productName, "Stop local access until opened again")
 		bind(activeView.status, func(a *app) { a.activateStatus() })
 		bind(activeView.server, func(a *app) { a.openPop() })
 		bind(activeView.open, func(a *app) { a.openPop() })

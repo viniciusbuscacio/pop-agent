@@ -16,7 +16,7 @@ import (
 
 func TestPreviewCannotInstallOrExposeCredentials(t *testing.T) {
 	app := newSetup(true)
-	if result := app.Install("https://fixture.test", "fixture-secret"); result == "" {
+	if result := app.Install("https://fixture.test", "fixture-secret", true, true); result == "" {
 		t.Fatal("preview allowed installation")
 	}
 	if result := app.Uninstall(true); result == "" {

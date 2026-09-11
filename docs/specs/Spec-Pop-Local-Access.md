@@ -7,28 +7,35 @@
 
 ## Purpose and product boundary
 
-The desktop-facing Pop Agent product has two independent parts:
+Windows offers one **Pop Agent Setup** with two independently selectable
+components, both checked by default:
 
-```text
-Pop Agent installed PWA
-  └── browser-owned app window and server UI
+- **Pop Agent Desktop**: a Go/WebView2 window displaying the existing server UI,
+  plus the visible computer-access tray and its private runtime.
+- **Pop Agent CLI**: the `pop` terminal command and Start menu shortcut.
 
-Pop Local Access (optional)
-  ├── visible native tray/menu-bar host
-  └── supervised `pop local-access` TypeScript runtime
-       └── authenticated outbound connection to the Pop Agent server
-```
+At least one component is required. Desktop-only setup never adds its private
+runtime to PATH; CLI-only setup never installs a window or tray on a clean user.
+An upgrade preserves existing components even if unchecked: unchecking is not
+an implicit uninstall request. The installed component record drives Finish.
 
-The PWA is the application interface. Pop Local Access (PLA) lends the
-server-side agent explicitly selected files and commands on one computer. It
-does not move the agent, model, provider credentials, product database or PWA
-onto that computer.
+The browser-installed PWA remains available independently. macOS retains its
+existing optional PLA tray and PWA arrangement; this Windows decision does not
+claim a new macOS Desktop package.
 
-Pop Agent ships no WKWebView/WebView2 desktop wrapper, native web window, DMG,
-Setup app or native Desktop download. The only native desktop support is the
-small optional PLA tray and stable `pop` launcher. PWA installation alone grants
-no local filesystem or command access; PLA installation alone does not install
-or replace the PWA.
+Desktop is a view-only process: it loads the confirmed HTTPS origin (loopback
+HTTP for development), keeps its WebView storage separate from browsers and
+uses the ordinary web sign-in. Setup sign-in configures the local runtime/CLI;
+it does not copy a token into the Desktop browser or override web sign-out.
+Same-origin navigation remains inside; external HTTPS links open in the browser.
+Credential-bearing URLs and other schemes are blocked. No native filesystem,
+command, credential or generic Go binding is exposed to the loaded page.
+
+Opening Desktop starts the existing tray process if needed. Closing the window
+leaves computer access in the visible tray. Open Pop Agent in the Windows tray
+opens the Desktop when installed, with browser fallback for legacy tray-only
+installs. The server remains authoritative for permission and explicit machine
+selection; installation does not enable or select local access.
 
 ## Architectural roles
 
@@ -126,7 +133,7 @@ The installed tray is intentionally small. It:
 - opens the local diagnostic log;
 - quits itself and its child.
 
-The tray does not host the PWA, render Settings, store provider credentials,
+The tray process does not host the web view, render Settings, store provider credentials,
 open a local HTTP server or execute arbitrary tray-supplied shell text. Closing
 the PWA does not stop PLA. Quitting PLA does not uninstall or sign out the PWA.
 
@@ -549,7 +556,7 @@ and removal behavior.
 
 ## Explicit non-goals
 
-- restoring a native Pop Desktop web wrapper;
+- running the agent engine or provider credentials in Desktop;
 - silently granting access when PWA or tray is installed;
 - auto-selecting an arbitrary one of multiple computers;
 - opening a listening port on the local computer;
@@ -572,7 +579,7 @@ access-policy check applies to prerequisite operations and file operations.
 
 Tray Quit terminates the launcher and its descendants before cancelling the app context. Context cancellation must also terminate the whole process tree, never only the launcher. Closing the tray must not leave a background Node transport with local file access.
 
-The Windows setup offers a per-user **Pop Local Access** Start menu shortcut (selected by default), targeting the installed tray executable with its icon and working directory. Creating or repairing this shortcut does not require administrator privileges.
+The Windows setup offers per-user **Pop Agent Desktop** and **Pop Agent CLI** Start menu shortcuts for installed components (selected by default). Desktop targets its web-window executable; CLI targets its terminal launcher. Creating or repairing this shortcut does not require administrator privileges.
 
 The Windows tray release uses the Windows GUI subsystem, so launching it from Start or Explorer never opens a console window. The installer also starts it hidden. The CLI launcher remains a console application.
 
@@ -623,7 +630,7 @@ layout; do not ship the old desktop application or its credential wizard.
 Windows uses a separate Wails executable backed by the pinned
 `go-installer/windows` library, not a renamed tray or MessageBox sequence. The
 family-style wizard supports both a clean per-user installation and an update:
-Welcome → License → Server/sign-in → Installation → Finish. It provides light
+Welcome → License → Components → Server/sign-in → Installation → Finish. It provides light
 and dark themes, a fixed dedicated destination, progress, error/retry feedback,
 and final shortcut, Start at Login and Open choices. It does not require a
 terminal or an installed PWA. Existing saved sign-in may be reused only for the
@@ -631,7 +638,7 @@ same confirmed origin; a changed origin requires a new sign-in. HTTPS is require
 except on loopback, login redirects are rejected, and secrets never appear in
 returned UI state, subprocess arguments, subprocess environment or logs.
 
-The Windows payload embeds version-matched tray/launcher bytes and validates
+The Windows payload embeds version-matched tray/window-capable executable and launcher bytes and validates
 size and SHA-256 before use. Source-only builds refuse installation; `--preview`
 is explicitly non-mutating and does not read the owner's profiles. Dependency
 preparation precedes replacement. Existing profiles, machine identity and server
@@ -649,9 +656,10 @@ start the installed tray on Finish is reported and remains retryable, never
 reported as a successful launch.
 
 The registered Windows uninstaller uses go-installer's helper handoff, restricted
-to the exact PLA-owned directory, shortcuts and registration. It removes the
-startup entry, but not shared CLI profiles, the launcher, runtime caches or server
-data. The uninstall wizard requires confirmation. The helper validates its
+to the exact installer-owned directory, shortcuts and registration. It removes
+its CLI PATH entry, Desktop/CLI executables and startup entry, while retaining
+shared profiles, separately installed launchers, WebView data, runtime caches and
+server data. The uninstall wizard requires confirmation. The helper validates its
 manifest before any removal.
 
 macOS remains update-only: first-install commands remain in Settings → Install
@@ -684,7 +692,7 @@ version alone proves that the native tray was replaced.
 ## Compact native menu
 
 The native tray has four top-level actions: **Open Pop Agent**, **Computer access**,
-**Settings**, and **Quit Pop Local Access**. Use native submenus with platform arrows.
+**Settings**, and **Quit Pop Agent Desktop** on Windows (**Quit Pop Local Access** on macOS). Use native submenus with platform arrows.
 Computer access contains **Allow access to this computer** and, where native sign-in
 is supported, **Sign in again…**. This permission still does not select a computer
 in another PWA tab.
