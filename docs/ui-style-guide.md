@@ -35,6 +35,9 @@ their caret and selection show the active editing target. Do not add
 ### Actions
 
 - `Button`: normal primary, ghost and danger actions; `size="md" | "sm"`.
+- `LinkButton`: native links/downloads with the shared button sizes and variants.
+  The installer download uses opt-in `variant="accent"`, `size="md"`, `download`
+  and `className="self-start"`: theme blue, theme contrast/hover, content-fit width.
 - `BackButton`: Settings-style arrow-only return action with an accessible name and minimum 40px touch target.
 - `IconButton`: square icon-only toolbar action. It must have an accessible name.
 - `Pressable`: foundation for bespoke interactive rows, disclosures and options when Button/IconButton do not fit. It centralizes button semantics and disabled behavior.
@@ -102,7 +105,9 @@ lives in i18n resources and errors describe an actionable next step without
 exposing stacks, internal paths or secrets.
 
 Primary actions use the neutral raised `Button`; ghost actions remain flat and
-danger actions use the danger semantic. Primitive `size` props own density.
+danger actions use the danger semantic. The installer download is an explicit
+owner-approved exception using the shared `accent` variant; neutral primary
+buttons elsewhere do not change. Primitive `size` props own density.
 Callers must not compete with them using local padding or text-size utilities.
 
 ## Responsive and long-content rules

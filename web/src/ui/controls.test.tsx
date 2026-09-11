@@ -85,6 +85,20 @@ describe('UI design-system primitives', () => {
     expect(screen.getByRole('menu')).toBeTruthy();
   });
 
+  it('offers a theme-accent download without changing neutral primary actions', () => {
+    render(<>
+      <Button>Save</Button>
+      <LinkButton href="/local-access-installer" download variant="accent" size="md">Download installer</LinkButton>
+    </>);
+    const download = screen.getByRole('link', { name: 'Download installer' });
+    expect(download.hasAttribute('download')).toBe(true);
+    expect(download.className).toContain('bg-[var(--accent)]');
+    expect(download.className).toContain('text-[var(--accent-fg)]');
+    expect(download.className).toContain('hover:bg-[var(--accent-hover)]');
+    expect(download.className).toContain('px-4 py-2 text-sm');
+    expect(screen.getByRole('button', { name: 'Save' }).className).toContain('bg-[var(--panel-bg)]');
+  });
+
   it('uses distinct switch thumbs for off and on', () => {
     render(
       <>

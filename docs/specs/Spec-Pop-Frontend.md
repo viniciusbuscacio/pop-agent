@@ -582,8 +582,11 @@ Settings mounts. Installation:
 ## Service worker and update lifecycle
 
 The generated Workbox service worker precaches only the app shell/assets.
-`/v1/*`, health and signed Files views are network-only or excluded from
-navigation fallback. Product data is not placed in Workbox runtime caches.
+`/v1/*`, health, signed Files views and public installer/runtime downloads are
+excluded from navigation fallback. Both `/local-access-installer` and its
+immutable `/local-access/*` redirect target must reach the server, never the
+cached app shell. The installer link uses native download semantics so clicking
+it keeps the current Settings page. Product data is not placed in Workbox runtime caches.
 
 Registration occurs exactly once in `services/pwa-update.ts`. Checks run every
 10 minutes, on return to visible and on explicit user action. A ready build is

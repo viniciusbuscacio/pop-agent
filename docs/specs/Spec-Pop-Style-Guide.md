@@ -31,7 +31,10 @@ choices.
 
 ## Interaction vocabulary
 
-- Accent indicates selected location/state, not every primary action.
+- Accent indicates selected location/state, not every primary action. The
+  installer download is an owner-approved exception: use the shared `accent`
+  action variant with theme foreground/hover tokens, medium size and content-fit
+  width (`self-start`), not a full-width neutral card action.
 - Primary buttons are raised neutral surfaces; ghost actions are flat; danger
   is text-semantic and does not turn whole screens red.
 - The global `:focus-visible` treatment remains on actions and choice/navigation

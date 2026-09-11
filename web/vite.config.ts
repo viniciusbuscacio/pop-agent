@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { navigationFallbackDenylist } from './pwa-navigation';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const popAgentVersion = readFileSync(join(root, 'VERSION'), 'utf8').trim();
@@ -58,11 +59,10 @@ export default defineConfig({
         // Adds the Web Push handlers (docs/specs/Spec-Pop-General.md §14) to the generated worker.
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
-        // APIs, health checks and signed file views are never the app shell.
-        // In particular, intercepting /files/download replaced a Markdown
-        // preview with a second copy of the PWA inside its own viewer on iOS.
-        // A manual refresh must fetch the HTML from the server, not precache.
-        navigateFallbackDenylist: [/[?&]_pop_refresh=/,/^\/v1\//, /^\/healthz$/, /^\/files\/download(?:\?|$)/],
+        // Keep APIs, signed file views and public installer/download routes
+        // on the network. Both the installer redirect and its immutable target
+        // must bypass the shell, or a PWA click navigates home instead of downloading.
+        navigateFallbackDenylist: navigationFallbackDenylist,
         // API requests pass directly to fetch. The client owns deadlines and
         // reconnect recovery; Workbox must not wrap network failures.
 

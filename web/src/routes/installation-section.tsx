@@ -84,6 +84,10 @@ export function InstallationSection() {
           {platform === 'windows' ? (
             <LinkButton
               href={`${origin}/local-access-installer?platform=windows&arch=amd64`}
+              download
+              variant="accent"
+              size="md"
+              className="self-start"
               data-testid="installation-local-access-windows-download"
             >
               {t('settings.installation.localAccessDownloadWindows')}

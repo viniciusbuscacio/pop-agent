@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom';
  * token variables only -- no literal hex anywhere in a component.
  */
 
-type ButtonVariant = 'primary' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'accent';
 type IconButtonSize = 'sm' | 'md';
 
 // Not semibold: the app has exactly one heavy line, the Chat/Files/Agent
@@ -43,17 +43,16 @@ const BUTTON_SIZES = {
 export type ButtonSize = keyof typeof BUTTON_SIZES;
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  // Not the accent: the blue belongs to the selected segment of a group, and
-  // nowhere else, so that colour always means "this is where you are" instead
-  // of also meaning "press this" (Vinicius, 03/08). A primary action is the
-  // raised surface -- panel over the screen background, in both themes -- and
-  // a ghost stays flat on it.
+  // Primary actions stay neutral. Accent is an explicit opt-in for the
+  // owner-approved installer download CTA, not a global primary restyle.
   primary:
     'bg-[var(--panel-bg)] text-[var(--screen-fg)] border border-[var(--border)] hover:enabled:bg-[var(--panel-hover)]',
   ghost:
     'bg-transparent text-[var(--screen-fg)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
   danger:
     'bg-transparent text-[var(--danger)] border border-[var(--border)] hover:enabled:bg-[var(--hover-overlay)]',
+  accent:
+    'bg-[var(--accent)] text-[var(--accent-fg)] border border-transparent hover:bg-[var(--accent-hover)] disabled:hover:bg-[var(--accent)]',
 };
 
 /**

@@ -62,9 +62,16 @@ describe('Settings installation guide', () => {
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
     expect(screen.getByRole('heading', { name: 'Local computer access' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Download Windows installer' }).getAttribute('href')).toBe(
+    const download = screen.getByRole('link', { name: 'Download Windows installer' });
+    expect(download.getAttribute('href')).toBe(
       `${window.location.origin}/local-access-installer?platform=windows&arch=amd64`,
     );
+    expect(download.hasAttribute('download')).toBe(true);
+    expect(download.getAttribute('target')).toBeNull();
+    expect(download.className).toContain('self-start');
+    expect(download.className).toContain('bg-[var(--accent)]');
+    expect(download.className).toContain('text-[var(--accent-fg)]');
+    expect(download.className).toContain('px-4 py-2 text-sm');
     expect(screen.getByTestId('installation-local-access-windows').textContent).toBe(
       `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${window.location.origin}/install-local-access.ps1' | iex"`,
     );
