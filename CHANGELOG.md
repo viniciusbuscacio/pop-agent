@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 0.2.91 — 2026-09-11
+
+- Continue Windows-first distribution; macOS PLA artifacts remain outside this release.
+- Allow browser-renamed setup files such as `-setup (1).exe` to open the wizard without depending on the filename.
 - Replace the Windows PLA update-only setup copy with a separate go-installer/Wails wizard supporting fresh installation, saved sign-in, runtime preparation and upgrades.
 - Add family light/dark themes, explicit installation progress and finish choices, verified embedded payloads, per-user registration and a scoped uninstaller that retains shared CLI data.
-- Preserve previous program bytes and registration for rollback, reject older registered PLA versions, and add native fixture and wizard-flow regression tests. Release acceptance still requires a clean-user and upgrade run of the complete Windows installer.
+- Preserve previous program bytes and registration for rollback, reject older registered PLA versions, and add native fixture and wizard-flow regression tests. Clean-user and existing-installation Windows acceptance remains an owner follow-up beyond the automated build, fixture and wizard checks.
 
 ## 0.2.90 — 2026-09-11
 
