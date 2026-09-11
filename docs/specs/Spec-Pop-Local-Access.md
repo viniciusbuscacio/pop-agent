@@ -23,6 +23,9 @@ The browser-installed PWA remains available independently. macOS retains its
 existing optional PLA tray and PWA arrangement; this Windows decision does not
 claim a new macOS Desktop package.
 
+The Windows Desktop native title bar defaults to dark colors independently of
+the Windows theme. This default does not synchronize with the web theme.
+
 Desktop is a view-only process: it loads the confirmed HTTPS origin (loopback
 HTTP for development), keeps its WebView storage separate from browsers and
 uses the ordinary web sign-in. Setup sign-in configures the local runtime/CLI;

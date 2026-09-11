@@ -130,6 +130,7 @@ func runDesktopIfRequested() bool {
 		return true
 	}
 	defer view.Destroy()
+	desktopDarkTitleBar(uintptr(view.Window()))
 	icon := desktopWindowIcon(uintptr(view.Window()))
 	if icon != 0 {
 		defer windows.NewLazySystemDLL("user32.dll").NewProc("DestroyIcon").Call(icon)
@@ -156,4 +157,23 @@ func desktopWindowIcon(hwnd uintptr) uintptr {
 		user32.NewProc("SendMessageW").Call(hwnd, 0x0080, 1, icon)
 	}
 	return icon
+}
+
+// Keep native window chrome dark by default, independently of the Windows theme.
+// Unsupported DWM attributes are ignored on older Windows versions.
+func desktopDarkTitleBar(hwnd uintptr) {
+	setAttribute := windows.NewLazySystemDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute")
+	if setAttribute.Find() != nil {
+		return
+	}
+	for _, attribute := range []struct {
+		id    uintptr
+		value uint32
+	}{
+		{20, 1},        // DWMWA_USE_IMMERSIVE_DARK_MODE
+		{35, 0x202020}, // DWMWA_CAPTION_COLOR (COLORREF)
+		{36, 0xf2f2f2}, // DWMWA_TEXT_COLOR (COLORREF)
+	} {
+		setAttribute.Call(hwnd, attribute.id, uintptr(unsafe.Pointer(&attribute.value)), unsafe.Sizeof(attribute.value))
+	}
 }

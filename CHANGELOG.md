@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Default the Windows Desktop native title bar to dark colors.
+
 - Open the Desktop visibly from setup and the tray instead of inheriting background-process window hiding.
 
 ## 0.2.92 — 2026-09-11
