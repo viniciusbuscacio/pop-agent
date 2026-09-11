@@ -61,6 +61,16 @@ describe('Settings installation guide', () => {
     expect(screen.getByTestId('installation-cli-windows').textContent).toContain(
       `powershell -c "irm ${window.location.origin}/install.ps1 | iex"`,
     );
+    expect(screen.getByRole('heading', { name: 'Local computer access' })).toBeTruthy();
+    expect(screen.getByTestId('installation-local-access-windows').textContent).toBe(
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${window.location.origin}/install-local-access.ps1' | iex"`,
+    );
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'macos');
+    expect(screen.getByTestId('installation-local-access-unix').textContent).toBe(
+      `tmp="$(mktemp)"\ncurl -fsSL ${window.location.origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`,
+    );
+
     await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'linux');
     expect(screen.queryByTestId('installation-cli-windows')).toBeNull();
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
@@ -69,7 +79,9 @@ describe('Settings installation guide', () => {
     expect(screen.getByTestId('installation-cli-unix').textContent).toContain(
       `$HOME/.local/bin/pop login ${window.location.origin}`,
     );
+    expect(screen.queryByTestId('installation-local-access-windows')).toBeNull();
     expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Local computer access' })).toBeNull();
     expect(localAccessMocks.machines).not.toHaveBeenCalled();
   });
 
@@ -233,13 +245,19 @@ it('shows connection instructions only after Connect a computer and returns to D
   expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
 });
 
-it('shows phone instructions without desktop shell commands or another device install prompt', async () => {
+it.each([
+  ['ios', /iPhone or iPad: open in Safari/],
+  ['android', /Android: open in Chrome/],
+] as const)('shows %s instructions without desktop or local-access commands', async (platform, instructions) => {
   const user = userEvent.setup();
   render(<MemoryRouter><SettingsPage /></MemoryRouter>);
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'ios');
-  expect(screen.getByText(/iPhone or iPad: open in Safari/)).toBeTruthy();
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), platform);
+  expect(screen.getByText(instructions)).toBeTruthy();
   expect(screen.queryByTestId('installation-cli-windows')).toBeNull();
   expect(screen.queryByTestId('installation-cli-unix')).toBeNull();
+  expect(screen.queryByTestId('installation-local-access-windows')).toBeNull();
+  expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Local computer access' })).toBeNull();
   expect(screen.queryByTestId('pwa-install')).toBeNull();
 });
 

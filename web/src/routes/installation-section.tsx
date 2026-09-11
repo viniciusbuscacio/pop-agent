@@ -75,6 +75,16 @@ export function InstallationSection() {
         <p className="text-sm text-[var(--muted)]">{t(WEB_INSTRUCTIONS[platform])}</p>
       </Card>
 
+      {isLocalAccessInstallPlatform(platform) ? (
+        <Card className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-base font-semibold">{t('settings.installation.localAccessTitle')}</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.localAccessBody')}</p>
+          </div>
+          <LocalAccessInstallInstructions origin={origin} platform={platform} />
+        </Card>
+      ) : null}
+
       <Card className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-semibold">{t('settings.installation.cliTitle')}</h2>
@@ -108,8 +118,6 @@ export function DevicesSection() {
     return current === 'ios' || current === 'android' ? 'windows' : current;
   });
   const origin = window.location.origin.replace(/\/$/, '');
-  const localAccessWindowsCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${origin}/install-local-access.ps1' | iex"`;
-  const localAccessUnixCommand = `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`;
   const [machines, setMachines] = useState<LocalMachineAccessDTO[]>([]);
   const [selectedConnection, setSelectedConnection] = useState(selectedLocalConnection() ?? '');
 
@@ -168,15 +176,10 @@ export function DevicesSection() {
       </div>
       <PlatformChoice platform={platform} onChange={setPlatform} desktopOnly />
       <Card className="flex flex-col gap-3">
-        {platform === 'windows' ? <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">{t('settings.installation.localAccessWindows')}</h3>
-          <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessWindowsHint')}</p>
-          <CopyBlock value={localAccessWindowsCommand} testId="installation-local-access-windows" />
-        </section> : <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">{t('settings.installation.localAccessUnix')}</h3>
-          <p className="text-xs text-[var(--muted)]">{t('settings.installation.localAccessUnixHint')}</p>
-          <CopyBlock value={localAccessUnixCommand} testId="installation-local-access-unix" />
-        </section>}
+        <LocalAccessInstallInstructions
+          origin={origin}
+          platform={platform === 'windows' ? 'windows' : 'macos'}
+        />
       </Card>
     </div>
   );
@@ -220,6 +223,8 @@ export function DevicesSection() {
 }
 
 type InstallPlatform = 'windows' | 'macos' | 'linux' | 'ios' | 'android';
+type LocalAccessInstallPlatform = Extract<InstallPlatform, 'windows' | 'macos'>;
+
 const WEB_INSTRUCTIONS: Record<InstallPlatform, Parameters<typeof t>[0]> = {
   windows: 'settings.installation.webWindows', macos: 'settings.installation.webMac',
   linux: 'settings.installation.webLinux', ios: 'settings.installation.webIphone', android: 'settings.installation.webAndroid',
@@ -228,6 +233,36 @@ function currentPlatform(): InstallPlatform {
   const platform = clientEnvironment().platform;
   return platform in WEB_INSTRUCTIONS ? platform as InstallPlatform : 'windows';
 }
+
+function isLocalAccessInstallPlatform(platform: InstallPlatform): platform is LocalAccessInstallPlatform {
+  return platform === 'windows' || platform === 'macos';
+}
+
+function localAccessInstallCommand(origin: string, platform: LocalAccessInstallPlatform): string {
+  return platform === 'windows'
+    ? `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${origin}/install-local-access.ps1' | iex"`
+    : `tmp="$(mktemp)"\ncurl -fsSL ${origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`;
+}
+
+function LocalAccessInstallInstructions({ origin, platform }: {
+  origin: string;
+  platform: LocalAccessInstallPlatform;
+}) {
+  const windows = platform === 'windows';
+  return <section className="flex flex-col gap-2">
+    <h3 className="text-sm font-medium">{t(windows
+      ? 'settings.installation.localAccessWindows'
+      : 'settings.installation.localAccessUnix')}</h3>
+    <p className="text-xs text-[var(--muted)]">{t(windows
+      ? 'settings.installation.localAccessWindowsHint'
+      : 'settings.installation.localAccessUnixHint')}</p>
+    <CopyBlock
+      value={localAccessInstallCommand(origin, platform)}
+      testId={windows ? 'installation-local-access-windows' : 'installation-local-access-unix'}
+    />
+  </section>;
+}
+
 function PlatformChoice({ platform, onChange, desktopOnly = false }: {
   platform: InstallPlatform; onChange: (platform: InstallPlatform) => void; desktopOnly?: boolean;
 }) {

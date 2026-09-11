@@ -618,11 +618,13 @@ macOS uses a DMG with a **Pop Local Access Setup.app** wizard (Continue, Install
 Finish). Reuse the historical Pop Desktop Setup's pinned go-installer setup DMG
 layout; do not ship the old desktop application or its credential wizard.
 Windows uses a dedicated `-setup.exe` entry point with native confirmation steps.
-These installers update an existing per-user PLA installation; fresh installation
-continues through Settings → Devices → Connect a computer. Cancel performs no
-installation. The installer reminds the user to finish local operations before
-confirming. It replaces only the native executable and restarts it, preserving
-profiles, stable machine identity, server permission and Start at Login.
+These native installers update an existing per-user PLA installation. Fresh
+installation commands are available from Settings → Install Pop for Windows and
+macOS and continue to be available through Settings → Devices → Connect a
+computer. Cancel performs no installation. The installer reminds the user to
+finish local operations before confirming. It replaces only the native
+executable and restarts it, preserving profiles, stable machine identity, server
+permission and Start at Login.
 Windows stops the exact installed process tree before replacement. macOS updates
 the existing LaunchAgent via kickstart instead of racing bootout/bootstrap.
 Previous executable bytes remain available; restart failure attempts restoration

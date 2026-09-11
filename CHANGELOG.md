@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Windows and macOS Pop Local Access installation commands to Install Pop while retaining Connect a computer in Devices.
+
 - Give macOS Pop Local Access and its setup wizard the Pop app icon, repairing existing installed bundles on startup.
 
 - Show Server connected/disconnected at the top of the PLA menu, with the status dot reflecting connectivity independently of access permission.

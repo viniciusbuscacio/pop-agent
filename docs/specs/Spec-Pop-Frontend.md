@@ -276,10 +276,12 @@ size, matching Add provider typography and padding. Breadcrumbs, navigation
 arrows and switches retain their dedicated interaction styles.
 
 Devices manages connected computers, local-access permissions and explicit file
-routing. Connection commands appear only after Connect a computer, with a Back
-action to the device list. Install Pop owns the server address, PWA installation
-and CLI instructions, selected by target platform (defaulting to this device).
-Only the current device can invoke its browser-owned installation prompt.
+routing. Connection commands remain available after Connect a computer, with a
+Back action to the device list. Install Pop owns the server address, PWA
+installation and CLI instructions, selected by target platform (defaulting to
+this device). It also shows the same-origin Pop Local Access installation card
+for Windows and macOS targets, but not Linux, iOS or Android. Only the current
+device can invoke its browser-owned installation prompt.
 The existing `section=installation` URL opens Install Pop; `section=devices`
 opens computer access management.
 
