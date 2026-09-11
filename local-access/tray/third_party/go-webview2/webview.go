@@ -82,6 +82,9 @@ type WebViewOptions struct {
 	NavigationStarting func(uri string) bool
 	NewWindowRequested func(uri string)
 
+	// Message receives page messages instead of the optional RPC binding handler.
+	Message func(message string)
+
 	// WindowOptions customizes the window that is created to embed the
 	// WebView2 widget.
 	WindowOptions WindowOptions
@@ -105,6 +108,9 @@ func NewWithOptions(options WebViewOptions) WebView {
 
 	chromium := edge.NewChromium()
 	chromium.MessageCallback = w.msgcb
+	if options.Message != nil {
+		chromium.MessageCallback = options.Message
+	}
 	chromium.DataPath = options.DataPath
 	chromium.NavigationStartingCallback = options.NavigationStarting
 	chromium.NewWindowRequestedCallback = options.NewWindowRequested

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Default the Windows Desktop native title bar to dark colors.
+- Synchronize the Windows Desktop native title bar with the resolved web theme, with a dark startup fallback.
 
 - Open the Desktop visibly from setup and the tray instead of inheriting background-process window hiding.
 

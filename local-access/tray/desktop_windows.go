@@ -3,6 +3,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/binary"
 	"os"
 	"os/exec"
@@ -17,6 +18,9 @@ import (
 )
 
 const desktopTitle = "Pop Agent Desktop"
+
+//go:embed desktop_theme.js
+var desktopThemeScript string
 
 func closeDesktopWindow() {
 	self, err := os.Executable()
@@ -108,6 +112,17 @@ func runDesktopIfRequested() bool {
 	var view webview.WebView
 	view = webview.NewWithOptions(webview.WebViewOptions{
 		DataPath: filepath.Join(dataRoot, "PopAgent", "DesktopWebView"), AutoFocus: true,
+		Message: func(message string) {
+			if view == nil {
+				return
+			}
+			switch message {
+			case "pop-desktop-theme:dark":
+				desktopTitleBarTheme(uintptr(view.Window()), true)
+			case "pop-desktop-theme:light":
+				desktopTitleBarTheme(uintptr(view.Window()), false)
+			}
+		},
 		WindowOptions: webview.WindowOptions{Title: desktopTitle, Width: 1180, Height: 780, Center: true},
 		NavigationStarting: func(target string) bool {
 			internal, external := desktopNavigation(origin, target)
@@ -130,7 +145,8 @@ func runDesktopIfRequested() bool {
 		return true
 	}
 	defer view.Destroy()
-	desktopDarkTitleBar(uintptr(view.Window()))
+	desktopTitleBarTheme(uintptr(view.Window()), true)
+	view.Init(desktopThemeScript)
 	icon := desktopWindowIcon(uintptr(view.Window()))
 	if icon != 0 {
 		defer windows.NewLazySystemDLL("user32.dll").NewProc("DestroyIcon").Call(icon)
@@ -159,9 +175,13 @@ func desktopWindowIcon(hwnd uintptr) uintptr {
 	return icon
 }
 
-// Keep native window chrome dark by default, independently of the Windows theme.
+// Mirror the resolved web theme; stay dark until the page reports its theme.
 // Unsupported DWM attributes are ignored on older Windows versions.
-func desktopDarkTitleBar(hwnd uintptr) {
+func desktopTitleBarTheme(hwnd uintptr, dark bool) {
+	darkMode, background, foreground := uint32(1), uint32(0x202020), uint32(0xd6d6d6)
+	if !dark {
+		darkMode, background, foreground = 0, 0xf2f5f7, 0x1e1f20
+	}
 	setAttribute := windows.NewLazySystemDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute")
 	if setAttribute.Find() != nil {
 		return
@@ -170,9 +190,9 @@ func desktopDarkTitleBar(hwnd uintptr) {
 		id    uintptr
 		value uint32
 	}{
-		{20, 1},        // DWMWA_USE_IMMERSIVE_DARK_MODE
-		{35, 0x202020}, // DWMWA_CAPTION_COLOR (COLORREF)
-		{36, 0xf2f2f2}, // DWMWA_TEXT_COLOR (COLORREF)
+		{20, darkMode},   // DWMWA_USE_IMMERSIVE_DARK_MODE
+		{35, background}, // DWMWA_CAPTION_COLOR (COLORREF)
+		{36, foreground}, // DWMWA_TEXT_COLOR (COLORREF)
 	} {
 		setAttribute.Call(hwnd, attribute.id, uintptr(unsafe.Pointer(&attribute.value)), unsafe.Sizeof(attribute.value))
 	}

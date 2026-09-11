@@ -1,0 +1,21 @@
+(() => {
+  if (window !== window.top) return;
+  let observing = false;
+  let previous;
+  const observe = () => {
+    if (observing || !document.documentElement) return;
+    observing = true;
+    const report = () => {
+      const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+      if (theme === previous) return;
+      previous = theme;
+      window.chrome.webview.postMessage(`pop-desktop-theme:${theme}`);
+    };
+    new MutationObserver(report).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-theme'],
+    });
+    report();
+  };
+  observe();
+  document.addEventListener('DOMContentLoaded', observe, { once: true });
+})();
