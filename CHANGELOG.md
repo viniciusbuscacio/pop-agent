@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.102 — 2026-09-12
 
 - Show an inline first-page preview for PDF chat attachments.
 
