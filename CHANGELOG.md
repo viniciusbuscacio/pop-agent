@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.100 — 2026-09-12
 
 - Open PDF chat attachments in the same full-screen preview used for images.
 
