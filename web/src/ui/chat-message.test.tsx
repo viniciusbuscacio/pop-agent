@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from './chat-message';
 
+const renderPdfThumbnail = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('../services/pdf-thumbnail', () => ({ renderPdfThumbnail }));
+
 afterEach(() => {
   cleanup();
+  renderPdfThumbnail.mockClear();
   useThinkingStore.setState({ show: true });
 });
 
@@ -476,16 +480,17 @@ it('shows an inline PDF thumbnail, opens it full screen and releases the modal U
   const dataUri = 'data:application/pdf;base64,JVBERi0xLjQ=';
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Document.pdf', type: 'application/pdf', dataUri }] }} />);
 
-  const thumbnail = await screen.findByTestId('pdf-thumbnail-frame');
-  expect(thumbnail.getAttribute('src')).toBe('data:application/pdf,pdf#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0');
+  const thumbnail = await screen.findByTestId('pdf-thumbnail-canvas');
+  expect(thumbnail.className).toContain('max-h-full');
   expect(screen.getByTestId('pdf-thumbnail').textContent).toContain('Document.pdf');
-  expect(objectUrl).toHaveBeenCalledOnce();
+  expect(renderPdfThumbnail).toHaveBeenCalledWith(dataUri, thumbnail, expect.any(AbortSignal));
+  expect(objectUrl).not.toHaveBeenCalled();
 
   await user.click(screen.getByRole('button', { name: 'Preview: Document.pdf' }));
   const dialog = screen.getByRole('dialog', { name: 'Document.pdf' });
   expect(document.activeElement).toBe(dialog);
   const frame = await screen.findByTestId('pdf-preview-frame');
-  expect(objectUrl).toHaveBeenCalledTimes(2);
+  expect(objectUrl).toHaveBeenCalledOnce();
   expect(frame.getAttribute('src')).toBe('data:application/pdf,pdf');
 
   await user.click(screen.getByRole('button', { name: 'Close' }));

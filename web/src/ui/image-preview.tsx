@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Button, Pressable } from './controls';
 import { t } from '../i18n';
 import { attachmentPreviewUrl } from '../services/attachment-preview';
+import { renderPdfThumbnail } from '../services/pdf-thumbnail';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -35,26 +36,36 @@ function useAttachmentObjectUrl(src: string, type: string): { url?: string; fail
 }
 
 export function PdfThumbnail({ src, name, onOpen }: { src: string; name: string; onOpen: () => void }) {
-  const { url, failed } = useAttachmentObjectUrl(src, 'application/pdf');
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const element = canvas.current;
+    if (element === null) return;
+    const controller = new AbortController();
+    setReady(false);
+    setFailed(false);
+    void renderPdfThumbnail(src, element, controller.signal).then(
+      () => setReady(true),
+      () => { if (!controller.signal.aborted) setFailed(true); },
+    );
+    return () => controller.abort();
+  }, [src]);
   return (
     <div className="w-72 max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="pdf-thumbnail">
-      <div className="relative h-40 bg-white">
+      <div className="relative flex h-40 items-center justify-center overflow-hidden bg-white">
+        <canvas
+          ref={canvas}
+          aria-hidden="true"
+          data-testid="pdf-thumbnail-canvas"
+          className={ready ? 'max-h-full max-w-full' : 'invisible absolute'}
+        />
         {failed ? (
           <div className="flex h-full items-center justify-center p-3 text-center text-xs text-[var(--muted)]">
             {t('files.openFailed')}
           </div>
-        ) : url === undefined ? (
+        ) : ready ? null : (
           <div className="flex h-full items-center justify-center text-xs text-[var(--muted)]">{t('app.loading')}</div>
-        ) : (
-          <iframe
-            src={`${url}#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0`}
-            title={name}
-            tabIndex={-1}
-            aria-hidden="true"
-            loading="lazy"
-            data-testid="pdf-thumbnail-frame"
-            className="h-full w-full border-0 pointer-events-none"
-          />
         )}
         <Pressable
           type="button"
