@@ -17,11 +17,10 @@ const packagePaths = [
   'shared/package.json',
   'server/package.json',
   'web/package.json',
-  'cli/package.json',
   'tools/package.json',
 ] as const;
 
-const lockPackagePaths = ['', 'shared', 'server', 'web', 'cli'] as const;
+const lockPackagePaths = ['', 'shared', 'server', 'web'] as const;
 const semanticVersion = /^\d+\.\d+\.\d+$/;
 
 export function versionConsistencyErrors(root: string): string[] {
@@ -53,17 +52,22 @@ export function versionConsistencyErrors(root: string): string[] {
     }
   }
 
+  const cliPackage = readJson<PackageJson>(root, 'cli/package.json', errors);
+  const expectedCli = cliPackage?.version;
+  if (!semanticVersion.test(expectedCli ?? '')) errors.push('Invalid CLI component version');
+  if (lock?.packages?.['cli']?.version !== expectedCli) errors.push('CLI lockfile version differs from cli/package.json');
+
   const cliVersionPath = join(root, 'cli/src/version.ts');
   const cliSource = readText(cliVersionPath);
   const cliVersion = /export const VERSION = ['"]([^'"]+)['"]/.exec(cliSource)?.[1];
-  if (cliVersion !== version) {
-    errors.push(`cli/src/version.ts VERSION is ${JSON.stringify(cliVersion)}; expected ${version}`);
+  if (cliVersion !== expectedCli) {
+    errors.push(`cli/src/version.ts VERSION is ${JSON.stringify(cliVersion)}; expected ${expectedCli}`);
   }
 
   const traySource = readText(join(root, 'local-access/tray/main.go'));
   const trayVersion = /const trayVersion = "([^"]+)"/.exec(traySource)?.[1];
-  if (trayVersion !== version) {
-    errors.push(`local-access/tray/main.go trayVersion is ${JSON.stringify(trayVersion)}; expected ${version}`);
+  if (!semanticVersion.test(trayVersion ?? '')) {
+    errors.push(`local-access/tray/main.go trayVersion is ${JSON.stringify(trayVersion)}; expected an independent semantic version`);
   }
 
   // Packed artifacts are immutable release snapshots and may trail the server.

@@ -992,3 +992,42 @@ one-time bootstrap update; server-served JavaScript cannot replace that binary.
 
 Windows and browser-only clients keep their existing web-refresh behavior; this
 macOS maintenance channel must not be advertised as a Windows native updater.
+
+
+## Independent server/web releases
+
+`deploy/local-release.sh build-server` builds server/web without requiring a Mac,
+compiling installers, or packing new clients. `release/clients.json` pins a
+previously published, verified client snapshot: source version, commit/tree,
+verification time, archive digest, and individual manifest/CLI archive hashes.
+`tools/client-release.ts pin VERIFIED_RELEASE_DIRECTORY` creates this reviewed
+lock and seeds the builder cache. Committing the lock is an explicit selection;
+there is no implicit latest-client lookup or silent fallback to compilation.
+
+Server-only builds compare the client source, shared wire DTOs and resolved CLI
+dependency closure against the pinned snapshot. Unrelated web/server dependencies
+and release labels do not invalidate it. Changed client/protocol inputs block
+reuse and require a compatible published snapshot. This conservative check is
+not a proof of backend behavioral compatibility; existing minimum-client checks,
+contract tests, full gate and production smoke remain required.
+
+The release publisher validates inherited snapshot hashes and does not reupload
+or relabel native assets. The server ships a per-artifact download source catalog
+(schema 2), preserving each original GitHub release location. Readers accept the
+legacy single-source catalog. Existing public download endpoints and client
+version negotiation remain unchanged. The packed CLI may be older than the
+server. Native update notices use the selected native manifest version, never
+the server version. A server rollback restores its selected client catalog too.
+
+Full `build` and `build-windows` batches remain available for changed clients.
+CLI source version comes from `cli/package.json` and `cli/src/version.ts`; native
+Desktop/setup version comes from `trayVersion`. Do not bump these for a web-only
+release. The initial implementation retains the common native component version
+across Windows/Mac; their published files have separate catalog entries. Splitting
+native source version numbering further is not required for server independence.
+
+Do not remove integrity or full-gate checks to accelerate this path. Server
+publication still requires a clean committed batch, immutable version/tag,
+verified production package and explicit publication. Client snapshot references
+must remain available for clean installs; hash-addressed cache entries can be
+reused across rollback and server upgrades.

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "source": {
+    "repository": "viniciusbuscacio/pop-agent",
+    "version": "0.2.103",
+    "commit": "e08592661980e518929c6e477decd0a1a96f2f5a",
+    "tree": "ba1d75e62227042d4ff415ea7c3a926df47ef770",
+    "verifiedAt": "2026-09-12T14:01:23.099Z",
+    "archive": {
+      "file": "pop-agent-0.2.103-linux-amd64.tar.gz",
+      "size": 161366403,
+      "sha256": "33e3d2df3da5e6ebb47826caceb083574149b24c81dc4002946f3f850fd08061"
+    }
+  },
+  "inputs": "8c1826ba0fbaa3d9b08b24a94712bc3ff712931faac1411346621a34a4b449d5",
+  "cliVersion": "0.2.103",
+  "files": {
+    "package.json": {
+      "file": "package.json",
+      "size": 342,
+      "sha256": "bd8823afd27faa7a825cf153c8d009afce81cd279129ed815b83b63e065f1617"
+    },
+    "cli-0.2.103.tgz": {
+      "file": "cli-0.2.103.tgz",
+      "size": 25751,
+      "sha256": "038b0ba7d4909aac295b3df7a4632d8142ebe8f898d54e6e7af6a7cda5089f42"
+    },
+    "launcher/manifest.json": {
+      "file": "manifest.json",
+      "size": 1158,
+      "sha256": "1c0c03052d6b8e5f1e0dd477381daddd3e7ceb7045fc2f983c3e27e4b5028aa0"
+    },
+    "local-access/manifest.json": {
+      "file": "manifest.json",
+      "size": 1247,
+      "sha256": "d2ac549bc20f0f95107fcc46f8dc67cccf160010c51551612eb1977550465fae"
+    },
+    "runtime/node/manifest.json": {
+      "file": "manifest.json",
+      "size": 1700,
+      "sha256": "ed944e32f4780e66f197dc9ef6ce9df561d99261c84d53487a15970784558d00"
+    }
+  }
+}

@@ -69,6 +69,8 @@
 
 ## Unreleased
 
+- Add server/web-only release builds that retain verified published Desktop, setup, launcher and CLI artifacts with their original versions and download sources.
+
 - Synchronize the Windows Desktop native title bar with the resolved web theme, with a dark startup fallback.
 
 - Open the Desktop visibly from setup and the tray instead of inheriting background-process window hiding.

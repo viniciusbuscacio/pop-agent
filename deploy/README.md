@@ -345,3 +345,31 @@ backups. Legacy `.tar.gz` archives remain unencrypted and can include provider
 sign-in tokens. `secret.key` is excluded from both formats. Use disk encryption on the Ubuntu server and
 protect backups during storage and transfer. Preserve `secret.key` separately
 if you need to recover SecretsRepo credentials on another host.
+
+
+### Publish a server/web change without rebuilding installers
+
+Keep CLI/native component versions unchanged for a server/web-only change.
+Select clients once from an already verified and published release directory:
+
+```sh
+node tools/client-release.ts pin "$HOME/.local/share/pop-agent/release-builder/releases/BASE_COMMIT"
+# Review and commit release/clients.json along with the server changes.
+./deploy/local-release.sh build-server
+# Publish only at the owner-approved publication point:
+./deploy/local-release.sh publish
+```
+
+The pin command needs authenticated `gh` for a private repository; `POP_AGENT_GH`
+can select its executable. It seeds a verified archive cache outside the checkout,
+so the build container requires no GitHub credentials. A cold public cache can
+fetch the exact hashed archive; for a private release restore/reseed the cache
+outside the container. `POP_AGENT_RELEASE_HOME` selects the builder state root.
+
+This path retains the full exact-tree gate and production installation probe,
+but does not request a Mac stage or run native packaging. Any client/shared
+protocol or client dependency change blocks reuse before the expensive gate.
+Use the full native release path and pin a compatible published snapshot instead.
+Do not change the lock hash merely to bypass that check. Downloads of Windows/Mac
+installers continue to use the original assets and hashes, without a client update
+prompt caused only by a server/web release. Rollback restores the prior catalog.

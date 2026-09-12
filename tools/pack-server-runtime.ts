@@ -47,17 +47,19 @@ try {
       }
     }
   }
+  const cliVersion = (JSON.parse(readFileSync(join(runtime, 'cli/pack/package.json'), 'utf8')) as { version: string }).version;
+  const reuseClients = existsSync(join(runtime, 'cli/pack/client-release.json'));
   for (const name of readdirSync(join(runtime, 'cli/pack'))) {
-    if (/^cli-.*\.tgz$/.test(name) && name !== `cli-${version}.tgz`) rmSync(join(runtime, 'cli/pack', name));
+    if (/^cli-.*\.tgz$/.test(name) && name !== `cli-${cliVersion}.tgz`) rmSync(join(runtime, 'cli/pack', name));
   }
   const paths = RUNTIME_PATHS.filter((path) => existsSync(join(runtime, path)));
   for (const path of paths) validateTree(join(runtime, path), runtime);
   const audioProof = JSON.parse(readFileSync(join(runtime, 'server/dist/audio/smoke.json'), 'utf8')) as { passed: boolean; sha256: string; architecture: string };
   if (audioProof.passed !== true || audioProof.architecture !== process.arch || audioProof.sha256 !== await fileHash(join(runtime, 'server/dist/audio/ffmpeg'))) throw new Error('Run test:audio for this exact native audio binary before packing');
-  await checkNativeRuntime(runtime, 'complete');
+  await checkNativeRuntime(runtime, reuseClients ? 'lazy' : 'complete');
   const repository = process.env['GITHUB_REPOSITORY'] ?? 'viniciusbuscacio/pop-agent';
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid release repository');
-  writeFileSync(join(runtime, 'cli/pack/client-downloads.json'), JSON.stringify({ repository, version }));
+  if (!reuseClients) writeFileSync(join(runtime, 'cli/pack/client-downloads.json'), JSON.stringify({ repository, version }));
   for (const directory of ['launcher', 'local-access', 'runtime/node']) {
     const base = join(runtime, 'cli/pack', directory);
     for (const name of readdirSync(base)) {

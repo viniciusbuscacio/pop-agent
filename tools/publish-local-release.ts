@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { validateClientLock } from './client-release.ts';
 import { AUDIO_SOURCE } from './audio-runtime.ts';
 import { fileHash, git, glibcVersion, validateManifest } from './server-runtime.ts';
 
@@ -28,9 +30,18 @@ async function verify(name: string, size: number, sha256: string): Promise<void>
 }
 await verify(manifest.file, manifest.size, manifest.sha256);
 await verify(AUDIO_SOURCE.file, AUDIO_SOURCE.size, AUDIO_SOURCE.sha256);
+const members = execFileSync('tar', ['-tf', join(output, manifest.file)], { encoding: 'utf8' }).split('\n');
+const inherited = members.includes('cli/pack/client-release.json')
+  ? validateClientLock(JSON.parse(execFileSync('tar', ['-xOf', join(output, manifest.file), 'cli/pack/client-release.json'], { encoding: 'utf8' }))) : undefined;
+if (inherited) {
+  for (const [name, entry] of Object.entries(inherited.files)) {
+    const bytes = execFileSync('tar', ['-xOf', join(output, manifest.file), `cli/pack/${name}`], { maxBuffer: 64 * 1024 * 1024 });
+    if (bytes.length !== entry.size || createHash('sha256').update(bytes).digest('hex') !== entry.sha256) throw new Error(`Inherited client mismatch: ${name}`);
+  }
+}
 for (const category of ['launcher', 'local-access']) {
   const packed = JSON.parse(execFileSync('tar', ['-xOf', join(output, manifest.file), `cli/pack/${category}/manifest.json`], { encoding: 'utf8' })) as { artifacts: Record<string, {file: string; size: number; sha256: string}> };
-  for (const asset of Object.values(packed.artifacts)) { await verify(asset.file, asset.size, asset.sha256); files.add(asset.file); }
+  for (const asset of Object.values(packed.artifacts)) { if (inherited) continue; await verify(asset.file, asset.size, asset.sha256); files.add(asset.file); }
 }
 console.log(`Verified ${files.size} release assets for ${version} at ${commit.slice(0, 12)}.`);
 if (mode === '--publish') {

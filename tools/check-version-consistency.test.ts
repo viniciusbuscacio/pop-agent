@@ -61,7 +61,7 @@ describe('global version consistency', () => {
 
     expect(versionConsistencyErrors(target)).toEqual(expect.arrayContaining([
       `package.json version is "0.2.9"; expected ${releaseVersion}`,
-      `package-lock.json packages["cli"] version is "0.2.9"; expected ${releaseVersion}`,
+      'CLI lockfile version differs from cli/package.json',
       `cli/src/version.ts VERSION is "0.2.9"; expected ${releaseVersion}`,
     ]));
   });

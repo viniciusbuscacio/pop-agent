@@ -12,7 +12,10 @@ trap 'rm -rf -- "$TMPDIR"' EXIT
 ./deploy/bootstrap-server.sh --prepare-only --build-from-source
 export PATH="$HOME/.local/share/pop-agent/server-toolchain/current/node/bin:$HOME/.local/share/pop-agent/server-toolchain/current/go/bin:$PATH"
 export POP_AGENT_BUILD_CACHE=/cache/audio
-if [[ ${POP_AGENT_WINDOWS_FIRST_RELEASE:-0} = 1 ]]; then
+if [[ ${POP_AGENT_SERVER_ONLY_RELEASE:-0} = 1 ]]; then
+  unset POP_AGENT_MACOS_TRAY_DIR
+  echo "Server-only release: reuse pinned published clients."
+elif [[ ${POP_AGENT_WINDOWS_FIRST_RELEASE:-0} = 1 ]]; then
   unset POP_AGENT_MACOS_TRAY_DIR
   echo 'Windows-first release: macOS Pop Local Access artifacts are intentionally omitted. A later macOS release requires a new version.'
 else
@@ -26,6 +29,9 @@ if [[ ! -d node_modules || ! -f /cache/dependency-key || $(cat /cache/dependency
   rm -f /cache/dependency-key
   ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --no-audit --no-fund
   printf '%s' "$dependency_key" > /cache/dependency-key
+fi
+if [[ ${POP_AGENT_SERVER_ONLY_RELEASE:-0} = 1 ]]; then
+  node tools/client-release.ts stage /cache/client-releases
 fi
 # A successful exact-tree gate is reusable for 24 hours; changed trees always run it.
 if ! node --input-type=module -e '
@@ -58,7 +64,10 @@ else
   cp "$output"/ffmpeg-*.tar.xz "$audio_cache/"
   (cd "$audio_cache" && find bundle -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS && sha256sum ffmpeg-*.tar.xz >> SHA256SUMS)
 fi
-npm run pack:cli
+if [[ ${POP_AGENT_SERVER_ONLY_RELEASE:-0} != 1 ]]; then
+  rm -f cli/pack/client-release.json cli/pack/client-downloads.json
+  npm run pack:cli
+fi
 npm run pack:server-runtime -- "$output"
 # Validate the actual production installation without exposing the host service or data.
 mkdir -p "$TMPDIR/no-build-tools"

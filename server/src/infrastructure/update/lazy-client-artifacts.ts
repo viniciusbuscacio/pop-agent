@@ -12,6 +12,7 @@ const execute = promisify(execFile);
 type Category = Parameters<ClientArtifactProvider['ensure']>[0];
 interface Artifact { file: string; size: number; sha256: string; sourceUrl?: string }
 interface Source { repository: string; version: string }
+interface SourceCatalog { schema: 2; artifacts: Record<string, Source> }
 export interface ClientArtifactDownloader {
   download(artifact: Artifact, source: Source | undefined, category: Category, destination: string): Promise<void>;
 }
@@ -74,7 +75,9 @@ export class LazyClientArtifacts implements ClientArtifactProvider {
     if (await verified(local, artifact)) return local;
     let source: Source | undefined;
     if (category !== 'node') {
-      source = JSON.parse(await readFile(join(this.pack, 'client-downloads.json'), 'utf8')) as Source;
+      const catalog = JSON.parse(await readFile(join(this.pack, 'client-downloads.json'), 'utf8')) as Source | SourceCatalog;
+      source = 'schema' in catalog && catalog.schema === 2 ? catalog.artifacts?.[`${category}/${file}`] : catalog as Source;
+      if (!source) return undefined;
       if (!/^[\w.-]+\/[\w.-]+$/.test(source.repository) || !/^\d+\.\d+\.\d+$/.test(source.version)) return undefined;
     }
     await mkdir(this.cache, { recursive: true, mode: 0o700 });

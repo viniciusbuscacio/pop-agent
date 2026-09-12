@@ -52,6 +52,21 @@ describe('lazy verified client downloads', () => {
     const response = await routes.request(`${category === 'launcher' ? '/cli/launcher' : '/local-access'}/${f.file}`);
     expect(response.status).toBe(200); expect(Buffer.from(await response.arrayBuffer())).toEqual(f.bytes); expect(f.calls()).toBe(1);
   });
+  it('resolves old installers from their original release with a newer server catalog', async () => {
+    const f = fixture('local-access');
+    writeFileSync(join(f.pack, 'client-downloads.json'), JSON.stringify({schema: 2, artifacts: {
+      [`local-access/${f.file}`]: {repository: 'owner/private-pop', version: '0.2.63'},
+    }}));
+    let resolvedVersion;
+    const provider = new LazyClientArtifacts(f.pack, f.cache, {async download(_artifact, source, _category, destination) {
+      resolvedVersion = source?.version;
+      writeFileSync(destination, f.bytes);
+    }});
+    expect(await provider.ensure('local-access', f.file)).toBeDefined();
+    expect(resolvedVersion).toBe('0.2.63');
+    writeFileSync(join(f.pack, 'client-downloads.json'), JSON.stringify({schema: 2, artifacts: {}}));
+    expect(await provider.ensure('local-access', f.file)).toBeUndefined();
+  });
   it('never downloads undeclared files or injected Node source URLs', async () => {
     const f = fixture();
     expect(await f.provider.ensure('node', '../secret')).toBeUndefined();

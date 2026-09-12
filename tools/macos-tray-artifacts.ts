@@ -94,7 +94,8 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   const root = resolve(import.meta.dirname, '..');
   const [mode, directory] = process.argv.slice(2);
   if (!directory || (mode !== 'build' && mode !== 'check')) throw new Error('Usage: node tools/macos-tray-artifacts.ts build|check DIRECTORY');
-  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  const version = /const trayVersion = "([^"]+)"/.exec(readFileSync(join(root, 'local-access/tray/main.go'), 'utf8'))?.[1];
+  if (!version) throw new Error('Missing native component version');
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   if (mode === 'build') build(root, resolve(directory), version, commit);
   else importMacosTray(resolve(directory), undefined, version, commit);

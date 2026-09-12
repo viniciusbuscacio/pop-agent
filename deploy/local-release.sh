@@ -3,11 +3,13 @@ set -euo pipefail
 umask 077
 mode=${1:-build}
 windows_first=0
+server_only=0
 case "$mode" in
   build) ;;
+  build-server) mode=build; server_only=1 ;;
   build-windows) mode=build; windows_first=1 ;;
   publish|auth) ;;
-  *) echo 'Usage: deploy/local-release.sh [build|build-windows|publish|auth]' >&2; exit 2 ;;
+  *) echo 'Usage: deploy/local-release.sh [build|build-server|build-windows|publish|auth]' >&2; exit 2 ;;
 esac
 source_root=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
 state=${POP_AGENT_RELEASE_HOME:-"$HOME/.local/share/pop-agent/release-builder"}
@@ -36,7 +38,7 @@ if [[ "$mode" = build ]]; then
   [[ $(git -C "$state/checkout" remote get-url origin) = "$source_root" ]] || { echo 'Unexpected builder checkout origin.' >&2; exit 1; }
   git -C "$state/checkout" fetch --quiet origin "$commit"
   git -C "$state/checkout" checkout --quiet --detach "$commit"
-  timeout --kill-after=30s 45m "${docker_cmd[@]}" run --rm --init --cpus=2 --memory=4g --user "$(id -u):$(id -g)"     -e POP_AGENT_BUILDER_IMAGE="$image" -e POP_AGENT_WINDOWS_FIRST_RELEASE="$windows_first" -e HOME=/cache/home     -v "$state/checkout:/work" -v "$state/cache:/cache" -v "$state/releases:/releases"     "$image" bash deploy/local-release-container.sh
+  timeout --kill-after=30s 45m "${docker_cmd[@]}" run --rm --init --cpus=2 --memory=4g --user "$(id -u):$(id -g)"     -e POP_AGENT_SERVER_ONLY_RELEASE="$server_only" -e POP_AGENT_BUILDER_IMAGE="$image" -e POP_AGENT_WINDOWS_FIRST_RELEASE="$windows_first" -e HOME=/cache/home     -v "$state/checkout:/work" -v "$state/cache:/cache" -v "$state/releases:/releases"     "$image" bash deploy/local-release-container.sh
 else
   [[ -r "$state/releases/latest" ]] || { echo 'Build the batch first.' >&2; exit 1; }
   built=$(cat "$state/releases/latest")

@@ -277,8 +277,10 @@ unencrypted `pi-auth.json` and can be included in backups; see the Security spec
 
 ## 19. Versioning and roadmap
 
-- Root `VERSION` is the manually edited global product version and must agree
-  with package manifests, lockfile workspace entries and protocol metadata.
+- Root `VERSION` identifies the server/web release and agrees with their package
+  manifests and workspace lock entries. CLI and native Desktop/setup versions
+  are independent component versions; server-only releases retain published
+  client bytes and original versions through `release/clients.json`.
 - Pop Agent uses semantic versions and annotated release tags. Released bytes
   are immutable; changed bytes require a new version and URL.
 - `CHANGELOG.md` records shipped changes. `History-Pop-Spec.md` preserves the

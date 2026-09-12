@@ -56,7 +56,9 @@ const read = (path: string): PackageJson => JSON.parse(readFileSync(path, 'utf8'
 
 async function main(): Promise<void> {
   const cliPkg = read(join(cli, 'package.json'));
-  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  const version = cliPkg.version;
+  const nativeVersion = /const trayVersion = "([^"]+)"/.exec(readFileSync(join(root, 'local-access/tray/main.go'), 'utf8'))?.[1];
+  if (!nativeVersion) throw new Error('Missing native component version');
 
   // This invocation packs the checkout's product version. Previously packed
   // CLI releases remain immutable and available while package.json selects
@@ -171,7 +173,7 @@ async function main(): Promise<void> {
   if (process.platform === 'darwin') trayTargets.push(['darwin', process.arch === 'arm64' ? 'arm64' : 'amd64']);
   for (const [os, arch] of trayTargets) {
     const suffix = os === 'windows' ? '.exe' : '';
-    const file = `pop-local-access-${version}-${os}-${arch}${suffix}`;
+    const file = `pop-local-access-${nativeVersion}-${os}-${arch}${suffix}`;
     const path = join(localAccessOut, file);
     execFileSync('go', ['build', '-trimpath', os === 'windows' ? '-ldflags=-s -w -H=windowsgui' : '-ldflags=-s -w', '-o', path, '.'], {
       cwd: join(root, 'local-access', 'tray'),
@@ -188,17 +190,17 @@ async function main(): Promise<void> {
   const windowsTray = localAccessArtifacts['windows-amd64'];
   const windowsLauncher = launcherArtifacts['windows-amd64'];
   if (windowsTray && windowsLauncher) {
-    localAccessArtifacts['windows-amd64-setup'] = packWindowsSetup(root, version, out, windowsTray, windowsLauncher);
+    localAccessArtifacts['windows-amd64-setup'] = packWindowsSetup(root, nativeVersion, out, windowsTray, windowsLauncher);
   }
   writeFileSync(
     join(localAccessOut, 'manifest.json'),
-    `${JSON.stringify({ version, artifacts: localAccessArtifacts }, undefined, 2)}\n`,
+    `${JSON.stringify({ version: nativeVersion, artifacts: localAccessArtifacts }, undefined, 2)}\n`,
   );
 
   const macosDirectory = process.env['POP_AGENT_MACOS_TRAY_DIR'];
   if (macosDirectory) {
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-    importMacosTray(macosDirectory, localAccessOut, version, commit);
+    importMacosTray(macosDirectory, localAccessOut, nativeVersion, commit);
   }
 
   process.stdout.write(`packed ${served}, Pop launcher ${launcherVersion}, and Pop Local Access ${version}\n`);
