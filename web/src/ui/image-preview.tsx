@@ -2,38 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Pressable } from './controls';
 import { t } from '../i18n';
-import { attachmentPreviewUrl } from '../services/attachment-preview';
-import { renderPdfThumbnail } from '../services/pdf-thumbnail';
+import { loadPdfDocument, renderPdfThumbnail, type PdfDocumentHandle } from '../services/pdf-thumbnail';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
-
-function useAttachmentObjectUrl(src: string, type: string): { url?: string; failed: boolean } {
-  const [url, setUrl] = useState<string>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    let live = true;
-    let objectUrl: string | undefined;
-    setUrl(undefined);
-    setFailed(false);
-    void attachmentPreviewUrl(src, type, controller.signal).then(
-      next => {
-        objectUrl = next;
-        if (live) setUrl(next);
-        else URL.revokeObjectURL(next);
-      },
-      () => { if (live) setFailed(true); },
-    );
-    return () => {
-      live = false;
-      controller.abort();
-      if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl);
-    };
-  }, [src, type]);
-  return { ...(url === undefined ? {} : { url }), failed };
-}
 
 export function PdfThumbnail({ src, name, onOpen }: { src: string; name: string; onOpen: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -81,40 +54,90 @@ export function PdfThumbnail({ src, name, onOpen }: { src: string; name: string;
   );
 }
 
-/** Native modal focus handling, Escape and focus restoration; only mounted while open. */
+/** Full-screen PDF.js canvas viewer; only mounted while open. */
 export function PdfPreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const { url, failed } = useAttachmentObjectUrl(src, 'application/pdf');
+  const viewport = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [pdf, setPdf] = useState<PdfDocumentHandle>();
+  const [page, setPage] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
     element?.focus({ preventScroll: true });
     return () => element?.close();
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    let live = true;
+    let loaded: PdfDocumentHandle | undefined;
+    setPdf(undefined);
+    setPage(1);
+    setFailed(false);
+    void loadPdfDocument(src, controller.signal).then(
+      document => {
+        loaded = document;
+        if (live) setPdf(document);
+        else void document.destroy();
+      },
+      () => { if (live && !controller.signal.aborted) setFailed(true); },
+    );
+    return () => {
+      live = false;
+      controller.abort();
+      if (loaded !== undefined) void loaded.destroy();
+    };
+  }, [src]);
+  useLayoutEffect(() => {
+    const document = pdf;
+    const element = canvas.current;
+    const container = viewport.current;
+    if (document === undefined || element === null || container === null) return;
+    const controller = new AbortController();
+    setReady(false);
+    setFailed(false);
+    void document.renderPage(page, element, {
+      width: Math.max(1, container.clientWidth - 16),
+      height: Math.max(1, container.clientHeight - 16),
+      zoom,
+    }, controller.signal).then(
+      () => setReady(true),
+      () => { if (!controller.signal.aborted) setFailed(true); },
+    );
+    return () => controller.abort();
+  }, [page, pdf, zoom]);
   return createPortal(
     <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
       className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <strong className="min-w-0 flex-1 truncate">{name}</strong>
+          <Button type="button" variant="ghost" aria-label={t('files.imageZoomOut')} disabled={zoom <= MIN_ZOOM}
+            onClick={() => setZoom(current => Math.max(MIN_ZOOM, current - ZOOM_STEP))}>−</Button>
+          <Button type="button" variant="ghost" aria-label={t('files.imageZoomIn')} disabled={zoom >= MAX_ZOOM}
+            onClick={() => setZoom(current => Math.min(MAX_ZOOM, current + ZOOM_STEP))}>+</Button>
           <Button type="button" variant="ghost" onClick={onClose}>{t('common.close')}</Button>
         </div>
-        {failed ? (
-          <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--muted)]" role="alert">
-            {t('files.openFailed')}
+        <div ref={viewport} className="relative min-h-0 flex-1 overflow-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-testid="pdf-preview-viewport">
+          <div className="flex min-h-full min-w-full items-center justify-center">
+            <canvas ref={canvas} data-testid="pdf-preview-canvas" aria-label={`${name}, ${t('files.pdfPageCount', { page, count: pdf?.pageCount ?? 1 })}`}
+              className={ready ? 'bg-white shadow-lg' : 'invisible absolute'} />
+            {failed ? <div className="text-center text-sm text-[var(--muted)]" role="alert">{t('files.openFailed')}</div>
+              : ready ? null : <div className="text-sm text-[var(--muted)]" role="status">{t('app.loading')}</div>}
           </div>
-        ) : url === undefined ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--muted)]" role="status">
-            {t('app.loading')}
+        </div>
+        {pdf !== undefined && pdf.pageCount > 1 ? (
+          <div className="flex shrink-0 items-center justify-center gap-3 border-t border-[var(--border)] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <Button type="button" variant="ghost" aria-label={t('files.pdfPreviousPage')} disabled={page <= 1}
+              onClick={() => setPage(current => Math.max(1, current - 1))}>←</Button>
+            <span className="text-sm text-[var(--muted)]">{t('files.pdfPageCount', { page, count: pdf.pageCount })}</span>
+            <Button type="button" variant="ghost" aria-label={t('files.pdfNextPage')} disabled={page >= pdf.pageCount}
+              onClick={() => setPage(current => Math.min(pdf.pageCount, current + 1))}>→</Button>
           </div>
-        ) : (
-          <iframe
-            src={url}
-            title={name}
-            data-testid="pdf-preview-frame"
-            className="min-h-0 flex-1 border-0 bg-[var(--bg)]"
-          />
-        )}
+        ) : null}
       </div>
     </dialog>, document.body,
   );

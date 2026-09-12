@@ -883,10 +883,9 @@ focus ring around Close; ordinary keyboard traversal retains visible focus.
 PDF chat attachments with available bodies render a bounded inline first-page
 mini-preview with their file name. The mini-preview uses PDF.js to paint a canvas
 rather than relying on an embedded browser PDF plug-in, so it behaves consistently
-in Chromium and macOS WKWebView. Activating it opens the same full-screen modal
-using the browser's native PDF viewer and Escape/Close. The client converts the
-full-screen data URI to a temporary object URL for WebKit/browser compatibility
-and revokes that URL when its preview unmounts.
+in Chromium and macOS WKWebView. Activating it opens a full-screen PDF.js canvas
+viewer with page navigation, zoom controls, Escape and Close. Neither PDF view
+may depend on the browser's native embedded PDF plug-in.
 
 Resend actions share one in-flight guard and visible progress/error feedback above
 the composer, including context-menu retries. A failed request keeps the original

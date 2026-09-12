@@ -5,12 +5,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from './chat-message';
 
-const renderPdfThumbnail = vi.hoisted(() => vi.fn(async () => undefined));
-vi.mock('../services/pdf-thumbnail', () => ({ renderPdfThumbnail }));
+const pdfMocks = vi.hoisted(() => {
+  const renderPage = vi.fn(async () => undefined);
+  const destroy = vi.fn(async () => undefined);
+  return {
+    renderThumbnail: vi.fn(async () => undefined),
+    renderPage,
+    destroy,
+    load: vi.fn(async () => ({ pageCount: 2, renderPage, destroy })),
+  };
+});
+vi.mock('../services/pdf-thumbnail', () => ({
+  renderPdfThumbnail: pdfMocks.renderThumbnail,
+  loadPdfDocument: pdfMocks.load,
+}));
 
 afterEach(() => {
   cleanup();
-  renderPdfThumbnail.mockClear();
+  pdfMocks.renderThumbnail.mockClear();
+  pdfMocks.renderPage.mockClear();
+  pdfMocks.destroy.mockClear();
+  pdfMocks.load.mockClear();
   useThinkingStore.setState({ show: true });
 });
 
@@ -473,29 +488,32 @@ it('opens an attached image with bounded zoom controls and closes without naviga
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it('shows an inline PDF thumbnail, opens it full screen and releases the modal URL', async () => {
+it('shows an inline PDF thumbnail and opens it in the PDF.js full-screen viewer', async () => {
   const user = userEvent.setup();
-  const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('data:application/pdf,pdf');
-  const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   const dataUri = 'data:application/pdf;base64,JVBERi0xLjQ=';
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Document.pdf', type: 'application/pdf', dataUri }] }} />);
 
   const thumbnail = await screen.findByTestId('pdf-thumbnail-canvas');
   expect(thumbnail.className).toContain('max-h-full');
   expect(screen.getByTestId('pdf-thumbnail').textContent).toContain('Document.pdf');
-  expect(renderPdfThumbnail).toHaveBeenCalledWith(dataUri, thumbnail, expect.any(AbortSignal));
-  expect(objectUrl).not.toHaveBeenCalled();
+  expect(pdfMocks.renderThumbnail).toHaveBeenCalledWith(dataUri, thumbnail, expect.any(AbortSignal));
 
   await user.click(screen.getByRole('button', { name: 'Preview: Document.pdf' }));
   const dialog = screen.getByRole('dialog', { name: 'Document.pdf' });
   expect(document.activeElement).toBe(dialog);
-  const frame = await screen.findByTestId('pdf-preview-frame');
-  expect(objectUrl).toHaveBeenCalledOnce();
-  expect(frame.getAttribute('src')).toBe('data:application/pdf,pdf');
+  const fullCanvas = await screen.findByTestId('pdf-preview-canvas');
+  expect(pdfMocks.load).toHaveBeenCalledWith(dataUri, expect.any(AbortSignal));
+  expect(pdfMocks.renderPage).toHaveBeenCalledWith(1, fullCanvas, expect.objectContaining({ zoom: 1 }), expect.any(AbortSignal));
+  expect(screen.getByText('1 of 2')).not.toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Next page' }));
+  expect(pdfMocks.renderPage).toHaveBeenLastCalledWith(2, fullCanvas, expect.objectContaining({ zoom: 1 }), expect.any(AbortSignal));
+  await user.click(screen.getByRole('button', { name: 'Zoom in' }));
+  expect(pdfMocks.renderPage).toHaveBeenLastCalledWith(2, fullCanvas, expect.objectContaining({ zoom: 1.25 }), expect.any(AbortSignal));
 
   await user.click(screen.getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(revokeObjectUrl).toHaveBeenCalledWith('data:application/pdf,pdf');
+  expect(pdfMocks.destroy).toHaveBeenCalledOnce();
 });
 
 it('offers a touch-accessible resend action on the interrupted user bubble', async () => {

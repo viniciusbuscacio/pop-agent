@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Open PDFs in a PDF.js full-screen viewer on macOS and Windows.
+
 ## 0.2.103 — 2026-09-12
 
 - Render inline PDF thumbnails with PDF.js for macOS WKWebView compatibility.
