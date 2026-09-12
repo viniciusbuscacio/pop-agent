@@ -27,7 +27,7 @@ export function channelNote(
 
 /** Exclude Pop's transport metadata from per-message skill relevance. */
 export function withoutChannelNote(prompt: string): string {
-  return withoutMessageTime(prompt).replace(/^\[Pop Agent: this message arrived through [^\r\n]*\.\]\r?\n\r?\n/u, '');
+  return withoutMessageTime(prompt).replace(/^\[Pop Agent: this message arrived through [^\r\n]*\.\]\r?\n\r?\n/u, '').replace(/^\[Pop attachment archive: [^\r\n]*\]\n\n/u, '');
 }
 
 

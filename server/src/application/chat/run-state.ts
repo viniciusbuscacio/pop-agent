@@ -1,3 +1,4 @@
+import type { AttachmentArchive } from '../files/attachment-archive.js';
 import type { Attachment, ExecutionMode, MessageClient, ToolRecord } from '../../domain/chat/chat.js';
 import type { AgentBridge, AgentRunControl } from '../ports/agent-bridge.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
@@ -68,6 +69,7 @@ export type RunOutcome = { ok: true } | { ok: false; code: string };
 export const REMEMBERED_OUTCOMES = 50;
 
 export interface RunDeps {
+  attachmentArchive?: Pick<AttachmentArchive, 'save'>;
   chats: ChatRepo;
   bridge: AgentBridge;
   sink: EventSink;

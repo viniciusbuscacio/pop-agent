@@ -3,6 +3,7 @@ import { Pressable } from './controls';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
+import { ImagePreview } from './image-preview';
 import { Markdown } from './markdown';
 
 /**
@@ -88,6 +89,7 @@ function ChatMessageView({
           </div>
         ) : null}
         {message.attachments.length > 0 ? <Attachments attachments={message.attachments} /> : null}
+        {onResend ? <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>{t('chat.resend')}</ActionButton> : null}
       </div>
     );
   }
@@ -221,22 +223,21 @@ function ActionButton({
 /**
  * What was sent along with the words (aw's split): images render as
  * thumbnails, everything else as a named chip. Tapping an image opens it in a
- * new tab -- the data URI is the file.
+ * full-screen preview without duplicating the attachment in persistent state.
  */
 function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }) {
+  const [preview, setPreview] = useState<MessageDTO['attachments'][number]>();
   const images = attachments.filter((entry) => entry.type.startsWith('image/') && entry.dataUri !== '');
   const files = attachments.filter((entry) => !entry.type.startsWith('image/') || entry.dataUri === '');
 
   return (
     <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">
       {images.map((image, index) => (
-        <img
-          key={`${image.name}-${String(index)}`}
-          src={image.dataUri}
-          alt={image.name}
-          className="max-h-72 max-w-full rounded-xl object-contain"
-        />
+        <Pressable key={`${image.name}-${String(index)}`} type="button" aria-label={`${t('files.preview')}: ${image.name}`} onClick={() => setPreview(image)} className="max-w-full rounded-xl">
+          <img src={image.dataUri} alt={image.name} className="max-h-72 max-w-full rounded-xl object-contain" />
+        </Pressable>
       ))}
+      {preview ? <ImagePreview src={preview.dataUri} name={preview.name} onClose={() => setPreview(undefined)} /> : null}
       {files.length > 0 ? (
         <div className="flex flex-wrap justify-end gap-1.5">
           {files.map((file, index) => (

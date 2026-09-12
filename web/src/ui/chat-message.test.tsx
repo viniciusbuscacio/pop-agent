@@ -437,3 +437,19 @@ it.each([
   expect(screen.getByText(label)).toBeTruthy();
   expect(screen.getByTitle('Origin reported by the authenticated A2A peer')).toBeTruthy();
 });
+
+it('opens an attached image in a full-screen dialog and closes it without navigation', async () => {
+  const user = userEvent.setup();
+  render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Photo.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }] }} />);
+  await user.click(screen.getByRole('button', { name: 'Preview: Photo.png' }));
+  expect(screen.getByRole('dialog', { name: 'Photo.png' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('offers a touch-accessible resend action on the interrupted user bubble', async () => {
+  const resend = vi.fn();
+  render(<ChatMessage message={{ ...base, role: 'user', content: 'Try again' }} onResend={resend} />);
+  await userEvent.click(screen.getByTestId('message-resend'));
+  expect(resend).toHaveBeenCalledTimes(1);
+});

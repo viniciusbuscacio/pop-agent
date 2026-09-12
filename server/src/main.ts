@@ -1,3 +1,4 @@
+import { AttachmentArchive } from './application/files/attachment-archive.js';
 import { A2aSettingsService } from './application/a2a/a2a-settings.js';
 import { A2aInboundService } from './application/a2a/a2a-inbound-service.js';
 import { SdkA2aServer } from './infrastructure/a2a/sdk-a2a-server.js';
@@ -211,6 +212,7 @@ const fileProvenance = new FileProvenanceService({
   files,
   clock: systemClock,
 });
+const attachmentArchive = new AttachmentArchive({ files, repo: context.attachmentCatalog, provenance: fileProvenance });
 // Beside the data directory, never inside it: a backup must not end up in the
 // next backup. Named once because the storage report has to count it too --
 // it is usually the heaviest thing on the disk (§16 keeps ten of them).
@@ -374,6 +376,7 @@ function piBridge(): PiAgentBridge {
       memorySearch: hybridMemory,
       userMemory: context.userMemory,
       files,
+      attachmentArchive,
       skills: skillsVault,
       autoSkillsEnabled: () => settings.read().autoSkillsEnabled,
       restTools: defineTool => buildRestTools(defineTool, restClients),
@@ -482,6 +485,7 @@ const purger = new FsChatPurger({
 const health = new HealthService({ providers, pingDb: context.pingDb });
 const queueDrain: { service?: QueuedMessageService } = {};
 const runs = new RunService({
+  attachmentArchive,
   chats: context.chats,
   bridge,
   sink: hub,
@@ -549,6 +553,7 @@ const runs = new RunService({
 });
 
 const queuedMessages = new QueuedMessageService({
+  attachmentArchive,
   repo: context.queuedMessages,
   chats: context.chats,
   runs,

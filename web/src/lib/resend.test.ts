@@ -39,12 +39,20 @@ describe('resendSource', () => {
     expect(resendSource(messages, 1)).toEqual(user);
   });
 
-  it('does not offer resend for a user stop marker', () => {
+  it('offers the original payload from both the stopped bubble and stop marker', () => {
     const messages: MessageDTO[] = [
       user,
       { ...base, id: 'stopped-1', role: 'system', content: 'You stopped this answer.' },
     ];
 
-    expect(resendSource(messages, 1)).toBeUndefined();
+    expect(resendSource(messages, 1)).toEqual(user);
+    expect(resendSource(messages, 0)).toEqual(user);
   });
+});
+
+it('does not retry a completed user turn because a later turn stopped', () => {
+ const next = { ...user, id: 'user-2', content: 'next', attachments: [{ name: 'photo.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }] };
+ const messages: MessageDTO[] = [user, next, { ...base, id: 'stop', role: 'system', content: 'You stopped this answer.' }];
+ expect(resendSource(messages, 0)).toBeUndefined();
+ expect(resendSource(messages, 1)).toBe(next);
 });

@@ -1,3 +1,4 @@
+import type { AttachmentArchive } from '../../application/files/attachment-archive.js';
 import { mkdirSync, readFileSync } from 'node:fs';
 import type { SessionForkPoint, SessionStatsResult } from '../../application/ports/session-command-bridge.js';
 import type {
@@ -78,7 +79,7 @@ export const SYSTEM_PROMPT = [
   'you to create or save is not done until it exists under Files/; the rest',
   'of the workspace is your scratch space, invisible to the user. To delete',
   'inside Files/ always use delete_file (it moves to a trash the user can',
-  'restore from) -- never rm. files_search finds the user\'s files by name.',
+  'restore from) -- never rm. files_search finds the user\'s files by name and saved attachment descriptions.',
   'When you create an image for the user in Files/, embed it in your answer as',
   '`![description](attachment://path-relative-to-Files)`; the app resolves that',
   'stable reference into a secure preview and download.',
@@ -296,6 +297,7 @@ export interface SdkPiEngineOptions {
   userMemory?: UserMemoryRepo;
   /** The user's Files folder: powers delete_file and files_search (docs/specs/Spec-Pop-General.md §14). */
   files?: FilesService;
+  attachmentArchive?: AttachmentArchive;
   /**
    * The skills vault, exposed through the read-only skills catalog. Skill
    * creation belongs to the reviewed background distiller, never a live turn.
@@ -524,7 +526,7 @@ export class SdkPiEngine implements PiEngine {
       ...(this.options.userMemory === undefined
         ? []
         : buildUserMemoryTools(sdk.defineTool, this.options.userMemory)),
-      ...(this.options.files === undefined ? [] : buildFileTools(sdk.defineTool, this.options.files)),
+      ...(this.options.files === undefined ? [] : buildFileTools(sdk.defineTool, this.options.files, this.options.attachmentArchive)),
       ...(this.options.skills === undefined
         ? []
         : buildSkillTools(sdk.defineTool, this.options.skills)),

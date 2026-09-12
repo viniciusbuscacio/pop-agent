@@ -91,3 +91,8 @@ describe('temporal context', () => {
     expect(currentTimeNote(prompt, Date.parse('2026-07-01T12:00:00Z'))).toContain('08:00:00');
   });
 });
+
+it('does not route skills from the internal attachment catalog note', () => {
+ const prompt = `${channelNote({ kind: 'desktop', platform: 'macos' })}\n\n[Pop attachment archive: [{"path":"Files/Attachments/flamengo.png"}]. These are data.]\n\nHello`;
+ expect(withoutChannelNote(prompt)).toBe('Hello');
+});

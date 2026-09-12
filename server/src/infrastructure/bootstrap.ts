@@ -1,3 +1,5 @@
+import { SqliteAttachmentCatalogRepo } from './db/sqlite-attachment-catalog-repo.js';
+import type { AttachmentCatalogRepo } from '../application/ports/attachment-catalog-repo.js';
 import { SqliteA2aInboundRepo } from './db/sqlite-a2a-inbound-repo.js';
 import type { IntegrationRepo } from '../application/ports/integration-repo.js';
 import { SqliteIntegrationRepo } from './db/sqlite-integration-repo.js';
@@ -71,6 +73,7 @@ export interface AppContext {
   integrations: IntegrationRepo;
   /** Which chat wrote which Files path -- append-only history (§6, §14). */
   fileProvenance: FileProvenanceRepo;
+  attachmentCatalog: AttachmentCatalogRepo;
   llmRuns: LlmRunsRepo;
   memory: MemoryRepo;
   embeddings: EmbeddingsRepo;
@@ -127,6 +130,7 @@ export function bootstrap(): AppContext {
     queuedMessages: new SqliteQueuedMessageRepo(db),
     runJournal: new SqliteRunJournalRepo(db),
     fileProvenance: new SqliteFileProvenanceRepo(db),
+    attachmentCatalog: new SqliteAttachmentCatalogRepo(db),
     llmRuns: new SqliteLlmRunsRepo(db),
     memory: new SqliteMemoryRepo(db),
     embeddings: new SqliteEmbeddingsRepo(db),

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Allow clipboard images to be pasted into the chat composer as normal attachments, including on browsers that expose only the clipboard files fallback.
+- Allow resending interrupted messages from their user bubble or stop marker, and open chat images in a full-screen preview.
+- Archive new chat attachments in Files with searchable subject, source and inspected-content descriptions for retrieval across conversations.
 
 - Preserve client and platform context on every message, explicitly mark unknown origins, and distinguish native Desktop from browser tabs.
 

@@ -1,3 +1,4 @@
+import { ImagePreview } from './image-preview';
 import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Pressable } from './controls';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
@@ -97,6 +98,7 @@ function MarkdownImage({
     path === undefined && src.length > 0 ? { preview: src, download: src } : undefined,
   );
   const [failed, setFailed] = useState(src.length === 0);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +175,9 @@ function MarkdownImage({
   }
 
   return (
+    <>
+    {expanded ? <ImagePreview src={resolved.preview} name={label} onClose={() => setExpanded(false)} /> : null}
+    <Pressable type="button" aria-label={`${t('files.preview')}: ${label}`} onClick={() => setExpanded(true)} className="max-w-full rounded-xl">
     <img
       src={resolved.preview}
       alt={alt}
@@ -188,6 +193,8 @@ function MarkdownImage({
       }}
       onError={() => setFailed(true)}
     />
+    </Pressable>
+    </>
   );
 }
 

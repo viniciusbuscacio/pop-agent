@@ -1,3 +1,4 @@
+import type { AttachmentArchive } from '../files/attachment-archive.js';
 import type { Attachment, ExecutionMode, MessageClient } from '../../domain/chat/chat.js';
 import { newQueuedMessageId } from '../../domain/ids.js';
 import type { ChatRepo } from '../ports/chat-repo.js';
@@ -36,6 +37,7 @@ export class QueuedMessageService {
   constructor(
     private readonly deps: {
       repo: QueuedMessageRepo;
+      attachmentArchive?: Pick<AttachmentArchive, 'save'>;
       chats: ChatRepo;
       runs: RunService;
       clock: Clock;
@@ -69,6 +71,7 @@ export class QueuedMessageService {
       createdAt: now,
       updatedAt: now,
     };
+    this.deps.attachmentArchive?.save({ ...message, content: message.text });
     // Services are synchronous around this repository, so count + create cannot
     // interleave inside this process. The id conflict fallback is still reported
     // as full rather than silently losing an accepted input.
@@ -91,6 +94,7 @@ export class QueuedMessageService {
       executionMode: current.executionMode,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
+    this.deps.attachmentArchive?.save({ ...message, content: message.text });
     this.deps.runs.clearSteering(chatId);
     if (!this.deps.repo.update(message)) return { ok: false, reason: 'queue_not_found' };
     const head = this.deps.repo.get(chatId) ?? message;

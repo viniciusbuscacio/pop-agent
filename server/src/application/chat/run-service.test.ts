@@ -1242,3 +1242,22 @@ describe('failing over between providers (docs/specs/Spec-Pop-General.md §15, f
     expect(sink.of('error')[0]?.message).toEqual(marks[1]);
   });
 });
+
+it('archives the accepted payload before a provider failure and gives the model its durable path', async () => {
+  const saved: string[] = [];
+  runs = new RunService({ chats: repo, journal: new SqliteRunJournalRepo(db), bridge, sink, clock,
+    attachmentArchive: { save: message => {
+      saved.push(message.content);
+      return [{ path: 'Attachments/photo.png', name: 'photo.png', chatId: message.chatId, messageId: message.id, type: 'image/png', subject: message.content, description: '', createdAt: message.createdAt }];
+    } },
+  });
+  bridge.script = async request => {
+    expect(saved).toEqual(['My photo']);
+    expect(request.prompt).toContain('Files/Attachments/photo.png');
+    throw new Error('provider unavailable');
+  };
+  const result = runs.startRun(newChat(), 'My photo', [{ name: 'photo.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }]);
+  expect(result.ok).toBe(true);
+  if (result.ok) await runs.whenRunEnds(result.runId);
+  expect(saved).toEqual(['My photo']);
+});

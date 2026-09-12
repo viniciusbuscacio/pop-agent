@@ -1,3 +1,4 @@
+import type { AttachmentArchive } from '../../application/files/attachment-archive.js';
 import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { envelope, sanitize } from '../../domain/safety/sanitize.js';
@@ -36,7 +37,7 @@ function stripPrefix(path: string): string {
   return cleaned.startsWith('Files/') ? cleaned.slice('Files/'.length) : cleaned;
 }
 
-export function buildFileTools(defineTool: DefineTool, files: FilesService): ToolDefinition[] {
+export function buildFileTools(defineTool: DefineTool, files: FilesService, archive?: AttachmentArchive): ToolDefinition[] {
   const deleteFile = defineTool({
     name: 'delete_file',
     label: 'Delete a user file',
@@ -71,10 +72,10 @@ export function buildFileTools(defineTool: DefineTool, files: FilesService): Too
     name: 'files_search',
     label: 'Search the user files',
     description:
-      "Searches the user's Files by name: every file or folder whose path contains the query, " +
+      "Searches the user's Files by name and archived attachment subject/description: every file or folder whose path contains the query, " +
       'case-insensitive. Use it when the user refers to a document that may live in their ' +
       'Files. Returns paths relative to Files/.',
-    promptSnippet: "files_search(query) — find the user's files by name",
+    promptSnippet: "files_search(query) — find files by name or archived attachment subject/description",
     parameters: Type.Object({
       query: Type.String({ description: 'Part of a file or folder name' }),
     }),
@@ -86,10 +87,23 @@ export function buildFileTools(defineTool: DefineTool, files: FilesService): Too
         .searchNames(query, MAX_HITS)
         .map((hit) => (hit.kind === 'dir' ? `${hit.path}/` : hit.path));
 
+      const archived = archive?.search(query) ?? [];
+      for (const record of archived) {
+        hits.push(`${record.path} — ${(record.description || record.subject).slice(0, 500)} (chat ${record.chatId}, ${record.createdAt}). File reference: attachment://${record.path}`);
+      }
       if (hits.length === 0) return Promise.resolve(text('No file name matched.'));
-      return Promise.resolve(text(envelope(sanitize(hits.join('\n')).clean, 'files_search')));
+      return Promise.resolve(text(envelope(sanitize(hits.slice(0, MAX_HITS).join('\n')).clean, 'files_search')));
     },
   });
 
-  return [deleteFile, search];
+  const describe = defineTool({
+    name: 'files_describe', label: 'Describe an archived attachment',
+    description: 'Save a concise factual description of an archived attachment you have inspected, so future files_search calls can find it by subject. Do not guess unseen content. Path is relative to Files/.',
+    parameters: Type.Object({ path: Type.String(), description: Type.String({ maxLength: 4000 }) }),
+    execute: (_id, params) => {
+      const { path, description } = params as { path: string; description: string };
+      return Promise.resolve(text(archive?.describe(stripPrefix(path), description) ? 'Attachment description saved.' : 'Archived attachment not found.'));
+    },
+  });
+  return archive ? [deleteFile, search, describe] : [deleteFile, search];
 }

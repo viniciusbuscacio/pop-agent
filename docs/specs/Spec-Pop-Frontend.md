@@ -866,3 +866,12 @@ local mutation acknowledgements, live events from other clients, and list
 reconciliation; successful archiving must not depend on subsequent list reads.
 Archiving a different chat must not interrupt the selected one. Explicitly
 opening a chat from the archive remains supported.
+
+## Interrupted messages and image previews
+
+An owner-stopped or failed turn can be resent from its original user bubble
+(using the visible touch-accessible action or the desktop context menu) or its
+stop/failure marker. Resend preserves text and attachments and is unavailable
+during an active run, queued input or compaction. A later failed turn never makes
+an earlier completed message retryable. Attached and assistant-rendered images
+open a full-screen modal with Close and Escape, preserving chat navigation.

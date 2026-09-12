@@ -183,16 +183,17 @@ export function ChatPage() {
     () =>
       (messages ?? []).map((message, index, history) => {
         const source = resendSource(history, index);
-        const canResend = source !== undefined && idle && pending.length === 0;
+        const canResend = source !== undefined && idle && pending.length === 0 && !compacting;
         return (
           <div key={message.id} data-context-message={message.id} className="min-w-0">
           <ChatMessage
             message={message}
-            resending={resendingId === message.id}
+            resending={resendingId !== undefined}
             {...(!canResend
               ? {}
               : {
                   onResend: () => {
+                    if (resendingId !== undefined) return;
                     setResendingId(message.id);
                     void send(chatId, source.content, source.attachments)
                       .catch(() => undefined)
@@ -206,7 +207,7 @@ export function ChatPage() {
           </div>
         );
       }),
-    [chatId, idle, messages, pending.length, resendingId, send],
+    [chatId, idle, messages, pending.length, resendingId, send, compacting],
   );
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
   const transcriptWithCommands = useMemo(() => {

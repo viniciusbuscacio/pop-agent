@@ -107,8 +107,17 @@ entries to a recoverable trash; agents must use `delete_file`, never shell `rm`.
 Folder deletion reports the full subtree blast radius to owner-facing
 confirmation. Restore refuses name collisions rather than overwriting.
 
-Accepted chat attachments are copied to chat-scoped workspace paths with
-sanitized names. Provenance tracks durable user files derived from tools or
+Accepted chat attachments are archived under `Files/Attachments/` with sanitized
+names and collision-resistant per-message identities, including queued inputs.
+The attachment catalog records their original name/type, receipt date, source
+chat/message, user-provided subject and optional inspected-content description.
+Files and this catalog survive chat deletion and are included in normal backups.
+`files_search` searches names and attachment subjects/descriptions; `files_describe`
+saves a factual description after the agent examines a file. Missing/trash files
+are excluded from catalog results. The model must not claim to remember unseen
+content and uses authenticated `attachment://` references to show found images.
+This applies to new attachments; existing workspace-only uploads are not silently
+backfilled. Working copies may still be written to chat-scoped workspace paths. Provenance tracks durable user files derived from tools or
 session exports. A database reference is not proof that a filesystem path still
 exists; missing files return an explicit not-found outcome.
 
