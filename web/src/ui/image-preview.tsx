@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from './controls';
+import { Button, Pressable } from './controls';
 import { t } from '../i18n';
 import { attachmentPreviewUrl } from '../services/attachment-preview';
 
@@ -8,22 +8,16 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 
-/** Native modal focus handling, Escape and focus restoration; only mounted while open. */
-export function PdfPreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+function useAttachmentObjectUrl(src: string, type: string): { url?: string; failed: boolean } {
   const [url, setUrl] = useState<string>();
   const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-    element?.focus({ preventScroll: true });
-    return () => element?.close();
-  }, []);
   useEffect(() => {
     const controller = new AbortController();
     let live = true;
     let objectUrl: string | undefined;
-    void attachmentPreviewUrl(src, 'application/pdf', controller.signal).then(
+    setUrl(undefined);
+    setFailed(false);
+    void attachmentPreviewUrl(src, type, controller.signal).then(
       next => {
         objectUrl = next;
         if (live) setUrl(next);
@@ -36,7 +30,56 @@ export function PdfPreview({ src, name, onClose }: { src: string; name: string; 
       controller.abort();
       if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl);
     };
-  }, [src]);
+  }, [src, type]);
+  return { ...(url === undefined ? {} : { url }), failed };
+}
+
+export function PdfThumbnail({ src, name, onOpen }: { src: string; name: string; onOpen: () => void }) {
+  const { url, failed } = useAttachmentObjectUrl(src, 'application/pdf');
+  return (
+    <div className="w-72 max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel-bg)]" data-testid="pdf-thumbnail">
+      <div className="relative h-40 bg-white">
+        {failed ? (
+          <div className="flex h-full items-center justify-center p-3 text-center text-xs text-[var(--muted)]">
+            {t('files.openFailed')}
+          </div>
+        ) : url === undefined ? (
+          <div className="flex h-full items-center justify-center text-xs text-[var(--muted)]">{t('app.loading')}</div>
+        ) : (
+          <iframe
+            src={`${url}#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0`}
+            title={name}
+            tabIndex={-1}
+            aria-hidden="true"
+            loading="lazy"
+            data-testid="pdf-thumbnail-frame"
+            className="h-full w-full border-0 pointer-events-none"
+          />
+        )}
+        <Pressable
+          type="button"
+          aria-label={`${t('files.preview')}: ${name}`}
+          onClick={onOpen}
+          className="absolute inset-0 cursor-pointer bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+        >
+          <span className="sr-only">{`${t('files.preview')}: ${name}`}</span>
+        </Pressable>
+      </div>
+      <div className="truncate border-t border-[var(--border)] px-2 py-1.5 text-xs text-[var(--muted)]">{name}</div>
+    </div>
+  );
+}
+
+/** Native modal focus handling, Escape and focus restoration; only mounted while open. */
+export function PdfPreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const { url, failed } = useAttachmentObjectUrl(src, 'application/pdf');
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    element?.focus({ preventScroll: true });
+    return () => element?.close();
+  }, []);
   return createPortal(
     <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
       className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">

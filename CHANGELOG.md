@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show an inline first-page preview for PDF chat attachments.
+
 ## 0.2.101 — 2026-09-12
 
 - Load PDF chat previews through temporary object URLs for WebKit compatibility.

@@ -3,7 +3,7 @@ import { Pressable } from './controls';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
-import { ImagePreview, PdfPreview } from './image-preview';
+import { ImagePreview, PdfPreview, PdfThumbnail } from './image-preview';
 import { Markdown } from './markdown';
 
 /**
@@ -241,19 +241,16 @@ function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }
       ))}
       {preview?.kind === 'image' ? <ImagePreview src={preview.attachment.dataUri} name={preview.attachment.name} onClose={() => setPreview(undefined)} /> : null}
       {preview?.kind === 'pdf' ? <PdfPreview src={preview.attachment.dataUri} name={preview.attachment.name} onClose={() => setPreview(undefined)} /> : null}
-      {pdfs.length > 0 || files.length > 0 ? (
+      {pdfs.map((pdf, index) => (
+        <PdfThumbnail
+          key={`${pdf.name}-${String(index)}`}
+          src={pdf.dataUri}
+          name={pdf.name}
+          onOpen={() => setPreview({ kind: 'pdf', attachment: pdf })}
+        />
+      ))}
+      {files.length > 0 ? (
         <div className="flex flex-wrap justify-end gap-1.5">
-          {pdfs.map((pdf, index) => (
-            <Pressable
-              key={`${pdf.name}-${String(index)}`}
-              type="button"
-              aria-label={`${t('files.preview')}: ${pdf.name}`}
-              onClick={() => setPreview({ kind: 'pdf', attachment: pdf })}
-              className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
-            >
-              <span className="truncate">{pdf.name}</span>
-            </Pressable>
-          ))}
           {files.map((file, index) => (
             <span
               key={`${file.name}-${String(index)}`}

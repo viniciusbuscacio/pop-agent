@@ -469,18 +469,23 @@ it('opens an attached image with bounded zoom controls and closes without naviga
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it('opens an attached PDF in the same full-screen viewer and closes it', async () => {
+it('shows an inline PDF thumbnail, opens it full screen and releases the modal URL', async () => {
   const user = userEvent.setup();
   const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('data:application/pdf,pdf');
   const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   const dataUri = 'data:application/pdf;base64,JVBERi0xLjQ=';
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Document.pdf', type: 'application/pdf', dataUri }] }} />);
 
+  const thumbnail = await screen.findByTestId('pdf-thumbnail-frame');
+  expect(thumbnail.getAttribute('src')).toBe('data:application/pdf,pdf#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0');
+  expect(screen.getByTestId('pdf-thumbnail').textContent).toContain('Document.pdf');
+  expect(objectUrl).toHaveBeenCalledOnce();
+
   await user.click(screen.getByRole('button', { name: 'Preview: Document.pdf' }));
   const dialog = screen.getByRole('dialog', { name: 'Document.pdf' });
   expect(document.activeElement).toBe(dialog);
   const frame = await screen.findByTestId('pdf-preview-frame');
-  expect(objectUrl).toHaveBeenCalledOnce();
+  expect(objectUrl).toHaveBeenCalledTimes(2);
   expect(frame.getAttribute('src')).toBe('data:application/pdf,pdf');
 
   await user.click(screen.getByRole('button', { name: 'Close' }));
