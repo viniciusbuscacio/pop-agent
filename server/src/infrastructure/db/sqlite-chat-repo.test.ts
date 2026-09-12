@@ -1,0 +1,312 @@
+import Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_CHAT_TITLE, type Chat, type Message } from '../../domain/chat/chat.js';
+import { newChatId, newMessageId } from '../../domain/ids.js';
+import { migrate } from './migrate.js';
+import { SqliteChatRepo } from './sqlite-chat-repo.js';
+
+let db: Database.Database;
+let repo: SqliteChatRepo;
+
+const T0 = '2026-07-30T20:00:00.000Z';
+
+function chat(overrides: Partial<Chat> = {}): Chat {
+  return {
+    id: newChatId(),
+    title: DEFAULT_CHAT_TITLE,
+    model: '',
+    provider: '',
+    archived: false,
+    pinned: false,
+    executionMode: 'normal',
+    piSessionId: '',
+    summary: '',
+    autoTitle: true,
+    createdAt: T0,
+    updatedAt: T0,
+    ...overrides,
+  };
+}
+
+function message(chatId: string, overrides: Partial<Message> = {}): Message {
+  return {
+    id: newMessageId(),
+    chatId,
+    role: 'user',
+    content: 'hello',
+    thinking: '',
+    tools: [],
+    attachments: [],
+    createdAt: T0,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  migrate(db);
+  repo = new SqliteChatRepo(db);
+});
+
+describe('chats', () => {
+  it('round-trips a chat', () => {
+    const created = repo.create(chat({ title: 'Groceries', model: 'fake/model-1' }));
+
+    expect(repo.get(created.id)).toEqual(created);
+  });
+
+  it('persists the synchronized execution mode', () => {
+    const created = repo.create(chat());
+
+    repo.setExecutionMode(created.id, 'plan');
+
+    expect(repo.get(created.id)?.executionMode).toBe('plan');
+  });
+
+  it('returns undefined for a chat that does not exist', () => {
+    expect(repo.get('chat-000000000000')).toBeUndefined();
+  });
+
+  it('lists pinned chats first, then the most recently active', () => {
+    const older = repo.create(chat({ updatedAt: '2026-07-30T10:00:00.000Z' }));
+    const newer = repo.create(chat({ updatedAt: '2026-07-30T18:00:00.000Z' }));
+    repo.setPinned(older.id, true);
+
+    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([older.id, newer.id]);
+    expect(repo.get(older.id)?.pinned).toBe(true);
+  });
+
+  it('keeps archived chats out of the main list', () => {
+    const open = repo.create(chat());
+    const filed = repo.create(chat());
+    repo.setArchived(filed.id, true);
+
+    expect(repo.list({ archived: false }).map((row) => row.id)).toEqual([open.id]);
+    expect(repo.list({ archived: true }).map((row) => row.id)).toEqual([filed.id]);
+  });
+
+  it('archives every open chat except the active one and pinned chats', () => {
+    const keep = repo.create(chat());
+    const pinned = repo.create(chat({ pinned: true }));
+    const one = repo.create(chat());
+    const two = repo.create(chat());
+    const alreadyFiled = repo.create(chat({ archived: true }));
+
+    expect(repo.archiveOthers(keep.id)).toBe(2);
+    expect(new Set(repo.list({ archived: false }).map((row) => row.id))).toEqual(
+      new Set([keep.id, pinned.id]),
+    );
+    expect(new Set(repo.list({ archived: true }).map((row) => row.id))).toEqual(
+      new Set([one.id, two.id, alreadyFiled.id]),
+    );
+    expect(repo.archiveOthers(keep.id)).toBe(0);
+  });
+
+  it('does not archive anything when the chat to keep is invalid', () => {
+    const one = repo.create(chat());
+    const two = repo.create(chat());
+
+    expect(repo.archiveOthers('chat-does-not-exist')).toBe(0);
+    expect(new Set(repo.list({ archived: false }).map((row) => row.id))).toEqual(
+      new Set([one.id, two.id]),
+    );
+  });
+
+  it('shows the last message as the preview', () => {
+    const created = repo.create(chat());
+    repo.appendMessage(message(created.id, { content: 'first', createdAt: T0 }));
+    repo.appendMessage(
+      message(created.id, { content: 'the latest thing', createdAt: '2026-07-30T20:05:00.000Z' }),
+    );
+
+    expect(repo.list({ archived: false })[0]?.preview).toBe('the latest thing');
+  });
+
+  it('previews an empty chat as an empty string, not null', () => {
+    repo.create(chat());
+
+    expect(repo.list({ archived: false })[0]?.preview).toBe('');
+  });
+
+  it('renames, re-models and touches', () => {
+    const created = repo.create(chat());
+
+    repo.rename(created.id, 'Renamed');
+    repo.setModel(created.id, 'fake/model-2', 'openrouter');
+    repo.touch(created.id, '2026-07-31T00:00:00.000Z');
+
+    const stored = repo.get(created.id);
+    expect(stored?.title).toBe('Renamed');
+    expect(stored?.model).toBe('fake/model-2');
+    expect(stored?.updatedAt).toBe('2026-07-31T00:00:00.000Z');
+  });
+
+  it('takes its messages with it when deleted', () => {
+    const created = repo.create(chat());
+    repo.appendMessage(message(created.id));
+    repo.appendMessage(message(created.id));
+
+    repo.delete(created.id);
+
+    expect(repo.get(created.id)).toBeUndefined();
+    expect(repo.countMessages(created.id)).toBe(0);
+  });
+
+  it('takes the message embeddings with it too', () => {
+    // They key on the implicit rowid, which no foreign key can reach, so the
+    // cascade misses them by construction -- and a recycled rowid would hand
+    // a new message a dead message's vector (found 05/08).
+    const created = repo.create(chat());
+    const stored = repo.appendMessage(message(created.id));
+    const rowid = (
+      db.prepare('SELECT rowid FROM messages WHERE id = ?').get(stored.id) as { rowid: number }
+    ).rowid;
+    db.prepare('INSERT INTO message_embeddings (message_rowid, vector) VALUES (?, ?)').run(
+      rowid,
+      Buffer.from([1, 2, 3]),
+    );
+
+    repo.delete(created.id);
+
+    const left = db.prepare('SELECT count(*) AS n FROM message_embeddings').get() as { n: number };
+    expect(left.n).toBe(0);
+  });
+
+  it('lists titles so a generated one can be de-duplicated', () => {
+    repo.create(chat({ title: 'Groceries' }));
+    repo.create(chat({ title: 'Taxes' }));
+
+    expect(repo.titles().sort()).toEqual(['Groceries', 'Taxes']);
+  });
+});
+
+describe('messages', () => {
+  it('round-trips content, thinking and tool records', () => {
+    const created = repo.create(chat());
+    const stored = repo.appendMessage(
+      message(created.id, {
+        role: 'assistant',
+        content: 'the answer',
+        thinking: 'let me see',
+        tools: [{ name: 'bash', status: 'done', detail: 'echo hello' }],
+      }),
+    );
+
+    expect(repo.getMessages(created.id, { limit: 10 })).toEqual([stored]);
+  });
+
+  it('returns history oldest-first', () => {
+    const created = repo.create(chat());
+    repo.appendMessage(message(created.id, { content: 'one', createdAt: '2026-07-30T20:00:00.000Z' }));
+    repo.appendMessage(message(created.id, { content: 'two', createdAt: '2026-07-30T20:01:00.000Z' }));
+    repo.appendMessage(
+      message(created.id, { content: 'three', createdAt: '2026-07-30T20:02:00.000Z' }),
+    );
+
+    expect(repo.getMessages(created.id, { limit: 10 }).map((row) => row.content)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+  });
+
+  it('names the newest message of every chat in one query', () => {
+    // The distiller's tick reads this against its watermarks instead of
+    // opening every tail (docs/specs/Spec-Pop-General.md §8, fase c).
+    const empty = repo.create(chat());
+    const busy = repo.create(chat());
+    repo.appendMessage(message(busy.id, { content: 'one', createdAt: '2026-07-30T20:00:00.000Z' }));
+    const two = repo.appendMessage(
+      message(busy.id, { content: 'two', createdAt: '2026-07-30T20:01:00.000Z' }),
+    );
+
+    const ids = repo.lastMessageIds();
+
+    expect(ids.find((row) => row.chatId === busy.id)?.lastMessageId).toBe(two.id);
+    expect(ids.find((row) => row.chatId === empty.id)?.lastMessageId).toBeUndefined();
+  });
+
+  it('opens a long chat at its tail, not at its beginning', () => {
+    const created = repo.create(chat());
+    for (let i = 0; i < 10; i += 1) {
+      repo.appendMessage(
+        message(created.id, {
+          content: `message ${String(i)}`,
+          createdAt: `2026-07-30T20:${String(i).padStart(2, '0')}:00.000Z`,
+        }),
+      );
+    }
+
+    const page = repo.getMessages(created.id, { limit: 3 });
+
+    expect(page.map((row) => row.content)).toEqual(['message 7', 'message 8', 'message 9']);
+  });
+
+  it('pages backwards from a known message without repeating it', () => {
+    const created = repo.create(chat());
+    for (let i = 0; i < 6; i += 1) {
+      repo.appendMessage(
+        message(created.id, {
+          content: `message ${String(i)}`,
+          createdAt: `2026-07-30T20:0${String(i)}:00.000Z`,
+        }),
+      );
+    }
+
+    const tail = repo.getMessages(created.id, { limit: 2 });
+    const first = tail[0];
+    expect(first).toBeDefined();
+
+    const previous = repo.getMessages(created.id, { limit: 2, before: (first as Message).id });
+
+    expect(previous.map((row) => row.content)).toEqual(['message 2', 'message 3']);
+  });
+
+  it('keeps chats apart', () => {
+    const mine = repo.create(chat());
+    const theirs = repo.create(chat());
+    repo.appendMessage(message(mine.id, { content: 'mine' }));
+    repo.appendMessage(message(theirs.id, { content: 'theirs' }));
+
+    expect(repo.getMessages(mine.id, { limit: 10 }).map((row) => row.content)).toEqual(['mine']);
+  });
+
+  it('survives a corrupt tools column instead of failing the whole read', () => {
+    const created = repo.create(chat());
+    const stored = repo.appendMessage(message(created.id, { role: 'assistant' }));
+    db.prepare('UPDATE messages SET tools_json = ? WHERE id = ?').run('not json', stored.id);
+
+    expect(repo.getMessages(created.id, { limit: 10 })[0]?.tools).toEqual([]);
+  });
+
+  it('refuses a message pointing at no chat', () => {
+    expect(() => repo.appendMessage(message('chat-000000000000'))).toThrow();
+  });
+
+  it('re-draws the id and retries on a primary-key collision (docs/specs/Spec-Pop-General.md §6)', () => {
+    // Force a collision: create a chat, then try to create another with the
+    // same id. The repo must not throw or overwrite -- it re-draws and inserts.
+    const taken = chat({ id: 'chat-CollisionAAA', title: 'first' });
+    repo.create(taken);
+
+    const clash = chat({ id: 'chat-CollisionAAA', title: 'second' });
+    const stored = repo.create(clash);
+
+    expect(stored.id).not.toBe('chat-CollisionAAA');
+    expect(stored.title).toBe('second');
+    // Both rows survive: nothing was overwritten.
+    expect(repo.get('chat-CollisionAAA')?.title).toBe('first');
+    expect(repo.get(stored.id)?.title).toBe('second');
+  });
+});
+
+
+it('remembers A2A origin beyond the latest message and does not confuse other chats', () => {
+  const incoming = repo.create(chat());
+  const local = repo.create(chat());
+  repo.appendMessage(message(incoming.id, { client: { kind: 'a2a-agent' } }));
+  for (let i = 0; i < 65; i++) repo.appendMessage(message(incoming.id));
+  expect(repo.hasA2aMessages(incoming.id)).toBe(true);
+  expect(repo.hasA2aMessages(local.id)).toBe(false);
+});

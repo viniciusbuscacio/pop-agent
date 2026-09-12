@@ -1,0 +1,141 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@theme {
+  --font-sans:
+    'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--screen-fg);
+  font-family: var(--font-sans);
+  /* dvh, not vh: the mobile keyboard must not push the layout off screen. */
+  min-height: 100dvh;
+}
+
+/* Focus has to be visible: the wizard and settings are keyboard-navigable. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Text-entry fields already have a neutral enclosing box and a caret. Keep
+   the global keyboard-focus ring on actions and choices, not inside inputs. */
+input.outline-none:focus,
+textarea.outline-none:focus {
+  outline: none;
+}
+
+/* Touching Add must not leave a browser accent halo around the icon. */
+#composer-add {
+  -webkit-tap-highlight-color: transparent;
+}
+#composer-add:focus {
+  outline: none;
+}
+
+/* Chromium/WebKit otherwise paints the native search clear glyph in its own
+   blue, outside the app palette. A mask keeps the native clear behavior while
+   taking its colour from the active theme. */
+input[type='search']::-webkit-search-cancel-button {
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+  appearance: none;
+  background-color: var(--screen-fg);
+  cursor: pointer;
+  opacity: 0.75;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 3l10 10M13 3L3 13' fill='none' stroke='black' stroke-linecap='round' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 3l10 10M13 3L3 13' fill='none' stroke='black' stroke-linecap='round' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+input[type='search']::-webkit-search-cancel-button:hover {
+  opacity: 1;
+}
+
+/* Selection inside the user's accent bubble inverts the pair, so the
+   highlight stays visible on the coloured background in both themes. */
+.user-bubble::selection {
+  background: var(--accent-fg);
+  color: var(--accent);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Shiki writes both palettes into CSS variables (defaultColor: false); this
+   picks the one matching the app theme, so code follows light/dark instantly. */
+.code-shiki .shiki,
+.code-shiki .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+:root[data-theme='dark'] .code-shiki .shiki,
+:root[data-theme='dark'] .code-shiki .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+.code-shiki pre {
+  padding: 0.75rem;
+  margin: 0;
+}
+
+/* The health dot's gentle pulse (docs/specs/Spec-Pop-General.md §14): opacity only, never
+   stroboscopic. */
+@keyframes health-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* The update banner's indeterminate progress while the new version loads. */
+@keyframes updatebar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* Shared go-apps indicator: 8px dot with a 2.4-second glow, never a strobe. */
+.rest-api-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: rest-api-dot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes rest-api-dot-pulse {
+  0%, 100% { box-shadow: 0 0 3px var(--success); }
+  50% { box-shadow: 0 0 8px var(--success); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rest-api-dot { animation: none; }
+}

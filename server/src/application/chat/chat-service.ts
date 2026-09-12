@@ -1,0 +1,275 @@
+import {
+  DEFAULT_CHAT_TITLE,
+  type Chat,
+  type ChatSummary,
+  type ExecutionMode,
+  type Message,
+} from '../../domain/chat/chat.js';
+import { nextChatTitle } from '../../domain/chat/title.js';
+import { newChatId, newMessageId } from '../../domain/ids.js';
+import type { ChatPurger } from '../ports/chat-purger.js';
+import type { ChatRepo } from '../ports/chat-repo.js';
+import type { Clock } from '../ports/clock.js';
+import type { EventSink } from '../ports/event-sink.js';
+
+/** Everything about conversations that does not involve running the agent. */
+
+const MAX_PAGE = 200;
+const DEFAULT_PAGE = 50;
+const MAX_TITLE_LENGTH = 120;
+
+export interface ChatDeps {
+  chats: ChatRepo;
+  clock: Clock;
+  /** True while archiving would hide work that is still running or waiting. */
+  busy?: (chatId: string) => boolean;
+  /** Removes a deleted chat's on-disk remains (JSONL, attachments). */
+  purger?: ChatPurger;
+  /**
+   * Stops whatever the chat has in flight before it is deleted. Structural on
+   * purpose: the run service is a sibling use case, not something this one
+   * should depend on by name.
+   */
+  runs?: { discardChat(chatId: string): boolean };
+  /** Broadcasts durable chat lifecycle changes to every connected client. */
+  sink?: EventSink;
+}
+
+export class ChatArchiveBusyError extends Error {
+  constructor() {
+    super('Wait for the current answer to finish and clear queued messages before archiving.');
+    this.name = 'ChatArchiveBusyError';
+  }
+}
+
+export class ChatService {
+  constructor(private readonly deps: ChatDeps) {}
+
+  create(): Chat {
+    const now = new Date(this.deps.clock.now()).toISOString();
+    // The deterministic starter (docs/specs/Spec-Pop-General.md §14): "Chat N", lowest free N
+    // among the living chats, so a brand-new sidebar is already readable.
+    const starter = nextChatTitle(this.deps.chats.list({ archived: false }).map((c) => c.title));
+    const chat = this.deps.chats.create({
+      id: newChatId(),
+      title: starter,
+      model: '',
+      provider: '',
+      archived: false,
+      pinned: false,
+      executionMode: 'normal',
+      piSessionId: '',
+      summary: '',
+      autoTitle: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    this.deps.sink?.emit({ kind: 'chat-created', chatId: chat.id, chat });
+    return chat;
+  }
+
+  list(options: { archived: boolean }): ChatSummary[] {
+    return this.deps.chats.list(options);
+  }
+
+  get(id: string): Chat | undefined {
+    return this.deps.chats.get(id);
+  }
+
+  rename(id: string, title: string): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+
+    const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
+    // An empty rename means "undo my title", not "leave it blank".
+    const chosen = trimmed.length > 0 ? trimmed : DEFAULT_CHAT_TITLE;
+    this.deps.chats.rename(id, chosen);
+    // A name chosen by hand is not the machine's to improve on.
+    this.deps.chats.setAutoTitle(id, false);
+    this.deps.chats.recordTitle({
+      chatId: id,
+      title: chosen,
+      turn: this.deps.chats.countUserMessages(id),
+      source: 'manual',
+      createdAt: new Date().toISOString(),
+    });
+    this.deps.sink?.emit({ kind: 'title', chatId: id, title: chosen });
+    return this.deps.chats.get(id);
+  }
+
+  setArchived(id: string, archived: boolean): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    // Restore is always allowed. Filing a chat is not: a hidden conversation
+    // must never keep answering or retain input that will answer later.
+    if (archived && this.deps.busy?.(id) === true) throw new ChatArchiveBusyError();
+    this.deps.chats.setArchived(id, archived);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({ kind: 'chat-archived-changed', chatId: id, archived: chat.archived });
+    return chat;
+  }
+
+  setPinned(id: string, pinned: boolean): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    this.deps.chats.setPinned(id, pinned);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({ kind: 'chat-pin-changed', chatId: id, pinned: chat.pinned });
+    return chat;
+  }
+
+  setExecutionMode(id: string, executionMode: ExecutionMode): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    this.deps.chats.setExecutionMode(id, executionMode);
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({
+      kind: 'chat-execution-mode-changed',
+      chatId: id,
+      executionMode: chat.executionMode ?? 'normal',
+    });
+    return chat;
+  }
+
+  /** Archives every open conversation except the active one and pinned chats. */
+  archiveOthers(keepChatId: string): number | undefined {
+    const keep = this.deps.chats.get(keepChatId);
+    if (keep === undefined || keep.archived) return undefined;
+    const changed = this.deps.chats
+      .list({ archived: false })
+      .filter((chat) => chat.id !== keepChatId && !chat.pinned)
+      .map((chat) => chat.id);
+    // Preflight every candidate before the adapter's single bulk mutation.
+    // This makes one busy chat refuse the whole operation instead of leaving
+    // the open list half archived.
+    if (changed.some((chatId) => this.deps.busy?.(chatId) === true)) {
+      throw new ChatArchiveBusyError();
+    }
+    const count = this.deps.chats.archiveOthers(keepChatId);
+    for (const chatId of changed) {
+      this.deps.sink?.emit({ kind: 'chat-archived-changed', chatId, archived: true });
+    }
+    return count;
+  }
+
+  /** Permanently deletes every open conversation except the active one and pinned chats. */
+  deleteOthers(keepChatId: string): number | undefined {
+    const keep = this.deps.chats.get(keepChatId);
+    if (keep === undefined || keep.archived) return undefined;
+
+    let deleted = 0;
+    for (const chat of this.deps.chats.list({ archived: false })) {
+      if (chat.id !== keepChatId && !chat.pinned && this.delete(chat.id)) deleted += 1;
+    }
+    return deleted;
+  }
+
+  setModel(id: string, model: string, provider: string): Chat | undefined {
+    if (this.deps.chats.get(id) === undefined) return undefined;
+    this.deps.chats.setModel(id, model, provider);
+    this.deps.chats.recordRecentModel({ provider, model, usedAt: new Date(this.deps.clock.now()).toISOString() });
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return undefined;
+    this.deps.sink?.emit({
+      kind: 'chat-model-changed',
+      chatId: id,
+      provider: chat.provider,
+      model: chat.model,
+    });
+    return chat;
+  }
+
+  recentModels(): { provider: string; model: string; usedAt: string }[] {
+    return this.deps.chats.recentModels(10);
+  }
+
+  userMessageAt(chatId: string, index: number): Message | undefined {
+    return this.deps.chats
+      .getMessages(chatId, { limit: Number.MAX_SAFE_INTEGER })
+      .filter((message) => message.role === 'user')[index];
+  }
+
+  recordContextCompacted(chatId: string): Message | undefined {
+    if (this.deps.chats.get(chatId) === undefined) return undefined;
+    const message = this.deps.chats.appendMessage({
+      id: newMessageId(),
+      chatId,
+      role: 'system',
+      content: 'Context compacted.',
+      thinking: '',
+      tools: [],
+      attachments: [],
+      createdAt: new Date(this.deps.clock.now()).toISOString(),
+      notice: { kind: 'context-compacted' },
+    });
+    this.deps.sink?.emit({ kind: 'system-message', chatId, message });
+    return message;
+  }
+
+  /** Creates the product-side half of a pi fork, stopping before the selected user turn. */
+  fork(sourceId: string, selectedUserIndex: number, piSessionId: string): Chat | undefined {
+    const source = this.deps.chats.get(sourceId);
+    if (source === undefined) return undefined;
+    const fork = this.create();
+    // The create event carries defaults; publish the inherited pair and mode
+    // through the same paths as any other durable cross-device change.
+    this.setModel(fork.id, source.model, source.provider);
+    this.setExecutionMode(fork.id, source.executionMode ?? 'normal');
+    this.deps.chats.setPiSessionId(fork.id, piSessionId);
+    this.rename(fork.id, `${source.title} fork`);
+
+    let userIndex = 0;
+    for (const message of this.deps.chats.getMessages(sourceId, { limit: Number.MAX_SAFE_INTEGER })) {
+      if (message.role === 'user') {
+        if (userIndex >= selectedUserIndex) break;
+        userIndex += 1;
+      }
+      this.deps.chats.appendMessage({ ...message, id: newMessageId(), chatId: fork.id });
+    }
+    return this.deps.chats.get(fork.id);
+  }
+
+  /**
+   * Deleting a conversation kills its work first (docs/specs/Spec-Pop-General.md §6). The order
+   * matters and is the whole point: abort, then delete, notify, then purge. A run
+   * still streaming into rows that are about to disappear would keep a pi
+   * process group alive, keep spending the user's credit, and end by failing
+   * a foreign key -- so the run is stopped and its queued siblings dropped
+   * before a single row goes.
+   */
+  delete(id: string): boolean {
+    const chat = this.deps.chats.get(id);
+    if (chat === undefined) return false;
+    this.deps.runs?.discardChat(id);
+    // Read the chat before the rows go, so the purger still knows where pi
+    // kept the session (docs/specs/Spec-Pop-General.md §6): SQLite by cascade, the rest by hand.
+    this.deps.chats.delete(id);
+    this.deps.sink?.emit({ kind: 'chat-deleted', chatId: id });
+    this.deps.purger?.purge(chat);
+    return true;
+  }
+
+  /**
+   * Deletes every archived conversation, each through {@link delete} so the
+   * order that matters there (abort, delete, purge) holds for all of them.
+   * One endpoint rather than a client loop, because the archive is where a
+   * frequent task quietly piles up dozens of chats, and dozens of round
+   * trips is how a "delete all" ends half done on a flaky connection.
+   */
+  deleteArchived(): number {
+    let deleted = 0;
+    for (const chat of this.deps.chats.list({ archived: true })) {
+      if (this.delete(chat.id)) deleted += 1;
+    }
+    return deleted;
+  }
+
+  getMessages(chatId: string, options: { before?: string; limit?: number }): Message[] | undefined {
+    if (this.deps.chats.get(chatId) === undefined) return undefined;
+
+    const limit = Math.min(Math.max(options.limit ?? DEFAULT_PAGE, 1), MAX_PAGE);
+    return this.deps.chats.getMessages(chatId, {
+      limit,
+      ...(options.before === undefined ? {} : { before: options.before }),
+    });
+  }
+}

@@ -1,0 +1,71 @@
+/*
+ * Design tokens, taken from go-notepad so the family looks like one product
+ * (Fluent-ish surfaces, Segoe UI stack). Components only ever read these
+ * variables -- a hardcoded colour anywhere is a bug.
+ *
+ * Two complete maps: whatever a component needs in dark, it also gets in
+ * light. The regression test asserts they stay in step.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  --document-bg: #ffffff;
+  --bg: #202020;
+  --screen-fg: #ffffff;
+  --titlebar-fg: #d6d6d6;
+  --accent: #4cc2ff;
+  --accent-hover: #48b2e8;
+  --accent-fg: #003a5c;
+  --border: #333333;
+  --panel-bg: #2b2b2b;
+  --panel-hover: #333333;
+  --notice-bg: #263641;
+  --notice-border: #3d667d;
+  --input-bg: #1b1b1b;
+  --muted: #9a9a9a;
+  --key-fg-dim: #d0d0d0;
+  --danger: #ff99a4;
+  --success: #3fbf6f;
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --backdrop: rgba(0, 0, 0, 0.65);
+  --switch-thumb-off: rgba(255, 255, 255, 0.6);
+  --switch-thumb-on: #ffffff;
+  --scroll-thumb: rgba(255, 255, 255, 0.28);
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --radius-composer: 1rem;
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-menu: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme='light'] {
+  /* A warm canvas keeps the light theme from reading as a blank white page;
+     controls stay white so the hierarchy remains visible without heavy lines. */
+  --document-bg: #ffffff;
+  --bg: #f7f5f2;
+  --screen-fg: #201f1e;
+  --titlebar-fg: #201f1e;
+  --accent: #005fb8;
+  --accent-hover: #0a6cc8;
+  --accent-fg: #ffffff;
+  --border: #dedad4;
+  --panel-bg: #ffffff;
+  --panel-hover: #f3f0ec;
+  --notice-bg: #eaf4fa;
+  --notice-border: #8bbbd5;
+  --input-bg: #ffffff;
+  --muted: #6f6b66;
+  --key-fg-dim: #373431;
+  --danger: #c42b1c;
+  --success: #107c41;
+  --hover-overlay: rgba(55, 45, 35, 0.055);
+  --backdrop: rgba(0, 0, 0, 0.45);
+  --switch-thumb-off: #5f5b57;
+  --switch-thumb-on: #ffffff;
+  --scroll-thumb: rgba(32, 31, 30, 0.28);
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --radius-composer: 1rem;
+  --shadow-panel: 0 1px 2px rgba(60, 48, 32, 0.08), 0 4px 12px rgba(60, 48, 32, 0.04);
+  --shadow-menu: 0 10px 24px rgba(60, 48, 32, 0.16);
+}

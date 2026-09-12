@@ -1,0 +1,51 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import type { UserMemoryDTO } from '@pop-agent/shared';
+import type { UserMemoryRepo } from '../../application/ports/user-memory-repo.js';
+import { scrubSecrets } from '../../domain/safety/secret-scrub.js';
+import { badBody, readJson, schemaError } from './body.js';
+import { apiError } from './errors.js';
+
+/**
+ * The living user-memory document over HTTP (docs/specs/Spec-Pop-General.md §13): Settings → Memory
+ * shows it, lets the user edit it, and restore the one-level backup. The agent
+ * edits the same document through its own tools.
+ */
+
+const MAX_DOC = 8_000;
+const putSchema = z.object({ doc: z.string().max(MAX_DOC), expectedDoc: z.string().max(MAX_DOC).optional() }).strict();
+
+export interface MemoryRoutesDeps {
+  userMemory: UserMemoryRepo;
+}
+
+export function createMemoryRoutes(deps: MemoryRoutesDeps): Hono {
+  const routes = new Hono();
+
+  routes.get('/memory', (c) => c.json(toDto(deps.userMemory.read())));
+
+  routes.put('/memory', async (c) => {
+    const body = await readJson(c);
+    if (body === undefined) return badBody(c);
+    const parsed = putSchema.safeParse(body);
+    if (!parsed.success) return schemaError(c, parsed.error);
+
+    // No await between compare and write: all repository operations are synchronous.
+    if (parsed.data.expectedDoc !== undefined && deps.userMemory.read().doc !== parsed.data.expectedDoc) {
+      return apiError(c, 409, 'edit_conflict', 'Memory changed on the server. Review the latest version before saving.');
+    }
+    deps.userMemory.write(scrubSecrets(parsed.data.doc));
+    return c.json(toDto(deps.userMemory.read()));
+  });
+
+  routes.post('/memory/restore', (c) => {
+    deps.userMemory.restoreBackup();
+    return c.json(toDto(deps.userMemory.read()));
+  });
+
+  return routes;
+}
+
+function toDto(memory: { doc: string; backup: string }): UserMemoryDTO {
+  return { doc: memory.doc, hasBackup: memory.backup.length > 0 };
+}

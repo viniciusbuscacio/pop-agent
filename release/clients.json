@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "sources": {
+    "launcher/pop-launcher-1.1.5-darwin-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "launcher/pop-launcher-1.1.5-darwin-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "launcher/pop-launcher-1.1.5-linux-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "launcher/pop-launcher-1.1.5-linux-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "launcher/pop-launcher-1.1.5-windows-arm64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "launcher/pop-launcher-1.1.5-windows-amd64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-windows-amd64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-windows-amd64-setup.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-arm64-setup.dmg": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-amd64-setup.dmg": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.3.0"
+    }
+  },
+  "source": {
+    "repository": "viniciusbuscacio/pop-agent",
+    "version": "0.3.0",
+    "commit": "cb4752dd8a692ff9246bf330e19f7e4b492981f0",
+    "tree": "48f6bf5769bbd1eaca0e56903ee47d7659e9c630",
+    "verifiedAt": "2026-09-12T16:06:35.801Z",
+    "archive": {
+      "file": "pop-agent-clients-0.3.0.tar.gz",
+      "size": 28035,
+      "sha256": "8c241e5a435c26be34725c82f2bda261c56f8e72b8beb7a44b5459d350b2378a"
+    }
+  },
+  "inputs": "9d6ebc24df98dfd27cff7c0053a550ac10976b832c0df078a8c0c5be999c40dc",
+  "cliVersion": "0.2.103",
+  "files": {
+    "package.json": {
+      "file": "package.json",
+      "size": 342,
+      "sha256": "bd8823afd27faa7a825cf153c8d009afce81cd279129ed815b83b63e065f1617"
+    },
+    "cli-0.2.103.tgz": {
+      "file": "cli-0.2.103.tgz",
+      "size": 25751,
+      "sha256": "038b0ba7d4909aac295b3df7a4632d8142ebe8f898d54e6e7af6a7cda5089f42"
+    },
+    "launcher/manifest.json": {
+      "file": "manifest.json",
+      "size": 1158,
+      "sha256": "1c0c03052d6b8e5f1e0dd477381daddd3e7ceb7045fc2f983c3e27e4b5028aa0"
+    },
+    "local-access/manifest.json": {
+      "file": "manifest.json",
+      "size": 1247,
+      "sha256": "d2ac549bc20f0f95107fcc46f8dc67cccf160010c51551612eb1977550465fae"
+    },
+    "runtime/node/manifest.json": {
+      "file": "manifest.json",
+      "size": 1700,
+      "sha256": "ed944e32f4780e66f197dc9ef6ce9df561d99261c84d53487a15970784558d00"
+    }
+  }
+}

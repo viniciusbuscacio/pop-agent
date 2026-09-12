@@ -1,0 +1,23 @@
+/** The derived self-map (docs/specs/Spec-Pop-General.md §8). Regenerate with `npm run selfmap`. */
+export const SELF_MAP = [
+  "## Repo map (generated -- npm run selfmap)",
+  "",
+  "Monorepo, npm workspaces: shared, server, web, cli. `shared` is the wire",
+  "contract (pure DTOs); `server` and `web` both import it.",
+  "Key dependencies: pi 0.84.1, hono ^4.13.5, better-sqlite3 ^13.0.2, react ^19.0.0.",
+  "",
+  "server/src, clean architecture -- dependencies point inward only:",
+  "- `application/` -- use cases and ports/ (interfaces the outer layers implement) (100 modules)",
+  "- `architecture/` -- the boundary test that enforces the dependency rule (0 modules)",
+  "- `domain/` -- entities, value objects and pure services -- the innermost layer (18 modules)",
+  "- `infrastructure/` -- adapters: SQLite, the pi engine, vaults on disk, embeddings (101 modules)",
+  "- `interface/` -- HTTP routes (Hono) and SSE -- the outer edge (42 modules)",
+  "- `manager/` -- see docs/specs/Spec-Pop-General.md (3 modules)",
+  "- `testing/` -- shared test harness helpers (1 module)",
+  "",
+  "## UI map (generated)",
+  "",
+  "PWA routes: /setup, /login, /recover, /settings/*, /, /chat/:chatId, /files, /files/trash, /files/*, /tasks, /tasks/new, /tasks/:taskId, /skills, /skills/new, /skills/:slug, /mcp, /mcp/new, /mcp/:id, /rest-api, /a2a, /a2a/new, /a2a/:id.",
+  "Settings sections: Server, Instructions, Install Pop, Devices, Models & Providers, Voice, Notifications, Auto-Skills, Memory, Storage, Backup & Restore, Appearance, Security, About, Updates.",
+  "Deep links: /settings?section=<name> opens a section directly.",
+].join('\n');

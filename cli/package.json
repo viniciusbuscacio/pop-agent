@@ -1,0 +1,27 @@
+{
+  "name": "@pop-agent/cli",
+  "version": "0.2.104",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viniciusbuscacio/pop-agent.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/viniciusbuscacio/pop-agent#readme",
+  "bugs": {
+    "url": "https://github.com/viniciusbuscacio/pop-agent/issues"
+  },
+  "bin": {
+    "pop": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@pop-agent/shared": "*",
+    "@earendil-works/pi-tui": "0.83.0",
+    "ws": "^8.21.1"
+  }
+}

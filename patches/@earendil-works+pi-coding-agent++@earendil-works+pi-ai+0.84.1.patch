@@ -1,0 +1,136 @@
+diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+--- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
++++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+@@ -304,7 +304,8 @@
+                         statusText: response.statusText,
+                     });
+                     const info = await parseErrorResponse(fakeResponse);
+-                    throw new Error(info.friendlyMessage || info.message);
++                    // Preserve the refusal status when replacing the body with friendly prose.
++                    throw new Error(`${response.status}: ${info.friendlyMessage || info.message}`);
+                 }
+                 catch (error) {
+                     if (error instanceof Error) {
+@@ -482,7 +483,7 @@
+     code;
+     payload;
+     constructor(message, options) {
+-        super(message);
++        super(options?.code ? `Codex error (${options.code}): ${message}` : message);
+         this.name = "CodexApiError";
+         this.code = options?.code;
+         this.payload = options?.payload;
+diff --git a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
+--- a/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
++++ b/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js
+@@ -1,7 +1,6 @@
+ /**
+  * GitHub Copilot OAuth flow
+  */
+-import { GITHUB_COPILOT_MODELS } from "../../providers/github-copilot.models.js";
+ import { pollOAuthDeviceCodeFlow } from "./device-code.js";
+ const decode = (s) => atob(s);
+ const CLIENT_ID = decode("SXYxLmI1MDdhMDhjODdlY2ZlOTg=");
+@@ -100,11 +99,24 @@
+     });
+     return parseAvailableCopilotModelIds(raw, allowPolicyFallback);
+ }
++// Catalog availability is optional metadata, not evidence that OAuth failed.
++async function optionalCopilotModelIds(token, domain, signal, previous) {
++    try {
++        return await fetchAvailableGitHubCopilotModelIds(token, domain, signal);
++    }
++    catch (error) {
++        if (signal.aborted)
++            throw error;
++        if (error?.status === 429 || error?.status >= 500 || error?.name === "TimeoutError")
++            return previous;
++        throw error;
++    }
++}
+ async function fetchJson(url, init) {
+     const response = await fetch(url, init);
+     if (!response.ok) {
+         const text = await response.text();
+-        throw new Error(`${response.status} ${response.statusText}: ${text}`);
++        throw Object.assign(new Error(`${response.status} ${response.statusText}: ${text}`), { status: response.status });
+     }
+     return response.json();
+ }
+@@ -228,50 +240,12 @@
+ /**
+  * Refresh GitHub Copilot token
+  */
+-async function refreshGitHubCopilotToken(refreshToken, enterpriseDomain, signal) {
++async function refreshGitHubCopilotToken(refreshToken, enterpriseDomain, signal, previousModelIds) {
+     const credentials = await refreshGitHubCopilotAccessToken(refreshToken, enterpriseDomain, signal);
+     return {
+         ...credentials,
+-        availableModelIds: await fetchAvailableGitHubCopilotModelIds(credentials.access, enterpriseDomain, signal),
+-    };
+-}
+-/**
+- * Enable a model for the user's GitHub Copilot account.
+- * This is required for some models (like Claude, Grok) before they can be used.
+- */
+-async function enableGitHubCopilotModel(token, modelId, enterpriseDomain, signal) {
+-    const baseUrl = getGitHubCopilotBaseUrl(token, enterpriseDomain);
+-    const url = `${baseUrl}/models/${modelId}/policy`;
+-    try {
+-        const response = await fetch(url, {
+-            method: "POST",
+-            headers: {
+-                "Content-Type": "application/json",
+-                Authorization: `Bearer ${token}`,
+-                ...COPILOT_HEADERS,
+-                "openai-intent": "chat-policy",
+-                "x-interaction-type": "chat-policy",
+-            },
+-            body: JSON.stringify({ state: "enabled" }),
+-            signal,
+-        });
+-        return response.ok;
+-    }
+-    catch (error) {
+-        if (signal.aborted)
+-            throw error;
+-        return false;
+-    }
+-}
+-/**
+- * Enable all known GitHub Copilot models that may require policy acceptance.
+- * Called after successful login to ensure all models are available.
+- */
+-async function enableAllGitHubCopilotModels(token, enterpriseDomain, signal) {
+-    const models = Object.values(GITHUB_COPILOT_MODELS);
+-    await Promise.all(models.map(async (model) => {
+-        await enableGitHubCopilotModel(token, model.id, enterpriseDomain, signal);
+-    }));
++        availableModelIds: await optionalCopilotModelIds(credentials.access, enterpriseDomain, signal, previousModelIds),
++    };
+ }
+ async function loginGitHubCopilot(interaction) {
+     const input = await interaction.prompt({
+@@ -296,11 +270,10 @@
+     });
+     const githubAccessToken = await pollForGitHubAccessToken(domain, device, interaction.signal);
+     const credentials = await refreshGitHubCopilotAccessToken(githubAccessToken, enterpriseDomain ?? undefined, interaction.signal);
+-    interaction.notify({ type: "progress", message: "Enabling models..." });
+-    await enableAllGitHubCopilotModels(credentials.access, enterpriseDomain ?? undefined, interaction.signal);
++    interaction.notify({ type: "progress", message: "Loading available models..." });
+     return {
+         ...credentials,
+-        availableModelIds: await fetchAvailableGitHubCopilotModelIds(credentials.access, enterpriseDomain ?? undefined, interaction.signal),
++        availableModelIds: await optionalCopilotModelIds(credentials.access, enterpriseDomain ?? undefined, interaction.signal),
+     };
+ }
+ function copilotEnterpriseDomain(credential) {
+@@ -313,7 +286,7 @@
+     name: "GitHub Copilot",
+     isSubscription: true,
+     login: loginGitHubCopilot,
+-    refresh: (credential, signal) => refreshGitHubCopilotToken(credential.refresh, copilotEnterpriseDomain(credential), signal),
++    refresh: (credential, signal) => refreshGitHubCopilotToken(credential.refresh, copilotEnterpriseDomain(credential), signal, credential.availableModelIds),
+     /** Derive the credential-specific proxy endpoint for each request. */
+     async toAuth(credential) {
+         return {

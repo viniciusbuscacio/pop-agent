@@ -1,0 +1,47 @@
+/*
+ * Web Push handlers, imported into the generated service worker (docs/specs/Spec-Pop-General.md
+ * §14). A push shows a notification; tapping it focuses an open Pop Agent window or
+ * opens one at the deep link the server sent.
+ */
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || 'Pop Agent';
+  const options = {
+    body: data.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url: data.url || '/' },
+  };
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const appIsVisible = clients.some((client) => {
+        if (client.visibilityState !== 'visible') return false;
+        return new URL(client.url).origin === self.location.origin;
+      });
+      if (!appIsVisible) return self.registration.showNotification(title, options);
+      return undefined;
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});

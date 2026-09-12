@@ -1,0 +1,897 @@
+import {
+  CombinedAutocompleteProvider,
+  Container,
+  Editor,
+  Markdown,
+  matchesKey,
+  SelectList,
+  Spacer,
+  ProcessTerminal,
+  Text,
+  TUI,
+  truncateToWidth,
+  type Component,
+  type SlashCommand,
+  type Terminal,
+} from '@earendil-works/pi-tui';
+import type { ChatDTO, MessageDTO, MessagesResponse, SessionCommandName } from '@pop-agent/shared';
+import {
+  MessageNotSentError,
+  type ChatModelState,
+  type ChatSession,
+  type ModelPair,
+} from '../../application/session.js';
+import type { RunState } from '../../application/transcript.js';
+import { ApiError } from '../../infrastructure/api.js';
+import { ModelSelector, safeTerminalText } from './model-selector.js';
+import { editorTheme, markdownTheme, paint, selectListTheme } from './theme.js';
+
+/**
+ * The interactive screen (docs/cli.md, step 4): pi's shape, Pop Agent's head.
+ *
+ * Everything hard about a terminal -- differential rendering, the multi-line
+ * editor with IME, key parsing across terminals, markdown to ANSI, bracketed
+ * paste -- comes from `@earendil-works/pi-tui`, published in lockstep with pi
+ * itself. What is written here is only the composition: what goes on the
+ * screen, in what order, and what the keys mean for Pop Agent. That split is the
+ * point. Copying pi's own screen would buy today's look and cost every future
+ * pi release; depending on the library buys the releases too.
+ *
+ * The transcript is append-only. A finished answer becomes a `Markdown`
+ * component and stops changing, so the differential renderer has nothing to
+ * recompute above the line that is still streaming -- which is what keeps a
+ * long conversation from redrawing itself on every token.
+ */
+
+/**
+ * The commands, in one list.
+ *
+ * They feed two things that used to be written twice and would have drifted:
+ * the `/help` text, and the autocomplete menu the editor pops when you type a
+ * slash. That menu is pi-tui's, and not registering a provider is why typing
+ * `/` showed nothing at all -- the commands worked, they were just
+ * undiscoverable (Vinicius, 04/08).
+ */
+const COMMANDS: SlashCommand[] = [
+  { name: 'new', description: 'Start a fresh conversation' },
+  { name: 'archive', description: 'Archive the current conversation' },
+  { name: 'unarchive', description: 'Restore this archived conversation' },
+  { name: 'chats', description: 'Switch to an open conversation' },
+  { name: 'model', description: 'Choose this conversation’s model' },
+  { name: 'stop', description: 'Interrupt the answer in flight' },
+  { name: 'think', description: 'Show or hide the reasoning' },
+  { name: 'compact', description: 'Compact the pi session context' },
+  { name: 'session', description: 'Show pi session statistics' },
+  { name: 'name', description: 'Rename the chat and pi session' },
+  { name: 'export', description: 'Export the pi session to Files' },
+  { name: 'fork', description: 'Fork from an earlier user message' },
+  { name: 'help', description: 'List these commands' },
+  { name: 'quit', description: 'Leave (or press Ctrl+C twice)' },
+];
+
+const HELP = COMMANDS.map(
+  (command) => `  /${command.name.padEnd(8)}${command.description ?? ''}`,
+).join('\n');
+
+/** One fixed-width monochrome Braille glyph, rotated without adding terminal lines. */
+const WORKING_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+const WORKING_FRAME_MS = 140;
+/** Conventional double-press window for the explicit terminal quit gesture. */
+const DOUBLE_CTRL_C_MS = 500;
+const localRunNotice = (command: string): string =>
+  `  ran here: ${command.length > 70 ? `${command.slice(0, 70)}…` : command}`;
+
+export interface ScreenOptions {
+  session: ChatSession;
+  /** Shown in the header, so two terminals on two servers are told apart. */
+  server: string;
+  title?: string;
+  /** Device preference, visible by default just like the web client. */
+  thinkingShown?: boolean;
+  /** Persists `/think` without coupling the screen to the filesystem. */
+  onThinkingShownChange?: (shown: boolean) => void;
+  /**
+   * Injected so the screen can be driven without a real terminal. Everything
+   * else in this client already takes its I/O as a parameter; the screen was
+   * the one piece that reached for the process itself, which made the only
+   * question that matters -- what ends up on screen -- unanswerable in a test.
+   */
+  terminal?: Terminal;
+  /** Called instead of exiting, so a test is not killed by /quit. */
+  onExit?: () => void;
+  /**
+   * Told which chat this screen is on, once it has one. The hands are claimed
+   * per chat and a chat does not exist until the first message creates it, so
+   * this fires after the ask rather than at start-up.
+   */
+  onChatOpened?: (chatId: string) => void;
+}
+
+type AssistantContent = Pick<RunState, 'text' | 'thinking' | 'tools'>;
+type ShownUser = { components: Component[]; spokenBefore: boolean; spokenRevision: number };
+
+class Header implements Component {
+  constructor(
+    private title: string,
+    private readonly server: string,
+    private model: ChatModelState,
+  ) {}
+
+  setTitle(title: string): void {
+    this.title = title;
+  }
+
+  setModel(model: ChatModelState): void {
+    this.model = model;
+  }
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    const selected = this.model.selected;
+    const effective = this.model.effectiveDefault;
+    const model = selected.provider.length > 0
+      ? `${safeTerminalText(selected.provider)}/${safeTerminalText(selected.model)}`
+      : effective === undefined
+        ? 'Default'
+        : `Default ${safeTerminalText(effective.provider)}/${safeTerminalText(effective.model)}`;
+    return [truncateToWidth(
+      `${paint.bold(safeTerminalText(this.title))}  ${paint.cyan(model)}  ${paint.dim(safeTerminalText(this.server))}`,
+      Math.max(1, width),
+      '…',
+    )];
+  }
+}
+
+/** One assistant segment that can change while streaming and survive settlement. */
+class AssistantSegment extends Container {
+  private content: AssistantContent;
+  private settled = false;
+  private readonly localRuns: string[] = [];
+
+  constructor(content: AssistantContent, private thinkingShown: boolean, settled = false) {
+    super();
+    this.content = content;
+    this.settled = settled;
+    this.rebuild();
+  }
+
+  update(content: AssistantContent): void {
+    this.content = content;
+    this.rebuild();
+  }
+
+  settle(content: AssistantContent = this.content): void {
+    this.content = content;
+    this.settled = true;
+    this.rebuild();
+  }
+
+  setThinkingShown(shown: boolean): void {
+    this.thinkingShown = shown;
+    this.rebuild();
+  }
+
+  addLocalRun(command: string): void {
+    this.localRuns.push(localRunNotice(command));
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    this.clear();
+    let hasBlock = false;
+    const add = (component: Component): void => {
+      if (hasBlock) this.addChild(new Spacer(1));
+      this.addChild(component);
+      hasBlock = true;
+    };
+
+    if (this.thinkingShown && this.content.thinking.trim().length > 0) {
+      add(new Markdown(this.content.thinking, 0, 0, markdownTheme, {
+        color: paint.dim,
+        italic: true,
+      }));
+    }
+    if (this.content.tools.length > 0) {
+      add(new Text(
+        this.content.tools.map((tool) => paint.dim(`  · ${tool.name} ${tool.status}`)).join('\n'),
+        0,
+        0,
+      ));
+    }
+    if (this.localRuns.length > 0) {
+      add(new Text(paint.dim(this.localRuns.join('\n')), 0, 0));
+    }
+    if (this.content.text.length > 0) {
+      add(this.settled
+        ? new Markdown(this.content.text, 0, 0, markdownTheme)
+        : new Text(this.content.text, 0, 0));
+    }
+  }
+}
+
+export class ChatScreen {
+  private readonly tui: TUI;
+  private readonly terminal: Terminal;
+  private readonly editor: Editor;
+  private readonly header: Header;
+  /** Replaceable history; the header and editor survive a chat switch. */
+  private readonly transcript = new Container();
+  /** Inline chat picker mounted immediately above the editor. */
+  private picker: Component | undefined;
+  private modelSelector: ModelSelector | undefined;
+  /** Prevents repeated /chats submissions from racing before the list arrives. */
+  private pickerOpening = false;
+  /** Current assistant segment; earlier steering segments remain in history. */
+  private streaming: AssistantSegment | undefined;
+  /** Every visible segment, including stored history, so `/think` redraws all. */
+  private assistantSegments: AssistantSegment[] = [];
+  /** Run-level state kept immediately above the editor, separate from output. */
+  private runStatus: Text | undefined;
+  private runStatusKind: RunState['status'] | undefined;
+  private runStatusTimer: ReturnType<typeof setInterval> | undefined;
+  private workingFrame = 0;
+  private thinkingShown: boolean;
+  /** Whether anything has been asked yet, so the first turn has no gap above. */
+  private spoken = false;
+  /** Invalidates optimistic-row rollback when another durable turn arrives. */
+  private spokenRevision = 0;
+  private exited = false;
+  private title: string;
+  /** Timestamp of the first Ctrl+C awaiting an immediate second press. */
+  private lastCtrlCAt: number | undefined;
+
+  constructor(private readonly options: ScreenOptions) {
+    this.terminal = options.terminal ?? new ProcessTerminal();
+    this.tui = new TUI(this.terminal);
+    this.title = options.title ?? 'New conversation';
+    this.thinkingShown = options.thinkingShown ?? true;
+    this.header = new Header(this.title, options.server, options.session.currentModel);
+    this.editor = new Editor(this.tui, editorTheme, { paddingX: 1 });
+    // Typing `/` now opens the menu, with Tab completing. The base path is the
+    // launch directory, which is what pi-tui completes files against -- worth
+    // knowing that until the local-tools channel lands (step 3) those files are on
+    // THIS machine and the agent's tools still run on the server.
+    this.editor.setAutocompleteProvider(new CombinedAutocompleteProvider(COMMANDS, process.cwd()));
+
+    this.tui.addChild(this.header);
+    this.tui.addChild(this.transcript);
+    this.tui.addChild(this.editor);
+    this.tui.setFocus(this.editor);
+    this.paintHeader();
+
+    this.editor.onSubmit = (text: string) => {
+      void this.submit(text);
+    };
+
+    // Raw mode swallows SIGINT, so Ctrl+C has to be caught by hand or the
+    // screen becomes a room with no door. The first press clears the editor;
+    // only an immediate, uninterrupted second press leaves through `quit()`.
+    // Escape is consumed so interrupting a run never also clears the draft.
+    this.tui.addInputListener((data: string) => {
+      if (matchesKey(data, 'ctrl+c')) {
+        const now = Date.now();
+        const elapsed = this.lastCtrlCAt === undefined ? undefined : now - this.lastCtrlCAt;
+        if (elapsed !== undefined && elapsed >= 0 && elapsed <= DOUBLE_CTRL_C_MS) {
+          this.lastCtrlCAt = undefined;
+          this.quit();
+        } else {
+          this.lastCtrlCAt = now;
+          this.editor.setText('');
+        }
+        return { consume: true };
+      }
+
+      // Any other input makes a later Ctrl+C a fresh first press.
+      this.lastCtrlCAt = undefined;
+      // The inline picker owns Escape before the screen does. Let SelectList
+      // receive it so cancelling /chats never also interrupts the current answer.
+      if (matchesKey(data, 'escape') && this.picker !== undefined) return undefined;
+      if (matchesKey(data, 'escape')) {
+        void this.options.session.stop();
+        return { consume: true };
+      }
+      return undefined;
+    });
+  }
+
+  start(): void {
+    this.tui.start();
+    this.say(paint.dim('Ask anything. /help for commands.'));
+  }
+
+  quit(notice?: string): void {
+    if (this.exited) return;
+    this.exited = true;
+    this.clearRunStatus(false);
+    this.tui.stop();
+
+    // These belong after TUI shutdown: a final differential repaint must not
+    // erase either the reason for an automatic exit or the command the user
+    // needs. A brand-new conversation has no server id until its first
+    // message, so in that case there is nothing to resume and the farewell
+    // stays short.
+    if (notice !== undefined) this.terminal.write(`${notice}\n`);
+    const chatId = this.options.session.currentChatId;
+    const farewell =
+      chatId === undefined
+        ? 'Bye!'
+        : `Bye!\nTo continue this chat, use:\npop --chat ${chatId}`;
+    this.terminal.write(`${paint.grey(farewell)}\n`);
+
+    if (this.options.onExit !== undefined) return this.options.onExit();
+    process.exit(0);
+  }
+
+  /**
+   * A finished block of text, appended and never touched again.
+   *
+   * `Text` pads by default -- a blank line above AND below -- while
+   * `Markdown` here does not, so a streamed answer occupied three lines and
+   * the same words rendered afterwards occupied one. Every answer that
+   * finished therefore shrank its block by two and pulled the editor up with
+   * it, which is what "the line I type jumps" was (Vinicius, 04/08). The two
+   * have to be the same shape, so nothing pads.
+   */
+  say(text: string): void {
+    this.append(new Text(text, 0, 0));
+  }
+
+  /** Adds a component to the replaceable history above the fixed editor. */
+  private append(component: Component): void {
+    // History lives in its own container. That keeps the fixed tail below it
+    // and, unlike the former root-level append, lets a chat switch replace the
+    // transcript without rebuilding the header, editor or TUI.
+    this.transcript.addChild(component);
+    this.focusTail();
+    this.tui.requestRender();
+  }
+
+  /** Keep status, picker and editor in a stable bottom-of-screen order. */
+  private layoutTail(): void {
+    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
+    if (this.picker !== undefined) this.tui.removeChild(this.picker);
+    this.tui.removeChild(this.editor);
+    if (this.runStatus !== undefined) this.tui.addChild(this.runStatus);
+    if (this.picker !== undefined) this.tui.addChild(this.picker);
+    this.tui.addChild(this.editor);
+    this.focusTail();
+    this.tui.requestRender();
+  }
+
+  private focusTail(): void {
+    this.tui.setFocus(this.picker ?? this.editor);
+  }
+
+  private paintHeader(): void {
+    this.header.setTitle(this.title);
+    this.header.setModel(this.options.session.currentModel);
+    this.tui.requestRender();
+  }
+
+  setTitle(title: string): void {
+    this.title = title;
+    this.paintHeader();
+  }
+
+  onModelChanged(state: ChatModelState): void {
+    this.header.setModel(state);
+    this.modelSelector?.updateState(state);
+    this.tui.requestRender();
+  }
+
+  /** Reset every replaceable part of the screen to a clean conversation. */
+  private resetConversation(notices: string[] = ['New conversation.']): void {
+    this.clearRunStatus(false);
+    this.streaming = undefined;
+    this.assistantSegments = [];
+    this.transcript.clear();
+    this.spoken = false;
+    this.spokenRevision += 1;
+    this.setTitle('New conversation');
+    for (const notice of notices) this.say(paint.dim(notice));
+    this.tui.setFocus(this.editor);
+    // Remove the previous conversation from terminal scrollback in one frame,
+    // just as switching to an existing conversation does.
+    this.tui.requestRender(true);
+  }
+
+  /** Reset both the server selection and every replaceable part of the screen. */
+  private startNewConversation(): void {
+    this.options.session.open(undefined);
+    this.resetConversation();
+  }
+
+  private async archiveConversation(): Promise<void> {
+    try {
+      const result = await this.options.session.archiveCurrent();
+      if (result === 'no-chat') {
+        this.say(paint.dim('Nothing to archive yet.'));
+        return;
+      }
+      if (result === 'busy') {
+        this.say(paint.yellow('The answer is still running. Use /stop first.'));
+        return;
+      }
+      if (result === 'already-archiving') {
+        this.say(paint.dim('Archiving is already in progress.'));
+        return;
+      }
+      if (result === 'superseded') return;
+      this.resetConversation(['Conversation archived.', 'New conversation.']);
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Conversation was not archived.'));
+    }
+  }
+
+  private async unarchiveConversation(): Promise<void> {
+    try {
+      const result = await this.options.session.unarchiveCurrent();
+      if (result === 'no-chat') {
+        this.say(paint.dim('Nothing to restore yet.'));
+        return;
+      }
+      if (result === 'not-archived') {
+        this.say(paint.dim('This conversation is not archived.'));
+        return;
+      }
+      if (result === 'already-unarchiving') {
+        this.say(paint.dim('Restoring is already in progress.'));
+        return;
+      }
+      if (result === 'superseded') return;
+      this.say(paint.dim('Conversation restored. You can send messages again.'));
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Conversation was not restored.'));
+    }
+  }
+
+  /** Keeps an externally archived transcript visible while disabling sends. */
+  onArchivedChanged(archived: boolean, source: 'event' | 'send-rejected'): void {
+    if (!archived) return;
+    this.say(paint.yellow(
+      source === 'event'
+        ? 'This conversation was archived elsewhere and is now read-only. Use /unarchive to restore it.'
+        : 'This conversation is archived and is now read-only. Use /unarchive to restore it.',
+    ));
+  }
+
+  /** Replace the visible transcript with the authoritative server history. */
+  onChatLoaded(chat: ChatDTO, response: MessagesResponse): void {
+    this.clearRunStatus(false);
+    this.streaming = undefined;
+    this.assistantSegments = [];
+    this.transcript.clear();
+    this.spoken = false;
+    this.spokenRevision += 1;
+    this.setTitle(chat.title.length === 0 ? 'Untitled conversation' : chat.title);
+
+    if (response.messages.length === 0) {
+      this.say(paint.dim('No messages yet.'));
+    } else {
+      for (const message of response.messages) this.showStoredMessage(message);
+    }
+    this.tui.setFocus(this.editor);
+    // Switching conversations is a genuine replacement, including terminal
+    // scrollback from the old one; force one clean frame rather than replaying
+    // a long differential deletion line by line.
+    this.tui.requestRender(true);
+  }
+
+  /** Render one persisted turn in the same visual language as live output. */
+  private showStoredMessage(message: MessageDTO): void {
+    if (message.role === 'user') {
+      this.showUser(message.content);
+      if (message.attachments.length > 0) {
+        this.say(paint.dim(`  attachments: ${message.attachments.map((entry) => entry.name).join(', ')}`));
+      }
+      return;
+    }
+
+    if (message.role === 'system') {
+      if (this.spoken) this.append(new Spacer(1));
+      this.spoken = true;
+      this.spokenRevision += 1;
+      this.say(paint.red(message.content));
+      return;
+    }
+
+    // A history page can technically begin with an assistant turn when older
+    // messages are outside the server's 50-message window.
+    this.spoken = true;
+    this.spokenRevision += 1;
+    const segment = new AssistantSegment(
+      { text: message.content, thinking: message.thinking, tools: message.tools },
+      this.thinkingShown,
+      true,
+    );
+    this.assistantSegments.push(segment);
+    this.append(segment);
+  }
+
+  /** Fetch and display the server's canonical list of open conversations. */
+  private async openChatPicker(): Promise<void> {
+    if (this.picker !== undefined || this.pickerOpening) return;
+    this.pickerOpening = true;
+
+    try {
+      const chats = await this.options.session.listChats();
+      if (chats.length === 0) {
+        this.say(paint.dim('No open conversations.'));
+        return;
+      }
+
+      const byId = new Map(chats.map((chat) => [chat.id, chat]));
+      const list = new SelectList(
+        chats.map((chat) => ({
+          value: chat.id,
+          label: `${chat.pinned ? '◆ ' : ''}${chat.title.length === 0 ? '(untitled)' : chat.title}`,
+          ...(chat.preview.length === 0
+            ? {}
+            : { description: chat.preview.replace(/\s+/g, ' ').trim() }),
+        })),
+        8,
+        selectListTheme,
+      );
+      const current = chats.findIndex((chat) => chat.id === this.options.session.currentChatId);
+      if (current >= 0) list.setSelectedIndex(current);
+
+      const close = (): void => this.closePicker();
+      list.onCancel = close;
+      list.onSelect = (item) => {
+        const selected = byId.get(item.value);
+        close();
+        if (selected === undefined) return;
+        void this.options.session.switchTo(selected).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'That conversation did not load.';
+          this.say(paint.red(message));
+        });
+      };
+
+      // Inline rather than overlaid: the list consumes rows immediately above
+      // the editor and pushes older transcript lines upward instead of painting
+      // over text the user is trying to read.
+      this.picker = list;
+      this.layoutTail();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The conversations did not load.';
+      this.say(paint.red(message));
+    } finally {
+      this.pickerOpening = false;
+    }
+  }
+
+  private async openModelPicker(): Promise<void> {
+    if (this.picker !== undefined || this.pickerOpening) return;
+    this.pickerOpening = true;
+    try {
+      const data = await this.options.session.modelPickerData();
+      if (data === undefined || this.picker !== undefined) return;
+      const selector = new ModelSelector(data);
+      selector.onChange = () => this.tui.requestRender();
+      selector.onCancel = () => this.closePicker();
+      selector.onSelect = (pair) => {
+        this.closePicker();
+        void this.applyModel(pair);
+      };
+      this.modelSelector = selector;
+      this.picker = selector;
+      this.layoutTail();
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Models did not load. Run /model to retry.'));
+    } finally {
+      this.pickerOpening = false;
+    }
+  }
+
+  private closePicker(): void {
+    const picker = this.picker;
+    this.picker = undefined;
+    this.modelSelector = undefined;
+    if (picker !== undefined) this.tui.removeChild(picker);
+    this.layoutTail();
+  }
+
+  private async applyModel(pair: ModelPair, validateCatalog = false): Promise<void> {
+    try {
+      const result = validateCatalog
+        ? await this.options.session.setModelFromInput(pair.provider, pair.model)
+        : await this.options.session.setModel(pair.provider, pair.model);
+      if (result === 'superseded') return;
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
+      this.say(paint.dim(pair.provider.length === 0
+        ? 'Using the server default model.'
+        : `Model set to ${safeTerminalText(pair.provider)} / ${safeTerminalText(pair.model)}.`));
+    } catch (error) {
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
+      this.say(paint.red(error instanceof Error ? error.message : 'The model did not change.'));
+    }
+  }
+
+  /** The run moved: repaint its output and its independent lifecycle line. */
+  onRun(state: RunState): void {
+    const hasOutput = state.text.length > 0 || state.thinking.length > 0 || state.tools.length > 0;
+    if (hasOutput) {
+      if (this.streaming === undefined) {
+        this.streaming = new AssistantSegment(state, this.thinkingShown);
+        this.assistantSegments.push(this.streaming);
+        this.append(this.streaming);
+      } else {
+        this.streaming.update(state);
+        this.tui.requestRender();
+      }
+    }
+
+    this.setRunStatus(state.status);
+  }
+
+  /** Keep local execution notices inside the answer block, before its prose. */
+  onLocalRun(command: string): void {
+    if (this.streaming === undefined) {
+      this.say(paint.dim(localRunNotice(command)));
+      return;
+    }
+    this.streaming.addLocalRun(command);
+    this.tui.requestRender();
+  }
+
+  /** Finalize the live segment in place, preserving its reasoning and position. */
+  onIdle(state: RunState): void {
+    this.clearRunStatus(true);
+    const hasOutput = state.text.length > 0 || state.thinking.length > 0 || state.tools.length > 0;
+    if (this.streaming !== undefined) {
+      this.streaming.settle(state);
+      this.streaming = undefined;
+      this.tui.requestRender();
+    } else if (hasOutput) {
+      const segment = new AssistantSegment(state, this.thinkingShown, true);
+      this.assistantSegments.push(segment);
+      this.append(segment);
+    }
+    if (state.status === 'error') {
+      this.say(paint.red(`The run failed: ${state.errorCode ?? 'unknown'}`));
+    }
+  }
+
+  onQueued(_text: string): void {
+    // submit() already rendered this as a user turn. The queue acknowledgment
+    // must stay silent or the same guidance appears twice in the transcript.
+  }
+
+  /** A user turn arrived from the web, PWA, or another terminal. */
+  onExternalUser(text: string): void {
+    this.showUser(text);
+  }
+
+  /**
+   * Pi consumed a steering message. Freeze the Text component exactly where
+   * it is and let the next delta create a new one below the user's guidance.
+   * Removing and re-appending it as Markdown would put the old answer AFTER
+   * the guidance: this TUI is append-only and deliberately has no insertion.
+   */
+  onSteering(): void {
+    this.streaming?.settle();
+    this.streaming = undefined;
+    this.tui.requestRender();
+  }
+
+  onStreamEnd(error?: unknown): void {
+    // The screen cannot recover this one-use event stream. Leave immediately
+    // through the same clean path as `/quit` instead of keeping a dead CLI in
+    // the foreground or as a hidden background process. Passing the notice to
+    // quit prints it after TUI shutdown, where a cancelled repaint cannot hide it.
+    const message = error instanceof ApiError && error.code === 'invalid_session'
+      ? `Your session expired or was revoked. Sign in again: pop login ${this.options.server}`
+      : 'The connection to the server dropped. Restart pop to reconnect.';
+    this.quit(paint.red(message));
+  }
+
+  private setRunStatus(status: RunState['status']): void {
+    if (status === 'done' || status === 'error') {
+      this.clearRunStatus(true);
+      return;
+    }
+    if (this.runStatusKind === status && this.runStatus !== undefined) return;
+
+    this.clearRunStatus(false);
+    this.runStatusKind = status;
+    this.workingFrame = 0;
+    this.runStatus = new Text(this.runStatusText(), 0, 0);
+    this.layoutTail();
+
+    if (status === 'running') {
+      this.runStatusTimer = setInterval(() => {
+        if (this.runStatus === undefined) return;
+        this.workingFrame = (this.workingFrame + 1) % WORKING_FRAMES.length;
+        this.runStatus.setText(this.runStatusText());
+        this.tui.requestRender();
+      }, WORKING_FRAME_MS);
+      this.runStatusTimer.unref();
+    }
+  }
+
+  private clearRunStatus(render: boolean): void {
+    if (this.runStatusTimer !== undefined) clearInterval(this.runStatusTimer);
+    this.runStatusTimer = undefined;
+    if (this.runStatus !== undefined) this.tui.removeChild(this.runStatus);
+    this.runStatus = undefined;
+    this.runStatusKind = undefined;
+    if (render) this.tui.requestRender();
+  }
+
+  private runStatusText(): string {
+    if (this.runStatusKind === 'queued') return paint.dim('Waiting for a free slot…');
+    return paint.dim(`${WORKING_FRAMES[this.workingFrame]} Working…`);
+  }
+
+  private async submit(raw: string): Promise<void> {
+    const text = raw.trim();
+    if (text.length === 0) return;
+
+    if (text.startsWith('/')) {
+      this.command(text);
+      return;
+    }
+    // Do not let a local send race the archive PATCH. Navigation remains
+    // available through slash commands and safely supersedes the late result.
+    if (this.options.session.archivePending) {
+      this.say(paint.yellow('This conversation is being archived.'));
+      return;
+    }
+    if (this.options.session.readOnly) {
+      this.editor.setText(raw);
+      this.say(paint.yellow('This conversation is archived. Use /unarchive to restore it.'));
+      this.tui.requestRender();
+      return;
+    }
+    // Sending while busy is intentional: the server appends to the durable
+    // steering FIFO and feeds its head into pi. Blocking here made the server
+    // feature unreachable.
+
+    const shown = this.showUser(text);
+    try {
+      await this.options.session.ask(text);
+      const chatId = this.options.session.currentChatId;
+      if (chatId !== undefined) this.options.onChatOpened?.(chatId);
+    } catch (error) {
+      if (error instanceof MessageNotSentError) {
+        this.rollbackUser(shown);
+        this.editor.setText(raw);
+        this.say(paint.red(error.message));
+        this.tui.requestRender();
+        return;
+      }
+      if (this.options.session.readOnly || (error instanceof ApiError && error.code === 'chat_archived')) {
+        // pi-tui clears submitted input before this callback settles. An
+        // archived chat did not accept these words, so remove the optimistic
+        // row, put them back exactly as the draft, and retain the server notice.
+        this.rollbackUser(shown);
+        this.editor.setText(raw);
+        this.tui.requestRender();
+        return;
+      }
+      const message =
+        error instanceof ApiError && error.code === 'chat_not_found'
+          ? `${error.message} Type /new to start a new conversation`
+          : error instanceof Error
+            ? error.message
+            : 'That did not send.';
+      this.say(paint.red(message));
+    }
+  }
+
+  /**
+   * One user bubble, local or synchronized. A blank line belongs between
+   * turns, never between a question and its answer.
+   */
+  private showUser(text: string): ShownUser {
+    // Spacer, not an empty Text: `Text` trims, so whitespace-only content
+    // renders zero lines and the separator silently is not there.
+    const spokenBefore = this.spoken;
+    const components: Component[] = [];
+    if (spokenBefore) components.push(new Spacer(1));
+    components.push(new Text(paint.cyan(`> ${text}`), 0, 0));
+    for (const component of components) this.append(component);
+    this.spoken = true;
+    this.spokenRevision += 1;
+    return { components, spokenBefore, spokenRevision: this.spokenRevision };
+  }
+
+  private rollbackUser(shown: ShownUser): void {
+    for (const component of shown.components) this.transcript.removeChild(component);
+    if (this.spokenRevision === shown.spokenRevision) this.spoken = shown.spokenBefore;
+    this.spokenRevision += 1;
+    this.tui.requestRender(true);
+  }
+
+  private command(text: string): void {
+    const [name] = text.split(/\s+/);
+    switch (name) {
+      case '/quit':
+      case '/exit':
+        this.quit();
+        return;
+      case '/help':
+        this.say(HELP);
+        return;
+      case '/chats':
+        if (text !== '/chats') {
+          this.say(paint.yellow('Usage: /chats'));
+          return;
+        }
+        void this.openChatPicker();
+        return;
+      case '/model':
+        this.modelCommand(text);
+        return;
+      case '/stop':
+        void this.options.session.stop();
+        return;
+      case '/think':
+        this.thinkingShown = !this.thinkingShown;
+        for (const segment of this.assistantSegments) segment.setThinkingShown(this.thinkingShown);
+        this.options.onThinkingShownChange?.(this.thinkingShown);
+        this.say(paint.dim(this.thinkingShown ? 'Reasoning shown.' : 'Reasoning hidden.'));
+        return;
+      case '/new':
+        this.startNewConversation();
+        return;
+      case '/archive':
+        void this.archiveConversation();
+        return;
+      case '/unarchive':
+        void this.unarchiveConversation();
+        return;
+      case '/compact':
+      case '/session':
+      case '/name':
+      case '/export':
+      case '/fork':
+        void this.runSessionCommand(name.slice(1) as SessionCommandName, text.slice(name.length).trim());
+        return;
+      default:
+        this.say(paint.yellow(`No such command: ${name ?? text}`));
+    }
+  }
+
+  private modelCommand(text: string): void {
+    const parts = text.split(/\s+/);
+    if (parts.length === 1) {
+      void this.openModelPicker();
+      return;
+    }
+    if (parts.length === 2 && parts[1] === 'default') {
+      void this.applyModel({ provider: '', model: '' });
+      return;
+    }
+    if (parts.length === 3 && parts[1] !== undefined && parts[2] !== undefined) {
+      void this.applyModel({ provider: parts[1], model: parts[2] }, true);
+      return;
+    }
+    this.say(paint.yellow('Usage: /model | /model default | /model <provider-id> <model-id>'));
+  }
+
+  private async runSessionCommand(command: SessionCommandName, argument: string): Promise<void> {
+    try {
+      if (command === 'fork' && argument.length === 0) {
+        const points = await this.options.session.forkPoints();
+        this.say(points.length === 0
+          ? paint.dim('No user messages are available to fork.')
+          : points.map((point) => `${String(point.number)}. ${point.text.slice(0, 120)}`).join('\n'));
+        return;
+      }
+      const result = await this.options.session.command(command, argument);
+      if (result.kind === 'fork') {
+        if (result.draft !== undefined) this.editor.setText(result.draft);
+        this.setTitle(result.chat?.title ?? 'Forked conversation');
+        this.say(paint.dim('Forked conversation. The selected request is in the editor.'));
+        return;
+      }
+      this.say(paint.dim(result.message ?? (result.path === undefined ? `${command} completed.` : `Exported to Files/${result.path}`)));
+    } catch (error) {
+      this.say(paint.red(error instanceof Error ? error.message : 'Command failed.'));
+    }
+  }
+}

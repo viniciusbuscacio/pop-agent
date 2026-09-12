@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+*.local
+.DS_Store
+*.tsbuildinfo
+# Packed clients are build outputs.
+cli/pack/
+# Generated, verified Windows setup payloads.
+local-access/setup/payload/*.exe
+local-access/setup/payload/manifest.json
+
+/local-access/setup/payload/tray
+/local-access/setup/payload/launcher
+/local-access/setup/payload/app.icns
+
+# Also ignore a local dependency symlink used by source-only checkouts.
+/node_modules

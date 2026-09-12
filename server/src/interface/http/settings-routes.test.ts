@@ -1,0 +1,247 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Hono } from 'hono';
+import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
+
+const PASSWORD = 'correct horse battery';
+
+let fixture: TestApp;
+let app: Hono;
+let token: string;
+
+beforeEach(async () => {
+  fixture = createTestApp();
+  app = fixture.app;
+  token = await setupTestSession(app, PASSWORD);
+});
+
+function authed(path: string, init: RequestInit = {}): Promise<Response> {
+  return Promise.resolve(
+    app.request(path, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(init.headers ?? {}),
+      },
+    }),
+  );
+}
+
+const DEFAULT_DOC = {
+  language: 'en',
+  defaultProvider: 'openrouter',
+  defaultModel: 'moonshotai/kimi-k3',
+  customInstructions: '',
+  voiceModel: 'base',
+  voiceCleanup: false,
+  voiceCleanupModel: '',
+  autoSkillsEnabled: true,
+  piUpdatePolicy: 'recommended',
+};
+
+describe('GET /v1/settings', () => {
+  it('compares the instructions base atomically without conflicting with unrelated fields', async () => {
+    await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ voiceCleanup: true }) });
+    expect((await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ customInstructions: 'new', expectedInstructions: '' }) })).status).toBe(200);
+    expect((await authed('/v1/settings', { method: 'PATCH', body: JSON.stringify({ customInstructions: 'stale', expectedInstructions: '' }) })).status).toBe(409);
+    const result = await (await authed('/v1/settings')).json();
+    expect(result.customInstructions).toBe('new'); expect(result.voiceCleanup).toBe(true);
+    expect(result).not.toHaveProperty('expectedInstructions');
+  });
+  it('needs a session', async () => {
+    expect((await app.request('/v1/settings')).status).toBe(401);
+  });
+
+  it('answers with the defaults before anything was saved', async () => {
+    const res = await authed('/v1/settings');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(DEFAULT_DOC);
+  });
+});
+
+describe('PUT /v1/settings', () => {
+  it('replaces the document and returns what was stored', async () => {
+    const next = {
+      ...DEFAULT_DOC,
+      defaultProvider: 'openrouter',
+      defaultModel: 'openai/gpt-5',
+      customInstructions: 'Answer briefly.',
+    };
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify(next),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(next);
+    expect(await (await authed('/v1/settings')).json()).toEqual(next);
+  });
+
+  it('rejects a field it does not know instead of dropping it', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, telemetry: true }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('invalid_field');
+  });
+
+  it('accepts both Auto-Skill states', async () => {
+    for (const autoSkillsEnabled of [false, true]) {
+      const res = await authed('/v1/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ...DEFAULT_DOC, autoSkillsEnabled }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).autoSkillsEnabled).toBe(autoSkillsEnabled);
+    }
+  });
+
+  it('rejects a non-boolean Auto-Skill state', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, autoSkillsEnabled: 'yes' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('persists each pi update policy and rejects unknown channels', async () => {
+    for (const piUpdatePolicy of ['keep-current', 'recommended', 'latest']) {
+      const res = await authed('/v1/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).piUpdatePolicy).toBe(piUpdatePolicy);
+    }
+
+    const rejected = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy: 'nightly' }),
+    });
+    expect(rejected.status).toBe(400);
+  });
+
+  it('preserves the policy when an older client saves a document without the new field', async () => {
+    await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, piUpdatePolicy: 'latest' }),
+    });
+    const oldClientDocument: Partial<typeof DEFAULT_DOC> = { ...DEFAULT_DOC };
+    delete oldClientDocument.piUpdatePolicy;
+
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...oldClientDocument, voiceCleanup: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).piUpdatePolicy).toBe('latest');
+  });
+
+  it('rejects an unsupported language', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, language: 'pt-BR' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects instructions past the cap instead of truncating them', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...DEFAULT_DOC, customInstructions: 'x'.repeat(4_001) }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a body that is not JSON', async () => {
+    const res = await authed('/v1/settings', { method: 'PUT', body: 'not json' });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('missing_field');
+  });
+
+  it('needs a session', async () => {
+    const res = await app.request('/v1/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ language: 'en' }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PATCH /v1/settings', () => {
+  it('merges independent fields without restoring a stale full document', async () => {
+    const [instructions, voiceCleanup] = await Promise.all([
+      authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ customInstructions: 'Keep answers concise.' }),
+      }),
+      authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ voiceCleanup: true }),
+      }),
+    ]);
+
+    expect(instructions.status).toBe(200);
+    expect(voiceCleanup.status).toBe(200);
+    expect(await (await authed('/v1/settings')).json()).toEqual({
+      ...DEFAULT_DOC,
+      customInstructions: 'Keep answers concise.',
+      voiceCleanup: true,
+    });
+  });
+
+  it('ignores valid retired automatic activation fields from a stale PWA', async () => {
+    const res = await authed('/v1/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ autoActivatePreparedUpdates: true, autoRestartIdleMinutes: 5 }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(DEFAULT_DOC);
+  });
+
+  it('rejects empty, unknown, or invalid patches', async () => {
+    for (const patch of [{}, { telemetry: true }, { autoRestartIdleMinutes: 0 }]) {
+      const res = await authed('/v1/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('needs a session', async () => {
+    const res = await app.request('/v1/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ voiceCleanup: true }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /v1/about', () => {
+  it('reports the three versions', async () => {
+    const res = await authed('/v1/about');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      popAgentVersion: expect.any(String),
+      nodeVersion: expect.any(String),
+      piVersion: expect.any(String),
+    });
+  });
+
+  it('needs a session', async () => {
+    expect((await app.request('/v1/about')).status).toBe(401);
+  });
+});
