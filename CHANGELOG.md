@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.104 — 2026-09-12
 
 - Open PDFs in a PDF.js full-screen viewer on macOS and Windows.
 
