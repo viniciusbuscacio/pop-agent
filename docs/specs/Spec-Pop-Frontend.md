@@ -450,7 +450,8 @@ The composer owns device-local draft interaction, not delivery authority:
   composer cannot be submitted;
 - drag/drop, picker and paste support attachments, with frontend limits matching
   API limits (eight items across uploads and Files references, 25 MB each and
-  100 MB raw in total);
+  100 MB raw in total); pasted clipboard files are read from both item and file
+  representations without duplicates, while text-only paste remains native;
 - `@` references existing Files paths without uploading them again;
 - model and Plan controls snapshot their current values into each send;
 - Plan styling and announcement make mode visible, but only the server enforces

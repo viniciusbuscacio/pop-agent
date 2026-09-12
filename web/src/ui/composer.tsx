@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO, SessionCommandName } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
@@ -21,7 +28,7 @@ import { FileInput, ModelPicker, TextArea, Pressable } from './controls';
 /**
  * The composer keeps send/stop and an action menu in its bottom row. Enter sends,
  * Shift+Enter breaks a line, Escape stops a run. Files arrive through the
- * picker or by dropping them anywhere on the composer; images show a
+ * picker, paste, or by dropping them anywhere on the composer; images show a
  * thumbnail chip, everything else a file chip. The per-file cap applies here
  * before a byte leaves the phone.
  *
@@ -333,7 +340,7 @@ export function Composer({
           .filter((file) => file.name.toLowerCase().includes(mentionQuery.toLowerCase()))
           .slice(0, 6);
 
-  function addFiles(files: FileList | null): void {
+  function addFiles(files: FileList | readonly File[] | null): void {
     if (files === null) return;
     setNotice(undefined);
     let plannedCount = attachments.length;
@@ -569,6 +576,14 @@ export function Composer({
     } finally {
       setSending(false);
     }
+  }
+
+  function onPaste(event: ReactClipboardEvent<HTMLTextAreaElement>): void {
+    if (locked) return;
+    const files = collectPastedFiles(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    addFiles(files);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
@@ -858,6 +873,7 @@ export function Composer({
               updateSlash(event.target.value, event.target.selectionStart ?? event.target.value.length);
             }}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={executionMode === 'plan' ? t('chat.planPlaceholder') : t('chat.placeholder')}
             aria-label={executionMode === 'plan' ? t('chat.planPlaceholder') : t('chat.placeholder')}
             // block (not inline-block): an inline textarea leaves baseline
@@ -1000,6 +1016,30 @@ function RecordingTimer() {
     <span className="tabular-nums">
       {`${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, '0')}`}
     </span>
+  );
+}
+
+function collectPastedFiles(data: DataTransfer): File[] {
+  const itemFiles: File[] = [];
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind !== 'file') continue;
+    const file = item.getAsFile();
+    if (file !== null) itemFiles.push(file);
+  }
+
+  const files = [...itemFiles];
+  for (const fallback of Array.from(data.files ?? [])) {
+    if (!itemFiles.some((file) => sameClipboardFile(file, fallback))) files.push(fallback);
+  }
+  return files;
+}
+
+function sameClipboardFile(left: File, right: File): boolean {
+  return left === right || (
+    left.name === right.name
+    && left.type === right.type
+    && left.size === right.size
+    && left.lastModified === right.lastModified
   );
 }
 

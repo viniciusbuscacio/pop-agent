@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allow clipboard images to be pasted into the chat composer as normal attachments, including on browsers that expose only the clipboard files fallback.
+
 - Preserve client and platform context on every message, explicitly mark unknown origins, and distinguish native Desktop from browser tabs.
 
 - Support Command-plus/equal, Command-minus and Command-zero for native macOS Desktop page zoom, also available in the View menu.

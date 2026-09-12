@@ -403,6 +403,83 @@ describe('pending message composition', () => {
     );
   });
 
+  it('turns an image clipboard item into a normal attachment', async () => {
+    const { onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    const image = new File(['clipboard image'], 'pasted.png', { type: 'image/png' });
+
+    const ordinaryPasteContinues = fireEvent.paste(area, {
+      clipboardData: {
+        items: [{ kind: 'file', getAsFile: () => image }],
+        files: [],
+      },
+    });
+
+    expect(ordinaryPasteContinues).toBe(false);
+    expect(await screen.findByText('pasted.png')).toBeTruthy();
+    fireEvent.keyDown(area, { key: 'Enter' });
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith(
+      '',
+      [expect.objectContaining({
+        name: 'pasted.png',
+        type: 'image/png',
+        dataUri: expect.stringMatching(/^data:image\/png/),
+      })],
+      [],
+      'steer',
+      'normal',
+    ));
+  });
+
+  it('uses clipboard files as a fallback without duplicating item/file overlap', async () => {
+    renderComposer();
+    const area = screen.getByRole('textbox');
+    const itemImage = new File(['first'], 'item.png', { type: 'image/png', lastModified: 1 });
+    const overlappingFallback = new File(['first'], 'item.png', { type: 'image/png', lastModified: 1 });
+    const fallbackImage = new File(['second'], 'fallback.png', { type: 'image/png' });
+
+    fireEvent.paste(area, {
+      clipboardData: {
+        items: [
+          { kind: 'file', getAsFile: () => itemImage },
+          { kind: 'file', getAsFile: () => null },
+        ],
+        files: [overlappingFallback, fallbackImage],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText('fallback.png')).toBeTruthy());
+    expect(screen.getAllByText('item.png')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Remove/ })).toHaveLength(2);
+  });
+
+  it('leaves ordinary text paste to the textarea', async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    const area = screen.getByRole('textbox');
+    area.focus();
+
+    await user.paste('ordinary text');
+
+    expect(area).toHaveProperty('value', 'ordinary text');
+    expect(screen.queryByTestId('attachment-tray')).toBeNull();
+  });
+
+  it('ignores clipboard files while the composer is locked', () => {
+    renderComposer({ locked: true });
+    const image = new File(['clipboard image'], 'locked.png', { type: 'image/png' });
+
+    const ordinaryPasteContinues = fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: {
+        items: [{ kind: 'file', getAsFile: () => image }],
+        files: [image],
+      },
+    });
+
+    expect(ordinaryPasteContinues).toBe(true);
+    expect(screen.queryByTestId('attachment-tray')).toBeNull();
+  });
+
   it('refuses a selection over the 100 MB aggregate attachment limit before sending', async () => {
     renderComposer();
     const files = Array.from({ length: 5 }, (_, index) => {
