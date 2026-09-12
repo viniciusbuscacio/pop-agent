@@ -47,6 +47,14 @@ describe('native Pop launcher installers', () => {
 
   afterEach(() => rmSync(cliPack, { recursive: true, force: true }));
 
+  it('offers the raw Mac executable for in-app updates instead of the setup DMG', async () => {
+    const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.30' } });
+    const response = await routes.request('http://localhost/desktop-update.json?platform=darwin&arch=arm64');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ version: '0.2.30', file: 'pop-local-access-0.2.30-darwin-arm64' });
+    expect((await routes.request('http://localhost/desktop-update.json?platform=darwin&arch=invalid')).status).toBe(404);
+  });
+
   it('publishes installer metadata and downloads without exposing any account data', async () => {
     const routes = createCliInstallerRoutes({ cliPack, versions: { popAgentVersion: '0.2.30' } });
     const response = await routes.request('http://localhost/local-access-update.json?platform=darwin&arch=arm64');

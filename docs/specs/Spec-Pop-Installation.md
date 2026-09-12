@@ -963,3 +963,22 @@ The macOS Desktop handles same-origin file downloads with WKDownload, saves
 them in Downloads using a free filename, and reveals the completed file in Finder
 without executing it. Navigation-to-download handoffs must not show a connection
 failure or replace the current page. Redirects retain the server-origin policy.
+
+## macOS Desktop refresh updates
+
+The owner's refresh click checks the configured server for a native Desktop update
+and fetches the current web shell even when the service worker has no waiting
+update. The narrow, main-frame, same-origin maintenance channel can request only
+this update; it exposes no general tools, commands, paths or credentials to pages.
+
+Desktop updates download the platform-specific executable, not the setup DMG,
+verify its advertised size and SHA-256 and its macOS code signature, stage a copy
+of the installed bundle and sign/verify that candidate. An independent helper waits
+for the old Desktop to exit, swaps bundles, starts the replacement and restores
+the prior program if startup fails. The current page is reopened with a fresh-shell
+marker. Profiles, WebKit data, permissions and the separate local-access process
+are preserved. A native installation predating this maintenance channel needs a
+one-time bootstrap update; server-served JavaScript cannot replace that binary.
+
+Windows and browser-only clients keep their existing web-refresh behavior; this
+macOS maintenance channel must not be advertised as a Windows native updater.

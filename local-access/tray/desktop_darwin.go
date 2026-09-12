@@ -74,7 +74,11 @@ func runDesktopIfRequested() bool {
 	if err := tray.Start(); err == nil {
 		_ = tray.Process.Release()
 	}
-	origin := C.CString(safeOrigin(profile.URL))
+	startURL := safeOrigin(profile.URL)
+	if candidate := os.Getenv("POP_DESKTOP_START_URL"); candidate != "" && safeOrigin(candidate) == startURL {
+		startURL = candidate
+	}
+	origin := C.CString(startURL)
 	defer C.free(unsafe.Pointer(origin))
 	script := C.CString(desktopThemeScript)
 	defer C.free(unsafe.Pointer(script))

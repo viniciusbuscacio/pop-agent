@@ -1,4 +1,5 @@
 #import "../../local-access/tray/desktop_darwin.m"
+void popDesktopBeginUpdate(char *url) { }
 
 @interface DownloadProbe : PopDesktop
 @property NSURL *output;

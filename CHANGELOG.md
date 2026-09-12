@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.97 — 2026-09-12
+
+- Make manual refresh fetch the current web interface even when the service worker reports no update.
+- Let macOS Desktop refresh download a verified native executable from its own server, replace the app with rollback protection and reopen the current page without a setup DMG.
+- Preserve login, local-access permissions and existing profile data during Desktop updates.
+
 ## 0.2.96 — 2026-09-11
 
 - Handle macOS Desktop downloads natively, retain the current page, preserve previous downloads and reveal completed files in Finder.

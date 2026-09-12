@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const trayVersion = "0.2.96"
+const trayVersion = "0.2.97"
 
 type childEvent struct {
 	Kind      string `json:"kind"`
@@ -50,6 +50,9 @@ type app struct {
 }
 
 func main() {
+	if runDesktopUpdateHelper() {
+		return
+	}
 	if runDesktopIfRequested() {
 		return
 	}

@@ -46,6 +46,8 @@ export async function checkForAndApplyUpdate(): Promise<UpdateCheckResult> {
 /** Explicit owner recovery only: fetch a fresh shell if worker activation fails.
  * Keep IndexedDB, credentials and worker registration; never silently reinstall. */
 export async function refreshAppSoftware(): Promise<UpdateCheckResult> {
+  const nativeUpdate = typeof window === 'undefined' ? undefined : (window as Window & { __popDesktopUpdate?: () => Promise<'current' | 'restarting'> }).__popDesktopUpdate;
+  if (nativeUpdate && await nativeUpdate() === 'restarting') return 'update-found';
   const result = await checker();
   if (result === 'update-found') {
     try { await applier(); }
@@ -55,6 +57,9 @@ export async function refreshAppSoftware(): Promise<UpdateCheckResult> {
       try { await hardRefreshPage(); }
       catch (failure) { logUpdate('reload', 'failed', Date.now(), undefined, failure); throw failure; }
     }
+  } else {
+    // A manual refresh must fetch the current shell even if no worker is ready.
+    await hardRefreshPage();
   }
   return result;
 }

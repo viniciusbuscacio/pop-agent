@@ -77,6 +77,16 @@ export function createCliInstallerRoutes(deps: CliInstallerDeps): Hono {
     });
   });
 
+  routes.get('/desktop-update.json', (c) => {
+    const platform = c.req.query('platform');
+    const arch = c.req.query('arch');
+    if (platform !== 'darwin' || !['arm64', 'amd64'].includes(arch ?? '')) return c.notFound();
+    const release = readLocalAccessRelease(deps.cliPack);
+    const file = release?.artifacts[`${platform}-${arch}`];
+    if (!release || !file) return c.notFound();
+    return c.json({ version: release.version, ...file }, 200, { 'cache-control': 'no-store' });
+  });
+
   routes.get('/local-access-update.json', (c) => {
     const artifact = requestedLocalAccessInstaller(c, deps.cliPack);
     if (artifact === undefined) return c.notFound();

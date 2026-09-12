@@ -1,6 +1,10 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
+extern void popDesktopBeginUpdate(char*);
+void popDesktopUpdateStatus(const char*);
+static WKWebView *updateWeb;
+
 @interface PopDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate>
 @property NSWindow *window;
 @property WKWebView *web;
@@ -78,6 +82,13 @@
 }
 - (void)userContentController:(WKUserContentController*)controller didReceiveScriptMessage:(WKScriptMessage*)message {
  if (!message.frameInfo.mainFrame || ![self internalURL:message.frameInfo.request.URL] || ![message.body isKindOfClass:[NSString class]]) return;
+ if ([message.name isEqual:@"popUpdate"] && [message.body isEqual:@"update"]) {
+  [self.web evaluateJavaScript:@"location.href" completionHandler:^(id value, NSError *error) {
+   if (error || ![value isKindOfClass:[NSString class]] || ![self internalURL:[NSURL URLWithString:value]]) { popDesktopUpdateStatus("error"); return; }
+   popDesktopBeginUpdate((char*)[(NSString*)value UTF8String]);
+  }];
+  return;
+ }
  if ([message.body isEqual:@"pop-desktop-theme:dark"]) self.window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
  else if ([message.body isEqual:@"pop-desktop-theme:light"]) self.window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
 }
@@ -128,8 +139,12 @@ void popDesktopRun(const char *origin, const char *script) {
   delegate.window.title=@"Pop Agent Desktop";delegate.window.minSize=NSMakeSize(720,520);delegate.window.releasedWhenClosed=NO;delegate.window.delegate=delegate;delegate.window.appearance=[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
   WKWebViewConfiguration *config=[WKWebViewConfiguration new];
   [config.userContentController addScriptMessageHandler:delegate name:@"popTheme"];
+  [config.userContentController addScriptMessageHandler:delegate name:@"popUpdate"];
   [config.userContentController addUserScript:[[WKUserScript alloc] initWithSource:[NSString stringWithUTF8String:script] injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
   delegate.web=[[WKWebView alloc] initWithFrame:delegate.window.contentView.bounds configuration:config];delegate.web.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;delegate.web.navigationDelegate=delegate;delegate.web.UIDelegate=delegate;
+  updateWeb = delegate.web;
+  const char *ready = getenv("POP_DESKTOP_UPDATE_READY");
+  if (ready) [@"ready" writeToFile:[NSString stringWithUTF8String:ready] atomically:YES encoding:NSUTF8StringEncoding error:nil];
   delegate.window.contentView=delegate.web;[delegate.window center];[delegate.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
   [delegate.web loadRequest:[NSURLRequest requestWithURL:delegate.origin]];
   // WKWebView may consume standard browser key equivalents before the menu.
@@ -144,4 +159,16 @@ void popDesktopRun(const char *origin, const char *script) {
   [NSApp run];
   [NSEvent removeMonitor:zoomKeys];
  }
+}
+
+void popDesktopUpdateStatus(const char *status) {
+ NSString *value = [NSString stringWithUTF8String:status];
+ dispatch_async(dispatch_get_main_queue(), ^{
+  NSData *data = [NSJSONSerialization dataWithJSONObject:@[value] options:0 error:nil];
+  NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+  [updateWeb evaluateJavaScript:[NSString stringWithFormat:@"window.dispatchEvent(new CustomEvent('pop-desktop-update', {detail: %@[0]}))",json] completionHandler:nil];
+ });
+}
+void popDesktopQuitForUpdate(void) {
+ dispatch_async(dispatch_get_main_queue(), ^{ [NSApp terminate:nil]; });
 }
