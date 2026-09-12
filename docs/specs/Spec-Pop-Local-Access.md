@@ -734,3 +734,7 @@ The background local-access helper has its own nested app bundle and bundle ID,
 so LaunchServices does not mistake it for the Desktop window. Closing the window
 keeps the helper running; reopening the Desktop restores its window. The tray's
 Quit stops local access and the Desktop window. The browser PWA is independent.
+
+The macOS Desktop View menu controls WKWebView page zoom: Command-plus (or
+Command-equal) zooms in, Command-minus zooms out, and Command-zero restores
+100%. Zoom is bounded between 50% and 300% and changes the entire page.

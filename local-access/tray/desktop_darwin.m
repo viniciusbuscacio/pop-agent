@@ -7,6 +7,15 @@
 @property NSURL *origin;
 @end
 @implementation PopDesktop
+- (void)popZoomIn:(id)sender { self.web.pageZoom = MIN(3.0, self.web.pageZoom + 0.1); }
+- (void)popZoomOut:(id)sender { self.web.pageZoom = MAX(0.5, self.web.pageZoom - 0.1); }
+- (void)popActualSize:(id)sender { self.web.pageZoom = 1.0; }
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+ if (item.action == @selector(popZoomIn:)) return self.web.pageZoom < 2.999;
+ if (item.action == @selector(popZoomOut:)) return self.web.pageZoom > 0.501;
+ if (item.action == @selector(popActualSize:)) return fabs(self.web.pageZoom - 1.0) > 0.001;
+ return YES;
+}
 - (BOOL)internalURL:(NSURL*)url {
  NSNumber *a = self.origin.port ?: @([self.origin.scheme isEqualToString:@"https"] ? 443 : 80);
  NSNumber *b = url.port ?: @([url.scheme isEqualToString:@"https"] ? 443 : 80);
@@ -63,7 +72,14 @@ void popDesktopRun(const char *origin, const char *script) {
   [edit addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
   [edit addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
   [edit addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-  [edit addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];NSApp.mainMenu=menu;
+  [edit addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+  NSMenuItem *viewItem=[NSMenuItem new];viewItem.title=@"View";[menu addItem:viewItem];
+  NSMenu *view=[NSMenu new];viewItem.submenu=view;
+  NSMenuItem *zoomIn=[view addItemWithTitle:@"Zoom In" action:@selector(popZoomIn:) keyEquivalent:@"+"];zoomIn.target=delegate;
+  NSMenuItem *zoomEqual=[view addItemWithTitle:@"Zoom In" action:@selector(popZoomIn:) keyEquivalent:@"="];zoomEqual.target=delegate;zoomEqual.hidden=YES;zoomEqual.allowsKeyEquivalentWhenHidden=YES;
+  NSMenuItem *zoomOut=[view addItemWithTitle:@"Zoom Out" action:@selector(popZoomOut:) keyEquivalent:@"-"];zoomOut.target=delegate;
+  NSMenuItem *actual=[view addItemWithTitle:@"Actual Size" action:@selector(popActualSize:) keyEquivalent:@"0"];actual.target=delegate;
+  NSApp.mainMenu=menu;
   delegate.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1180,780) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
   delegate.window.title=@"Pop Agent Desktop";delegate.window.minSize=NSMakeSize(720,520);delegate.window.releasedWhenClosed=NO;delegate.window.delegate=delegate;delegate.window.appearance=[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
   WKWebViewConfiguration *config=[WKWebViewConfiguration new];
@@ -71,6 +87,17 @@ void popDesktopRun(const char *origin, const char *script) {
   [config.userContentController addUserScript:[[WKUserScript alloc] initWithSource:[NSString stringWithUTF8String:script] injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
   delegate.web=[[WKWebView alloc] initWithFrame:delegate.window.contentView.bounds configuration:config];delegate.web.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;delegate.web.navigationDelegate=delegate;delegate.web.UIDelegate=delegate;
   delegate.window.contentView=delegate.web;[delegate.window center];[delegate.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
-  [delegate.web loadRequest:[NSURLRequest requestWithURL:delegate.origin]];[NSApp run];
+  [delegate.web loadRequest:[NSURLRequest requestWithURL:delegate.origin]];
+  // WKWebView may consume standard browser key equivalents before the menu.
+  id zoomKeys = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent*(NSEvent *event) {
+   if (NSApp.keyWindow != delegate.window || !(event.modifierFlags & NSEventModifierFlagCommand) || (event.modifierFlags & (NSEventModifierFlagControl | NSEventModifierFlagOption))) return event;
+   NSString *key = event.charactersIgnoringModifiers;
+   if ([key isEqual:@"+"] || [key isEqual:@"="]) { [delegate popZoomIn:nil]; return nil; }
+   if ([key isEqual:@"-"]) { [delegate popZoomOut:nil]; return nil; }
+   if ([key isEqual:@"0"]) { [delegate popActualSize:nil]; return nil; }
+   return event;
+  }];
+  [NSApp run];
+  [NSEvent removeMonitor:zoomKeys];
  }
 }
