@@ -30,7 +30,7 @@ async function verify(name: string, size: number, sha256: string): Promise<void>
 }
 await verify(manifest.file, manifest.size, manifest.sha256);
 await verify(AUDIO_SOURCE.file, AUDIO_SOURCE.size, AUDIO_SOURCE.sha256);
-const members = execFileSync('tar', ['-tf', join(output, manifest.file)], { encoding: 'utf8' }).split('\n');
+const members = execFileSync('tar', ['-tf', join(output, manifest.file), 'cli/pack'], { encoding: 'utf8' }).split('\n');
 const inherited = members.includes('cli/pack/client-release.json')
   ? validateClientLock(JSON.parse(execFileSync('tar', ['-xOf', join(output, manifest.file), 'cli/pack/client-release.json'], { encoding: 'utf8' }))) : undefined;
 if (inherited) {
