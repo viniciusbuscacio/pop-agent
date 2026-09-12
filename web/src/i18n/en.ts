@@ -330,6 +330,8 @@ export const en = {
   'settings.installation.macAppleDownload': 'Download for Mac — Apple Silicon (.dmg)',
   'settings.installation.macIntelDownload': 'Download for Mac — Intel (.dmg)',
   'settings.installation.macSetupHint': 'Open the DMG, then open Pop Agent Setup and follow the installation steps. Choose Apple Silicon for M-series Macs or Intel for older Macs.',
+  'settings.installation.macSetupBlockedTitle': 'If macOS blocks the installer',
+  'settings.installation.macSetupBlockedHint': 'Keep the downloaded DMG open so the Pop Agent Setup volume stays mounted. Copy this command into Terminal and press Return. It copies the installer to a temporary folder, checks its code signature, removes quarantine from the copy and opens it.',
   'settings.installation.localAccessTitle': 'Local computer access',
   'settings.installation.localAccessBody':
     'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a copyable macOS setup command to Install Pop for opening a blocked installer from its mounted DMG.
+
 ## 0.2.97 — 2026-09-12
 
 - Make manual refresh fetch the current web interface even when the service worker reports no update.

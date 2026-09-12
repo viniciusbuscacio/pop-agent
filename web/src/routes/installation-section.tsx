@@ -17,6 +17,14 @@ import {
 } from '../services/local-connection-selection';
 import { BackButton, Button, Card, LinkButton, Select, SwitchField } from '../ui/controls';
 
+const MAC_SETUP_COMMAND = [
+  "pop_setup_dir=\"$(mktemp -d \"${TMPDIR:-/tmp}/pop-agent-setup.XXXXXX\")\" &&",
+  "ditto \"/Volumes/Pop Agent Setup/Pop Agent Setup.app\" \"$pop_setup_dir/Pop Agent Setup.app\" &&",
+  "codesign --verify --deep --strict \"$pop_setup_dir/Pop Agent Setup.app\" &&",
+  "xattr -dr com.apple.quarantine \"$pop_setup_dir/Pop Agent Setup.app\" &&",
+  "open \"$pop_setup_dir/Pop Agent Setup.app\"",
+].join('\n');
+
 /**
  * Device setup instructions are generated from the origin that served this page.
  * This matters for personal installs: copying a product-wide example would point
@@ -110,6 +118,11 @@ export function InstallationSection() {
                 ))}
               </div>
               <p className="text-sm text-[var(--muted)]">{t('settings.installation.macSetupHint')}</p>
+              <section className="flex min-w-0 flex-col gap-2">
+                <h3 className="text-sm font-medium">{t('settings.installation.macSetupBlockedTitle')}</h3>
+                <p className="text-sm text-[var(--muted)]">{t('settings.installation.macSetupBlockedHint')}</p>
+                <CopyBlock value={MAC_SETUP_COMMAND} testId="installation-macos-setup-command" />
+              </section>
             </>
           ) : <LocalAccessInstallInstructions origin={origin} platform={platform} />}
         </Card>
