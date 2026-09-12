@@ -214,7 +214,7 @@ export const en = {
   'chat.queueSave': 'Save queued message',
   'chat.queueCancelFailed': 'Could not cancel the queued message.',
   'chat.stop': 'Stop',
-  'chat.attach': 'Attach a file',
+  'chat.attach': 'Attache a file/photo',
   'chat.mic': 'Record a voice note',
   'chat.micStop': 'Stop recording',
   'chat.micUnavailable': 'The microphone is not available in this browser.',
