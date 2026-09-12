@@ -70,7 +70,7 @@ function ChatMessageView({
         {onResend === undefined ? null : (
           <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
             <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
-            {t('chat.resend')}
+            {t(resending ? 'chat.resending' : 'chat.resend')}
           </ActionButton>
         )}
       </div>
@@ -89,7 +89,7 @@ function ChatMessageView({
           </div>
         ) : null}
         {message.attachments.length > 0 ? <Attachments attachments={message.attachments} /> : null}
-        {onResend ? <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>{t('chat.resend')}</ActionButton> : null}
+        {onResend ? <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>{t(resending ? 'chat.resending' : 'chat.resend')}</ActionButton> : null}
       </div>
     );
   }
@@ -182,7 +182,7 @@ function SystemNoticeCard({
           {onResend === undefined ? null : (
             <ActionButton testId="message-resend" disabled={resending} onClick={onResend}>
               <span aria-hidden="true" className={resending ? 'animate-spin' : ''}>↻</span>
-              {t('chat.tryAgain')}
+              {t(resending ? 'chat.resending' : 'chat.tryAgain')}
             </ActionButton>
           )}
           {onChangeModel === undefined ? null : (

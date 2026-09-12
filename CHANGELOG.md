@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show resend progress and failures consistently for bubble and context-menu actions, retain the original payload, and prevent duplicate concurrent retries.
+
 ## 0.2.94 — 2026-09-11
 
 - Allow clipboard images to be pasted into the chat composer as normal attachments, including on browsers that expose only the clipboard files fallback.

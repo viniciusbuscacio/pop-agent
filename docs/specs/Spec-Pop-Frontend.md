@@ -875,3 +875,8 @@ stop/failure marker. Resend preserves text and attachments and is unavailable
 during an active run, queued input or compaction. A later failed turn never makes
 an earlier completed message retryable. Attached and assistant-rendered images
 open a full-screen modal with Close and Escape, preserving chat navigation.
+
+Resend actions share one in-flight guard and visible progress/error feedback above
+the composer, including context-menu retries. A failed request keeps the original
+payload and unlocks manual retry. Transport errors indicate unconfirmed delivery,
+not certain rejection; never automatically resend a potentially accepted message.

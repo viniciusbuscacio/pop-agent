@@ -200,6 +200,9 @@ export const en = {
   'chat.planHidden': 'Plan mode disabled',
   'chat.planChangeFailed': 'Could not synchronize Plan mode',
   'chat.send': 'Send',
+  'chat.resending': 'Resending…',
+  'chat.resendRejected': 'Could not resend: {reason}',
+  'chat.resendUnconfirmed': 'Could not confirm the resend. Check the conversation before trying again. The original message and attachments are still available.',
   'chat.sendFailed': 'Could not send or safely queue this message. Your draft was kept.',
   'chat.serverReconnecting':
     'Server reconnecting… Your draft and attachments were kept. Sending will unlock automatically when the server is back.',

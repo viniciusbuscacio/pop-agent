@@ -17,6 +17,7 @@ import { PopBubbleMark } from '../ui/pop-bubble-mark';
 import { Composer } from '../ui/composer';
 import { RunStatusLine } from '../ui/run-status-line';
 import { resendSource } from '../lib/resend';
+import { useResendAction } from '../lib/resend-action';
 import { shouldResumeFollowing } from '../lib/chat-follow';
 import { activeChatModel } from '../lib/active-chat-model';
 
@@ -49,7 +50,7 @@ export function ChatPage() {
   const [models, setModels] = useState<ModelChoice[]>([]);
   const [providers, setProviders] = useState<ProviderStatusDTO[]>([]);
   const [unconfigured, setUnconfigured] = useState(false);
-  const [resendingId, setResendingId] = useState<string | undefined>(undefined);
+  const { resendingId, resendError, resend } = useResendAction(chatId, send);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const [editingPendingId, setEditingPendingId] = useState<string | undefined>(undefined);
   const editRequest = pending.find((message) => message.id === editingPendingId);
@@ -192,13 +193,7 @@ export function ChatPage() {
             {...(!canResend
               ? {}
               : {
-                  onResend: () => {
-                    if (resendingId !== undefined) return;
-                    setResendingId(message.id);
-                    void send(chatId, source.content, source.attachments)
-                      .catch(() => undefined)
-                      .finally(() => setResendingId(undefined));
-                  },
+                  onResend: () => { void resend(message.id, source); },
                 })}
             {...(message.notice === undefined
               ? {}
@@ -207,7 +202,7 @@ export function ChatPage() {
           </div>
         );
       }),
-    [chatId, idle, messages, pending.length, resendingId, send, compacting],
+    [idle, messages, pending.length, resendingId, resend, compacting],
   );
   const streamedLength = (live?.content.length ?? 0) + (live?.thinking.length ?? 0);
   const transcriptWithCommands = useMemo(() => {
@@ -358,7 +353,7 @@ export function ChatPage() {
         if (!compacting && !editingPendingId) actions.push({id:'quote',label:t('context.quote'),run:()=>setQuoteRequest({chatId,text,id:crypto.randomUUID()})});
       }
       const source = resendSource(messages ?? [], index);
-      if (!selection && source && idle && pending.length===0 && !compacting && !resendingId) actions.push({id:'resend',label:t('chat.resend'),run:async()=>{setResendingId(message.id);try{await send(chatId,source.content,source.attachments);}finally{setResendingId(undefined);}}});
+      if (!selection && source && idle && pending.length===0 && !compacting && !resendingId) actions.push({id:'resend',label:t('chat.resend'),run:()=>resend(message.id,source)});
     } else {
       actions.push({id:'new-chat',label:t('shell.newChat'),run:async()=>{const created=await createChat();void navigate(`/chat/${created.id}`);}});
     }
@@ -547,6 +542,7 @@ export function ChatPage() {
       </div>
 
       {context ? <ContextMenu anchor={context.anchor} onClose={()=>setContext(undefined)}>{context.actions.map(action=><MenuItem key={action.id} testId={`context-${action.id}`} label={action.label} onClick={()=>{setContext(undefined);void Promise.resolve().then(action.run).catch(()=>notify(t('context.failed')));}} />)}</ContextMenu> : null}
+      {resendError ? <p role="alert" data-testid="resend-error" className="px-3 py-2 text-sm text-[var(--danger)]">{resendError}</p> : null}
       <Composer
         {...(quoteRequest ? {quoteRequest} : {})}
         chatId={chatId}
