@@ -19,6 +19,14 @@ afterEach(() => {
 });
 
 describe('clientEnvironment', () => {
+  it.each(['Macintosh', 'Windows', 'Linux'])('keeps Desktop distinct on %s', (userAgent) => {
+    vi.stubGlobal('navigator', { userAgent });
+    vi.stubGlobal('__popDesktop', true);
+    expect(clientEnvironment().kind).toBe('desktop');
+    expect(clientEnvironment().platform).toBe(userAgent === 'Macintosh' ? 'macos' : userAgent.toLowerCase());
+    expect(clientEnvironment().appLabel).toBe('Pop Agent Desktop');
+  });
+
   it('describes an installed iPhone PWA as this device, not as the server', () => {
     vi.stubGlobal('navigator', {
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',

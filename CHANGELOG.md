@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve client and platform context on every message, explicitly mark unknown origins, and distinguish native Desktop from browser tabs.
+
 - Support Command-plus/equal, Command-minus and Command-zero for native macOS Desktop page zoom, also available in the View menu.
 
 ## 0.2.93 — 2026-09-11

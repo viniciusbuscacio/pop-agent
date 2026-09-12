@@ -1,5 +1,6 @@
 (() => {
   if (window !== window.top) return;
+  Object.defineProperty(window, '__popDesktop', { value: true });
   let observing = false;
   let previous;
   const observe = () => {

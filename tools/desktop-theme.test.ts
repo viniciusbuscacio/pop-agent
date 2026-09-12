@@ -8,6 +8,7 @@ it.each(['webkit', 'chrome'])('reports resolved themes through the %s appearance
  Object.defineProperty(window, platform, { configurable: true, value: platform === 'webkit' ? { messageHandlers: { popTheme: { postMessage } } } : { webview: { postMessage } } });
  document.documentElement.dataset['theme'] = 'dark';
  window.eval(script);
+ expect(Reflect.get(window, '__popDesktop')).toBe(true);
  expect(postMessage).toHaveBeenCalledWith('pop-desktop-theme:dark');
  document.documentElement.dataset['theme'] = 'light';
  await vi.waitFor(() => expect(postMessage).toHaveBeenLastCalledWith('pop-desktop-theme:light'));

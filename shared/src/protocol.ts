@@ -133,7 +133,7 @@ export function installCommand(origin: string, _serverVersion: string): string {
  * client, and lives in the platform instead, or "PWA on an iPhone" would be
  * two answers at once.
  */
-export const CLIENT_KINDS = ['web', 'pwa', 'cli', 'api', 'task'] as const;
+export const CLIENT_KINDS = ['web', 'pwa', 'desktop', 'cli', 'api', 'task'] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 
 export function isClientKind(value: string): value is ClientKind {

@@ -3,21 +3,25 @@ import { describe, expect, it } from 'vitest';
 import { channelNote, withoutChannelNote } from './channel-note.js';
 
 describe('channelNote', () => {
+  it.each(['windows', 'linux', 'macos', 'ios', 'android'])('preserves the current %s platform on repeated channels', (platform) => {
+    for (const kind of ['web', 'pwa', 'desktop', 'cli']) {
+      expect(channelNote({ kind, platform }, kind)).toContain(`on ${platform}`);
+    }
+  });
+
   it('says where the first message came from, since there is nothing to compare', () => {
     expect(channelNote({ kind: 'cli' }, undefined)).toContain('terminal');
   });
 
-  it('says nothing when the channel has not changed', () => {
-    // The whole point: fifty turns from the same place would otherwise pay
-    // for fifty copies of a fact that mattered once.
-    expect(channelNote({ kind: 'cli' }, 'cli')).toBeUndefined();
-    expect(channelNote({ kind: 'web' }, 'web')).toBeUndefined();
+  it('identifies every turn even when its channel has not changed', () => {
+    expect(channelNote({ kind: 'cli' }, 'cli')).toContain('terminal');
+    expect(channelNote({ kind: 'web', platform: 'ios' }, 'web')).toContain('ios');
   });
 
-  it('names both sides when it moved', () => {
+  it('does not attribute the previous channel to all historical messages', () => {
     const note = channelNote({ kind: 'web' }, 'pwa');
     expect(note).toContain('web app');
-    expect(note).toContain('installed app');
+    expect(note).not.toContain('earlier ones');
   });
 
   it('carries the platform, which is what changes an answer', () => {
@@ -25,9 +29,9 @@ describe('channelNote', () => {
     expect(channelNote({ kind: 'pwa', platform: 'ios' }, undefined)).toContain('ios');
   });
 
-  it('says nothing at all when the client did not identify itself', () => {
-    // Better a silence than a guess written into every conversation.
-    expect(channelNote(undefined, 'cli')).toBeUndefined();
+  it('explicitly marks missing origin so stale history cannot substitute for it', () => {
+    expect(channelNote(undefined, 'cli')).toContain('unknown');
+    expect(withoutChannelNote(`${channelNote(undefined)}\n\nHi`)).toBe('Hi');
   });
 
   it('never carries the IP, which answers an audit question and not hers', () => {

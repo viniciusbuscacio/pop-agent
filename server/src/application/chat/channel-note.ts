@@ -1,19 +1,7 @@
-/**
- * Telling the agent where a message came from, and only when it is news
- * (docs/specs/Spec-Pop-General.md §13).
- *
- * The naive version puts "this arrived through the CLI" on every turn. In a
- * fifty-turn conversation that is fifty copies of a fact that mattered once,
- * paid for on every request forever. What is worth saying is the CHANGE --
- * "we were on the phone, now you are at a terminal" -- because that is what
- * she cannot work out for herself and what actually changes an answer: there
- * are no buttons to press in a terminal, and no `apt install` on an iPhone.
- *
- * The first message of a conversation is news too: it establishes where this
- * one is happening, and there is nothing before it to compare against.
- */
+/** Per-message client-reported origin; never infer it from earlier turns. */
 
 const NAMES: Record<string, string> = {
+  desktop: 'Pop Agent Desktop',
   cli: 'the terminal (Pop Agent CLI)',
   web: 'the web app in a browser',
   pwa: 'the installed app',
@@ -26,25 +14,15 @@ function describe(kind: string, platform: string | undefined): string {
   return platform === undefined || platform.length === 0 ? name : `${name} on ${platform}`;
 }
 
-/**
- * The line to prepend to this turn's prompt, or undefined when there is
- * nothing new to say. Never includes the IP: that answers "who connected",
- * which is an audit question, and no answer of hers would change for it.
- */
+/** Keep each turn self-contained, including missing metadata. Never include IPs. */
 export function channelNote(
   current: { kind: string; platform?: string } | undefined,
-  previousKind: string | undefined,
-): string | undefined {
-  if (current === undefined) return undefined;
-  if (previousKind === current.kind) return undefined;
-
-  const now = describe(current.kind, current.platform);
-  if (previousKind === undefined) {
-    return `[Pop Agent: this message arrived through ${now}.]`;
+  _previousKind?: string,
+): string {
+  if (current === undefined) {
+    return '[Pop Agent: this message arrived through an unidentified client; device and platform are unknown. Do not infer them from earlier messages.]';
   }
-  return `[Pop Agent: this message arrived through ${now}; the earlier ones came through ${
-    NAMES[previousKind] ?? previousKind
-  }.]`;
+  return `[Pop Agent: this message arrived through ${describe(current.kind, current.platform)}. Client-reported origin for this message only; do not infer other messages or the local-tool destination from it.]`;
 }
 
 /** Exclude Pop's transport metadata from per-message skill relevance. */

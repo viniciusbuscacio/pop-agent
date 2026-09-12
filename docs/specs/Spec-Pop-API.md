@@ -241,3 +241,12 @@ The scoped integration server and owner-managed REST clients are specified in [S
 ### Small text-file editing
 
 Owner-authenticated `GET /v1/files/text?path=<relative-path>` returns `FileTextDTO` (UTF-8 `content` and opaque `revision`). `PUT /v1/files/text` accepts `SaveFileTextRequest` (`path`, `content`, `revision`) and returns the new `FileTextDTO`. The same Files path jail applies. Supported text extensions and a 1 MiB UTF-8 byte limit are enforced server-side; empty text is allowed. A stale revision returns 409 `file_changed`, a deleted file returns 404, oversized content returns 413 and unsupported/binary text returns 415. Saves do not recreate deleted files. The revision check and write execute synchronously within the server process.
+
+### Per-message client origin
+
+Every user turn, including queued and steering turns, carries its own compact
+client-reported origin in model context. Supported kinds include web, PWA,
+Desktop, CLI, API and scheduled tasks. Platform is independent of client kind.
+Missing origin is explicitly unknown; previous turns and the selected local-tool
+computer must not be used to invent it. Native Desktop identifies its host before
+the frontend starts. Origin metadata does not grant permissions.

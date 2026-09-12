@@ -131,12 +131,6 @@ export class RunService {
       return { ok: false, reason: 'llm_stopped' };
     }
 
-    // What the last message came through, read BEFORE this one is stored:
-    // the agent is told only when the channel changes, because repeating
-    // "this came from the CLI" on all fifty turns of a conversation is fifty
-    // copies of a fact that mattered once.
-    const previousClient = this.deps.chats.lastClientKind(chatId);
-
     const userDraft: Message = {
       id: newMessageId(),
       chatId,
@@ -149,7 +143,7 @@ export class RunService {
       ...(options.client === undefined ? {} : { client: options.client }),
     };
 
-    const note = channelNote(options.client, previousClient);
+    const note = channelNote(options.client);
 
     const run: PendingRun = {
       runId: newRunId(),
@@ -448,8 +442,7 @@ export class RunService {
     }
     if (run.steering.has(input.id)) return true;
 
-    const previousClient = this.deps.chats.lastClientKind(chatId);
-    const note = channelNote(input.client, previousClient);
+    const note = channelNote(input.client);
     const steering: PendingSteering = {
       ...input,
       prompt: withMessageTime(note === undefined ? input.text : `${note}\n\n${input.text}`, input.receivedAt ?? new Date(this.deps.clock.now()).toISOString(), input.client?.timeZone),
