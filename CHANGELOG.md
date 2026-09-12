@@ -2,6 +2,8 @@
 
 ## 0.2.95 — 2026-09-11
 
+- Offer Apple Silicon and Intel setup DMG downloads directly in Settings → Install Pop.
+
 - Mention photos in the attachment menu label.
 
 - Keep visible overflow menus anchored to the control that opened them on macOS/WebKit instead of relying on pointer clicks to move focus.

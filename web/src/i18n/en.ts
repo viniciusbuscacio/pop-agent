@@ -326,7 +326,10 @@ export const en = {
   'settings.installation.webAndroid':
     'Android: open in Chrome, open the menu, then choose Install app or Add to Home screen.',
   'settings.installation.desktopTitle': 'Pop Agent Desktop',
-  'settings.installation.desktopBody': 'The Windows installer includes Pop Agent Desktop and Pop Agent CLI. Choose either or keep both. Computer access stays disabled until you enable it.',
+  'settings.installation.desktopBody': 'The installer includes Pop Agent Desktop and Pop Agent CLI. Choose either or keep both. Computer access stays disabled until you enable it.',
+  'settings.installation.macAppleDownload': 'Download for Mac — Apple Silicon (.dmg)',
+  'settings.installation.macIntelDownload': 'Download for Mac — Intel (.dmg)',
+  'settings.installation.macSetupHint': 'Open the DMG, then open Pop Agent Setup and follow the installation steps. Choose Apple Silicon for M-series Macs or Intel for older Macs.',
   'settings.installation.localAccessTitle': 'Local computer access',
   'settings.installation.localAccessBody':
     'Install this package and enable it if you want Pop Agent to access and edit files on this computer. It is disabled by default.',

@@ -78,8 +78,8 @@ export function InstallationSection() {
       {isLocalAccessInstallPlatform(platform) ? (
         <Card className="flex flex-col gap-4">
           <div>
-            <h2 className="text-base font-semibold">{t(platform === 'windows' ? 'settings.installation.desktopTitle' : 'settings.installation.localAccessTitle')}</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">{t(platform === 'windows' ? 'settings.installation.desktopBody' : 'settings.installation.localAccessBody')}</p>
+            <h2 className="text-base font-semibold">{t('settings.installation.desktopTitle')}</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">{t('settings.installation.desktopBody')}</p>
           </div>
           {platform === 'windows' ? (
             <LinkButton
@@ -93,7 +93,25 @@ export function InstallationSection() {
               {t('settings.installation.localAccessDownloadWindows')}
             </LinkButton>
           ) : null}
-          <LocalAccessInstallInstructions origin={origin} platform={platform} />
+          {platform === 'macos' ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {(['arm64', 'amd64'] as const).map(arch => (
+                  <LinkButton
+                    key={arch}
+                    href={`${origin}/local-access-installer?platform=darwin&arch=${arch}`}
+                    download
+                    variant="accent"
+                    size="md"
+                    data-testid={`installation-macos-${arch}-download`}
+                  >
+                    {t(arch === 'arm64' ? 'settings.installation.macAppleDownload' : 'settings.installation.macIntelDownload')}
+                  </LinkButton>
+                ))}
+              </div>
+              <p className="text-sm text-[var(--muted)]">{t('settings.installation.macSetupHint')}</p>
+            </>
+          ) : <LocalAccessInstallInstructions origin={origin} platform={platform} />}
         </Card>
       ) : null}
 

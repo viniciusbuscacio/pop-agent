@@ -77,9 +77,13 @@ describe('Settings installation guide', () => {
     );
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'macos');
-    expect(screen.getByTestId('installation-local-access-unix').textContent).toBe(
-      `tmp="$(mktemp)"\ncurl -fsSL ${window.location.origin}/install-local-access.sh -o "$tmp" && bash "$tmp"; rm -f "$tmp"`,
-    );
+    expect(screen.getByRole('heading', { name: 'Pop Agent Desktop' })).toBeTruthy();
+    for (const arch of ['arm64', 'amd64']) {
+      const macDownload = screen.getByTestId(`installation-macos-${arch}-download`);
+      expect(macDownload.getAttribute('href')).toBe(`${window.location.origin}/local-access-installer?platform=darwin&arch=${arch}`);
+      expect(macDownload.hasAttribute('download')).toBe(true);
+    }
+    expect(screen.queryByTestId('installation-local-access-unix')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Download Pop Agent Setup' })).toBeNull();
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Device to install on' }), 'linux');

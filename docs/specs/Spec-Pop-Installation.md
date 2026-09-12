@@ -954,3 +954,7 @@ The setup and app are ad-hoc signed locally. This is not Developer ID notarizati
 Native acceptance distinguishes fixture transaction tests (component combinations,
 preparation failure and rollback) from a live update and the actual DMG wizard.
 Intel cross-build verification does not imply execution on an Intel Mac.
+
+Settings → Install Pop offers separate Apple Silicon and Intel macOS setup DMG
+downloads from the current server, with instructions to open Pop Agent Setup.
+The Desktop installation path does not require copying a Terminal command.
