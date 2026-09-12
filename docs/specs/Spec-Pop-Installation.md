@@ -971,6 +971,11 @@ failure or replace the current page. Redirects retain the server-origin policy.
 
 ## macOS Desktop refresh updates
 
+The native Desktop implements JavaScript confirmation dialogs for its server
+origin as window-modal sheets with OK and Cancel. Only OK resolves true; Cancel
+or a frame outside the configured origin resolves false. Chat deletion and other
+confirmed actions must wait for that result rather than silently cancelling.
+
 The owner's refresh click checks the configured server for a native Desktop update
 and fetches the current web shell even when the service worker has no waiting
 update. The narrow, main-frame, same-origin maintenance channel can request only

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add a copyable macOS setup command to Install Pop for opening a blocked installer from its mounted DMG.
+- Show native confirmation dialogs on macOS Desktop so chat deletion can be confirmed or cancelled.
 
 ## 0.2.97 — 2026-09-12
 

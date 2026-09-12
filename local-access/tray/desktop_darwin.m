@@ -99,6 +99,17 @@ static WKWebView *updateWeb;
 - (void)webView:(WKWebView*)web runJavaScriptAlertPanelWithMessage:(NSString*)message initiatedByFrame:(WKFrameInfo*)frame completionHandler:(void (^)(void))done {
  NSAlert *a=[NSAlert new];a.messageText=message;[a runModal];done();
 }
+- (void)webView:(WKWebView*)web runJavaScriptConfirmPanelWithMessage:(NSString*)message initiatedByFrame:(WKFrameInfo*)frame completionHandler:(void (^)(BOOL))done {
+ if (![self internalURL:frame.request.URL]) { done(NO); return; }
+ NSAlert *alert = [NSAlert new];
+ alert.messageText = @"Pop Agent";
+ alert.informativeText = message;
+ [alert addButtonWithTitle:@"OK"];
+ [alert addButtonWithTitle:@"Cancel"];
+ [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
+  done(response == NSAlertFirstButtonReturn);
+ }];
+}
 - (void)webView:(WKWebView*)web runOpenPanelWithParameters:(WKOpenPanelParameters*)params initiatedByFrame:(WKFrameInfo*)frame completionHandler:(void (^)(NSArray<NSURL*>*))done {
  NSOpenPanel *panel=[NSOpenPanel openPanel];panel.allowsMultipleSelection=params.allowsMultipleSelection;
  [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse r){done(r==NSModalResponseOK ? panel.URLs : nil);}];
