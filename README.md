@@ -168,6 +168,33 @@ compile the project or run the full development test suite.
 Installation shows concise progress. Press **D** for detailed output; the full
 installation log path is printed for troubleshooting.
 
+### macOS Desktop installer
+
+In **Settings → Install Pop → macOS**, download the DMG for Apple Silicon
+(M-series Macs) or Intel. Open the DMG, then open **Pop Agent Setup** and follow
+**Continue → Install → Finish**.
+
+Current macOS installers are ad-hoc signed but not notarized by Apple. If macOS
+blocks **Pop Agent Setup**, including after **Open Anyway**, keep the DMG mounted
+as **Pop Agent Setup** and paste this block into Terminal. Use it only with the
+installer downloaded from your own Pop Agent server:
+
+```sh
+pop_setup_dir="$(mktemp -d "${TMPDIR:-/tmp}/pop-agent-setup.XXXXXX")" &&
+ditto "/Volumes/Pop Agent Setup/Pop Agent Setup.app" "$pop_setup_dir/Pop Agent Setup.app" &&
+codesign --verify --deep --strict "$pop_setup_dir/Pop Agent Setup.app" &&
+xattr -dr com.apple.quarantine "$pop_setup_dir/Pop Agent Setup.app" &&
+open "$pop_setup_dir/Pop Agent Setup.app"
+```
+
+This opens a temporary copy of the installer after removing quarantine from
+that copy only. It needs no `sudo` and does not disable Gatekeeper globally.
+Continue through the setup wizard to install Desktop, CLI, or both.
+
+Once the Desktop has the in-app updater (0.2.97 or newer), its refresh button
+updates the web interface and any newer native Desktop component from your
+server. The DMG is only needed for initial installation or recovery.
+
 ### Finish in your browser
 
 1. Open the private-LAN setup URL printed by the installer and enter its
