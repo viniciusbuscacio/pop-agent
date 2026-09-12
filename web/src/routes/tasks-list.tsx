@@ -146,8 +146,8 @@ function TaskRow({ task }: { task: TaskDTO }) {
         type="button"
         data-testid="task-menu"
         aria-label={t('tasks.menu')}
-        onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-        onClick={() => {setAnchor(undefined);setMenuOpen((value) => !value);}}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {setAnchor(menuAnchor(event));setMenuOpen((value) => !value);}}
         className="absolute top-2 right-1 rounded px-2 py-1 text-[var(--muted)] hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯

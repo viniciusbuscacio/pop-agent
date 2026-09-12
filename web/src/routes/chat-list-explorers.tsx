@@ -133,8 +133,8 @@ export function FolderTree() {
             type="button"
             data-testid="tree-folder-menu"
             aria-label={t('shell.chatMenu')}
-            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {setAnchor(menuAnchor(event));setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
             className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
           >
             ⋯
@@ -376,8 +376,8 @@ export function SkillsList({ filter }: { filter: string }) {
                   type="button"
                   data-testid="skill-row-menu"
                   aria-label={t('shell.chatMenu')}
-                  onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-                  onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === skill.slug ? undefined : skill.slug));}}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {setAnchor(menuAnchor(event));setMenuFor((v) => (v === skill.slug ? undefined : skill.slug));}}
                   className="shrink-0 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
                 >
                   ⋯

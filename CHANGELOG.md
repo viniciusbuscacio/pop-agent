@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep visible overflow menus anchored to the control that opened them on macOS/WebKit instead of relying on pointer clicks to move focus.
 - Show resend progress and failures consistently for bubble and context-menu actions, retain the original payload, and prevent duplicate concurrent retries.
 
 ## 0.2.94 — 2026-09-11

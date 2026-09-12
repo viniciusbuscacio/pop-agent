@@ -280,8 +280,8 @@ export function ChatList() {
               type="button"
               data-testid="list-menu"
               aria-label={t('shell.listMenu')}
-              onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-              onClick={() => {setAnchor(undefined);setListMenu((value) => !value);}}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {setAnchor(menuAnchor(event));setListMenu((value) => !value);}}
               className={chatHeaderIconButton}
             >
               ⋯
@@ -724,8 +724,8 @@ function ChatRow({
         type="button"
         data-testid="chat-menu"
         aria-label={t('shell.chatMenu')}
-        onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-        onClick={() => {setAnchor(undefined);setMenuOpen((value) => !value);}}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {setAnchor(menuAnchor(event));setMenuOpen((value) => !value);}}
         className="absolute top-1 right-1 rounded px-2 py-1 text-[var(--muted)] opacity-100 hover:bg-[var(--hover-overlay)] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
       >
         ⋯

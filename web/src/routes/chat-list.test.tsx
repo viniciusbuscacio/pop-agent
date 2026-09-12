@@ -225,6 +225,20 @@ describe('compact conversation search', () => {
     expect(menuClass).toContain('w-[2.375rem]');
   });
 
+  it('anchors a pointer-opened chat menu even when WebKit does not focus its button', () => {
+    renderList();
+    const trigger = screen.getAllByTestId('chat-menu')[0]!;
+    trigger.getBoundingClientRect = () => DOMRect.fromRect({ x: 220, y: 80, width: 30, height: 40 });
+
+    fireEvent.pointerDown(trigger, { pointerType: 'mouse', clientX: 235, clientY: 100 });
+    expect(document.activeElement).not.toBe(trigger);
+    fireEvent.click(trigger, { clientX: 235, clientY: 100 });
+
+    const menu = screen.getByRole('menu');
+    expect(menu.style.left).toBe('235px');
+    expect(menu.style.top).toBe('100px');
+  });
+
   it('keeps the field hidden until the search button opens and focuses it', async () => {
     renderList();
     await waitFor(() => expect(screen.getAllByTestId('chat-row')).toHaveLength(2));

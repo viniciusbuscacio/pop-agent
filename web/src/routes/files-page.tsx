@@ -530,8 +530,8 @@ export function FilesPage() {
             type="button"
             data-testid="folder-row-menu"
             aria-label={t('shell.chatMenu')}
-            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {setAnchor(menuAnchor(event));setMenuFor((v) => (v === folder.path ? undefined : folder.path));}}
             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
           >
             ⋯
@@ -928,8 +928,8 @@ export function FilesPage() {
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
-                            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-                            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === hit.path ? undefined : hit.path));}}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {setAnchor(menuAnchor(event));setMenuFor((v) => (v === hit.path ? undefined : hit.path));}}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
@@ -996,8 +996,8 @@ export function FilesPage() {
                             type="button"
                             data-testid="file-menu"
                             aria-label={t('shell.chatMenu')}
-                            onPointerDown={(event) => { event.stopPropagation(); setAnchor(undefined); }}
-                            onClick={() => {setAnchor(undefined);setMenuFor((v) => (v === file.path ? undefined : file.path));}}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {setAnchor(menuAnchor(event));setMenuFor((v) => (v === file.path ? undefined : file.path));}}
                             className="shrink-0 rounded px-2 text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
                           >
                             ⋯
