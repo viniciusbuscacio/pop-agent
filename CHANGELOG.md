@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.101 — 2026-09-12
 
 - Load PDF chat previews through temporary object URLs for WebKit compatibility.
 
