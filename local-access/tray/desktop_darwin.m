@@ -4,6 +4,19 @@
 extern void popDesktopBeginUpdate(char*);
 void popDesktopUpdateStatus(const char*);
 static WKWebView *updateWeb;
+static NSString *const popDesktopZoomKey = @"PopDesktopPageZoom";
+
+static CGFloat popBoundZoom(CGFloat zoom) {
+ if (!isfinite(zoom)) return 1.0;
+ return MIN(3.0, MAX(0.5, zoom));
+}
+static CGFloat popLoadZoom(NSUserDefaults *defaults) {
+ id value = [defaults objectForKey:popDesktopZoomKey];
+ return [value isKindOfClass:[NSNumber class]] ? popBoundZoom([value doubleValue]) : 1.0;
+}
+static void popStoreZoom(NSUserDefaults *defaults, CGFloat zoom) {
+ [defaults setDouble:popBoundZoom(zoom) forKey:popDesktopZoomKey];
+}
 
 @interface PopDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate>
 @property NSWindow *window;
@@ -12,9 +25,13 @@ static WKWebView *updateWeb;
 @property NSMapTable<WKDownload*, NSURL*> *downloads;
 @end
 @implementation PopDesktop
-- (void)popZoomIn:(id)sender { self.web.pageZoom = MIN(3.0, self.web.pageZoom + 0.1); }
-- (void)popZoomOut:(id)sender { self.web.pageZoom = MAX(0.5, self.web.pageZoom - 0.1); }
-- (void)popActualSize:(id)sender { self.web.pageZoom = 1.0; }
+- (void)popSetZoom:(CGFloat)zoom {
+ self.web.pageZoom = popBoundZoom(zoom);
+ popStoreZoom([NSUserDefaults standardUserDefaults], self.web.pageZoom);
+}
+- (void)popZoomIn:(id)sender { [self popSetZoom:self.web.pageZoom + 0.1]; }
+- (void)popZoomOut:(id)sender { [self popSetZoom:self.web.pageZoom - 0.1]; }
+- (void)popActualSize:(id)sender { [self popSetZoom:1.0]; }
 - (BOOL)validateMenuItem:(NSMenuItem*)item {
  if (item.action == @selector(popZoomIn:)) return self.web.pageZoom < 2.999;
  if (item.action == @selector(popZoomOut:)) return self.web.pageZoom > 0.501;
@@ -153,6 +170,7 @@ void popDesktopRun(const char *origin, const char *script) {
   [config.userContentController addScriptMessageHandler:delegate name:@"popUpdate"];
   [config.userContentController addUserScript:[[WKUserScript alloc] initWithSource:[NSString stringWithUTF8String:script] injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
   delegate.web=[[WKWebView alloc] initWithFrame:delegate.window.contentView.bounds configuration:config];delegate.web.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;delegate.web.navigationDelegate=delegate;delegate.web.UIDelegate=delegate;
+  delegate.web.pageZoom=popLoadZoom([NSUserDefaults standardUserDefaults]);
   updateWeb = delegate.web;
   const char *ready = getenv("POP_DESKTOP_UPDATE_READY");
   if (ready) [@"ready" writeToFile:[NSString stringWithUTF8String:ready] atomically:YES encoding:NSUTF8StringEncoding error:nil];

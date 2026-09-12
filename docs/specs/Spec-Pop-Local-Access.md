@@ -737,4 +737,6 @@ Quit stops local access and the Desktop window. The browser PWA is independent.
 
 The macOS Desktop View menu controls WKWebView page zoom: Command-plus (or
 Command-equal) zooms in, Command-minus zooms out, and Command-zero restores
-100%. Zoom is bounded between 50% and 300% and changes the entire page.
+100%. Zoom is bounded between 50% and 300%, changes the entire page and is
+stored as a device-local Desktop preference so it survives relaunches and
+native Desktop updates.
