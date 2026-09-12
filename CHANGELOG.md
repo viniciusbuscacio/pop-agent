@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.95 — 2026-09-11
+
+- Mention photos in the attachment menu label.
 
 - Keep visible overflow menus anchored to the control that opened them on macOS/WebKit instead of relying on pointer clicks to move focus.
 - Show resend progress and failures consistently for bubble and context-menu actions, retain the original payload, and prevent duplicate concurrent retries.
