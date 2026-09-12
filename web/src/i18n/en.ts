@@ -840,6 +840,8 @@ export const en = {
   'files.selectFolder': 'Select folder',
   'files.openFile': 'Open file',
   'files.preview': 'Preview',
+  'files.imageZoomOut': 'Zoom out',
+  'files.imageZoomIn': 'Zoom in',
   'files.source': 'Source',
   'files.openInBrowser': 'Open in browser',
   'files.openFailed': 'This file could not be opened.',

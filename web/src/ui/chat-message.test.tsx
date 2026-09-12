@@ -438,11 +438,22 @@ it.each([
   expect(screen.getByTitle('Origin reported by the authenticated A2A peer')).toBeTruthy();
 });
 
-it('opens an attached image in a full-screen dialog and closes it without navigation', async () => {
+it('opens an attached image with bounded zoom controls and closes without navigation', async () => {
   const user = userEvent.setup();
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Photo.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }] }} />);
   await user.click(screen.getByRole('button', { name: 'Preview: Photo.png' }));
   expect(screen.getByRole('dialog', { name: 'Photo.png' })).toBeTruthy();
+
+  const image = screen.getByTestId('image-preview-image');
+  const canvas = image.parentElement;
+  expect(canvas?.style.width).toBe('100%');
+  await user.click(screen.getByRole('button', { name: 'Zoom in' }));
+  expect(canvas?.style.width).toBe('125%');
+  await user.click(screen.getByRole('button', { name: 'Zoom out' }));
+  expect(canvas?.style.width).toBe('100%');
+  await user.click(screen.getByRole('button', { name: 'Zoom out' }));
+  expect(image.style.transform).toBe('scale(0.75)');
+
   await user.click(screen.getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).toBeNull();
 });

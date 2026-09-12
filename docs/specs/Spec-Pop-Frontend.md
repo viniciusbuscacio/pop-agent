@@ -874,7 +874,9 @@ An owner-stopped or failed turn can be resent from its original user bubble
 stop/failure marker. Resend preserves text and attachments and is unavailable
 during an active run, queued input or compaction. A later failed turn never makes
 an earlier completed message retryable. Attached and assistant-rendered images
-open a full-screen modal with Close and Escape, preserving chat navigation.
+open a full-screen modal with Close and Escape, preserving chat navigation. The
+modal provides adjacent Zoom out and Zoom in controls, initially fits the image
+to the viewport, permits 50%–300% magnification and scrolls enlarged content.
 
 Resend actions share one in-flight guard and visible progress/error feedback above
 the composer, including context-menu retries. A failed request keeps the original
