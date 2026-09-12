@@ -471,16 +471,21 @@ it('opens an attached image with bounded zoom controls and closes without naviga
 
 it('opens an attached PDF in the same full-screen viewer and closes it', async () => {
   const user = userEvent.setup();
+  const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('data:application/pdf,pdf');
+  const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   const dataUri = 'data:application/pdf;base64,JVBERi0xLjQ=';
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Document.pdf', type: 'application/pdf', dataUri }] }} />);
 
   await user.click(screen.getByRole('button', { name: 'Preview: Document.pdf' }));
   const dialog = screen.getByRole('dialog', { name: 'Document.pdf' });
   expect(document.activeElement).toBe(dialog);
-  expect(screen.getByTestId('pdf-preview-frame').getAttribute('src')).toBe(dataUri);
+  const frame = await screen.findByTestId('pdf-preview-frame');
+  expect(objectUrl).toHaveBeenCalledOnce();
+  expect(frame.getAttribute('src')).toBe('data:application/pdf,pdf');
 
   await user.click(screen.getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).toBeNull();
+  expect(revokeObjectUrl).toHaveBeenCalledWith('data:application/pdf,pdf');
 });
 
 it('offers a touch-accessible resend action on the interrupted user bubble', async () => {

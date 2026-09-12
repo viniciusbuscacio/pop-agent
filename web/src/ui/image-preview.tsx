@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './controls';
 import { t } from '../i18n';
+import { attachmentPreviewUrl } from '../services/attachment-preview';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -10,12 +11,32 @@ const ZOOM_STEP = 0.25;
 /** Native modal focus handling, Escape and focus restoration; only mounted while open. */
 export function PdfPreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [url, setUrl] = useState<string>();
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
     element?.focus({ preventScroll: true });
     return () => element?.close();
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    let live = true;
+    let objectUrl: string | undefined;
+    void attachmentPreviewUrl(src, 'application/pdf', controller.signal).then(
+      next => {
+        objectUrl = next;
+        if (live) setUrl(next);
+        else URL.revokeObjectURL(next);
+      },
+      () => { if (live) setFailed(true); },
+    );
+    return () => {
+      live = false;
+      controller.abort();
+      if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
   return createPortal(
     <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
       className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">
@@ -24,12 +45,22 @@ export function PdfPreview({ src, name, onClose }: { src: string; name: string; 
           <strong className="min-w-0 flex-1 truncate">{name}</strong>
           <Button type="button" variant="ghost" onClick={onClose}>{t('common.close')}</Button>
         </div>
-        <iframe
-          src={src}
-          title={name}
-          data-testid="pdf-preview-frame"
-          className="min-h-0 flex-1 border-0 bg-[var(--bg)]"
-        />
+        {failed ? (
+          <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--muted)]" role="alert">
+            {t('files.openFailed')}
+          </div>
+        ) : url === undefined ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-[var(--muted)]" role="status">
+            {t('app.loading')}
+          </div>
+        ) : (
+          <iframe
+            src={url}
+            title={name}
+            data-testid="pdf-preview-frame"
+            className="min-h-0 flex-1 border-0 bg-[var(--bg)]"
+          />
+        )}
       </div>
     </dialog>, document.body,
   );
