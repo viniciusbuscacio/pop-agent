@@ -22,7 +22,7 @@ const inputPaths = ['cli/src', 'cli/package.json', 'shared/src', 'launcher', 'lo
 
 /** Conservative compatibility proof: unchanged client code, wire DTOs and client dependency closure. */
 export function clientInputs(root: string, revision = 'HEAD'): string {
-  const files = git(root, ['ls-tree', '-r', '--name-only', revision, '--', ...inputPaths]).split('\n').filter(Boolean);
+  const files = git(root, ['ls-tree', '-r', '--name-only', revision, '--', ...inputPaths]).split('\n').filter((file) => file !== '' && !/\.test\.tsx?$|_test\.go$/.test(file));
   const read = (path: string) => execFileSync('git', ['show', `${revision}:${path}`], { cwd: root });
   const hash = createHash('sha256');
   for (const file of files.sort()) {

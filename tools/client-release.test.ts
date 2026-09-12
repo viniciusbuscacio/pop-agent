@@ -26,6 +26,8 @@ function fixture() {
 describe('independent server release clients', () => {
   it('keeps clients valid across web/server changes but blocks protocol and native changes', () => {
     const f = fixture(); const before = clientInputs(f.root);
+    f.put('cli/src/version.test.ts', 'updated test assertion');
+    f.put('local-access/tray/main_test.go', 'updated test assertion');
     f.put('web/src/viewer.ts', 'PDF fix'); f.put('server/src/viewer.ts', 'PDF endpoint'); f.commit();
     expect(clientInputs(f.root)).toBe(before);
     f.put('shared/src/protocol.ts', 'export const minimum = 2;'); f.commit();
