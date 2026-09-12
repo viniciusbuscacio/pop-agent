@@ -12,6 +12,7 @@ interface Lock {
   source: { repository: string; version: string; commit: string; tree: string; verifiedAt: string; archive: Entry };
   inputs: string;
   cliVersion: string;
+  sources?: Record<string, { repository: string; version: string }>;
   files: Record<string, Entry>;
 }
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
@@ -74,6 +75,10 @@ export function validateClientLock(value: unknown): Lock {
   const required = ['package.json', `cli-${lock.cliVersion}.tgz`, 'launcher/manifest.json', 'local-access/manifest.json', 'runtime/node/manifest.json'];
   if (!lock.files || Object.keys(lock.files).length !== required.length) throw new Error('Incomplete client snapshot');
   for (const name of required) { check(lock.files[name]!); if (lock.files[name]!.file !== name.split('/').at(-1)) throw new Error('Invalid client snapshot path'); }
+  for (const [name, source] of Object.entries(lock.sources ?? {})) {
+    if (!/^(launcher|local-access)\/[\w.-]+$/.test(name) || !source
+      || !/^[\w.-]+\/[\w.-]+$/.test(source.repository) || !semver.test(source.version)) throw new Error('Invalid inherited client source');
+  }
   return lock;
 }
 
@@ -98,7 +103,18 @@ export async function pinClients(root: string, directory: string): Promise<void>
     const bytes = member(archive, name);
     files[name] = { file: name.split('/').at(-1)!, size: bytes.length, sha256: digest(bytes) };
   }
-  const lock = validateClientLock({ schema: 1, source: { repository, version, commit: proof.commit, tree: manifest.tree,
+  const catalog = JSON.parse(member(archive, 'client-downloads.json').toString()) as {schema?: number; repository?: string; version?: string; artifacts?: Record<string, {repository: string; version: string}>};
+  const sources: Record<string, {repository: string; version: string}> = {};
+  for (const category of ['launcher', 'local-access']) {
+    const metadata = JSON.parse(member(archive, `${category}/manifest.json`).toString()) as {artifacts: Record<string, Entry>};
+    for (const entry of Object.values(metadata.artifacts)) {
+      const key = `${category}/${entry.file}`;
+      const source = catalog.schema === 2 ? catalog.artifacts?.[key] : {repository: catalog.repository!, version: catalog.version!};
+      if (!source) throw new Error(`Missing original client source: ${key}`);
+      sources[key] = source;
+    }
+  }
+  const lock = validateClientLock({ schema: 1, sources, source: { repository, version, commit: proof.commit, tree: manifest.tree,
     verifiedAt: proof.verifiedAt, archive: {file: manifest.file, size: manifest.size, sha256: manifest.sha256} },
     inputs: clientInputs(root, proof.commit), cliVersion, files });
   mkdirSync(join(root, 'release'), { recursive: true });
@@ -134,7 +150,12 @@ export async function stageClients(root: string, cache: string): Promise<void> {
   const artifacts: Record<string, { repository: string; version: string }> = {};
   for (const category of ['launcher', 'local-access']) {
     const manifest = JSON.parse(readFileSync(join(pack, category, 'manifest.json'), 'utf8')) as {artifacts: Record<string, Entry>};
-    for (const entry of Object.values(manifest.artifacts)) artifacts[`${category}/${entry.file}`] = {repository: lock.source.repository, version: lock.source.version};
+    for (const entry of Object.values(manifest.artifacts)) {
+      const key = `${category}/${entry.file}`;
+      const source = lock.sources ? lock.sources[key] : {repository: lock.source.repository, version: lock.source.version};
+      if (!source) throw new Error(`Missing pinned client source: ${key}`);
+      artifacts[key] = source;
+    }
   }
   writeFileSync(join(pack, 'client-downloads.json'), JSON.stringify({ schema: 2, artifacts }) + '\n');
   writeFileSync(join(pack, 'client-release.json'), JSON.stringify(lock, null, 2) + '\n');

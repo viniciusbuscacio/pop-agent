@@ -1,5 +1,55 @@
 {
   "schema": 1,
+  "sources": {
+    "launcher/pop-launcher-1.1.5-darwin-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "launcher/pop-launcher-1.1.5-darwin-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "launcher/pop-launcher-1.1.5-linux-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "launcher/pop-launcher-1.1.5-linux-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "launcher/pop-launcher-1.1.5-windows-arm64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "launcher/pop-launcher-1.1.5-windows-amd64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-windows-amd64.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-windows-amd64-setup.exe": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-arm64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-arm64-setup.dmg": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-amd64": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    },
+    "local-access/pop-local-access-0.2.103-darwin-amd64-setup.dmg": {
+      "repository": "viniciusbuscacio/pop-agent",
+      "version": "0.2.103"
+    }
+  },
   "source": {
     "repository": "viniciusbuscacio/pop-agent",
     "version": "0.2.103",

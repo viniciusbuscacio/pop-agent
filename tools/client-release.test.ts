@@ -52,18 +52,21 @@ describe('independent server release clients', () => {
     const f = fixture(); const files: Record<string, {file: string; size: number; sha256: string}> = {};
     const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
     for (const name of ['package.json', 'cli-1.0.0.tgz', 'launcher/manifest.json', 'local-access/manifest.json', 'runtime/node/manifest.json']) {
-      const bytes = Buffer.from(name === 'package.json' ? '{"version":"1.0.0"}' : name.endsWith('manifest.json') ? '{"artifacts":{}}' : `historic:${name}`);
+      const bytes = Buffer.from(name === 'package.json' ? '{"version":"1.0.0"}' : name.endsWith('manifest.json') ? '{"artifacts":{"target":{"file":"legacy.exe"}}}' : `historic:${name}`);
       f.put(`snapshot/cli/pack/${name}`, bytes.toString());
       files[name] = {file: name.split('/').at(-1)!, size: bytes.length, sha256: digest(bytes)};
     }
     const archive = join(f.root, 'baseline.tar.gz');
     execFileSync('tar', ['-czf', archive, '-C', join(f.root, 'snapshot'), 'cli/pack']);
     const bytes = readFileSync(archive); const sha256 = digest(bytes);
-    const lock = {schema: 1, source: {repository: 'owner/pop', version: '1.0.0', commit: f.git('rev-parse', 'HEAD'), tree: f.git('rev-parse', 'HEAD^{tree}'), verifiedAt: new Date().toISOString(), archive: {file: 'baseline.tar.gz', size: bytes.length, sha256}}, inputs: clientInputs(f.root), cliVersion: '1.0.0', files};
+    const lock = {schema: 1, sources: {'launcher/legacy.exe': {repository: 'owner/pop', version: '0.8.0'}, 'local-access/legacy.exe': {repository: 'owner/pop', version: '0.9.0'}}, source: {repository: 'owner/pop', version: '1.0.0', commit: f.git('rev-parse', 'HEAD'), tree: f.git('rev-parse', 'HEAD^{tree}'), verifiedAt: new Date().toISOString(), archive: {file: 'baseline.tar.gz', size: bytes.length, sha256}}, inputs: clientInputs(f.root), cliVersion: '1.0.0', files};
     f.put('release/clients.json', JSON.stringify(lock));
     f.put(`cache/${sha256}.tar.gz`, ''); writeFileSync(join(f.root, `cache/${sha256}.tar.gz`), bytes);
     await stageClients(f.root, join(f.root, 'cache'));
-    expect(JSON.parse(readFileSync(join(f.root, 'cli/pack/client-downloads.json'), 'utf8')).schema).toBe(2);
+    const catalog = JSON.parse(readFileSync(join(f.root, 'cli/pack/client-downloads.json'), 'utf8'));
+    expect(catalog.schema).toBe(2);
+    expect(catalog.artifacts['local-access/legacy.exe'].version).toBe('0.9.0');
+    expect(catalog.artifacts['launcher/legacy.exe'].version).toBe('0.8.0');
     expect(readFileSync(join(f.root, 'cli/pack/cli-1.0.0.tgz'), 'utf8')).toBe('historic:cli-1.0.0.tgz');
     expect(() => validateClientLock({...lock, files: {...files, '../escape': files['package.json']}})).toThrow();
     f.put('shared/src/protocol.ts', 'incompatible'); f.commit();
