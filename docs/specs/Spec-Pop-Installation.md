@@ -833,6 +833,11 @@ version built from its own exact clean commit. Ordinary `build` remains strict.
 
 ## Owner-managed local release builder
 
+For server/web-only changes, prefer `./deploy/local-release.sh build-server`.
+Keep client component versions unchanged and retain the verified published
+artifacts pinned in `release/clients.json`; no Mac build is required. Changed
+client inputs require the full release path, not a bypass of the guard.
+
 Run `./deploy/local-release.sh build` on ubuntu-home for a complete release, or
 the explicit `build-windows` mode described above for Windows-first validation.
 A pinned Ubuntu 24.04 Docker image builds native AMD64 artifacts independently

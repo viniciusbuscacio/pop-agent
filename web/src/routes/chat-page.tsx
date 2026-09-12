@@ -2,7 +2,7 @@ import { menuAnchor, menuKeyboard, nativeContext, selectionIn, type MenuAnchor }
 import { useNotificationsStore } from '../store/notifications';
 import type { ContextAction } from '../ui/action-surface';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BackButton, Pressable, ContextMenu, MenuItem } from '../ui/controls';
+import { BackButton, Pressable, ContextMenu, MenuItem, NavigationArrowIcon } from '../ui/controls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProviderStatusDTO, QueuedMessageDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
@@ -512,7 +512,7 @@ export function ChatPage() {
             aria-label={t('chat.jumpToLatest')}
             className="absolute right-4 bottom-2 z-10 flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--panel-bg)] text-sm shadow-lg"
           >
-            <span aria-hidden="true">↓</span>
+            <NavigationArrowIcon direction="down" />
           </Pressable>
         ) : null}
       </div>

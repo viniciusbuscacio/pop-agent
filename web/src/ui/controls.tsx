@@ -60,6 +60,20 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
  * list options). It deliberately owns only interaction states; use Button or
  * IconButton whenever their visual shape fits.
  */
+type NavigationArrowDirection = 'left' | 'down';
+
+/** Filled navigation arrow shared by Back and jump-to-latest controls. */
+export function NavigationArrowIcon({ direction }: { direction: NavigationArrowDirection }) {
+  const path = direction === 'left'
+    ? 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z'
+    : 'M11 4v12.17l-5.59-5.59L4 12l8 8 8-8-1.41-1.41L13 16.17V4h-2Z';
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
+}
+
 /** Shared Settings-style navigation back control. */
 export function BackButton({ className = '', ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'type'>) {
   return <Pressable
@@ -67,9 +81,7 @@ export function BackButton({ className = '', ...props }: Omit<ButtonHTMLAttribut
     type="button"
     className={`grid min-h-10 min-w-10 shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--screen-fg)] hover:bg-[var(--hover-overlay)] ${className}`}
   >
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z" />
-    </svg>
+    <NavigationArrowIcon direction="left" />
   </Pressable>;
 }
 

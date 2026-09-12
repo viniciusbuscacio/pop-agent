@@ -19,6 +19,7 @@ const fixtures = [
 ] as const;
 
 const releaseVersion = readFileSync(join(sourceRoot, 'VERSION'), 'utf8').trim();
+const cliVersion = (JSON.parse(readFileSync(join(sourceRoot, 'cli/package.json'), 'utf8')) as { version: string }).version;
 let root = '';
 
 afterEach(() => {
@@ -44,7 +45,7 @@ describe('global version consistency', () => {
   it('reports source drift across manifests, lockfile and the CLI handshake', () => {
     const target = fixture();
     const cliPath = join(target, 'cli/src/version.ts');
-    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace(releaseVersion, '0.2.9'));
+    writeFileSync(cliPath, readFileSync(cliPath, 'utf8').replace(cliVersion, '0.2.9'));
 
     const rootPackagePath = join(target, 'package.json');
     const rootPackage = JSON.parse(readFileSync(rootPackagePath, 'utf8')) as { version: string };
@@ -62,7 +63,7 @@ describe('global version consistency', () => {
     expect(versionConsistencyErrors(target)).toEqual(expect.arrayContaining([
       `package.json version is "0.2.9"; expected ${releaseVersion}`,
       'CLI lockfile version differs from cli/package.json',
-      `cli/src/version.ts VERSION is "0.2.9"; expected ${releaseVersion}`,
+      `cli/src/version.ts VERSION is "0.2.9"; expected ${cliVersion}`,
     ]));
   });
 });

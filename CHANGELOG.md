@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.105 — 2026-09-12
+
+- Add server/web-only release builds that retain verified published Desktop, setup, launcher and CLI artifacts with their original versions and download sources.
+- Teach the built-in publication skill to select server-only builds and preserve independent client versions.
+- Match the chat jump-to-latest arrow to the filled Settings navigation arrow.
+
 ## 0.2.104 — 2026-09-12
 
 - Open PDFs in a PDF.js full-screen viewer on macOS and Windows.
@@ -68,8 +74,6 @@
 - Package native Mac component installers as setup DMGs and preserve existing browser PWA installations.
 
 ## Unreleased
-
-- Add server/web-only release builds that retain verified published Desktop, setup, launcher and CLI artifacts with their original versions and download sources.
 
 - Synchronize the Windows Desktop native title bar with the resolved web theme, with a dark startup fallback.
 

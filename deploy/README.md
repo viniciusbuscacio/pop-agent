@@ -48,13 +48,13 @@ Caddy is already operator-managed.
 
 ## Install a specific version
 
-Retrieve the immutable v0.2.104 installer over HTTPS into an owner-only
+Retrieve the immutable v0.2.105 installer over HTTPS into an owner-only
 temporary file. The download must complete successfully before the file is
 executed, the installer and acquired source use the same release ref, and the
 subshell always removes the temporary file:
 
 ```sh
-(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.104/server-install.sh && sh "$file" --ref v0.2.104)
+(umask 077; file=$(mktemp "${TMPDIR:-/tmp}/pop-server-install.XXXXXX") || exit; trap 'status=$?; rm -f "$file"; exit "$status"' 0; trap 'exit 1' 1 2 3 15; curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$file" https://raw.githubusercontent.com/viniciusbuscacio/pop-agent/v0.2.105/server-install.sh && sh "$file" --ref v0.2.105)
 ```
 
 Options belong after the temporary filename. For example, add `--prepare-only`
@@ -290,6 +290,11 @@ Review service journal contents before sharing them. A restored snapshot removes
 the failed attempt's later state and diagnostics.
 
 ## Maintainer builds on ubuntu-home
+
+Choose `./deploy/local-release.sh build-server` for server/web-only changes.
+It keeps the published clients pinned in `release/clients.json` and needs no
+Mac build. Keep CLI/native component versions unchanged. Use the full build
+below only when client inputs change; never bypass the client-input guard.
 
 Before a complete Linux build, prepare the exact clean release commit on a Mac
 with Xcode command-line tools and Go. Run

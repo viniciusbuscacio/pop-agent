@@ -425,7 +425,11 @@ describe('chat transcript', () => {
     expect(jump.className).toContain('right-4');
     expect(jump.className).toContain('size-9');
     expect(jump.className).not.toContain('left-1/2');
-    expect(jump.textContent).toBe('↓');
+    expect(jump.textContent).toBe('');
+    expect(jump.querySelector('svg')?.classList.contains('h-5')).toBe(true);
+    expect(jump.querySelector('path')?.getAttribute('d')).toBe(
+      'M11 4v12.17l-5.59-5.59L4 12l8 8 8-8-1.41-1.41L13 16.17V4h-2Z',
+    );
     expect(jump.getAttribute('aria-label')).toBe('Jump to the latest messages');
 
     scroller.scrollTop = 500;

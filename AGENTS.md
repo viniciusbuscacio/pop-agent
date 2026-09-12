@@ -27,6 +27,10 @@ Quick facts for agents working in this repo:
   Batch GitHub pushes and releases only at owner-agreed publication points.
   The local Ubuntu 24.04 release builder runs/reuses the full exact-tree gate
   once per batch; do not repeat it on GitHub Actions. English everywhere.
+- Server/web-only releases use `./deploy/local-release.sh build-server` and
+  retain pinned published clients from `release/clients.json`. Do not bump CLI
+  or native versions or request a Mac build for UI/server-only changes. Client
+  input changes require the full release path; never bypass the guard.
 - Test end-to-end without clicking: `tools/smoke.ts` (temp DB + fake
   provider). Owner sessions use `GET /v1/ax`; integrations use
   `GET /v1/integration/ax` with their independently authorized REST API key.
