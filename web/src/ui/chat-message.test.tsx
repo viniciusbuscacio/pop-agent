@@ -442,7 +442,9 @@ it('opens an attached image with bounded zoom controls and closes without naviga
   const user = userEvent.setup();
   render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Photo.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }] }} />);
   await user.click(screen.getByRole('button', { name: 'Preview: Photo.png' }));
-  expect(screen.getByRole('dialog', { name: 'Photo.png' })).toBeTruthy();
+  const dialog = screen.getByRole('dialog', { name: 'Photo.png' });
+  expect(document.activeElement).toBe(dialog);
+  expect(screen.getByRole('button', { name: 'Close' })).not.toBe(document.activeElement);
 
   const image = screen.getByTestId('image-preview-image');
   const canvas = image.parentElement;

@@ -14,11 +14,14 @@ export function ImagePreview({ src, name, onClose }: { src: string; name: string
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
+    // Keep the browser from auto-focusing Close (and painting a focus ring)
+    // when the preview opens. Keyboard users still reach every action with Tab.
+    element?.focus({ preventScroll: true });
     return () => element?.close();
   }, []);
   return createPortal(
-    <dialog ref={dialog} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
-      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] backdrop:bg-black/80">
+    <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
+      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <strong className="min-w-0 flex-1 truncate">{name}</strong>

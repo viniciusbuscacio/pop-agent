@@ -877,6 +877,8 @@ an earlier completed message retryable. Attached and assistant-rendered images
 open a full-screen modal with Close and Escape, preserving chat navigation. The
 modal provides adjacent Zoom out and Zoom in controls, initially fits the image
 to the viewport, permits 50%–300% magnification and scrolls enlarged content.
+Opening the modal focuses its neutral container rather than painting an initial
+focus ring around Close; ordinary keyboard traversal retains visible focus.
 
 Resend actions share one in-flight guard and visible progress/error feedback above
 the composer, including context-menu retries. A failed request keeps the original
