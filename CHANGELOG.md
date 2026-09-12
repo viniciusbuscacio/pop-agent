@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Open PDF chat attachments in the same full-screen preview used for images.
+
 ## 0.2.99 — 2026-09-12
 
 - Keep full-screen chat images centered when their zoom changes.

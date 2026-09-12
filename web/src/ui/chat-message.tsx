@@ -3,7 +3,7 @@ import { Pressable } from './controls';
 import type { MessageDTO, ToolCallDTO } from '@pop-agent/shared';
 import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
-import { ImagePreview } from './image-preview';
+import { ImagePreview, PdfPreview } from './image-preview';
 import { Markdown } from './markdown';
 
 /**
@@ -226,20 +226,34 @@ function ActionButton({
  * full-screen preview without duplicating the attachment in persistent state.
  */
 function Attachments({ attachments }: { attachments: MessageDTO['attachments'] }) {
-  const [preview, setPreview] = useState<MessageDTO['attachments'][number]>();
+  const [preview, setPreview] = useState<{ kind: 'image' | 'pdf'; attachment: MessageDTO['attachments'][number] }>();
   const images = attachments.filter((entry) => entry.type.startsWith('image/') && entry.dataUri !== '');
-  const files = attachments.filter((entry) => !entry.type.startsWith('image/') || entry.dataUri === '');
+  const pdfs = attachments.filter((entry) => entry.type === 'application/pdf' && entry.dataUri !== '');
+  const files = attachments.filter((entry) =>
+    (!entry.type.startsWith('image/') && entry.type !== 'application/pdf') || entry.dataUri === '');
 
   return (
     <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2" data-testid="message-attachments">
       {images.map((image, index) => (
-        <Pressable key={`${image.name}-${String(index)}`} type="button" aria-label={`${t('files.preview')}: ${image.name}`} onClick={() => setPreview(image)} className="max-w-full rounded-xl">
+        <Pressable key={`${image.name}-${String(index)}`} type="button" aria-label={`${t('files.preview')}: ${image.name}`} onClick={() => setPreview({ kind: 'image', attachment: image })} className="max-w-full rounded-xl">
           <img src={image.dataUri} alt={image.name} className="max-h-72 max-w-full rounded-xl object-contain" />
         </Pressable>
       ))}
-      {preview ? <ImagePreview src={preview.dataUri} name={preview.name} onClose={() => setPreview(undefined)} /> : null}
-      {files.length > 0 ? (
+      {preview?.kind === 'image' ? <ImagePreview src={preview.attachment.dataUri} name={preview.attachment.name} onClose={() => setPreview(undefined)} /> : null}
+      {preview?.kind === 'pdf' ? <PdfPreview src={preview.attachment.dataUri} name={preview.attachment.name} onClose={() => setPreview(undefined)} /> : null}
+      {pdfs.length > 0 || files.length > 0 ? (
         <div className="flex flex-wrap justify-end gap-1.5">
+          {pdfs.map((pdf, index) => (
+            <Pressable
+              key={`${pdf.name}-${String(index)}`}
+              type="button"
+              aria-label={`${t('files.preview')}: ${pdf.name}`}
+              onClick={() => setPreview({ kind: 'pdf', attachment: pdf })}
+              className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover-overlay)]"
+            >
+              <span className="truncate">{pdf.name}</span>
+            </Pressable>
+          ))}
           {files.map((file, index) => (
             <span
               key={`${file.name}-${String(index)}`}

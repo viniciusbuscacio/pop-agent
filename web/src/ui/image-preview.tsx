@@ -8,6 +8,33 @@ const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 
 /** Native modal focus handling, Escape and focus restoration; only mounted while open. */
+export function PdfPreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    element?.focus({ preventScroll: true });
+    return () => element?.close();
+  }, []);
+  return createPortal(
+    <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
+      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <strong className="min-w-0 flex-1 truncate">{name}</strong>
+          <Button type="button" variant="ghost" onClick={onClose}>{t('common.close')}</Button>
+        </div>
+        <iframe
+          src={src}
+          title={name}
+          data-testid="pdf-preview-frame"
+          className="min-h-0 flex-1 border-0 bg-[var(--bg)]"
+        />
+      </div>
+    </dialog>, document.body,
+  );
+}
+
 export function ImagePreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const viewport = useRef<HTMLDivElement>(null);

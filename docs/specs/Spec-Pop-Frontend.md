@@ -880,6 +880,8 @@ to the viewport, permits 50%–300% magnification, keeps each zoom step centered
 and scrolls enlarged content.
 Opening the modal focuses its neutral container rather than painting an initial
 focus ring around Close; ordinary keyboard traversal retains visible focus.
+PDF chat attachments with available bodies open from their named chip in the
+same full-screen modal, using the browser's native PDF viewer and Escape/Close.
 
 Resend actions share one in-flight guard and visible progress/error feedback above
 the composer, including context-menu retries. A failed request keeps the original

@@ -469,6 +469,20 @@ it('opens an attached image with bounded zoom controls and closes without naviga
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
+it('opens an attached PDF in the same full-screen viewer and closes it', async () => {
+  const user = userEvent.setup();
+  const dataUri = 'data:application/pdf;base64,JVBERi0xLjQ=';
+  render(<ChatMessage message={{ ...base, role: 'user', attachments: [{ name: 'Document.pdf', type: 'application/pdf', dataUri }] }} />);
+
+  await user.click(screen.getByRole('button', { name: 'Preview: Document.pdf' }));
+  const dialog = screen.getByRole('dialog', { name: 'Document.pdf' });
+  expect(document.activeElement).toBe(dialog);
+  expect(screen.getByTestId('pdf-preview-frame').getAttribute('src')).toBe(dataUri);
+
+  await user.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
 it('offers a touch-accessible resend action on the interrupted user bubble', async () => {
   const resend = vi.fn();
   render(<ChatMessage message={{ ...base, role: 'user', content: 'Try again' }} onResend={resend} />);
