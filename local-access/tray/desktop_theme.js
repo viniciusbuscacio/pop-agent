@@ -1,3 +1,4 @@
+/* global window, document, MutationObserver */
 (() => {
   if (window !== window.top) return;
   Object.defineProperty(window, '__popDesktop', { value: true });
