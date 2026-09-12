@@ -1,16 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.94 — 2026-09-11
 
 - Allow clipboard images to be pasted into the chat composer as normal attachments, including on browsers that expose only the clipboard files fallback.
 - Allow resending interrupted messages from their user bubble or stop marker, and open chat images in a full-screen preview.
 - Archive new chat attachments in Files with searchable subject, source and inspected-content descriptions for retrieval across conversations.
 
+## 0.2.93 — 2026-09-11
+
 - Preserve client and platform context on every message, explicitly mark unknown origins, and distinguish native Desktop from browser tabs.
 
 - Support Command-plus/equal, Command-minus and Command-zero for native macOS Desktop page zoom, also available in the View menu.
-
-## 0.2.93 — 2026-09-11
 
 - Add the macOS Pop Agent Setup wizard with independent Desktop and CLI selections, runtime preparation, legacy PLA migration and file rollback.
 - Add a native WKWebView Desktop window with a separate background helper, restricted navigation and theme-synchronized title bar.

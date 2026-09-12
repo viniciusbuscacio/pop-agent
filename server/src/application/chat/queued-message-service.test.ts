@@ -1,3 +1,4 @@
+import type { AttachmentArchive } from '../files/attachment-archive.js';
 import { describe, expect, it } from 'vitest';
 import type { QueuedMessage, QueuedMessageRepo } from '../ports/queued-message-repo.js';
 import { QueuedMessageService } from './queued-message-service.js';
@@ -44,7 +45,7 @@ function pending(id: string, deliveryMode: QueuedMessage['deliveryMode'] = 'stee
   };
 }
 
-function harness(items: QueuedMessage[]) {
+function harness(items: QueuedMessage[], archive?: Pick<AttachmentArchive, 'save'>) {
   const repo = new MemoryQueue();
   repo.items.push(...items);
   const offered: SteeringInput[] = [];
@@ -61,6 +62,7 @@ function harness(items: QueuedMessage[]) {
     },
   } as unknown as RunService;
   const service = new QueuedMessageService({
+    ...(archive ? { attachmentArchive: archive } : {}),
     repo,
     chats: { get: () => ({ id: CHAT }) } as never,
     runs,
@@ -121,4 +123,13 @@ describe('batch steering delivery', () => {
       'queued-L1m2N3o4P5q',
     ]);
   });
+});
+
+it('archives an accepted queued attachment even if the owner later cancels the queued turn', () => {
+ const saved: string[] = [];
+ const { service } = harness([], { save: message => { saved.push(message.content); return []; } });
+ const result = service.enqueue(CHAT, { text: 'Keep this photo', attachments: [{ name: 'a.png', type: 'image/png', dataUri: 'data:image/png;base64,YQ==' }], filePaths: [] });
+ expect(saved).toEqual(['Keep this photo']);
+ if (result.ok) service.cancel(CHAT, result.message.id);
+ expect(saved).toEqual(['Keep this photo']);
 });

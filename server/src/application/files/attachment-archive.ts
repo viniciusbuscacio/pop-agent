@@ -9,8 +9,8 @@ export class AttachmentArchive {
   constructor(private readonly deps: { files: FilesService; repo: AttachmentCatalogRepo; provenance: FileProvenanceService }) {}
   save(message: Pick<Message, 'id' | 'chatId' | 'content' | 'createdAt' | 'attachments'>): AttachmentRecord[] {
     return message.attachments.flatMap((attachment, index) => {
-      const match = /^data:[^;,]*;base64,([A-Za-z0-9+/=\r\n]+)$/u.exec(attachment.dataUri);
-      if (!match?.[1]) return [];
+      const match = /^data:[^;,]*;base64,([A-Za-z0-9+/=\r\n]*)$/u.exec(attachment.dataUri);
+      if (match?.[1] === undefined) return [];
       const name = attachment.name.split(/[\\/]/u).at(-1)?.replace(/[^\p{L}\p{N}.() _-]/gu, '_').slice(0, 160).replace(/^\.+/u, '') || 'file';
       const bytes = Buffer.from(match[1], 'base64');
       const key = createHash('sha256').update(`${message.chatId}:${message.id}:${index}:`).update(bytes).digest('hex').slice(0, 24);
