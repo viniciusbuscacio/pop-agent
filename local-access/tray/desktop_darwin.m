@@ -1,10 +1,11 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
-@interface PopDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
+@interface PopDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate>
 @property NSWindow *window;
 @property WKWebView *web;
 @property NSURL *origin;
+@property NSMapTable<WKDownload*, NSURL*> *downloads;
 @end
 @implementation PopDesktop
 - (void)popZoomIn:(id)sender { self.web.pageZoom = MIN(3.0, self.web.pageZoom + 0.1); }
@@ -27,7 +28,49 @@
  return NO;
 }
 - (void)webView:(WKWebView*)web decidePolicyForNavigationAction:(WKNavigationAction*)action decisionHandler:(void (^)(WKNavigationActionPolicy))handler {
- handler([self allowURL:action.request.URL] ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+ if (![self allowURL:action.request.URL]) { handler(WKNavigationActionPolicyCancel); return; }
+ handler(action.shouldPerformDownload ? WKNavigationActionPolicyDownload : WKNavigationActionPolicyAllow);
+}
+- (void)webView:(WKWebView*)web decidePolicyForNavigationResponse:(WKNavigationResponse*)response decisionHandler:(void (^)(WKNavigationResponsePolicy))handler {
+ if (![self internalURL:response.response.URL]) { handler(WKNavigationResponsePolicyCancel); return; }
+ NSString *disposition = [response.response isKindOfClass:[NSHTTPURLResponse class]] ? [(NSHTTPURLResponse*)response.response valueForHTTPHeaderField:@"Content-Disposition"] : nil;
+ BOOL attachment = [disposition.lowercaseString hasPrefix:@"attachment"];
+ handler(attachment || !response.canShowMIMEType ? WKNavigationResponsePolicyDownload : WKNavigationResponsePolicyAllow);
+}
+- (void)webView:(WKWebView*)web navigationAction:(WKNavigationAction*)action didBecomeDownload:(WKDownload*)download { download.delegate = self; }
+- (void)webView:(WKWebView*)web navigationResponse:(WKNavigationResponse*)response didBecomeDownload:(WKDownload*)download { download.delegate = self; }
+- (NSURL*)downloadDirectory { return [[NSFileManager defaultManager] URLForDirectory:NSDownloadsDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:nil]; }
+- (void)download:(WKDownload*)download decideDestinationUsingResponse:(NSURLResponse*)response suggestedFilename:(NSString*)suggestedFilename completionHandler:(void (^)(NSURL*))done {
+ NSURL *directory = [self downloadDirectory];
+ if (!directory) { done(nil); return; }
+ NSString *name = suggestedFilename.lastPathComponent;
+ if (!name.length || [name isEqual:@"."] || [name isEqual:@".."]) name = @"Download";
+ NSURL *destination = [directory URLByAppendingPathComponent:name];
+ // WebKit requires a nonexistent destination. Preserve earlier downloads.
+ for (NSUInteger index = 1; [[NSFileManager defaultManager] fileExistsAtPath:destination.path]; index++) {
+  NSString *stem = name.stringByDeletingPathExtension;
+  NSString *unique = [NSString stringWithFormat:@"%@ (%lu)", stem, (unsigned long)index];
+  if (name.pathExtension.length) unique = [unique stringByAppendingPathExtension:name.pathExtension];
+  destination = [directory URLByAppendingPathComponent:unique];
+ }
+ if (!self.downloads) self.downloads = [NSMapTable strongToStrongObjectsMapTable];
+ [self.downloads setObject:destination forKey:download];
+ done(destination);
+}
+- (void)downloadDidFinish:(WKDownload*)download {
+ NSURL *destination = [self.downloads objectForKey:download];
+ [self.downloads removeObjectForKey:download];
+ if (destination) [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[destination]];
+}
+- (void)download:(WKDownload*)download didFailWithError:(NSError*)error resumeData:(NSData*)resumeData {
+ [self.downloads removeObjectForKey:download];
+ if (error.code == NSURLErrorCancelled) return;
+ NSAlert *alert = [NSAlert new]; alert.messageText = @"Download failed";
+ alert.informativeText = @"The file could not be downloaded. Check your connection and try the download again.";
+ [alert beginSheetModalForWindow:self.window completionHandler:nil];
+}
+- (void)download:(WKDownload*)download willPerformHTTPRedirection:(NSHTTPURLResponse*)response newRequest:(NSURLRequest*)request decisionHandler:(void (^)(WKDownloadRedirectPolicy))handler {
+ handler([self internalURL:request.URL] ? WKDownloadRedirectPolicyAllow : WKDownloadRedirectPolicyCancel);
 }
 - (WKWebView*)webView:(WKWebView*)web createWebViewWithConfiguration:(WKWebViewConfiguration*)config forNavigationAction:(WKNavigationAction*)action windowFeatures:(WKWindowFeatures*)features {
  if ([self allowURL:action.request.URL]) [web loadRequest:action.request];
@@ -50,7 +93,8 @@
  [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse r){done(r==NSModalResponseOK ? panel.URLs : nil);}];
 }
 - (void)webView:(WKWebView*)web didFailProvisionalNavigation:(WKNavigation*)navigation withError:(NSError*)error {
- if (error.code==NSURLErrorCancelled) return;
+ // Converting a navigation to a download interrupts the frame by design.
+ if (error.code==NSURLErrorCancelled || ([error.domain isEqual:WebKitErrorDomain] && error.code==WebKitErrorFrameLoadInterruptedByPolicyChange)) return;
  NSAlert *alert=[NSAlert new];alert.messageText=@"Could not connect to Pop Agent";alert.informativeText=@"Check your network, Tailscale and Pop Server, then retry.";
  [alert addButtonWithTitle:@"Retry"];[alert addButtonWithTitle:@"Cancel"];
  [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response){if(response==NSAlertFirstButtonReturn)[web loadRequest:[NSURLRequest requestWithURL:self.origin]];}];

@@ -958,3 +958,8 @@ Intel cross-build verification does not imply execution on an Intel Mac.
 Settings → Install Pop offers separate Apple Silicon and Intel macOS setup DMG
 downloads from the current server, with instructions to open Pop Agent Setup.
 The Desktop installation path does not require copying a Terminal command.
+
+The macOS Desktop handles same-origin file downloads with WKDownload, saves
+them in Downloads using a free filename, and reveals the completed file in Finder
+without executing it. Navigation-to-download handoffs must not show a connection
+failure or replace the current page. Redirects retain the server-origin policy.

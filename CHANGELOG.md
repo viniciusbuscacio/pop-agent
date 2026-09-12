@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.96 — 2026-09-11
+
+- Handle macOS Desktop downloads natively, retain the current page, preserve previous downloads and reveal completed files in Finder.
+- Avoid reporting a download navigation handoff as a server connection failure.
+
 ## 0.2.95 — 2026-09-11
 
 - Offer Apple Silicon and Intel setup DMG downloads directly in Settings → Install Pop.
