@@ -26,10 +26,10 @@ export function clientInputs(root: string, revision = 'HEAD'): string {
   const read = (path: string) => execFileSync('git', ['show', `${revision}:${path}`], { cwd: root });
   const hash = createHash('sha256');
   for (const file of files.sort()) {
-    let bytes = read(file).toString();
-    if (file === 'cli/package.json') { const pkg = JSON.parse(bytes) as {version?: string}; delete pkg.version; bytes = JSON.stringify(pkg); }
-    if (file === 'cli/src/version.ts') bytes = bytes.replace(/export const VERSION = ['"][^'"]+['"]/, 'export const VERSION = "component"');
-    if (file === 'local-access/tray/main.go') bytes = bytes.replace(/const trayVersion = "[^"]+"/, 'const trayVersion = "component"');
+    let bytes: string | Buffer = read(file);
+    if (file === 'cli/package.json') { const pkg = JSON.parse(bytes.toString()) as {version?: string}; delete pkg.version; bytes = JSON.stringify(pkg); }
+    if (file === 'cli/src/version.ts') bytes = bytes.toString().replace(/export const VERSION = ['"][^'"]+['"]/, 'export const VERSION = "component"');
+    if (file === 'local-access/tray/main.go') bytes = bytes.toString().replace(/const trayVersion = "[^"]+"/, 'const trayVersion = "component"');
     hash.update(file).update(bytes);
   }
   type Pkg = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; [key: string]: unknown };

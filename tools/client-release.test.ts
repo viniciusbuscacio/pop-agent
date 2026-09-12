@@ -41,6 +41,13 @@ describe('independent server release clients', () => {
     f.put('package-lock.json', JSON.stringify(lock)); f.commit();
     expect(clientInputs(f.root)).not.toBe(before);
   });
+  it('hashes native binary assets without lossy text conversion', () => {
+    const f = fixture();
+    writeFileSync(join(f.root, 'local-access/icon.bin'), Buffer.from([0xff])); f.commit();
+    const before = clientInputs(f.root);
+    writeFileSync(join(f.root, 'local-access/icon.bin'), Buffer.from([0xfe])); f.commit();
+    expect(clientInputs(f.root)).not.toBe(before);
+  });
   it('does not rebuild clients for a dependency used only by the web', () => {
     const f = fixture(); const before = clientInputs(f.root);
     const lock = JSON.parse(readFileSync(join(f.root, 'package-lock.json'), 'utf8'));
