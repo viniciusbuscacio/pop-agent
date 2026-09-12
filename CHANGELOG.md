@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep full-screen chat images centered when their zoom changes.
+
 ## 0.2.98 — 2026-09-12
 
 - Add a copyable macOS setup command to Install Pop for opening a blocked installer from its mounted DMG.

@@ -448,9 +448,18 @@ it('opens an attached image with bounded zoom controls and closes without naviga
 
   const image = screen.getByTestId('image-preview-image');
   const canvas = image.parentElement;
+  const viewport = screen.getByTestId('image-preview-viewport');
+  Object.defineProperties(viewport, {
+    scrollWidth: { value: 1_250, configurable: true },
+    clientWidth: { value: 1_000, configurable: true },
+    scrollHeight: { value: 1_000, configurable: true },
+    clientHeight: { value: 800, configurable: true },
+  });
   expect(canvas?.style.width).toBe('100%');
   await user.click(screen.getByRole('button', { name: 'Zoom in' }));
   expect(canvas?.style.width).toBe('125%');
+  expect(viewport.scrollLeft).toBe(125);
+  expect(viewport.scrollTop).toBe(100);
   await user.click(screen.getByRole('button', { name: 'Zoom out' }));
   expect(canvas?.style.width).toBe('100%');
   await user.click(screen.getByRole('button', { name: 'Zoom out' }));

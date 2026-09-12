@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './controls';
 import { t } from '../i18n';
@@ -10,6 +10,7 @@ const ZOOM_STEP = 0.25;
 /** Native modal focus handling, Escape and focus restoration; only mounted while open. */
 export function ImagePreview({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   useEffect(() => {
     const element = dialog.current;
@@ -19,6 +20,14 @@ export function ImagePreview({ src, name, onClose }: { src: string; name: string
     element?.focus({ preventScroll: true });
     return () => element?.close();
   }, []);
+  useLayoutEffect(() => {
+    const element = viewport.current;
+    if (element === null) return;
+    // Expanding the canvas otherwise grows only toward the right/bottom from
+    // the browser's current origin. Recenter after every zoom step.
+    element.scrollLeft = Math.max(0, (element.scrollWidth - element.clientWidth) / 2);
+    element.scrollTop = Math.max(0, (element.scrollHeight - element.clientHeight) / 2);
+  }, [zoom]);
   return createPortal(
     <dialog ref={dialog} tabIndex={-1} aria-label={name} onCancel={event => { event.preventDefault(); onClose(); }}
       className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none bg-[var(--bg)] p-0 text-[var(--screen-fg)] outline-none backdrop:bg-black/80">
@@ -45,7 +54,7 @@ export function ImagePreview({ src, name, onClose }: { src: string; name: string
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>{t('common.close')}</Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-testid="image-preview-viewport">
+        <div ref={viewport} className="min-h-0 flex-1 overflow-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-testid="image-preview-viewport">
           <div
             className="flex min-h-full min-w-full items-center justify-center"
             style={{ width: `${String(Math.max(1, zoom) * 100)}%`, height: `${String(Math.max(1, zoom) * 100)}%` }}
