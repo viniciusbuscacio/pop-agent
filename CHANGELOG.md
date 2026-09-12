@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.106 — 2026-09-12
+
+- Stop asking an up-to-date CLI to update merely because the server has a newer independent version.
+
 ## 0.2.105 — 2026-09-12
 
 - Add server/web-only release builds that retain verified published Desktop, setup, launcher and CLI artifacts with their original versions and download sources.

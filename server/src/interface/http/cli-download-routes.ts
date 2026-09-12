@@ -128,7 +128,7 @@ export function createCliDownloadRoutes(deps: CliDownloadDeps): Hono {
   return routes;
 }
 
-function packedCliRelease(cliPack: string): { version: string; file: string; bytes: Buffer } | undefined {
+export function packedCliRelease(cliPack: string): { version: string; file: string; bytes: Buffer } | undefined {
   try {
     const manifest = JSON.parse(readFileSync(join(cliPack, 'package.json'), 'utf8')) as { version?: unknown };
     if (typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(manifest.version)) return undefined;

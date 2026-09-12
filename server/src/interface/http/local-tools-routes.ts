@@ -11,6 +11,7 @@ import {
 } from '../../application/local-access/local-connection-registry.js';
 import { entityId } from '../../domain/ids.js';
 import { apiError } from './errors.js';
+import { packedCliRelease } from './cli-download-routes.js';
 
 const POLL_TIMEOUT_MS = 25_000;
 export const MAX_LOCAL_FRAME_BYTES = 12 * 1024 * 1024;
@@ -115,6 +116,7 @@ export interface LocalToolsRoutesDeps {
   auth: AuthService;
   clock: Clock;
   versions: { popAgentVersion: string };
+  cliPack: string;
 }
 
 export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
@@ -141,7 +143,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
               ws.close(4002, 'invalid_attach');
               return;
             }
-            const compatibility = versionFrames(attach.machine.clientVersion, deps.versions, c.req.url);
+            const compatibility = versionFrames(attach.machine.clientVersion, deps.versions, c.req.url, deps.cliPack);
             if (compatibility.outdated !== undefined) {
               ws.send(JSON.stringify(compatibility.outdated));
               ws.close(4003, 'client_outdated');
@@ -233,7 +235,7 @@ export function createLocalToolsRoutes(deps: LocalToolsRoutesDeps): Hono {
     const frame = await jsonWithinLimit(c);
     const attach = validAttach(frame);
     if (attach === undefined) return apiError(c, 400, 'invalid_attach', 'Invalid local access attach.');
-    const compatibility = versionFrames(attach.machine.clientVersion, deps.versions, c.req.url);
+    const compatibility = versionFrames(attach.machine.clientVersion, deps.versions, c.req.url, deps.cliPack);
     if (compatibility.outdated !== undefined) {
       return c.json({ error: compatibility.outdated }, 426);
     }
@@ -399,17 +401,19 @@ function validAttach(value: unknown): AttachFrame | undefined {
   };
 }
 
-function versionFrames(
+export function versionFrames(
   client: string,
   versions: { popAgentVersion: string },
   requestUrl: string,
+  cliPack: string,
 ): { warning?: Record<string, unknown>; outdated?: Record<string, unknown> } {
   const server = versions.popAgentVersion;
   const install = installCommand(originOf(requestUrl), server);
   if (client.length === 0 || compareVersions(client, MIN_CLIENT_VERSION) < 0) {
     return { outdated: { kind: 'outdated', minimum: MIN_CLIENT_VERSION, server, install } };
   }
-  return compareVersions(client, server) < 0
+  const available = packedCliRelease(cliPack)?.version;
+  return available !== undefined && compareVersions(client, available) < 0
     ? { warning: { kind: 'version_warning', server, install } }
     : {};
 }

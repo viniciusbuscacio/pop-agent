@@ -183,8 +183,8 @@ selection is rejected and never rerouted.
 
 ## Version compatibility
 
-Root `VERSION` is the product/Node CLI release. Launcher release is separate and
-changes when launcher source ships. The server advertises minimum compatible
+Root `VERSION` identifies the server/web release. The Node CLI and launcher
+have independent component versions and change when their own code ships. The server advertises minimum compatible
 client/local-access versions; minimums move only for real wire breaks.
 
 A bare `pop` launch and `pop update` check published versions and install only
@@ -195,7 +195,9 @@ Interactive `pop login` opens chat after successful authentication in the same
 process, without repeating launcher update checks. Failed login never opens
 chat. `--no-chat` and noninteractive output keep login-only behavior; PLA
 installers use `--no-chat` so installation continues after authentication. Attach still enforces the minimum as defense in depth.
-A behind-but-compatible version may warn without blocking. Version checks never
+A compatible client may warn only when it is older than the downloadable CLI
+selected by `cli/pack/package.json`, never merely older than the server. Missing
+client archives must not trigger an update offer. Version checks never
 substitute for protocol negotiation.
 
 ## `popman`
