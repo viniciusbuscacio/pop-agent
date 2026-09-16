@@ -194,7 +194,7 @@ Pinned Node and whisper.cpp archives are downloaded concurrently, verified,
 screened for unsafe paths/links, executable-probed and atomically activated in
 the per-user toolchain. Cached bytes are reverified and reused on retries.
 `--prepare-only` stops before application/systemd installation. The explicit
-`--build-from-source` developer mode adds build-essential, Python, distribution FFmpeg and the pinned
+`--build-from-source` source-build mode adds build-essential, Python, distribution FFmpeg and the pinned
 Go runtime and retains the former npm ci/full gate/client packaging path.
 
 Normal bootstrap from an untagged development checkout resolves the latest published stable GitHub release and runs its bootstrap from an isolated shallow source clone before selecting runtime pins. The caller checkout is never switched or edited. This works when main contains newer commits with the same VERSION or an unreleased VERSION bump. A checkout already at its matching version tag remains explicitly pinned. Authenticated private repositories use gh; public repositories need only curl and git. No build fallback is introduced.

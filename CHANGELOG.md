@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clarify release guidance wording so credential confidentiality and the source-build
+  option do not falsely taint authorized local activation under the existing guard.
+
 - Add `/loop <task>` to PWA and CLI chat commands. The server frames explicit
   owner requests for Loop on initial and steering turns, preserves original
   message text, clarifies bare usage and keeps Plan Mode read-only.

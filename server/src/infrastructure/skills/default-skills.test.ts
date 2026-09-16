@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { selectSkills } from '../../domain/skills/skill-router.js';
 import type { Skill } from '../../domain/skills/skill.js';
@@ -92,5 +93,22 @@ describe('on-demand internals reference', () => {
     expect(internals?.body).toContain('## Auto-Skill workflow');
     expect(sanitize(JSON.stringify(internals)).riskLevel).toBe('low');
     expect(manual.body).not.toContain('## Auto-Skill workflow');
+  });
+});
+
+
+describe('activation guidance safety classification', () => {
+  it('keeps the complete release skill low risk in its tool-result representation', () => {
+    const skill = DEFAULT_SKILLS.find((entry) => entry.slug === 'publish-pop-agent');
+    expect(skill).toBeDefined();
+    expect(sanitize(JSON.stringify(skill)).riskLevel).toBe('low');
+    expect(skill?.body).toContain('Keep credentials confidential');
+  });
+
+  it('keeps installation source-build guidance low risk', () => {
+    const spec = readFileSync(new URL('../../../../docs/specs/Spec-Pop-Installation.md', import.meta.url), 'utf8');
+    const line = spec.split('\n').find((entry) => entry.startsWith('`--build-from-source`'));
+    expect(line).toBeDefined();
+    expect(sanitize(line!).riskLevel).toBe('low');
   });
 });
