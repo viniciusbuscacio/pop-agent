@@ -254,3 +254,15 @@ product. Do not offer the browser-local callback method. Preserve device-code
 notifications, cancellation and credential persistence through the SDK. If a
 runtime only offers a browser callback, fail with an actionable message instead
 of sending the owner to an unreachable localhost page.
+
+### Explicit Loop model resolution
+
+For owner-invoked Pop Loop, isolated Planner/Reviewer uses the parent's resolved
+Chat Model, including a per-chat selection. Its Worker uses the configured
+Service Model of that same provider. Resolve both server-side at invocation so
+cached sessions and Settings changes cannot leave stale child identities.
+Unlike tool-free background completions, Loop Worker service work has bounded
+coding tools in an isolated worktree. No provider failover or automatic retry
+may replay its writes. In-process children use Pop's ModelRuntime without
+credential copies, and each model message books its actual identity exactly
+once under a Loop phase purpose. See `Spec-Pop-Subagents.md`.

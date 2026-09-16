@@ -138,11 +138,12 @@ async function git(cwd: string, args: string[]): Promise<string> {
   const result = await execFileAsync('git', ['-C', cwd, ...args], {
     encoding: 'utf8',
     maxBuffer: MAX_PATCH_BYTES + 1_024 * 1_024,
+    timeout: 30_000,
   });
   return result.stdout.trim();
 }
 
-async function resolveWorkerRepository(
+export async function resolveWorkerRepository(
   requestedRepository: string,
 ): Promise<{ repository: string; baseCommit: string }> {
   const repository = await git(requestedRepository, ['rev-parse', '--show-toplevel']);
@@ -150,7 +151,7 @@ async function resolveWorkerRepository(
   return { repository, baseCommit };
 }
 
-async function createWorkerWorktree(
+export async function createWorkerWorktree(
   repository: string,
   baseCommit: string,
   toolCallId: string,
@@ -180,7 +181,7 @@ async function createWorkerWorktree(
   return { repository, baseCommit, root, worktree };
 }
 
-async function captureWorkerHandoff(
+export async function captureWorkerHandoff(
   prepared: PreparedWorkerWorktree,
   childIndex: number,
 ): Promise<WorkerHandoff> {
@@ -192,7 +193,7 @@ async function captureWorkerHandoff(
   const diff = await execFileAsync(
     'git',
     ['-C', prepared.worktree, 'diff', '--binary', prepared.baseCommit, '--'],
-    { encoding: 'utf8', maxBuffer: MAX_PATCH_BYTES + 1_024 * 1_024 },
+    { encoding: 'utf8', maxBuffer: MAX_PATCH_BYTES + 1_024 * 1_024, timeout: 30_000 },
   );
   const patch = diff.stdout;
   const patchBytes = Buffer.byteLength(patch);
@@ -212,7 +213,7 @@ async function captureWorkerHandoff(
   return handoff;
 }
 
-async function removeWorkerWorktree(prepared: PreparedWorkerWorktree): Promise<void> {
+export async function removeWorkerWorktree(prepared: PreparedWorkerWorktree): Promise<void> {
   try {
     await git(prepared.repository, ['worktree', 'remove', '--force', prepared.worktree]);
   } catch {

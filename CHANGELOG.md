@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add explicitly requested Pop Loop: isolated Chat Model planning/review and
+  Service Model implementation, bounded sequential corrections, real diff/test
+  evidence and private patch handoff. Plan Mode and taint guards exclude it;
+  nothing is automatically integrated, published or activated.
+
 ## 0.3.0 — 2026-09-12
 
 - Lower the desktop sidebar footer divider by 2px to align with the composer.

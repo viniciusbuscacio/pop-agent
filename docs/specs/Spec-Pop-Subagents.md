@@ -114,3 +114,82 @@ Tests must prove that:
 - the auth link targets only Pop's isolated OAuth store and no API key is
   persisted;
 - five child usages create five separate rows without booking their aggregate.
+
+## Explicit Pop Loop
+
+Pop remains a normal, fully capable agent. Only an explicit owner request such
+as “call Loop” or “chama o Loop” invokes the Pop-owned `run_loop` tool. There is
+no automatic complexity detection. Loop is a workflow, not a fourth agent:
+**Pop > Planner/Reviewer > Worker**. Ordinary `delegate_worker` remains unchanged.
+
+The initial Loop accepts only an absolute Git repository path and a bounded
+task. Models, roles, tools, limits and workflow scripts are not caller options.
+The server reads the live parent session's resolved provider/model when Loop
+starts. Planner/Reviewer uses that Chat Model; Worker uses the current Service
+Model setting for the same provider, including its dynamic follow-chat policy.
+Missing models or configuration fail actionably; Loop never silently chooses a
+different model/provider or retries a write through failover.
+
+Loop uses dedicated in-process pi SDK child sessions, not simulated role prompts
+inside Pop and not the packaged delegate worker. Each phase has a fresh,
+in-memory context with only its task/plan/corrections and role-specific tools.
+There is one Planner/Reviewer role and one Worker role, executing sequentially;
+no parallel workers, nested agents, parent transcript, ambient extensions,
+host/project prompt discovery, Pop memory, MCP, PLA or background jobs enter
+these contexts. The shared Pop ModelRuntime supplies credentials in memory;
+no key is copied into a child file, argv or global environment. This SDK path
+supports configured API-key, OAuth and custom providers; the separate packaged
+`delegate_worker` OAuth restriction still applies to that feature only.
+
+The server creates one detached managed Git worktree from source HEAD for the
+whole workflow. Worker corrections preserve earlier work in that same worktree.
+These are checkout/context boundaries, not an OS sandbox: the Worker has the
+normal server coding tools and owner-authorized shell access. Worker instructions
+limit work to the worktree and prohibit commits, publication and activation.
+
+Planner/Reviewer receives only `loop_inspect` and `loop_read`, not shell, write,
+edit or arbitrary extensions. Reads are bounded regular files jailed to the
+worktree, excluding Git metadata and symlink escapes. Nonblocking opens reject
+special files such as FIFOs without waiting for another process. Before each read-only
+phase, the server captures the actual binary diff, file inventory and Worker
+tool-call/result evidence. The inspection tool only returns that snapshot;
+it does not execute commands or change even the Git index. Reviewer must use
+both inspection and file reading before its verdict is accepted. Worker final
+prose is not review evidence. Reviewer examines actual files/diff and captured
+validation results and must block or request corrections for missing checks.
+Large diffs/evidence fail closed rather than silently truncate review coverage.
+
+The sequence is plan → execute → review → bounded corrections. Plan and review
+responses use strict JSON. Review returns approved, blocked or corrections;
+malformed output or child failure ends the workflow without retry. Up to three
+corrections (four Worker executions) are allowed; exhaustion returns `limit`.
+There is a 30-minute execution deadline, 80 attempted tool calls per phase and
+320 total. Count attempts before SDK name/schema validation, including unknown
+tools and invalid arguments; an over-budget batch must not execute.
+Git preparation/capture/cleanup commands have independent 30-second timeouts;
+cleanup can finish after the execution deadline.
+Cancellation aborts the active SDK session (including native bash process-group
+cancellation); automatic provider retries and compaction retries are disabled.
+Each terminal child model message is accounted once under its actual
+provider/model and `loop:plan`, `loop:worker` or `loop:review`, never additionally
+as a child aggregate.
+
+All settled outcomes, including failure and cancellation, attempt a private
+patch, manifest and `loop-evidence.json` handoff before removing the worktree.
+Artifacts include actual tool/test evidence and phase responses and are retained
+in the private temporary handoff directory, like delegated worker patches.
+Artifact capture failure cannot return approval. Pop must inspect the handoff,
+integrate deliberately and run final validation; Loop approval does not commit,
+publish, release or activate anything. Temporary handoffs are not durable product
+storage and can be lost to host temporary-directory cleanup.
+
+`run_loop` is excluded from Plan Mode and classified high-impact under taint.
+Child tools share workflow-scoped taint across fresh role contexts; child answers
+are also scanned before they can influence another phase. Fresh contexts do not make
+repository or tool content trusted. Loop results remain external tool data.
+
+Tests must cover server model mapping and live changes, real SDK tool registration,
+read-only enforcement, separate contexts, actual patch/test evidence, correction
+preservation and approval, bounds, malformed output, failure/cancellation,
+worktree cleanup, usage deduplication, credential non-persistence and Plan/taint
+exclusion. Candidate-runtime probes check the explicit child tool allowlist.

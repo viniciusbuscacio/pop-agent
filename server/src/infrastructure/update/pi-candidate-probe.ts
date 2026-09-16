@@ -61,6 +61,7 @@ const agentSessionMethods = [
   'setModel',
   'dispose',
   'sessionFile',
+  'model',
 ] as const;
 for (const method of agentSessionMethods) {
   if (!Object.getOwnPropertyNames(sdk.AgentSession.prototype).includes(method)) {
@@ -217,13 +218,20 @@ try {
       compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
     }),
     customTools: [candidateTool],
+    // Loop reviewer sessions depend on an explicit fail-closed SDK allowlist.
+    tools: ['candidate_probe'],
   });
   try {
     if (session.sessionManager === undefined || session.agent === undefined) {
       throw new Error('pi AgentSession runtime contract missing: sessionManager/agent');
     }
     session.setSteeringMode('all');
-    session.setActiveToolsByName(session.getActiveToolNames());
+    if (JSON.stringify(session.getActiveToolNames()) !== JSON.stringify(['candidate_probe'])) {
+      throw new Error('pi explicit child tool allowlist failed');
+    }
+    session.setActiveToolsByName([]);
+    if (session.getActiveToolNames().length !== 0) throw new Error('pi empty child tool allowlist failed');
+    session.setActiveToolsByName(['candidate_probe']);
     await session.prompt('Run the candidate probe tool.');
     if (toolRuns !== 1 || !toolResultReturned || requestCount !== 2) {
       throw new Error(`candidate tool/event turn contract failed: toolRuns=${String(toolRuns)} toolResult=${String(toolResultReturned)} requests=${String(requestCount)}`);

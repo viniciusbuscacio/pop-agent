@@ -334,3 +334,15 @@ positive execution instructions, including later instructions in the same text,
 remain checked. No file path, source label or code fence exempts content from
 scanning. Owner-requested retries of tainted distillation windows re-evaluate
 all checks against the immutable source without clearing the historical verdict.
+
+### Loop workflow boundary
+
+`run_loop` is a high-impact delegation tool: refuse it after external-content
+taint, regardless of arguments, and omit it in Plan Mode. Only an explicit
+owner Loop request authorizes its use. The isolated Planner/Reviewer has an
+explicit read-only tool allowlist with jailed bounded file reads and
+server-captured diff/test evidence. Worker tools retain independent taint
+checks. Worktrees isolate checkout state, not hostile host processes; this
+feature is not an OS sandbox. Credentials remain in Pop's existing runtime,
+never copied into child configuration or global environment. Failure, Stop and
+limits capture partial handoffs and clean worktrees without replaying writes.

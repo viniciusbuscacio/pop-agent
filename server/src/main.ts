@@ -368,6 +368,7 @@ function piBridge(): PiAgentBridge {
       // credit limit, instead of every turn failing with a 402.
       modelsPath: join(context.dataDir, 'models.json'),
       apiKey: (providerId) => providers.apiKey(providerId),
+      serviceModel: (providerId) => providers.serviceModel(providerId),
       customProviders: () => providers.customProvidersForEngine(),
       notesVault,
       memory: context.memory,

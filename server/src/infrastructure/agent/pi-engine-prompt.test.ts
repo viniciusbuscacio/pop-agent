@@ -27,6 +27,7 @@ describe('Pop Agent system prompt', () => {
     expect(tools).not.toEqual(
       expect.arrayContaining(['bash', 'write', 'edit', 'notes_write', 'delete_file', 'delegate_worker']),
     );
+    expect(tools).not.toContain('run_loop');
     for (const a2aTool of A2A_TOOL_NAMES) expect(tools).not.toContain(a2aTool);
   });
 

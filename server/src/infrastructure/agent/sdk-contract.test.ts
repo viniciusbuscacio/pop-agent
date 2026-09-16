@@ -57,6 +57,7 @@ describe('pi sdk contract', () => {
         // Where pi keeps the conversation. Pop Agent stores the path, never reads
         // the file, and hands it back when the chat wakes up again.
         'sessionFile',
+        'model',
       ]) {
         expect(session, `AgentSession.${method}`).toContain(method);
       }

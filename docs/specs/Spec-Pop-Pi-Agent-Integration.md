@@ -441,3 +441,12 @@ message text and timestamps remain unchanged, and skill routing excludes it.
 A reused/resumed session receives a fresh clock on its next turn. Historical
 clock notes are not current; delayed relative-date requests may require clarification.
 Existing pre-feature turns keep their historical records without invented times.
+
+## Pop Loop child sessions
+
+Normal Mode also exposes `run_loop` when the composition root supplies live
+Service Model resolution. It is invoked only for explicit owner Loop requests,
+never automatic routing; Plan Mode excludes it. Isolated in-process SDK sessions
+perform real planning, implementation and review under the model, tool, worktree,
+accounting and bounded correction contract in `Spec-Pop-Subagents.md`. The live
+parent session model is read at invocation, not captured at session open.

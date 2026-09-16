@@ -105,6 +105,7 @@ export function isBlockedUnderTaint(command: string, machine: GuardedMachine = '
  */
 const REFUSED_UNDER_TAINT = new Set([
   'skill_write',
+  'run_loop',
   'a2a_send_message',
   'rest_call',
   'a2a_continue_task',
@@ -175,7 +176,7 @@ export class TaintGuard implements ToolGuard {
       });
       return Promise.resolve({
         block: true,
-        reason: tool === 'skill_write' ? SKILL_BLOCK_REASON : A2A_BLOCK_REASON,
+        reason: tool === 'skill_write' ? SKILL_BLOCK_REASON : tool === 'run_loop' ? BLOCK_REASON : A2A_BLOCK_REASON,
       });
     }
 
