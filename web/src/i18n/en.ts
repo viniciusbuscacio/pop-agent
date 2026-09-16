@@ -710,6 +710,7 @@ export const en = {
   'chat.slashNew': 'Start a new chat',
   'chat.slashModel': 'Change the model for this chat',
   'chat.slashQueue': 'Send only after the current run finishes',
+  'chat.slashLoop': 'Run Loop on a task: /loop <task>',
   'chat.slashHelp': 'Show all commands',
   'chat.slashCompact': 'Compact the pi session context',
   'chat.slashSession': 'Show pi session statistics',

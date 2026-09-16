@@ -314,6 +314,32 @@ describe('pending message composition', () => {
     );
   });
 
+  it('offers Loop in slash help and inserts a task prefix without invoking a session command', () => {
+    const { onCommand, onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: '/help' } });
+    fireEvent.keyDown(area, { key: 'Enter' });
+    fireEvent.click(screen.getByText('Run Loop on a task: /loop <task>'));
+    expect((area as HTMLTextAreaElement).value).toBe('/loop ');
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { text: '/loop fix tests', executionMode: 'normal' as const },
+    { text: '/loop', executionMode: 'normal' as const },
+    { text: '/loop fix tests', executionMode: 'plan' as const },
+    { text: '/loop', executionMode: 'plan' as const },
+  ])('sends $text through ordinary messaging in $executionMode mode', async ({ text, executionMode }) => {
+    const { onCommand, onSend } = renderComposer({ executionMode });
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: text } });
+    // The send button submits even when a bare command's completion menu is open.
+    fireEvent.click(screen.getByTestId('composer-send'));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith(text, [], [], 'steer', executionMode));
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
   it('executes pi session commands locally instead of sending them to the model', async () => {
     const { onCommand, onSend } = renderComposer();
     const area = screen.getByRole('textbox');

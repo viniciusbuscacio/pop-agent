@@ -109,6 +109,11 @@ it makes no request and points to `/stop`. A failed archive preserves the
 current selection and transcript and reports the server error. The interactive
 command has no confirmation and does not restore or bulk-archive chats.
 
+`/loop <task>` appears in help and autocomplete. Unlike native session commands,
+it is ordinary owner text sent through the normal message API, including bare
+`/loop` for server-side usage clarification. The CLI does not execute Loop or
+change the wire contract; unknown slash commands still report an error.
+
 The TUI renders persisted transcript plus live SSE projection, thinking when
 enabled, tool lifecycle, queue/run state and stable failures. It does not poll
 for streamed output or invent local transcript rows. Local execution notices

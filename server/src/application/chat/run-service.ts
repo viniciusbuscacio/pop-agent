@@ -9,6 +9,7 @@ import type {
 } from '../ports/agent-bridge.js';
 import { billsPerToken } from '../providers/provider-definitions.js';
 import { channelNote, withMessageTime } from './channel-note.js';
+import { frameLoopCommand } from './loop-command.js';
 import { shouldFailOver, isAuthFailure, type RunFailure } from './failover.js';
 
 /**
@@ -149,6 +150,7 @@ export class RunService {
       ...(options.client === undefined ? {} : { client: options.client }),
     };
 
+    const ownerPrompt = frameLoopCommand(text, options.executionMode ?? 'normal');
     const note = channelNote(options.client) + this.archiveAttachments({ ...userDraft, id: options.queuedMessageId ?? userDraft.id });
 
     const run: PendingRun = {
@@ -156,7 +158,7 @@ export class RunService {
       chatId,
       // The note rides this turn's prompt only; the stored message keeps the
       // user's own words, so the history is not littered with framing.
-      prompt: withMessageTime(note === undefined ? text : `${note}\n\n${text}`, options.receivedAt ?? now, options.client?.timeZone),
+      prompt: withMessageTime(`${note}\n\n${ownerPrompt}`, options.receivedAt ?? now, options.client?.timeZone),
       model: chat.model,
       provider: chat.provider,
       attachments,
@@ -448,10 +450,11 @@ export class RunService {
     }
     if (run.steering.has(input.id)) return true;
 
+    const ownerPrompt = frameLoopCommand(input.text, run.executionMode);
     const note = channelNote(input.client) + this.archiveAttachments({ id: input.id, chatId, content: input.text, attachments: input.attachments, createdAt: input.receivedAt ?? new Date(this.deps.clock.now()).toISOString() });
     const steering: PendingSteering = {
       ...input,
-      prompt: withMessageTime(note === undefined ? input.text : `${note}\n\n${input.text}`, input.receivedAt ?? new Date(this.deps.clock.now()).toISOString(), input.client?.timeZone),
+      prompt: withMessageTime(`${note}\n\n${ownerPrompt}`, input.receivedAt ?? new Date(this.deps.clock.now()).toISOString(), input.client?.timeZone),
     };
     run.steering.set(input.id, steering);
     const control = run.control;

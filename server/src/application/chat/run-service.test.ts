@@ -173,6 +173,47 @@ describe('starting a run', () => {
   });
 });
 
+describe('/loop owner messages', () => {
+  it.each(['normal', 'plan'] as const)('frames initial and steering turns in %s mode but persists original text', async (executionMode) => {
+    const chatId = newChat();
+    const initial = '/loop fix tests in /repo';
+    const steering = '/loop also validate types';
+    let steeringPrompt = '';
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    bridge.script = async (request) => {
+      request.onControlReady?.({
+        steer: async (input) => {
+          steeringPrompt = input.prompt;
+          request.onEvent({ kind: 'steering-delivered', steeringId: input.id });
+          return true;
+        },
+        cancelSteering: () => true,
+        clearSteering: () => undefined,
+      });
+      await held;
+    };
+    runs.startRun(chatId, initial, [], { executionMode });
+    expect(runs.offerSteering(chatId, { id: 'queued-loop', text: steering, attachments: [], executionMode })).toBe(true);
+    release();
+    await runs.whenIdle();
+    for (const prompt of [bridge.seen[0]?.prompt, steeringPrompt]) {
+      expect(prompt).toContain('[Pop Loop command:');
+      expect(prompt).toContain(executionMode === 'plan' ? 'do not invoke run_loop' : 'Use run_loop');
+    }
+    expect(repo.getMessages(chatId, { limit: 10 }).filter((message) => message.role === 'user').map((message) => message.content)).toEqual([initial, steering]);
+    expect(bridge.seen[0]?.executionMode).toBe(executionMode);
+  });
+
+  it('does not interpret commands in client metadata or attachments', async () => {
+    runs.startRun(newChat(), 'inspect the attachment', [{ name: '/loop fix tests', type: 'text/plain', dataUri: 'data:text/plain;base64,L2xvb3A=' }], {
+      client: { kind: 'web', platform: '/loop fix tests' },
+    });
+    await runs.whenIdle();
+    expect(bridge.seen[0]?.prompt).not.toContain('[Pop Loop command:');
+  });
+});
+
 describe('finishing a run', () => {
   it('stores the assembled answer and reports its id', async () => {
     const chatId = newChat();

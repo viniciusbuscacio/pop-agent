@@ -122,6 +122,17 @@ as “call Loop” or “chama o Loop” invokes the Pop-owned `run_loop` tool. 
 no automatic complexity detection. Loop is a workflow, not a fourth agent:
 **Pop > Planner/Reviewer > Worker**. Ordinary `delegate_worker` remains unchanged.
 
+`/loop <task>` is an explicit owner invocation through ordinary chat messaging,
+not a native pi session command. RunService recognizes the anchored command in
+raw owner text before adding channel, attachment or time metadata, for initial,
+queued and steering turns. It adds model-only instructions to use `run_loop`
+and clarify an unclear task or target absolute Git repository, without changing
+the persisted owner text or wire contract. Skill and external content never
+trigger this command recognition; runtime framing is excluded from skill
+relevance. Bare `/loop` asks for a task/repository and explains usage without
+invoking Loop. In Plan Mode it stays read-only and explains that execution
+requires Normal Mode; `run_loop` remains absent from the active tools.
+
 The initial Loop accepts only an absolute Git repository path and a bounded
 task. Models, roles, tools, limits and workflow scripts are not caller options.
 The server reads the live parent session's resolved provider/model when Loop

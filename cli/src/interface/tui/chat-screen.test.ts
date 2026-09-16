@@ -185,6 +185,40 @@ describe('ChatScreen', () => {
     expect(plain()).not.toContain('Escape twice');
   });
 
+  it('lists and autocompletes /loop', async () => {
+    const { terminal, plain, send } = recorder();
+    const { screen } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/help');
+    await flush();
+    expect(plain()).toContain('Run Loop on a task: /loop <task>');
+    send('/loo');
+    await flush();
+    send('\t');
+    expect((screen as unknown as { editor: { getText(): string } }).editor.getText()).toBe('/loop ');
+  });
+
+  it.each(['/loop fix tests', '/loop', '/LOOP fix tests'])('sends %s as ordinary owner text', async (text) => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit(text);
+    expect(ports.send).toHaveBeenCalledWith('chat-1', text);
+    expect(ports.sessionCommand).not.toHaveBeenCalled();
+    await flush();
+    expect(plain()).not.toContain('No such command');
+  });
+
+  it('still rejects unknown slash commands', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/looping task');
+    await flush();
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(plain()).toContain('No such command: /looping');
+  });
+
   it('offers /archive through slash-command autocomplete', async () => {
     const { terminal, send } = recorder();
     const { screen } = screenWith(terminal);

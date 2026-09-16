@@ -59,6 +59,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'chats', description: 'Switch to an open conversation' },
   { name: 'model', description: 'Choose this conversation’s model' },
   { name: 'stop', description: 'Interrupt the answer in flight' },
+  { name: 'loop', description: 'Run Loop on a task: /loop <task>' },
   { name: 'think', description: 'Show or hide the reasoning' },
   { name: 'compact', description: 'Compact the pi session context' },
   { name: 'session', description: 'Show pi session statistics' },
@@ -730,7 +731,7 @@ export class ChatScreen {
     const text = raw.trim();
     if (text.length === 0) return;
 
-    if (text.startsWith('/')) {
+    if (text.startsWith('/') && !/^\/loop(?:\s|$)/i.test(text)) {
       this.command(text);
       return;
     }

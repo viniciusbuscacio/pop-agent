@@ -32,6 +32,7 @@ export function slashCommands(): SlashCommand[] {
     { name: 'new', description: t('chat.slashNew') },
     { name: 'model', description: t('chat.slashModel') },
     { name: 'queue', description: t('chat.slashQueue') },
+    { name: 'loop', description: t('chat.slashLoop') },
     { name: 'compact', description: t('chat.slashCompact') },
     { name: 'session', description: t('chat.slashSession') },
     { name: 'name', description: t('chat.slashName') },

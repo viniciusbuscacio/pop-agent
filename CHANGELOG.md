@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `/loop <task>` to PWA and CLI chat commands. The server frames explicit
+  owner requests for Loop on initial and steering turns, preserves original
+  message text, clarifies bare usage and keeps Plan Mode read-only.
+
 - Add explicitly requested Pop Loop: isolated Chat Model planning/review and
   Service Model implementation, bounded sequential corrections, real diff/test
   evidence and private patch handoff. Plan Mode and taint guards exclude it;

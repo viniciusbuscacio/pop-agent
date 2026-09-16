@@ -470,6 +470,12 @@ with any existing draft; if send/queue fails, the merged text becomes the
 recoverable draft. Audio is capped at 25 MB and only one transcription may run
 at a time. Leaving the chat stops an active recorder and its media tracks.
 
+The slash menu and `/help` include `/loop <task>`. Selecting Loop inserts the
+prefix for editing; submitting it (including bare `/loop`) uses ordinary message
+send/queue/steering, preserving the execution mode. It never calls the native
+session-command endpoint. The server owns Loop interpretation and Plan Mode
+restrictions, equally for browser and installed PWA clients.
+
 Slash/session commands are recognized client-side only where they invoke a
 specific API/UI action. Local command output is visible transcript UI but never
 pretends to be durable model context. Each output is anchored to the settled

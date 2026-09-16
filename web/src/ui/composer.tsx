@@ -272,8 +272,8 @@ export function Composer({
       area.current?.focus();
       return;
     }
-    if (command.name === 'queue') {
-      persist('/queue ');
+    if (command.name === 'queue' || command.name === 'loop') {
+      persist(`/${command.name} `);
       setSlashQuery(undefined);
       area.current?.focus();
       return;
