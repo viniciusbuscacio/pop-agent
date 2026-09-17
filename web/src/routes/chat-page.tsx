@@ -189,6 +189,7 @@ export function ChatPage() {
           <div key={message.id} data-context-message={message.id} className="min-w-0">
           <ChatMessage
             message={message}
+            settled
             resending={resendingId !== undefined}
             {...(!canResend
               ? {}

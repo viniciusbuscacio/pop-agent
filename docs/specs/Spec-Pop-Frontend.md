@@ -420,6 +420,22 @@ frontend must not assume or simulate one.
   inline at their first position relative to the ordinary tool group. The card
   uses the existing active, done, failed and interrupted status semantics and
   reveals bounded progress or result detail when expanded.
+- Each call named exactly `run_loop` renders its own inline **Loop** card, never
+  inside **Ran tools** or **Subagents**. Grouping must not move other calls across
+  a Loop card. The thinking visibility preference includes these cards.
+  Planning (Planner/Reviewer), execution (Worker) and review (Planner/Reviewer)
+  stay visible with pending, active, completed, error, interrupted or unconfirmed
+  phase state; correction cycles return execution to active and review to pending.
+  Phase completion means the workflow advanced, not that changes were approved.
+  Only an explicit returned Loop result supplies Approved, Blocked, Correction
+  limit reached, Failed or Interrupted; generic tool completion without a valid
+  result has an unknown outcome. Settled unfinished calls, including Stop and
+  restart recovery, must not keep spinning. Expansion reveals review evidence,
+  summary and plain-text progress/final handoff. Old concatenated phase markers
+  remain readable; malformed/unknown detail never becomes executable markup or
+  invented success. Show correction counts when known, and no duration without
+  reliable timing metadata. Cards remain keyboard accessible and horizontally
+  contained on narrow screens.
 - Markdown, tool output and long paths cannot widen the transcript. Code/table
   surfaces scroll internally when wrapping would destroy meaning.
 

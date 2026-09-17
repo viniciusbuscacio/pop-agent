@@ -194,6 +194,17 @@ integrate deliberately and run final validation; Loop approval does not commit,
 publish, release or activate anything. Temporary handoffs are not durable product
 storage and can be lost to host temporary-directory cleanup.
 
+Each `run_loop` call has a dedicated inline Loop card in the assistant timeline,
+separate from ordinary tools and delegation, with visible planning, execution
+and review phases. Phase progression is not approval: the card uses the returned
+Loop status for the business outcome, shows known correction counts, and reveals
+summary, evidence and raw handoff detail on expansion. Generic tool completion
+cannot imply approval; settled unfinished phases are interrupted, not spinning.
+Historical concatenated progress remains readable. The facade emits bounded
+cumulative, newline-delimited phase snapshots through existing tool text; the SDK
+bridge forwards only new tails. The final JSON result and wire DTO shapes stay
+unchanged. This adds no child tool activity, synthetic time or public API.
+
 `run_loop` is excluded from Plan Mode and classified high-impact under taint.
 Child tools share workflow-scoped taint across fresh role contexts; child answers
 are also scanned before they can influence another phase. Fresh contexts do not make

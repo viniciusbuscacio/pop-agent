@@ -7,6 +7,8 @@ import * as sdk from '@earendil-works/pi-coding-agent';
 import { buildLoopTool, readLoopFile, type LoopToolOptions } from './loop-tool.js';
 import { buildPlanToolNames, SYSTEM_PROMPT } from './pi-engine.js';
 import { TaintGuard } from './tool-taint.js';
+import { RunTranslator } from './pi-run-translation.js';
+import type { AgentEvent } from '../../application/ports/agent-bridge.js';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -44,7 +46,19 @@ describe('Loop tool boundaries', () => {
       expect(inspection).toContain(writes === 1 ? '+first' : '+corrected');
       return JSON.stringify({ verdict: writes === 1 ? 'correct' : 'approved', summary: 'checked files', evidence: ['README.md'] });
     } });
-    const result = await tool.execute('correction', { repository, task: 'change' }, undefined, undefined, ctx);
+    const events: AgentEvent[] = [];
+    const translator = new RunTranslator((event) => events.push(event));
+    const snapshots: string[] = [];
+    const result = await tool.execute('correction', { repository, task: 'change' }, undefined, (partialResult) => {
+      snapshots.push((partialResult.content[0] as { text: string }).text);
+      translator.handle({ type: 'tool_execution_update', toolCallId: 'correction', toolName: 'run_loop', args: {}, partialResult });
+    }, ctx);
+    translator.handle({ type: 'tool_execution_end', toolCallId: 'correction', toolName: 'run_loop', result, isError: false });
+    const lines = ['Loop: plan\n', 'Loop: worker\n', 'Loop: review\n', 'Loop: worker (correction 1)\n', 'Loop: review (correction 1)\n'];
+    expect(snapshots).toEqual(lines.map((_, index) => lines.slice(0, index + 1).join('')));
+    expect(events.filter((event) => event.kind === 'tool').map((event) => event.detail)).toEqual([
+      ...lines, (result.content[0] as { text: string }).text,
+    ]);
     const details = result.details as { status: string; evidencePath: string; handoff: { patchPath: string } };
     roots.push(dirname(details.evidencePath));
     expect(details.status).toBe('approved');

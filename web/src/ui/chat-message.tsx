@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { useThinkingStore } from '../store/thinking';
 import { ImagePreview, PdfPreview, PdfThumbnail } from './image-preview';
 import { Markdown } from './markdown';
+import { LoopCard } from './loop-card';
 
 /**
  * One turn of the conversation. The user's words go in a bubble on the right;
@@ -17,12 +18,15 @@ function ChatMessageView({
   resending = false,
   onChangeModel,
   systemTone = 'default',
+  settled = false,
 }: {
   message: Pick<MessageDTO, 'role' | 'content' | 'thinking' | 'tools' | 'attachments' | 'notice' | 'a2aAuthor'>;
   onResend?: () => void;
   resending?: boolean;
   onChangeModel?: () => void;
   systemTone?: 'default' | 'info';
+  /** Settled history must not keep an unfinished Loop spinning after Stop. */
+  settled?: boolean;
 }) {
   const showThinking = useThinkingStore((state) => state.show);
 
@@ -103,6 +107,7 @@ function ChatMessageView({
       {showThinking && message.tools.length > 0 ? (
         <ToolTimeline
           tools={message.tools}
+          settled={settled}
           interrupted={/interrupted by a server restart/i.test(message.content)}
         />
       ) : null}
@@ -305,7 +310,21 @@ function ThinkingCard({ text, answered }: { text: string; answered: boolean }) {
   );
 }
 
-function ToolTimeline({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
+function ToolTimeline({ tools, interrupted, settled }: { tools: ToolCallDTO[]; interrupted: boolean; settled: boolean }) {
+  const timeline: ReactNode[] = [];
+  let start = 0;
+  tools.forEach((tool, index) => {
+    if (tool.name !== 'run_loop') return;
+    if (index > start) timeline.push(<ToolGroups key={`tools-${String(start)}`} tools={tools.slice(start, index)} interrupted={interrupted} />);
+    timeline.push(<LoopCard key={`loop-${String(index)}`} tool={tool} interrupted={interrupted || settled} />);
+    start = index + 1;
+  });
+  if (start < tools.length) timeline.push(<ToolGroups key={`tools-${String(start)}`} tools={tools.slice(start)} interrupted={interrupted} />);
+  return timeline;
+}
+
+/** Preserve existing grouping, but never move a tool across a Loop call. */
+function ToolGroups({ tools, interrupted }: { tools: ToolCallDTO[]; interrupted: boolean }) {
   const delegated = tools.filter((tool) => tool.name === 'delegate_worker');
   const ordinary = tools.filter((tool) => tool.name !== 'delegate_worker');
   const groups = [

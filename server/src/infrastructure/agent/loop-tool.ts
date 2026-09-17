@@ -93,10 +93,18 @@ export function buildLoopTool(options: LoopToolOptions): ToolDefinition {
             read: (path, offset) => readLoopFile(worktree.worktree, path, offset),
             inspect: () => Promise.resolve(inspection),
           };
+          let progress = '';
+          let executions = 0;
           result = await runPopLoop({ child: async (request) => {
-            // Capture before entering a read-only role; its tools cannot mutate even the index.
+            if (request.phase === 'worker') executions += 1;
+            const correction = Math.max(0, executions - 1);
+            // The SDK bridge turns cumulative snapshots into append-only deltas.
+            // At most nine phase entries (plan + four execution/review pairs).
+            progress += `Loop: ${request.phase}${correction > 0 ? ` (correction ${String(correction)})` : ''}\n`;
+            onUpdate?.({ content: [{ type: 'text', text: progress }], details: {} });
+            // Capture belongs to this phase; report it before preparation can fail.
+            // Read-only role tools cannot mutate even the index.
             if (request.phase !== 'worker') inspection = await snapshot();
-            onUpdate?.({ content: [{ type: 'text', text: `Loop: ${request.phase}` }], details: {} });
             return (options.child ?? runLoopChild)(childOptions, request);
           } }, { task: params.task, chat, worker, signal: controller.signal });
         }

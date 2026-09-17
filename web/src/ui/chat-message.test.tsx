@@ -114,7 +114,7 @@ describe('horizontal overflow containment', () => {
 });
 
 describe('thinking visibility', () => {
-  it('hides thinking, ordinary tools, and subagents together', () => {
+  it('hides thinking, ordinary tools, subagents and Loop together', () => {
     render(
       <ChatMessage
         message={{
@@ -125,6 +125,7 @@ describe('thinking visibility', () => {
           tools: [
             { name: 'bash', status: 'done', detail: 'ordinary result' },
             { name: 'delegate_worker', status: 'done', detail: 'worker result' },
+            { name: 'run_loop', status: 'done', detail: '' },
           ],
         }}
       />,
@@ -133,12 +134,14 @@ describe('thinking visibility', () => {
     expect(screen.getByTestId('thinking-card')).toBeTruthy();
     expect(screen.getByTestId('tool-card')).toBeTruthy();
     expect(screen.getByTestId('subagents-card')).toBeTruthy();
+    expect(screen.getByTestId('loop-card')).toBeTruthy();
 
     act(() => useThinkingStore.setState({ show: false }));
 
     expect(screen.queryByTestId('thinking-card')).toBeNull();
     expect(screen.queryByTestId('tool-card')).toBeNull();
     expect(screen.queryByTestId('subagents-card')).toBeNull();
+    expect(screen.queryByTestId('loop-card')).toBeNull();
     expect(screen.getByText('Final answer')).toBeTruthy();
   });
 });
@@ -521,4 +524,43 @@ it('offers a touch-accessible resend action on the interrupted user bubble', asy
   render(<ChatMessage message={{ ...base, role: 'user', content: 'Try again' }} onResend={resend} />);
   await userEvent.click(screen.getByTestId('message-resend'));
   expect(resend).toHaveBeenCalledTimes(1);
+});
+
+describe('Loop timeline placement', () => {
+  it('keeps each Loop at its call position between ordinary and delegated groups', async () => {
+    render(<ChatMessage message={{ ...base, role: 'assistant', tools: [
+      { name: 'bash', status: 'done', detail: 'before' },
+      { name: 'delegate_worker', status: 'done', detail: 'delegated before' },
+      { name: 'run_loop', status: 'done', detail: 'first loop' },
+      { name: 'read', status: 'done', detail: 'between' },
+      { name: 'run_loop', status: 'output', detail: 'Loop: plan' },
+      { name: 'delegate_worker', status: 'done', detail: 'delegated after' },
+      { name: 'bash', status: 'done', detail: 'after' },
+    ] }} />);
+    expect(Array.from(screen.getByTestId('message-assistant').children).map((child) => child.getAttribute('data-testid')))
+      .toEqual(['tool-card', 'subagents-card', 'loop-card', 'tool-card', 'loop-card', 'subagents-card', 'tool-card']);
+    for (const toggle of screen.getAllByTestId('tool-toggle')) await userEvent.click(toggle);
+    expect(screen.getAllByTestId('tool-output').map((node) => node.textContent)).toEqual(['before', 'between', 'after']);
+    expect(screen.getAllByTestId('loop-card')).toHaveLength(2);
+  });
+
+  it('renders adjacent Loop calls separately without an ordinary tool group', () => {
+    render(<ChatMessage message={{ ...base, role: 'assistant', tools: [
+      { name: 'run_loop', status: 'done', detail: '' },
+      { name: 'run_loop', status: 'start', detail: '' },
+    ] }} />);
+    expect(screen.getAllByTestId('loop-card')).toHaveLength(2);
+    expect(screen.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('marks an unfinished Loop interrupted when the live answer becomes settled after Stop', () => {
+    const message = { ...base, role: 'assistant' as const, tools: [
+      { name: 'run_loop', status: 'output' as const, detail: 'Loop: planLoop: worker' },
+    ] };
+    const { rerender } = render(<ChatMessage message={message} />);
+    expect(screen.getByTestId('loop-stage-worker').textContent).toContain('Active');
+    rerender(<ChatMessage message={message} settled />);
+    expect(screen.getByTestId('loop-stage-worker').textContent).toContain('Interrupted');
+    expect(screen.getByTestId('loop-card').querySelector('.animate-spin')).toBeNull();
+  });
 });

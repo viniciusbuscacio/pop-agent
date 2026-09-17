@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Give each Loop invocation its own inline card with planning, execution and
+  review phases, correction counts, explicit workflow outcomes and expandable
+  evidence/handoff details. Preserve tool ordering and historical progress;
+  stopped work no longer keeps spinning. Loop progress now streams as cumulative
+  newline-delimited snapshots without changing the API.
+
 - Clarify release guidance wording so credential confidentiality and the source-build
   option do not falsely taint authorized local activation under the existing guard.
 
