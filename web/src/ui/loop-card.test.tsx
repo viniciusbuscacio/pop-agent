@@ -24,7 +24,7 @@ describe('Loop card', () => {
     expect(stage('plan')).toContain('Completed');
     expect(stage('worker')).toContain('Active');
     rerender(<LoopCard tool={tool(progress)} interrupted={false} />);
-    expect(stage('worker')).toContain('Completed');
+    expect(stage('worker')).toContain('Worker round finished');
     expect(stage('review')).toContain('Active');
     rerender(<LoopCard tool={tool(`${progress}Loop: worker (correction 1)\n`)} interrupted={false} />);
     expect(stage('worker')).toContain('Active');
@@ -104,4 +104,14 @@ describe('Loop card', () => {
     expect(screen.getByTestId('loop-output').textContent).toBe(detail);
     expect(screen.getByTestId('loop-card').querySelector('script')).toBeNull();
   });
+  it('shows a safe phase, code and reason without implying objective completion, including final-only history', () => {
+    const failure = { phase: 'review', code: 'snapshot_failed', reason: 'Loop evidence snapshot failed; parent inspection is required.' };
+    render(<LoopCard tool={tool(JSON.stringify({ status: 'failed', corrections: 2, summary: failure.reason, evidence: ['Prior evidence'], failure }), 'done')} interrupted={false} />);
+    expect(screen.getByTestId('loop-failure').textContent).toBe(`review · snapshot_failed: ${failure.reason}`);
+    expect(stage('worker')).toContain('Worker round finished');
+    expect(stage('review')).toContain('Error');
+    expect(screen.getByTestId('loop-card').textContent).not.toContain('objective completed');
+    expect(screen.getByTestId('loop-card').querySelector('.animate-spin')).toBeNull();
+  });
+
 });

@@ -8,6 +8,7 @@ interface LoopResult {
   summary: string;
   corrections: number;
   evidence: string[];
+  failure?: { phase: string; code: string; reason: string };
 }
 
 function object(text: string): Record<string, unknown> | undefined {
@@ -64,6 +65,12 @@ export function loopProgress(tool: ToolCallDTO, interrupted: boolean) {
     (!['approved', 'blocked', 'limit'].includes(String(parsed.status)) || parsed.evidence.length > 0) &&
     parsed.evidence.every((entry) => typeof entry === 'string' && entry.trim().length > 0 && entry.length <= 32_000)
     ? parsed as unknown as LoopResult : undefined;
+  // Optional diagnostics do not invalidate legacy final results.
+  const rawFailure = result?.failure;
+  const failure = rawFailure && typeof rawFailure === 'object' &&
+    typeof rawFailure.phase === 'string' && /^[a-z_]{1,32}$/.test(rawFailure.phase) &&
+    typeof rawFailure.code === 'string' && /^[a-z_]{1,64}$/.test(rawFailure.code) &&
+    typeof rawFailure.reason === 'string' && rawFailure.reason.length <= 2000 ? rawFailure : undefined;
   const outcome: LoopOutcome | 'unknown' | 'active' = result?.status ?? (tool.status === 'error' ? 'failed' :
     interrupted && tool.status !== 'done' ? 'cancelled' :
     tool.status === 'done' ? 'unknown' : 'active');
@@ -73,5 +80,11 @@ export function loopProgress(tool: ToolCallDTO, interrupted: boolean) {
   } else if (phase && outcome !== 'active') {
     stages[phase] = outcome === 'cancelled' ? 'interrupted' : outcome === 'failed' ? 'error' : 'unknown';
   }
-  return { stages, outcome, corrections, result };
+  if (failure && ['plan', 'worker', 'review'].includes(failure.phase)) {
+    const failedPhase = failure.phase as LoopStage;
+    if (failedPhase !== 'plan') stages.plan = 'completed';
+    if (failedPhase === 'review') stages.worker = 'completed';
+    stages[failedPhase] = outcome === 'cancelled' ? 'interrupted' : 'error';
+  }
+  return { stages, outcome, corrections, result, failure };
 }

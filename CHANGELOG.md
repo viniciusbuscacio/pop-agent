@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fix Loop stopping before later reviews when cumulative Worker evidence exceeds
+  200,000 characters: inspect immutable private snapshots through bounded pages,
+  with per-round totals/hashes and explicit retained-log truncation. Preserve
+  review evidence on later failures and return safe phase/code diagnostics,
+  including artifact/cleanup failures. Corrections now require measurable
+  next-deliverable progress toward the original goal; the UI distinguishes
+  “Worker round finished” from objective completion.
+
 - Give each Loop invocation its own inline card with planning, execution and
   review phases, correction counts, explicit workflow outcomes and expandable
   evidence/handoff details. Preserve tool ordering and historical progress;

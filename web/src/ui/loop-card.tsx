@@ -11,7 +11,7 @@ const phases: LoopStage[] = ['plan', 'worker', 'review'];
 export function LoopCard({ tool, interrupted }: { tool: ToolCallDTO; interrupted: boolean }) {
   const [open, setOpen] = useState(false);
   const detailId = useId();
-  const { stages, outcome, corrections, result } = loopProgress(tool, interrupted);
+  const { stages, outcome, corrections, result, failure } = loopProgress(tool, interrupted);
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
     <div data-testid="loop-card" className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--panel-bg)]">
@@ -37,10 +37,13 @@ export function LoopCard({ tool, interrupted }: { tool: ToolCallDTO; interrupted
               <Check aria-hidden="true" className="h-3 w-3 shrink-0" />
             ) : <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full border border-[var(--border)]" />}
             <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t(`chat.loop.phase.${phase}`)}</span>
-            <span className={stages[phase] === 'error' ? 'text-[var(--danger)]' : ''}>{t(`chat.loop.stage.${stages[phase]}`)}</span>
+            <span className={stages[phase] === 'error' ? 'text-[var(--danger)]' : ''}>{phase === 'worker' && stages[phase] === 'completed' ? t('chat.loop.workerFinished') : t(`chat.loop.stage.${stages[phase]}`)}</span>
           </li>
         ))}
       </ol>
+      {failure ? <p data-testid="loop-failure" className="px-3 pb-3 text-xs text-[var(--danger)] [overflow-wrap:anywhere]">
+        {t('chat.loop.failure', { phase: failure.phase, code: failure.code, reason: failure.reason })}
+      </p> : null}
       {corrections === undefined ? null : <p className="px-3 pb-3 text-xs text-[var(--muted)]">{t('chat.loop.corrections', { count: corrections })}</p>}
       {open ? (
         <div id={detailId} className="flex min-w-0 flex-col gap-2 px-3 pb-3 text-xs text-[var(--muted)]">

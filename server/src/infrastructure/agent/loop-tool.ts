@@ -9,6 +9,8 @@ import { runPopLoop, type LoopModel, type LoopResult } from '../../application/l
 import type { RunUsage } from '../../application/ports/agent-bridge.js';
 import { captureWorkerHandoff, createWorkerWorktree, removeWorkerWorktree, resolveWorkerRepository } from './worker-subagent.js';
 import { runLoopChild, type LoopChildOptions, type LoopEvidence } from './loop-child.js';
+import { failLoop, LoopError, loopAbort } from '../../application/loop/loop-failure.js';
+import { createLoopSnapshot } from './loop-snapshot.js';
 import { TaintGuard } from './tool-taint.js';
 
 const exec = promisify(execFile);
@@ -59,10 +61,11 @@ export function buildLoopTool(options: LoopToolOptions): ToolDefinition {
       const abort = (): void => controller.abort();
       signal?.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) abort();
-      const timeout = setTimeout(abort, options.timeoutMs ?? 30 * 60 * 1000);
+      const timeout = setTimeout(() => controller.abort(new LoopError('deadline', 'prepare')), options.timeoutMs ?? 30 * 60 * 1000);
       let prepared: Awaited<ReturnType<typeof createWorkerWorktree>> | undefined;
       const evidence: LoopEvidence[] = [];
-      let result: LoopResult = { status: 'failed', summary: 'Loop preparation failed. Check repository and Chat/Service Model settings; no retry was attempted.', corrections: 0, evidence: [] };
+      let result: LoopResult = failLoop({ status: 'failed', summary: '', corrections: 0, evidence: [] }, undefined, 'prepare', 'preparation_failed');
+      const snapshots: string[] = [];
       let handoff: Awaited<ReturnType<typeof captureWorkerHandoff>> | undefined;
       let evidencePath: string | undefined;
       try {
@@ -71,27 +74,30 @@ export function buildLoopTool(options: LoopToolOptions): ToolDefinition {
         const worker = { providerId: chat.providerId, modelId: options.serviceModel(chat.providerId) };
         const runtime = await options.runtime(chat.providerId);
         if (runtime.getModel(chat.providerId, chat.modelId) === undefined || runtime.getModel(worker.providerId, worker.modelId) === undefined) {
-          result.summary = 'Loop model unavailable. Select available Chat and Service Models for the current provider in Settings. No fallback or worker write was attempted.';
+          result = failLoop(result, undefined, 'prepare', 'preparation_failed');
         } else {
           const source = await resolveWorkerRepository(params.repository);
           controller.signal.throwIfAborted();
           prepared = await createWorkerWorktree(source.repository, source.baseCommit, `loop-${id}`, 1);
           const worktree = prepared;
-          let inspection = '';
-          const snapshot = async (): Promise<string> => {
-            const captured = await captureWorkerHandoff(worktree, 1);
-            const files = await exec('git', ['-C', worktree.worktree, 'ls-files'], { maxBuffer: 1024 * 1024, timeout: 10_000 });
-            const diff = readFileSync(captured.patchPath, 'utf8');
-            if (diff.length > 100_000) throw new Error('Diff too large for Loop review; parent review required');
-            const workerEvidence = JSON.stringify(evidence.filter((entry) => entry.phase === 'worker' && entry.kind !== 'answer'));
-            if (workerEvidence.length > 200_000) throw new Error('Evidence too large for Loop review; parent review required');
-            return JSON.stringify({ baseCommit: worktree.baseCommit, files: files.stdout.slice(0, 32_000), diff, workerEvidence });
+          let inspection: ReturnType<typeof createLoopSnapshot> | undefined;
+          const snapshot = async (phase: 'plan' | 'review', round: number): Promise<void> => {
+            try {
+              const captured = await captureLoopHandoff(worktree, phase);
+              const files = await exec('git', ['-C', worktree.worktree, 'ls-files', '-z'], { maxBuffer: 16 * 1024 * 1024, timeout: 30_000 });
+              inspection = createLoopSnapshot({ baseCommit: worktree.baseCommit, round,
+                diff: readFileSync(captured.patchPath, 'utf8'), inventory: files.stdout, evidence }, phase);
+              const path = join(worktree.root, `loop-snapshot-${phase}-${round}.json`);
+              writeFileSync(path, inspection.serialized, { mode: 0o600 });
+              snapshots.push(path);
+            } catch (error) { throw error instanceof LoopError ? error : new LoopError('snapshot_failed', phase); }
           };
           const childOptions: LoopChildOptions = {
             sdk: options.sdk, runtime, agentDir: options.agentDir, cwd: worktree.worktree,
             evidence, budget: { remaining: 320 }, guard: new TaintGuard({}), onUsage: options.onUsage,
             read: (path, offset) => readLoopFile(worktree.worktree, path, offset),
-            inspect: () => Promise.resolve(inspection),
+            inspect: (args) => { if (!inspection) throw new LoopError('snapshot_failed', 'review'); return inspection.inspect(args); },
+            inspectionComplete: () => inspection?.complete() ?? false,
           };
           let progress = '';
           let executions = 0;
@@ -104,28 +110,44 @@ export function buildLoopTool(options: LoopToolOptions): ToolDefinition {
             onUpdate?.({ content: [{ type: 'text', text: progress }], details: {} });
             // Capture belongs to this phase; report it before preparation can fail.
             // Read-only role tools cannot mutate even the index.
-            if (request.phase !== 'worker') inspection = await snapshot();
+            if (request.phase !== 'worker') await snapshot(request.phase, request.round ?? 0);
             return (options.child ?? runLoopChild)(childOptions, request);
           } }, { task: params.task, chat, worker, signal: controller.signal });
         }
-      } catch {
-        // Never return raw provider/credential errors through the tool surface.
-        if (controller.signal.aborted) result = { ...result, status: 'cancelled', summary: 'Loop stopped; no replay was attempted.' };
+      } catch (error) {
+        result = failLoop(result, controller.signal.aborted ? loopAbort(controller.signal, 'prepare') : error, 'prepare', 'preparation_failed');
       } finally {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abort);
         if (prepared !== undefined) {
           try {
-            handoff = await captureWorkerHandoff(prepared, 1);
-            evidencePath = join(prepared.root, 'loop-evidence.json');
-            writeFileSync(evidencePath, JSON.stringify({ result, evidence }, null, 2), { mode: 0o600 });
+            handoff = await captureLoopHandoff(prepared, 'artifact');
+          } catch (error) {
+            result = failLoop(result, error, 'artifact', 'artifact_failed');
+          }
+          try { await removeWorkerWorktree(prepared); } catch {
+            // Cleanup must neither throw away the handoff nor overwrite an earlier failure.
+            if (!result.failure) result = failLoop(result, undefined, 'cleanup', 'cleanup_failed');
+          }
+          const path = join(prepared.root, 'loop-evidence.json');
+          try {
+            writeFileSync(path, JSON.stringify({ result, evidence, snapshots }, null, 2), { mode: 0o600 });
+            evidencePath = path;
           } catch {
-            result = { ...result, status: 'failed', summary: 'Loop artifact capture failed; do not treat this run as approved.' };
-          } finally { await removeWorkerWorktree(prepared); }
+            result = failLoop(result, undefined, 'artifact', 'artifact_failed');
+          }
         }
       }
       const details = { ...result, ...(handoff === undefined ? {} : { handoff }), ...(evidencePath === undefined ? {} : { evidencePath }) };
       return { content: [{ type: 'text', text: JSON.stringify(details) }], details };
     },
   });
+}
+
+async function captureLoopHandoff(prepared: Awaited<ReturnType<typeof createWorkerWorktree>>, phase: 'plan' | 'review' | 'artifact') {
+  try { return await captureWorkerHandoff(prepared, 1); } catch (error) {
+    const oversized = error instanceof Error && (error.message === 'Worker patch exceeds the 16 MiB handoff limit' ||
+      ('code' in error && error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'));
+    throw new LoopError(oversized ? 'patch_limit' : phase === 'artifact' ? 'artifact_failed' : 'snapshot_failed', phase);
+  }
 }

@@ -252,6 +252,8 @@ export const en = {
   'chat.loop.outcome.cancelled': 'Interrupted',
   'chat.loop.outcome.unknown': 'Outcome unknown',
   'chat.loop.corrections': 'Corrections: {count}',
+  'chat.loop.workerFinished': 'Worker round finished',
+  'chat.loop.failure': '{phase} · {code}: {reason}',
   'chat.loop.evidence': 'Review evidence',
   'chat.loop.detail': 'Progress and final result',
   'chat.ranTools': 'Ran {count} tools',

@@ -346,3 +346,9 @@ checks. Worktrees isolate checkout state, not hostile host processes; this
 feature is not an OS sandbox. Credentials remain in Pop's existing runtime,
 never copied into child configuration or global environment. Failure, Stop and
 limits capture partial handoffs and clean worktrees without replaying writes.
+Immutable review snapshots use bounded read-only pagination, with strict section,
+round and cursor validation and complete coverage required before review. Private
+handoffs contain bounded retained logs with explicit truncation metadata and
+hashes, not a promise of uncapped raw output. Failure diagnostics use stable
+application-owned codes/phases and constant safe reasons, never raw provider or
+filesystem errors.

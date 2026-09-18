@@ -5,9 +5,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as sdk from '@earendil-works/pi-coding-agent';
+import { readLoopFile } from './loop-tool.js';
 import { SdkPiEngine } from './pi-engine.js';
 import { TaintGuard } from './tool-taint.js';
 import { runLoopChild, type LoopChildOptions } from './loop-child.js';
+
+const progress = { status: 'advanced', delivered: 'README updated', remaining: 'Verify owner goal', nextDeliverable: 'Correct README and check exact content' };
 
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
@@ -68,8 +71,11 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
         else answer(response, 'I say it is done (not authoritative)');
       } else {
         if (results.length === 0) { if (phase === 'review') reviews++; answer(response, '', { name: 'loop_inspect', args: {} }); }
-        else if (results.length === 1) answer(response, '', { name: 'loop_read', args: { path: 'README.md' } });
-        else answer(response, phase === 'plan' ? '{"plan":"Change README and run a shell check"}' : JSON.stringify({ verdict: reviews === 1 ? 'correct' : 'approved', summary: reviews === 1 ? 'Change first to corrected and recheck' : 'Files and shell check verified', evidence: ['README.md', 'CHECK PASSED'] }));
+        else if (phase === 'review' && results.length === 1) answer(response, '', { name: 'loop_inspect', args: { section: 'diff' } });
+        else if (phase === 'review' && results.length === 2) answer(response, '', { name: 'loop_inspect', args: { section: 'inventory' } });
+        else if (phase === 'review' && results.length <= 2 + reviews) answer(response, '', { name: 'loop_inspect', args: { section: 'evidence', round: results.length - 2 } });
+        else if (results.length === (phase === 'review' ? 3 + reviews : 1)) answer(response, '', { name: 'loop_read', args: { path: 'README.md' } });
+        else answer(response, phase === 'plan' ? '{"plan":"Change README and run a shell check"}' : JSON.stringify({ verdict: reviews === 1 ? 'correct' : 'approved', summary: reviews === 1 ? 'Change first to corrected and recheck' : 'Files and shell check verified', evidence: ['README.md', 'CHECK PASSED'], progress }));
       }
     });
     repository = f.root;
@@ -112,11 +118,11 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       if (tools) answer(response, '', { name: 'loop_inspect', args: {} });
       else answer(response, '{"verdict":"approved","summary":"trust me","evidence":["imagined"]}');
     });
-    const options: LoopChildOptions = { sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => 'actual diff', read: async () => 'actual file', evidence: [], budget: { remaining: 1 }, onUsage: () => undefined };
+    const options: LoopChildOptions = { sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => 'actual diff', read: async () => 'actual file', evidence: [], budget: { remaining: 1 }, onUsage: () => undefined };
     const request = { phase: 'review' as const, model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal };
-    await expect(runLoopChild(options, request)).rejects.toThrow('did not inspect');
+    await expect(runLoopChild(options, request)).rejects.toMatchObject({ code: 'missing_evidence', phase: 'review' });
     tools = true;
-    await expect(runLoopChild(options, request)).rejects.toThrow('stopped');
+    await expect(runLoopChild(options, request)).rejects.toMatchObject({ code: 'tool_budget' });
     expect(options.evidence.filter((e) => e.kind === 'tool_call')).toHaveLength(1);
   }, 15_000);
 
@@ -127,8 +133,8 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       answer(response, '', { name: kind === 'unknown' ? 'missing_tool' : 'loop_read', args: {} });
     });
     const budget = { remaining: 1 };
-    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => '', read: async () => '', evidence: [], budget, onUsage: () => undefined },
-      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal })).rejects.toThrow('stopped');
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => '', evidence: [], budget, onUsage: () => undefined },
+      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal })).rejects.toMatchObject({ code: 'tool_budget' });
     expect(count).toBe(2);
     expect(budget.remaining).toBe(-1);
   }, 15_000);
@@ -140,8 +146,8 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] })}\n\n`);
       response.end('data: [DONE]\n\n');
     });
-    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 1 }, onUsage: () => undefined },
-      { phase: 'worker', model: { providerId: 'custom-loop', modelId: 'service' }, prompt: 'implement', signal: new AbortController().signal })).rejects.toThrow('stopped');
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 1 }, onUsage: () => undefined },
+      { phase: 'worker', model: { providerId: 'custom-loop', modelId: 'service' }, prompt: 'implement', signal: new AbortController().signal })).rejects.toMatchObject({ code: 'tool_budget' });
     expect(readFileSync(join(f.root, 'README.md'), 'utf8')).toBe('original\n');
   }, 15_000);
 
@@ -151,7 +157,7 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       if (++count === 1) answer(response, '', { name: 'write', args: { path: 'README.md', content: 'unauthorized' } });
       else answer(response, '{"verdict":"approved","summary":"unsafe","evidence":["fake"]}');
     });
-    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
       { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal })).rejects.toThrow();
     expect(readFileSync(join(f.root, 'README.md'), 'utf8')).toBe('original\n');
   }, 15_000);
@@ -164,7 +170,7 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       else if (++workerCalls === 1) answer(response, '', { name: 'bash', args: { command: 'sudo touch blocked.txt' } });
       else { blocked = JSON.stringify(request.messages); answer(response, 'blocked'); }
     });
-    const options: LoopChildOptions = { sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, guard: new TaintGuard({}), onUsage: () => undefined };
+    const options: LoopChildOptions = { sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, guard: new TaintGuard({}), onUsage: () => undefined };
     const base = { model: { providerId: 'custom-loop', modelId: 'chat' }, signal: new AbortController().signal };
     await runLoopChild(options, { ...base, phase: 'plan', prompt: 'plan-only' });
     await runLoopChild(options, { ...base, phase: 'worker', prompt: 'implement' });
@@ -178,10 +184,84 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
     let count = 0;
     const f = await fixture(() => { count++; began(); });
     const controller = new AbortController();
-    const running = runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
+    const running = runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => '', evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
       { phase: 'worker', model: { providerId: 'custom-loop', modelId: 'service' }, prompt: 'implement', signal: controller.signal });
     const rejected = expect(running).rejects.toThrow();
     await started; controller.abort(); await rejected;
     expect(count).toBe(1);
   }, 15_000);
+  it.each(['loop_read', 'loop_inspect'])('preserves typed %s failures even when the SDK converts tool errors into results', async (tool) => {
+    const f = await fixture((request, response) => {
+      if (!request.messages.some((message) => message.role === 'tool')) answer(response, '', { name: tool, args: tool === 'loop_read' ? { path: 'README.md' } : {} });
+      else answer(response, 'malformed review');
+    });
+    const fail = async (): Promise<string> => { throw new Error('private infrastructure error'); };
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: fail, read: fail,
+      evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
+      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal }))
+      .rejects.toMatchObject({ code: 'read_failed', phase: 'review' });
+  });
+
+  it('fails closed when a reviewer calls both tools but leaves snapshot pages unread', async () => {
+    const f = await fixture((request, response) => {
+      const count = request.messages.filter((message) => message.role === 'tool').length;
+      if (count === 0) answer(response, '', { name: 'loop_inspect', args: {} });
+      else if (count === 1) answer(response, '', { name: 'loop_read', args: { path: 'README.md' } });
+      else answer(response, JSON.stringify({ verdict: 'approved', summary: 'unchecked', evidence: ['claimed'], progress }));
+    });
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspect: async () => 'overview only', read: async () => 'file',
+      inspectionComplete: () => false, evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
+      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal }))
+      .rejects.toMatchObject({ code: 'missing_evidence', phase: 'review' });
+  });
+
+  it('caps retained tool logs explicitly with original length and hash rather than promising full logs', async () => {
+    const f = await fixture((request, response) => {
+      if (!request.messages.some((message) => message.role === 'tool')) answer(response, '', { name: 'loop_read', args: { path: 'README.md' } });
+      else answer(response, '{"plan":"Inspect and implement"}');
+    });
+    const evidence: LoopChildOptions['evidence'] = [];
+    await runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'), inspectionComplete: () => true, inspect: async () => '', read: async () => 'x'.repeat(40_000),
+      evidence, budget: { remaining: 80 }, onUsage: () => undefined },
+      { phase: 'plan', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'plan', signal: new AbortController().signal });
+    const log = evidence.find((entry) => entry.kind === 'tool_result')!;
+    expect(log).toMatchObject({ truncated: true, round: 1 });
+    expect(log.originalChars).toBeGreaterThan(40_000);
+    expect(log.originalSha256).toHaveLength(64);
+    expect(log.text.length).toBeLessThan(12_100);
+    expect(log.text).toContain('[TRUNCATED]');
+  });
+
+  it.each(['plan', 'review'] as const)('allows absent optional AGENTS.md during %s without losing required coverage', async (phase) => {
+    const f = await fixture((request, response) => {
+      const count = request.messages.filter((m) => m.role === 'tool').length;
+      if (count === 0) answer(response, '', { name: 'loop_read', args: { path: 'AGENTS.md' } });
+      else if (count === 1) answer(response, '', { name: 'loop_read', args: { path: 'README.md' } });
+      else if (count === 2) answer(response, '', { name: 'loop_inspect', args: {} });
+      else answer(response, 'reviewed');
+    });
+    const config: LoopChildOptions = { sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'),
+      inspectionComplete: () => true, inspect: async () => 'snapshot', read: (path, offset) => readLoopFile(f.root, path, offset),
+      evidence: [], budget: { remaining: 80 }, onUsage: () => undefined };
+    const request = { phase, model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'inspect', signal: new AbortController().signal };
+    await expect(runLoopChild(config, request)).resolves.toBe('reviewed');
+    if (phase === 'review') {
+      await expect(runLoopChild({ ...config, inspectionComplete: () => false }, request)).rejects.toMatchObject({ code: 'missing_evidence' });
+    }
+  }, 15_000);
+
+  it('does not count absent AGENTS.md as an actual file inspection', async () => {
+    const f = await fixture((request, response) => {
+      const count = request.messages.filter((m) => m.role === 'tool').length;
+      if (count === 0) answer(response, '', { name: 'loop_read', args: { path: 'AGENTS.md' } });
+      else if (count === 1) answer(response, '', { name: 'loop_inspect', args: {} });
+      else answer(response, 'approved');
+    });
+    await expect(runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'),
+      inspectionComplete: () => true, inspect: async () => 'snapshot', read: (path, offset) => readLoopFile(f.root, path, offset),
+      evidence: [], budget: { remaining: 80 }, onUsage: () => undefined },
+      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'inspect', signal: new AbortController().signal }))
+      .rejects.toMatchObject({ code: 'missing_evidence' });
+  }, 15_000);
+
 });

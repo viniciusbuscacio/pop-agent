@@ -427,6 +427,10 @@ frontend must not assume or simulate one.
   stay visible with pending, active, completed, error, interrupted or unconfirmed
   phase state; correction cycles return execution to active and review to pending.
   Phase completion means the workflow advanced, not that changes were approved.
+  Worker completion reads “Worker round finished”, never objective completion.
+  Optional safe failure phase/code/reason are visible without expanding raw
+  output; final-only history uses the failure phase, while legacy results without
+  diagnostics remain readable.
   Only an explicit returned Loop result supplies Approved, Blocked, Correction
   limit reached, Failed or Interrupted; generic tool completion without a valid
   result has an unknown outcome. Settled unfinished calls, including Stop and

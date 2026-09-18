@@ -165,14 +165,44 @@ special files such as FIFOs without waiting for another process. Before each rea
 phase, the server captures the actual binary diff, file inventory and Worker
 tool-call/result evidence. The inspection tool only returns that snapshot;
 it does not execute commands or change even the Git index. Reviewer must use
-both inspection and file reading before its verdict is accepted. Worker final
+both inspection and file reading before its verdict is accepted. Confirmed ENOENT
+for the optional root AGENTS.md is reported as absence, not a failed phase or a
+successful file inspection. Other read failures remain explicit errors, and
+missing snapshot pages still prevent acceptance. Worker final
 prose is not review evidence. Reviewer examines actual files/diff and captured
 validation results and must block or request corrections for missing checks.
-Large diffs/evidence fail closed rather than silently truncate review coverage.
+Inspection is paginated, not embedded cumulatively in the role prompt. Each
+read-only phase has an immutable private snapshot: overview with character
+totals, SHA-256 hashes and round index, full bounded binary diff, NUL-delimited
+file inventory, and per-round Worker evidence as JSONL. `loop_inspect` accepts
+only section, round, zero-based character offset and limit (1–12,000); serialized
+pages never exceed 32,000 characters. `nextOffset` continues even inside a single
+large entry; concatenate pages before interpreting that JSONL entry. Overview
+and every section/page, plus actual file reads and Worker tool-result evidence,
+are required before accepting review. Review activity and Worker final prose
+are excluded from subsequent review snapshots. There is no 200,000-character
+cumulative evidence abort. Incomplete coverage fails closed within the existing
+tool budget, never automatically approves. The 16 MiB patch ceiling remains;
+file inventory capture is bounded at 16 MiB and fails explicitly if exceeded.
+
+The private handoff retains every snapshot and all **bounded retained** phase
+logs, not uncapped raw logs. Tool calls/results retain at most 12,000 characters
+plus a truncation marker; entries expose original character count, original
+SHA-256, round and explicit truncation state. Phase answers remain bounded at
+32,000 characters. Reviewers must not treat truncated/missing checks as proof;
+they request a smaller measurable validation deliverable or block. No evidence
+is silently discarded to fit the prompt.
 
 The sequence is plan → execute → review → bounded corrections. Plan and review
 responses use strict JSON. Review returns approved, blocked or corrections;
-malformed output or child failure ends the workflow without retry. Up to three
+malformed output or child failure ends the workflow without retry. Each review
+also supplies structured progress (`advanced` or `no-progress`, delivered work,
+remaining original goal, and next deliverable). Corrections specify one bounded,
+measurable next deliverable and its acceptance check, not another unbounded
+attempt at the whole objective. The original owner goal stays in every round;
+a passing test suite alone never substitutes for completion. These reports are
+review claims backed by inspected evidence, not automatically verified success
+or authority for outside-scope side effects. Up to three
 corrections (four Worker executions) are allowed; exhaustion returns `limit`.
 There is a 30-minute execution deadline, 80 attempted tool calls per phase and
 320 total. Count attempts before SDK name/schema validation, including unknown
@@ -189,7 +219,15 @@ All settled outcomes, including failure and cancellation, attempt a private
 patch, manifest and `loop-evidence.json` handoff before removing the worktree.
 Artifacts include actual tool/test evidence and phase responses and are retained
 in the private temporary handoff directory, like delegated worker patches.
-Artifact capture failure cannot return approval. Pop must inspect the handoff,
+Application-owned failure diagnostics include a stable code, failing phase and
+constant safe reason for snapshot/read, patch ceiling, provider, malformed
+plan/review/worker response, missing evidence, tool budget, deadline, abort,
+preparation, artifact and cleanup failures. Raw external errors never become
+these diagnostics. Later failures retain prior review verdicts, progress and
+evidence. Cleanup errors cannot escape and erase the result; the final status
+and evidence are persisted after cleanup so they agree with the returned result.
+If artifact storage itself fails, the result reports artifact failure without
+promising a persisted evidence file. Artifact capture failure cannot return approval. Pop must inspect the handoff,
 integrate deliberately and run final validation; Loop approval does not commit,
 publish, release or activate anything. Temporary handoffs are not durable product
 storage and can be lost to host temporary-directory cleanup.
@@ -197,13 +235,14 @@ storage and can be lost to host temporary-directory cleanup.
 Each `run_loop` call has a dedicated inline Loop card in the assistant timeline,
 separate from ordinary tools and delegation, with visible planning, execution
 and review phases. Phase progression is not approval: the card uses the returned
-Loop status for the business outcome, shows known correction counts, and reveals
+Loop status for the business outcome, shows known correction counts, labels Worker completion “Worker round finished”,
+exposes safe failure phase/code/reason, and reveals
 summary, evidence and raw handoff detail on expansion. Generic tool completion
 cannot imply approval; settled unfinished phases are interrupted, not spinning.
 Historical concatenated progress remains readable. The facade emits bounded
 cumulative, newline-delimited phase snapshots through existing tool text; the SDK
-bridge forwards only new tails. The final JSON result and wire DTO shapes stay
-unchanged. This adds no child tool activity, synthetic time or public API.
+bridge forwards only new tails. The final tool JSON adds optional failure and per-round review fields; existing
+wire DTO shapes and legacy result rendering stay unchanged. This adds no child tool activity, synthetic time or public API.
 
 `run_loop` is excluded from Plan Mode and classified high-impact under taint.
 Child tools share workflow-scoped taint across fresh role contexts; child answers
