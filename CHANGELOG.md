@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow Loop reviewers to correct invalid read-only inspection arguments without
+  permanently failing the phase. Explain the required evidence round in the tool
+  contract and error; retain complete evidence coverage, tool budgets and terminal
+  infrastructure failures.
+
 - Fix Loop stopping before later reviews when cumulative Worker evidence exceeds
   200,000 characters: inspect immutable private snapshots through bounded pages,
   with per-round totals/hashes and explicit retained-log truncation. Preserve

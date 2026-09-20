@@ -51,13 +51,21 @@ export async function runLoopChild(options: LoopChildOptions, request: LoopChild
   const stop = (): void => { stopped = true; void session.abort(); };
   const customTools: ToolDefinition[] = [sdk.defineTool({
     name: 'loop_inspect', label: 'Inspect Loop evidence',
-    description: 'Read-only immutable snapshot. Start with overview, then paginate diff, inventory and evidence per round using nextOffset. Character pages may continue inside a large JSONL entry; concatenate them. All pages must be inspected before review.',
+    description: 'Read-only immutable snapshot. Start with overview, then paginate diff, inventory and evidence per round using nextOffset. Character pages may continue inside a large JSONL entry; concatenate them. Use {section:"overview"} without round/offset/limit. For evidence, round is required (use a round from overview.rounds); omit round for diff/inventory. All pages must be inspected before review.',
     parameters: Type.Object({ section: Type.Optional(Type.Union(['overview', 'diff', 'inventory', 'evidence'].map((s) => Type.Literal(s)))),
-      round: Type.Optional(Type.Integer({ minimum: 1, maximum: 4 })), offset: Type.Optional(Type.Integer({ minimum: 0 })),
+      round: Type.Optional(Type.Integer({ minimum: 1, maximum: 4, description: 'Required only for section="evidence"; use a round listed in overview.rounds. Omit for other sections.' })), offset: Type.Optional(Type.Integer({ minimum: 0 })),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 12_000 })) }, { additionalProperties: false }),
     execute: async (_id, raw) => {
       let text: string;
       try { text = await options.inspect(raw as LoopInspectArgs); } catch (error) {
+        // Bad read-only arguments can be corrected within the existing tool budget.
+        // Do not latch them as infrastructure failures; full snapshot coverage is
+        // still required at the end of review, and real failures remain sticky.
+        if (error instanceof LoopError && error.code === 'invalid_inspection') {
+          throw new Error('Invalid loop_inspect arguments. Use {"section":"overview"} alone; ' +
+            'for evidence include "round" from overview.rounds, for example {"section":"evidence","round":1,"offset":0,"limit":12000}. ' +
+            'Omit round for diff/inventory. Offset must be within the section; limit is 1-12000. Continue with nextOffset until null.');
+        }
         toolFailure = error instanceof LoopError ? error : new LoopError('read_failed', request.phase); throw toolFailure;
       }
       inspected = true;

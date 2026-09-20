@@ -195,7 +195,12 @@ is silently discarded to fit the prompt.
 
 The sequence is plan → execute → review → bounded corrections. Plan and review
 responses use strict JSON. Review returns approved, blocked or corrections;
-malformed output or child failure ends the workflow without retry. Each review
+malformed output or child failure ends the workflow without retry. Invalid
+read-only inspection arguments return actionable tool errors and may be corrected
+within the existing attempted-call budget; they do not permanently fail a phase.
+The evidence round is required only for the evidence section and must come from
+the overview. Recovery never waives full snapshot coverage or actual file reads,
+and infrastructure/read failures remain terminal even after later successful calls. Each review
 also supplies structured progress (`advanced` or `no-progress`, delivered work,
 remaining original goal, and next deliverable). Corrections specify one bounded,
 measurable next deliverable and its acceptance check, not another unbounded

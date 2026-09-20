@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as sdk from '@earendil-works/pi-coding-agent';
 import { readLoopFile } from './loop-tool.js';
+import { createLoopSnapshot, type LoopInspectArgs } from './loop-snapshot.js';
+import { LoopError } from '../../application/loop/loop-failure.js';
 import { SdkPiEngine } from './pi-engine.js';
 import { TaintGuard } from './tool-taint.js';
 import { runLoopChild, type LoopChildOptions } from './loop-child.js';
@@ -201,6 +203,44 @@ describe('Pop Loop real SDK integration with local fake provider', () => {
       { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal }))
       .rejects.toMatchObject({ code: 'read_failed', phase: 'review' });
   });
+
+  it.each(['recovered', 'incomplete', 'infrastructure'] as const)('handles an invalid evidence round with %s review coverage', async (mode) => {
+    const calls: Array<{ name: string; args: object }> = [
+      { name: 'loop_inspect', args: { section: 'overview' } },
+      { name: 'loop_inspect', args: { section: 'evidence', limit: 12000 } },
+      { name: 'loop_inspect', args: { section: 'diff' } },
+      { name: 'loop_inspect', args: { section: 'inventory' } },
+      ...(mode === 'incomplete' ? [] : [{ name: 'loop_inspect', args: { section: 'evidence', round: 1 } }]),
+      { name: 'loop_read', args: { path: 'README.md' } },
+    ];
+    // A real snapshot failure must survive a subsequent successful inspection.
+    if (mode === 'infrastructure') calls.unshift({ name: 'loop_inspect', args: { section: 'overview' } });
+    const verdict = JSON.stringify({ verdict: 'correct', summary: 'Finish the remaining implementation', evidence: ['README.md'], progress });
+    const f = await fixture((request, response) => {
+      const count = request.messages.filter((m) => m.role === 'tool').length;
+      const call = calls[count];
+      if (call) answer(response, '', call);
+      else answer(response, verdict);
+    });
+    const snapshot = createLoopSnapshot({ baseCommit: 'base', round: 1, diff: 'diff', inventory: 'README.md\0',
+      evidence: [{ phase: 'worker', round: 1, kind: 'tool_result', text: 'CHECK PASSED' }] }, 'review');
+    let inspections = 0;
+    const evidence: LoopChildOptions['evidence'] = [];
+    const budget = { remaining: 80 };
+    const result = runLoopChild({ sdk, runtime: f.runtime, cwd: f.root, agentDir: join(f.root, 'agent'),
+      inspect: async (args?: LoopInspectArgs) => {
+        if (++inspections === 1 && mode === 'infrastructure') throw new LoopError('snapshot_failed', 'review');
+        return snapshot.inspect(args);
+      }, inspectionComplete: snapshot.complete, read: (path, offset) => readLoopFile(f.root, path, offset),
+      evidence, budget, onUsage: () => undefined },
+      { phase: 'review', model: { providerId: 'custom-loop', modelId: 'chat' }, prompt: 'review', signal: new AbortController().signal });
+    if (mode === 'recovered') await expect(result).resolves.toBe(verdict);
+    else await expect(result).rejects.toMatchObject({ code: mode === 'incomplete' ? 'missing_evidence' : 'snapshot_failed', phase: 'review' });
+    expect(snapshot.complete()).toBe(mode !== 'incomplete');
+    expect(budget.remaining).toBe(80 - calls.length);
+    expect(evidence.filter((entry) => entry.kind === 'tool_result').map((entry) => entry.text).join('\n'))
+      .toContain('for evidence include');
+  }, 15_000);
 
   it('fails closed when a reviewer calls both tools but leaves snapshot pages unread', async () => {
     const f = await fixture((request, response) => {
