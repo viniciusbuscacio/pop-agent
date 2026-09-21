@@ -334,3 +334,10 @@ positive execution instructions, including later instructions in the same text,
 remain checked. No file path, source label or code fence exempts content from
 scanning. Owner-requested retries of tainted distillation windows re-evaluate
 all checks against the immutable source without clearing the historical verdict.
+
+Skill credential detection distinguishes procedural mentions (including the
+passwordPlease application name and token handling) from labeled values.
+Assignments, quoted credential keys, common English/Portuguese value markers
+and recognizable bare secret formats remain checked in routing fields and
+bodies. Mentioning an application never exempts the rest of a line from
+scanning. Rejected owner writes leave the existing skill unchanged.

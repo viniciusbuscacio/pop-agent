@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix false credential detections when saving skills that mention passwordPlease
+  or describe password/token handling. Continue rejecting labeled credentials
+  and recognizable bare keys, including secrets beside an application name.
+
 ## 0.3.0 — 2026-09-12
 
 - Lower the desktop sidebar footer divider by 2px to align with the composer.

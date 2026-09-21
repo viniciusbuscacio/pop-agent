@@ -79,6 +79,38 @@ describe('skills_list', () => {
 });
 
 describe('explicit skill maintenance', () => {
+  it('creates and replaces owner skills mentioning passwordPlease without credentials', async () => {
+    const skills = repo();
+    const tools = buildSkillTools(identity as never, skills);
+    const procedure = {
+      ...GOOD,
+      name: 'passwordPlease router access',
+      description: 'Operate the router through Mac/passwordPlease.',
+      whenToUse: 'When the owner requests router access using passwordPlease.',
+      body: 'Use the authorized passwordPlease item through its CLI.\nNever print the password or token.',
+    };
+    await call(tools, 'skill_write', procedure);
+    await call(tools, 'skill_write', { ...procedure, replace: true, body: `${procedure.body}\nVerify the current routes.` });
+    expect(skills.written).toHaveLength(2);
+    expect(skills.get(GOOD.slug)?.body).toContain('Verify the current routes.');
+  });
+
+  it.each([
+    'Use passwordPlease; password=example-value',
+    'Use passwordPlease; "token": "example-value"',
+    'Use passwordPlease; senha é example-value',
+    'passwordPlease login --password example-value',
+    'Use passwordPlease; ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456',
+    'Use passwordPlease.\npassword:\nexample-value',
+  ])('rejects credentials even beside the application name without replacing the skill: %s', async (body) => {
+    const skills = repo([{ ...GOOD, source: 'user' }]);
+    await expect(call(buildSkillTools(identity as never, skills), 'skill_write', {
+      ...GOOD, replace: true, body,
+    })).rejects.toThrow('Potential credentials detected');
+    expect(skills.written).toEqual([]);
+    expect(skills.get(GOOD.slug)?.body).toBe(GOOD.body);
+  });
+
   it('loads a referenced skill even when it falls outside the listing limit', async () => {
     const skills = repo(Array.from({ length: 70 }, (_, i) => ({ ...GOOD, slug: `skill-${String(i)}`, source: 'user' })));
     const tools = buildSkillTools(identity as never, skills);
