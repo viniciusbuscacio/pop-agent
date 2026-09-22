@@ -529,9 +529,30 @@ projection shows credential presence and bounded persisted task state; only a
 frontend service calls the guarded API, and the browser never contacts a remote
 Agent Card or A2A endpoint directly.
 
+Files keeps one best-effort IndexedDB metadata snapshot (`pop-agent-files-cache`,
+schema 1), capped at 8 MiB. Its allowlist contains only names, real relative
+paths, kinds, sizes, modification times, child metadata and an opaque ETag;
+file bodies, thumbnails, preview/download links and credentials are never
+persisted. An opaque per-login namespace survives reload and token renewal but
+changes on explicit login and is removed on logout. A different namespace
+cannot hydrate the old snapshot. Oversized writes retain the last-good entry;
+quota, corruption, blocked or denied storage falls back to ordinary online use.
+
+Opening Files paints RAM immediately, otherwise hydrates disk before a silent,
+deduplicated authenticated `GET /files` revalidation. Storage operations have
+short deadlines so unavailable IndexedDB cannot indefinitely delay the request.
+Conditional requests send `If-None-Match`; bodyless 304 retains the exact tree
+and validator without parsing JSON. Page/sidebar requests share pending work.
+Failures preserve the last-good tree and show Retry; without any snapshot the
+page shows loading or a retryable error, never an invented empty listing.
+In-place reconciliation preserves selection and scroll. Only a freshly verified
+tree can redirect a now-missing folder. Mutation completion invalidates older
+reads so its refresh never joins a pre-mutation request; logout invalidates both
+late hydration and network results and serializes persistent cleanup.
+
 The Files UI:
 
-- renders the live server tree by real path;
+- renders the server-owned tree by real path, with last-good metadata while revalidating;
 - supports folders, upload, search, preview/download and selection;
 - starts uploads immediately after picker/drop, targets the open folder, and
   uploads sequentially with a 100 MB per-file cap;

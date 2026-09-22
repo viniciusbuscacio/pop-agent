@@ -15,7 +15,14 @@ const test = vi.hoisted(() => ({
   messages: {} as Record<string, unknown[]>,
   openChat: vi.fn(async (_id: string, _background?: boolean, _signal?: AbortSignal) => undefined),
   token: 'session' as string | undefined,
+  filesFresh: false,
+  reloadFiles: vi.fn(async () => undefined),
 }));
+vi.mock('../store/files', () => ({ useFilesStore: { getState: () => ({
+  fresh: test.filesFresh, hydrate: async () => undefined,
+  invalidate: () => { test.filesFresh = false; },
+  reload: test.reloadFiles,
+}) } }));
 vi.mock('./chat-memory', () => ({ selectMemoryChat: vi.fn(), startChatMemory: () => vi.fn() }));
 vi.mock('./session', () => ({ session: { token: () => test.token, generation: () => 0 } }));
 vi.mock('./api', () => ({ apiRequest: vi.fn(async () => structuredClone(test.manifest)) }));
@@ -49,6 +56,8 @@ beforeEach(() => {
   settingsResources.clear(); vi.mocked(apiRequest).mockReset().mockImplementation(async () => structuredClone(test.manifest));
   vi.mocked(chatCache.get).mockReset().mockResolvedValue(undefined);
   test.calls.length = 0; test.manifest = { epoch: 'one', revisions: {} }; test.messages = {}; test.token = 'session';
+  test.filesFresh = false;
+  test.reloadFiles.mockReset().mockImplementation(async () => { test.filesFresh = true; });
   test.openChat.mockReset().mockImplementation(async id => { test.calls.push(`chat:${id}`); test.messages[id] = []; });
 });
 afterEach(() => { stop?.(); stop = undefined; syncQueue.stop(); });
@@ -201,4 +210,18 @@ it('revalidates an evicted transcript even when an old disk cache paints before 
   });
   ensureChat('b');
   await vi.waitFor(() => expect(test.calls).toEqual(['chat:b']));
+});
+
+it('includes Files in startup and revision-aware manual/reconnect rounds without polling', async () => {
+  stop = startClientSync(); await refreshClientData();
+  expect(test.reloadFiles).toHaveBeenCalledTimes(1);
+  await refreshClientData(); expect(test.reloadFiles).toHaveBeenCalledTimes(1);
+  test.manifest.revisions.files = 1;
+  const manual = refreshClientData(); expect(refreshClientData()).toBe(manual);
+  await manual; expect(test.reloadFiles).toHaveBeenCalledTimes(2);
+  test.manifest.revisions.files = 2;
+  test.opened?.(); await refreshClientData();
+  expect(test.reloadFiles).toHaveBeenCalledTimes(3);
+  test.events?.({ kind: 'resources-changed', keys: ['files'] });
+  await vi.waitFor(() => expect(test.reloadFiles).toHaveBeenCalledTimes(4));
 });

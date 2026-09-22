@@ -176,6 +176,14 @@ Software-update state is HTTP/local PWA state, not an SSE product event.
 
 ## Files and binary responses
 
+Owner-authenticated `GET /v1/files` returns the full `{ tree }` metadata snapshot
+from precomputed RAM JSON with `Cache-Control: private, no-cache` and a strong
+content ETag. Matching `If-None-Match` (including weak/list forms or `*`) returns
+304 without a body, only after authentication. Without usable metadata it returns
+503 `files_index_unavailable` and `no-store`, not an authoritative empty tree.
+Projection changes invalidate the `files` resource revision through schema-3
+`resources-changed` events. Listing never downloads file contents or starts a scan.
+
 Uploads validate names, paths, type and size before final placement. Downloads
 stream rather than buffering whole files. Active HTML/SVG content is forced to
 download. `Content-Disposition` filenames are server-generated/escaped.

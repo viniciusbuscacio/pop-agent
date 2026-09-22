@@ -179,6 +179,13 @@ undo and must state the real subtree blast radius. Agent deletion in `Files/`
 uses recoverable trash. YOLO removes intermediate agent confirmations; it does
 not remove owner-facing UI safeguards.
 
+Files metadata snapshots are owner-only disposable data outside the Files tree.
+Persisted shape, paths, finite sizes/timestamps and root identity are validated
+before warm-loading; invalid snapshots are rebuilt. Scans and incremental updates
+exclude hidden paths, root Garbage, all symlinks and symlinked ancestors. Conditional
+metadata responses retain the ordinary session guard: an ETag grants no access.
+Cache metadata never replaces the live path jail for file bodies or mutations.
+
 ## External-content sanitization
 
 Every web result, file/note/history retrieval, MCP result and tool output is

@@ -187,3 +187,24 @@ it('folder-tree blank space creates inside the current directory without navigat
   await waitFor(() => expect(filesService.mkdir).toHaveBeenCalledWith('Docs/Child'));
   expect(screen.queryByRole('menu')).toBeNull();
 });
+
+it('does not paint a false empty listing on first-load failure and exposes retry', () => {
+  useFilesStore.setState({ tree: undefined, error: true, fresh: false });
+  mount();
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  expect(screen.queryByTestId('file-row')).toBeNull();
+  expect(screen.queryByText('This folder is empty.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(useFilesStore.getState().reload).toHaveBeenCalledTimes(2);
+});
+it('reconciles metadata without replacing the selected row or resetting its scroll container', () => {
+  useFilesStore.setState({ error: false, fresh: true });
+  mount();
+  const row = screen.getAllByTestId('file-row')[0]!;
+  fireEvent.pointerDown(row, { pointerType: 'mouse' }); fireEvent.click(row, { detail: 1 });
+  const list = row.parentElement!; list.scrollTop = 75;
+  act(() => { useFilesStore.setState({ tree: useFilesStore.getState().tree!.map(node => ({ ...node, size: 20 })) }); });
+  expect(screen.getAllByTestId('file-row')[0]).toBe(row);
+  expect(screen.getByRole('checkbox', { name: 'a.md' })).toHaveProperty('checked', true);
+  expect(list.scrollTop).toBe(75);
+});

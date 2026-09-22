@@ -3,6 +3,7 @@ import { apiRequest } from './api';
 import { eventStream } from './events';
 import { session } from './session';
 import { chatCache } from './chat-cache';
+import { useFilesStore } from '../store/files';
 import { useChatStore } from '../store/chat';
 import { settingsResources } from './settings-resources';
 import { settingsLoaders, syncSetting } from './settings-preload';
@@ -80,6 +81,7 @@ export function ensureChat(id: string): () => void {
 
 function hydrate(): void {
   const started = generation;
+  void useFilesStore.getState().hydrate();
   const initial = useChatStore.getState();
   void chatCache.getLists().then(lists => {
     if (lists && generation === started) {
@@ -142,6 +144,12 @@ export function refreshClientData(): Promise<void> {
         reads.push(record(key, key, syncChat(id, selectedChat === id)));
       }
     }
+    if (needs('files') || !useFilesStore.getState().fresh) {
+      reads.push(record('files', 'files', syncQueue.add('files', async () => {
+        await useFilesStore.getState().reload();
+        if (!useFilesStore.getState().fresh) throw new Error('Files metadata unavailable');
+      })));
+    }
     const readSetting = (key: string) => {
       const state = settingsResources.state(key);
       if (needs(key) || !state.fresh || state.data === undefined) return record(key, `settings:${key}`, syncSetting(key));
@@ -161,6 +169,10 @@ export function refreshClientData(): Promise<void> {
 
 function synchronizeKeys(keys: string[]): Promise<void> {
   const reads = keys.map(key => {
+    if (key === 'files') {
+      useFilesStore.getState().invalidate();
+      return useFilesStore.getState().reload();
+    }
     if (key === 'chats') return Promise.all([
       syncQueue.add('chats', signal => useChatStore.getState().loadChats(signal)),
       syncQueue.add('archived', signal => useChatStore.getState().loadArchived(signal)),

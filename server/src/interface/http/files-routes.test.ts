@@ -18,6 +18,23 @@ function json(token: string): Record<string, string> {
 }
 
 describe('files routes', () => {
+  it('authenticates conditional metadata reads and changes ETags only with the projection', async () => {
+    const fixture = await signedIn();
+    const first = await fixture.app.request('/v1/files', { headers: auth(fixture.token) });
+    const etag = first.headers.get('etag');
+    expect(etag).toMatch(/^"[a-f0-9]{64}"$/);
+    expect(first.headers.get('cache-control')).toBe('private, no-cache');
+    expect((await fixture.app.request('/v1/files', { headers: { 'If-None-Match': etag! } })).status).toBe(401);
+    const unchanged = await fixture.app.request('/v1/files', { headers: { ...auth(fixture.token), 'If-None-Match': `"other", W/${etag}` } });
+    expect(unchanged.status).toBe(304);
+    expect(await unchanged.text()).toBe('');
+    expect(unchanged.headers.get('etag')).toBe(etag);
+    fixture.files.write('new.txt', Buffer.from('new'));
+    const changed = await fixture.app.request('/v1/files', { headers: { ...auth(fixture.token), 'If-None-Match': etag! } });
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get('etag')).not.toBe(etag);
+    expect(await changed.json()).toMatchObject({ tree: [{ path: 'new.txt' }] });
+  });
   it('serves the tree as the disk has it', async () => {
     const fixture = await signedIn();
     fixture.files.write('reports/pesca.pdf', Buffer.from('pdf'));

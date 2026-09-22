@@ -81,6 +81,17 @@ Boot is fail-closed and follows this ownership order:
 A failed prerequisite aborts boot rather than silently choosing a weaker engine,
 empty database, unvalidated runtime or insecure default.
 
+### Files metadata lifecycle
+
+The application-owned `FilesIndex` port isolates the disposable metadata
+projection. Its filesystem adapter owns warm snapshot loading, atomic batched
+persistence, recursive watch updates, startup/daily reconciliation and background
+recovery. Composition subscribes Files changes to the `files` resource revision,
+starts the adapter after successful composition and closes/flushes it on shutdown.
+HTTP owns DTO mapping and precomputes the serialized response/ETag on projection
+changes; requests never perform a full scan. Cached metadata does not replace
+live disk validation in existing Files mutation/download services.
+
 ### Shutdown and restart
 
 On `SIGTERM` or `SIGINT`, the run service synchronously persists interrupted

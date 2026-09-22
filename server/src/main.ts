@@ -45,6 +45,7 @@ import { FakeAgentBridge } from './infrastructure/agent/fake-bridge.js';
 import { FsChatPurger } from './infrastructure/agent/chat-purger.js';
 import { WorkspaceSweeper } from './infrastructure/agent/workspace-sweeper.js';
 import { FilesService } from './application/files/files-service.js';
+import { PersistentFilesIndex } from './infrastructure/files/persistent-files-index.js';
 import { FileProvenanceService } from './application/files/file-provenance.js';
 import { GarbageSweeper } from './application/files/garbage-sweeper.js';
 import { filesCatalogBlock } from './application/files/files-catalog.js';
@@ -201,7 +202,13 @@ const localConnections = new LocalConnectionRegistry(
 // Files as a plain folder (docs/specs/Spec-Pop-General.md §14): real names under dataDir/files/,
 // the disk itself is the record. This service is the app's one door to it.
 const filesDir = ensureFilesDir(context.dataDir);
-const files = new FilesService({ root: filesDir, clock: systemClock });
+const filesIndex = new PersistentFilesIndex({
+  root: filesDir,
+  snapshotPath: join(context.dataDir, 'files-metadata.json'),
+  onError: (code) => console.warn(`pop files: ${code}`),
+});
+const files = new FilesService({ root: filesDir, clock: systemClock, index: filesIndex });
+files.subscribeTree(() => hub.invalidate(['files']));
 // The agent sees the same folder as `Files/` in its workspace -- a symlink,
 // so the tab and the agent can never disagree about what exists.
 const filesLinkWarning = ensureWorkspaceFilesLink(workspace, filesDir);
@@ -892,12 +899,14 @@ setInterval(() => void notifyNewVersion().catch(() => undefined), 6 * 60 * 60 * 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     runs.flushInterrupted();
+    filesIndex.close();
     process.exit(0);
   });
 }
 
 // Nothing runs itself until the server is actually up (docs/specs/Spec-Pop-General.md §21).
 taskScheduler.start();
+void filesIndex.start();
 
 // The local-tools channel needs a WebSocket server the adaptor can upgrade onto
 // (docs/cli.md, step 3). `noServer` because the HTTP server is the one below.
