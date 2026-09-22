@@ -62,6 +62,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'loop', description: 'Run Loop on a task: /loop <task>' },
   { name: 'think', description: 'Show or hide the reasoning' },
   { name: 'compact', description: 'Compact the pi session context' },
+  { name: 'info', description: 'Show model, context and session usage' },
   { name: 'session', description: 'Show pi session statistics' },
   { name: 'name', description: 'Rename the chat and pi session' },
   { name: 'export', description: 'Export the pi session to Files' },
@@ -846,6 +847,7 @@ export class ChatScreen {
         void this.unarchiveConversation();
         return;
       case '/compact':
+      case '/info':
       case '/session':
       case '/name':
       case '/export':
@@ -876,6 +878,10 @@ export class ChatScreen {
 
   private async runSessionCommand(command: SessionCommandName, argument: string): Promise<void> {
     try {
+      if (command === 'info' && argument.trim() !== '') {
+        this.say(paint.yellow('Usage: /info'));
+        return;
+      }
       if (command === 'fork' && argument.length === 0) {
         const points = await this.options.session.forkPoints();
         this.say(points.length === 0

@@ -49,10 +49,13 @@ vi.mock('../ui/composer', () => ({
   }: {
     onSend: (text: string, attachments: []) => Promise<void>;
     onShowSystemMessage: (message: string) => void;
-    onCommand: (command: 'compact', argument: string) => Promise<void>;
+    onCommand: (command: 'compact' | 'info', argument: string) => Promise<void>;
     locked?: boolean;
   }) => (
     <>
+      <button type="button" data-testid="composer-info" onClick={() => void onCommand('info', '')}>
+        Info
+      </button>
       <output data-testid="composer-locked">{locked ? 'locked' : 'unlocked'}</output>
       <button type="button" data-testid="composer" onClick={() => void onSend('New message', [])}>
         Send
@@ -215,6 +218,18 @@ describe('chat transcript', () => {
     expect(screen.getAllByTestId('chat-message').map((row) => row.textContent)).toEqual([
       'Provider: openai-codex · Model: gpt-5.6-sol', 'Finished answer',
     ]);
+  });
+
+  it('renders /info output locally through the native command service without persisting history', async () => {
+    const message = 'Model (last used): provider / model\nContext: 100 / 32000 tokens (0.3%)\nChat ID: chat-empty';
+    runSessionCommand.mockResolvedValue({ kind: 'info', message });
+    renderPage();
+    await screen.findByTestId('empty-chat-icon');
+    fireEvent.click(screen.getByTestId('composer-info'));
+    await waitFor(() => expect(runSessionCommand).toHaveBeenCalledWith(chat.id, 'info', ''));
+    await waitFor(() => expect(screen.getByTestId('chat-message').textContent).toBe(message));
+    expect(useChatStore.getState().messages[chat.id] ?? []).toEqual([]);
+    expect(screen.getByTestId('composer-locked').textContent).toBe('unlocked');
   });
 
   it('shows compact progress in the working slot, then puts completion in the timeline', async () => {

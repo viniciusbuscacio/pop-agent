@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native `/info` to web/PWA/Desktop and CLI help/autocomplete: selected and
+  actual model/provider, SDK context estimate, scoped session messages/tokens,
+  input/output/cache and tool counts, four-decimal estimated cost, mode and safe
+  chat/session IDs. Preserve unknown/partial usage, context and pricing without
+  prompting a model; retain busy locks and backward-compatible `/session`.
+
 - Allow Loop reviewers to correct invalid read-only inspection arguments without
   permanently failing the phase. Explain the required evidence round in the tool
   contract and error; retain complete evidence coverage, tool budgets and terminal

@@ -262,3 +262,11 @@ in Pop Agent Setup. The executable remains `pop`. Pop Agent Desktop uses a
 private launcher even when the terminal component is unchecked; this does not
 install a terminal command or grant local access. See the Installation spec for
 per-user paths, preservation of existing installs and uninstall ownership.
+
+## Native conversation information
+
+`/info` takes no arguments and appears in chat help/autocomplete. It calls the
+native session-command endpoint, never sends a model prompt, and displays the
+same safe model/context/usage snapshot as web/PWA/Desktop. Output stays local
+to the requesting transcript. `/session` remains supported unchanged. Busy
+sessions retain the existing command lock; failed requests do not become prompts.

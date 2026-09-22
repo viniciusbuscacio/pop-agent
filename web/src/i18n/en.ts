@@ -735,6 +735,7 @@ export const en = {
   'chat.slashLoop': 'Run Loop on a task: /loop <task>',
   'chat.slashHelp': 'Show all commands',
   'chat.slashCompact': 'Compact the pi session context',
+  'chat.slashInfo': 'Show model, context and session usage',
   'chat.slashSession': 'Show pi session statistics',
   'chat.slashName': 'Rename the chat and pi session',
   'chat.slashExport': 'Export the pi session to Files',

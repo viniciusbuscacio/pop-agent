@@ -593,6 +593,12 @@ export class SdkPiEngine implements PiEngine {
       this.planToolNames(),
       model.input.includes('image'),
       () => additionalUsage.splice(0),
+      (providerId, modelId) => {
+        const custom = this.options.customProviders?.().find((provider) => provider.id === providerId);
+        // Custom registration uses a runtime fallback window, not catalog evidence.
+        return custom === undefined || custom.models?.some((model) => model.id === modelId &&
+          model.context !== undefined && model.context > 0) === true;
+      },
     );
   }
 

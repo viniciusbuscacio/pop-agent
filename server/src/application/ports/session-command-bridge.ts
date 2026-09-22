@@ -1,5 +1,11 @@
 export interface SessionStatsResult {
   sessionId: string;
+  currentModel?: { providerId: string; modelId: string };
+  lastUsedModel?: { providerId: string; modelId: string };
+  /** Honest /info metadata; legacy /session fields remain unchanged. */
+  infoContext?: { tokens: number | null; contextWindow: number | null; percent: number | null };
+  usageStatus?: 'reported' | 'partial' | 'unavailable';
+  costStatus?: 'estimated' | 'partial' | 'unavailable';
   sessionFile?: string;
   userMessages: number;
   assistantMessages: number;

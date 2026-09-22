@@ -278,7 +278,7 @@ export function Composer({
       area.current?.focus();
       return;
     }
-    if (['compact', 'session', 'name', 'export', 'fork'].includes(command.name)) {
+    if (['compact', 'session', 'info', 'name', 'export', 'fork'].includes(command.name)) {
       persist(`/${command.name} `);
       setSlashQuery(undefined);
       area.current?.focus();
@@ -524,16 +524,21 @@ export function Composer({
       return;
     }
     if (!canSend || sending) return;
-    const sessionCommand = /^\/(compact|session|name|export|fork)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+    const sessionCommand = /^\/(compact|session|info|name|export|fork)(?:\s+([\s\S]*))?$/i.exec(text.trim());
     if (sessionCommand?.[1] !== undefined) {
+      if (sessionCommand[1].toLowerCase() === 'info' && (sessionCommand[2] ?? '').trim() !== '') {
+        onShowSystemMessage('Usage: /info');
+        return;
+      }
       setSending(true);
       setNotice(undefined);
       try {
         if (onCommand === undefined) throw new Error('Session commands are unavailable.');
         await onCommand(sessionCommand[1].toLowerCase() as SessionCommandName, sessionCommand[2] ?? '');
         persist('');
-      } catch {
-        setNotice(t('chat.sendFailed'));
+      } catch (error) {
+        setNotice(sessionCommand[1].toLowerCase() === 'info' && error instanceof ApiError
+          ? error.message : t('chat.sendFailed'));
       } finally {
         setSending(false);
       }

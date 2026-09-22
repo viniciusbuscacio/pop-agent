@@ -340,6 +340,36 @@ describe('pending message composition', () => {
     expect(onCommand).not.toHaveBeenCalled();
   });
 
+  it('offers /info in help/autocomplete and inserts it for native submission', async () => {
+    const { onCommand, onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: '/inf' } });
+    fireEvent.click(screen.getByRole('button', { name: '/info Show model, context and session usage' }));
+    expect((area as HTMLTextAreaElement).value).toBe('/info ');
+    expect(onCommand).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('composer-send'));
+    await waitFor(() => expect(onCommand).toHaveBeenCalledWith('info', ''));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it.each(['/info', '/INFO', ' /info  '])('routes %s natively without sending a prompt', async (text) => {
+    const { onCommand, onSend } = renderComposer();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: text } });
+    fireEvent.click(screen.getByTestId('composer-send'));
+    await waitFor(() => expect(onCommand).toHaveBeenCalledWith('info', ''));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects /info arguments locally and keeps the draft', () => {
+    const { onCommand, onSend, onShowSystemMessage } = renderComposer();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '/info extra' } });
+    fireEvent.click(screen.getByTestId('composer-send'));
+    expect(onShowSystemMessage).toHaveBeenCalledWith('Usage: /info');
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('/info extra');
+  });
+
   it('executes pi session commands locally instead of sending them to the model', async () => {
     const { onCommand, onSend } = renderComposer();
     const area = screen.getByRole('textbox');

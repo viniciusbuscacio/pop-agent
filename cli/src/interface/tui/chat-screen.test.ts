@@ -377,15 +377,27 @@ describe('ChatScreen', () => {
     expect(ports.createChat).not.toHaveBeenCalled();
   });
 
-  it('runs pi session commands locally instead of sending them as prompts', async () => {
+  it.each(['session', 'info'])('runs /%s locally instead of sending it as a prompt', async (command) => {
     const { terminal, plain } = recorder();
     const { screen, ports } = screenWith(terminal);
     screen.start();
-    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/session');
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit(`/${command}`);
     await flush();
-    expect(ports.sessionCommand).toHaveBeenCalledWith('chat-1', 'session', '');
+    expect(ports.sessionCommand).toHaveBeenCalledWith('chat-1', command, '');
     expect(ports.send).not.toHaveBeenCalled();
     expect(plain()).toContain('Session details');
+  });
+
+  it('rejects /info arguments without creating a chat or sending a prompt', async () => {
+    const { terminal, plain } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    screen.start();
+    await (screen as unknown as { submit(text: string): Promise<void> }).submit('/info extra');
+    await flush();
+    expect(ports.sessionCommand).not.toHaveBeenCalled();
+    expect(ports.createChat).not.toHaveBeenCalled();
+    expect(ports.send).not.toHaveBeenCalled();
+    expect(plain()).toContain('Usage: /info');
   });
 
   it('opens /chats as a keyboard picker and loads the selected conversation', async () => {

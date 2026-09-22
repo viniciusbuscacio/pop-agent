@@ -16,3 +16,5 @@ export * from './integrations.js';
 export * from './ui-control.js';
 
 export interface A2aModuleSettingsDTO { serverEnabled: boolean; clientEnabled: boolean; }
+
+export * from './session-info.js';

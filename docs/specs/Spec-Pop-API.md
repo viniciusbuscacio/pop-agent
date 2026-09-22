@@ -250,3 +250,15 @@ Desktop, CLI, API and scheduled tasks. Platform is independent of client kind.
 Missing origin is explicitly unknown; previous turns and the selected local-tool
 computer must not be used to invent it. Native Desktop identifies its host before
 the frontend starts. Origin metadata does not grant permissions.
+
+## Native `/info`
+
+Authenticated `POST /v1/chats/:id/commands` accepts `{ command: "info" }` with an
+optional whitespace-only `argument`; other arguments return `400 invalid_field`.
+It returns `{ kind: "info", info: SessionInfoDTO, message }`. The shared DTO and
+formatter contain only safe model identities, SDK statistics, mode and opaque
+chat/session IDs, never the session filename or credentials. Unknown context,
+usage or cost values are nullable; status distinguishes reported/estimated,
+partial and unavailable totals. No model prompt is submitted or transcript row
+created. Existing busy/queued locks return `409 run_in_progress`; adapter errors
+use a fixed safe message. The existing `session` command response is unchanged.

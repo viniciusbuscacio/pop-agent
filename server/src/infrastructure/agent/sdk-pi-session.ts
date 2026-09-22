@@ -13,6 +13,7 @@ export class SdkPiSession implements PiSession {
     private readonly planToolNames: string[],
     public supportsImages: boolean = false,
     private readonly takeAdditionalUsage: () => Array<RunUsage & { purpose: string }> = () => [],
+    private readonly contextWindowKnown: (providerId: string, modelId: string) => boolean = () => true,
   ) {}
 
   setExecutionMode(mode: ExecutionMode): void {
@@ -74,8 +75,40 @@ export class SdkPiSession implements PiSession {
   stats(): SessionStatsResult {
     const stats = this.session.getSessionStats();
     const context = stats.contextUsage;
+    const model = this.session.model;
+    const last = this.session.sessionManager.getBranch().slice().reverse()
+      .find((entry) => entry.type === 'message' && entry.message.role === 'assistant');
+    const lastMessage = last?.type === 'message' && last.message.role === 'assistant' ? last.message : undefined;
+    // SDK totals are authoritative. Inspect availability, not a second accounting
+    // ledger: provider adapters may encode absent usage/pricing as zero.
+    const usages = this.session.sessionManager.getEntries().flatMap((entry) => {
+      if (entry.type === 'compaction' || entry.type === 'branch_summary') return [entry.usage];
+      if (entry.type !== 'message') return [];
+      if (entry.message.role === 'assistant') return [entry.message.usage];
+      if (entry.message.role === 'toolResult' && entry.message.usage !== undefined) return [entry.message.usage];
+      return [];
+    });
+    const knownUsage = usages.filter((usage) => usage !== undefined &&
+      [usage.input, usage.output, usage.cacheRead, usage.cacheWrite].every((n) => Number.isFinite(n) && n >= 0) &&
+      usage.input + usage.output + usage.cacheRead + usage.cacheWrite > 0).length;
+    const knownCost = usages.filter((usage) => usage !== undefined && Number.isFinite(usage.cost?.total) && usage.cost.total > 0).length;
+    const usageStatus = knownUsage === usages.length ? 'reported' : knownUsage > 0 ? 'partial' : 'unavailable';
+    const costStatus = knownCost === usages.length ? 'estimated' : knownCost > 0 ? 'partial' : 'unavailable';
+    const knownWindow = model !== undefined && this.contextWindowKnown(model.provider, model.id) &&
+      context !== undefined && Number.isFinite(context.contextWindow) && context.contextWindow > 0;
+    const finite = (value: number | null | undefined): number | null =>
+      typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
     return {
       sessionId: stats.sessionId,
+      ...(model === undefined ? {} : { currentModel: { providerId: model.provider, modelId: model.id } }),
+      ...(lastMessage === undefined ? {} : { lastUsedModel: { providerId: lastMessage.provider, modelId: lastMessage.responseModel ?? lastMessage.model } }),
+      infoContext: {
+        tokens: finite(context?.tokens),
+        contextWindow: knownWindow ? context.contextWindow : null,
+        percent: knownWindow ? finite(context.percent) : null,
+      },
+      usageStatus,
+      costStatus,
       ...(stats.sessionFile === undefined ? {} : { sessionFile: stats.sessionFile }),
       userMessages: stats.userMessages,
       assistantMessages: stats.assistantMessages,

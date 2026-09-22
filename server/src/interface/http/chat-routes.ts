@@ -10,6 +10,8 @@ import {
   EVENT_STREAM_VERSION_HEADER,
   LOCAL_CONNECTION_HEADER,
   isClientKind,
+  formatSessionInfo,
+  type SessionInfoDTO,
   type ChatDTO,
   type MessageDTO,
   type ModelDTO,
@@ -65,7 +67,7 @@ const patchSchema = z
 
 const keepChatSchema = z.object({ keepChatId: z.string().min(1).max(80) }).strict();
 const sessionCommandSchema = z.object({
-  command: z.enum(['compact', 'session', 'name', 'export', 'fork']),
+  command: z.enum(['compact', 'session', 'info', 'name', 'export', 'fork']),
   argument: z.string().max(1000).optional(),
 }).strict();
 
@@ -410,6 +412,27 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
         c.req.param('id'), parsed.data.command, parsed.data.argument ?? '',
       );
       if (result === undefined) return chatNotFound(c);
+      if (result.kind === 'info') {
+        const { stats, chat } = result;
+        const usageStatus = stats.usageStatus ?? (stats.assistantMessages === 0 ? 'reported' : 'unavailable');
+        const costStatus = stats.costStatus ?? (stats.assistantMessages === 0 ? 'estimated' : 'unavailable');
+        const info: SessionInfoDTO = {
+          chatId: chat.id, sessionId: stats.sessionId, mode: chat.executionMode ?? 'normal',
+          selectedModel: chat.provider && chat.model ? { providerId: chat.provider, modelId: chat.model } : null,
+          currentModel: stats.currentModel === undefined ? null : { ...stats.currentModel },
+          lastUsedModel: stats.lastUsedModel === undefined ? null : { ...stats.lastUsedModel },
+          scope: 'pi-session',
+          context: stats.infoContext === undefined
+            ? { tokens: null, contextWindow: null, percent: null } : { ...stats.infoContext },
+          messages: { total: stats.totalMessages, user: stats.userMessages, assistant: stats.assistantMessages },
+          tools: { calls: stats.toolCalls, results: stats.toolResults },
+          tokens: usageStatus === 'unavailable' ? null : { ...stats.tokens },
+          usageStatus,
+          cost: costStatus === 'unavailable' ? null : stats.cost,
+          costStatus,
+        };
+        return c.json({ kind: 'info', info, message: formatSessionInfo(info) });
+      }
       if (result.kind === 'session') {
         const stats = result.stats;
         const context = stats.context === undefined
@@ -428,7 +451,8 @@ export function createChatRoutes(deps: ChatRoutesDeps): Hono {
       if (error instanceof SessionCommandArgumentError) {
         return apiError(c, 400, 'invalid_field', error.message);
       }
-      return apiError(c, 500, 'session_command_failed', error instanceof Error ? error.message : 'Command failed.');
+      return apiError(c, 500, 'session_command_failed', parsed.data.command === 'info'
+        ? 'Session information is unavailable.' : error instanceof Error ? error.message : 'Command failed.');
     }
   });
 

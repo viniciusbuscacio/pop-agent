@@ -10,6 +10,7 @@ import type {
 export type SessionCommandResult =
   | { kind: 'compact' }
   | { kind: 'session'; stats: SessionStatsResult }
+  | { kind: 'info'; chat: Chat; stats: SessionStatsResult }
   | { kind: 'name'; chat: Chat }
   | { kind: 'export'; path: string }
   | { kind: 'fork'; chat: Chat; draft: string };
@@ -33,17 +34,21 @@ export class SessionCommandService {
 
   async execute(
     chatId: string,
-    command: 'compact' | 'session' | 'name' | 'export' | 'fork',
+    command: 'compact' | 'session' | 'info' | 'name' | 'export' | 'fork',
     argument: string,
   ): Promise<SessionCommandResult | undefined> {
     const source = this.deps.chats.get(chatId);
     if (source === undefined) return undefined;
+    if (command === 'info' && argument.trim() !== '') throw new SessionCommandArgumentError('Usage: /info');
     if (this.deps.busy(chatId)) throw new SessionCommandBusyError();
 
     if (command === 'compact') {
       await this.deps.bridge.compact(chatId, argument.trim() || undefined);
       this.deps.chats.recordContextCompacted(chatId);
       return { kind: 'compact' };
+    }
+    if (command === 'info') {
+      return { kind: 'info', chat: source, stats: await this.deps.bridge.sessionStats(chatId) };
     }
     if (command === 'session') {
       return { kind: 'session', stats: await this.deps.bridge.sessionStats(chatId) };

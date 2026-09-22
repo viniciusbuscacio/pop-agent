@@ -356,6 +356,7 @@ The composer supports:
 
 - `/compact [instructions]`;
 - `/session`;
+- `/info`;
 - `/name <name>`;
 - `/export [html|jsonl]`;
 - `/fork [number]`.
@@ -363,6 +364,23 @@ The composer supports:
 These call public SDK operations rather than prompting the model or
 reimplementing pi's algorithms. Command results do not enter model context.
 Session-mutating commands refuse while the chat is running or queued.
+
+`/info` uses SDK `getSessionStats()` totals across all entries in the current
+pi session (including branches, not the Pop chat lifetime). Context is the SDK's
+active-branch estimate; preserve an unknown post-compaction token count even
+when the model window is known. Never present a synthetic custom-model runtime
+window as a known context limit. Selected chat/default, current SDK model and
+last assistant's actual model/provider on the active branch are distinct. The
+actual response model takes precedence when the SDK supplies it.
+
+Token totals and pricing are SDK-reported, not a second accounting ledger.
+Missing/all-zero assistant usage is unavailable; mixed known/unknown usage is
+partial. Zero SDK cost for a nonempty usage record cannot establish free billing:
+show unavailable/partial pricing conservatively. An empty session's known totals
+may be zero. Cost is an estimate with four decimal places, never an invoice.
+Neither successful output nor failure includes the session filesystem path.
+`/info` retains idle command locks because opening/reconciling the bridge session
+is not safe under an active run; it never calls `prompt()` or books a model run.
 
 Compaction completion becomes a durable system timeline marker. Other command
 output remains local to the requesting transcript. Exports are copied under

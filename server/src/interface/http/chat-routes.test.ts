@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CLIENT_HEADER,
   CLIENT_PLATFORM_HEADER,
@@ -8,10 +8,12 @@ import {
   type ChatDTO,
   type MessageDTO,
   type StreamEvent,
+  type SessionCommandResponse,
 } from '@pop-agent/shared';
 import type { Hono } from 'hono';
 import { MAX_PENDING_MESSAGES_PER_CHAT } from '../../application/chat/queued-message-service.js';
 import { createTestApp, setupTestSession, type TestApp } from '../../testing/app-fixture.js';
+import { FakeAgentBridge } from '../../infrastructure/agent/fake-bridge.js';
 import { attachmentSizeViolation, base64DecodedByteLength } from './chat-routes.js';
 
 const PASSWORD = 'correct horse battery';
@@ -57,6 +59,70 @@ it('warms transcript and queued attachment metadata without downloading bodies',
 });
 
 describe('pi session commands', () => {
+  it('returns a safe native /info snapshot for an empty session without adding history', async () => {
+    const chat = await newChat();
+    const response = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'info' } });
+    expect(response.status).toBe(200);
+    const result = await response.json() as SessionCommandResponse;
+    expect(result.kind).toBe('info');
+    expect(result.info).toMatchObject({ chatId: chat.id, sessionId: 'fake-session', mode: 'normal',
+      scope: 'pi-session', lastUsedModel: null, currentModel: null,
+      context: { tokens: null, contextWindow: null, percent: null },
+      messages: { total: 0 }, tokens: { total: 0 }, cost: 0 });
+    expect(result.message).toContain('Cost: $0.0000');
+    const history = await (await api(`/v1/chats/${chat.id}/messages`)).json() as { messages: MessageDTO[] };
+    expect(history.messages).toEqual([]);
+  });
+
+  it('maps only safe /info fields and preserves unknown cost/context', async () => {
+    const stats = await new FakeAgentBridge().sessionStats();
+    const spy = vi.spyOn(FakeAgentBridge.prototype, 'sessionStats').mockResolvedValue({
+      ...stats, sessionFile: '/private/sessions/secret.jsonl', assistantMessages: 1,
+      currentModel: { providerId: 'current-provider', modelId: 'current-model' },
+      lastUsedModel: { providerId: 'fallback-provider', modelId: 'actual-model' },
+      infoContext: { tokens: null, contextWindow: 64000, percent: null },
+      usageStatus: 'unavailable', costStatus: 'unavailable',
+    });
+    try {
+      const chat = await newChat();
+      fixture.chats.setModel(chat.id, 'selected-model', 'selected-provider');
+      const response = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'info' } });
+      const text = await response.text();
+      const result = JSON.parse(text) as SessionCommandResponse;
+      expect(result.info).toMatchObject({
+        selectedModel: { providerId: 'selected-provider', modelId: 'selected-model' },
+        currentModel: { providerId: 'current-provider', modelId: 'current-model' },
+        lastUsedModel: { providerId: 'fallback-provider', modelId: 'actual-model' },
+        context: { tokens: null, contextWindow: 64000, percent: null }, tokens: null, cost: null,
+      });
+      expect(text).not.toContain('sessionFile');
+      expect(text).not.toContain('/private');
+      spy.mockRejectedValue(new Error('/private/secrets/key: token-secret'));
+      const error = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'info' } });
+      expect(error.status).toBe(500);
+      expect(await error.text()).not.toContain('token-secret');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('validates /info arguments, authentication and missing chats', async () => {
+    const chat = await newChat();
+    const url = `/v1/chats/${chat.id}/commands`;
+    expect((await api(url, { method: 'POST', body: { command: 'info', argument: 'extra' } })).status).toBe(400);
+    expect((await api(url, { method: 'POST', body: { command: 'info', argument: '  ' } })).status).toBe(200);
+    expect((await api(url, { method: 'POST', body: { command: 'info' }, auth: false })).status).toBe(401);
+    expect((await api('/v1/chats/missing/commands', { method: 'POST', body: { command: 'info' } })).status).toBe(404);
+  });
+
+  it('preserves the session bridge busy lock for /info', async () => {
+    const chat = await newChat();
+    await api(`/v1/chats/${chat.id}/messages`, { method: 'POST', body: { text: 'slow: working' } });
+    const response = await api(`/v1/chats/${chat.id}/commands`, { method: 'POST', body: { command: 'info' } });
+    expect(response.status).toBe(409);
+    fixture.runs.stopRun(chat.id);
+  });
+
   it('runs compact, session, name and export through the bridge', async () => {
     const chat = await newChat();
     const events: StreamEvent[] = [];

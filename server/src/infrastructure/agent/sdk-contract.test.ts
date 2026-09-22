@@ -69,6 +69,7 @@ describe('pi sdk contract', () => {
         'getLeafId',
         'getEntry',
         'getBranch',
+        'getEntries',
         'buildSessionContext',
         'branch',
         'resetLeaf',

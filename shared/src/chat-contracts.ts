@@ -122,7 +122,7 @@ export interface MessagesResponse {
 }
 
 /** `PATCH /v1/chats/:id` — send only what changes. */
-export type SessionCommandName = 'compact' | 'session' | 'name' | 'export' | 'fork';
+export type SessionCommandName = 'compact' | 'session' | 'info' | 'name' | 'export' | 'fork';
 
 export interface SessionCommandRequest {
   command: SessionCommandName;
@@ -136,6 +136,7 @@ export interface SessionForkPointDTO {
 
 export interface SessionCommandResponse {
   kind: SessionCommandName;
+  info?: import('./session-info.js').SessionInfoDTO;
   message?: string;
   path?: string;
   chat?: ChatDTO;

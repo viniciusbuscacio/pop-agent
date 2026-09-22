@@ -74,6 +74,7 @@ const sessionManagerMethods = [
   'getLeafId',
   'getEntry',
   'getBranch',
+  'getEntries',
   'buildSessionContext',
   'branch',
   'resetLeaf',

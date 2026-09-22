@@ -917,3 +917,15 @@ Resend actions share one in-flight guard and visible progress/error feedback abo
 the composer, including context-menu retries. A failed request keeps the original
 payload and unlocks manual retry. Transport errors indicate unconfirmed delivery,
 not certain rejection; never automatically resend a potentially accepted message.
+
+## Native conversation information
+
+Web, installed PWA and Desktop share `/info` in composer help/autocomplete. It
+takes no arguments, uses the native session-command service and displays its
+safe snapshot locally without adding a user turn or calling a model. Show the
+selected, current-session and actual last-used model/provider separately,
+SDK context estimate (used/window tokens and percent), scoped session message,
+token/cache/tool counts, four-decimal estimated dollar cost, mode, chat ID and
+opaque session ID. Unknown and partial values stay explicit, not invented zeros
+or context limits. Busy sessions retain existing command locks and report their
+safe error. `/session` remains backward compatible.
