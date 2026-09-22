@@ -294,3 +294,33 @@ describe('authenticated Files downloads', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('conditional metadata requests', () => {
+  it('authenticates a conditional GET and accepts bodyless 304 with renewal and the original validator', async () => {
+    session.start('owner', true);
+    const previous = { tree: [] };
+    const etag = vi.fn();
+    const fetch = vi.fn(async () => new Response(null, { status: 304, headers: { 'x-pop-agent-token': 'renewed' } }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(apiRequest('/files', { conditional: { etag: '"revision"', value: previous }, onEtag: etag })).resolves.toBe(previous);
+    expect(fetch).toHaveBeenCalledWith('/v1/files', expect.objectContaining({
+      cache: 'no-store', headers: expect.objectContaining({ authorization: 'Bearer owner', 'if-none-match': '"revision"' }),
+    }));
+    expect(etag).toHaveBeenCalledWith('"revision"');
+    expect(session.token()).toBe('renewed');
+  });
+  it('parses changed snapshots as the direct JSON envelope and records their validator', async () => {
+    const etag = vi.fn();
+    vi.stubGlobal('fetch', async () => new Response('{"tree":[]}', { headers: { etag: '"new"' } }));
+    await expect(apiRequest('/files', { conditional: { etag: '"old"', value: { tree: ['old'] } }, onEtag: etag })).resolves.toEqual({ tree: [] });
+    expect(etag).toHaveBeenCalledWith('"new"');
+  });
+  it('does not treat unexpected 304 or conditional authentication failure as empty success', async () => {
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 304 }));
+    await expect(apiRequest('/files')).rejects.toMatchObject({ status: 304 });
+    session.start('owner', true);
+    vi.stubGlobal('fetch', async () => new Response('{"error":{"code":"invalid_session"}}', { status: 401 }));
+    await expect(apiRequest('/files', { conditional: { etag: '"old"', value: { tree: [] } } })).rejects.toMatchObject({ status: 401 });
+    expect(session.token()).toBeUndefined();
+  });
+});

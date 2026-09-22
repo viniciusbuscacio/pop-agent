@@ -15,8 +15,8 @@ Cached permissions and connection states never grant authority.
 ## One finite queue
 
 Each authenticated app lifetime starts one full round: open and archived chat
-lists, each non-archived conversation's displayed transcript snapshot one at a time, then
-every server-backed Settings resource one at a time. The currently requested
+lists, each non-archived conversation's displayed transcript snapshot one at a time,
+Files metadata, then every server-backed Settings resource one at a time. The currently requested
 destination takes priority. Navigation promotes/deduplicates its read rather
 than restarting the whole round. A foreground lane may bypass one already
 running background read; background work itself remains sequential.
@@ -88,8 +88,18 @@ Browser suspension may stop the stream; restoration uses the recovery path.
 
 ## Persistence and safety
 
-Persist last-valid chat lists, transcript text and allowlisted Settings data
-without time-based expiry. Browser quota/eviction and explicit logout can remove
+Persist last-valid chat lists, transcript text, Files metadata and allowlisted
+Settings data without time-based expiry. Files has a separate 8 MiB single-snapshot
+budget and per-login opaque ownership namespace, stable through token renewal.
+It never persists file bodies, thumbnails or links. Opening Files shares one
+cache hydration and authenticated ETag/304 revalidation between page and sidebar;
+RAM stays visible, and persistent metadata paints before the network result.
+Storage denial, quota and blocked operations must not stall online loading.
+Files participates in the finite manual/reconnect synchronization path, with no
+polling. A mutation invalidates pre-mutation reads before its refresh; session
+boundaries discard late cache/network results and pending persistent writes.
+First-load failure shows a retryable error rather than false empty content;
+revalidation failure preserves the last-good tree, selection and scroll. Browser quota/eviction and explicit logout can remove
 it. Never persist provider secrets, passkey material, transient operations or
 an authoritative online status. Preserve cache on failed refresh. Storage
 failure must not break the online app or cause an eviction/redownload loop.

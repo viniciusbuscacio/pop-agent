@@ -14,6 +14,8 @@ import { clearSubscriptionUsageCache } from './subscription-usage-cache';
 
 const TOKEN_KEY = 'pop-agent.token';
 const PERSIST_KEY = 'pop-agent.persist';
+const FILES_NAMESPACE_KEY = 'pop-agent.files-cache-namespace';
+let filesNamespace: string | undefined;
 let generation = 0;
 let volatileToken: string | undefined;
 let volatileStore: 'local' | 'page' | undefined;
@@ -83,6 +85,14 @@ export const session = {
     return read(selectedStore(), TOKEN_KEY) ?? read(otherStore(), TOKEN_KEY) ?? volatileToken;
   },
 
+  /** Opaque cache ownership, stable across reload/renewal; never a credential. */
+  filesCacheNamespace(): string | undefined {
+    if (!session.token()) return undefined;
+    filesNamespace = read(selectedStore(), FILES_NAMESPACE_KEY) ?? filesNamespace ?? crypto.randomUUID();
+    write(selectedStore(), FILES_NAMESPACE_KEY, filesNamespace);
+    return filesNamespace;
+  },
+
   /** Called after a successful sign-in, when the checkbox decides the storage. */
   start(token: string, keepSignedIn: boolean): void {
     chatCache.clear();
@@ -98,6 +108,10 @@ export const session = {
     // Choose from the requested behavior rather than rereading a preference
     // that a denied localStorage could not persist.
     write(keepSignedIn ? localStore() : pageStore(), TOKEN_KEY, token);
+    remove(localStore(), FILES_NAMESPACE_KEY);
+    remove(pageStore(), FILES_NAMESPACE_KEY);
+    filesNamespace = crypto.randomUUID();
+    write(selectedStore(), FILES_NAMESPACE_KEY, filesNamespace);
   },
 
   /** A renewed token from `x-pop-agent-token`: same storage, new value. */
@@ -118,6 +132,9 @@ export const session = {
     generation += 1;
     volatileToken = undefined;
     volatileStore = undefined;
+    filesNamespace = undefined;
+    remove(localStore(), FILES_NAMESPACE_KEY);
+    remove(pageStore(), FILES_NAMESPACE_KEY);
     remove(localStore(), TOKEN_KEY);
     remove(pageStore(), TOKEN_KEY);
     // Cached transcripts belong to the authenticated session. Never let a

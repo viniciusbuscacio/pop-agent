@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type {
@@ -37,9 +38,27 @@ const moveSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
 export function createFilesRoutes(deps: FilesRoutesDeps): Hono {
   const routes = new Hono();
 
-  routes.get('/files', (c) =>
-    c.json({ tree: deps.files.tree().map(toDto) } satisfies FilesTreeResponse),
-  );
+  // Serialize at projection changes, not on each request/conditional poll.
+  let body = '';
+  let etag = '';
+  const refresh = (): void => {
+    body = JSON.stringify({ tree: deps.files.tree().map(toDto) } satisfies FilesTreeResponse);
+    etag = `"${createHash('sha256').update(body).digest('hex')}"`;
+  };
+  refresh();
+  deps.files.subscribeTree(refresh);
+  routes.get('/files', (c) => {
+    if (!deps.files.metadataAvailable()) {
+      c.header('Cache-Control', 'no-store');
+      return apiError(c, 503, 'files_index_unavailable', 'Files metadata is being rebuilt. Retry shortly.');
+    }
+    c.header('Cache-Control', 'private, no-cache');
+    c.header('ETag', etag);
+    const tags = c.req.header('If-None-Match')?.split(',').map(tag => tag.trim().replace(/^W\//, ''));
+    if (tags?.some(tag => tag === '*' || tag === etag)) return c.body(null, 304);
+    c.header('Content-Type', 'application/json; charset=UTF-8');
+    return c.body(body);
+  });
 
   routes.get('/files/text', (c) => refusing(c, () => textResponse(c, deps.files.readText(c.req.query('path') ?? ''))));
   routes.put('/files/text', async (c) => {

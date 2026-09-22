@@ -61,3 +61,18 @@ describe('browser session storage', () => {
     expect(clearCache).toHaveBeenCalledOnce();
   });
 });
+
+it('namespaces Files metadata per login, retaining ownership across token renewal', () => {
+  session.start('same-token', true);
+  const first = session.filesCacheNamespace();
+  expect(first).toBeTruthy();
+  expect(first).not.toBe('same-token');
+  session.refresh('renewed');
+  expect(session.filesCacheNamespace()).toBe(first);
+  expect(localStorage.getItem('pop-agent.files-cache-namespace')).toBe(first);
+  session.clear();
+  expect(session.filesCacheNamespace()).toBeUndefined();
+  expect(localStorage.getItem('pop-agent.files-cache-namespace')).toBeNull();
+  session.start('same-token', true);
+  expect(session.filesCacheNamespace()).not.toBe(first);
+});

@@ -121,6 +121,28 @@ backfilled. Working copies may still be written to chat-scoped workspace paths. 
 session exports. A database reference is not proof that a filesystem path still
 exists; missing files return an explicit not-found outcome.
 
+### Files metadata projection
+
+The plain Files tree remains authority; bodies are read/downloaded only on demand.
+The server keeps a full metadata tree in RAM and a disposable versioned JSON
+snapshot at `POP_AGENT_DATA_DIR/files-metadata.json`, outside Files. Persistence
+is batched and atomically replaces an owner-only file; no contents are retained.
+Tree requests use precomputed JSON, never recursive filesystem scans.
+
+Pop writes, text edits, folder creation, moves, trash and restore update affected
+paths and ancestor metadata immediately. A recursive filesystem watcher batches
+agent/external changes. Hidden paths, root Garbage and symlinks (including
+symlinked ancestors) are excluded from metadata. Mutations and downloads still
+validate the live disk jail; a cache entry is not permission to read or overwrite.
+
+Missing/invalid snapshots bootstrap in the background. Valid snapshots warm-load,
+then startup reconciliation covers changes during downtime. One daily full scan
+repairs missed notifications; watcher/scan failures mark the projection unavailable
+and retry in the background, never from a request. Concurrent mutation/watcher
+paths are replayed against live disk before a scan replaces the projection.
+Shutdown stops timers/watchers and flushes batched metadata. Persistence failure
+is logged with a stable code and retried; it cannot invalidate durable user files.
+
 ## Notes vault
 
 Notes are plain Markdown under `POP_AGENT_DATA_DIR/notes/` and may be opened by

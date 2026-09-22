@@ -23,14 +23,18 @@ let reloadGeneration = 0;
 let pending: Promise<void> | undefined;
 let snapshot: FilesSnapshot | undefined;
 let hydration: Promise<void> | undefined;
+let invalidationGeneration = 0;
 
 export const useFilesStore = create<FilesState>((set, get) => ({
   tree: undefined, loading: false, error: false, fresh: false,
   hydrate: () => {
     if (hydration) return hydration;
+    const namespace = session.filesCacheNamespace();
+    if (!namespace || get().tree !== undefined) return Promise.resolve();
     const authGeneration = session.generation();
-    hydration = filesCache.read().then(cached => {
-      if (cached && session.generation() === authGeneration && get().tree === undefined) {
+    const invalidation = invalidationGeneration;
+    hydration = filesCache.read(namespace).then(cached => {
+      if (cached && session.generation() === authGeneration && invalidation === invalidationGeneration && get().tree === undefined) {
         snapshot = cached;
         set({ tree: cached.tree });
       }
@@ -39,23 +43,31 @@ export const useFilesStore = create<FilesState>((set, get) => ({
   },
   invalidate: () => {
     reloadGeneration++;
+    invalidationGeneration++;
+    hydration = Promise.resolve(); // Never resurrect a pre-mutation disk snapshot.
     pending = undefined;
-    set({ fresh: false });
+    set({ fresh: false, loading: false });
   },
   reload: () => {
     if (pending) return pending;
+    const namespace = session.filesCacheNamespace();
+    if (!namespace) return Promise.resolve();
     const request = ++reloadGeneration;
     const authGeneration = session.generation();
     const isCurrent = () => request === reloadGeneration && authGeneration === session.generation();
-    void get().hydrate();
+    const hydrated = get().hydrate();
     set({ loading: true });
     pending = (async () => {
       try {
+        // Paint persisted metadata first and reuse its validator. Storage has a
+        // deadline, so denied/blocked IndexedDB cannot hold the network lane.
+        await hydrated;
+        if (!isCurrent()) return;
         const next = await filesService.tree(snapshot);
         if (isCurrent()) {
           snapshot = next;
           set({ tree: next.tree, fresh: true, error: false });
-          void filesCache.write(next);
+          void filesCache.write(next, namespace);
         }
       } catch {
         if (isCurrent()) set({ error: true, fresh: false });
@@ -67,7 +79,8 @@ export const useFilesStore = create<FilesState>((set, get) => ({
   },
 }));
 filesCache.onReset(() => {
-  reloadGeneration++; pending = undefined; snapshot = undefined; hydration = undefined;
+  reloadGeneration++; invalidationGeneration++;
+  pending = undefined; snapshot = undefined; hydration = undefined;
   useFilesStore.setState({ tree: undefined, loading: false, error: false, fresh: false });
 });
 filesCache.onChange(() => useFilesStore.getState().invalidate());

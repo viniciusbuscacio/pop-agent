@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Cache Files metadata locally for immediate navigation and silently revalidate
+  with authenticated ETag/304 requests shared by the page and sidebar. Keep
+  last-good listings and Retry on failure, preserve selection/scroll, and reject
+  stale mutation/logout results. The bounded, login-scoped IndexedDB cache never
+  stores file bodies, thumbnails, links or credentials and remains optional when
+  browser storage is denied or full.
+
 - Allow Loop reviewers to correct invalid read-only inspection arguments without
   permanently failing the phase. Explain the required evidence round in the tool
   contract and error; retain complete evidence coverage, tool budgets and terminal

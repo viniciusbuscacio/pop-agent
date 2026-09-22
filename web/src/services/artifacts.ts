@@ -9,7 +9,7 @@ import type {
   GarbageResponse,
 } from '@pop-agent/shared';
 import { apiRequest, apiUpload, fileDownloadResponse } from './api';
-import { filesCache, type FilesSnapshot } from './files-cache';
+import { filesCache, safeFilesSnapshot, type FilesSnapshot } from './files-cache';
 import { session } from './session';
 
 async function mutation<T>(operation: Promise<T>): Promise<T> {
@@ -36,7 +36,10 @@ export const filesService = {
       ...(previous?.etag ? { conditional: { etag: previous.etag, value: previous } } : {}),
       onEtag: value => { etag = value ?? undefined; },
     });
-    return { tree: response.tree, ...(etag ? { etag } : {}) };
+    if (previous && response === previous && etag === previous.etag) return previous;
+    const next = safeFilesSnapshot({ tree: response?.tree, ...(etag ? { etag } : {}) });
+    if (!next) throw new Error('Invalid Files metadata response');
+    return next;
   },
 
   /** Live name matches across the whole tree, folders and files alike. */

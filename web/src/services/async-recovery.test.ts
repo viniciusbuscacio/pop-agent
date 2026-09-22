@@ -56,15 +56,20 @@ it('does not apply a Files reload after the session ends', async () => {
     const reply = deferred<Awaited<ReturnType<typeof filesService.tree>>>();
     vi.spyOn(filesService, 'tree').mockReturnValue(reply.promise);
     const request = useFilesStore.getState().reload();
+    await Promise.resolve();
     session.clear();
     reply.resolve({ tree: [{ name: 'private.txt', path: 'private.txt', kind: 'file', size: 1, mtime: '2026-09-07T00:00:00Z' }] });
     await request;
-    expect(useFilesStore.getState().tree).toEqual([]);
+    expect(useFilesStore.getState().tree).toBeUndefined();
 });
 it('an older Files snapshot cannot restore a deleted item in the UI', async () => {
+    session.start('owner', false);
+    useFilesStore.setState({ tree: [] });
     const old = deferred<Awaited<ReturnType<typeof filesService.tree>>>(), fresh = deferred<Awaited<ReturnType<typeof filesService.tree>>>();
     vi.spyOn(filesService, 'tree').mockImplementationOnce(() => old.promise).mockImplementationOnce(() => fresh.promise);
     const first = useFilesStore.getState().reload();
+    await Promise.resolve();
+    useFilesStore.getState().invalidate(); // A completed mutation invalidates the old read.
     const second = useFilesStore.getState().reload();
     fresh.resolve({ tree: [] });
     await second;

@@ -313,7 +313,7 @@ export class FilesService {
     const dir = relative === '' ? this.deps.root : resolveInFiles(this.deps.root, relative);
     const nodes: FileNode[] = [];
     for (const dirent of this.safeReaddir(dir)) {
-      if (dirent.name.startsWith('.')) continue;
+      if (dirent.name.startsWith('.') || dirent.isSymbolicLink()) continue;
       if (relative === '' && dirent.name === GARBAGE_DIR) continue;
       const path = relative === '' ? dirent.name : `${relative}/${dirent.name}`;
       const stat = statSync(join(dir, dirent.name));
@@ -395,7 +395,7 @@ export class FilesService {
     }
   }
 
-  private safeReaddir(dir: string): { name: string; isDirectory(): boolean }[] {
+  private safeReaddir(dir: string): { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }[] {
     try {
       return readdirSync(dir, { withFileTypes: true });
     } catch {

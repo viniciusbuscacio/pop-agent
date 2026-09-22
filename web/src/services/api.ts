@@ -184,7 +184,7 @@ async function performApiRequest<T>(
   const headers: Record<string, string> = clientHeaders(client);
   if (init.uiKey !== undefined) headers['X-Pop-UI-Key'] = init.uiKey;
   const method = init.method ?? 'GET';
-  if (init.conditional) headers['if-none-match'] = init.conditional.etag;
+  if (init.conditional && method === 'GET') headers['if-none-match'] = init.conditional.etag;
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
   if (init.onboardingToken !== undefined) {
@@ -207,6 +207,7 @@ async function performApiRequest<T>(
       fetch(`${BASE}${path}`, {
         method,
         headers,
+        ...(init.conditional ? { cache: 'no-store' as const } : {}),
         ...(init.signal === undefined ? {} : { signal: init.signal }),
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
       }),
@@ -216,13 +217,16 @@ async function performApiRequest<T>(
     const renewed = response.headers.get(SESSION_TOKEN_HEADER);
     if (isCurrentSession() && renewed !== null && renewed.length > 0) session.refresh(renewed);
 
-    init.onEtag?.(response.headers.get('etag'));
-    if (response.status === 304 && init.conditional) return init.conditional.value;
+    if (response.status === 304 && init.conditional && method === 'GET') {
+      init.onEtag?.(response.headers.get('etag') ?? init.conditional.etag);
+      return init.conditional.value;
+    }
 
     // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
     // (POST /files/folders answers created with nothing to add).
     if (response.status === 204) return undefined as T;
     if (response.ok) {
+      init.onEtag?.(response.headers.get('etag'));
       const text = await response.text();
       return (text.length === 0 ? undefined : JSON.parse(text)) as T;
     }
