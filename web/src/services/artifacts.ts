@@ -9,6 +9,14 @@ import type {
   GarbageResponse,
 } from '@pop-agent/shared';
 import { apiRequest, apiUpload, fileDownloadResponse } from './api';
+import { filesCache, type FilesSnapshot } from './files-cache';
+import { session } from './session';
+
+async function mutation<T>(operation: Promise<T>): Promise<T> {
+  const generation = session.generation();
+  try { return await operation; }
+  finally { if (generation === session.generation()) filesCache.changed(); }
+}
 
 /**
  * Files as a plain folder (docs/specs/Spec-Pop-General.md §14): the tree is the disk, and a path
@@ -20,10 +28,15 @@ export const filesService = {
     return apiRequest<FileTextDTO>(`/files/text?path=${encodeURIComponent(path)}`);
   },
   saveText(value: SaveFileTextRequest): Promise<FileTextDTO> {
-    return apiRequest<FileTextDTO>('/files/text', { method: 'PUT', body: value });
+    return mutation(apiRequest<FileTextDTO>('/files/text', { method: 'PUT', body: value }));
   },
-  tree(): Promise<FilesTreeResponse> {
-    return apiRequest<FilesTreeResponse>('/files');
+  async tree(previous?: FilesSnapshot): Promise<FilesSnapshot> {
+    let etag: string | undefined;
+    const response = await apiRequest<FilesTreeResponse>('/files', {
+      ...(previous?.etag ? { conditional: { etag: previous.etag, value: previous } } : {}),
+      onEtag: value => { etag = value ?? undefined; },
+    });
+    return { tree: response.tree, ...(etag ? { etag } : {}) };
   },
 
   /** Live name matches across the whole tree, folders and files alike. */
@@ -36,25 +49,25 @@ export const filesService = {
     const form = new FormData();
     form.append('file', file);
     if (dir.length > 0) form.append('dir', dir);
-    return apiUpload<FileNodeDTO>('/files', form, signal);
+    return mutation(apiUpload<FileNodeDTO>('/files', form, signal));
   },
 
   /** Creates the folder and every missing parent on the way (mkdir -p). */
   mkdir(path: string): Promise<void> {
-    return apiRequest<void>('/files/folders', { method: 'POST', body: { path } });
+    return mutation(apiRequest<void>('/files/folders', { method: 'POST', body: { path } }));
   },
 
   /** A path edit: rename and move are the same thing. 409 = name_taken. */
   move(from: string, to: string): Promise<void> {
-    return apiRequest<void>('/files/move', { method: 'POST', body: { from, to } });
+    return mutation(apiRequest<void>('/files/move', { method: 'POST', body: { from, to } }));
   },
 
   /** Moves the entry into trash and returns its exact handle for immediate undo. */
   async remove(path: string): Promise<GarbageEntryDTO> {
-    const removed = await apiRequest<GarbageEntryDTO | undefined>(
+    const removed = await mutation(apiRequest<GarbageEntryDTO | undefined>(
       `/files?path=${encodeURIComponent(path)}`,
       { method: 'DELETE' },
-    );
+    ));
     if (removed !== undefined) return removed;
 
     // During an update, a freshly loaded PWA can briefly meet the previous
@@ -131,7 +144,7 @@ export const trashService = {
   },
 
   restore(name: string): Promise<void> {
-    return apiRequest<void>(`/trash/${encodeURIComponent(name)}/restore`, { method: 'POST' });
+    return mutation(apiRequest<void>(`/trash/${encodeURIComponent(name)}/restore`, { method: 'POST' }));
   },
 
   /** Skips the retention window for one thing. */

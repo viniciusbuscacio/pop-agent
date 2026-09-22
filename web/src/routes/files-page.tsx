@@ -47,6 +47,8 @@ export function FilesPage() {
   const pathRef = useRef(currentPath);
   pathRef.current = currentPath;
   const tree = useFilesStore((state) => state.tree);
+  const fresh = useFilesStore((state) => state.fresh);
+  const error = useFilesStore((state) => state.error);
   const reload = useFilesStore((state) => state.reload);
   const notify = useNotificationsStore((state) => state.notify);
   const announceTrash = useTrashUndo();
@@ -213,10 +215,10 @@ export function FilesPage() {
   // A dead link (deleted folder, or a file's path) falls back to the root once
   // the tree arrived.
   useEffect(() => {
-    if (currentPath !== '' && tree !== undefined && openFolder?.kind !== 'dir') {
+    if (fresh && currentPath !== '' && tree !== undefined && openFolder?.kind !== 'dir') {
       void navigate('/files', { replace: true });
     }
-  }, [currentPath, openFolder, tree, navigate]);
+  }, [currentPath, openFolder, tree, navigate, fresh]);
 
   const listing = childrenOf(tree ?? [], currentPath);
   const rootFolders = listing.filter((node) => node.kind === 'dir');
@@ -879,6 +881,10 @@ export function FilesPage() {
           )}
         </div>
       ) : null}
+
+      {error ? <div role="status" className="px-4 py-2 text-sm text-[var(--muted)]">
+        {t('files.refreshFailed')} <Button variant="ghost" size="sm" onClick={() => void reload()}>{t('settings.sync.retry')}</Button>
+      </div> : tree === undefined ? <p role="status" className="px-4 py-2 text-sm text-[var(--muted)]">{t('app.loading')}</p> : null}
 
       {/* pb-20 on a phone keeps the last row clear of the bottom bar below. */}
       <PullToRefresh onRefresh={reload} className={selecting ? 'pb-40 md:pb-24' : 'pb-20 md:pb-0'}>

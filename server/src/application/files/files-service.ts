@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, extname } from 'node:path';
 import { cleanRelative, isHiddenPath, resolveInFiles } from '../../domain/files/safe-path.js';
+import type { FilesIndex } from '../ports/files-index.js';
 import type { Clock } from '../ports/clock.js';
 
 /**
@@ -72,11 +73,25 @@ const EDITABLE_TEXT_EXTENSIONS = new Set(['.css', '.csv', '.js', '.json', '.log'
 export type TextFileResult = { content: string; revision: string } | 'not-found' | 'unsupported' | 'too-large' | 'conflict';
 
 export class FilesService {
+  private readonly listeners = new Set<() => void>();
+
+  metadataAvailable(): boolean { return this.deps.index?.available() ?? true; }
+  subscribeTree(listener: () => void): () => void {
+    if (this.deps.index) return this.deps.index.subscribe(listener);
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+  private changed(paths: string[]): void {
+    this.deps.index?.changed(paths);
+    this.deps.onChanged?.();
+    for (const listener of this.listeners) listener();
+  }
   constructor(
     private readonly deps: {
       /** Absolute path of the Files root (`POP_AGENT_DATA_DIR/files/`). */
       root: string;
       clock: Clock;
+      index?: FilesIndex;
       /** Told after any mutation, so the session catalog can refresh. */
       onChanged?: () => void;
     },
@@ -113,7 +128,7 @@ export class FilesService {
 
   /** The live tree: folders first, then files, both by name; Garbage and dotfiles unlisted. */
   tree(): FileNode[] {
-    return this.walk('');
+    return this.deps.index?.tree() ?? this.walk('');
   }
 
   stat(relativePath: string): { kind: 'file' | 'dir'; size: number; mtimeMs: number } | undefined {
@@ -146,13 +161,13 @@ export class FilesService {
     const target = this.resolveVisible(relativePath);
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
     writeFileSync(target, bytes, { mode: 0o600 });
-    this.deps.onChanged?.();
+    this.changed([cleanRelative(relativePath)]);
   }
 
   mkdir(relativePath: string): void {
     const target = this.resolveVisible(relativePath);
     mkdirSync(target, { recursive: true, mode: 0o700 });
-    this.deps.onChanged?.();
+    this.changed([cleanRelative(relativePath)]);
   }
 
   /** Rename and move are the same operation now: a path edit. */
@@ -163,7 +178,7 @@ export class FilesService {
     if (existsSync(to)) return 'target-exists';
     mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
     renameSync(from, to);
-    this.deps.onChanged?.();
+    this.changed([cleanRelative(fromRelative), cleanRelative(toRelative)]);
     return 'ok';
   }
 
@@ -181,7 +196,7 @@ export class FilesService {
     const notes = this.readNotes();
     notes[entryName] = { originalPath: cleaned, deletedAt };
     this.writeNotes(notes);
-    this.deps.onChanged?.();
+    this.changed([cleaned]);
     return {
       name: entryName,
       originalPath: cleaned,
@@ -225,7 +240,7 @@ export class FilesService {
     renameSync(join(this.garbageDir(), entryName), target);
 
     this.dropNote(entryName);
-    this.deps.onChanged?.();
+    this.changed([entry.originalPath]);
     return 'ok';
   }
 

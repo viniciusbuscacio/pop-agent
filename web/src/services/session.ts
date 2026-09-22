@@ -1,3 +1,4 @@
+import { filesCache } from './files-cache';
 import { chatCache } from './chat-cache';
 import { settingsResources } from './settings-resources';
 import { clearSubscriptionUsageCache } from './subscription-usage-cache';
@@ -86,6 +87,7 @@ export const session = {
   start(token: string, keepSignedIn: boolean): void {
     chatCache.clear();
     settingsResources.clear();
+    filesCache.clear();
     clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = token;
@@ -111,6 +113,7 @@ export const session = {
 
   clear(): void {
     settingsResources.clear();
+    filesCache.clear();
     clearSubscriptionUsageCache();
     generation += 1;
     volatileToken = undefined;

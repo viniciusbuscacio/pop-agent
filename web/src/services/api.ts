@@ -133,6 +133,12 @@ function platformName(): string {
 // that observed recovery window without retrying forever.
 const LOCAL_RECONNECT_DELAYS_MS = [1_000, 2_000, 3_000, 4_000, 5_000, 5_000, 5_000, 5_000] as const;
 
+interface ApiRequestOptions<T> {
+  method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal;
+  conditional?: { etag: string; value: T };
+  onEtag?: (etag: string | null) => void;
+}
+
 interface ApiRequestRuntime {
   sleep?: (milliseconds: number) => Promise<void>;
   reconnectDelaysMs?: readonly number[];
@@ -151,7 +157,7 @@ function retriesLocalReconnect(path: string, method: string): boolean {
 
 let activeUiRequests = 0;
 export const pendingUiRequests = (): number => activeUiRequests;
-export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal } = {}, runtime: ApiRequestRuntime = {}): Promise<T> {
+export async function apiRequest<T>(path: string, init: ApiRequestOptions<T> = {}, runtime: ApiRequestRuntime = {}): Promise<T> {
   const counted = !path.startsWith('/ui/');
   if (counted) activeUiRequests++;
   // Snapshot reads must release the network lane even if the server/proxy
@@ -168,7 +174,7 @@ export async function apiRequest<T>(path: string, init: { method?: string; body?
 
 async function performApiRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown; onboardingToken?: string; uiKey?: string; signal?: AbortSignal } = {},
+  init: ApiRequestOptions<T> = {},
   runtime: ApiRequestRuntime = {},
 ): Promise<T> {
   const token = session.token();
@@ -178,6 +184,7 @@ async function performApiRequest<T>(
   const headers: Record<string, string> = clientHeaders(client);
   if (init.uiKey !== undefined) headers['X-Pop-UI-Key'] = init.uiKey;
   const method = init.method ?? 'GET';
+  if (init.conditional) headers['if-none-match'] = init.conditional.etag;
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (token !== undefined) headers['authorization'] = `Bearer ${token}`;
   if (init.onboardingToken !== undefined) {
@@ -208,6 +215,9 @@ async function performApiRequest<T>(
     // The server hands back a fresh token once the current one is a day old.
     const renewed = response.headers.get(SESSION_TOKEN_HEADER);
     if (isCurrentSession() && renewed !== null && renewed.length > 0) session.refresh(renewed);
+
+    init.onEtag?.(response.headers.get('etag'));
+    if (response.status === 304 && init.conditional) return init.conditional.value;
 
     // A 204 (every DELETE) has no body to parse -- and neither does a bare 201
     // (POST /files/folders answers created with nothing to add).
