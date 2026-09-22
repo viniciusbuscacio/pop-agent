@@ -471,7 +471,13 @@ The composer owns device-local draft interaction, not delivery authority:
 - drag/drop, picker and paste support attachments, with frontend limits matching
   API limits (eight items across uploads and Files references, 25 MB each and
   100 MB raw in total); pasted clipboard files are read from both item and file
-  representations without duplicates, while text-only paste remains native;
+  representations without duplicates. Plain-text pastes over 10,000 UTF-16 code
+  units, or taking the resulting text over the API's 32,000-unit limit, become
+  UTF-8 `.txt` attachments through the normal tray/send/archive flow. Existing
+  draft text is preserved; selection length is accounted for in the threshold.
+  Encoding is synchronous to avoid a paste/Enter race. Ordinary text paste stays
+  native. Attachment count/byte limits still apply; on refusal show the existing
+  limit notice and retain native paste rather than discard clipboard content;
 - `@` references existing Files paths without uploading them again;
 - model and Plan controls snapshot their current values into each send;
 - Plan styling and announcement make mode visible, but only the server enforces

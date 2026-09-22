@@ -10,6 +10,7 @@ import type { AttachmentDTO, ExecutionMode, MessageDelivery, QueuedMessageDTO, S
 import { t } from '../i18n';
 import { ApiError } from '../services/api';
 import { appendComposerHistory, readComposerHistory } from '../services/composer-history';
+import { shouldAttachPastedText, pastedTextAttachment } from '../services/pasted-text';
 import { providersService } from '../services/providers';
 import { flattenFiles, useFilesStore } from '../store/files';
 import { useThinkingStore } from '../store/thinking';
@@ -586,9 +587,41 @@ export function Composer({
   function onPaste(event: ReactClipboardEvent<HTMLTextAreaElement>): void {
     if (locked) return;
     const files = collectPastedFiles(event.clipboardData);
-    if (files.length === 0) return;
+    if (files.length > 0) {
+      event.preventDefault();
+      addFiles(files);
+      return;
+    }
+    const pasted = event.clipboardData.getData('text/plain');
+    const target = event.currentTarget;
+    const remainingLength = text.length - (target.selectionEnd - target.selectionStart);
+    if (!shouldAttachPastedText(pasted, remainingLength)) return;
+
+    // Encode synchronously: Enter immediately after paste must not race a
+    // FileReader and submit an incomplete message. Reuse the normal attachment
+    // DTO/tray/send/archive flow after clipboard intake.
+    const bytes = new TextEncoder().encode(pasted);
+    let index = 1;
+    while (attachments.some(item => item.name === `pasted-text-${String(index)}.txt`)) index += 1;
+    const name = `pasted-text-${String(index)}.txt`;
+    const totalBytes = attachments.reduce((total, item) => total + dataUriPayloadBytes(item.dataUri), 0);
+    // On refusal leave native paste intact, so the clipboard content is not lost.
+    if (attachments.length + mentions.length >= MAX_ATTACHMENTS) {
+      setNotice(t('chat.attachCount'));
+      return;
+    }
+    if (bytes.length > MAX_ATTACH_BYTES) {
+      setNotice(t('chat.attachTooLarge', { name }));
+      return;
+    }
+    if (totalBytes + bytes.length > MAX_ATTACH_TOTAL_BYTES) {
+      setNotice(t('chat.attachTotalTooLarge'));
+      return;
+    }
+    const attachment = pastedTextAttachment(bytes, name);
     event.preventDefault();
-    addFiles(files);
+    setNotice(undefined);
+    setAttachments(current => [...current, attachment]);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {

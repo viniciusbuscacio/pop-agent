@@ -509,6 +509,63 @@ describe('pending message composition', () => {
     expect(screen.getAllByRole('button', { name: /^Remove/ })).toHaveLength(2);
   });
 
+  it('attaches a large pasted log intact and can send immediately with the existing draft', async () => {
+    const { onSend } = renderComposer();
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: 'Explain this log' } });
+    const log = 'x'.repeat(43562);
+    expect(fireEvent.paste(area, { clipboardData: {
+      items: [], files: [], getData: () => log,
+    } })).toBe(false);
+    expect(area).toHaveProperty('value', 'Explain this log');
+    expect(screen.getByText('pasted-text-1.txt')).toBeTruthy();
+    fireEvent.keyDown(area, { key: 'Enter' });
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0]![0]).toBe('Explain this log');
+    const attachment = onSend.mock.calls[0]![1][0];
+    expect(attachment.type).toBe('text/plain');
+    expect(atob(attachment.dataUri.split(',')[1])).toBe(log);
+  });
+
+  it('accounts for replaced selection when testing the combined message limit', () => {
+    renderComposer();
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(area, { target: { value: 'x'.repeat(32000) } });
+    area.setSelectionRange(0, 10);
+    const clipboardData = { items: [], files: [], getData: () => 'short' };
+    expect(fireEvent.paste(area, { clipboardData })).toBe(true);
+    area.setSelectionRange(32000, 32000);
+    expect(fireEvent.paste(area, { clipboardData })).toBe(false);
+    expect(screen.getByText('pasted-text-1.txt')).toBeTruthy();
+  });
+
+  it('retains native text paste and a notice when the attachment tray is full', async () => {
+    const user = userEvent.setup();
+    renderComposer({ editRequest: { ...pending, attachments: Array.from({ length: 8 }, (_, i) => ({
+      name: `file-${i}.txt`, type: 'text/plain', dataUri: 'data:text/plain;base64,eA==',
+    })) } });
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    area.focus();
+    area.setSelectionRange(area.value.length, area.value.length);
+    const pasted = 'x'.repeat(10001);
+    await user.paste(pasted);
+    expect(area.value).toContain(pasted);
+    expect(screen.queryByText('pasted-text-1.txt')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('8 files');
+  });
+
+  it('keeps the generated attachment and draft after a failed send', async () => {
+    const onSend = vi.fn().mockRejectedValue(new Error('offline'));
+    renderComposer({ onSend });
+    const area = screen.getByRole('textbox');
+    fireEvent.change(area, { target: { value: 'Keep me' } });
+    fireEvent.paste(area, { clipboardData: { items: [], files: [], getData: () => 'x'.repeat(10001) } });
+    fireEvent.keyDown(area, { key: 'Enter' });
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('pasted-text-1.txt')).toBeTruthy();
+    expect(area).toHaveProperty('value', 'Keep me');
+  });
+
   it('leaves ordinary text paste to the textarea', async () => {
     const user = userEvent.setup();
     renderComposer();

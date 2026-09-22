@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Automatically attach large plain-text pastes as UTF-8 text files in web/PWA/Desktop
+  chat, preserving the draft and using the existing attachment archive flow.
+
 - Add native `/info` to web/PWA/Desktop and CLI help/autocomplete: selected and
   actual model/provider, SDK context estimate, scoped session messages/tokens,
   input/output/cache and tool counts, four-decimal estimated cost, mode and safe
