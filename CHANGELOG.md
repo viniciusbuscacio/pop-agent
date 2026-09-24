@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — client distribution activation guard
+
+- Refuse incomplete CLI/Local Access distributions before service activation, including prepared runtimes. Verify pinned client checksums, lazy catalogs, effective checkout identity, and HTTP bootstrap content.
+- Provide a versioned local activation path and validate rollback clients; a failed preflight leaves the running service untouched.
+
 ## Unreleased
 
 - Fix false credential detections when saving skills that mention passwordPlease

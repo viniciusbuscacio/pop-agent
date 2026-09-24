@@ -1057,3 +1057,40 @@ retaining the old Git objects or history. After publication, the usual pin
 command may select the new server release for subsequent server-only builds.
 The publisher verifies and includes pinned client assets whose source is this
 same release before making it available. Never relabel compiled client bytes.
+
+
+## Client completeness at activation
+
+A successful source gate and `/healthz` are not evidence that an installation
+can bootstrap CLI or Local Access. `cli/pack` is ignored build output and must
+be prepared explicitly in every server generation, including local deployments.
+Server-only preparation reuses `stageClients()` and the exact immutable clients
+pinned in `release/clients.json`; it never rebuilds or relabels those clients.
+
+Before service mutation, validate mandatory manifests, the CLI tarball, safe
+regular paths, and the lazy download catalog. Reused clients must match the
+snapshot and pinned file sizes/SHA-256 values. Full client builds instead verify
+their generated manifests and all native bytes, then write an explicit
+`client-build.json` checksum proof before converting to lazy distribution.
+Lazy packs with a source lock require either the inherited snapshot or this
+complete-build proof; deleting metadata must not downgrade validation. A CLI
+version already pinned retains its original package/tarball hashes while native
+components may advance independently; an old reuse lock must not silently
+replace newly built native clients. Lazy mode does not require downloading all native
+binaries. Revalidate prepared client identity immediately before activation.
+
+The installer must verify the effective systemd checkout (including drop-ins),
+then the launcher and Node manifests, Local Access update metadata, CLI manifest,
+and CLI tarball content. HTTP 200 alone is insufficient: an HTML app fallback
+must fail validation. Requests have time/size limits and refuse redirects.
+`/cli/local-access/manifest.json` is not a public API; use the existing
+`/local-access-update.json?platform=windows&arch=amd64` contract.
+
+Local activation uses the versioned `tools/local-client-activation.ts` entry;
+one-off activation scripts are not an accepted deployment path. Its prepared
+client receipt supplements, rather than replaces, the source gate and runtime
+checks. A rollback candidate is validated against its own snapshot before the
+swap and checked through HTTP after recovery. Preflight failure before service
+mutation must not restart the previously running service. Never label an
+incomplete rollback as successful recovery. These checks do not prevent an
+administrator from bypassing the deployment tooling with direct systemd edits.

@@ -1,3 +1,4 @@
+import { recordCompleteClientBuild } from './client-pack.ts';
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -59,7 +60,10 @@ try {
   await checkNativeRuntime(runtime, reuseClients ? 'lazy' : 'complete');
   const repository = process.env['GITHUB_REPOSITORY'] ?? 'viniciusbuscacio/pop-agent';
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid release repository');
-  if (!reuseClients) writeFileSync(join(runtime, 'cli/pack/client-downloads.json'), JSON.stringify({ repository, version }));
+  if (!reuseClients) {
+    writeFileSync(join(runtime, 'cli/pack/client-downloads.json'), JSON.stringify({ repository, version }));
+    recordCompleteClientBuild(runtime);
+  }
   for (const directory of ['launcher', 'local-access', 'runtime/node']) {
     const base = join(runtime, 'cli/pack', directory);
     for (const name of readdirSync(base)) {

@@ -1,3 +1,4 @@
+import { clientPackFixture } from './client-pack-fixture.ts';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,6 +32,8 @@ class FakeRunner implements CommandRunner {
   run(command: string, args: readonly string[], options: { cwd: string; inherit?: boolean }) {
     this.calls.push({ command, args: [...args], cwd: options.cwd, inherit: options.inherit ?? false });
     const key = `${command} ${args.join(' ')}`;
+    if (key === 'systemctl show pop-agent-service.service -p ExecStart --value') return result(`{ path=/usr/bin/node ; argv[]=/usr/bin/node ${this.checkout}/server/dist/main.js ; }`);
+    if (key === 'systemctl show pop-agent-service.service -p WorkingDirectory --value') return result(this.checkout);
     if (key === 'git --version') return result('git version 2.43.0\n');
     if (key === 'npm --version') return result('10.8.2\n');
     if (key === 'go version') return result(this.goVersion);
@@ -76,6 +79,7 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
   writeFileSync(join(checkout, 'server/dist/main.js'), 'export {};\n');
   writeFileSync(join(checkout, 'server/dist/manager/main.js'), 'export {};\n');
 
+  clientPackFixture(checkout);
   const runner = new FakeRunner();
   runner.checkout = checkout;
   const uid = process.getuid?.() ?? 1000;
@@ -97,6 +101,7 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
       whisperExecutable: '/opt/pop-whisper/whisper-cli',
       systemdRuntimeDir: systemdRuntime,
       healthCheck: async () => true,
+      bootstrapCheck: async () => {},
       privateIpv4: () => '192.168.50.12',
     },
     runner,
@@ -104,6 +109,19 @@ function fixture(): { options: InstallOptions; dependencies: InstallerDependenci
 }
 
 describe('systemd server installer', () => {
+  it('rejects a clean prebuilt checkout without clients before service mutation', async () => {
+    const { options, dependencies, runner } = fixture();
+    rmSync(join(options.checkout, 'cli/pack'), { recursive: true });
+    let activationStarted = false;
+    await expect(installPreparedCheckout({ ...options, prebuilt: true }, dependencies, () => { activationStarted = true; })).rejects.toThrow();
+    expect(activationStarted).toBe(false);
+    expect(runner.calls.filter(c => c.command === 'sudo' && c.args[0] === '--')).toEqual([]);
+  });
+  it('does not declare success when health is good but client bootstrap fails', async () => {
+    const { options, dependencies } = fixture();
+    dependencies.bootstrapCheck = async () => { throw new Error('manifest HTTP 404'); };
+    await expect(installPreparedCheckout({ ...options, prebuilt: true }, dependencies)).rejects.toThrow('manifest HTTP 404');
+  });
   it('activates a prepared prebuilt runtime without npm, Go, or the repository gate', async () => {
     const { options, dependencies, runner } = fixture();
     dependencies.goExecutable = '';
@@ -112,6 +130,20 @@ describe('systemd server installer', () => {
     expect(runner.installedUnit).toContain('ExecStart=/usr/bin/node');
     expect(runner.installedUnit).not.toContain('/go/');
     expect(runner.installedUnit).toContain(`Environment=POP_AGENT_FFMPEG=${options.checkout}/server/dist/audio/ffmpeg`);
+  });
+
+  it('rejects an old generation still selected by a systemd override', async () => {
+    const { options, dependencies, runner } = fixture();
+    const run = runner.run.bind(runner);
+    runner.run = (command, args, opts) => command === 'systemctl' && args[0] === 'show' ? result('/old/generation') : run(command, args, opts);
+    await expect(installPreparedCheckout({ ...options, prebuilt: true }, dependencies)).rejects.toThrow('Active checkout differs');
+  });
+
+  it('rejects an ExecStart override even with the correct WorkingDirectory', async () => {
+    const { options, dependencies, runner } = fixture();
+    const run = runner.run.bind(runner);
+    runner.run = (command, args, opts) => command === 'systemctl' && args.includes('ExecStart') ? result('{ path=/usr/bin/node ; argv[]=/usr/bin/node /old/server/dist/main.js ; }') : run(command, args, opts);
+    await expect(installPreparedCheckout({ ...options, prebuilt: true }, dependencies)).rejects.toThrow('Active server command differs');
   });
 
   it('starts through the dependency-free bootstrap without touching systemd for help', () => {
