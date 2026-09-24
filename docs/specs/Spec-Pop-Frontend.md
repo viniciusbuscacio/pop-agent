@@ -408,6 +408,13 @@ frontend must not assume or simulate one.
 - Settled transcript rows are memoized by stable message object identity.
 - The settled transcript subtree is memoized independently of the live answer.
 - Historical Markdown must not be reparsed for each streamed fragment.
+- Live Markdown code fences show the current plain source and defer syntax
+  highlighting until the message settles. Copy always uses the current source.
+  Renderer identities, including list ancestors, remain stable across deltas;
+  code controls and their horizontal scroller are not remounted by highlighting.
+  Settled highlighting is retained on unrelated rerenders. Delayed results for
+  obsolete code/language or a resumed stream must never replace current source;
+  plain/unsupported languages and highlighting failures remain readable.
 - Live text/thinking/tool updates render no more than once per animation frame.
 - Run status occupies a permanently reserved line above the composer. Queued,
   working and approval status animate locally; SSE does not carry animation

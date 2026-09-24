@@ -80,9 +80,9 @@ vi.mock('../ui/composer', () => ({
 
 const chatMessageRender = vi.hoisted(() => vi.fn());
 vi.mock('../ui/chat-message', () => ({
-  ChatMessage: ({ message }: { message: MessageDTO }) => {
+  ChatMessage: ({ message, settled = false }: { message: MessageDTO; settled?: boolean }) => {
     chatMessageRender(message);
-    return <div data-testid="chat-message">{message.content}</div>;
+    return <div data-testid="chat-message" data-settled={settled}>{message.content}</div>;
   },
 }));
 
@@ -299,6 +299,8 @@ describe('chat transcript', () => {
     });
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId('chat-message')).toHaveLength(2));
+    expect(screen.getAllByTestId('chat-message')[0]?.getAttribute('data-settled')).toBe('true');
+    expect(screen.getAllByTestId('chat-message')[1]?.getAttribute('data-settled')).toBe('false');
     chatMessageRender.mockClear();
 
     useChatStore.setState((state) => ({
@@ -311,6 +313,12 @@ describe('chat transcript', () => {
     await waitFor(() => expect(screen.getAllByTestId('chat-message')[1]?.textContent).toContain('another'));
     expect(chatMessageRender).toHaveBeenCalledTimes(1);
     expect(chatMessageRender).toHaveBeenCalledWith(expect.objectContaining({ content: 'First fragment, then another' }));
+
+    act(() => useChatStore.setState({
+      messages: { [chat.id]: [settled, { ...settled, id: 'finished-answer', content: 'First fragment, then another' }] },
+      live: {},
+    }));
+    expect(screen.getAllByTestId('chat-message')[1]?.getAttribute('data-settled')).toBe('true');
   });
 
   it.each([

@@ -12,6 +12,9 @@
 
 ## Unreleased
 
+- Fix flickering chat code blocks during streaming: keep current source and copy
+  controls stable, then apply syntax highlighting after the answer settles.
+
 - Automatically attach large plain-text pastes as UTF-8 text files in web/PWA/Desktop
   chat, preserving the draft and using the existing attachment archive flow.
 

@@ -25,7 +25,7 @@ function ChatMessageView({
   resending?: boolean;
   onChangeModel?: () => void;
   systemTone?: 'default' | 'info';
-  /** Settled history must not keep an unfinished Loop spinning after Stop. */
+  /** Settled history enables syntax highlighting and stops unfinished Loop spinners. */
   settled?: boolean;
 }) {
   const showThinking = useThinkingStore((state) => state.show);
@@ -114,7 +114,7 @@ function ChatMessageView({
 
       {message.content.length > 0 ? (
         <div className="text-[var(--screen-fg)]">
-          <Markdown text={message.content} />
+          <Markdown text={message.content} streaming={!settled} />
         </div>
       ) : null}
     </div>

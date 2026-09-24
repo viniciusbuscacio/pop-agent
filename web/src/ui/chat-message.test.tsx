@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useThinkingStore } from '../store/thinking';
 import { ChatMessage } from './chat-message';
+
+const highlightCode = vi.hoisted(() => vi.fn());
+vi.mock('../lib/syntax-highlighter', () => ({ highlightCode }));
 
 const pdfMocks = vi.hoisted(() => {
   const renderPage = vi.fn(async () => undefined);
@@ -22,6 +25,7 @@ vi.mock('../services/pdf-thumbnail', () => ({
 
 afterEach(() => {
   cleanup();
+  highlightCode.mockReset();
   pdfMocks.renderThumbnail.mockClear();
   pdfMocks.renderPage.mockClear();
   pdfMocks.destroy.mockClear();
@@ -35,6 +39,23 @@ describe('streaming performance', () => {
   it('memoizes settled rows instead of revisiting them for every live fragment', () => {
     expect(ChatMessage).toHaveProperty('$$typeof', Symbol.for('react.memo'));
   });
+});
+
+it('defers Markdown highlighting for live messages and highlights settled history', async () => {
+  highlightCode.mockImplementation(async (code: string) => `<pre class="shiki"><code>${code}</code></pre>`);
+  const message = { ...base, role: 'assistant' as const, content: '\u0060\u0060\u0060typescript\nconst a = 1\n\u0060\u0060\u0060' };
+  const { container, rerender } = render(<ChatMessage message={message} />);
+  const pre = container.querySelector('pre');
+  const updated = { ...message, content: message.content.replace('1', '12') };
+  rerender(<ChatMessage message={updated} />);
+  await act(async () => { await Promise.resolve(); });
+  expect(container.querySelector('pre')).toBe(pre);
+  expect(pre?.textContent).toBe('const a = 12');
+  expect(highlightCode).not.toHaveBeenCalled();
+
+  rerender(<ChatMessage message={updated} settled />);
+  await waitFor(() => expect(container.querySelector('.code-shiki')).not.toBeNull());
+  expect(highlightCode).toHaveBeenCalledExactlyOnceWith('const a = 12', 'typescript');
 });
 
 describe('horizontal overflow containment', () => {

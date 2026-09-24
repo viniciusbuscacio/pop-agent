@@ -1,7 +1,7 @@
 import { ImagePreview } from './image-preview';
-import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, createContext, memo, useContext, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Pressable } from './controls';
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { t } from '../i18n';
 import { saveFromLink } from '../lib/download';
@@ -15,64 +15,73 @@ import { filesService } from '../services/artifacts';
  * Code blocks are highlighted by Shiki, imported on demand so the highlighter
  * is not in the bundle that has to load before the login screen.
  */
-function MarkdownView({ text }: { text: string }) {
-  return (
-    <div className="markdown flex min-w-0 flex-col gap-3 leading-relaxed break-words [overflow-wrap:anywhere]">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        urlTransform={markdownUrlTransform}
-        components={{
-          pre: PreBlock,
-          code: ({ className, children }) =>
-            className === undefined ? (
-              <code className="rounded bg-[var(--input-bg)] px-1.5 py-0.5 font-mono text-[0.9em]">
-                {children}
-              </code>
-            ) : (
-              <code className={className}>{children}</code>
-            ),
-          // `urlTransform` keeps the internal image scheme long enough for
-          // MarkdownImage to resolve it. Internal file links use authenticated downloads;
-          // external links still get the stock sanitizer.
-          a: ({ href, children }) => {
-            const filePath = internalFilePath(href ?? '');
-            if (filePath !== undefined) return (
-              <Pressable type="button" className="text-left text-[var(--accent)] underline underline-offset-2"
-                onClick={() => { void filesService.link(filePath).then(saveFromLink).catch(() => window.alert(t('files.downloadFailed'))); }}>
-                {children}
-              </Pressable>
-            );
-            const safe = defaultUrlTransform(href ?? '');
-            return (
-              <a
-                href={safe.length === 0 ? undefined : safe}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-[var(--accent)] underline underline-offset-2"
-              >
-                {children}
-              </a>
-            );
-          },
-          img: MarkdownImage,
-          table: ({ children }) => (
-            <div className="max-w-full overflow-x-auto">
-              <table className="w-full border-collapse text-sm">{children}</table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="border border-[var(--border)] px-2 py-1 text-left">{children}</th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-[var(--border)] px-2 py-1">{children}</td>
-          ),
-          ul: ({ children }) => <ul className="list-disc pl-5">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-5">{children}</ol>,
-        }}
+const StreamingContext = createContext(false);
+const remarkPlugins = [remarkGfm];
+
+// Renderer identities must survive reparsing, including list/table ancestors of
+// code blocks. Inline component definitions remount their entire subtree.
+const markdownComponents: Components = {
+  pre: PreBlock,
+  code: ({ className, children }) =>
+    className === undefined ? (
+      <code className="rounded bg-[var(--input-bg)] px-1.5 py-0.5 font-mono text-[0.9em]">
+        {children}
+      </code>
+    ) : (
+      <code className={className}>{children}</code>
+    ),
+  // `urlTransform` keeps the internal image scheme long enough for
+  // MarkdownImage to resolve it. Internal file links use authenticated downloads;
+  // external links still get the stock sanitizer.
+  a: ({ href, children }) => {
+    const filePath = internalFilePath(href ?? '');
+    if (filePath !== undefined) return (
+      <Pressable type="button" className="text-left text-[var(--accent)] underline underline-offset-2"
+        onClick={() => { void filesService.link(filePath).then(saveFromLink).catch(() => window.alert(t('files.downloadFailed'))); }}>
+        {children}
+      </Pressable>
+    );
+    const safe = defaultUrlTransform(href ?? '');
+    return (
+      <a
+        href={safe.length === 0 ? undefined : safe}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-[var(--accent)] underline underline-offset-2"
       >
-        {text}
-      </ReactMarkdown>
+        {children}
+      </a>
+    );
+  },
+  img: MarkdownImage,
+  table: ({ children }) => (
+    <div className="max-w-full overflow-x-auto">
+      <table className="w-full border-collapse text-sm">{children}</table>
     </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-[var(--border)] px-2 py-1 text-left">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-[var(--border)] px-2 py-1">{children}</td>
+  ),
+  ul: ({ children }) => <ul className="list-disc pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5">{children}</ol>,
+};
+
+function MarkdownView({ text, streaming = false }: { text: string; streaming?: boolean }) {
+  return (
+    <StreamingContext.Provider value={streaming}>
+      <div className="markdown flex min-w-0 flex-col gap-3 leading-relaxed break-words [overflow-wrap:anywhere]">
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          urlTransform={markdownUrlTransform}
+          components={markdownComponents}
+        >
+          {text}
+        </ReactMarkdown>
+      </div>
+    </StreamingContext.Provider>
   );
 }
 
@@ -253,17 +262,21 @@ function PreBlock({ children }: { children?: ReactNode }) {
   return <CodeBlock code={code} language={language} />;
 }
 
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [html, setHtml] = useState<string | undefined>(undefined);
+const CodeBlock = memo(function CodeBlock({ code, language }: { code: string; language: string }) {
+  const streaming = useContext(StreamingContext);
+  const [highlight, setHighlight] = useState<{ code: string; language: string; html: string }>();
+  // Validate during render, not in an effect: changed source must be visible on
+  // its very first paint, never the HTML from the previous code/language.
+  const html = !streaming && highlight?.code === code && highlight.language === language
+    ? highlight.html : undefined;
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Plain text has nothing to highlight. Keeping its original <pre> avoids
-    // replacing the whole block after the large Shiki chunk loads, which is a
-    // visible flash for short hashes, commit IDs and command output.
-    if (isPlainCodeLanguage(language)) {
+    // Live fences always show current source. Highlight once the message settles
+    // rather than racing a chunk load / tokenization against every delta.
+    if (streaming || isPlainCodeLanguage(language)) {
       return () => {
         cancelled = true;
       };
@@ -272,8 +285,9 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     void (async () => {
       try {
         const { highlightCode } = await import('../lib/syntax-highlighter');
+        if (cancelled) return;
         const highlighted = await highlightCode(code, language);
-        if (!cancelled) setHtml(highlighted);
+        if (!cancelled) setHighlight({ code, language, html: highlighted });
       } catch {
         // An unknown language (or a failed chunk load) simply stays plain.
       }
@@ -282,7 +296,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     return () => {
       cancelled = true;
     };
-  }, [code, language]);
+  }, [code, language, streaming]);
 
   async function copy(): Promise<void> {
     try {
@@ -307,16 +321,16 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           {copied ? t('common.copied') : t('common.copy')}
         </Pressable>
       </div>
-      {html === undefined ? (
-        <pre className="max-w-full overflow-x-auto bg-[var(--input-bg)] p-3 font-mono text-sm">
-          <code>{code}</code>
-        </pre>
-      ) : (
-        <div className="code-shiki max-w-full overflow-x-auto text-sm" dangerouslySetInnerHTML={{ __html: html }} />
-      )}
+      <div className={`max-w-full overflow-x-auto bg-[var(--input-bg)] text-sm${html === undefined ? '' : ' code-shiki'}`}>
+        {html === undefined ? (
+          <pre className="m-0 p-3 font-mono"><code>{code}</code></pre>
+        ) : (
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        )}
+      </div>
     </div>
   );
-}
+});
 
 function isPlainCodeLanguage(language: string): boolean {
   return language === 'text' || language === 'txt' || language === 'plaintext';
