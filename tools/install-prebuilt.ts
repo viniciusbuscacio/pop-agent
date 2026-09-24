@@ -1,9 +1,10 @@
+import { validateClientPack, verifyClientBootstrap } from './client-pack.ts';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { checkNativeRuntime, extractRuntime, fileHash, git, glibcVersion, prepareRuntimeSource, validateManifest } from './server-runtime.ts';
-import { installPreparedCheckout, parseInstallArguments } from './install-systemd.ts';
+import { installPreparedCheckout, parseInstallArguments, systemdCommandIdentity } from './install-systemd.ts';
 
 import { installEvent } from './install-journal.ts';
 
@@ -91,17 +92,39 @@ try {
       copyFileSync(previousUnit, join(staging, 'previous.service'));
       copyFileSync(previousLauncher, join(staging, 'previous-popman'));
     }
+    let activationStarted = false;
+    const previousCheckout = hadPrevious ? execFileSync('systemctl', ['show', 'pop-agent-service', '-p', 'WorkingDirectory', '--value'], {encoding: 'utf8'}).trim() : undefined;
+    const rollbackPack = previousCheckout ? validateClientPack(previousCheckout) : undefined;
+    const previousCommand = hadPrevious ? systemdCommandIdentity(execFileSync('systemctl', ['show', 'pop-agent-service', '-p', 'ExecStart', '--value'], {encoding: 'utf8'})) : undefined;
+    const previousEnvironment = hadPrevious ? execFileSync('systemctl', ['show', 'pop-agent-service', '-p', 'Environment', '--value'], {encoding: 'utf8'}) : '';
+    const previousPort = /\bPOP_AGENT_PORT=(\d+)/.exec(previousEnvironment)?.[1] ?? '8787';
     try {
       installEvent('service-activate');
-      await installPreparedCheckout({ ...options, checkout: activated, prebuilt: true });
+      await installPreparedCheckout({ ...options, checkout: activated, prebuilt: true }, undefined, () => { activationStarted = true; });
     } catch (error) {
-      if (hadPrevious) {
+      if (hadPrevious && activationStarted) {
+        if (!rollbackPack || !previousCheckout || validateClientPack(previousCheckout).digest !== rollbackPack.digest) throw new Error('Rollback client pack changed; service recovery requires intervention');
         installEvent('service-rollback');
         console.error('Activation failed; restoring the previous service and popman launcher.');
         execFileSync('sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0644', join(staging, 'previous.service'), previousUnit], { stdio: 'inherit' });
         execFileSync('sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0755', join(staging, 'previous-popman'), previousLauncher], { stdio: 'inherit' });
         execFileSync('sudo', ['--', 'systemctl', 'daemon-reload'], { stdio: 'inherit' });
         execFileSync('sudo', ['--', 'systemctl', 'restart', 'pop-agent-service.service'], { stdio: 'inherit' });
+        if (execFileSync('systemctl', ['show', 'pop-agent-service', '-p', 'WorkingDirectory', '--value'], {encoding: 'utf8'}).trim() !== previousCheckout) throw new Error('Rollback checkout identity mismatch');
+        if (!rollbackPack || !previousCheckout || validateClientPack(previousCheckout).digest !== rollbackPack.digest) throw new Error('Rollback client pack changed');
+        if (systemdCommandIdentity(execFileSync('systemctl', ['show', 'pop-agent-service', '-p', 'ExecStart', '--value'], {encoding:'utf8'})) !== previousCommand) throw new Error('Rollback server command mismatch');
+        execFileSync('systemctl', ['is-active', '--quiet', 'pop-agent-service']);
+        let recovered = false;
+        for (let attempt = 0; attempt < 15; attempt += 1) {
+          try {
+            const origin = `http://127.0.0.1:${previousPort}`;
+            const health = await fetch(`${origin}/healthz`, {redirect:'error', signal:AbortSignal.timeout(2_000)});
+            if (!health.ok) throw new Error('Rollback health check failed');
+            await verifyClientBootstrap(origin, rollbackPack); recovered = true; break;
+          }
+          catch { await new Promise(resolve => setTimeout(resolve, 1_000)); }
+        }
+        if (!recovered) throw new Error('Rollback bootstrap verification failed');
       }
       throw error;
     }

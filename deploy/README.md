@@ -386,3 +386,40 @@ batch. The publisher accepts an existing tag only for that commit, verifies
 already uploaded draft assets by size and SHA-256, uploads missing assets and
 checks the complete inventory before publishing. Empty failed-upload starters
 can be retried; conflicting bytes and published releases remain immutable.
+
+
+## Guarded local activation
+
+Use the versioned entry below for local server-only generations. Do not clone
+source and activate it with a one-off systemd script: ignored `cli/pack` output
+is mandatory runtime data for CLI and Local Access.
+
+```sh
+node tools/local-client-activation.ts prepare /absolute/candidate /absolute/client-cache
+node tools/local-client-activation.ts verify /absolute/current http://127.0.0.1:8787
+node tools/local-client-activation.ts activate /absolute/candidate /absolute/data http://127.0.0.1:8787
+```
+
+Preparation requires a clean committed candidate with built server/shared/web
+outputs, stages the exact pinned clients, and records runtime/client hashes in
+the candidate's Git directory. Activation additionally requires the matching
+source gate receipt (same Node version, at most 24 hours old), rechecks runtime
+and client integrity, validates the previous generation, and refuses active or
+queued work. DATA_DIR and origin port must match the effective systemd unit.
+The host lock refuses concurrent activations; after an interrupted process,
+inspect the service before manually removing a stale lock under
+`~/.local/state/pop-agent/local-activation.lock`.
+
+The activator owns only `zzzz-pop-client-activation.conf`, preserves other
+drop-ins, and verifies effective service identity plus bootstrap contents. Work
+arriving before the first restart restores the override without restarting.
+Rollback after a restart also requires idle; failed or busy recovery is reported
+explicitly for operator intervention. Idle observation does not prevent new
+admissions atomically, so use a quiet maintenance window.
+
+`verify` is read-only and accepts an existing generation without a new prepared
+receipt. It checks the actual public bootstrap contents, including the CLI
+archive, rather than treating an HTML HTTP 200 response as a client manifest.
+A preexisting client/protocol change that no longer matches `release/clients.json`
+blocks preparation: publish and pin compatible clients through the normal
+release process instead of changing hashes or bypassing the guard.
