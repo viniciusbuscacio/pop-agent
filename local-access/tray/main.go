@@ -45,6 +45,7 @@ type app struct {
 	connected       bool
 	quitting        bool
 	signingIn       bool
+	attempt         int
 	log             *os.File
 	view            trayView
 }
@@ -119,13 +120,19 @@ func (a *app) start() {
 	}
 	a.connected = false
 	a.accessKnown = false
+	a.attempt++
+	attempt := a.attempt
+	started := time.Now()
 	pop, err := popPath()
 	if err != nil {
 		a.status = "Pop CLI not installed"
+		writeDiagnostic(a.log, "launcher_missing", map[string]any{"attempt": attempt, "error": sanitizeDiagnostic(err.Error())})
 		a.mu.Unlock()
 		a.publish()
 		return
 	}
+	writeDiagnostic(a.log, "child_starting", map[string]any{"attempt": attempt, "executable": pop, "server": safeOrigin(a.server)})
+	diagnostics := &childDiagnostics{out: a.log, attempt: attempt}
 	cmd := childCommand(a.ctx, pop, "local-access", "--status-json")
 	home, _ := os.UserHomeDir()
 	cmd.Dir = home
@@ -136,12 +143,12 @@ func (a *app) start() {
 		stdin, err = cmd.StdinPipe()
 	}
 	if err == nil {
-		cmd.Stderr = a.log
+		cmd.Stderr = diagnostics
 		err = cmd.Start()
 	}
 	if err != nil {
 		a.status = "Could not start"
-		fmt.Fprintln(a.log, "start:", err)
+		writeDiagnostic(a.log, "child_start_failed", map[string]any{"attempt": attempt, "error": sanitizeDiagnostic(err.Error()), "stderr": diagnostics.finish()})
 		a.mu.Unlock()
 		a.publish()
 		return
@@ -168,9 +175,16 @@ func (a *app) start() {
 			a.status = "Disconnected — reconnecting"
 		}
 		a.mu.Unlock()
-		if err != nil {
-			fmt.Fprintln(a.log, "local access exited:", err)
+		fields := map[string]any{"attempt": attempt, "pid": cmd.Process.Pid, "duration_ms": time.Since(started).Milliseconds(), "exit_code": cmd.ProcessState.ExitCode(), "stderr": diagnostics.finish()}
+		event := "child_stopped"
+		if shouldRestart {
+			event = "child_exited"
+			fields["retry_after_seconds"] = 5
 		}
+		if err != nil {
+			fields["error"] = sanitizeDiagnostic(err.Error())
+		}
+		writeDiagnostic(a.log, event, fields)
 		a.publish()
 		if shouldRestart {
 			time.Sleep(5 * time.Second)
@@ -191,6 +205,7 @@ func (a *app) scan(reader io.Reader, cmd *exec.Cmd) {
 			a.mu.Unlock()
 			continue
 		}
+		knownEvent := true
 		switch event.Kind {
 		case "starting":
 			a.connected = false
@@ -223,6 +238,11 @@ func (a *app) scan(reader io.Reader, cmd *exec.Cmd) {
 			a.connected = false
 			a.accessKnown = false
 			a.status = "Update required"
+		default:
+			knownEvent = false
+		}
+		if knownEvent && a.log != nil {
+			writeDiagnostic(a.log, "connection_state", map[string]any{"attempt": a.attempt, "state": event.Kind, "server": safeOrigin(a.server), "connected": a.connected, "access_known": a.accessKnown, "access_enabled": a.accessKnown && a.accessEnabled})
 		}
 		a.mu.Unlock()
 		a.publish()

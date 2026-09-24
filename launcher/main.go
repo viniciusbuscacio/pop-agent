@@ -133,7 +133,7 @@ func (l *launcher) run(args []string) int {
 	if len(args) == 0 || args[0] == "update" || hasArg(args, "--chat") {
 		executable, updated, err := l.updateLauncher(serverURL)
 		if err != nil {
-			fmt.Fprintf(l.stderr, "Could not connect to or update the Pop launcher: %v. Run pop doctor for diagnostics.\n", err)
+			reportBootstrapFailure(l.stderr, err)
 			return 1
 		}
 		if updated {
@@ -156,7 +156,7 @@ func (l *launcher) run(args []string) int {
 
 	m, err := l.fetchManifest(serverURL)
 	if err != nil {
-		fmt.Fprintf(l.stderr, "Could not connect to the Pop Agent server.\n\nServer: %s\nCause: %s\n\nCheck that the server is online and reachable, then run `pop` again.\nRun `pop doctor` for detailed diagnostics.\n", serverURL, describeNetworkError(err))
+		reportBootstrapFailure(l.stderr, err)
 		return 1
 	}
 
@@ -246,9 +246,17 @@ func (l *launcher) doctor(args []string) int {
 		fmt.Fprintf(l.stdout, "Server: invalid URL (%v)\n", err)
 		return 1
 	}
+	launcherRelease, err := l.fetchLauncherManifest(serverURL)
+	if err != nil {
+		fmt.Fprintln(l.stdout, "Launcher bootstrap: failed")
+		reportBootstrapFailure(l.stdout, err)
+		return 1
+	}
+	fmt.Fprintf(l.stdout, "Launcher manifest: ready (%s)\n", launcherRelease.Version)
 	m, err := l.fetchManifest(serverURL)
 	if err != nil {
-		fmt.Fprintf(l.stdout, "Server: unreachable (%s)\n", describeNetworkError(err))
+		fmt.Fprintln(l.stdout, "Client bootstrap: failed")
+		reportBootstrapFailure(l.stdout, err)
 		return 1
 	}
 	fmt.Fprintf(l.stdout, "Server: online (%s, CLI %s)\n", serverURL, m.Version)
@@ -282,18 +290,18 @@ func (l *launcher) fetchManifest(serverURL string) (manifest, error) {
 	req.Header.Set("User-Agent", "pop-launcher/"+launcherVersion)
 	response, err := l.http.Do(req)
 	if err != nil {
-		return manifest{}, err
+		return manifest{}, manifestFailure(req.URL.String(), 0, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return manifest{}, fmt.Errorf("server returned HTTP %d", response.StatusCode)
+		return manifest{}, manifestFailure(req.URL.String(), response.StatusCode, nil)
 	}
 	var m manifest
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&m); err != nil {
-		return manifest{}, fmt.Errorf("invalid CLI manifest: %w", err)
+		return manifest{}, manifestFailure(req.URL.String(), http.StatusOK, err)
 	}
 	if !validVersion(m.Version) || !validVersion(m.MinimumNodeVersion) || !validVersion(m.MinimumLauncherVersion) || m.Package.URL == "" || m.Package.Size <= 0 || len(m.Package.SHA256) != 64 {
-		return manifest{}, errors.New("server returned an incomplete CLI manifest")
+		return manifest{}, manifestFailure(req.URL.String(), http.StatusOK, errors.New("incomplete CLI manifest"))
 	}
 	if compareVersions(launcherVersion, m.MinimumLauncherVersion) < 0 {
 		return manifest{}, fmt.Errorf("Pop launcher %s is too old; this server requires %s or newer. Reinstall the launcher from %s/install.sh", launcherVersion, m.MinimumLauncherVersion, serverURL)
@@ -654,6 +662,10 @@ func commandOutput(cmd *exec.Cmd) (string, error) {
 }
 
 func describeNetworkError(err error) string {
+	var diagnostic *manifestError
+	if errors.As(err, &diagnostic) {
+		return diagnostic.Error()
+	}
 	if errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err) {
 		return "connection timed out after 3 seconds"
 	}

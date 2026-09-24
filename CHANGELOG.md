@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — client bootstrap diagnostics
+
+- Identify failed public manifest routes and HTTP/transport failure classes, with repair guidance instead of misleading offline messages. Doctor checks launcher metadata without updating.
+- Add timestamped Local Access lifecycle/stderr logs with attempt, PID, elapsed time, exit status, retry delay, bounded failure context, and credential redaction.
+
 ## Unreleased — client distribution activation guard
 
 - Refuse incomplete CLI/Local Access distributions before service activation, including prepared runtimes. Verify pinned client checksums, lazy catalogs, effective checkout identity, and HTTP bootstrap content.

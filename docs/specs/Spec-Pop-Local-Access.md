@@ -492,8 +492,16 @@ also record the bounded selector, caller client kind/platform and whether the
 selector was unknown or temporarily offline. They do not include bearer tokens,
 password, message/attachment content, command output or user file contents.
 
-The tray log records lifecycle/diagnostic errors and child stderr. Structured
-status reports server origin, transport and access state only. The tray sanitizes
+The tray log records lifecycle/diagnostic errors and child stderr. Child lifecycle
+and stderr records use timestamped JSON lines with component version and attempt
+identity. Exit records retain a bounded, sanitized stderr tail, PID, duration,
+exit code and the retry delay when a retry is planned. Intentional stops are
+identified separately. Child stderr is buffered by line with bounded memory;
+oversized lines are omitted, URL credentials/query/fragment and labeled tokens,
+passwords, API keys and authorization values are redacted. Public bootstrap
+errors name the failing endpoint and status without logging response bodies.
+These diagnostics remain local and do not change retry or permission policy.
+Structured status reports server origin, transport and access state only. The tray sanitizes
 origins before display and never treats an arbitrary URL as executable content.
 
 Hostname, platform, architecture, version and online/permission state are shown

@@ -97,15 +97,15 @@ func (l *launcher) fetchRuntimeManifest(serverURL string) (runtimeManifest, erro
 	req.Header.Set("User-Agent", "pop-launcher/"+launcherVersion)
 	response, err := l.http.Do(req)
 	if err != nil {
-		return runtimeManifest{}, err
+		return runtimeManifest{}, manifestFailure(req.URL.String(), 0, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return runtimeManifest{}, fmt.Errorf("server returned HTTP %d", response.StatusCode)
+		return runtimeManifest{}, manifestFailure(req.URL.String(), response.StatusCode, nil)
 	}
 	var release runtimeManifest
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&release); err != nil {
-		return runtimeManifest{}, fmt.Errorf("invalid managed Node runtime manifest: %w", err)
+		return runtimeManifest{}, manifestFailure(req.URL.String(), http.StatusOK, err)
 	}
 	if !validVersion(release.Version) || !validVersion(release.MinimumLauncherVersion) {
 		return runtimeManifest{}, errors.New("server returned an incomplete managed Node runtime manifest")

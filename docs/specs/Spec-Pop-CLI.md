@@ -40,6 +40,18 @@ profile read, server request, PLA attach or chat creation. `pop --version` and
 package smoke probes. Runtime diagnostics/install are launcher-owned commands
 and may bootstrap managed Node from the selected/supplied server.
 
+## Bootstrap diagnostics
+
+Public manifest failures identify the request endpoint and HTTP status and use
+stable diagnostic categories. A 404 is a missing distribution/routing failure,
+not an unreachable server; 401/403 on these public routes is an access/proxy
+failure, not proof of expired chat credentials. HTTP 200 with malformed metadata
+is an invalid manifest. Transport errors identify timeout, DNS, certificate or
+connection refusal when known. Diagnostics omit URL credentials, query and
+fragment, response bodies and raw transport error strings that could contain
+secrets. `pop doctor` checks the launcher manifest read-only as well as the CLI
+manifest; it must never self-update as part of this check.
+
 ## Installation and update
 
 Public same-origin shell/PowerShell bootstrap selects the exact

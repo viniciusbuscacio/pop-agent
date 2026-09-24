@@ -22,31 +22,39 @@ type launcherManifest struct {
 	Artifacts map[string]launcherArtifact `json:"artifacts"`
 }
 
-// Checks the same-origin native release before CLI minimum-version checks.
-func (l *launcher) updateLauncher(serverURL string) (string, bool, error) {
+func (l *launcher) fetchLauncherManifest(serverURL string) (launcherManifest, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+"/cli/launcher/manifest.json", nil)
 	if err != nil {
-		return "", false, err
+		return launcherManifest{}, err
 	}
 	response, err := l.http.Do(req)
 	if err != nil {
-		return "", false, err
+		return launcherManifest{}, manifestFailure(req.URL.String(), 0, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return "", false, fmt.Errorf("launcher manifest returned HTTP %d", response.StatusCode)
+		return launcherManifest{}, manifestFailure(req.URL.String(), response.StatusCode, nil)
 	}
 	if response.Request.URL.Scheme != req.URL.Scheme || response.Request.URL.Host != req.URL.Host {
-		return "", false, fmt.Errorf("launcher manifest redirected outside its trusted source")
+		return launcherManifest{}, fmt.Errorf("launcher manifest redirected outside its trusted source")
 	}
 	var release launcherManifest
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&release); err != nil {
-		return "", false, err
+		return launcherManifest{}, manifestFailure(req.URL.String(), http.StatusOK, err)
 	}
 	if !validVersion(release.Version) {
-		return "", false, fmt.Errorf("invalid launcher version")
+		return launcherManifest{}, fmt.Errorf("invalid launcher version")
+	}
+	return release, nil
+}
+
+// Checks the same-origin native release before CLI minimum-version checks.
+func (l *launcher) updateLauncher(serverURL string) (string, bool, error) {
+	release, err := l.fetchLauncherManifest(serverURL)
+	if err != nil {
+		return "", false, err
 	}
 	if compareVersions(release.Version, launcherVersion) <= 0 {
 		return "", false, nil
