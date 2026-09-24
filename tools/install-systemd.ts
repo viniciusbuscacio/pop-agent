@@ -18,6 +18,7 @@ import { networkInterfaces, tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { validateClientPack, verifyClientBootstrap, type ClientPack } from './client-pack.ts';
 import { installEvent } from './install-journal.ts';
 
 const MINIMUM_NODE = [22, 19, 0] as const;
@@ -66,6 +67,7 @@ export interface InstallerDependencies {
   systemdRuntimeDir: string;
   healthCheck: (url: string, timeoutMs: number) => Promise<boolean>;
   privateIpv4: () => string | undefined;
+  bootstrapCheck: (origin: string, pack: ClientPack) => Promise<void>;
 }
 
 const defaultRunner: CommandRunner = {
@@ -98,6 +100,7 @@ function defaultDependencies(prebuilt = false): InstallerDependencies {
     whisperExecutable: executableOnPath('whisper-cli'),
     systemdRuntimeDir: '/run/systemd/system',
     healthCheck: boundedHealthCheck,
+    bootstrapCheck: verifyClientBootstrap,
     privateIpv4: firstPrivateIpv4,
   };
 }
@@ -237,6 +240,7 @@ export function parseInstallArguments(args: readonly string[], checkout: string)
 export async function installPreparedCheckout(
   requested: InstallOptions,
   dependencies: InstallerDependencies = defaultDependencies(requested.prebuilt),
+  onActivationStart: () => void = () => {},
 ): Promise<void> {
   installEvent('service-preflight');
   const options = validatePreflight(requested, dependencies);
@@ -263,6 +267,8 @@ export async function installPreparedCheckout(
   if (!existsSync(builtManager) || !statSync(builtManager).isFile()) {
     throw new Error(`the gate did not produce ${builtManager}; inspect the gate output and rerun`);
   }
+
+  const clientPack = validateClientPack(options.checkout, existsSync(join(options.checkout, 'cli/pack/client-downloads.json')) ? 'lazy' : 'complete');
 
   installEvent('service-directories');
   const dataDir = prepareOwnedDirectory(options.dataDir, dependencies.uid, 'data directory');
@@ -303,10 +309,12 @@ export async function installPreparedCheckout(
   try {
     writeFileSync(stagedUnit, unit, { encoding: 'utf8', mode: 0o600 });
     writeFileSync(stagedPopman, popmanLauncher, { encoding: 'utf8', mode: 0o700 });
+    if (validateClientPack(options.checkout, existsSync(join(options.checkout, 'cli/pack/client-downloads.json')) ? 'lazy' : 'complete').digest !== clientPack.digest) throw new Error('Client pack changed before activation');
     console.log(`Installing popman and ${UNIT_NAME} through narrowly scoped sudo commands...`);
     if (networkOnboarding) {
       runChecked(runner, 'sudo', ['--', 'tailscale', 'set', `--operator=${dependencies.username}`], options.checkout, true);
     }
+    onActivationStart();
     installEvent('service-launcher');
     runChecked(runner, 'sudo', ['--', 'install', '-o', 'root', '-g', 'root', '-m', '0755', stagedPopman, POPMAN_DESTINATION], options.checkout, true);
     installEvent('service-unit');
@@ -331,6 +339,11 @@ export async function installPreparedCheckout(
     );
   }
   runChecked(runner, 'systemctl', ['is-active', '--quiet', UNIT_NAME], options.checkout);
+  const effectiveCheckout = runChecked(runner, 'systemctl', ['show', UNIT_NAME, '-p', 'WorkingDirectory', '--value'], options.checkout).stdout.trim();
+  if (effectiveCheckout !== options.checkout) throw new Error('Active checkout differs from candidate; inspect systemd drop-ins');
+  const effectiveCommand = runChecked(runner, 'systemctl', ['show', UNIT_NAME, '-p', 'ExecStart', '--value'], options.checkout).stdout;
+  if (systemdCommandIdentity(effectiveCommand) !== `${dependencies.nodeExecutable}\n${dependencies.nodeExecutable} ${options.checkout}/server/dist/main.js`) throw new Error('Active server command differs from candidate; inspect systemd drop-ins');
+  await dependencies.bootstrapCheck(`http://127.0.0.1:${String(options.port)}`, clientPack);
   installEvent('service-ready');
   console.log(`Pop Agent is healthy. The service remains loopback-only at http://127.0.0.1:${String(options.port)}.`);
   if (setupCode !== undefined) {
@@ -627,4 +640,11 @@ export async function runInstallCli(): Promise<void> {
 const invokedPath = process.argv[1];
 if (invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href) {
   await runInstallCli();
+}
+
+/** Ignore volatile process status fields when comparing the effective unit command. */
+export function systemdCommandIdentity(value: string): string {
+  const match = /path=([^;]+?) ; argv\[\]=([^;]+?) ;/.exec(value);
+  if (!match) throw new Error('Cannot identify effective systemd command');
+  return `${match[1]!.trim()}\n${match[2]!.trim()}`;
 }

@@ -1,3 +1,4 @@
+import { validateClientPack } from './client-pack.ts';
 import { probeAudioBinary } from './audio-runtime.ts';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -164,25 +165,5 @@ export async function checkNativeRuntime(root: string, clientMode: 'complete' | 
   for (const file of ['server/dist/main.js', 'server/dist/manager/main.js', 'web/dist/index.html', 'cli/pack/runtime/node/manifest.json']) {
     if (!lstatSync(join(root, file)).isFile()) throw new Error(`Missing runtime file: ${file}`);
   }
-  const version = (JSON.parse(readFileSync(join(root, 'cli/pack/package.json'), 'utf8')) as { version: string }).version;
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid CLI component version');
-  const sources = clientMode === 'lazy' ? JSON.parse(readFileSync(join(root, 'cli/pack/client-downloads.json'), 'utf8')) as {schema?: number; repository?: string; version?: string; artifacts?: Record<string, {repository: string; version: string}>} : undefined;
-  for (const directory of ['cli/pack/launcher', 'cli/pack/local-access', 'cli/pack/runtime/node']) {
-    const manifest = JSON.parse(readFileSync(join(root, directory, 'manifest.json'), 'utf8')) as { artifacts?: Record<string, { file: string; size: number; sha256: string }>; packages?: Record<string, { file: string; size: number; sha256: string }> };
-    const artifacts = Object.values(manifest.artifacts ?? manifest.packages ?? {});
-    if (artifacts.length === 0) throw new Error(`Empty client manifest: ${directory}`);
-    for (const artifact of artifacts) {
-      if (typeof artifact.file !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]+$/.test(artifact.file) || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > 128 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(artifact.sha256)) throw new Error('Invalid client artifact filename');
-      const path = join(root, directory, artifact.file);
-      if (clientMode === 'lazy') {
-        if (!directory.endsWith('runtime/node')) {
-          const source = sources?.schema === 2 ? sources.artifacts?.[`${directory.split('/').at(-1)}/${artifact.file}`] : sources;
-          if (!source || !/^[\w.-]+\/[\w.-]+$/.test(source.repository ?? '') || !/^\d+\.\d+\.\d+$/.test(source.version ?? '')) throw new Error('Invalid deferred client release source');
-        }
-        continue;
-      }
-      if (!lstatSync(path).isFile() || lstatSync(path).size !== artifact.size || await fileHash(path) !== artifact.sha256) throw new Error(`Client artifact failed verification: ${artifact.file}`);
-    }
-  }
-  if (!lstatSync(join(root, `cli/pack/cli-${version}.tgz`)).isFile()) throw new Error('Missing packed CLI');
+  validateClientPack(root, clientMode);
 }
