@@ -187,10 +187,16 @@ export function createApp(deps: AppDeps): Hono {
   // Bound the bytes before JSON/multipart parsers allocate them. Individual
   // routes still enforce their smaller semantic limits (Files is 100 MiB; PLA
   // frames are 12 MiB), while this ceiling catches every forgotten route.
-  app.use('/v1/*', bodyLimit({
+  const ordinaryBodyLimit = bodyLimit({
     maxSize: MAX_API_BODY_BYTES,
     onError: (c) => apiError(c, 413, 'too_large', 'This request body is too large.'),
-  }));
+  });
+  app.use('/v1/*', (c, next) => {
+    // Raw backup imports are bounded while streaming, after the owner guard.
+    // Hono's generic limiter buffers chunked bodies and cannot serve multi-GiB imports.
+    if (c.req.method === 'POST' && c.req.path === '/v1/backups/import') return next();
+    return ordinaryBodyLimit(c, next);
+  });
 
   // Liveness and the sidebar's health probe (docs/specs/Spec-Pop-General.md §13), as their own
   // mini-app so the typed registry below can bless them explicitly.

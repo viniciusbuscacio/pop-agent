@@ -234,6 +234,33 @@ complete backups. Restore policy comes from validated archive metadata, never
 from a caller-supplied filename. Listings label locally-created omissions as
 Without Files using their generated `-without-files.popbackup` suffix.
 
+## Importing an encrypted backup
+
+Settings → Backup offers a file-backed raw upload with progress and cancellation,
+including on an empty installation without a configured creation password.
+POST `/v1/backups/import` is owner-authenticated, accepts only raw
+`application/octet-stream` `.popbackup` bytes, and streams into private staging.
+The 10 GiB byte ceiling is enforced during streaming, including chunked bodies;
+imports expire after two hours and aborted/failed uploads remove staging.
+Import shares the backup mutation lock and publishes atomically under a generated
+name without overwriting or pruning previous archives. It only checks the format
+header and minimum length: authentication, manifest, database and path validation
+remain mandatory during explicitly confirmed restore with the archive password.
+Imported Files inclusion is unknown until that validation, never inferred from an
+uploaded filename. Uploading does not restore, change credentials or restart.
+
+Creation never dereferences symbolic links into external data. Included internal
+links (including absolute paths and internal aliases) are normalized to portable
+relative targets in staging. External, dangling, excluded-target or escaping links
+fail creation with an actionable error before publishing an archive. The source
+is unchanged and no files are silently omitted. The explicit per-creation
+`skipUnsupportedLinks` option defaults off. When selected in Settings, unsupported
+links alone are omitted from staging and their data-relative paths recorded in
+the authenticated archive at `.pop-backup-omitted-links.json`. External target
+contents are never copied. The UI explains that linked dependencies are excluded. Old unsafe archives remain
+rejected by restore; repair requires a separately reviewed copy, not relaxed
+validation.
+
 ## Browser and offline restore
 
 Settings → Backup offers Restore for each saved archive on the installed systemd

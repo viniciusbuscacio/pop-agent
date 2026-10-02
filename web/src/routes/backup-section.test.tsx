@@ -10,9 +10,11 @@ const remove = vi.fn();
 const setPassword = vi.fn();
 const restore = vi.fn();
 const create = vi.fn();
+const importArchive = vi.fn();
 
 vi.mock('../services/backups', () => ({
   backupsService: {
+    importArchive: (...args: unknown[]) => importArchive(...args) as Promise<unknown>,
     restore: (name: string, password?: string) => restore(name, password) as Promise<unknown>,
     setPassword: (password: string, confirmation: string) => setPassword(password, confirmation) as Promise<void>,
     list: () => list() as Promise<unknown>,
@@ -27,6 +29,7 @@ beforeEach(() => {
   list.mockReset().mockResolvedValue({
     backups: [{ name: 'backup-2026.tar.gz', size: 1024, createdAt: '2026-08-31T12:00:00Z' }],
   });
+  importArchive.mockReset().mockResolvedValue({});
   create.mockReset().mockResolvedValue({});
   restore.mockReset().mockResolvedValue({ accepted: true });
   remove.mockReset().mockResolvedValue(undefined);
@@ -136,4 +139,32 @@ it('does not offer file exclusion before the connected server supports it', asyn
   await screen.findByText('No backups yet.');
   expect((toggle as HTMLInputElement).disabled).toBe(true);
   expect((toggle as HTMLInputElement).checked).toBe(true);
+});
+
+
+it('imports a file in an empty installation without setting a new password or auto-restoring', async () => {
+  list.mockResolvedValue({ backups: [], importMaxBytes: 10 * 1024 ** 3, restoreAvailable: true });
+  const user = userEvent.setup(); render(<BackupSection />);
+  await screen.findByText('No backups yet.');
+  const file = new File(['POPBAK01' + 'x'.repeat(100)], 'original.popbackup');
+  await user.upload(screen.getByLabelText('Backup archive'), file);
+  await user.click(screen.getByText('Import backup'));
+  await waitFor(() => expect(importArchive).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function)));
+  expect(restore).not.toHaveBeenCalled(); expect(setPassword).not.toHaveBeenCalled();
+  expect(await screen.findByText(/Backup imported/)).toBeTruthy();
+});
+
+it('cancels an in-flight import without restoring and reconciles the archive list', async () => {
+  list.mockResolvedValue({ backups: [], importMaxBytes: 10 * 1024 ** 3 });
+  importArchive.mockImplementation((_file: File, signal: AbortSignal, progress: (bytes: number) => void) => new Promise((_resolve, reject) => {
+    progress(10);
+    signal.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+  }));
+  const user = userEvent.setup(); render(<BackupSection />);
+  await screen.findByText('No backups yet.');
+  await user.upload(screen.getByLabelText('Backup archive'), new File(['x'.repeat(100)], 'backup.popbackup'));
+  await user.click(screen.getByText('Import backup'));
+  await user.click(await screen.findByText('Cancel upload'));
+  expect(await screen.findByText(/Upload cancelled/)).toBeTruthy();
+  expect(restore).not.toHaveBeenCalled();
 });

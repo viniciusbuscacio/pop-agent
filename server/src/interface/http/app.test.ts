@@ -100,3 +100,11 @@ describe('app', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'not_found' } });
   });
 });
+
+it('keeps raw large backup imports behind owner authentication', async () => {
+  const { app } = createTestApp();
+  const response = await app.request('/v1/backups/import', {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': String(5 * 1024 ** 3) }, body: 'POPBAK01',
+  });
+  expect(response.status).toBe(401);
+});

@@ -301,6 +301,44 @@ export async function apiUpload<T>(path: string, form: FormData, signal?: AbortS
   throw handleSessionError(classifyServerReachability(await toApiError(response)), isCurrentSession);
 }
 
+/** File-backed raw upload: XHR exposes progress without buffering a multi-GiB Blob. */
+export function apiRawUpload<T>(path: string, file: File, signal: AbortSignal, progress: (bytes: number) => void): Promise<T> {
+  const token = session.token();
+  const generation = session.generation();
+  const isCurrentSession = (): boolean => session.generation() === generation && session.token() === token;
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    xhr.open('POST', `${BASE}${path}`);
+    xhr.timeout = 2 * 60 * 60 * 1000;
+    for (const [key, value] of Object.entries(clientHeaders())) xhr.setRequestHeader(key, value);
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    if (token !== undefined) xhr.setRequestHeader('authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => progress(event.loaded);
+    xhr.onabort = () => { cleanup(); reject(new DOMException('Upload cancelled', 'AbortError')); };
+    xhr.onerror = xhr.ontimeout = () => {
+      cleanup(); healthMonitor.reportUnreachable();
+      reject(new ApiError('server_unreachable', 'Backup import interrupted. Check the connection and retry.', 0));
+    };
+    xhr.onload = () => {
+      cleanup(); healthMonitor.reportReachable();
+      const response = new Response(xhr.responseText, { status: xhr.status, headers: {
+        [SESSION_TOKEN_HEADER]: xhr.getResponseHeader(SESSION_TOKEN_HEADER) ?? '',
+      } });
+      refreshSessionFrom(response, isCurrentSession);
+      if (response.ok) {
+        try { resolve(JSON.parse(xhr.responseText) as T); } catch { reject(new ApiError('operation_error', 'Invalid upload response.', xhr.status)); }
+      } else {
+        void toApiError(response).then((error) => reject(handleSessionError(classifyServerReachability(error), isCurrentSession)));
+      }
+    };
+    if (signal.aborted) { reject(new DOMException('Upload cancelled', 'AbortError')); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    xhr.send(file);
+  });
+}
+
 function refreshSessionFrom(response: Response, isCurrentSession: () => boolean): void {
   const renewed = response.headers.get(SESSION_TOKEN_HEADER);
   if (isCurrentSession() && renewed !== null && renewed.length > 0) session.refresh(renewed);

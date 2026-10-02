@@ -77,3 +77,20 @@ it('validates the optional Files choice while keeping empty-body clients compati
   expect((await response.json()).includeFiles).toBe(false);
   expect((await app.request('/backups', { method: 'POST', body: JSON.stringify({ includeFiles: 'false' }) })).status).toBe(400);
 });
+
+it('accepts raw import separately from explicit restore and refuses buffered/oversized formats', async () => {
+  const backups = service(undefined);
+  backups.importArchive = vi.fn(async (source) => {
+    let size = 0; for await (const chunk of source) size += chunk.length;
+    return { name: 'pop-backup-import-test.popbackup', size, createdAt: '', encrypted: true, includeFiles: null };
+  });
+  const app = createBackupRoutes({ backups });
+  const send = (headers: Record<string, string>) => app.request('/backups/import', { method: 'POST', headers, body: 'POPBAK01' });
+  expect((await send({ 'content-type': 'multipart/form-data' })).status).toBe(400);
+  expect((await send({ 'content-type': 'application/octet-stream', 'content-length': String(11 * 1024 ** 3) })).status).toBe(413);
+  expect(backups.importArchive).not.toHaveBeenCalled();
+  const response = await send({ 'content-type': 'application/octet-stream' });
+  expect(response.status).toBe(201);
+  expect((await response.json()).includeFiles).toBeNull();
+  expect(backups.restore).not.toHaveBeenCalled();
+});

@@ -269,3 +269,76 @@ it('exposes failed creation after navigation instead of reporting an idle succes
   expect(service.status().state).toBe('failed');
   expect(service.list()).toEqual([]);
 });
+
+it('normalizes internal absolute links and restores their included target on a different host', async () => {
+  mkdirSync(join(dataDir, 'files'));
+  writeFileSync(join(dataDir, 'files', 'target.txt'), 'portable');
+  symlinkSync(join(dataDir, 'files', 'target.txt'), join(dataDir, 'files', 'alias'));
+  const info = await service.create();
+  const destination = join(root, 'destination'); mkdirSync(destination);
+  const target = new TarBackupService({ dataDir: destination, backupsDir, now: () => new Date().toISOString() });
+  await target.restore(info.name, password);
+  expect(readFileSync(join(destination, 'files', 'alias'), 'utf8')).toBe('portable');
+});
+
+it('rejects external links at creation without changing the source or publishing an archive', async () => {
+  const outside = join(root, 'outside'); writeFileSync(outside, 'outside');
+  symlinkSync(outside, join(dataDir, 'external'));
+  await expect(service.create()).rejects.toThrow('Cannot back up symbolic link');
+  expect(service.list()).toEqual([]);
+  expect(service.status().message).toContain('nothing was excluded silently');
+  expect(readFileSync(join(dataDir, 'external'), 'utf8')).toBe('outside');
+});
+
+it('rejects links to excluded host keys', async () => {
+  symlinkSync('secret.key', join(dataDir, 'key-alias'));
+  await expect(service.create()).rejects.toThrow('Cannot back up symbolic link');
+  expect(service.list()).toEqual([]);
+});
+
+it('imports encrypted bytes without password or restore, then roundtrips with explicit password', async () => {
+  const original = await service.create();
+  const bytes = readFileSync(service.pathOf(original.name)!);
+  async function* chunks() { yield bytes.subarray(0, 3); yield bytes.subarray(3); }
+  const imported = await service.importArchive(chunks(), new AbortController().signal);
+  expect(imported.includeFiles).toBeNull();
+  expect(readFileSync(service.pathOf(imported.name)!)).toEqual(bytes);
+  expect(service.list()).toHaveLength(2);
+  expect(await service.restore(imported.name, password)).toBe(true);
+});
+
+it('rejects malformed or truncated imports and removes pending files', async () => {
+  const { readdirSync } = await import('node:fs');
+  for (const bytes of [Buffer.alloc(100), Buffer.from('POPBAK01')]) {
+    async function* chunks() { yield bytes; }
+    await expect(service.importArchive(chunks(), new AbortController().signal)).rejects.toThrow();
+    expect(readdirSync(backupsDir)).toEqual([]);
+  }
+});
+
+it('serializes import against mutations and cleans partial bytes on cancellation', async () => {
+  const { readdirSync } = await import('node:fs');
+  const controller = new AbortController();
+  async function* chunks() {
+    yield Buffer.concat([Buffer.from('POPBAK01'), Buffer.alloc(100)]);
+    await expect(service.create()).rejects.toThrow('already running');
+    expect(() => service.setPassword('another-backup-password')).toThrow('already running');
+    expect(() => service.delete('missing')).toThrow('already running');
+    controller.abort();
+  }
+  await expect(service.importArchive(chunks(), controller.signal)).rejects.toThrow();
+  expect(readdirSync(backupsDir)).toEqual([]);
+  expect(service.status().state).toBe('idle');
+});
+
+it('omits unsupported links only on explicit opt-in and records omissions in the encrypted snapshot', async () => {
+  const outside = join(root, 'external-dependency'); writeFileSync(outside, 'do not copy');
+  symlinkSync(outside, join(dataDir, 'external-link'));
+  const info = await service.create({ skipUnsupportedLinks: true });
+  const destination = join(root, 'portable'); mkdirSync(destination);
+  const target = new TarBackupService({ dataDir: destination, backupsDir, now: () => new Date().toISOString() });
+  await target.restore(info.name, password);
+  expect(existsSync(join(destination, 'external-link'))).toBe(false);
+  expect(JSON.parse(readFileSync(join(destination, '.pop-backup-omitted-links.json'), 'utf8'))).toEqual({ version: 1, paths: ['external-link'] });
+  expect(readFileSync(join(dataDir, 'external-link'), 'utf8')).toBe('do not copy');
+});

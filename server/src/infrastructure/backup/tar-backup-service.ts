@@ -1,8 +1,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, posix, relative, resolve } from 'node:path';
-import type { Readable } from 'node:stream';
+import { cp, link, lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { BackupImportError, MAX_BACKUP_IMPORT_BYTES } from '../../application/backup/backup-import.js';
 import Database from 'better-sqlite3';
 import { c, t, x } from 'tar';
 import { BACKUP_PASSWORD_KEY, BackupError, BackupPassword } from '../../application/backup/backup-password.js';
@@ -15,7 +18,7 @@ import { decryptArchive, encryptArchive } from './archive-crypto.js';
 
 const KEEP = 10;
 const DATABASE_FILE = 'pop-agent.db';
-const EXCLUDED = new Set([BACKUP_CONTENT_FILE, 'secret.key', 'models', 'voice-models', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
+const EXCLUDED = new Set(['.pop-backup-omitted-links.json', BACKUP_CONTENT_FILE, 'secret.key', 'models', 'voice-models', DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`]);
 
 export interface TarBackupDeps {
   dataDir: string;
@@ -75,11 +78,11 @@ export class TarBackupService implements BackupService {
       const path = this.pathOf(name);
       if (path === undefined) return [];
       const info = lstatSync(path);
-      return [{ name, size: info.size, createdAt: info.mtime.toISOString(), encrypted: name.endsWith('.popbackup'), includeFiles: !name.endsWith('-without-files.popbackup') }];
+      return [{ name, size: info.size, createdAt: info.mtime.toISOString(), encrypted: name.endsWith('.popbackup'), includeFiles: name.startsWith('pop-backup-import-') ? null : !name.endsWith('-without-files.popbackup') }];
     }).sort((left, right) => right.name.localeCompare(left.name));
   }
 
-  async create(options: { includeFiles?: boolean } = {}): Promise<BackupInfo> {
+  async create(options: { includeFiles?: boolean; skipUnsupportedLinks?: boolean } = {}): Promise<BackupInfo> {
     const includeFiles = options.includeFiles !== false;
     if (this.busy) throw new BackupError('A backup is already running.');
     if (this.deps.secrets === undefined) throw new BackupError('Set a backup password in Settings → Backup first.');
@@ -104,6 +107,10 @@ export class TarBackupService implements BackupService {
       });
       await writeFile(join(stagedData, BACKUP_CONTENT_FILE), JSON.stringify({ version: 1, includeFiles }), { mode: 0o600 });
       await snapshotDatabase(join(this.deps.dataDir, DATABASE_FILE), join(stagedData, DATABASE_FILE));
+      const omittedLinks = await normalizeBackupLinks(stagedData, this.deps.dataDir, options.skipUnsupportedLinks === true);
+      if (omittedLinks.length > 0) {
+        await writeFile(join(stagedData, '.pop-backup-omitted-links.json'), JSON.stringify({ version: 1, paths: omittedLinks }), { mode: 0o600 });
+      }
       const pending = join(stagingRoot, 'archive');
       // tar's stream respects backpressure; no unencrypted tar.gz is written.
       await encryptArchive(() => c({ gzip: true, cwd: stagedData, portable: true }, ['.']) as unknown as Readable, pending, password);
@@ -111,11 +118,47 @@ export class TarBackupService implements BackupService {
       this.prune();
       return { name, size: (await stat(target)).size, createdAt: this.deps.now(), encrypted: true, includeFiles };
     } catch (error) {
-      this.operation = { state: 'failed', message: 'Could not create backup. Check available disk space and try again.' };
+      this.operation = { state: 'failed', message: error instanceof BackupError ? error.message : 'Could not create backup. Check available disk space and try again.' };
       throw error;
     } finally {
       try { if (stagingRoot !== undefined) await rm(stagingRoot, { recursive: true, force: true }); }
       finally { this.busy = false; if (this.operation.state === 'creating') this.operation = { state: 'idle' }; }
+    }
+  }
+
+  /** Raw encrypted bytes only; no parsing, decryption, retention or live-data writes. */
+  async importArchive(source: AsyncIterable<Uint8Array>, signal: AbortSignal): Promise<BackupInfo> {
+    if (this.busy) throw new BackupError('A backup operation is already running.');
+    this.busy = true;
+    this.operation = { state: 'importing' };
+    let staging: string | undefined;
+    try {
+      signal.throwIfAborted();
+      staging = await mkdtemp(join(this.deps.backupsDir, '.import-'));
+      const pending = join(staging, 'archive');
+      let size = 0;
+      let header = Buffer.alloc(0);
+      const bound = new Transform({ transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        if (size > MAX_BACKUP_IMPORT_BYTES) return callback(new BackupImportError('Backup exceeds the 10 GiB import limit.', 413));
+        if (header.length < 8) {
+          header = Buffer.concat([header, chunk.subarray(0, 8 - header.length)]);
+          if (header.length === 8 && !header.equals(Buffer.from('POPBAK01'))) {
+            return callback(new BackupImportError('Not a supported .popbackup archive.', 400));
+          }
+        }
+        callback(null, chunk);
+      } });
+      await pipeline(Readable.from(source), bound, createWriteStream(pending, { flags: 'wx', mode: 0o600 }), { signal });
+      if (size <= 52) throw new BackupImportError('The backup header or payload is incomplete.', 400);
+      signal.throwIfAborted();
+      const name = `pop-backup-import-${randomUUID()}.popbackup`;
+      // Same filesystem: atomic publication without rename's overwrite semantics.
+      await link(pending, join(this.deps.backupsDir, name));
+      return { name, size, createdAt: this.deps.now(), encrypted: true, includeFiles: null };
+    } finally {
+      try { if (staging !== undefined) await rm(staging, { recursive: true, force: true }); }
+      finally { this.busy = false; this.operation = { state: 'idle' }; }
     }
   }
 
@@ -230,4 +273,41 @@ async function prepareRestoredSecrets(extracted: string, dataDir: string, passwo
 async function snapshotDatabase(source: string, destination: string): Promise<void> {
   const database = new Database(source, { readonly: true, fileMustExist: true });
   try { await database.backup(destination); } finally { database.close(); }
+}
+
+/** Never dereference links while copying. Normalize only targets present in the snapshot. */
+async function normalizeBackupLinks(staged: string, source: string, skipUnsupported: boolean): Promise<string[]> {
+  const omitted: string[] = [];
+  const sourceRoot = await realpath(source);
+  const inside = (path: string): boolean => path !== '..' && !path.startsWith('../') && !isAbsolute(path);
+  async function walk(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) { await walk(path); continue; }
+      if (!entry.isSymbolicLink()) continue;
+      const name = relative(staged, path);
+      try {
+        const original = await readlink(path);
+        // Relative links with lexical escapes remain invalid even if an outside alias points back in.
+        if (!isAbsolute(original) && !inside(relative(staged, resolve(dirname(path), original)))) throw new Error('escape');
+        const target = await realpath(resolve(dirname(join(sourceRoot, name)), original));
+        const targetName = relative(sourceRoot, target);
+        if (!inside(targetName)) throw new Error('external');
+        const stagedTarget = join(staged, targetName);
+        // Canonical targets cannot be excluded, dangling or links into live data.
+        const targetInfo = await lstat(stagedTarget);
+        if (!targetInfo.isFile() && !targetInfo.isDirectory()) throw new Error('missing target');
+        if (!inside(relative(staged, await realpath(stagedTarget)))) throw new Error('escape');
+        const replacement = relative(dirname(path), stagedTarget) || '.';
+        if (replacement.includes('\\')) throw new Error('unsupported');
+        await rm(path);
+        await symlink(replacement, path);
+      } catch {
+        if (skipUnsupported) { await rm(path); omitted.push(name); continue; }
+        throw new BackupError(`Cannot back up symbolic link "${name}": its target must exist inside included backup data. Remove or relocate the link and retry; nothing was excluded silently.`);
+      }
+    }
+  }
+  await walk(staged);
+  return omitted;
 }

@@ -11,22 +11,23 @@ export interface BackupInfo {
   size: number;
   createdAt: string;
   encrypted?: boolean;
-  includeFiles?: boolean;
+  includeFiles?: boolean | null;
 }
 
 export interface BackupOperation {
-  state: 'idle' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed';
+  state: 'idle' | 'importing' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed';
   message?: string;
 }
 
 export interface BackupService {
+  importArchive?(source: AsyncIterable<Uint8Array>, signal: AbortSignal): Promise<BackupInfo>;
   status?(): BackupOperation;
   canRestore?(): boolean;
   requestRestore?(name: string, password?: string): void;
   passwordConfigured(): boolean;
   setPassword(password: string): void;
   list(): BackupInfo[];
-  create(options?: { includeFiles?: boolean }): Promise<BackupInfo>;
+  create(options?: { includeFiles?: boolean; skipUnsupportedLinks?: boolean }): Promise<BackupInfo>;
   /** Absolute path of a backup, for the download route. Undefined if unknown. */
   pathOf(name: string): string | undefined;
   /** Replaces the live data with a backup's contents. Returns false if unknown. */

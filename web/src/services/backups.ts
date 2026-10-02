@@ -1,7 +1,10 @@
 import type { BackupDTO, BackupsResponse } from '@pop-agent/shared';
-import { apiDownload, apiRequest } from './api';
+import { apiDownload, apiRawUpload, apiRequest } from './api';
 
 export const backupsService = {
+  importArchive(file: File, signal: AbortSignal, progress: (bytes: number) => void): Promise<BackupDTO> {
+    return apiRawUpload<BackupDTO>('/backups/import', file, signal, progress);
+  },
   setPassword(password: string, confirmation: string): Promise<void> {
     return apiRequest<void>('/backups/password', { method: 'PUT', body: { password, confirmation } });
   },
@@ -9,8 +12,8 @@ export const backupsService = {
     return apiRequest<BackupsResponse>('/backups');
   },
 
-  create(includeFiles = true): Promise<BackupDTO> {
-    return apiRequest<BackupDTO>('/backups', { method: 'POST', body: { includeFiles } });
+  create(includeFiles = true, skipUnsupportedLinks = false): Promise<BackupDTO> {
+    return apiRequest<BackupDTO>('/backups', { method: 'POST', body: { includeFiles, ...(skipUnsupportedLinks ? { skipUnsupportedLinks: true } : {}) } });
   },
 
   restore(name: string, password?: string): Promise<{ accepted: boolean }> {

@@ -145,13 +145,15 @@ export interface BackupDTO {
   size: number;
   createdAt: string;
   encrypted?: boolean;
-  includeFiles?: boolean;
+  /** null for imports: determined only after authenticated restore validation. */
+  includeFiles?: boolean | null;
 }
 
 export interface BackupsResponse {
+  importMaxBytes?: number;
   fileSelectionAvailable?: boolean;
   restoreAvailable?: boolean;
-  operation?: { state: 'idle' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed'; message?: string };
+  operation?: { state: 'idle' | 'importing' | 'creating' | 'preparing' | 'restarting' | 'restored' | 'failed'; message?: string };
   backups: BackupDTO[];
   passwordConfigured?: boolean;
 }

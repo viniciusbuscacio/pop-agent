@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — portable backups and browser import
+
+- Import encrypted backups through Settings with bounded streaming, upload progress and cancellation; restoration remains a separate confirmed action.
+- Normalize included internal symbolic links in new backups and fail clearly on external or excluded targets rather than creating unrestorable archives.
+
+
 ## Unreleased — client bootstrap diagnostics
 
 - Identify failed public manifest routes and HTTP/transport failure classes, with repair guidance instead of misleading offline messages. Doctor checks launcher metadata without updating.
