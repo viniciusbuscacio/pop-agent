@@ -216,6 +216,39 @@ describe('slugify', () => {
 });
 
 describe('scrubCandidate', () => {
+  it('preserves application names and procedural credential references in every text field', () => {
+    const procedure = candidate({
+      name: 'passwordPlease access',
+      description: 'Operate the router through Mac/passwordPlease.',
+      whenToUse: 'When using passwordPlease or checking token expiration.',
+      body: 'Read the authorized item through the passwordPlease CLI.\nNever print the password or token.\nUse the Keychain service named passwordPlease.',
+    });
+    expect(scrubCandidate(procedure)).toEqual(procedure);
+    expect(hasUsableRouting(procedure)).toBe(true);
+  });
+
+  it.each([
+    'password=example-value',
+    'PASSWORD: example-value',
+    'DB_PASSWORD=example-value',
+    'access_token: example-value',
+    '"password": "example-value"',
+    "'token' = 'example-value'",
+    'api-key = example-value',
+    'senha: example-value',
+    'password is example-value',
+    'senha é example-value',
+    'password:',
+    'login --password example-value',
+    'login --token=example-value',
+    'Use passwordPlease; password=example-value',
+    'Use passwordPlease; ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456',
+  ])('still redacts credential-bearing lines: %s', (line) => {
+    for (const field of ['name', 'description', 'whenToUse', 'body'] as const) {
+      expect(scrubCandidate(candidate({ [field]: line }))[field]).toBe('[redacted secret]');
+    }
+  });
+
   it('replaces a line carrying a credential, whole', () => {
     const scrubbed = scrubCandidate(
       candidate({ body: 'Run the deploy.\napi_key = sk-live-1234\nDone.' }),

@@ -359,3 +359,10 @@ handoffs contain bounded retained logs with explicit truncation metadata and
 hashes, not a promise of uncapped raw output. Failure diagnostics use stable
 application-owned codes/phases and constant safe reasons, never raw provider or
 filesystem errors.
+
+Skill credential detection distinguishes procedural mentions (including the
+passwordPlease application name and token handling) from labeled values.
+Assignments, quoted credential keys, common English/Portuguese value markers
+and recognizable bare secret formats remain checked in routing fields and
+bodies. Mentioning an application never exempts the rest of a line from
+scanning. Rejected owner writes leave the existing skill unchanged.

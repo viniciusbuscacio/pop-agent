@@ -292,14 +292,19 @@ export function candidateRoutingText(candidate: SkillCandidate): string {
 }
 
 /**
- * A line that smells of a credential is replaced, not trimmed around -- the
+ * A line containing a credential label/value is replaced, not trimmed around -- the
  * same rule `skill_write` applies in fase (b), for the same reason: a skill
  * body is distilled from a conversation, conversations contain pasted keys, and
  * this text is going to be replayed into future prompts. Whole line, because a
  * key is worth nothing without the name beside it and guessing where the value
  * starts is how a scrubber leaks half a token.
  */
-const SECRET_LINE = /password|token|(?:api[_-]?)?key\s*[=:]/i;
+// A technical mention (passwordPlease, token handling, password rotation) is
+// not a credential. Require an assignment or a natural-language value marker.
+// Keep labels with an empty assignment conservative: the value may follow on
+// another line. Quoted JSON keys and environment-variable suffixes also match.
+const SECRET_LINE = /(?:password|passphrase|token|secret|senha|credential|credencial|(?:api[_ -]?)?key)\b["'`]?\s*(?:[:=]|(?:is|é)\s+\S)/i;
+const SECRET_ARGUMENT = /--(?:password|passphrase|token|secret|senha|api[-_]key)(?:=|\s+)\S/i;
 
 /**
  * The secrets that carry no label. `SECRET_LINE` has a word to hold on to; a
@@ -324,7 +329,7 @@ export const REDACTED_SECRET = '[redacted secret]';
 
 export function scrubCandidate(candidate: SkillCandidate): SkillCandidate {
   const scrubLine = (line: string): string =>
-    SECRET_LINE.test(line) || BARE_TOKEN.test(line) ? REDACTED_SECRET : line;
+    SECRET_LINE.test(line) || SECRET_ARGUMENT.test(line) || BARE_TOKEN.test(line) ? REDACTED_SECRET : line;
   return {
     ...candidate,
     name: scrubLine(candidate.name),
