@@ -732,6 +732,10 @@ export class ChatScreen {
     const text = raw.trim();
     if (text.length === 0) return;
 
+    // Recall submitted input, including commands and failed sends, in entry
+    // order rather than async completion order. pi-tui owns navigation/drafts.
+    this.editor.addToHistory(text);
+
     if (text.startsWith('/') && !/^\/loop(?:\s|$)/i.test(text)) {
       this.command(text);
       return;

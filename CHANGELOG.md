@@ -20,6 +20,9 @@
 
 ## Unreleased
 
+- Restore CLI Up/Down input recall for this interactive session, including commands
+  and failed sends, while preserving multiline input and draft recovery.
+
 - Fix flickering chat code blocks during streaming: keep current source and copy
   controls stable, then apply syntax highlighting after the answer settles.
 

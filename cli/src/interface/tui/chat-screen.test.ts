@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatDTO } from '@pop-agent/shared';
-import { Markdown, Text, type Terminal } from '@earendil-works/pi-tui';
+import { Markdown, Text, type Editor, type Terminal } from '@earendil-works/pi-tui';
 import { markdownTheme } from './theme.js';
 import { ChatSession, type SessionPorts } from '../../application/session.js';
 import { emptyRun } from '../../application/transcript.js';
@@ -156,6 +156,221 @@ describe('model selector safety', () => {
     expect(output).not.toContain('\u001b[2J');
     expect(output).not.toContain('\u0007');
     expect(safeTerminalText('safe\u009bcontrol')).toBe('safecontrol');
+  });
+});
+
+describe('ChatScreen input recall', () => {
+  const up = '\u001b[A';
+  const down = '\u001b[B';
+  const paste = (text: string): string => `\u001b[200~${text}\u001b[201~`;
+  const editorOf = (screen: ChatScreen): Editor => (screen as unknown as { editor: Editor }).editor;
+
+  it('recalls older/newer submissions and restores the draft with built-in navigation', async () => {
+    const { terminal, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    const editor = editorOf(screen);
+    screen.start();
+    try {
+      send('first');
+      send('\r');
+      send('second');
+      send('\r');
+      await vi.waitFor(() => expect(ports.send).toHaveBeenCalledTimes(2));
+      expect(editor.getText()).toBe('');
+      send('unfinished draft');
+      send(up); // pi-tui first moves to the start of a nonempty first line.
+      expect(editor.getText()).toBe('unfinished draft');
+      send(up);
+      expect(editor.getText()).toBe('second');
+      send(up);
+      expect(editor.getText()).toBe('first');
+      send(up);
+      expect(editor.getText()).toBe('first');
+      send(down);
+      expect(editor.getText()).toBe('second');
+      send(down);
+      expect(editor.getText()).toBe('unfinished draft');
+      send('X');
+      expect(editor.getText()).toBe('Xunfinished draft');
+      expect(ports.send).toHaveBeenCalledTimes(2);
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it('ignores blanks and keeps pi-tui consecutive duplicate handling', () => {
+    const { terminal, send } = recorder();
+    const { screen } = screenWith(terminal);
+    const editor = editorOf(screen);
+    screen.start();
+    try {
+      for (const text of ['first', '', '  \n  ', 'second', 'second', '']) {
+        send(paste(text));
+        send('\r');
+      }
+      send(up);
+      expect(editor.getText()).toBe('second');
+      send(up);
+      expect(editor.getText()).toBe('first');
+      send(down);
+      expect(editor.getText()).toBe('second');
+      send(down);
+      expect(editor.getText()).toBe('');
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it.each(['first line\n  indented line\nlast line', Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n')])(
+    'recalls expanded multiline paste and leaves line navigation to the editor (case %#)',
+    async (text) => {
+      const { terminal, send } = recorder();
+      const { screen, ports } = screenWith(terminal);
+      const editor = editorOf(screen);
+      screen.start();
+      try {
+        send(paste(text));
+        send('\r');
+        await vi.waitFor(() => expect(ports.send).toHaveBeenCalledWith('chat-1', text));
+        send(up);
+        expect(editor.getText()).toBe(text);
+        for (let i = 1; i < text.split('\n').length; i += 1) {
+          send(down);
+          expect(editor.getText()).toBe(text);
+        }
+        send(down);
+        expect(editor.getText()).toBe('');
+      } finally {
+        screen.quit();
+      }
+    },
+  );
+
+  it('restores a multiline draft including an unsubmitted large paste', async () => {
+    const { terminal, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    const editor = editorOf(screen);
+    const pasted = 'pasted text '.repeat(100);
+    screen.start();
+    try {
+      send('earlier');
+      send('\r');
+      send('draft first line\\');
+      send('\r'); // The editor's backslash + Enter multiline shortcut.
+      send(paste(pasted));
+      expect(editor.getExpandedText()).toBe(`draft first line\n${pasted}`);
+      send(up); // Move inside the draft before entering history.
+      expect(editor.getExpandedText()).toBe(`draft first line\n${pasted}`);
+      send('\u0001'); // Ctrl+A: first line start.
+      const cursor = editor.getCursor();
+      send(up);
+      expect(editor.getText()).toBe('earlier');
+      send(down);
+      expect(editor.getExpandedText()).toBe(`draft first line\n${pasted}`);
+      expect(editor.getCursor()).toEqual(cursor);
+      send('\r');
+      await vi.waitFor(() => expect(ports.send).toHaveBeenLastCalledWith(
+        'chat-1', `draft first line\n${pasted.trimEnd()}`,
+      ));
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it('recalls commands (including invalid commands) and /loop without executing on recall', async () => {
+    const { terminal, send } = recorder();
+    const { screen, ports } = screenWith(terminal);
+    const editor = editorOf(screen);
+    screen.start();
+    try {
+      const inputs = ['/help', '/unknown', '/loop task', '/new'];
+      for (const text of inputs) {
+        send(paste(text));
+        send('\r');
+        await flush();
+      }
+      expect(ports.send).toHaveBeenCalledOnce();
+      expect(ports.send).toHaveBeenCalledWith('chat-1', '/loop task');
+      for (const text of [...inputs].reverse()) {
+        send(up);
+        expect(editor.getText()).toBe(text);
+      }
+      expect(ports.send).toHaveBeenCalledOnce();
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it('registers pending and failed sends once, in submission rather than completion order', async () => {
+    const { terminal, send } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    const editor = editorOf(screen);
+    session.open('chat-1');
+    let rejectSend: (error: Error) => void = () => undefined;
+    vi.mocked(ports.send).mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectSend = reject;
+    }));
+    screen.start();
+    try {
+      send('failed first');
+      send('\r');
+      await vi.waitFor(() => expect(ports.send).toHaveBeenCalledOnce());
+      send('successful second');
+      send('\r');
+      await vi.waitFor(() => expect(ports.send).toHaveBeenCalledTimes(2));
+      send(up);
+      expect(editor.getText()).toBe('successful second');
+      send(up);
+      expect(editor.getText()).toBe('failed first');
+      rejectSend(new Error('Send failed.'));
+      await flush();
+      send(down);
+      expect(editor.getText()).toBe('successful second');
+      send(down);
+      expect(editor.getText()).toBe('');
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it('preserves archived-send draft recovery while making the submission recallable', async () => {
+    const { terminal, send } = recorder();
+    const { screen, session, ports } = screenWith(terminal);
+    const editor = editorOf(screen);
+    session.open('chat-1');
+    vi.mocked(ports.send).mockRejectedValueOnce(new ApiError('chat_archived', 'Archived.', 409));
+    screen.start();
+    try {
+      send('rejected draft');
+      send('\r');
+      await vi.waitFor(() => expect(session.readOnly).toBe(true));
+      expect(editor.getText()).toBe('rejected draft');
+      send('\u0003'); // Clear the restored draft, not recall history.
+      send(up);
+      expect(editor.getText()).toBe('rejected draft');
+      send(down);
+      expect(editor.getText()).toBe('');
+    } finally {
+      screen.quit();
+    }
+  });
+
+  it('does not import server transcript or external user turns into input recall', () => {
+    const { terminal, send } = recorder();
+    const { screen } = screenWith(terminal);
+    const editor = editorOf(screen);
+    screen.start();
+    try {
+      screen.onChatLoaded(chatDto(), { messages: [{
+        id: 'stored', chatId: 'chat-1', role: 'user', content: 'past server input',
+        thinking: '', tools: [], attachments: [], createdAt: '',
+      }] });
+      screen.onExternalUser('another client');
+      send(up);
+      expect(editor.getText()).toBe('');
+    } finally {
+      screen.quit();
+    }
   });
 });
 

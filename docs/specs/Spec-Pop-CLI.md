@@ -126,6 +126,16 @@ it is ordinary owner text sent through the normal message API, including bare
 `/loop` for server-side usage clarification. The CLI does not execute Loop or
 change the wire contract; unknown slash commands still report an error.
 
+The interactive editor keeps session-local recall of nonblank submitted input,
+including slash commands and failed or locally blocked send attempts. Registration
+happens once at submission, in input order rather than request-completion order.
+Up/Down use pi-tui's built-in history and multiline cursor navigation, including
+returning to the unfinished draft with Down. Multiline and expanded pasted text
+remain intact, subject to the editor's existing outer-whitespace trimming and
+consecutive-duplicate handling. Recall survives `/new` and chat switches within
+the same screen, but is neither persisted nor populated from server transcripts
+or other clients' messages.
+
 The TUI renders persisted transcript plus live SSE projection, thinking when
 enabled, tool lifecycle, queue/run state and stable failures. It does not poll
 for streamed output or invent local transcript rows. Local execution notices
