@@ -1,6 +1,14 @@
 # Changelog
 
+## 0.3.3 — 2026-11-09
+
+- Restore CLI Up/Down input recall (CLI 0.2.106), with complete macOS and Windows clients.
+- Recover publication drafts omitted by GitHub's by-tag lookup using bounded,
+  authenticated release-list pagination; refuse ambiguous matching releases.
+
 ## 0.3.2 — 2026-11-09
+
+- Unpublished: draft creation exposed the publication lookup defect fixed in 0.3.3.
 
 - Restore CLI Up/Down input recall for this interactive session, including commands
   and failed sends, while preserving multiline input and draft recovery.
@@ -25,9 +33,6 @@
 - Provide a versioned local activation path and validate rollback clients; a failed preflight leaves the running service untouched.
 
 ## Unreleased
-
-- Recover publication drafts omitted by GitHub's by-tag lookup using bounded,
-  authenticated release-list pagination; refuse ambiguous matching releases.
 
 - Fix flickering chat code blocks during streaming: keep current source and copy
   controls stable, then apply syntax highlighting after the answer settles.
