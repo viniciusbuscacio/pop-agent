@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { basename, join, resolve } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { validateClientLock } from './client-release.ts';
-import { resumePublication, type DraftState, type RemoteAsset } from './release-publication.ts';
+import { findRelease, resumePublication, type DraftState, type RemoteAsset } from './release-publication.ts';
 import { AUDIO_SOURCE } from './audio-runtime.ts';
 import { fileHash, git, glibcVersion, validateManifest } from './server-runtime.ts';
 
@@ -77,7 +77,7 @@ if (mode === '--publish') {
     return object?.sha;
   };
   const releaseState = async (): Promise<DraftState | undefined> => {
-    const release = await api<{ id: number; draft: boolean }>(`releases/tags/${tag}`);
+    const release = await findRelease(tag, api);
     if (!release) return undefined;
     const assets: RemoteAsset[] = [];
     for (let page = 1; ; page++) {

@@ -869,6 +869,10 @@ verified batch resumes only when the tag resolves to that commit. Existing
 assets must match size and SHA-256; only missing assets are uploaded. Empty
 failed-upload starters may be removed from a matching draft. Conflicting
 assets, unexpected files and published releases are never overwritten.
+If GitHub's by-tag lookup returns 404, publication searches the authenticated
+release list with bounded pagination for the exact tag, including drafts. It
+refuses multiple matches, incomplete searches and listing errors rather than
+selecting an arbitrary draft or creating another one.
 Hosted CI and release workflows are disabled; no release runs on each UI edit.
 
 ### Interactive installation presentation

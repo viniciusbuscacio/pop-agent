@@ -26,6 +26,9 @@
 
 ## Unreleased
 
+- Recover publication drafts omitted by GitHub's by-tag lookup using bounded,
+  authenticated release-list pagination; refuse ambiguous matching releases.
+
 - Fix flickering chat code blocks during streaming: keep current source and copy
   controls stable, then apply syntax highlighting after the answer settles.
 

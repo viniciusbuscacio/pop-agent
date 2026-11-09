@@ -1,6 +1,31 @@
 export interface PublicationAsset { name: string; size: number; sha256: string }
 export interface RemoteAsset { name: string; size: number; state: string; id: number }
 export interface DraftState { id: number; draft: boolean; assets: RemoteAsset[] }
+export interface RemoteRelease { id: number; draft: boolean; tag_name: string }
+
+/** The authenticated API returns undefined only for HTTP 404; other failures must throw. */
+export type ReleaseApi = <T>(path: string) => Promise<T | undefined>;
+
+/** GitHub's by-tag endpoint can omit drafts. Scan all bounded pages before accepting a match. */
+export async function findRelease(tag: string, api: ReleaseApi): Promise<RemoteRelease | undefined> {
+  const release = await api<RemoteRelease>(`releases/tags/${encodeURIComponent(tag)}`);
+  if (release) {
+    if (release.tag_name !== tag) throw new Error('Release tag does not match requested tag');
+    return release;
+  }
+  let match: RemoteRelease | undefined;
+  for (let page = 1; page <= 100; page++) {
+    const batch = await api<RemoteRelease[]>(`releases?per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) throw new Error('Cannot list releases');
+    for (const candidate of batch) {
+      if (candidate.tag_name !== tag) continue;
+      if (match) throw new Error(`Multiple releases match tag ${tag}`);
+      match = candidate;
+    }
+    if (batch.length < 100) return match;
+  }
+  throw new Error('Release discovery pagination limit exceeded');
+}
 export interface PublicationPort {
   tagCommit(): Promise<string | undefined>;
   release(): Promise<DraftState | undefined>;
