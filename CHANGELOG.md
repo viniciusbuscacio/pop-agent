@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 — 2026-11-09
+
+- Restore CLI Up/Down input recall for this interactive session, including commands
+  and failed sends, while preserving multiline input and draft recovery.
+- Rebuild the complete client distribution, including macOS installers.
+
 ## 0.3.1 — 2026-10-02
 
 - Windows-first release: new Windows Desktop/CLI installers; no macOS Desktop installer in this release.
@@ -19,9 +25,6 @@
 - Provide a versioned local activation path and validate rollback clients; a failed preflight leaves the running service untouched.
 
 ## Unreleased
-
-- Restore CLI Up/Down input recall for this interactive session, including commands
-  and failed sends, while preserving multiline input and draft recovery.
 
 - Fix flickering chat code blocks during streaming: keep current source and copy
   controls stable, then apply syntax highlighting after the answer settles.
